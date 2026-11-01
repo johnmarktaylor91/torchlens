@@ -121,6 +121,7 @@ from ..intervention.types import (
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
 from ._op_dedup import _dedup_cached_identity_out, _dedup_saved_activation_out
+from ._op_grad_stream import stream_grad_blobs
 from ._op_transforms import (
     apply_transform,
     train_mode_tripwire_armed,
@@ -2346,7 +2347,11 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
     @property
     def grads(self) -> GradientRecordAccessor:
-        """Per-pass gradient records saved for this Op."""
+        """Per-pass gradient records saved for this Op.
+
+        One record per backward pass that reached this op's output, each the
+        gradient after this trace's ``tl.grad(site)`` edit chain.
+        """
 
         trace = self.source_trace
         raise_if_no_backward_capture(trace, plural_subject="op.grads or saved_grad_ops")
@@ -3901,7 +3906,10 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     ) -> None:
         """Save the grad tensor for this layer's output.
 
-        Called by the backward hook registered during the forward pass.
+        Called by the backward hook registered during the forward pass. The
+        saved value is the gradient of this op's output after TorchLens's edit
+        chain at this site (``tl.grad(site)`` edits run first), so ``.grad``
+        and an edit agree.
         The grad is ``detach().clone()``'d - a bare copy, not deep-copied -
         so it's independent of the autograd graph but cheap to store.
 
@@ -3934,19 +3942,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
                 self.transformed_gradient_memory = _memory_or_none(self.transformed_grad)
             self._internal_set("grad", raw_payload)
             self.has_grad = True
-            if writer is not None and getattr(trace, "_defer_streaming_bundle_finalization", False):
-                self._stream_tensor_blob(
-                    writer,
-                    tensor_field="grad",
-                    pending_field="_pending_grad_blob_id",
-                    kind="grad",
-                )
-                self._stream_tensor_blob(
-                    writer,
-                    tensor_field="transformed_grad",
-                    pending_field="_pending_transformed_grad_blob_id",
-                    kind="transformed_grad",
-                )
+            stream_grad_blobs(self, trace, writer)
             return
         # Admit BEFORE the transform/clone allocate (r8 R34, fable F1): a
         # policy-DENIED label reaching this legacy slot (callable/selector
@@ -4006,19 +4002,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         self.has_grad = True
         if budget is not None and grad_reservation is not None:
             budget.commit(grad_reservation, (self.grad, self.transformed_grad))
-        if writer is not None and getattr(trace, "_defer_streaming_bundle_finalization", False):
-            self._stream_tensor_blob(
-                writer,
-                tensor_field="grad",
-                pending_field="_pending_grad_blob_id",
-                kind="grad",
-            )
-            self._stream_tensor_blob(
-                writer,
-                tensor_field="transformed_grad",
-                pending_field="_pending_transformed_grad_blob_id",
-                kind="transformed_grad",
-            )
+        stream_grad_blobs(self, trace, writer)
 
     def _apply_transform(
         self,

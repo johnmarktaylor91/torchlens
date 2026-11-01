@@ -1,7 +1,10 @@
 """Ancestor storage, producer policy, and exhaustive record freezing."""
 
+from __future__ import annotations
+
 import contextlib
 import dataclasses
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
@@ -23,6 +26,7 @@ from ..._utils._torch_compat import (
     tensor_version_or_none,
 )
 from . import module_stack as _mstack
+from ._completeness_origins import internal_scalar_read
 from ._tl import (
     active_label_session_token,
     get_param_meta,
@@ -30,28 +34,14 @@ from ._tl import (
     set_same_object_mutation,
     set_tensor_label,
 )
-from .completeness_witness import internal_scalar_read
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
-
-from .ops import (
-    CaptureProducerMode,
-    CaptureProducerPolicy,
-)
-
-if TYPE_CHECKING:
-    from .ops import (
-        _ANCESTOR_FIELD_NAMES,
-        _ANCESTOR_SLOT_DESCRIPTORS,
-        _CAPTURE_PRODUCER_POLICIES,
-        _EMIT_BY_MODE,
-        _FUNCTION_REF_PER_OUTPUT_FIELDS,
-        _INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_EXCLUSIONS,
-        _LABEL_VERSION_SNAPSHOT,
-        _VIEW_MUTATION_RELABELS,
-        _AncestorBitset,
+    from .ops import (  # annotations only; runtime binding at the bottom
+        CaptureProducerMode,
+        CaptureProducerPolicy,
     )
+
 
 __all__ = (
     "_get_ancestor_field",
@@ -79,7 +69,7 @@ __all__ = (
 )
 
 
-def _get_ancestor_field(op: Op, field_name: str) -> "set[str] | frozenset[str]":
+def _get_ancestor_field(op: Op, field_name: str) -> set[str] | frozenset[str]:
     """Return one public ancestor closure view.
 
     During postprocess the cell holds the mutable staging set and is returned
@@ -138,7 +128,43 @@ def _delete_ancestor_field(op: Op, field_name: str) -> None:
     _ANCESTOR_SLOT_DESCRIPTORS[field_name].__delete__(op)
 
 
-def _compact_ancestor_sets(trace: "Trace") -> None:
+def _get_root_ancestors(op: Op) -> set[str] | frozenset[str]:
+    """Return ``op.root_ancestors``: staging set or frozen closure view."""
+
+    return _get_ancestor_field(op, "root_ancestors")
+
+
+def _set_root_ancestors(op: Op, value: set[str]) -> None:
+    """Assign ``op.root_ancestors`` through its preserved slot descriptor."""
+
+    _set_ancestor_field(op, "root_ancestors", value)
+
+
+def _delete_root_ancestors(op: Op) -> None:
+    """Delete ``op.root_ancestors`` through its preserved slot descriptor."""
+
+    _delete_ancestor_field(op, "root_ancestors")
+
+
+def _get_internal_source_ancestors(op: Op) -> set[str] | frozenset[str]:
+    """Return ``op.internal_source_ancestors``: staging set or frozen closure view."""
+
+    return _get_ancestor_field(op, "internal_source_ancestors")
+
+
+def _set_internal_source_ancestors(op: Op, value: set[str]) -> None:
+    """Assign ``op.internal_source_ancestors`` through its preserved slot descriptor."""
+
+    _set_ancestor_field(op, "internal_source_ancestors", value)
+
+
+def _delete_internal_source_ancestors(op: Op) -> None:
+    """Delete ``op.internal_source_ancestors`` through its preserved slot descriptor."""
+
+    _delete_ancestor_field(op, "internal_source_ancestors")
+
+
+def _compact_ancestor_sets(trace: Trace) -> None:
     """Replace finished Ops' two large ancestor sets with interned integer bitmaps.
 
     The original slot descriptors remain the storage authority. Public attribute
@@ -374,13 +400,13 @@ def get_capture_producer_policy(mode: CaptureProducerMode) -> CaptureProducerPol
 
     policy = _CAPTURE_PRODUCER_POLICIES.get(mode)
     if policy is None:
-        emit = globals()[_EMIT_BY_MODE[mode]]
+        emit = _EMIT_BY_MODE[mode]
         policy = CaptureProducerPolicy(mode, emit)
         _CAPTURE_PRODUCER_POLICIES[mode] = policy
     return policy
 
 
-def set_capture_producer_policy(trace: "Trace", mode: CaptureProducerMode) -> None:
+def set_capture_producer_policy(trace: Trace, mode: CaptureProducerMode) -> None:
     """Attach a precomputed producer policy to ``trace``.
 
     Compiled once at session setup; the hot path only ever touches the
@@ -402,7 +428,7 @@ def set_capture_producer_policy(trace: "Trace", mode: CaptureProducerMode) -> No
     trace._capture_producer_policy = get_capture_producer_policy(mode)
 
 
-def _should_keep_alias_mutation_contract(trace: "Trace") -> bool:
+def _should_keep_alias_mutation_contract(trace: Trace) -> bool:
     """Return whether mutation-position alias contracts can be consumed.
 
     Parameters
@@ -427,7 +453,7 @@ def _should_keep_alias_mutation_contract(trace: "Trace") -> bool:
     )
 
 
-def _snapshot_exhaustive_module_stack(self: "Trace") -> list[tuple[str, int]]:
+def _snapshot_exhaustive_module_stack(self: Trace) -> list[tuple[str, int]]:
     """Return the raw hook-stack module context.
 
     Parameters
@@ -724,7 +750,7 @@ def _exhaustive_output_ref(
     )
 
 
-def _exhaustive_capture_policy(trace: "Trace", fields_dict: dict[str, Any]) -> CapturePolicy:
+def _exhaustive_capture_policy(trace: Trace, fields_dict: dict[str, Any]) -> CapturePolicy:
     """Return the exhaustive freeze's capture policy (shared by both shapes)."""
 
     return CapturePolicy(
@@ -732,3 +758,26 @@ def _exhaustive_capture_policy(trace: "Trace", fields_dict: dict[str, Any]) -> C
         save_grad=fields_dict["save_grads"],
         save_mode=getattr(trace, "save_mode", "copy"),
     )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_exhaustive import _emit_exhaustive_operation_events  # noqa: E402
+from ._ops_predicate_events import _emit_predicate_operation_events  # noqa: E402
+from .ops import (  # noqa: E402
+    _ANCESTOR_FIELD_NAMES,
+    _ANCESTOR_SLOT_DESCRIPTORS,
+    _CAPTURE_PRODUCER_POLICIES,
+    _FUNCTION_REF_PER_OUTPUT_FIELDS,
+    _INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_EXCLUSIONS,
+    _LABEL_VERSION_SNAPSHOT,
+    _VIEW_MUTATION_RELABELS,
+    CaptureProducerPolicy,
+    _AncestorBitset,
+)
+
+# Producer routing by capture mode; the emitters live in their home modules above.
+_EMIT_BY_MODE: dict[CaptureProducerMode, Callable[..., Any]] = {
+    "exhaustive": _emit_exhaustive_operation_events,
+    "predicate": _emit_predicate_operation_events,
+}

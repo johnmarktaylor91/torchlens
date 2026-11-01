@@ -1,11 +1,13 @@
 """Save budgets, predicate payloads, and lookback retention."""
 
+from __future__ import annotations
+
 import dataclasses
 import time
 import warnings
 from collections import deque
-from collections.abc import Callable, Iterator
-from typing import TYPE_CHECKING, Any, cast
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import torch
 
@@ -23,14 +25,11 @@ from ..._data_classes.op import (
 from ..._ir.op_record import amend_lookback_retention
 from ..._ir.predicate import RetroactiveCaptureDecision
 from ..._ir.refs import TensorRef
-from ..._state import pause_logging
-from ..._utils.arg_handling import copy_arg_tree
 from ..._utils.tensor_utils import (
     get_memory_amount_from_metadata,
     safe_copy,
     safe_to,
 )
-from ..._validation_argument_references import active_argument_references
 from ...intervention.selectors import (
     BaseSelector,
 )
@@ -42,26 +41,21 @@ from ...recording.types import (
     RecordContext,
     StorageIntent,
 )
+from ._ops_arguments import _copy_saved_arg_tree, _copy_saved_call_args, _iter_tree_tensors
+from ._ops_payload_stream import _stream_predicate_payloads
 from ._tl import (
     mark_detached_saved_activation,
 )
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
-
-from .ops import (
-    _RetainedLookbackPayload,
-)
-
-if TYPE_CHECKING:
-    from .ops import (
-        _RetainedLookbackCandidate,
-        _retention_device,
-    )
+    from ..._save_budget import RetainedPayload
+    from .ops import _RetainedLookbackPayload  # annotations only; runtime binding at the bottom
 
 __all__ = (
     "_admit_save_budget",
     "_copy_saved_arg_tree",
+    "_copy_saved_call_args",
     "_commit_save_budget",
     "_save_predicate_activation_fields",
     "_stream_predicate_payloads",
@@ -77,7 +71,7 @@ __all__ = (
 
 
 def _admit_save_budget(
-    trace: "Trace",
+    trace: Trace,
     tensor: torch.Tensor,
     fields_dict: dict[str, Any],
     *,
@@ -119,7 +113,7 @@ def _admit_save_budget(
 
 
 def _commit_save_budget(
-    trace: "Trace",
+    trace: Trace,
     fields_dict: dict[str, Any],
     reservation: Any,
 ) -> None:
@@ -156,122 +150,12 @@ def _commit_save_budget(
     )
 
 
-def _copy_saved_arg_tree(arg: Any, retained: bool = False) -> Any:
-    """Copy one ``save_arg_values`` argument tree, as the pre-call and saved snapshots do.
-
-    Outside forward validation's own capture this is exactly
-    :func:`~torchlens._utils.arg_handling.copy_arg_tree`. Inside it, a plain
-    parameter argument (or a tensor on a parameter's storage), bare or in a
-    flat list or tuple, is replaced by an alias of the same storage and version
-    counter instead of a copy; see :mod:`torchlens._validation_argument_references`
-    for the guard that reruns validation on this copy path if such a value changes.
-    For the ``retained`` snapshot (``saved_args``/``saved_kwargs``), a validation
-    ``output_device`` other than ``"same"`` also keeps every other such tensor's
-    copy on that device, tagged with the device the op consumed it on.
-    """
-
-    references = active_argument_references()
-    if references is None:
-        return copy_arg_tree(arg)
-    if isinstance(arg, torch.Tensor):
-        return _parameter_alias(references, arg, retained)
-    if _is_flat_sequence(arg):
-        return type(arg)(
-            _parameter_alias(references, item, retained) if isinstance(item, torch.Tensor) else item
-            for item in arg
-        )
-    return copy_arg_tree(arg)
-
-
-def _is_flat_sequence(arg: Any) -> bool:
-    """Whether ``arg`` is a plain list or tuple holding no nested container."""
-
-    return type(arg) in (list, tuple) and not any(
-        isinstance(item, (list, tuple, dict)) for item in arg
-    )
-
-
-def _parameter_alias(references: Any, tensor: torch.Tensor, retained: bool = False) -> torch.Tensor:
-    """Alias a parameter-storage tensor (recording its version), else copy it as before.
-
-    The guard decides and builds the alias (see
-    ``ParameterArgumentReferences.alias``) and, for a ``retained`` snapshot,
-    the offloaded copy (``ParameterArgumentReferences.offload``); anything it
-    declines is copied exactly as on the copy path.
-    """
-
-    # Paused: the guard's storage and version reads, its alias and its copy are
-    # TorchLens's own calls, never captured ops (and never re-enter this copy).
-    with pause_logging():
-        alias = references.alias(tensor)
-        if alias is None and retained and references.offloads:
-            alias = references.offload(tensor)
-    return cast(torch.Tensor, copy_arg_tree(tensor)) if alias is None else alias
-
-
-def _saved_arg_retention_devices(t_args: Any, t_kwargs: Any) -> dict[int, torch.device]:
-    """Map ``id`` of each argument tensor whose retained copy moves to the device it moves to.
-
-    Mirrors :func:`_copy_saved_arg_tree` for the retained snapshot: only a bare
-    tensor argument or an item of a flat list or tuple can move. Empty outside
-    validation's offloading capture.
-    """
-
-    references = active_argument_references()
-    if references is None or not references.offloads:
-        return {}
-    devices: dict[int, torch.device] = {}
-    with pause_logging():
-        for arg in (*t_args, *t_kwargs.values()):
-            items = arg if _is_flat_sequence(arg) else (arg,)
-            for item in items:
-                if isinstance(item, torch.Tensor):
-                    target = references.retention_device(item)
-                    if target is not None:
-                        devices[id(item)] = target
-    return devices
-
-
-def _uncharged_parameter_aliases(*roots: Any) -> set[int]:
-    """Return ``id`` of each tensor that shares storage with a live parameter of validation's copy.
-
-    Only inside validation's own capture, on every ``output_device``: such an
-    alias adds no storage, so the save budget charges it nothing. Empty
-    outside validation, and on its clone-path rerun or a capture of the live
-    model (no parameter is aliased there), where every argument is charged.
-    """
-
-    references = active_argument_references()
-    if references is None:
-        return set()
-    with pause_logging():
-        return {
-            id(tensor)
-            for tensor in _iter_tree_tensors(*roots)
-            if references.shares_parameter_storage(tensor)
-        }
-
-
-def _iter_tree_tensors(*roots: Any) -> Iterator[torch.Tensor]:
-    """Yield every tensor leaf reachable through builtin containers."""
-
-    stack: list[Any] = list(roots)
-    while stack:
-        value = stack.pop()
-        if isinstance(value, torch.Tensor):
-            yield value
-        elif isinstance(value, dict):
-            stack.extend(value.values())
-        elif isinstance(value, (list, tuple, set, frozenset)):
-            stack.extend(value)
-
-
 def _admit_saved_args_budget(
-    trace: "Trace",
+    trace: Trace,
     fields_dict: dict[str, Any],
     t_args: Any,
     t_kwargs: Any,
-) -> "list[Any] | None":
+) -> list[Any] | None:
     """Admit projected ``save_arg_values`` bytes BEFORE the clones allocate.
 
     r8 R34 (sol 2): both exhaustive paths cloned every tensor argument first
@@ -282,31 +166,17 @@ def _admit_saved_args_budget(
     graph are available before the clone: project alias-deduped physical
     bytes per device and admit them through the standard ``primary`` site
     (rolling back sibling reservations if one device refuses); the
-    post-clone commit reconciles the estimate alias-aware as usual.
+    post-clone commit reconciles the estimate alias-aware as usual. A
+    storage argument (``Tensor.set_(storage, ...)``) is cloned for the saved
+    arguments like a tensor, so its bytes are projected the same way.
     """
 
     budget = getattr(trace, "_save_budget_accountant", None)
     if budget is None:
         return None
-    from ..._save_budget import _retained_storage_identities
-    from ._ops_retention import _saved_arg_retention_devices, _uncharged_parameter_aliases
+    from ._ops_arguments import _project_saved_args_bytes
 
-    # Offloaded copies (validation with an ``output_device``) are charged to
-    # the device they will live on, not the device the op consumed them on;
-    # parameter aliases in validation's capture add no storage and are not charged.
-    moved_to = _saved_arg_retention_devices(t_args, t_kwargs)
-    aliases = _uncharged_parameter_aliases(t_args, t_kwargs)
-    per_device: dict[Any, int] = {}
-    seen_identities: set[tuple[Any, ...]] = set()
-    for tensor in _iter_tree_tensors(t_args, t_kwargs):
-        if id(tensor) in aliases:
-            continue
-        device = moved_to.get(id(tensor), tensor.device)
-        for identity, num_bytes in _retained_storage_identities(tensor):
-            if identity in seen_identities:
-                continue
-            seen_identities.add(identity)
-            per_device[device] = per_device.get(device, 0) + num_bytes
+    per_device = _project_saved_args_bytes(t_args, t_kwargs)
     if not per_device:
         return []
     label = fields_dict.get("_layer_label_raw") or fields_dict.get("_label_raw") or "<unlabeled>"
@@ -326,23 +196,26 @@ def _admit_saved_args_budget(
 
 
 def _commit_saved_args_budget(
-    trace: "Trace",
+    trace: Trace,
     fields_dict: dict[str, Any],
-    reservations: "list[Any] | None",
+    reservations: list[Any] | None,
 ) -> None:
     """Reconcile saved-args reservations against the cloned snapshots."""
 
     budget = getattr(trace, "_save_budget_accountant", None)
     if budget is None or reservations is None:
         return
-    from ._ops_retention import _uncharged_parameter_aliases
+    from ._ops_arguments import _iter_tree_storages, _uncharged_parameter_aliases
 
     saved = (fields_dict.get("saved_args"), fields_dict.get("saved_kwargs"))
     aliases = _uncharged_parameter_aliases(*saved)
-    cloned = tuple(tensor for tensor in _iter_tree_tensors(*saved) if id(tensor) not in aliases)
-    by_device: dict[str, list[torch.Tensor]] = {}
-    for tensor in cloned:
-        by_device.setdefault(str(tensor.device), []).append(tensor)
+    cloned: list[RetainedPayload] = [
+        tensor for tensor in _iter_tree_tensors(*saved) if id(tensor) not in aliases
+    ]
+    cloned.extend(_iter_tree_storages(*saved))
+    by_device: dict[str, list[RetainedPayload]] = {}
+    for payload in cloned:
+        by_device.setdefault(str(payload.device), []).append(payload)
     committed_devices: set[str] = set()
     for reservation in reservations:
         device_key = str(reservation.device)
@@ -358,7 +231,7 @@ def _commit_saved_args_budget(
 
 
 def _charge_saved_args_budget(
-    trace: "Trace",
+    trace: Trace,
     fields_dict: dict[str, Any],
 ) -> None:
     """Charge ``save_arg_values`` argument snapshots against the save budget.
@@ -401,7 +274,7 @@ def _charge_saved_args_budget(
 
 
 def _save_predicate_activation_fields(
-    trace: "Trace",
+    trace: Trace,
     fields_dict: dict[str, Any],
     tensor: torch.Tensor,
     spec: CaptureSpec,
@@ -493,42 +366,6 @@ def _save_predicate_activation_fields(
         out_sink(fields_dict["_label_raw"], ram_payload)
 
 
-def _stream_predicate_payloads(
-    trace: "Trace",
-    fields_dict: dict[str, Any],
-    *,
-    disk_payload: torch.Tensor | None,
-    transformed_disk_payload: torch.Tensor | None,
-) -> None:
-    """Write predicate-selected disk payloads during forward capture.
-
-    Parameters
-    ----------
-    trace:
-        Active trace whose writer receives payload blobs.
-    fields_dict:
-        Mutable operation fields receiving pending blob ids.
-    disk_payload:
-        Detached raw payload for disk storage.
-    transformed_disk_payload:
-        Detached transformed payload for disk storage.
-    """
-
-    writer = getattr(trace, "_out_writer", None)
-    if writer is None:
-        return
-    label = fields_dict["_label_raw"]
-    for payload, pending_field, kind in (
-        (disk_payload, "_pending_blob_id", "out"),
-        (transformed_disk_payload, "_pending_transformed_out_blob_id", "transformed_out"),
-    ):
-        if payload is None:
-            continue
-        blob_id = writer.next_blob_id()
-        fields_dict[pending_field] = blob_id
-        writer.submit_blob(blob_id, payload, kind=kind, label=label)
-
-
 def _module_stack_frames_from_fields(fields_dict: dict[str, Any]) -> tuple[ModuleStackFrame, ...]:
     """Project exhaustive op fields into predicate module-stack frames.
 
@@ -556,7 +393,7 @@ def _module_stack_frames_from_fields(fields_dict: dict[str, Any]) -> tuple[Modul
     return tuple(frames)
 
 
-def _append_trace_predicate_context(trace: "Trace", ctx: RecordContext) -> None:
+def _append_trace_predicate_context(trace: Trace, ctx: RecordContext) -> None:
     """Append a trace selective-save context to the bounded runtime window.
 
     Parameters
@@ -584,7 +421,7 @@ def _append_trace_predicate_context(trace: "Trace", ctx: RecordContext) -> None:
         history.popleft()
 
 
-def _trace_followed_by_candidate_selector(trace: "Trace") -> BaseSelector | None:
+def _trace_followed_by_candidate_selector(trace: Trace) -> BaseSelector | None:
     """Return the candidate selector for ``candidate & followed_by(successor)``."""
 
     from ..._ir.selector_eval import split_followed_by_conjunction
@@ -598,7 +435,7 @@ def _trace_followed_by_candidate_selector(trace: "Trace") -> BaseSelector | None
 
 
 def _retain_lookback_candidate(
-    trace: "Trace",
+    trace: Trace,
     ctx: RecordContext,
     fields_dict: dict[str, Any],
     tensor: torch.Tensor,
@@ -627,7 +464,7 @@ def _retain_lookback_candidate(
 
 
 def _copy_lookback_payload(
-    trace: "Trace",
+    trace: Trace,
     fields_dict: dict[str, Any],
     tensor: torch.Tensor,
     policy: str,
@@ -707,7 +544,7 @@ def _copy_lookback_payload(
 
 
 def _apply_retroactive_decision(
-    trace: "Trace",
+    trace: Trace,
     decision: RetroactiveCaptureDecision,
 ) -> None:
     """Mark retained candidate events as saved after a successor matches."""
@@ -744,7 +581,7 @@ def _apply_retroactive_decision(
 
 
 def _replace_event_with_retained_payload(
-    trace: "Trace",
+    trace: Trace,
     raw_label: str,
     payload: _RetainedLookbackPayload,
 ) -> None:
@@ -792,7 +629,7 @@ def _replace_event_with_retained_payload(
 
 
 def _build_trace_predicate_context(
-    trace: "Trace",
+    trace: Trace,
     fields_dict: dict[str, Any],
     tensor: torch.Tensor,
     *,
@@ -871,3 +708,14 @@ def _build_trace_predicate_context(
         is_transform=bool(fields_dict.get("is_transform", False)),
         transform_kind=fields_dict.get("transform_kind"),
     )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_activations import (  # noqa: E402
+    _retention_device,
+)
+from .ops import (  # noqa: E402
+    _RetainedLookbackCandidate,
+    _RetainedLookbackPayload,
+)

@@ -249,14 +249,56 @@ def test_paddle_validation_layer_parameters_are_known_sources() -> None:
     assert tl.validate(_LinearRelu(), _layer_input(), scope="forward", backend="paddle") is True
 
 
-def test_paddle_validation_unregistered_tensor_leaf_still_fails() -> None:
-    """An unlabeled tensor that is NOT a registered parameter stays a coverage gap."""
+def test_paddle_validation_unregistered_layer_tensor_is_a_recorded_constant() -> None:
+    """A plain tensor attribute built before the forward is a recorded constant (SPEC 2).
 
-    trace = tl.trace(_ClosureTensorLayer(), _layer_input(), backend="paddle")
+    It becomes a parentless ``constant`` op with a saved payload, the add lists
+    it as a parent, and validation replays the add from that payload.
+    """
 
+    model = _ClosureTensorLayer()
+    trace = tl.trace(model, _layer_input(), backend="paddle")
+
+    constant = next(op for op in trace.layer_list if op.layer_type == "constant")
+    assert list(constant.parents) == []
+    assert (constant.out.numpy() == model.__dict__["hidden"].numpy()).all()
+    add = next(c for c in trace._paddle_op_captures if c.op_name.endswith("add"))
+    assert add.capture_gap_markers == ()
+    assert PaddleBackend().validate_trace(trace) is True
+    status = trace.validation_replay_status
+    assert status.exempted_reason_counts == {"constant_producer_leaf": 1}
+
+
+class _ForwardBuiltTensorLayer(paddle.nn.Layer):
+    """Layer that builds a tensor DURING the forward through an unwrapped op."""
+
+    def __init__(self) -> None:
+        """Hold a linear layer."""
+
+        super().__init__()
+        self.linear = paddle.nn.Linear(4, 3)
+
+    def forward(self, x: Any) -> Any:
+        """Store an unwrapped op's output on self, then read it through a wrapped add."""
+
+        self.__dict__["hidden"] = paddle.erf(self.linear(x))
+        return paddle.add(self.linear(x), self.__dict__["hidden"])
+
+
+def test_paddle_validation_tensor_built_during_forward_still_fails() -> None:
+    """An unlabeled tensor created inside the forward is never a constant; it stays a gap."""
+
+    model = _ForwardBuiltTensorLayer()
+    model.__dict__["hidden"] = paddle.ones([3], dtype="float32")  # stale pre-forward value
+    trace = tl.trace(model, _layer_input(), backend="paddle")
+
+    assert not [op for op in trace.layer_list if op.layer_type == "constant"]
     add = next(c for c in trace._paddle_op_captures if c.op_name.endswith("add"))
     assert any("unlabeled tensor input" in marker for marker in add.capture_gap_markers)
     assert PaddleBackend().validate_trace(trace) is False
+    status = trace.validation_replay_status
+    assert status.state == "failed"
+    assert status.decisions[0]["reason"] == "parent_payload_missing"
 
 
 def test_paddle_validation_parameter_replay_uses_the_parameter_value() -> None:

@@ -70,7 +70,7 @@ def _fire(step, site="relu_1_2", replaced=True):
         site=site,
         helper="zero_ablate",
         timing="post",
-        direction="forward",
+        signal="forward",
         replaced=replaced,
     )
 

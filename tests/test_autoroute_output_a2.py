@@ -149,21 +149,25 @@ def test_config_id2label_decodes_topk_labels_and_probs() -> None:
     )
 
 
-def test_output_style_override_and_output_head_select_named_head() -> None:
-    """Explicit style and output head decode the selected live output tensor."""
+def test_read_time_head_decodes_the_named_retained_head() -> None:
+    """Two same-width heads are ambiguous at capture; ``head=`` decodes one at read time."""
 
     labels = {0: "cold", 1: "hot"}
     model = _DictHeadClassifier(torch.tensor([[1.0, 5.0]]), labels).eval()
 
-    trace = tl.trace(
-        model,
-        torch.ones(1, 2),
-        capture=tl.options.CaptureOptions(output_style="classification", output_head="main"),
-    )
+    trace = tl.trace(model, torch.ones(1, 2))
 
+    assert trace.decoded_output is None
     assert trace.output_postprocessor is not None
-    assert trace.output_postprocessor.selected_output_head == "main"
-    assert _decoded_rows(trace)[0]["label"] == "hot"
+    assert trace.output_postprocessor.ambiguous is True
+
+    decoded = trace.decode_output(head="main")
+    assert decoded["kind"] == "batch_topk"
+    assert decoded["rows"][0]["label"] == "hot"
+    aux = trace.decode_output(style="classification", head="aux")
+    assert aux["rows"][0]["label"] == "hot"
+    # The read-time decode returns rows and never rewrites the captured record.
+    assert trace.decoded_output is None
 
 
 def test_custom_registered_output_detector_decodes() -> None:
@@ -176,9 +180,9 @@ def test_custom_registered_output_detector_decodes() -> None:
 
         @autoroute.output.register(name="custom_labels", priority=-1)
         def custom_labels(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocessing | None:
-            """Return custom labels for an explicit custom style."""
+            """Return custom labels for the read-time custom style."""
 
-            if meta.get("output_style") != "custom_labels":
+            if meta.get("style") != "custom_labels":
                 return None
             return ResolvedPostprocessing(
                 source="custom",
@@ -192,13 +196,11 @@ def test_custom_registered_output_detector_decodes() -> None:
                 confidence=1.0,
             )
 
-        trace = tl.trace(
-            model,
-            torch.ones(1, 2),
-            capture=tl.options.CaptureOptions(output_style="custom_labels"),
-        )
+        trace = tl.trace(model, torch.ones(1, 2))
+        assert trace.decoded_output is None
+        decoded = trace.decode_output(style="custom_labels")
 
-    assert _decoded_rows(trace)[0]["label"] == "left"
+    assert decoded["rows"][0]["label"] == "left"
 
 
 def test_backward_ready_decode_keeps_graph_connected_output() -> None:
@@ -242,7 +244,10 @@ def test_multi_output_selects_logits_and_fails_closed_on_ambiguity() -> None:
     )
     assert ambiguous.decoded_output is None
     assert ambiguous.output_postprocessor is not None
-    assert "pass output_style=/output_head=" in ambiguous.output_postprocessor.description
+    assert (
+        "call trace.decode_output(style=..., head=...)"
+        in ambiguous.output_postprocessor.description
+    )
 
 
 def test_generic_1000_width_tensor_without_verified_metadata_does_not_decode() -> None:
@@ -261,9 +266,7 @@ def test_hf_text_decode_uses_attached_tokenizer() -> None:
     model = _Classifier(torch.tensor([[[0.0, 5.0], [6.0, 1.0]]])).eval()
     model._torchlens_output_tokenizer = _Tokenizer()
 
-    trace = tl.trace(
-        model, torch.ones(1, 2), capture=tl.options.CaptureOptions(output_style="hf_text")
-    )
+    trace = tl.trace(model, torch.ones(1, 2))
 
     assert trace.output_postprocessor is not None
     assert trace.output_postprocessor.style == "hf_text"
@@ -290,9 +293,7 @@ def test_hf_text_decode_handles_batch_greater_than_one_independently() -> None:
     model = _Classifier(logits).eval()
     model._torchlens_output_tokenizer = _Tokenizer()
 
-    trace = tl.trace(
-        model, torch.ones(2, 2), capture=tl.options.CaptureOptions(output_style="hf_text")
-    )
+    trace = tl.trace(model, torch.ones(2, 2))
 
     assert trace.decoded_output == [
         {"batch_item": 0, "rank": 1, "text": "tok1 tok0", "token_ids": [1, 0]},
@@ -337,9 +338,7 @@ def test_cache_key_changes_when_only_id2label_changes(tmp_path: Path) -> None:
     assert second.decoded_output is not None
     assert first.decoded_output["rows"][0]["label"] == "old-yes"
     assert second.decoded_output["rows"][0]["label"] == "new-yes"
-    assert semantic_output_cache_key(model, output_style=None, output_head=None)["config"][
-        "id2label"
-    ] == {0: "new-no", 1: "new-yes"}
+    assert semantic_output_cache_key(model)["config"]["id2label"] == {0: "new-no", 1: "new-yes"}
 
 
 def test_imagenet_label_bank_package_data_loads() -> None:

@@ -851,9 +851,9 @@ def test_escape_census_operators_coupled_to_observers() -> None:
 def test_disable_current_modes_snapshot_allowlist_audit() -> None:
     """Torch ``_disable_current_modes`` sites stay a known allowlist (advisory-but-armed)."""
 
-    from torchlens.backends.torch import completeness_witness as cw
+    import torchlens.backends.torch._completeness_cross_thread
 
-    audit = cw.audit_disable_current_modes_sites()
+    audit = torchlens.backends.torch._completeness_cross_thread.audit_disable_current_modes_sites()
     # A new eager mode-disable site the belt does not classify becomes a RED test.
     assert audit["unclassified"] == (), audit
 

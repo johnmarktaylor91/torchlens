@@ -40,8 +40,9 @@ from .._data_classes._state_adapter import state_items
 from .._data_classes.trace import Trace
 from .._errors import InvalidArgumentError
 from .._utils.display import user_stacklevel
+from .._utils.hashing import sha256_file
 from ..backends.registry import BackendSpec, get_backend_spec
-from ..errors import TorchLensWarning
+from ..errors import RunnablePreflightError, TorchLensWarning
 from . import (
     TLSPEC_VERSION,
     ArtifactError,
@@ -64,8 +65,9 @@ from ._save_gates import (
     _save_bundle_via_container_door,
 )
 from .lazy import LazyActivationRef
-from .manifest import Manifest, Provenance, TensorEntry, enforce_version_policy, sha256_of_file
+from .manifest import Manifest, Provenance, TensorEntry, enforce_version_policy
 from .paths import (
+    _make_tmp_bundle_path,
     reject_symlink_path as _reject_symlink_path,
     resolve_bundle_blob_path,
     resolve_bundle_blobs_dir,
@@ -510,7 +512,6 @@ def save(
         except CaptureOutcomeError as outcome_exc:
             if outcome_exc.fields.get("code") == "N4":
                 from .._runnable import RunnableErrorCode
-                from ..errors import RunnablePreflightError
 
                 raise RunnablePreflightError(
                     "Runnable save refuses a HALTED capture: the recorded graph "
@@ -897,7 +898,6 @@ def _require_canonical_runnable_labels(names: Iterable[object], *, family: str) 
     """
 
     from .._runnable import RunnableErrorCode
-    from ..errors import RunnablePreflightError
 
     for name in names:
         if not isinstance(name, str) or name == "":
@@ -1045,7 +1045,7 @@ def _capture_activation_blob_specs(
     """
 
     from .._runnable import ActivationPayloadMember, SlotByteDigest, StateByteDigest
-    from .._runnable_execution import build_input_attestation_fingerprint
+    from .._runnable_input_aliases import build_input_attestation_fingerprint
     from .._runnable_state import runnable_tensor_byte_digest
 
     slot_ids = {slot.slot_id for slot in descriptor.tensor_slots}
@@ -1601,7 +1601,7 @@ def _load_trace_payload(
     reanchor_loaded_episode_evidence(trace)
     _reanchor_visualizer_paths(trace, bundle_path)
     setattr(trace, "_loaded_from_bundle", True)
-    setattr(trace, "_source_bundle_manifest_sha256", sha256_of_file(manifest_path))
+    setattr(trace, "_source_bundle_manifest_sha256", sha256_file(manifest_path))
     setattr(trace, "_source_bundle_path", bundle_path)
     setattr(trace, "_source_bundle_created_at", manifest.created_at)
     setattr(trace, "_source_bundle_provenance", manifest.provenance)
@@ -1797,7 +1797,7 @@ def _bind_embedded_nonpersistent_buffer_payload(
             entry.relative_path,
             resolved_blobs_dir=resolved_blobs_dir,
         )
-        observed_sha256 = sha256_of_file(blob_path)
+        observed_sha256 = sha256_file(blob_path)
         if observed_sha256 != entry.sha256:
             raise ArtifactError(
                 "Checksum mismatch for embedded non-persistent buffer "
@@ -1883,7 +1883,7 @@ def _bind_embedded_weight_payload(
             entry.relative_path,
             resolved_blobs_dir=resolved_blobs_dir,
         )
-        observed_sha256 = sha256_of_file(blob_path)
+        observed_sha256 = sha256_file(blob_path)
         if observed_sha256 != entry.sha256:
             raise ArtifactError(
                 f"Checksum mismatch for embedded state blob_id={entry.blob_id} at {blob_path}."
@@ -1973,7 +1973,7 @@ def _bind_archived_activation_payload(
             entry.relative_path,
             resolved_blobs_dir=resolved_blobs_dir,
         )
-        observed_sha256 = sha256_of_file(blob_path)
+        observed_sha256 = sha256_file(blob_path)
         if observed_sha256 != entry.sha256:
             raise ArtifactError(
                 f"Checksum mismatch for archived activation blob_id={entry.blob_id} at {blob_path}."
@@ -2651,7 +2651,7 @@ def _directories_content_equal(left: Path, right: Path) -> bool:
     bundle directory is a provable duplicate of the live bundle (safe to
     delete) versus genuinely distinct data that must not be silently
     destroyed. Compares the set of relative file paths and, for each,
-    the file's SHA-256 digest via :func:`sha256_of_file`.
+    the file's SHA-256 digest via :func:`sha256_file`.
 
     Parameters
     ----------
@@ -2677,7 +2677,7 @@ def _directories_content_equal(left: Path, right: Path) -> bool:
     if left_files != right_files:
         return False
     try:
-        return all(sha256_of_file(left / rel) == sha256_of_file(right / rel) for rel in left_files)
+        return all(sha256_file(left / rel) == sha256_file(right / rel) for rel in left_files)
     except OSError:
         return False
 
@@ -2854,7 +2854,7 @@ def _write_tensor_blob(
         device_at_save=str(tensor.device),
         layout=str(contiguous_tensor.layout).replace("torch.", ""),
         bytes=int(contiguous_tensor.numel() * contiguous_tensor.element_size()),
-        sha256=sha256_of_file(blob_path),
+        sha256=sha256_file(blob_path),
         requires_grad=bool(tensor.requires_grad),
     )
 
@@ -2908,7 +2908,7 @@ def _write_payload_blob(
         device_at_save=encoded.logical_device,
         layout=str(transport_tensor.layout).replace("torch.", ""),
         bytes=int(transport_tensor.numel() * transport_tensor.element_size()),
-        sha256=sha256_of_file(blob_path),
+        sha256=sha256_file(blob_path),
         requires_grad=False,
         **manifest_fields,
     )
@@ -3100,7 +3100,7 @@ def _load_and_verify_fast_copy_source(
         raise ArtifactError(
             "source bundle manifest fingerprint is unavailable; materialize refs and retry"
         )
-    observed_manifest_sha256 = sha256_of_file(manifest_path)
+    observed_manifest_sha256 = sha256_file(manifest_path)
     if observed_manifest_sha256 != expected_manifest_sha256:
         raise ArtifactError(
             "source bundle manifest has changed since load; materialize refs and retry"
@@ -3147,7 +3147,7 @@ def _fast_copy_tensor_blob(
     if not source_blob_path.exists():
         raise ArtifactError(f"Tensor blob not found at {source_blob_path}.")
 
-    observed_sha256 = sha256_of_file(source_blob_path)
+    observed_sha256 = sha256_file(source_blob_path)
     if observed_sha256 != fast_copy_spec.source_ref.expected_sha256:
         raise ArtifactError(
             f"blob at {source_blob_path} sha256 mismatch; expected "
@@ -3943,7 +3943,7 @@ def _check_unknown_blob_entries(manifest: Manifest, blobs_path: Path) -> None:
     colliding_extra_names: list[str] = []
     for extra_name in extra_names:
         extra_path = blobs_path / extra_name
-        extra_sha256 = sha256_of_file(extra_path)
+        extra_sha256 = sha256_file(extra_path)
         if extra_sha256 in expected_sha256s:
             colliding_extra_names.append(extra_name)
 
@@ -4031,7 +4031,7 @@ def _eager_verify_blob_payloads(
             entry.relative_path,
             resolved_blobs_dir=resolved_blobs_dir,
         )
-        observed_sha256 = sha256_of_file(blob_path)
+        observed_sha256 = sha256_file(blob_path)
         if observed_sha256 != entry.sha256:
             raise ArtifactError(f"Checksum mismatch for blob_id={entry.blob_id} at {blob_path}.")
         tensor_map = _load_safetensors_file(blob_path, map_location)
@@ -4140,23 +4140,6 @@ def _load_safetensors_file(
         ) from exc
     except (OSError, SafetensorError, ValueError) as exc:
         raise ArtifactError(f"Failed to read safetensors blob at {blob_path}.") from exc
-
-
-def _make_tmp_bundle_path(bundle_path: Path) -> Path:
-    """Create the deterministic sibling temp path for one bundle target.
-
-    Parameters
-    ----------
-    bundle_path:
-        Final bundle directory path.
-
-    Returns
-    -------
-    Path
-        Temporary working directory path.
-    """
-
-    return bundle_path.parent / f"{bundle_path.name}.tmp.{uuid.uuid4().hex}"
 
 
 def _make_backup_path(bundle_path: Path) -> Path:

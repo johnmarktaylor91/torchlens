@@ -524,8 +524,8 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="containers",
         title="Dicts and tuples",
-        rule='show_containers="nodes" adds a record box for a returned container; "labels" '
-        "names its keys on the arrows.",
+        rule='show_containers="nodes" adds a record box for a container; "labels" names its '
+        "keys on the arrows.",
         panels=(
             Panel(
                 "a",
@@ -535,11 +535,22 @@ SLIDES: tuple[Slide, ...] = (
                 label='show_containers="nodes"',
                 crop=("node(text~dict)", "node(text~linear_1_1)"),
             ),
+            Panel(
+                "b",
+                "DictMid",
+                capture={"capture_container_structure": True},
+                kwargs={"show_containers": "nodes"},
+                label="the same dict, used inside the model",
+            ),
         ),
         keys=(
             Key("Dashed record box for the returned dict", "node(text~dict)"),
-            Key("Arrowless ties mark membership", "edge(arrowhead=none)"),
             Key("Arrow words name each key: logits, probs", None),
+            Key(
+                "A dict used inside the model: arrowless ties mark membership",
+                "edge(arrowhead=none)",
+                "b",
+            ),
         ),
         footnote='"cluster" draws a dotted group instead.',
         rows=("VN25", "VE12", "VR09"),
@@ -1283,8 +1294,8 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="data-outputs",
         title="Outputs as decoded rows",
-        rule="output_transform turns the output into label and score rows; output_style decodes "
-        "a model that carries its labels.",
+        rule="output_transform turns the output into label and score rows; a model that carries "
+        "its labels decodes automatically, and decode_output(style=, head=) re-decodes on demand.",
         panels=(
             Panel(
                 "a",
@@ -1502,7 +1513,7 @@ ALPHABET: Mapping[str, tuple[tuple[str, str, str, Selector], ...]] = MappingProx
             ("accumulates into a leaf", "backward", "a", "edge(style=dotted)"),
             ("forward op to its grad_fn", "combined", "a", "edge(constraint=false)"),
             ("reader of a changed parameter", "mutated-param", "a", "edge(style=dashed)"),
-            ("member of a container", "containers", "a", "edge(arrowhead=none)"),
+            ("member of a container", "containers", "b", "edge(arrowhead=none)"),
             ("module call (outermost)", "module-boxes", "a", "cluster(penwidth={pen_max})"),
             ("module call (deeper)", "module-boxes", "a", "cluster(label~@block.0:1)"),
             ("module not from the input", "dashed", "a", "cluster(style^dashed)"),

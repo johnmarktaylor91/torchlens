@@ -12,7 +12,6 @@ import torch
 import torchlens as tl
 from torchlens.intervention import runtime as intervention_runtime
 from torchlens.intervention.errors import (
-    HelperMountError,
     HookSignatureError,
     HookSiteCoverageError,
     HookValueError,
@@ -112,15 +111,15 @@ def test_phase3_helpers_import_and_return_specs() -> None:
         tl.project_out(torch.ones(3), dim=-1),
         tl.intervention.helpers.swap_with(torch.ones(2, 3)),
         tl.splice_module(torch.nn.Identity()),
-        tl.hook_grad(_good_hook),
-        tl.zero_grad(),
-        tl.scale_grad(0.5),
+        tl.clip_norm(1.0),
     ]
 
     assert all(isinstance(spec, Edit) for spec in helper_specs)
     assert helper_specs[0].name == "zero_ablate"
-    assert helper_specs[-1].kind == "backward"
-    assert dict(helper_specs[-1].metadata)["live_rerun_only"] is True
+    # The site decides the pass: neutral edits carry no signal, activation readers say forward.
+    assert helper_specs[-1].name == "clip_norm"
+    assert helper_specs[-1].signal is None
+    assert helper_specs[-2].signal == "forward"
 
 
 @pytest.mark.smoke
@@ -183,11 +182,13 @@ def test_normalizer_accepts_supported_shapes_in_order() -> None:
     assert pair_entries[0].site_target == tl.label("x")
 
 
-def test_helper_direction_override_contradiction_raises() -> None:
-    """Backward-only helpers cannot be mounted as forward hooks."""
+def test_activation_only_edit_on_gradient_site_raises() -> None:
+    """An edit that reads recorded activations cannot mount on a gradient site."""
 
-    with pytest.raises(HelperMountError, match="intrinsically 'backward'"):
-        normalize_hook_plan(tl.func("relu"), tl.zero_grad(), direction="forward")
+    with pytest.raises(Exception) as excinfo:
+        normalize_hook_plan(tl.grad(tl.func("relu")), tl.splice_module(torch.nn.Identity()))
+    fields = getattr(excinfo.value, "fields", None) or {}
+    assert fields.get("code", getattr(excinfo.value, "code", None)) == "edit_signal_mismatch"
 
 
 def test_sites_callable_predicate_is_preserved_with_ops_filter() -> None:
@@ -238,13 +239,13 @@ def test_normalizer_rejects_missing_site_and_bad_signature() -> None:
 
 @pytest.mark.smoke
 def test_execute_hook_rejects_none_type_shape_dtype_and_device() -> None:
-    """Hook execution validates return values by default."""
+    """Hook execution validates return values by default; None leaves the value unchanged."""
 
     out = torch.ones(2, 3)
     context = _context()
 
     def none_hook(out: torch.Tensor, *, ctx: HookContext) -> None:
-        """Return None, which Phase 3 rejects."""
+        """Return None, which keeps the incoming value (fn -> Tensor | None)."""
 
         return None
 
@@ -268,8 +269,7 @@ def test_execute_hook_rejects_none_type_shape_dtype_and_device() -> None:
 
         return torch.empty(out.shape, dtype=out.dtype, device="meta")
 
-    with pytest.raises(HookValueError, match="None"):
-        _execute_hook(none_hook, out, context)
+    assert torch.equal(_execute_hook(none_hook, out, context), out)
     with pytest.raises(HookValueError, match="list"):
         _execute_hook(list_hook, out, context)
     with pytest.raises(HookValueError, match="shape"):
@@ -310,7 +310,7 @@ def test_seeded_noise_is_deterministic_and_unseeded_records_note() -> None:
 
     assert torch.equal(seeded_a(out, ctx=context), seeded_b(out, ctx=context))
     _ = unseeded(out, ctx=context)
-    assert any("noise used unseeded" in note for note in context.run_ctx["ledger_notes"])
+    assert any("noise used unseeded" in note for note in context.run_state["ledger_notes"])
 
 
 def test_splice_module_dtype_error_is_specific() -> None:

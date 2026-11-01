@@ -15,7 +15,11 @@ auto-routes genuine framework models (MLX, JAX, tinygrad, Paddle, TensorFlow).
 metadata lives on `Trace.backend`, `Trace.module_identity_mode`, `Trace.param_source`,
 `Trace.derived_grads`, `Trace.autograd.intermediate_derived_grads`, `Trace.payload_load_status`,
 `Trace.validation_replay_status`, `dtype_ref`, `device_ref`, `backend_address`, and
-`resolver_status`.
+`resolver_status`. Every backend fills one contract, `tl.backends.BackendProtocol`; torch is
+`stable` and the five others are `preview`. Which capabilities each backend supports, its
+measured conformance scorecard and its tutorial are in [Backend Support](backends.md) and the
+per-backend pages it links; `tl.report.doctor()` shows each backend's `backend_scorecard:<name>`
+row, and refusals carry an `exc.code` from `tl.backends.REFUSAL_CODES`.
 JAX leaf gradients are requested with `tl.backends.jax.GradOptions`; they are derived by a
 second functional AD run and never populate backward-pass or op-gradient surfaces.
 JAX intermediate derived gradients are requested with
@@ -60,7 +64,7 @@ on the measured fixtures.
 
 ## Public surface map
 
-`torchlens.__all__` currently exposes 87 names. The most-used ones, grouped by job (this
+`torchlens.__all__` currently exposes 83 names. The most-used ones, grouped by job (this
 table is a selection, not the full list — read `torchlens.__all__` for that):
 
 | Job | Names |
@@ -72,7 +76,7 @@ table is a selection, not the full list — read `torchlens.__all__` for that):
 | Site discovery | `label`, `func`, `func_transform`, `module`, `contains`, `where`, `in_module`, `head`, `output`, `grad_fn`, `facet` |
 | Predicate composition | `followed_by`, `preceded_by`, `without_op`, `when` (the former `intervening` alias is removed) |
 | Activation helpers | `zero_ablate`, `mean_ablate`, `torchlens.intervention.scramble_elements` (elementwise iid scramble), `replace_with`, `swap_with`, `steer`, `scale`, `clamp`, `add_noise`, `project_onto`, `project_out`, `splice_module` |
-| Backward helpers | `hook_grad`, `zero_grad`, `scale_grad`, `clamp_grad`, `add_grad_noise`, `clip_grad` |
+| Gradient sites | `grad` (`tl.grad(site)` addresses a gradient; the activation helpers above and `clip_norm` edit it; there are no gradient-only helpers) |
 | Extraction and validation | `pluck`, `extract`, `extract_dataset`, `validate` (the former `peek` and `batched_extract` aliases are removed); disk-mode `extract_dataset` writes a self-describing manifest, resumes with `resume=True`, and loads back via `torchlens.dataset_extraction.load_extraction` (DOCUMENTED-UNSTABLE spellings) |
 | Subpackages | `facets`, `recording` |
 

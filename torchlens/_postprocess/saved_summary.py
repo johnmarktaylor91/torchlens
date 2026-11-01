@@ -3,6 +3,8 @@
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
+from .._quantities import Bytes
+
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
@@ -130,3 +132,64 @@ def refresh_pinned_autograd_memory(trace: "Trace", saved_ops: Iterable[object]) 
         for payload in (getattr(op, "out", None), getattr(op, "transformed_out", None))
     ]
     trace.pinned_autograd_memory = Bytes(pinned_autograd_bytes(payloads))
+
+
+def _has_retained_gradient_payloads(self: "Trace") -> bool:
+    """Return whether any completed backward pass retained gradient payloads.
+
+    Parameters
+    ----------
+    self:
+        Trace whose projected operation and parameter gradients should be
+        inspected.
+
+    Returns
+    -------
+    bool
+        Whether portable scrubbing must include gradient payloads.
+
+    Notes
+    -----
+    The projection is the authority here, rather than ``Trace.save_grads``:
+    ``log_backward(save_grads=...)`` may override that capture-time default on
+    each pass.
+    """
+
+    for op in getattr(self, "layer_list", ()):
+        for record in getattr(op, "grads", ()):
+            if record.grad is not None or record.transformed_grad is not None:
+                return True
+    for param in getattr(self, "param_logs", {}).values():
+        if any(record.grad is not None for record in getattr(param, "grads", ())):
+            return True
+    return False
+
+
+def _refresh_fast_saved_summary(self: "Trace") -> None:
+    """Refresh saved-output counters after retained layers are finalized.
+
+    Args:
+        self: Trace whose final retained layer entries were updated.
+
+    Returns:
+        None. Mutates aggregate saved-output fields on ``self``.
+    """
+
+    saved_layers = [
+        layer_entry
+        for layer_entry in self.layer_list
+        if getattr(layer_entry, "has_saved_activation", False)
+        and not getattr(layer_entry, "is_orphan", False)
+    ]
+    self.num_saved_ops = len(saved_layers)
+    # F20 (brainpipe D-17): read the ONE byte model -- physically retained
+    # alias-aware bytes -- never a sum of raw activation_memory fields. The
+    # explorer P4 memory truth (reduce-only captures count the retained
+    # TRANSFORMED bytes, raw-retaining captures the raw bytes) is served by
+    # this same aggregate: it counts the payloads capture actually kept.
+    from .._save_budget import retained_activation_bytes
+
+    self.saved_activation_memory = Bytes(retained_activation_bytes(saved_layers))
+    self.num_saved_layers = len({layer_entry.layer_label for layer_entry in saved_layers})
+    refresh_saved_module_call_count(self, {layer_entry.label for layer_entry in saved_layers})
+    refresh_pinned_autograd_memory(self, saved_layers)

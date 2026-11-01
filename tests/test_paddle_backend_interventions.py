@@ -283,9 +283,8 @@ def test_paddle_backward_direction_refuses_typed() -> None:
             _inputs(),
             backend="paddle",
             intervene=tl.when(
-                tl.func("functional.relu"),
+                tl.grad(tl.func("functional.relu")),
                 tl.zero_ablate(),
-                direction="backward",
             ),
         )
 

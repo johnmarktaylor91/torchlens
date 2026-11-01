@@ -14,9 +14,17 @@ if TYPE_CHECKING:
 else:
     _TraceMixinBase = object
 from .._deprecations import MISSING, MissingType
-from .._errors import InvalidArgumentError, KeywordConflictError, RecordBindingError
+from .._errors import (
+    InvalidArgumentError,
+    KeywordConflictError,
+    PayloadUnavailableError,
+    RecordBindingError,
+)
 from .._runnable import DivergencePolicy, RunProvider, RunResult
+from ..errors import RunCapabilityUnavailableError, StateBindingError
 from ..options import ReplayOptions, merge_replay_options
+from ._staged_spec import _staged_user_entries
+from ._trace_pristine import derive_pristine
 from .cleanup import (
     _LIST_FIELDS_TO_CLEAN,
     _clear_entry_attributes,
@@ -48,7 +56,6 @@ def _refuse_loaded_backward_capture(trace: "Trace", entry_point: str) -> None:
     if not loaded_from_bundle:
         return
     from .._runnable import RunnableErrorCode
-    from ..errors import RunCapabilityUnavailableError
 
     raise RunCapabilityUnavailableError(
         f"{entry_point}() is unavailable on a bundle-loaded Trace: the loaded "
@@ -131,7 +138,6 @@ def _refuse_state_compromised_live_run(trace: Any) -> None:
     compromised = getattr(runnable_state, "state_compromised", None)
     if compromised is None:
         return
-    from ..errors import StateBindingError
 
     raise StateBindingError(
         "A prior run() failed while RESTORING this trace's live model state "
@@ -294,7 +300,6 @@ def _refuse_stats_capture(trace: Any, purpose: str) -> None:
 
     if not is_stats_capture(trace):
         return
-    from .._errors import PayloadUnavailableError
 
     action = "validation" if purpose == "validation_entry" else "replay"
     raise PayloadUnavailableError(
@@ -470,8 +475,6 @@ class TraceValidationMixin(_TraceMixinBase):
             pristine reading; otherwise ``True``.
         """
 
-        from ._trace_pristine import derive_pristine
-
         return derive_pristine(self)
 
     def push(
@@ -572,6 +575,11 @@ class TraceValidationMixin(_TraceMixinBase):
         inputs:
             Unified provider input tree. Supplying this keyword returns a
             transactional :class:`RunResult` and leaves this Trace unchanged.
+            A tuple or list spreads as positional arguments, as ``tl.trace``
+            binds ``input_args``, on every provider and with ``fast=True``
+            (on a live trace a one-parameter forward takes a multi-element
+            sequence whole); any other value is the single argument, and
+            ``{"args": [...], "kwargs": {...}}`` binds both.
         seed:
             Optional deterministic live refresh, random-state, and runtime RNG seed.
         fast:
@@ -711,7 +719,6 @@ class TraceValidationMixin(_TraceMixinBase):
             # inherited-status leg would silently settle UNVERIFIABLE instead,
             # which is exactly the silence the capability table forbids.
             from .._runnable import RunnableErrorCode
-            from ..errors import RunCapabilityUnavailableError
 
             raise RunCapabilityUnavailableError(
                 "This Trace is a TRUNCATED run product (until=): it covers only "
@@ -744,13 +751,7 @@ class TraceValidationMixin(_TraceMixinBase):
             # this trace's saved values (audit-recorded and propagated); their
             # inertness on a new-input run is the PendingValueEditsWarning
             # DISCLOSURE at the run door below, never a refusal.
-            staged_spec = getattr(self, "_intervention_spec", None)
-            staged_user_hooks = [
-                hook_spec
-                for hook_spec in getattr(staged_spec, "hook_specs", ())
-                if not (getattr(hook_spec, "metadata", None) or {}).get("selection_do_engine_owned")
-            ]
-            staged_value_specs = getattr(staged_spec, "target_value_specs", ())
+            staged_user_hooks, staged_value_specs = _staged_user_entries(self)
             # The guarded fast LIVE engine applies the staged spec at real
             # module boundaries (``_fast_live_steer``), so the gate's reason
             # does not hold there; loaded providers and the ordinary live
@@ -834,7 +835,6 @@ class TraceValidationMixin(_TraceMixinBase):
                 )
             if fast and save is not None:
                 from .._runnable import RunnableErrorCode
-                from ..errors import RunCapabilityUnavailableError
 
                 raise RunCapabilityUnavailableError(
                     "run-time save= does not compose with fast=True yet: the fast "
@@ -848,32 +848,9 @@ class TraceValidationMixin(_TraceMixinBase):
                 )
             run_save_labels: Any = None
             if save is not None:
-                from .._runnable_execution import _resolve_run_until_plan
+                from .._runnable_transaction import _resolve_run_save_labels
 
-                # Reuse the static-form resolver: same accepted family (labels,
-                # module addresses, 'saved'), same typed refusals (pre-S4
-                # predicate gate, junk forms, unknown-site lookup feedback).
-                save_plan = _resolve_run_until_plan(self, save)
-                run_save_labels = frozenset(save_plan.requested_layer_labels)
-                if until is not None:
-                    until_preview = _resolve_run_until_plan(self, until)
-                    executed_raw = frozenset(until_preview.executed_raw_labels)
-                    executed_final = {
-                        layer.layer_label
-                        for layer in self.layer_list
-                        if layer._layer_label_raw in executed_raw
-                    }
-                    outside = sorted(run_save_labels - executed_final)
-                    if outside:
-                        raise InvalidArgumentError(
-                            "run-time save= selection must lie inside the "
-                            "until= executed window; out-of-window site(s): "
-                            f"{', '.join(outside)}",
-                            code="run_until_form_invalid",
-                            remedy="widen until= to cover the save= sites, or "
-                            "drop the out-of-window save= sites",
-                            argument="save",
-                        )
+                run_save_labels = _resolve_run_save_labels(self, save, until)
             if carry_state and loaded_provider in {
                 RunProvider.LOADED_SPARSE,
                 RunProvider.LOADED_ANALYSIS,
@@ -935,7 +912,8 @@ class TraceValidationMixin(_TraceMixinBase):
 
             require_structure_only_capability(self, "live_replay")
             _refuse_stats_capture(self, "live_replay")
-            from .._runnable_execution import _LiveRunOptions, run_live_trace
+            from .._runnable_execution import run_live_trace
+            from .._runnable_transaction import _LiveRunOptions
 
             _refuse_state_compromised_live_run(self)
             staged_spec = getattr(self, "_intervention_spec", None)

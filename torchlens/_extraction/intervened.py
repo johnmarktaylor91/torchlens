@@ -22,12 +22,11 @@ breaks the row-is-stimulus contract the artifact states.
 from __future__ import annotations
 
 import dataclasses
-import hashlib
-import json
 from collections.abc import Mapping
 from typing import Any
 
 from .._errors import InvalidArgumentError
+from .._utils.hashing import sha256_canonical_json
 from .harvest_schema import (
     ADDRESS_CLASSES,
     HarvestSpec,
@@ -236,7 +235,7 @@ def coerce_intervention(intervene: Any) -> InterventionPlan | None:
             "rule_id": str(rule.rule_id),
             "where": str(rule.where_repr),
             "action": str(rule.action_repr),
-            "direction": str(rule.direction),
+            "signal": str(rule.signal),
         }
         for rule in intervene.rules
     )
@@ -371,16 +370,12 @@ def _receipt_digest(plan: InterventionPlan, sites: list[str], fire_counts: list[
         ``sha256:``-prefixed hex digest.
     """
 
-    payload = json.dumps(
-        {
-            "spec_digest": plan.spec_digest,
-            "site_keys": list(sites),
-            "fire_counts": [int(count) for count in fire_counts],
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    return "sha256:" + hashlib.sha256(payload.encode()).hexdigest()
+    payload = {
+        "spec_digest": plan.spec_digest,
+        "site_keys": list(sites),
+        "fire_counts": [int(count) for count in fire_counts],
+    }
+    return "sha256:" + sha256_canonical_json(payload, default=None)
 
 
 def final_harvest_block(

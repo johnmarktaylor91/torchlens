@@ -323,6 +323,18 @@ class DictOut(nn.Module):
         return {"logits": h, "probs": torch.softmax(h, -1)}
 
 
+class DictMid(nn.Module):
+    """The same dict built by a submodule and used inside the model: a mid-graph container."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.heads = DictOut()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        d = self.heads(x)
+        return d["logits"] * d["probs"]
+
+
 class ListOut(nn.Module):
     """Three same-shape outputs in a list: more than an inline limit of two."""
 
@@ -463,6 +475,7 @@ FIXTURES: dict[str, Callable[[], tuple[nn.Module, Any]]] = {
     "BigStack": _seeded(lambda: (BigStack(), torch.randn(1, 3))),
     "ConvBnRelu2": _seeded(lambda: (ConvBnRelu2().eval(), torch.randn(1, 1, 6, 6))),
     "DictOut": _seeded(lambda: (DictOut(), torch.randn(1, 3))),
+    "DictMid": _seeded(lambda: (DictMid(), torch.randn(1, 3))),
     "ListOut": _seeded(lambda: (ListOut(), torch.randn(1, 3))),
     "Dead": _seeded(lambda: (Dead(), torch.randn(1, 3))),
     "NanMaker": _seeded(lambda: (NanMaker(), torch.ones(1, 3))),

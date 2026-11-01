@@ -446,7 +446,9 @@ def _install_instrumentation() -> _Instrumentation:
     event_snapshots: list[list[dict[str, Any]]] = []
     restore_callbacks: list[Callable[[], None]] = []
 
-    ops_module = importlib.import_module("torchlens.backends.torch.ops")
+    # The torch backend imports the setter from its home at call time, so the
+    # home module is the one place a wrapper intercepts it.
+    ops_module = importlib.import_module("torchlens.backends.torch._ops_capture_records")
     original_set_policy = ops_module.set_capture_producer_policy
 
     def observing_set_policy(trace: Any, mode: str) -> None:

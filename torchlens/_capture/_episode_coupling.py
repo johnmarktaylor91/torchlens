@@ -22,11 +22,11 @@ refusal codes are the stable branch surface. Doc of record:
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
+
+from .._utils.hashing import sha256_canonical_json
 
 __all__ = [
     "INTERVENTION_DIGEST_SCHEMA",
@@ -77,7 +77,7 @@ class CouplingFire:
     site: str
     helper: str | None
     timing: str | None
-    direction: str | None
+    signal: str | None
     replaced: bool
 
 
@@ -131,7 +131,7 @@ class CouplingSession:
                     ),
                     helper=getattr(record, "helper_name", None),
                     timing=getattr(record, "timing", None),
-                    direction=getattr(record, "direction", None),
+                    signal=getattr(record, "signal", None),
                     replaced=bool(getattr(record, "replaced", False)),
                 )
             )
@@ -185,28 +185,25 @@ def mint_intervention_digest(session: CouplingSession) -> str:
     """Mint the intervention digest binding fire evidence to the product.
 
     Hex SHA-256 over the canonical-JSON encoding of the armed rule identity
-    and the ORDERED fire facts (step, site, helper, timing, direction,
+    and the ORDERED fire facts (step, site, helper, timing, signal,
     replaced) plus the outside-step count. Every input is deterministic for
     a fixed capture (raw site labels follow capture order; no timestamps),
     so an identical re-run mints the identical digest -- the "assert digest
     identity, never output equality alone" test law.
     """
 
-    canonical = json.dumps(
+    return sha256_canonical_json(
         {
             "schema": INTERVENTION_DIGEST_SCHEMA,
             "rules": [list(row) for row in session.rule_identity],
             "fires": [
-                [fire.step, fire.site, fire.helper, fire.timing, fire.direction, fire.replaced]
+                [fire.step, fire.site, fire.helper, fire.timing, fire.signal, fire.replaced]
                 for fire in session.fires
             ],
             "outside_step_fires": session.outside_step_fires,
         },
-        sort_keys=True,
-        separators=(",", ":"),
         default=str,
     )
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def stamp_episode_steps(trace: Any, calls: list[Any]) -> None:

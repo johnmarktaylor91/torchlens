@@ -527,15 +527,18 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `torchlens.at_step(k)` on a bound call or `generate` names the k-th forward
   (step 0 is the prefill), on op-level rules and as `tl.module(address) & at_step(...)`
   boundary rules, capture-free; outside a binding or an episode capture the qualifier still
-  refuses `episode_step_selector_without_episode`. Gradient edits (`tl.zero_grad`,
-  `tl.scale_grad`, `tl.hook_grad`, ...) refuse `bind_rule_unsupported`: the lane replaces forward
-  values only; edit gradients on a `backward_ready` trace and call `trace.backward(loss)`.
+  refuses `episode_step_selector_without_episode`. Gradient sites (`tl.grad(...)`) refuse
+  `bind_rule_unsupported`: the lane replaces forward values only; edit gradients with
+  `trace.do(tl.grad(site), edit, model=model, inputs=x, loss=...)`, or capture with
+  `backward_ready=True, intervene=tl.when(tl.grad(site), edit)` and call `trace.backward(loss)`.
 
 **Recipe and Rule** *(spelling documented-unstable)*
 : `tl.Recipe` is the immutable multi-clause intervention spec that `tl.when(...)` builds and every
   intervention door accepts. `Recipe.rules` is the tuple of its clauses, each a
-  `tl.intervention.Rule` with `target` (the selector or predicate), `edit` (the helper or
-  callable) and `direction` (`"forward"`, `"backward"`, `"both"` or `None`). `Recipe.merge(*others)`
+  `tl.intervention.Rule` with `target` (the selector or predicate) and `edit` (the helper or
+  callable). `Rule.signal` is a read-only property derived from the target, never a field and
+  never saved: `"backward"` for a gradient site (`tl.grad(...)`) or a node selector, `"forward"`
+  for an activation site, `"both"` for a union of the two. `Recipe.merge(*others)`
   (also `recipe_a & recipe_b`) returns one `tl.Recipe` joining the clauses; a duplicate clause
   refuses `spec_rules_duplicate`.
 
@@ -1067,7 +1070,56 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : `tl.grad_fn` (backward grad_fn; `label=` matches one exact grad_fn label),
   `tl.grad_input` / `tl.grad_output` (backward event tensors), `tl.in_backward_pass`
   (one backward pass number), and `tl.without_op` (grad_fns without a paired forward op;
-  the former `intervening` alias is removed).
+  the former `intervening` alias is removed). These are NODE selectors: they address an
+  autograd node and its `grad_input` tuple, resolved against `trace.grad_fn_logs` after
+  `log_backward()`. The gradient of a forward site's output is addressed with `tl.grad(site)`
+  instead (see **tl.grad**).
+
+**tl.grad(site)** *(spelling documented-unstable)*
+: Builds a `GradSelector` (frozen, hashable, selector kind `"grad"`; also
+  `torchlens.intervention.selectors.grad`) that names the gradient of the loss with respect to the
+  site's OUTPUT, observed at the TorchLens boundary before it enters the op's backward function:
+  the same tensor `trace[site].grad` stores. It is an address and never calls autograd.
+  `repr(tl.grad("relu_3"))` is `tl.grad('relu_3')`. It accepts a label (pass-qualified
+  `"relu_3:2"` on multi-pass layers), any activation selector (`tl.label`, `tl.func`,
+  `tl.module`, `tl.in_module`, `tl.label_contains`, `tl.label_matches`, `tl.where`,
+  `tl.model_output`, `tl.model_input`, `tl.followed_by`, `tl.preceded_by`, `tl.at_step`, ... and
+  `&`/`|`/`~` compositions of these), an `Op` or `Layer` record, or a `find_sites()` table. An op with
+  several outputs has one gradient per output (`tuple_index` names the slot). It refuses, with
+  `SelectorCompositionError` carrying `code` and `remedy`: a nested `tl.grad`
+  (`grad_selector_nested`), a node selector or a pass qualifier inside
+  (`grad_selector_inner_not_forward`: write `tl.grad(s) & tl.in_backward_pass(2)`), a facet or
+  head selector (`grad_facet_unsupported`), a `Selection` (`grad_selection_unsupported`), and a
+  list or mapping (`grad_selector_inner_invalid`). No site door takes a pass keyword; the site
+  decides. Read side is unchanged in spelling: `trace[site].grad`, `.grads` and `.has_grad`
+  (`trace[tl.grad(s)]` is not an indexing form).
+
+**Activation, gradient and node universes**
+: Every site belongs to one universe. A bare selector or label is an ACTIVATION site (forward out
+  hook, payload the activation); `tl.grad(inner)` is a GRADIENT site (the output gradient of each
+  forward op `inner` matches); the backward selectors are NODE sites (a grad_fn post-hook per
+  `grad_input` slot). A bare label never reaches the backward graph unless wrapped in `tl.grad`.
+  `tl.grad(a) | tl.grad(b)` is one gradient branch, `tl.grad(s) | s` is two branches (activation
+  and gradient, each resolved, mounted and recorded separately; union keeps both because
+  identity is typed, never the label alone), `~tl.grad(s)` normalises to `tl.grad(~s)`, and
+  `tl.grad(s) & tl.in_backward_pass(n)` restricts the gradient branch to pass `n`. `&` across
+  universes refuses `selector_cross_universe_and` (`tl.grad(s) & s`, `s & tl.grad_fn(...)`,
+  `tl.grad(s) & tl.grad_fn(...)`), `~` over a union that spans universes refuses
+  `selector_cross_universe_not` (negate inside each branch: `tl.grad(~a) | ~a`), and a pass
+  qualifier on a bare activation selector refuses `selector_signal_mismatch`. A gradient site resolves its inner selector exactly as the
+  activation door does (zero matches refuse); a matched op the loss never reaches is a
+  `no_fire`, never a resolution error and never a zero tensor. `Trace.find_sites(tl.grad(s))`
+  returns the matched forward sites with `signal="backward"`; its `.to_dataframe()` table
+  carries that value in a `signal` column (`"forward"` for activation sites, `"backward"` for node sites).
+
+**signal (record field)** *(spelling documented-unstable)*
+: The one field that says which pass a record or event belongs to: `"forward"` or `"backward"`
+  (plan and span summaries may say `"both"`). It is spelled `signal` on `HookContext`,
+  `FireRecord`, `TapRecord`, `Edit`, `NarrationEvent` and `Rule` (derived), on the audit payload,
+  the coupling record and the span record. Sites carry no `signal=` keyword; the only door that
+  does is `tl.observers.span(name, signal="both")`. `HookContext` also carries `ctx.state` (the
+  per-(site, hook) scratch dict) and `ctx.run_state` (the run-scoped dict); a callable attached
+  to `tl.grad(s) | s` runs in both passes and reads `ctx.signal`.
 
 **`Accessor.count_by(*keys)`**
 : Every accessor (`trace.layers`, `trace.ops`, `trace.modules`, `trace.params`, ...) counts
@@ -1090,7 +1142,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `intervention_helper_renamed`; for coherent donor patching use
   `tl.patch_from`), `tl.replace_with` (fixed value), `tl.steer` (add a scaled steering direction), `tl.project_onto` /
   `tl.project_out` (keep or remove the component along a direction), and
-  `tl.splice_module` (call a module as a black-box forward splice). Availability outside
+  `tl.splice_module` (call a module as a black-box forward splice), and `tl.clip_norm` (norm clip).
+  Availability outside
   the torch backend is narrower; see the per-backend rosters in the backends guide.
   The value helpers take the keyword-only `allow_shape_change=` (default `False`), which
   allows the edit to change the site's output shape; by default the edit must preserve it. `tl.steer`
@@ -1120,18 +1173,57 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `mean_ablate(dim=...)`, the removed `mean_from(population)` is `mean_ablate(population,
   dim=None)`, and a saved spec naming `mean_fill` refuses `intervention_helper_renamed`.
 
-**Backward helpers**
-: `tl.hook_grad` builds a live/rerun-only backward hook; `tl.zero_grad`, `tl.scale_grad`,
-  `tl.clamp_grad`, `tl.clip_grad`, and `tl.add_grad_noise` edit gradient tensors during the
-  backward pass. `tl.zero_grad` and `tl.scale_grad` also take `allow_shape_change=`, with the
-  same meaning as on the value helpers.
+**Edits on gradient sites**
+: A tensor edit is a function of one tensor and the site decides which tensor, so the neutral
+  edits apply to activation and gradient sites alike: `tl.scale`, `tl.zero_ablate`, `tl.clamp`,
+  `tl.add_noise`, `torchlens.intervention.scramble_elements`, `tl.steer`, `tl.project_onto`,
+  `tl.project_out`, `tl.replace_with`, `swap_with` with a fixed tensor donor, `tl.clip_norm`,
+  and any callable `fn(tensor, *, ctx)`; their `Edit.signal` is `None`. Edits that read recorded
+  forward state (`tl.patch_from`, `tl.mean_ablate`, `tl.splice_module`, `swap_with` with a
+  site or trace donor; `Edit.signal == "forward"`) refuse on a gradient site with
+  `edit_signal_mismatch` at attach time, before any mutation. There are no gradient-only helpers:
+  `trace.do(tl.grad("relu_3"), tl.zero_ablate(), model=model, inputs=x)` zeroes a gradient.
+
+**tl.clip_norm(max_norm, norm_type=2.0)** *(spelling documented-unstable)*
+: Neutral, portable edit that rescales its tensor so its `norm_type` norm is at most `max_norm`,
+  per tensor. On `tl.grad(site)` it is gradient-norm clipping at that site.
+
+**Armed gradient edits and Trace.armed_edits** *(spellings documented-unstable)*
+: `trace.do(tl.grad(s), edit, model=model, inputs=x)` reruns the forward with the activation half of
+  the plan applied live and the gradient half carried into the result's recipe as sticky backward
+  hooks of the returned execution only (the source trace is not armed). The rerun is made
+  graph-connected whatever the source's `backward_ready` was and says so in
+  `result.last_run["backward_ready_forced"]`. Its `intervention_event_v2` envelope has status
+  `"armed"` (beside `"fired"`, `"no_fire"`, `"error"`), `fire_count=0` and
+  `extra={"armed_edits": n, "awaiting": "backward"}` (a mixed plan keeps the activation half's
+  `fired`/`no_fire` status and adds the same keys). `Trace.armed_edits` is the read-only tuple of
+  the gradient rules in the trace's recipe, and the trace summary says "N gradient edits armed;
+  call trace.backward(loss)" until they fire. Each `trace.backward(loss)` then writes one settle
+  envelope per arming transaction (`door="backward"`, `lane="live_hook"`, `parent_event_id` and
+  `extra["arming_event_id"]` the arming row, `backward_pass_index`, status `fired` or `no_fire`
+  with `no_fire_reason` `"gradient_not_reached"` or `"pass_filtered"`); a second backward never
+  rewrites the first pass's row. `loss=` on `Trace.do` (and `tl.sweep`) is a callable of the
+  returned trace returning a scalar with a `grad_fn`; the door runs `result.backward(loss(result))`
+  in the same call. A non-callable refuses `do_loss_not_callable`, a plan with no gradient site
+  refuses `do_loss_without_gradient_site`, and a callable that raises writes an `error` envelope,
+  detaches the hooks this call attached, and re-raises. `engine="set_only"` arms the gradient rules
+  on the trace itself for its own `trace.backward(loss)`. `attach_hooks(tl.grad(s), edit)`
+  registers the sticky rule without a rerun; when the trace holds no live backward graph its
+  `attach_hooks` history row carries `armed_for="next_rerun"` (the rule waits for the next rerun's
+  backward). A saved trace keeps the armed rules and records their
+  count in `annotations["armed_gradient_edits"]`.
 
 **Replay verbs**
 : `Trace.do` applies a one-shot intervention to a captured log; `Trace.push` pushes an edit
   downstream through the recorded graph (DAG replay) and `Trace.push_from` pushes from a
   pre-mutated site; `Trace.run` performs a full-forward run with the log's active
   intervention spec; `tl.sweep` captures one intervened trace per swept replacement
-  value. (The former `replay`/`replay_from`/`rerun` aliases are removed.) The replay engine operates on pass-qualified op labels
+  value. (The former `replay`/`replay_from`/`rerun` aliases are removed.) Replay re-executes
+  forward ops only, so a gradient site on `do` without `model=`/`x=`, on `engine="replay"`, or in
+  `push` refuses `replay_gradient_edit_unsupported` before any mutation ("Pass model= and x= to
+  rerun with the edit armed, then call result.backward(loss) (or pass loss=), or stage it with
+  engine='set_only' and call trace.backward(loss) on this trace"); differentiable replay of
+  gradient edits is out of scope this release. The replay engine operates on pass-qualified op labels
   (`label:pass`): cone traversal, the replay overlay, hook targets, and commits are
   keyed per pass, so edits on multi-pass (recurrence-grouped) layers touch exactly the
   addressed pass and recompute every downstream pass; a bare label naming a multi-pass
@@ -1249,8 +1341,11 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   once (the cross-shard mixing buffer) and yields token rows when `tokens=True`.
 
 **Observers**
-: `tl.observers.tap` creates a tap observer for a site; `tl.observers.span` records a named observer span
-  around captures or hook execution (the former `record_span` alias is removed);
+: `tl.observers.tap` creates a tap observer for a site (`tap(tl.grad(s))` records gradients with
+  `signal="backward"` and `grad_kind="grad_output"`; `tap(tl.grad(s) | s)` records both);
+  `tl.observers.span(name, signal="both")` records a named observer span around captures or hook
+  execution, `signal=` (`"forward"`, `"backward"` or `"both"`) scoping which records carry the span
+  name (the former `record_span` alias is removed);
   `tl.observers.register_tensor_connection` registers a manual parent-child tensor edge during
   capture.
 
@@ -1320,7 +1415,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `tl.facets` is the semantic facet namespace (canonical home `torchlens._semantic`);
   `tl.export` holds static export helpers; `tl.Bundle(...)` / `tl.Bundle` build aligned
   Trace collections and `torchlens._visualization.show_bundle_graph` renders a bundle's graph:
-  `nodes="ops"` (default) the union op graph, `nodes="members"` (spelling documented-unstable)
+  `nodes="ops"` (default) the union op graph (`signal="forward"`, the default, or
+  `"backward"` picks which pass's graph), `nodes="members"` (spelling documented-unstable)
   one node per member and one edge per relation row, from the earlier member to the later one,
   labelled with the kind, the row's `label`, on `fed_by` its basis and coverage, and on
   `selected_by` its `chosen` decision; solid edges carry token spans TorchLens checked, every other
@@ -1361,11 +1457,13 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   DOCUMENTED-UNSTABLE, for any accumulator's whole state (`tl_stats_state_v1`; a reload
   keeps folding as if never interrupted; `load_fitted(path, encoder=...)` takes back an
   `encoder=` callable, which is not stored). `tl.stats.aggregate(model,
-  dataloader, metrics)` streams activations (`target="out"`) or gradients
-  (`target="grad"`, with `loss_fn=`) through those accumulators across a whole
+  dataloader, metrics)` streams activations or gradients through those accumulators, keyed
+  by site: `metrics={"relu_3": tl.stats.Mean(), tl.grad("relu_3"): tl.stats.Mean()}` (a plain
+  string key is an activation; a gradient key needs `loss_fn=`, else
+  `aggregate_loss_fn_required`; result and cache keys use the key's canonical repr) across a whole
   dataloader without retaining per-batch tensors; `cache=True` (with `cache_dir=`, as
   for `tl.trace`; DOCUMENTED-UNSTABLE) keys the run by value (model contents and code,
-  every batch, each accumulator's starting state and encoder, `target=`, `loss_fn=`,
+  every batch, each accumulator's starting state and encoder, the metric keys, `loss_fn=`,
   versions) so a rerun restores the saved states and skips the loop, and refuses a run
   it cannot key (`stats_aggregate_cache_unkeyable`). Per-unit statistics
   (DOCUMENTED-UNSTABLE): the keyword-only `unit_axis=` on `tl.stats.Quantile` and
@@ -1485,6 +1583,168 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   tlspec v8 with closed-vocabulary load validation; the bundle-save chokepoint refuses
   `shard_local_persistence_unsupported` under any schema that would silently drop the
   disclosure (see the [error and refusal contract](error_refusal_contract.md)).
+
+## Backends: the backend protocol, maturity and conformance
+
+Every backend, torch included, fills one contract, `tl.backends.BackendProtocol`. Its capability
+table is declared in `BackendCapabilities` and measured by the shared conformance suite; the
+measured result ships as a scorecard record per backend and shows in `tl.report.doctor()`. The
+backends guide (`docs/backends.md`) carries the maturity table and links one page per backend
+(`docs/backends/<name>.md`: a tutorial, a can and cannot table and the framework requirement).
+
+**tl.backends.BackendProtocol**
+: The one trace-producing contract every backend fills (`typing.Protocol`, runtime-checkable).
+  Members: `name` (the registered name: `"torch"`, `"tf"`, `"jax"`, `"mlx"`, `"paddle"`,
+  `"tinygrad"`), `maturity`, `framework` (a `FrameworkRequirement`), `materialization`,
+  `capabilities()` (the declared `BackendCapabilities`), `runtime_available()` (`None`, or the
+  refusal code `runtime_missing` / `runtime_version_unsupported`; never raises),
+  `can_handle(model, args, kwargs)`, `capture(model, args, kwargs, **trace_options)` (returns a
+  `Trace`; an unsupported option or capability refuses typed before any framework call),
+  `reference_output(model, args, kwargs)` (the framework's own forward with no TorchLens wrapper
+  installed: the oracle's independent arm), `validate(trace, ground_truth)` (returns a
+  `ValidationStatus`, never a bare bool; a failure names the first offending op and a reason from
+  `tl.backends.VALIDATION_REASONS`), `is_tensor(value)`, `host_copy(value)` (a detached NumPy copy
+  with shape and dtype kept; 0-d stays 0-d), `realize_once(values)`, `trace_options()` and
+  `refusal_codes()` (a subset of `tl.backends.REFUSAL_CODES`). Reached through
+  `BackendSpec.protocol()`; registration checks the returned object against the member list. The
+  older `CaptureBackend` orchestration adapter stays torch's internal capture seam; it is not the
+  backend contract.
+
+**BackendSpec.protocol** and **BackendSpec.maturity**
+: `BackendSpec.protocol` is the lazy factory (`Callable[[], BackendProtocol] | None`) that returns
+  the backend's protocol object. `BackendSpec.maturity` is the backend's launch label, the single
+  source `tl.report.doctor()` and the docs read.
+
+**maturity** (`"preview"` | `"stable"`)
+: A backend's launch label, on `BackendSpec.maturity` and `BackendProtocol.maturity`. Torch is
+  `"stable"`; tf, jax, mlx, paddle and tinygrad are `"preview"`. Only a recorded maintainer
+  decision changes it, as a one-line change to the backend's registration plus the docs table;
+  no code computes it, and `graduation_report` is advisory. A backend registered `"stable"` must
+  have every graduation item met in its shipped scorecard (`tests/test_backend_maturity.py`).
+
+**materialization** (`"eager"` | `"lazy"`)
+: Whether a backend's op outputs are concrete values when the wrapped call returns (`"eager"`:
+  torch, tf, jax, paddle) or deferred until an evaluation (`"lazy"`: mlx, tinygrad). Lazy backends
+  follow the realize-once rule: the traced forward runs once to its outputs, then
+  `realize_once(values)` evaluates every recorded value in one framework evaluation before any
+  payload is read, so random-number consumption equals one eager forward. A backend that cannot do
+  this yet refuses graphs holding lazy random-number state with `rng_state_in_graph`. On eager
+  backends `realize_once` is a no-op.
+
+**tl.backends.FrameworkRequirement**
+: What a backend needs from its framework, stated once (frozen dataclass): `distributions`
+  (installed distribution names that version the framework, in lookup order), `minimum`
+  (inclusive floor), `below` (exclusive ceiling, or `None` when none is declared), `tested_through`
+  (the highest version the backend's suite has run on; a preview sets `below` or this), `pinned`
+  (the exact version the per-change CI leg installs, or `None` while the leg is unpinned) and
+  `extra` (the pyproject extra that installs the framework; `""` for a base dependency). The
+  supported range is `[minimum, below)`. `pinned` lies inside it, the extra's specifier equals it
+  and the CI leg installs `pinned` (`tests/test_backend_framework_pins.py`).
+  `tl.report.doctor()` shows the installed version, the pin and the range per backend.
+
+**tl.backends.REFUSAL_CODES** (backend refusal codes)
+: The closed registry of codes a backend may raise. A refusal is a `BackendUnsupportedError`
+  whose `exc.code` is a member (the code is the contract; message text is not pinned). It refuses
+  before any framework call with side effects and is never a silent wrong result. A raise with a
+  code outside the registry fails the backend's `c0_refusal_codes_registered` cell.
+
+  | Code | Raised when |
+  |---|---|
+  | `backward_capture_unsupported`, `fastlog_unsupported`, `interventions_unsupported`, `rng_replay_unsupported`, `streaming_unsupported`, `structure_only_capture_unsupported`, `validation_replay_unsupported`, `payload_materialization_unsupported`, `intermediate_derived_grads_unsupported` | the matching `BackendCapabilities` flag is `False` and the capability was requested; one code per flag |
+  | `trace_option_unsupported` | a trace option outside the backend's `trace_options()` |
+  | `module_identity_mode_unsupported`, `save_level_unsupported` | the requested mode or level is outside the backend's declared set |
+  | `explicit_seed_unsupported` | `random_seed=` on a preview backend |
+  | `runtime_missing`, `runtime_version_unsupported` | the framework is not importable, or its version is outside the supported range |
+  | `foreign_tensor_input` | an input leaf belongs to another framework |
+  | `constant_unrealizable` | a closure or literal constant has no readable buffer; the message names the constant op |
+  | `rng_state_in_graph` | the forward graph carries lazy random-number state that a per-op evaluation would re-evaluate, on a backend without realize-once capture |
+  | `unwrapped_op_in_capture` | a wrapper backend met an output or intermediate with no captured producer and the caller asked for a refusal; without that request the trace is marked `capture_verified=False` with this code as `capture_verification_reason` and a warning |
+
+  Codes the backends already raised before the registry (`value_dependent_branch_unsupported`,
+  `followed_by_unsupported`, `torchscript_boundary` and the rest) are members too; the frozenset is
+  the full list.
+
+**tl.backends.VALIDATION_REASONS** (validation decision reasons)
+: The closed list of per-op decision reasons a backend's `validate` uses in
+  `ValidationStatus.decisions[*]["reason"]` and the status reason counts: `replay_mismatch`,
+  `parent_payload_missing`, `no_replayable_function`, `constant_producer_leaf`,
+  `constant_parent_payload`, `user_intervention_replacement`, `effectful_region`,
+  `perturbation_insensitive`, `dtype_tolerance_exceeded`. `constant_producer_leaf`: replay reads a
+  constant's saved payload because there is no function to re-execute it from (counted as
+  exempted; a parentless op that does have a replayable function is still replayed and a mismatch
+  still fails). `constant_parent_payload`: perturbation skips a constant parent, and the consumer
+  is still perturbed on its other parents. The suite checks membership, so the list may be a
+  superset of what one backend emits.
+
+**`constant` op (closure constants and literal producers)**
+: A tensor the forward used that is neither an input, a parameter or buffer of the model, nor the
+  output of a recorded op (a closure tensor built outside the traced call) is recorded as a source
+  op with `func_name="constant"`, no parents and a saved payload; the op that read it lists it as
+  a parent. Labels follow the backend's label convention (`constant_<n>` on the previews; torch
+  numbers it like its other source ops). An op with no tensor parents whose arguments are all
+  literals (a `fill` or `ones` inside the forward) keeps its own `func_name`, has zero parents and
+  a saved payload. Constant payloads count toward the payload budget and `save=` applies.
+  Validation treats a constant as a leaf (reasons `constant_producer_leaf` and
+  `constant_parent_payload`); a constant with no readable buffer refuses `constant_unrealizable`.
+
+**`backend_scorecard:<name>` (doctor row)**
+: `tl.report.doctor()` carries one row per registered backend, key `backend_scorecard:<name>`,
+  label `"<name> backend scorecard"`, built from the scorecard record shipped in the backend's
+  package (no framework is imported and nothing executes). Status `pass` when the record's highest
+  tier is the durable tier with no failed cell, `known_broken` when any cell failed, `scope` when the framework
+  is not installed here, `not_tested` when no record ships. Details read
+  `"<maturity>; <passed>/<denominator> cells passed, <unsupported> unsupported, <failed> failed;
+  pinned <pinned>, installed <version or absent>, supported [<minimum>, <below>)"`; the
+  suggestion names the install extra when the framework is absent, otherwise the first failed
+  cell.
+
+**torchlens.conformance.graduation_report(backend)**
+: Returns a `GraduationReport(backend, items)` of six `GraduationItem(id, met, detail)` rows
+  computed from the backend's shipped scorecard, the repository and the registry;
+  `GraduationReport.met` is true when all six are met. Advisory: it never changes `maturity`.
+  The items: G1 the backend passes the conformance suite torch passes, every unsupported
+  capability a typed refusal; G2 replay validation works on it, including after load; G3 at least
+  two pretrained families from the backend's own ecosystem are captured and validated; G4 a
+  per-change CI leg installs the pinned framework version inside a stated range; G5 its docs page
+  has a runnable tutorial and a can and cannot table equal to the scorecard's capability summary;
+  G6 its spellings are frozen: no unstable marker in the backend package and a glossary entry for
+  every public name. The report is embedded in the scorecard record and printed by
+  `python -m torchlens.conformance.scorecard --backend <name> --graduation`.
+
+**`python -m torchlens.conformance.scorecard --backend <name>`**
+: Computes the backend's scorecard. `--write` writes the shipped record
+  (`torchlens/backends/<name>/scorecard.json`, in the wheel), `--check` recomputes and exits
+  nonzero when the shipped record differs (the backend's pinned CI leg runs it, so the record is a
+  tested fact, never hand-edited) and `--graduation` prints the graduation report from the shipped
+  record.
+
+**Capability summary** (`supported` | `unsupported` | `untested`)
+: The scorecard's per-flag reading of `BackendCapabilities`: `supported` when the flag is `True`
+  and the suite consumed it, `unsupported` when it is `False` and its `c1_refusal_<flag>` cell
+  passed (the request refuses with the contracted code), `untested` when it is `False` and the
+  refusal cell failed or did not run. Each backend page's can and cannot table equals this
+  summary and renders `untested` as "not yet proven" (`tests/test_backend_docs_lockstep.py`).
+
+**Conformance case ids added by the protocol**
+: Tier 0, the provider API (no model execution): `c0_protocol_complete`, `c0_framework_requirement_consistent`,
+  `c0_refusal_codes_registered`, `c0_capability_table_complete`. Tier 1 (capture):
+  `c1_graph_integrity`, `c1_intermediates_match`, `c1_shape_metadata_matches_payload`,
+  `c1_validation_passes`, `c1_validation_names_reason`, `c1_constant_parents_recorded`,
+  `c1_rng_consumed_once`, `c1_no_silent_gap`, one `c1_refusal_<flag>` per capability flag the
+  backend sets `False` and one `c1_refusal_trace_option_<name>` per public trace option outside
+  its `trace_options()`. Tier 2 (durable): `c2_payload_values_equal`, `c2_validation_after_load`. A
+  typed refusal inside any other cell makes it `unsupported`; an untyped exception, a wrong value
+  or a trace marked `capture_verified=False` makes it `failed`.
+
+**Per-backend namespaces**
+: `tl.backends.torch` is the stable PyTorch eager backend (`docs/backends/torch.md`).
+  `tl.backends.tf` (`GradOptions`, `TFBackend`; `docs/backends/tf.md`), `tl.backends.jax`
+  (`GradOptions`, `JAXBackend`; `docs/backends/jax.md`), `tl.backends.mlx` (`GradOptions`,
+  `MLXBackend`; `docs/backends/mlx.md`), `tl.backends.paddle` (`GradOptions`, `PaddleBackend`;
+  `docs/backends/paddle.md`) and `tl.backends.tinygrad` (`GradOptions`, `TinygradBackend`;
+  `docs/backends/tinygrad.md`) are the five preview backends. Each `GradOptions` requests the
+  backend's derived gradients (`trace.derived_grads`, opt-in intermediate derived gradients); each
+  `<Name>Backend` is the backend's capture object behind `tl.trace(..., backend="<name>")`.
 
 ## Unstable surfaces (documented-unstable; no deprecation shim owed)
 
@@ -2083,13 +2343,13 @@ default-keep); mask-application semantics documented-unstable*
 : `tl.Edit` is the public edit-object type (the old class
   spelling is removed, U00 clean break). `repr(edit)` prints the
   public spelling: a builtin edit prints as the public call that builds it
-  (`tl.scale_grad(2.0)`, default-valued keywords omitted; evaluating it
-  rebuilds an equal edit), any other edit as `tl.Edit('name', kind=...,
+  (`tl.scale(2.0)`, default-valued keywords omitted; evaluating it
+  rebuilds an equal edit), any other edit as `tl.Edit('name', signal=...,
   portability=...)`. An `Edit` is a frozen record of its identity:
   `helper_name` (also read as `name`), positional `args`, keyword `kwargs`
-  (a tuple of name and value pairs), `kind`, `portability`, `metadata`
+  (a tuple of name and value pairs), `signal`, `portability`, `metadata`
   (name and value pairs, such as `("keep_grad", True)` or the selection
-  disclosure a masked `do()` adds), `direction`, `batch_independent`,
+  disclosure a masked `do()` adds), `batch_independent`,
   `compatible_with_append` (an edit that may change the output shape is
   refused on an append rerun unless this is true) and `selection_recipe`
   (the selection recipe a selection-targeted `do()` attaches; `None`
@@ -2750,12 +3010,22 @@ deprecation shim owed*
   attention node's `flops` label field or `flops` overlay row is followed by
   the note.
 
-**`output_style_unknown`** — *unstable — no deprecation shim owed*
-: The typed refusal `tl.errors.OutputStyleUnknownError` (an `InvalidArgumentError`
-  subclass) for a `CaptureOptions(output_style=...)` no detector can resolve, with a did-you-mean over the built-in styles
-  (`classification`, `imagenet`, `imagenet1k`, `hf_text`). It refuses before
-  the forward when no custom output detector is registered, and after the
-  capture when registered custom detectors all declined the style.
+**`decode_style_unknown`** — *unstable — no deprecation shim owed*
+: The typed refusal `tl.errors.DecodeStyleUnknownError` (an `InvalidArgumentError`
+  subclass) for a `Trace.decode_output(style=...)` no built-in or registered custom output
+  detector resolves, with a did-you-mean over the built-in styles (`classification`,
+  `imagenet`, `imagenet1k`, `hf_text`). The same code refuses `style="hf_text"` without a
+  usable `tokenizer=`. Output decoding is read-time only: the capture runs the automatic
+  detector pass with no option, and `CaptureOptions` has no decode field.
+
+**`decode_head_unknown`** — *unstable — no deprecation shim owed*
+: `Trace.decode_output(head=...)` named a head that is not one of the trace's output heads
+  (the output container paths such as `"logits"`, `"0"`, `"0.logits"`); the refusal lists the
+  available heads in `fields["available_heads"]`.
+
+**`decode_head_ambiguous`** — *unstable — no deprecation shim owed*
+: `Trace.decode_output(style=...)` found several qualifying output heads and none was named;
+  pass `head=` one of the heads the refusal lists.
 
 **tl.bridge.transformers.register_attention(model=None)** — *unstable — no deprecation shim owed*
 : Registers TorchLens as a Hugging Face attention backend: one call puts a
@@ -2883,14 +3153,32 @@ deprecation shim owed*
   pass with an op missing or extra; every preview roster row declares one.
 
 **torchlens.conformance.PreviewScorecard** — *unstable — no deprecation shim owed*
-: The frozen canonical scorecard: `scorecard_version`, `backend`,
+: The frozen canonical scorecard (`scorecard_version`
+  "torchlens.conformance.preview_scorecard.v2"): `backend`,
   `framework_version` (`""` when absent), `suite_version`,
   `torchlens_version`, `cells` (`ScorecardCell` rows of `tier`, `case_id`,
   `family`, `state`, `detail`), `counts` (cells per state plus `denominator`),
   `highest_tier` (highest tier whose every cell passed, cumulative from C0, or
-  `""`) and `sha256` over the canonical bytes with that field excluded.
-  `to_canonical_json()` renders the attested bytes (sorted keys, compact,
-  ASCII).
+  `""`), `maturity` (the backend's launch label), `framework_requirement`
+  (the backend's `FrameworkRequirement` as strings), `capabilities` (the
+  capability summary: flag to `supported`, `unsupported` or `untested`),
+  `roster_groups` (roster rows per group, `config_built` and `ecosystem`),
+  `graduation` (the six graduation items) and `sha256` over the canonical bytes
+  with that field excluded. `to_canonical_json()` renders the attested bytes
+  (sorted keys, compact, ASCII). The record each backend ships is
+  `torchlens/backends/<name>/scorecard.json`.
+
+**RosterModel protocol fields** — *unstable — no deprecation shim owed*
+: `RosterModel.expected_intermediates` (op kind to the value or values a NumPy
+  computation from the row's own definition expects; read by
+  `c1_intermediates_match`), `RosterModel.has_constants` (the row's forward
+  reads a closure constant or a literal producer; enables
+  `c1_constant_parents_recorded`), `RosterModel.random_init` (the row builds
+  random-init layers; enables `c1_rng_consumed_once` on lazy backends) and
+  `RosterModel.group` (`config_built`, the small per-change models that earn no
+  claim, or `ecosystem`, pinned pretrained families from the backend's own
+  ecosystem that run only when `TORCHLENS_CONFORMANCE_ECOSYSTEM=1` or their
+  weights are cached).
 
 **trace.ops counting (`len(trace.ops) == trace.num_ops`)** — *unstable — no deprecation shim owed*
 : `len`, iteration, integer indexing, `keys()`/`values()`/`items()` and
@@ -3021,7 +3309,9 @@ deprecation shim owed*
 
 **Backend registry**
 : `tl.backends.spec(name)`, `tl.backends.specs()`, `tl.backends.register(spec)`,
-  `tl.backends.unregister(name)` and `tl.backends.resolve(...)`.
+  `tl.backends.unregister(name)` and `tl.backends.resolve(...)`. Each `BackendSpec` carries
+  `maturity` and the `protocol` factory (see "Backends: the backend protocol, maturity and
+  conformance").
   `BackendCapabilities.has_streaming` is the streaming-save capability flag (flag name
   `has_streaming`). `CaptureBackend.cleanup_stopped_forward_session` tears down a forward
   stopped early.
@@ -3408,6 +3698,14 @@ The sections above describe each surface in depth.
 ### Namespace names
 | Spelling | Meaning |
 | --- | --- |
+| `tl.backends.BackendProtocol` | The one contract every backend fills: capability table, capture, validate, reference output, host copy, realize-once |
+| `tl.backends.FrameworkRequirement` | A backend's framework distributions, supported range, tested-through version, CI pin and install extra |
+| `tl.backends.REFUSAL_CODES` | Closed registry of backend refusal codes (`exc.code` of `BackendUnsupportedError`) |
+| `tl.backends.VALIDATION_REASONS` | Closed list of per-op validation decision reasons every backend's `validate` uses |
+| `tl.clip_norm` | Neutral edit that rescales a tensor (on `tl.grad(site)`, the gradient) to at most `max_norm` in `norm_type` norm |
+| `tl.conformance.GraduationItem` | One graduation check: `id` (`G1` to `G6`), `met`, `detail` |
+| `tl.conformance.GraduationReport` | The six graduation items for one backend; advisory, never changes `maturity` |
+| `tl.conformance.graduation_report` | Compute a backend's graduation report from its shipped scorecard |
 | `tl.debug.BackwardNanReport` | Result of `tl.debug.bisect_nan_backward`: the backward pass walked, the earliest provable non-finite birth and the full transition ledger |
 | `tl.debug.BisectNanReport` | Result of `tl.debug.bisect_nan` |
 | `tl.debug.BisectPrecisionReport` | Result of `tl.debug.bisect_precision` |
@@ -3468,6 +3766,7 @@ The sections above describe each surface in depth.
 | `tl.export.unregister_target` | Remove one export-target registration |
 | `tl.fingerprint.StructuralHashMismatchError` | Raised when a model's provisional structural hash differs from its pin |
 | `tl.fingerprint.content` | Return a deterministic SHA-256 digest of nested tensor content |
+| `tl.grad` | Address the gradient of a site's output: `tl.grad("relu_3")`; builds a `GradSelector` |
 | `tl.intervention.BundleComparisonError` | The same class as `tl.errors.BundleComparisonError` |
 | `tl.intervention.Population` | A prepared, provenance-stamped donor population: `members`, `datums`, `origin`, `kind`, `content_digest`, `digest_kind`, `identity`, `eligible_indices(...)`, `mean(dim=None, ...)`, `std(dim=None, ...)`; built by `tl.intervention.population` |
 | `tl.intervention.label_contains` | Create a label-substring selector |
@@ -3547,6 +3846,8 @@ The sections above describe each surface in depth.
 | `Accessor.search` | Return records whose lookup key contains `needle` |
 | `AmbiguousBackendError.default_remedy` | The remedy the error names when none is passed |
 | `BackendCapabilities.has_validation_replay` | Whether the backend can perform replay validation |
+| `BackendSpec.maturity` | The backend's launch label, `"preview"` or `"stable"` |
+| `BackendSpec.protocol` | Lazy factory returning the backend's `BackendProtocol` object |
 | `BackwardEstimate.is_freeze_pattern_captured` | Whether the parameter freeze pattern was captured |
 | `BackwardEstimate.is_grad_disabled_at_capture` | Whether grad was disabled when the forward was captured |
 | `BackwardEstimate.num_frozen_weight_ops` | Ops whose weight gradient is skipped because the weight is frozen |
@@ -3612,6 +3913,7 @@ The sections above describe each surface in depth.
 | `DiagnosticFinding.check_name` | Check name (`"nonfinite"`, `"dtype_regime"`, `"layout"` or `"confinement"`) |
 | `DiffReport.rows_with_status` | Return the rows carrying one closed-vocabulary status |
 | `DryRun.filter` | Return a new trace with decisions from a new op predicate |
+| `Edit.signal` | Pass an edit is bound to: `"forward"` for edits that read recorded activations, `None` for neutral edits |
 | `EffectsView.rank_changes` | Rank candidates by the size of their change from baseline, descending |
 | `EffectsView.to_selection` | Convert the view to a selection: the union of its WHERE regions |
 | `EpisodeOptions.acknowledge_step_cost` | Accept a step declaration beyond the cost ceiling |
@@ -3631,6 +3933,7 @@ The sections above describe each surface in depth.
 | `FindNanReport.found` | Whether a NaN or Inf was found |
 | `FindNanReport.label_status` | Whether the reported label is final (`"final"`) or absent (`"none"`) |
 | `FindNanReport.message` | Human-readable diagnostic summary |
+| `FireRecord.signal` | Pass the fire happened in: `"forward"` or `"backward"` |
 | `GqaInfo.num_query_heads` | Number of query heads |
 | `GradFnSketch.num_nodes` | Number of walked nodes |
 | `GradReceptiveField.batch_support` | Batch indices the influence set reaches, or `None` |
@@ -3646,6 +3949,8 @@ The sections above describe each surface in depth.
 | `GradReceptiveField.target_key` | Return the direction-stable key of the target graph point |
 | `GradReceptiveField.unit_shape` | Shape of the target unit |
 | `GradReceptiveField.warnings` | Warnings raised while measuring |
+| `GraduationItem.met` | Whether this graduation check holds |
+| `GraduationReport.met` | Whether all six graduation items hold |
 | `GuessInputShapeReport.attempts` | Probe diary as `(shape, outcome)` tuples |
 | `GuessInputShapeReport.constraining_module` | Module qualname that constrained the inferred shape, when known |
 | `GuessInputShapeReport.constraining_op` | Operation name that constrained the inferred shape, when known |
@@ -3660,6 +3965,9 @@ The sections above describe each surface in depth.
 | `HealthFacts.num_unmapped_ops` | Ops the health partition could not map |
 | `HistogramPoint.bin_edges` | Histogram bin edges for the point's counts |
 | `HistoryReader.num_chunks` | Number of committed chunks |
+| `HookContext.run_state` | Run-scoped scratch dict shared by every hook of one run |
+| `HookContext.signal` | Pass the hook is firing in: `"forward"` or `"backward"` |
+| `HookContext.state` | Per-(site, hook) scratch dict |
 | `HtmlReportOptions.deterministic` | Suppress the manifest timestamp for byte-exact regeneration |
 | `HtmlReportOptions.max_array_bytes` | Thumbnail byte budget, enforced before payloads are written |
 | `HtmlReportOptions.max_array_sites` | Thumbnail site budget, enforced before payloads are written |
@@ -3700,6 +4008,11 @@ The sections above describe each surface in depth.
 | `PreprocessingComparison.unknown_fields` | Names of every uncomparable field, in field order |
 | `PreprocessingComparison.unknown_reasons` | Deduplicated reasons behind every unknown field, in field order |
 | `PreprocessingComparison.verdict` | `"verified"` / `"mismatch"` / `"unknown"` |
+| `PreviewScorecard.capabilities` | Capability summary: flag to `supported`, `unsupported` or `untested` |
+| `PreviewScorecard.framework_requirement` | The backend's `FrameworkRequirement`, as strings |
+| `PreviewScorecard.graduation` | The six graduation items embedded in the record |
+| `PreviewScorecard.maturity` | The backend's launch label when the record was computed |
+| `PreviewScorecard.roster_groups` | Roster rows per group (`config_built`, `ecosystem`) |
 | `ProfileReport.has_rescue_rerun` | Whether the profile needed a rescue rerun |
 | `ProfileReport.is_structure_only` | Whether the profiled capture kept structure only |
 | `ReceptiveField.axis_roles` | Axis layout of the input grid: per-axis kinds, windowed axes and their provenance |
@@ -3713,11 +4026,16 @@ The sections above describe each surface in depth.
 | `Recording.num_predicate_failure_overflows` | Predicate failures beyond the kept list (counted, not stored) |
 | `RooflineRow.is_cache_resident_hint` | Whether the row's working set likely fits in cache (a hint, not a measurement) |
 | `RosterModel.builder` | Zero-arg factory returning `(model, example_input)` |
+| `RosterModel.expected_intermediates` | Op kind to the NumPy-computed values `c1_intermediates_match` compares |
+| `RosterModel.group` | `config_built` (per-change toy rows) or `ecosystem` (pinned pretrained families) |
+| `RosterModel.has_constants` | The row reads a closure constant or literal producer (`c1_constant_parents_recorded`) |
+| `RosterModel.random_init` | The row builds random-init layers (`c1_rng_consumed_once`) |
 | `Rule.action_repr` | Canonical rendering of the action over its current tensor content |
 | `Rule.address_class` | How the rule addresses its sites (value-dependent by default) |
 | `Rule.decision` | The rule's normalized decision, or `None` |
 | `Rule.payload_fidelity` | Audit fidelity of this rule's action payload |
-| `Rule.rule_id` | Content-derived rule identity over WHERE, action and direction |
+| `Rule.rule_id` | Content-derived rule identity over WHERE and action |
+| `Rule.signal` | Pass the rule edits (`"forward"`, `"backward"` or `"both"`), derived from its target |
 | `Rule.where_repr` | Canonical rendering of the rule's WHERE clause |
 | `RunReport.has_carried_state` | Whether mutations were deliberately left on the live model; the default run restores declared state and reports `False` |
 | `RunReport.is_poisoned` | Whether the run left the provider unusable for further runs |
@@ -3747,7 +4065,9 @@ The sections above describe each surface in depth.
 | `SummaryTotals.retained_bytes` | Bytes this object holds now |
 | `Super.absent_names` | Return bundle member names not represented by this view |
 | `Super.is_complete` | Return whether every bundle member is represented |
+| `TapRecord.signal` | Pass the tapped value belongs to: `"forward"` or `"backward"` |
 | `TensorSpec.from_tensor` | Build a spec from a tensor (alternate constructor) |
+| `Trace.armed_edits` | Read-only tuple of the gradient rules in the trace's recipe |
 | `Trace.random_seed` | The torch seed the capture ran under (`seed=` on the capture door), or `None`; saved with the trace |
 | `TraceSlice.empty` | Return whether the slice has no members (emptiness is disclosure) |
 | `ValidationDiagnostic.check_name` | Stable name for the validation diagnostic source |
@@ -3948,7 +4268,7 @@ alphabetical order.
 | `Trace.conditional_edge_call_indices` | Dict mapping (parent, child, conditional id, branch kind) to the sorted pass indices in which that branch-entry edge occurred |
 | `Trace.conditional_records` | List of `ConditionalEvent` records, one per conditional statement observed during capture |
 | `Trace.conditionals` | Accessor for the conditional records, looked up by integer ordinal or stable label |
-| `Trace.decode_output` | Return the decoded output rows captured during tracing, up to `k` ranks per batch item; raise if no decoded output was captured |
+| `Trace.decode_output` | Return the decoded output rows captured during tracing, up to `k` ranks per batch item; with `style=`, `head=` or `tokenizer=` decode again on demand from the retained output tensors without touching `decoded_output`; raise if nothing was captured and no output tensor is retained |
 | `Trace.decoded_output` | The decoded model output captured at trace time, such as top-k labels per batch item, or `None` |
 | `Trace.DEFAULT_FILL_STATE` | Class-level dict of the default fill value for each Trace field, derived from the field policy table |
 | `Trace.derived_grads` | Accessor for leaf-level gradients derived explicitly or by a non-torch backend |
@@ -4831,9 +5151,13 @@ alphabetical order.
 | `captured_bytes=` | field and constructor keyword of `MemoryFacts`, `SummaryTotals` |
 | `captured_saved_ops=` | field and constructor keyword of `MemoryFacts` |
 | `degradations=` | field and constructor keyword of `MergeReport` |
+| `expected_intermediates=` | field of `RosterModel`: NumPy-computed intermediate values per op kind |
 | `flops_attributions=` | field and constructor keyword of `BackwardStatus` |
+| `framework_requirement=` | field and constructor keyword of `PreviewScorecard` |
+| `graduation=` | field and constructor keyword of `PreviewScorecard` |
 | `has_carried_state=` | field and constructor keyword of `RunReport` |
 | `has_constancy_hint=` | field and constructor keyword of `ClipLedgerSnapshot` |
+| `has_constants=` | field of `RosterModel`: the row reads a closure constant or literal producer |
 | `has_identical_target_resolution=` | field and constructor keyword of `SpecCompat` |
 | `has_intervention=` | field and constructor keyword of `NarrationEvent` |
 | `has_rescue_rerun=` | field and constructor keyword of `ProfileReport` |
@@ -4868,6 +5192,8 @@ alphabetical order.
 | `is_tripped=` | field and constructor keyword of `WatchdogSnapshot` |
 | `is_verified=` | field and constructor keyword of `CaptureFacts` |
 | `item_list=` | keyword of `tl.types.Accessor`: the ordered records |
+| `loss=` | keyword of `Trace.do` and `tl.sweep`: a callable of the returned trace whose scalar result the door runs `backward` on |
+| `met=` | field and constructor keyword of `GraduationItem` |
 | `min_stimuli=` | keyword of the `tl.repgeom` geometry functions (`classical_mds`, `effective_dimensionality`, `scree`): fewest stimuli accepted |
 | `num_audited_ops=` | field and constructor keyword of `DTypeRangeReport` |
 | `num_backward_passes=` | field and constructor keyword of `BackwardStatus`, `BackwardStyleInventory` |
@@ -4897,10 +5223,14 @@ alphabetical order.
 | `param_names=` | field and constructor keyword of `CheckFinding` |
 | `peak_bytes_per_s=` | field and constructor keyword of `MachineBalance` |
 | `peak_flops_per_s=` | field and constructor keyword of `MachineBalance` |
+| `random_init=` | field of `RosterModel`: the row builds random-init layers |
 | `retained_bytes=` | field and constructor keyword of `MemoryFacts`, `SummaryTotals` |
 | `retained_lazy_ops=` | field and constructor keyword of `MemoryFacts` |
 | `retained_present_ops=` | field and constructor keyword of `MemoryFacts` |
+| `roster_groups=` | field and constructor keyword of `PreviewScorecard` |
+| `run_state=` | field and constructor keyword of `HookContext`: the run-scoped scratch dict (`ctx.run_state`) |
 | `serve=` | keyword of `tl.export.netron`: open the exported graph in a local viewer |
+| `signal=` | keyword of `tl.observers.span` (`"forward"`, `"backward"` or `"both"`) and `torchlens._visualization.show_bundle_graph` (`"forward"` or `"backward"`) |
 | `source_ref=` | keyword of `tl.types.Accessor`: weak reference to the owning trace |
 | `state_dict=` | keyword of `Trace.load_state_dict`: the sparse-run state to stage |
 | `uncounted_op_counts=` | field and constructor keyword of `BackwardStatus` |

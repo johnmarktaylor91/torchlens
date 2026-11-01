@@ -29,12 +29,13 @@ from ..._utils.tensor_utils import (
     safe_copy,
     safe_to,
 )
+from ._completeness_escape_state import record_alias_mutation_candidate
+from ._completeness_origins import internal_scalar_read
 from ._tl import (
     get_tensor_label,
     mark_detached_saved_activation,
     pop_same_object_mutation,
 )
-from .completeness_witness import internal_scalar_read, record_alias_mutation_candidate
 from .tensor_tracking import (
     _append_module_suffix_to_equivalence_class,
     _get_equivalence_class,
@@ -44,17 +45,6 @@ from .tensor_tracking import (
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
 
-if TYPE_CHECKING:
-    from .ops import (
-        _SETTER_MUTATION_FUNC_NAMES,
-        _admit_save_budget,
-        _admit_saved_args_budget,
-        _commit_save_budget,
-        _commit_saved_args_budget,
-        _is_inplace_augmented_assignment_dunder,
-        _label_version_baseline,
-        _should_keep_alias_mutation_contract,
-    )
 
 __all__ = (
     "_log_output_tensor_info",
@@ -487,6 +477,29 @@ def _log_output_tensor_info(
         fields_dict["internal_source_ancestors"] = {_label_raw}
 
 
+def _save_call_args_fields(
+    trace: "Trace", fields_dict: dict[str, Any], t_args: Any, t_kwargs: Any
+) -> None:
+    """Snapshot the call's arguments into ``fields_dict`` under the save budget."""
+
+    if trace.save_arg_values:
+        # Admit BEFORE the clones allocate (r8 R34, sol 2): the snapshot
+        # used to clone every tensor argument first and charge after.
+        from ._ops_arguments import _copy_saved_call_args
+
+        arg_reservations = _admit_saved_args_budget(trace, fields_dict, t_args, t_kwargs)
+        fields_dict["has_saved_args"] = True
+        saved_args, saved_kwargs = _copy_saved_call_args(
+            fields_dict["func_name"], tuple(t_args), dict(t_kwargs), True
+        )
+        fields_dict["saved_args"] = list(saved_args)
+        fields_dict["saved_kwargs"] = saved_kwargs
+        _commit_saved_args_budget(trace, fields_dict, arg_reservations)
+    else:
+        fields_dict["saved_args"] = None
+        fields_dict["saved_kwargs"] = None
+
+
 def _save_activation_fields(
     trace: "Trace",
     fields_dict: dict[str, Any],
@@ -531,9 +544,8 @@ def _save_activation_fields(
         # the non-differentiable summary role, the transient safe_copy is
         # skipped entirely -- the reducer sees a detached view of the live
         # output at the save point (correct: no later in-place mutation has
-        # run yet). Function-local import: this function is rebound into
-        # backends.torch.ops globals (_split_rebind), so a new module-level
-        # name would not resolve there.
+        # run yet). Function-local import: layering (the summary-role module
+        # imports the backend), not a cycle at import.
         from ..._ir.summary_role import is_summary_transform
 
         reduce_only = not store_raw and is_summary_transform(activation_transform)
@@ -679,21 +691,7 @@ def _save_activation_fields(
         if out_sink is not None and isinstance(fields_dict["out"], torch.Tensor):
             out_sink(fields_dict["_label_raw"], fields_dict["out"])
 
-        if trace.save_arg_values:
-            # Admit BEFORE the clones allocate (r8 R34, sol 2): the snapshot
-            # used to clone every tensor argument first and charge after.
-            from ._ops_retention import _copy_saved_arg_tree
-
-            arg_reservations = _admit_saved_args_budget(trace, fields_dict, t_args, t_kwargs)
-            fields_dict["has_saved_args"] = True
-            fields_dict["saved_args"] = [_copy_saved_arg_tree(arg, True) for arg in t_args]
-            fields_dict["saved_kwargs"] = {
-                key: _copy_saved_arg_tree(value, True) for key, value in t_kwargs.items()
-            }
-            _commit_saved_args_budget(trace, fields_dict, arg_reservations)
-        else:
-            fields_dict["saved_args"] = None
-            fields_dict["saved_kwargs"] = None
+        _save_call_args_fields(trace, fields_dict, t_args, t_kwargs)
     except Exception as exc:
         if writer is not None:
             writer.abort(f"Failed while saving out for {fields_dict['_label_raw']}: {exc}")
@@ -759,3 +757,21 @@ def _retention_device(tensor: torch.Tensor, configured: Any) -> torch.device:
     if configured in (None, "same", str(tensor.device)):
         return tensor.device
     return torch.device(configured)
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_capture_records import (  # noqa: E402
+    _is_inplace_augmented_assignment_dunder,
+    _label_version_baseline,
+    _should_keep_alias_mutation_contract,
+)
+from ._ops_retention import (  # noqa: E402
+    _admit_save_budget,
+    _admit_saved_args_budget,
+    _commit_save_budget,
+    _commit_saved_args_budget,
+)
+from .ops import (  # noqa: E402
+    _SETTER_MUTATION_FUNC_NAMES,
+)

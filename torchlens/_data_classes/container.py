@@ -24,6 +24,12 @@ from .._ir.container_registry import (
     Role,
     Site,
 )
+from ._container_labels import (
+    _display_key,
+    _leaf_reference,
+    _path_component_text,
+    _same_container_spec,
+)
 
 if TYPE_CHECKING:
     from .op import Op
@@ -836,27 +842,70 @@ def reconstruct_output(trace: Any, values: Literal["out", "transformed"] = "out"
     """
 
     output_labels = tuple(getattr(trace, "output_layers", ()) or ())
+    opaque_member: str | None = None
     for label in output_labels:
         op = trace.ops[label]
         container = container_from_op(op)
+        if container is None or container.root_kind != "final_output":
+            continue
         # A path-only final-output view (supports_reconstruct=False) means the
         # container path was retained for replay validation but the structural
         # spec was never persisted because capture_container_structure was off.
         # Such a view cannot be rebuilt; fall through to the informative error
         # rather than raising the opaque "path-only" message.
-        if (
-            container is not None
-            and container.root_kind == "final_output"
-            and container.supports_reconstruct
-        ):
+        if container.supports_reconstruct:
             return container.reconstruct(values=values)
+        if opaque_member is None:
+            opaque_member = _opaque_member_text(container.spec)
     if len(output_labels) == 1:
         return trace.ops[output_labels[0]].out
-    raise PayloadUnavailableError(
-        "No reconstructable final-output container was captured",
-        code="container_not_reconstructable",
-        remedy="trace with capture_container_structure=True to persist container structure",
-    )
+    problem = "No reconstructable final-output container was captured"
+    remedy = "trace with capture_container_structure=True to persist container structure"
+    if opaque_member is not None:
+        # The structure is recorded and holds an opaque node: the capture option cannot help.
+        problem = (
+            f"The final-output container cannot be rebuilt: {opaque_member} is or holds "
+            "an object TorchLens cannot represent (container kind 'opaque', for example a "
+            "Hugging Face DynamicCache)"
+        )
+        remedy = (
+            "read the output leaves one by one through trace.output_layers, register "
+            "the type with tl.types.register_container, or have the model return only "
+            "supported containers (for a Hugging Face model, use_cache=False leaves "
+            "the cache out)"
+        )
+    raise PayloadUnavailableError(problem, code="container_not_reconstructable", remedy=remedy)
+
+
+def _opaque_member_text(spec: ContainerSpec | None) -> str | None:
+    """Name the first opaque node of a final-output spec, or ``None`` when there is none.
+
+    Parameters
+    ----------
+    spec:
+        Final-output container spec, ``None`` for a path-only view.
+
+    Returns
+    -------
+    str | None
+        ``"the model output"`` for an opaque root, ``"its member 'a.b'"`` for a
+        nested opaque node, ``None`` when no node is opaque.
+    """
+
+    if spec is None:
+        return None
+    pending: list[tuple[tuple[str, ...], ContainerSpec]] = [((), spec)]
+    while pending:
+        path, node = pending.pop(0)
+        if node.kind == "opaque":
+            if not path:
+                return "the model output"
+            return f"its member {'.'.join(path)!r}"
+        pending.extend(
+            ((*path, _path_component_text(component)), child)
+            for component, child in node.child_specs
+        )
+    return None
 
 
 def reconstruct_container(
@@ -1003,25 +1052,6 @@ def _op_is_final_output(op: Op) -> bool:
     return any(trace.ops[label] is op for label in output_labels if label in trace.ops)
 
 
-def _same_container_spec(left: ContainerSpec | None, right: ContainerSpec | None) -> bool:
-    """Return whether two specs represent the same captured container root.
-
-    Parameters
-    ----------
-    left:
-        Candidate sibling spec.
-    right:
-        Seed op spec.
-
-    Returns
-    -------
-    bool
-        ``True`` when specs are the same object or equal frozen dataclasses.
-    """
-
-    return left is right or (left is not None and right is not None and left == right)
-
-
 def _value_for_op(op: Op, source: str) -> Any:
     """Return a leaf value from an op.
 
@@ -1137,43 +1167,6 @@ def _leaf_paths(
             yield child_path
         else:
             yield from _leaf_paths(child_spec, prefix=child_path)
-
-
-def _display_key(key: Any) -> str:
-    """Return a display label for an immediate key.
-
-    Parameters
-    ----------
-    key:
-        User-facing key.
-
-    Returns
-    -------
-    str
-        Readable key label.
-    """
-
-    return f"[{key!r}]" if not isinstance(key, str) else key
-
-
-def _leaf_reference(value: Any) -> str:
-    """Return a stable leaf reference for a container tree line.
-
-    Parameters
-    ----------
-    value:
-        Leaf value, usually an ``Op``.
-
-    Returns
-    -------
-    str
-        Output-style layer label when available, otherwise ``repr(value)``.
-    """
-
-    layer_label = getattr(value, "layer_label", None)
-    if layer_label is not None:
-        return str(layer_label)
-    return repr(value)
 
 
 __all__ = [

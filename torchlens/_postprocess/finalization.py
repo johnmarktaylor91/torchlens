@@ -41,15 +41,22 @@ from .._data_classes.prehook import ModuleInputSnapshot, PreHookEffect
 from .._io import ArtifactError, BlobRef
 from .._io.accessor_rebuild import rebuild_trace_accessors
 from .._io.lazy import LazyActivationRef
-from .._io.manifest import sha256_of_file
 from .._io.scrub import BlobSpec
 from .._io.streaming import BundleStreamWriter
 from .._ir.container_registry import _iter_tensor_leaves
 from .._quantities import Bytes, Duration, Flops
-from .._utils._torch_symbols import torch_attr
+from .._utils._torch_symbols import torch_dtype_named
+from .._utils.hashing import sha256_file
 from ..backends.torch._tl import clear_meta
+from ._conditional_records import (
+    _find_conditional_evaluation_entry_edge,
+    _make_public_conditional_ids,
+    _merge_conditional_role_labels,
+    _resolve_conditional_bool_op,
+)
 from ._module_census import bind_layer_conditional_roles, op_space_labels, uncalled_module_addresses
 from ._multipass_params import pass_param_addresses, union_multipass_params
+from .saved_summary import _has_retained_gradient_payloads
 
 if TYPE_CHECKING:
     from .._data_classes.layer import Layer
@@ -1480,147 +1487,6 @@ def _build_conditional_records(self: "Trace") -> None:
     self.conditionals = ConditionalAccessor(conditionals)
 
 
-def _make_public_conditional_ids(condition_events: list[Any]) -> dict[int, str]:
-    """Build unique public ids for conditional records.
-
-    Parameters
-    ----------
-    condition_events:
-        Conditional events in trace order.
-
-    Returns
-    -------
-    dict[int, str]
-        Mapping from dense ``ConditionalEvent.id`` to the public conditional id
-        exposed through ``Trace.conditionals`` and role refs.
-    """
-
-    id_counts: dict[str, int] = defaultdict(int)
-    base_ids_by_event_id: dict[int, str] = {}
-    for event in condition_events:
-        terminal_bool_label = event.bool_layers[0] if event.bool_layers else str(event.id)
-        base_id = f"cond_{terminal_bool_label}"
-        base_ids_by_event_id[event.id] = base_id
-        id_counts[base_id] += 1
-
-    return {
-        event.id: (
-            base_ids_by_event_id[event.id]
-            if id_counts[base_ids_by_event_id[event.id]] == 1
-            else f"{base_ids_by_event_id[event.id]}__event_{event.id}"
-        )
-        for event in condition_events
-    }
-
-
-def _resolve_conditional_bool_op(
-    self: "Trace",
-    terminal_bool: str,
-    witnessed_indices: list[int],
-    bool_layers_raw: list[str] | None,
-) -> Any | None:
-    """Resolve the op whose ``bool_value`` backs one arm's single evaluation.
-
-    Parameters
-    ----------
-    self:
-        Trace whose lookup keys resolve conditional bool ops.
-    terminal_bool:
-        Renamed public label of the arm's terminal bool layer.
-    witnessed_indices:
-        Indices into the owning event's ``bool_layers`` witnessed for this
-        arm's test. Only single-witness arms reach this resolver.
-    bool_layers_raw:
-        Index-aligned RAW labels stashed by phase 5c, or ``None`` for
-        legacy/degraded events.
-
-    Returns
-    -------
-    Any | None
-        The exact evaluating op. The raw label is preferred because it is
-        unique per pass: a rolled multi-pass bool layer renames every pass to
-        ONE base label, and an unqualified ``layer_dict_all_keys`` lookup
-        resolves last-writer-wins to an arbitrary pass (round-24 condbranch
-        seal, S3). Falls back to the renamed label for legacy events.
-    """
-
-    if (
-        bool_layers_raw is not None
-        and len(witnessed_indices) == 1
-        and 0 <= witnessed_indices[0] < len(bool_layers_raw)
-    ):
-        raw_op = self.layer_dict_all_keys.get(bool_layers_raw[witnessed_indices[0]])
-        if raw_op is not None:
-            return raw_op
-    return self.layer_dict_all_keys.get(terminal_bool)
-
-
-def _merge_conditional_role_labels(
-    role_labels_by_cond_arm: dict[tuple[str, int, str], list[str]],
-    role_key: tuple[str, int, str],
-    labels: list[str],
-) -> None:
-    """Merge one conditional-role label list without dropping prior members.
-
-    Parameters
-    ----------
-    role_labels_by_cond_arm:
-        Mapping from ``(conditional_id, arm_index, role)`` to layer labels.
-    role_key:
-        Key naming the arm-role bucket to update.
-    labels:
-        Labels to merge into the bucket.
-    """
-
-    merged = dict.fromkeys([*role_labels_by_cond_arm.get(role_key, []), *labels])
-    role_labels_by_cond_arm[role_key] = list(merged)
-
-
-def _find_conditional_evaluation_entry_edge(
-    self: "Trace",
-    bool_layers: list[str],
-) -> tuple[str, str] | None:
-    """Return the main-graph entry edge for a conditional evaluation chain.
-
-    Parameters
-    ----------
-    self:
-        Trace whose finalized layer graph contains the conditional evaluation.
-    bool_layers:
-        Bool-producing layer labels for one conditional event, in evaluation order.
-
-    Returns
-    -------
-    tuple[str, str] | None
-        Edge from the upstream main-graph parent into the first bool-producing
-        layer, or ``None`` when no distinct upstream parent is available.
-    """
-
-    if not bool_layers:
-        return None
-
-    first_bool_label = bool_layers[0]
-    if first_bool_label not in self.layer_dict_all_keys:
-        return None
-
-    visited_labels: set[str] = set()
-    parent_queue: deque[str] = deque(self.layer_dict_all_keys[first_bool_label].parents)
-    while parent_queue:
-        parent_label = parent_queue.popleft()
-        if parent_label in visited_labels:
-            continue
-        visited_labels.add(parent_label)
-        if parent_label not in self.layer_dict_all_keys:
-            continue
-
-        parent_layer = self.layer_dict_all_keys[parent_label]
-        if parent_label != first_bool_label and parent_layer.has_output_descendant:
-            return (parent_label, first_bool_label)
-        parent_queue.extend(parent_layer.parents)
-
-    return None
-
-
 def _set_tracing_finished(self: "Trace") -> None:
     """Step 17: Mark the Trace and all OpLogs as pass-finished.
 
@@ -1671,7 +1537,6 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
         return
 
     from .._capture.outcome import outcome_for
-    from .._io.scrub import scrub_for_save
     from ..intervention.injection import refuse_injection_logged_stream_finalize
 
     # F44: the streamed writer stages its own bundle and never passes the
@@ -1679,20 +1544,9 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
     # keeps a streamed artifact from silently dropping recorded computation.
     refuse_injection_logged_stream_finalize(self)
     try:
-        scrubbed_state, blob_specs, unsupported_tensor_records = scrub_for_save(
-            self,
-            include_outs=True,
-            include_grads=_has_retained_gradient_payloads(self),
-            include_saved_args=self.save_arg_values,
-            include_rng_states=self.save_rng_states,
-            include_custom_attributes=getattr(writer, "include_custom_attributes", True),
-            include_buffer_values=getattr(writer, "include_buffer_values", True),
-        )
+        scrubbed_state, blob_specs, unsupported_tensor_records = _scrub_streamed_trace(self, writer)
         scrubbed_state, blob_specs = _reuse_streamed_blob_ids(
-            self,
-            scrubbed_state=scrubbed_state,
-            blob_specs=blob_specs,
-            writer=writer,
+            self, scrubbed_state=scrubbed_state, blob_specs=blob_specs, writer=writer
         )
         final_path = writer.stage_for_settlement(
             scrubbed_state=scrubbed_state,
@@ -1711,7 +1565,7 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
     setattr(
         self,
         "_source_bundle_manifest_sha256",
-        sha256_of_file(
+        sha256_file(
             Path(writer.tmp_path if not writer._finalized else final_path) / "manifest.json"
         ),
     )
@@ -1723,35 +1577,40 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
     self._defer_streaming_bundle_finalization = False
 
 
-def _has_retained_gradient_payloads(self: "Trace") -> bool:
-    """Return whether any completed backward pass retained gradient payloads.
+def _scrub_streamed_trace(
+    self: "Trace", writer: BundleStreamWriter
+) -> tuple[dict[str, Any], list[BlobSpec], list[dict[str, str]]]:
+    """Scrub a streamed trace for staging, numbering its blobs past the stream's ids.
 
     Parameters
     ----------
     self:
-        Trace whose projected operation and parameter gradients should be
-        inspected.
+        Model log whose streamed bundle is being finalized.
+    writer:
+        The capture's streaming bundle writer.
 
     Returns
     -------
-    bool
-        Whether portable scrubbing must include gradient payloads.
-
-    Notes
-    -----
-    The projection is the authority here, rather than ``Trace.save_grads``:
-    ``log_backward(save_grads=...)`` may override that capture-time default on
-    each pass.
+    tuple[dict[str, Any], list[BlobSpec], list[dict[str, str]]]
+        Scrubbed state, blob specs and unsupported tensor audit records.
     """
 
-    for op in getattr(self, "layer_list", ()):
-        for record in getattr(op, "grads", ()):
-            if record.grad is not None or record.transformed_grad is not None:
-                return True
-    for param in getattr(self, "param_logs", {}).values():
-        if any(record.grad is not None for record in getattr(param, "grads", ())):
-            return True
-    return False
+    from .._io.scrub import scrub_for_save
+
+    return scrub_for_save(
+        self,
+        include_outs=True,
+        include_grads=_has_retained_gradient_payloads(self),
+        include_saved_args=self.save_arg_values,
+        include_rng_states=self.save_rng_states,
+        include_custom_attributes=getattr(writer, "include_custom_attributes", True),
+        include_buffer_values=getattr(writer, "include_buffer_values", True),
+        # Scrub ids start past every id the capture streamed: a tensor field with
+        # no streamed blob (a synthetic output row, an orphan payload) otherwise
+        # takes an id the stream already wrote once an op streamed during capture
+        # was pruned, and its ref silently resolves to that op's payload.
+        blob_id_floor=writer._issued_blob_count(),
+    )
 
 
 def _evict_streamed_outs(self: "Trace") -> None:
@@ -1994,7 +1853,7 @@ def _dtype_from_manifest_string(dtype_name: str) -> torch.dtype:
         If the dtype name is unknown to the current runtime.
     """
 
-    dtype_obj = torch_attr(dtype_name)  # r47 secD_1: no lazy ``torch.__getattr__``
-    if not isinstance(dtype_obj, torch.dtype):
+    dtype_obj = torch_dtype_named(dtype_name)
+    if dtype_obj is None:
         raise ArtifactError(f"Unsupported dtype string in manifest: {dtype_name}.")
     return dtype_obj

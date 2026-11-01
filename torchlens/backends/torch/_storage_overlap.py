@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import torch
 
+from ... import _state
+
 
 def _storage_overlap_byte_interval(t: torch.Tensor) -> tuple[int, int]:
     """Return the ``[start, end)`` byte interval ``t`` can address in its storage.
@@ -137,3 +139,19 @@ def _strided_views_share_storage_elements(mutated: torch.Tensor, alias: torch.Te
         return True
     hits = (relative >= 0) & (relative < count_b * stride_b) & (relative % stride_b == 0)
     return bool(hits.any())
+
+
+def _storage_range(tensor: torch.Tensor) -> tuple[int, int]:
+    """Return byte range occupied by a tensor inside its storage."""
+
+    with _state.pause_logging():
+        element_size = tensor.element_size()
+        start = int(tensor.storage_offset()) * element_size
+        end = start + int(tensor.numel()) * element_size
+    return start, end
+
+
+def _ranges_overlap(left: tuple[int, int], right: tuple[int, int]) -> bool:
+    """Return whether two half-open byte ranges overlap."""
+
+    return left[0] < right[1] and right[0] < left[1]

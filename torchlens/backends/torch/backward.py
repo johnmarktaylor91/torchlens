@@ -9,14 +9,13 @@ from __future__ import annotations
 import contextlib
 import functools
 import inspect
-import os
 import re
 import threading
 import time
 import warnings
 import weakref
 from collections import OrderedDict, deque
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field, replace
 from typing import Any, Literal, cast
 
@@ -28,6 +27,12 @@ from ..._capture.peak_memory import (
     process_rss_bytes,
     record_backward_peak,
     reset_peak_rss,
+)
+from ..._data_classes._fork_lineage import _is_fork_relative
+from ..._data_classes._grad_fn_naming import (
+    _grad_fn_label_parts,
+    _grad_fn_type_from_class_name,
+    _normalize_grad_fn_type,
 )
 from ..._data_classes.backward_pass import BackwardPass
 from ..._data_classes.func_call_location import FuncCallLocation
@@ -47,16 +52,17 @@ from ..._ir.events import (
 )
 from ..._quantities import Bytes, Duration
 from ..._state import pause_logging
+from ..._utils._package_frames import is_torchlens_code
 from ..._utils._torch_compat import (
     HAS_SAVED_TENSORS_HOOKS_PATCHABLE,
     get_accumulate_grad_class,
     get_current_autograd_node_fn,
 )
-from ..._utils._torch_symbols import torch_attr
+from ..._utils._torch_symbols import torch_dtype_named
 from ..._utils.introspection import _get_code_qualname, _get_col_offset
 from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
 from ...errors import ConfigurationError
-from ._backward_dispatch import outside_census
+from ._backward_dispatch import backward_window, outside_census
 from ._backward_markers import begin_grad_fn_marker, end_grad_fn_marker, executing_grad_fn_ref
 from ._backward_roots import _autograd_roots_from_call, _root_tensors, _roots_by_trace
 from ._fire_timing import (
@@ -64,6 +70,13 @@ from ._fire_timing import (
     _fire_timing_stamp_list,
     _pop_matching_fire_start,
     _register_fire_timing_prehook,
+)
+from ._grad_fn_orders import (
+    _assign_grad_fn_orders,
+    _max_call_order,
+    _order_attribution_coverage,
+    _pass_order_from_roots,
+    _resolved_order_for_creator,
 )
 from ._grad_fn_source import _grad_fn_is_custom, _grad_fn_source_metadata
 from ._gradfn_markers import (
@@ -101,7 +114,6 @@ _ORIGINAL_SAVED_TENSORS_HOOKS_ENTER: Callable[..., Any] | None = None
 _INSTALLED_SAVED_TENSORS_HOOKS_INIT: Callable[..., Any] | None = None
 _INSTALLED_SAVED_TENSORS_HOOKS_ENTER: Callable[..., Any] | None = None
 _SAVED_TENSORS_HOOKS_INIT_PATCHED = False
-_TORCHLENS_PKG_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _INFERENCE_ONLY_BACKWARD_ERROR = (
     "Cannot run log_backward on a trace captured with inference_only=True: the autograd "
     "graph was discarded during capture. inference_only is either passed explicitly or "
@@ -225,8 +237,7 @@ def _capture_backward_call_context(trace: Any) -> FuncCallLocation | None:
         return None
     frame = frame.f_back
     while frame is not None:
-        filename = os.path.abspath(frame.f_code.co_filename)
-        if not filename.startswith(_TORCHLENS_PKG_DIR):
+        if not is_torchlens_code(frame.f_code):
             source_loading_enabled = bool(getattr(trace, "save_code_context", False))
             func_name = frame.f_code.co_name
             return FuncCallLocation(
@@ -348,7 +359,7 @@ def _active_forward_op_count_at_trigger() -> int | None:
 def _register_slot_gradient_prehook(
     grad_fn_handle: Any,
     output_nr: int,
-    tensor_hook: Callable[[torch.Tensor | None], None],
+    tensor_hook: Callable[[torch.Tensor | None], torch.Tensor | None],
 ) -> Any:
     """Register a tensor gradient hook as a node pre-hook on one output slot.
 
@@ -363,7 +374,9 @@ def _register_slot_gradient_prehook(
     output_nr:
         Output slot of that node the tensor version occupies.
     tensor_hook:
-        Hook taking the gradient of one tensor (``None`` when none arrived).
+        Hook taking the gradient of one tensor (``None`` when none arrived) and
+        returning the gradient to pass on (an edited tensor replaces the
+        slot's entry, so ``tl.grad(site)`` edits reach the node).
 
     Returns
     -------
@@ -371,10 +384,18 @@ def _register_slot_gradient_prehook(
         Removable handle of the registered pre-hook.
     """
 
-    def prehook(grad_outputs: tuple[torch.Tensor | None, ...]) -> None:
-        """Pass the slot's incoming gradient to the tensor hook, unchanged."""
+    def prehook(
+        grad_outputs: tuple[torch.Tensor | None, ...],
+    ) -> tuple[torch.Tensor | None, ...] | None:
+        """Pass the slot's incoming gradient to the tensor hook; splice back an edit."""
 
-        tensor_hook(grad_outputs[output_nr] if output_nr < len(grad_outputs) else None)
+        incoming = grad_outputs[output_nr] if output_nr < len(grad_outputs) else None
+        result = tensor_hook(incoming)
+        if result is None or result is incoming:
+            return None
+        updated = list(grad_outputs)
+        updated[output_nr] = result
+        return tuple(updated)
 
     return grad_fn_handle.register_prehook(prehook)
 
@@ -1059,198 +1080,6 @@ def _prefer_direct_pairing_source_for_paired_ops(trace: Any) -> None:
             grad_fn_record.module_membership_source = "paired"
 
 
-def _resolved_order_for_creator(
-    creator_object_id: int | None,
-    grad_fn_logs: dict[int, GradFn],
-) -> int | None:
-    """Return the derived order for a creator-attributed grad-fn node."""
-
-    if creator_object_id is None:
-        return 1
-    creator = grad_fn_logs.get(creator_object_id)
-    creator_order = None if creator is None else creator.order
-    if creator_order is None:
-        return None
-    return creator_order + 1
-
-
-def _pass_order_from_roots(
-    root_grad_fn_ids: Sequence[int],
-    grad_fn_logs: dict[int, GradFn],
-    pass_orders: dict[int, int],
-) -> int | None:
-    """Derive a backward pass order from its root grad-fn nodes."""
-
-    root_orders = [
-        _root_based_order(grad_fn_logs[root_id], pass_orders)
-        for root_id in root_grad_fn_ids
-        if root_id in grad_fn_logs
-    ]
-    if not root_orders:
-        return None
-    if any(root_order is None for root_order in root_orders):
-        return None
-    if len(root_orders) != len(root_grad_fn_ids):
-        return None
-    unique_orders = set(root_orders)
-    if len(unique_orders) != 1:
-        return None
-    return cast(int, root_orders[0])
-
-
-def _root_based_order(root_grad_fn: GradFn, pass_orders: dict[int, int]) -> int | None:
-    """Return the ROOT-based pass order for one root grad-fn.
-
-    Parameters
-    ----------
-    root_grad_fn:
-        Root autograd node for the backward pass.
-    pass_orders:
-        Already materialized pass orders keyed by pass index.
-
-    Returns
-    -------
-    int | None
-        Root-based order, or ``None`` when the root cannot be attributed.
-    """
-
-    origin_backward_pass = root_grad_fn.origin_backward_pass
-    if origin_backward_pass is None:
-        return root_grad_fn.order
-    origin_order = pass_orders.get(origin_backward_pass)
-    if origin_order is None:
-        return root_grad_fn.order
-    return origin_order + 1
-
-
-def _order_attribution_coverage(
-    calls: Sequence[GradFnCall],
-    grad_fn_logs: dict[int, GradFn],
-) -> float | None:
-    """Return the fraction of calls with resolved grad-fn order metadata."""
-
-    if not calls:
-        return None
-    labels_with_order = {
-        grad_fn.label for grad_fn in grad_fn_logs.values() if grad_fn.order is not None
-    }
-    covered = sum(1 for call in calls if call.label in labels_with_order)
-    return covered / len(calls)
-
-
-def _max_call_order(
-    calls: Sequence[GradFnCall],
-    grad_fn_logs: dict[int, GradFn],
-) -> int | None:
-    """Return the maximum resolved GradFn order among calls in one pass.
-
-    Parameters
-    ----------
-    calls:
-        Materialized GradFn calls for a backward pass.
-    grad_fn_logs:
-        GradFn records keyed by object id.
-
-    Returns
-    -------
-    int | None
-        Highest order observed among the pass calls, or ``None`` when no call has
-        resolved order metadata.
-    """
-
-    label_to_order = {
-        grad_fn.label: grad_fn.order
-        for grad_fn in grad_fn_logs.values()
-        if grad_fn.order is not None
-    }
-    call_orders = [label_to_order[call.label] for call in calls if call.label in label_to_order]
-    return max(call_orders) if call_orders else None
-
-
-def _assign_grad_fn_orders(grad_fn_logs: dict[int, GradFn]) -> None:
-    """Populate resolved GradFn order values from creators and known topology."""
-
-    for grad_fn_record in grad_fn_logs.values():
-        grad_fn_record.order = _resolved_order_for_creator(
-            grad_fn_record.creator_object_id,
-            grad_fn_logs,
-        )
-
-    changed = True
-    while changed:
-        changed = False
-        for grad_fn_record in grad_fn_logs.values():
-            if grad_fn_record.creator_object_id is not None or grad_fn_record.has_op:
-                continue
-            child_orders: list[int] = []
-            for child_id in grad_fn_record.next_grad_fn_ids:
-                child = grad_fn_logs.get(child_id)
-                if child is not None and child.order is not None:
-                    child_orders.append(child.order)
-            if not child_orders:
-                continue
-            inferred_order = max(child_orders)
-            if inferred_order > 1 and grad_fn_record.order != inferred_order:
-                grad_fn_record.order = inferred_order
-                changed = True
-
-
-def _normalize_grad_fn_type(grad_fn_handle: Any) -> str:
-    """Normalize an autograd grad_fn_handle class name for TorchLens labels.
-
-    Parameters
-    ----------
-    grad_fn_handle:
-        Autograd function object.
-
-    Returns
-    -------
-    str
-        Lowercased class name with a trailing ``Backward<digits>`` suffix removed.
-    """
-    return re.sub(r"Backward\d*$", "", type(grad_fn_handle).__name__).lower()
-
-
-def _grad_fn_label_parts(
-    trace: Any,
-    type: str,
-    _layer_label: str | None,
-    type_counter: dict[str, int],
-    total_num: int,
-) -> tuple[int, int, str]:
-    """Build numeric label fields for one grad_fn_handle.
-
-    Parameters
-    ----------
-    trace:
-        Trace being updated.
-    type:
-        Normalized grad_fn_handle type.
-    _layer_label:
-        Matching forward layer label, or ``None`` for intervening grad_fns.
-    type_counter:
-        Running per-type counter for intervening grad_fns.
-    total_num:
-        One-based discovery index in the backward graph.
-
-    Returns
-    -------
-    tuple[int, int, str]
-        GradFn type index, total index, and user-facing label.
-    """
-    del trace, _layer_label
-    type_counter[type] = type_counter.get(type, 0) + 1
-    type_num = type_counter[type]
-    label = f"{type}_back_{type_num}_{total_num}"
-    return type_num, total_num, label
-
-
-def _grad_fn_type_from_class_name(class_name: str) -> str:
-    """Normalize an autograd class name for native backward labels."""
-
-    return re.sub(r"Backward\d*$", "", class_name).lower()
-
-
 @dataclass
 class _BackwardFoldState:
     """Cross-fold accumulators for incremental backward projection.
@@ -1930,9 +1759,8 @@ def _torch_dtype_from_string(dtype_name: str) -> torch.dtype | str:
     """Return a ``torch.dtype`` for canonical dtype strings when possible."""
 
     if dtype_name.startswith("torch."):
-        dtype_attr = dtype_name.removeprefix("torch.")
-        dtype = torch_attr(dtype_attr)  # r47 secD_1: no lazy ``torch.__getattr__``
-        if isinstance(dtype, torch.dtype):
+        dtype = torch_dtype_named(dtype_name.removeprefix("torch."))
+        if dtype is not None:
             return dtype
     return dtype_name
 
@@ -3297,8 +3125,6 @@ def _run_backward_with_capture(
     result = None
     trace._tl_active_backward_bracket = True
     try:
-        from ._backward_dispatch import backward_window
-
         with backward_window(trace, pass_index):
             result = backward_callable()
     except BaseException:
@@ -3425,6 +3251,7 @@ def _run_backward_with_capture(
         _materialize_backward_projections(trace)
         if status == "ok":
             _warn_zero_match_backward_interventions(trace)
+            _settle_armed_gradient_edits(trace, pass_index)
         if cleanup_error is not None:
             # Pre-fence, the pending-clear failure raised here-abouts anyway
             # (before the later memory raise), so first-cleanup-error keeps
@@ -3433,6 +3260,28 @@ def _run_backward_with_capture(
         if memory_error is not None:
             raise memory_error
     return result
+
+
+def _settle_armed_gradient_edits(trace: Any, pass_index: int) -> None:
+    """Write the settle rows of the gradient edits armed on ``trace`` (SPEC 3.3).
+
+    The settle law lives with the doors that arm (``_trace_intervention``);
+    this is the one call at backward pass end. Until that function exists on
+    the branch this runs on, there is nothing armed to settle.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose backward pass just ended.
+    pass_index:
+        One-based index of that pass.
+    """
+
+    from ..._data_classes import _trace_intervention
+
+    settle = getattr(_trace_intervention, "settle_armed_gradient_edits", None)
+    if settle is not None:
+        settle(trace, pass_index=pass_index)
 
 
 def disarm_triggers(trace: Any) -> None:
@@ -3480,8 +3329,6 @@ def _capture_autograd_engine_call(
     Any
         Return value from ``engine_callable``.
     """
-
-    from .tensor_tracking import _is_fork_relative
 
     # A backward the user directed at one trace (open managed bracket) must
     # not be re-captured by that trace's FORK RELATIVES just because they

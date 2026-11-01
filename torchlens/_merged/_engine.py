@@ -26,12 +26,26 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import Any
 
-from ..distributed._audit import MembershipLineageVerdict, verify_membership_lineages
-from ..distributed._ledger import InstallEpoch, membership_digest_for_ranks
+from ..distributed._audit import MembershipLineageVerdict
+from ._derive_steps import (
+    _STRUCTURAL_KINDS,
+    _guard_scope,
+    absolute_seq_mismatch,
+    align_seq_deltas,
+    audit_membership_lineages,
+    build_group_table,
+    c10d_delta_mismatch,
+    check_membership_authority,
+    collect_channel_records,
+    declared_rank_gap,
+    presence_gap,
+    stored_alignment,
+    stored_value_status,
+    value_divergence,
+)
 from ._enums import (
-    TENSORLESS_KINDS,
     WITNESS_IDENTITY_KINDS,
     WITNESS_NOT_APPLICABLE_KINDS,
     WITNESS_VERDICT_BACKENDS,
@@ -41,7 +55,8 @@ from ._enums import (
     MergeValueStatus,
 )
 from ._errors import MergedFinding, MergeInputError
-from ._evidence import P2P_KINDS, RankEvidence
+from ._evidence import RankEvidence
+from ._relation_table import _relation_findings, _roles_of
 
 __all__ = [
     "JoinKey",
@@ -53,15 +68,6 @@ __all__ = [
 
 JoinKey = tuple[str, int, str, int]
 """``(membership_digest, lifetime_ordinal, channel, seq_delta)``."""
-
-_STRUCTURAL_KINDS = frozenset(
-    {
-        "group_lifetime_evidence_conflict",
-        "relation_violation",
-        "order_contradiction",
-        "correlation_delta_mismatch",
-    }
-)
 
 
 @dataclass(frozen=True)
@@ -193,52 +199,6 @@ class MergeDerivation:
         }
 
 
-def _guard_scope(evidence: Mapping[int, RankEvidence]) -> None:
-    """Refuse out-of-C1-scope boundaries typed (p2p/pipeline: C3; DTensor: C2)."""
-
-    for rank in sorted(evidence):
-        if evidence[rank].shard_local:
-            # L8 3.2c(2), the SECOND scope key (marker-keyed; refusal-widening
-            # beside the geometry key below, which STAYS): a member whose
-            # trace carries the shard-local capture marker refuses regardless
-            # of boundary geometry. Runs inside derive_merge, so directly
-            # constructed RankEvidence refuses too (the membership-authority
-            # precedent). Narrowing this refusal is D-L8-MRG, never this code.
-            raise MergeInputError(
-                f"Rank {rank} is a shard-local capture (distributed_scope == "
-                "'rank_local_shard'). Sharded-topology merging stays refused "
-                "pending its own authorizing ruling plus the merged-side "
-                "tiling-proof deliverable; the geometry-independent marker "
-                "key refuses it at merge scope.",
-                code=MergedErrorCode.MERGE_SCOPE_UNSUPPORTED,
-                rank=rank,
-                reason="shard_local_member_unsupported",
-            )
-        for index, entry in enumerate(evidence[rank].boundaries):
-            kind = entry["kind"]
-            channel = entry["correlation"]["channel"]
-            if kind in P2P_KINDS or channel != "coll":
-                raise MergeInputError(
-                    f"Rank {rank} boundary {index} is a point-to-point boundary "
-                    f"(kind={kind!r}, channel={channel!r}). C1 merges symmetric "
-                    "collectives only; p2p/pipeline pairing is rung C3.",
-                    code=MergedErrorCode.MERGE_SCOPE_UNSUPPORTED,
-                    rank=rank,
-                    kind=kind,
-                    channel=channel,
-                )
-            for role in entry.get("roles", ()):
-                if role.get("logical_shape") is not None or role.get("placements") is not None:
-                    raise MergeInputError(
-                        f"Rank {rank} boundary {index} carries DTensor dual "
-                        "geometry; sharded-topology merging is rung C2 and stays "
-                        "refused until its capture-fidelity census is green.",
-                        code=MergedErrorCode.MERGE_SCOPE_UNSUPPORTED,
-                        rank=rank,
-                        kind=kind,
-                    )
-
-
 def _role_digests(entry: dict[str, Any]) -> tuple[tuple[str, ...] | None, tuple[str, ...] | None]:
     """Return ``(contribution_digests, destination_digests)`` or ``None`` each."""
 
@@ -261,148 +221,6 @@ def _role_digests(entry: dict[str, Any]) -> tuple[tuple[str, ...] | None, tuple[
             )
         values.append(tuple(str(item) for item in digests))
     return values[0], values[1]
-
-
-def _roles_of(entry: dict[str, Any], role_names: Iterable[str]) -> list[dict[str, Any]]:
-    """Return the ordered role entries matching ``role_names``."""
-
-    wanted = set(role_names)
-    return [role for role in entry.get("roles", ()) if role.get("role") in wanted]
-
-
-def _relation_findings(
-    key: JoinKey,
-    kind: str,
-    membership: tuple[int, ...],
-    entries: dict[int, dict[str, Any]],
-) -> list[MergedFinding]:
-    """Evaluate the per-kind relation table over the presenting entries (1.5)."""
-
-    findings: list[MergedFinding] = []
-    ranks = tuple(sorted(entries))
-
-    def violation(detail: str) -> None:
-        """Append one ``relation_violation`` finding for this key."""
-
-        findings.append(
-            MergedFinding(
-                kind="relation_violation",
-                detail=f"{kind} at key {key}: {detail}",
-                membership_digest=key[0],
-                key=key,
-                ranks=ranks,
-            )
-        )
-
-    kinds_seen = {entry["kind"] for entry in entries.values()}
-    if len(kinds_seen) > 1:
-        violation(f"ranks disagree on the collective kind: {sorted(kinds_seen)}")
-        return findings
-
-    # Role cardinality vs kind (b6-opus-R18-1 belt): the set-of-shapes
-    # agreement below is vacuously satisfied when EVERY presenting rank holds
-    # zero roles, so uniform roles deletion rendered the TOP verdict. Evidence
-    # parse refuses that shape outright; this belt keeps direct engine callers
-    # honest and names each offending rank.
-    if kind not in TENSORLESS_KINDS:
-        all_roles = ("contribution", "destination", "contribution_destination")
-        for rank, entry in sorted(entries.items()):
-            if not _roles_of(entry, all_roles):
-                violation(f"rank {rank} presents zero tensor roles for a tensor-carrying boundary")
-
-    reduce_ops = {entry.get("reduce_op") for entry in entries.values()}
-    if len(reduce_ops) > 1:
-        violation(f"ranks disagree on the reduce op: {sorted(map(str, reduce_ops))}")
-
-    def shapes(entry: dict[str, Any], names: Iterable[str]) -> tuple[tuple[int, ...], ...]:
-        """Collect the shapes of ``entry``'s roles matching any of ``names``, in order."""
-
-        return tuple(tuple(role["shape"]) for role in _roles_of(entry, names))
-
-    group_size = len(membership)
-    contribution_roles = ("contribution", "contribution_destination")
-    destination_roles = ("destination", "contribution_destination")
-    if kind in ("all_reduce", "all_to_all_single", "all_gather_into_tensor", "broadcast"):
-        shape_sets = {
-            shapes(entry, contribution_roles) or shapes(entry, destination_roles)
-            for entry in entries.values()
-        }
-        if len(shape_sets) > 1:
-            violation(f"tensor shapes disagree across ranks: {sorted(shape_sets)}")
-    # Distinct-shape-set agreement belt for the remaining symmetric kinds
-    # (R18-1 iii fallback): every role of these kinds shares one element
-    # geometry across the group (all_gather/gather/scatter slots equal the
-    # contribution shape; reduce inputs equal outputs; reduce_scatter feeds
-    # group_size output-shaped slots; reduce_scatter_tensor's two shapes
-    # repeat on every rank), so the SET of distinct role shapes must agree
-    # across ranks even though per-rank role COUNTS legitimately differ
-    # (root list vs leaf tensor). all_to_all stays out: uneven splits make
-    # per-rank shape sets legitimately rank-local. A UNIFORM cross-rank shape
-    # rewrite still passes this belt -- coherent reauthoring, the documented
-    # out-of-scope boundary (only a per-core cross-check against the member's
-    # own op records could catch it, and parse never dereferences the trace).
-    if kind in (
-        "all_gather",
-        "gather",
-        "scatter",
-        "reduce",
-        "reduce_scatter",
-        "reduce_scatter_tensor",
-    ):
-        distinct_shape_sets = {
-            frozenset(shapes(entry, ("contribution", "destination", "contribution_destination")))
-            for entry in entries.values()
-            if entry.get("roles")
-        }
-        if len(distinct_shape_sets) > 1:
-            violation(
-                "distinct role shapes disagree across ranks: "
-                f"{sorted(sorted(s) for s in distinct_shape_sets)}"
-            )
-    if kind == "all_gather":
-        for rank, entry in sorted(entries.items()):
-            n_destinations = len(_roles_of(entry, destination_roles))
-            if n_destinations != group_size:
-                violation(
-                    f"rank {rank} records {n_destinations} destination(s) for a "
-                    f"group of {group_size}"
-                )
-    if kind == "all_to_all":
-        for rank, entry in sorted(entries.items()):
-            n_in = len(_roles_of(entry, contribution_roles))
-            n_out = len(_roles_of(entry, destination_roles))
-            if n_in != group_size or n_out != group_size:
-                violation(
-                    f"rank {rank} records {n_in} contribution(s) and {n_out} "
-                    f"destination(s) for a group of {group_size}"
-                )
-    if kind in ("broadcast", "reduce", "gather", "scatter"):
-        # Root-only aggregate presence (1.5): at most one rank may present
-        # the root's role signature.
-        if kind == "broadcast":
-            roots = [
-                rank
-                for rank, entry in sorted(entries.items())
-                if not _roles_of(entry, ("destination",))
-            ]
-        elif kind == "reduce":
-            roots = [
-                rank
-                for rank, entry in sorted(entries.items())
-                if _roles_of(entry, destination_roles)
-            ]
-        else:
-            # gather roots hold a destination LIST; scatter roots a
-            # contribution LIST (group_size entries; leaves hold one tensor).
-            list_roles = destination_roles if kind == "gather" else contribution_roles
-            roots = [
-                rank
-                for rank, entry in sorted(entries.items())
-                if len(_roles_of(entry, list_roles)) == group_size and group_size > 1
-            ]
-        if len(roots) > 1:
-            violation(f"multiple ranks {roots} present root-only aggregate roles")
-    return findings
 
 
 def _witness_consistency(
@@ -576,6 +394,233 @@ def _check_order(
     return None
 
 
+def _per_rank_refs(
+    evidence: Mapping[int, RankEvidence], entries_at: Mapping[int, tuple[int, int]]
+) -> tuple[dict[int, dict[str, Any]], dict[int, PerRankRef]]:
+    """Reference each presenting rank's boundary at one key, never copying it.
+
+    Parameters
+    ----------
+    evidence:
+        Mapping from global rank to rank evidence.
+    entries_at:
+        ``rank -> (seq_abs, boundary_index)`` for the ranks presenting the key.
+
+    Returns
+    -------
+    tuple[dict[int, dict[str, Any]], dict[int, PerRankRef]]
+        The boundary records by rank (in ``entries_at`` order) and the
+        per-rank join references (in rank order).
+
+    Raises
+    ------
+    MergeInputError
+        When a witness digest field is not a list of digests.
+    """
+
+    entries = {rank: evidence[rank].boundaries[index] for rank, (_seq, index) in entries_at.items()}
+    per_rank: dict[int, PerRankRef] = {}
+    for rank, (seq_abs, index) in sorted(entries_at.items()):
+        entry = entries[rank]
+        contribution, destination = _role_digests(entry)
+        per_rank[rank] = PerRankRef(
+            rank=rank,
+            boundary_index=index,
+            seq_abs=seq_abs,
+            op_labels_raw=tuple(entry["op_labels_raw"]),
+            group_rank=entry["group"].get("my_group_rank"),
+            witness_policy=entry["witness"]["policy_resolved"],
+            n_contribution_roles=len(
+                _roles_of(entry, ("contribution", "contribution_destination"))
+            ),
+            n_destination_roles=len(_roles_of(entry, ("destination", "contribution_destination"))),
+            contribution_digests=contribution,
+            destination_digests=destination,
+            c10d_group_seq=entry.get("c10d_group_seq"),
+        )
+    return entries, per_rank
+
+
+def _presence_and_missing(
+    key: JoinKey, per_rank: Mapping[int, PerRankRef], membership: tuple[int, ...]
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Return a key's ``(presence, missing)`` ranks, refusing presence outside membership.
+
+    Raises
+    ------
+    MergeInputError
+        When a presenting rank is not a member of the key's group.
+    """
+
+    presence = tuple(sorted(per_rank))
+    if not set(presence).issubset(membership):
+        raise MergeInputError(
+            f"Join key {key} has presence {presence} outside membership {membership}.",
+            code=MergedErrorCode.MERGED_SCHEMA_INVALID,
+        )
+    return presence, tuple(sorted(set(membership) - set(presence)))
+
+
+def _reduce_op(entries: Mapping[int, dict[str, Any]]) -> str | None:
+    """Return the least distinct ``reduce_op`` the presenting entries record, or ``None``."""
+
+    reduce_ops = sorted(
+        {
+            str(entry.get("reduce_op"))
+            for entry in entries.values()
+            if entry.get("reduce_op") is not None
+        }
+    )
+    return reduce_ops[0] if reduce_ops else None
+
+
+def _key_cross_checks(
+    evidence: Mapping[int, RankEvidence],
+    key: JoinKey,
+    per_rank: Mapping[int, PerRankRef],
+    group_seq_base: dict[int, int],
+    missing: tuple[int, ...],
+) -> list[MergedFinding]:
+    """Run one key's two correlation cross-checks (both structural), then the gap.
+
+    Parameters
+    ----------
+    evidence:
+        Mapping from global rank to rank evidence.
+    key:
+        The join key ``(digest, ordinal, channel, seq_delta)``.
+    per_rank:
+        The per-rank join references, keyed and ordered by rank.
+    group_seq_base:
+        The channel's per-rank backend group-seq base, shared across its keys.
+    missing:
+        The member ranks that do not present the key.
+
+    Returns
+    -------
+    list[MergedFinding]
+        The backend group-seq, absolute-seq and presence-gap findings, in
+        that order, omitting the checks that pass.
+    """
+
+    presence = tuple(per_rank)
+    checks = (
+        c10d_delta_mismatch(
+            key,
+            presence,
+            {rank: per_rank[rank].c10d_group_seq for rank in presence},
+            group_seq_base,
+        ),
+        absolute_seq_mismatch(evidence, key, {rank: per_rank[rank].seq_abs for rank in presence}),
+        presence_gap(key, missing),
+    )
+    return [finding for finding in checks if finding is not None]
+
+
+def _join_key(
+    evidence: Mapping[int, RankEvidence],
+    key: JoinKey,
+    entries_at: Mapping[int, tuple[int, int]],
+    group: tuple[tuple[int, ...], str | None],
+    group_seq_base: dict[int, int],
+) -> tuple[JoinRecord, list[MergedFinding]]:
+    """Join one correlation key across the ranks presenting it.
+
+    Builds the per-rank references, then runs the key's checks in their
+    normative order: relation table, backend group-seq cross-check,
+    absolute-seq cross-check, presence gap, and the demote-only witness
+    verdict.
+
+    Parameters
+    ----------
+    evidence:
+        Mapping from global rank to rank evidence.
+    key:
+        The join key ``(digest, ordinal, channel, seq_delta)``.
+    entries_at:
+        ``rank -> (seq_abs, boundary_index)`` for the ranks presenting ``key``.
+    group:
+        The group-table row ``(membership, backend)``; the backend is
+        ``None`` when unknown or disputed.
+    group_seq_base:
+        The channel's per-rank backend group-seq base, shared across its keys.
+
+    Returns
+    -------
+    tuple[JoinRecord, list[MergedFinding]]
+        The join record and this key's findings, in order.
+
+    Raises
+    ------
+    MergeInputError
+        On a malformed witness digest field, presence outside the
+        membership, or an out-of-range group rank.
+    """
+
+    membership, backend = group
+    entries, per_rank = _per_rank_refs(evidence, entries_at)
+    presence, missing = _presence_and_missing(key, per_rank, membership)
+    kind = entries[presence[0]]["kind"]
+    findings = _relation_findings(key, kind, membership, entries)
+    findings.extend(_key_cross_checks(evidence, key, per_rank, group_seq_base, missing))
+    consistency = _witness_consistency(kind, backend, membership, presence, per_rank)
+    if consistency is BoundaryConsistency.MISMATCHED:
+        findings.append(value_divergence(key, kind, presence))
+    return JoinRecord(
+        key=key,
+        kind=kind,
+        reduce_op=_reduce_op(entries),
+        membership=membership,
+        backend=backend,
+        presence=presence,
+        missing=missing,
+        per_rank=per_rank,
+        consistency=consistency,
+    ), findings
+
+
+def _join_channel(
+    evidence: Mapping[int, RankEvidence],
+    channel_key: tuple[str, int, str],
+    by_rank: Mapping[int, list[tuple[int, int]]],
+    group: tuple[tuple[int, ...], str | None],
+) -> tuple[list[JoinRecord], dict[tuple[int, int], JoinKey], list[MergedFinding]]:
+    """Join every key of one correlation channel, in seq-delta order.
+
+    Parameters
+    ----------
+    evidence:
+        Mapping from global rank to rank evidence.
+    channel_key:
+        ``(membership_digest, lifetime_ordinal, channel)``.
+    by_rank:
+        The channel's per-rank ``(seq_abs, boundary_index)`` records.
+    group:
+        The group-table row ``(membership, backend)`` of the channel's uid.
+
+    Returns
+    -------
+    tuple[list[JoinRecord], dict[tuple[int, int], JoinKey], list[MergedFinding]]
+        The channel's joins, the ``(rank, boundary_index) -> key`` node map
+        for the order check, and the channel's findings, all in key order.
+    """
+
+    digest, ordinal, channel = channel_key
+    deltas = align_seq_deltas(by_rank)
+    joins: list[JoinRecord] = []
+    joined_nodes: dict[tuple[int, int], JoinKey] = {}
+    findings: list[MergedFinding] = []
+    c10d_base: dict[int, int] = {}
+    for delta in sorted(deltas):
+        key: JoinKey = (digest, ordinal, channel, delta)
+        record, key_findings = _join_key(evidence, key, deltas[delta], group, c10d_base)
+        for rank, ref in record.per_rank.items():
+            joined_nodes[(rank, ref.boundary_index)] = key
+        joins.append(record)
+        findings.extend(key_findings)
+    return joins, joined_nodes, findings
+
+
 def derive_merge(
     evidence: Mapping[int, RankEvidence],
     expected_ranks: Iterable[int] | None = None,
@@ -606,311 +651,35 @@ def derive_merge(
     _guard_scope(evidence)
     input_ranks = tuple(sorted(evidence))
     declared = None if expected_ranks is None else tuple(sorted({int(r) for r in expected_ranks}))
-    findings: list[MergedFinding] = []
-
-    # Evidence extraction enforces this for public merge inputs. Repeat the
-    # authority check here because load rederivation and internal callers can
-    # construct ``RankEvidence`` directly: presence outside membership must
-    # never participate in a join or complete a witness verdict.
-    for rank in input_ranks:
-        seen_correlation_keys: set[tuple[str, int, str, int]] = set()
-        for entry in evidence[rank].boundaries:
-            members = tuple(int(member) for member in entry["group"]["global_ranks"])
-            if rank not in members:
-                raise MergeInputError(
-                    f"Rank {rank} presents a collective boundary for membership {members}, "
-                    "but presence must be a subset of the recorded membership.",
-                    code=MergedErrorCode.MERGED_SCHEMA_INVALID,
-                    rank=rank,
-                )
-            correlation = entry["correlation"]
-            # The digest is definitionally sha256(sorted(global_ranks)) and freely
-            # recomputable; an incoherent pair rebinds this boundary's joins,
-            # ordinals, and audit row to another communicator's membership.
-            if correlation["membership_digest"] != membership_digest_for_ranks(members):
-                raise MergeInputError(
-                    f"Rank {rank} presents a boundary whose membership_digest does "
-                    f"not equal the digest of its own recorded membership {members}.",
-                    code=MergedErrorCode.MERGED_SCHEMA_INVALID,
-                    rank=rank,
-                )
-            correlation_key = (
-                str(correlation["membership_digest"]),
-                int(correlation["lifetime_ordinal"]),
-                str(correlation["channel"]),
-                int(correlation["seq"]),
-            )
-            if correlation_key in seen_correlation_keys:
-                raise MergeInputError(
-                    f"Rank {rank} presents duplicate correlation key {correlation_key}; "
-                    "rank-local issue sequence values must be unique.",
-                    code=MergedErrorCode.MERGED_SCHEMA_INVALID,
-                    rank=rank,
-                )
-            seen_correlation_keys.add(correlation_key)
+    check_membership_authority(evidence, input_ranks)
 
     # 1. PRE-JOIN membership-lineage audit, before ANY joining or gaps (1.3).
-    epochs = cast(
-        "Mapping[int, InstallEpoch]",
-        {rank: ev.install_epoch for rank, ev in evidence.items()},
-    )
-    audit = verify_membership_lineages({rank: ev.ledger for rank, ev in evidence.items()}, epochs)
-    conflicted_memberships = tuple(
-        sorted(digest for digest, verdict in audit.items() if verdict.is_conflict)
-    )
-    for digest in conflicted_memberships:
-        verdict = audit[digest]
-        findings.append(
-            MergedFinding(
-                kind="group_lifetime_evidence_conflict",
-                detail=verdict.detail,
-                membership_digest=digest,
-                ranks=verdict.presenting_ranks,
-            )
-        )
+    audit, conflicted_memberships, findings = audit_membership_lineages(evidence)
 
     # 2. Group table from the recorded memberships (rank cores are authority).
-    group_members: dict[tuple[str, int], tuple[int, ...]] = {}
-    group_backend: dict[tuple[str, int], str | None] = {}
-    backend_disputed: set[tuple[str, int]] = set()
-    for rank in input_ranks:
-        for index, entry in enumerate(evidence[rank].boundaries):
-            correlation = entry["correlation"]
-            uid = (correlation["membership_digest"], correlation["lifetime_ordinal"])
-            members = tuple(int(r) for r in entry["group"]["global_ranks"])
-            backend = entry["group"].get("backend")
-            if uid in group_members and group_members[uid] != members:
-                findings.append(
-                    MergedFinding(
-                        kind="relation_violation",
-                        detail=(
-                            f"rank {rank} records group {uid} with member order "
-                            f"{members} but another rank recorded "
-                            f"{group_members[uid]}; c10d group rank lists must be "
-                            "identical on every member rank."
-                        ),
-                        membership_digest=uid[0],
-                        ranks=input_ranks,
-                    )
-                )
-            # Backend disagreement was silent first-writer-wins: one rank
-            # claiming "gloo" flipped an unknown-backend group into the
-            # WITNESS_VERDICT_BACKENDS set, rendering verdict-grade
-            # attestations under semantics the other ranks never recorded.
-            # Disagreement is a relation violation like the member list, and
-            # the disputed backend demotes to None so every witness verdict
-            # on the group is NOT_APPLICABLE (demote-only, P3).
-            if (
-                uid in group_backend
-                and uid not in backend_disputed
-                and group_backend[uid] != backend
-            ):
-                backend_disputed.add(uid)
-                findings.append(
-                    MergedFinding(
-                        kind="relation_violation",
-                        detail=(
-                            f"rank {rank} records group {uid} with backend "
-                            f"{backend!r} but another rank recorded "
-                            f"{group_backend[uid]!r}; a disputed backend is "
-                            "never verdict-grade."
-                        ),
-                        membership_digest=uid[0],
-                        ranks=input_ranks,
-                    )
-                )
-                group_backend[uid] = None
-            group_members.setdefault(uid, members)
-            group_backend.setdefault(uid, backend)
+    group_members, group_backend, group_findings = build_group_table(evidence, input_ranks)
+    findings.extend(group_findings)
 
     # 3. Correlation joining: seq DELTAS from each rank's first recorded key.
-    per_channel: dict[tuple[str, int, str], dict[int, list[tuple[int, int]]]] = {}
-    for rank in input_ranks:
-        for index, entry in enumerate(evidence[rank].boundaries):
-            correlation = entry["correlation"]
-            digest = correlation["membership_digest"]
-            if digest in conflicted_memberships:
-                continue  # no join AND no gap for a conflicted membership (1.3)
-            channel_key = (digest, correlation["lifetime_ordinal"], correlation["channel"])
-            per_channel.setdefault(channel_key, {}).setdefault(rank, []).append(
-                (int(correlation["seq"]), index)
-            )
-
+    per_channel = collect_channel_records(evidence, input_ranks, conflicted_memberships)
     joins: list[JoinRecord] = []
     joined_nodes: dict[tuple[int, int], JoinKey] = {}
     for channel_key in sorted(per_channel):
-        digest, ordinal, channel = channel_key
-        by_rank = per_channel[channel_key]
-        deltas: dict[int, dict[int, tuple[int, int]]] = {}
-        for rank, records in by_rank.items():
-            ordered = sorted(records)
-            base = ordered[0][0]
-            for seq_abs, index in ordered:
-                deltas.setdefault(seq_abs - base, {})[rank] = (seq_abs, index)
-        membership = group_members[(digest, ordinal)]
-        backend = group_backend[(digest, ordinal)]
-        c10d_base: dict[int, int] = {}
-        for delta in sorted(deltas):
-            entries_at = deltas[delta]
-            key: JoinKey = (digest, ordinal, channel, delta)
-            entries = {
-                rank: evidence[rank].boundaries[index] for rank, (_seq, index) in entries_at.items()
-            }
-            per_rank: dict[int, PerRankRef] = {}
-            for rank, (seq_abs, index) in sorted(entries_at.items()):
-                entry = entries[rank]
-                contribution, destination = _role_digests(entry)
-                per_rank[rank] = PerRankRef(
-                    rank=rank,
-                    boundary_index=index,
-                    seq_abs=seq_abs,
-                    op_labels_raw=tuple(entry["op_labels_raw"]),
-                    group_rank=entry["group"].get("my_group_rank"),
-                    witness_policy=entry["witness"]["policy_resolved"],
-                    n_contribution_roles=len(
-                        _roles_of(entry, ("contribution", "contribution_destination"))
-                    ),
-                    n_destination_roles=len(
-                        _roles_of(entry, ("destination", "contribution_destination"))
-                    ),
-                    contribution_digests=contribution,
-                    destination_digests=destination,
-                    c10d_group_seq=entry.get("c10d_group_seq"),
-                )
-                joined_nodes[(rank, index)] = key
-            presence = tuple(sorted(per_rank))
-            if not set(presence).issubset(membership):
-                raise MergeInputError(
-                    f"Join key {key} has presence {presence} outside membership {membership}.",
-                    code=MergedErrorCode.MERGED_SCHEMA_INVALID,
-                )
-            missing = tuple(sorted(set(membership) - set(presence)))
-            findings.extend(
-                _relation_findings(key, entries[presence[0]]["kind"], membership, entries)
-            )
-
-            # Redundant c10d group-seq cross-check, as deltas from the first
-            # joined key (1.6): a disagreement means c10d itself orders these
-            # issues differently than the join claims.
-            for rank in presence:
-                value = per_rank[rank].c10d_group_seq
-                if value is not None and rank not in c10d_base and delta == 0:
-                    c10d_base[rank] = value
-            c10d_deltas: dict[int, int] = {}
-            for rank in presence:
-                observed = per_rank[rank].c10d_group_seq
-                if observed is not None and rank in c10d_base:
-                    c10d_deltas[rank] = observed - c10d_base[rank]
-            if len(set(c10d_deltas.values())) > 1:
-                findings.append(
-                    MergedFinding(
-                        kind="correlation_delta_mismatch",
-                        detail=(
-                            f"c10d group-seq deltas disagree at key {key}: "
-                            f"{dict(sorted(c10d_deltas.items()))}; the backend's own "
-                            "sequence counter contradicts the join alignment."
-                        ),
-                        membership_digest=digest,
-                        key=key,
-                        ranks=tuple(sorted(c10d_deltas)),
-                    )
-                )
-
-            # Absolute-seq cross-check for ranks armed BEFORE any group: their
-            # per-(uid, channel) counters tick on EVERY issue from group
-            # creation on (captured or not), so the same collective carries the
-            # SAME absolute seq on every such rank. Delta alignment anchors at
-            # each rank's first RECORDED key; when capture windows differ, the
-            # anchors name different collectives and the join is fabricated.
-            # The c10d group-seq cross-check is structurally blind to this
-            # class (each rank's base is taken at its own delta 0, so a
-            # constant offset cancels); the absolute counters are not.
-            # Seeded ranks stay out: their arm-time histories differ, so
-            # absolute bases are legitimately rank-local facts (P3).
-            armed_seq_abs = {
-                rank: per_rank[rank].seq_abs
-                for rank in presence
-                if evidence[rank].install_epoch == "armed_before_any_group"
-            }
-            if len(set(armed_seq_abs.values())) > 1:
-                findings.append(
-                    MergedFinding(
-                        kind="correlation_delta_mismatch",
-                        detail=(
-                            f"absolute issue sequences disagree at key {key}: "
-                            f"{dict(sorted(armed_seq_abs.items()))}; every rank armed "
-                            "before any group ticks the same counter on the same "
-                            "collective, so the joined boundaries are not the same "
-                            "collective (the delta anchors name different first "
-                            "captures)."
-                        ),
-                        membership_digest=digest,
-                        key=key,
-                        ranks=tuple(sorted(armed_seq_abs)),
-                    )
-                )
-
-            if missing:
-                findings.append(
-                    MergedFinding(
-                        kind="presence_gap",
-                        detail=(
-                            f"member rank(s) {list(missing)} of group {digest[:12]}… "
-                            f"(ordinal {ordinal}) did not present key {key}."
-                        ),
-                        membership_digest=digest,
-                        key=key,
-                        ranks=missing,
-                    )
-                )
-            kind = entries[presence[0]]["kind"]
-            reduce_ops = sorted(
-                {
-                    str(entry.get("reduce_op"))
-                    for entry in entries.values()
-                    if entry.get("reduce_op") is not None
-                }
-            )
-            consistency = _witness_consistency(kind, backend, membership, presence, per_rank)
-            if consistency is BoundaryConsistency.MISMATCHED:
-                findings.append(
-                    MergedFinding(
-                        kind="value_divergence",
-                        detail=(
-                            f"byte-exact witness digests disagree at key {key} "
-                            f"({kind}); rank values are NOT interchangeable. The "
-                            "divergence is recorded, never repaired (P3)."
-                        ),
-                        membership_digest=digest,
-                        key=key,
-                        ranks=presence,
-                    )
-                )
-            joins.append(
-                JoinRecord(
-                    key=key,
-                    kind=kind,
-                    reduce_op=reduce_ops[0] if reduce_ops else None,
-                    membership=membership,
-                    backend=backend,
-                    presence=presence,
-                    missing=missing,
-                    per_rank=per_rank,
-                    consistency=consistency,
-                )
-            )
+        uid = (channel_key[0], channel_key[1])
+        channel_joins, channel_nodes, channel_findings = _join_channel(
+            evidence,
+            channel_key,
+            per_channel[channel_key],
+            (group_members[uid], group_backend[uid]),
+        )
+        joins.extend(channel_joins)
+        joined_nodes.update(channel_nodes)
+        findings.extend(channel_findings)
 
     # 4. Declared expected ranks can only WIDEN expectations (4.3).
-    if declared is not None:
-        absent = tuple(sorted(set(declared) - set(input_ranks)))
-        if absent:
-            findings.append(
-                MergedFinding(
-                    kind="presence_gap",
-                    detail=(f"declared expected rank(s) {list(absent)} presented no rank core."),
-                    ranks=absent,
-                )
-            )
+    declared_gap = declared_rank_gap(declared, input_ranks)
+    if declared_gap is not None:
+        findings.append(declared_gap)
 
     # 5. Partial-order consistency.
     order_finding = _check_order(evidence, joined_nodes)
@@ -918,34 +687,13 @@ def derive_merge(
         findings.append(order_finding)
 
     # 6. Verdicts.
-    structural = [f for f in findings if f.kind in _STRUCTURAL_KINDS]
-    gaps = [f for f in findings if f.kind == "presence_gap"]
-    if structural:
-        alignment = MergeAlignment.CONFLICTED
-    elif gaps:
-        alignment = MergeAlignment.PARTIAL
-    else:
-        alignment = MergeAlignment.ALIGNED
-
-    applicable = [j for j in joins if j.consistency is not BoundaryConsistency.NOT_APPLICABLE]
-    attested = [j for j in applicable if j.consistency is BoundaryConsistency.ATTESTED]
-    mismatched = [j for j in applicable if j.consistency is BoundaryConsistency.MISMATCHED]
-    if mismatched:
-        value_status = MergeValueStatus.DIVERGENT
-    elif applicable and len(attested) == len(applicable):
-        value_status = MergeValueStatus.ATTESTED_COMPLETE
-    elif attested:
-        value_status = MergeValueStatus.ATTESTED_PARTIAL
-    else:
-        value_status = MergeValueStatus.UNWITNESSED
-
     return MergeDerivation(
         ranks=input_ranks,
         expected_ranks=declared,
         joins=tuple(joins),
         findings=tuple(findings),
         audit=dict(sorted(audit.items())),
-        stored_alignment=alignment,
-        stored_value_status=value_status,
+        stored_alignment=stored_alignment(findings),
+        stored_value_status=stored_value_status([join.consistency for join in joins]),
         conflicted_memberships=conflicted_memberships,
     )

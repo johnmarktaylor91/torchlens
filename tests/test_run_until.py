@@ -89,7 +89,7 @@ def test_live_truncated_fork_output_proof_fails_closed():
     first assertion.
     """
 
-    from torchlens._runnable_execution import _fresh_bare_tensor_root
+    from torchlens._runnable_call_outputs import _fresh_bare_tensor_root
 
     _model, log, result = _live_until_relu()
     assert log._runnable.output_losslessness is not None  # the source stamp IS positive

@@ -353,8 +353,6 @@ STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
         "_rerun_save_request": StorageBinding(StorageKind.RUNTIME),
         "_last_validation_failure": StorageBinding(StorageKind.RUNTIME),
         "_validation_diagnostics": StorageBinding(StorageKind.RUNTIME),
-        "_output_style": StorageBinding(StorageKind.RUNTIME),
-        "_output_head": StorageBinding(StorageKind.RUNTIME),
         "_output_tokenizer": StorageBinding(StorageKind.RUNTIME),
         "_semantic_output_metadata": StorageBinding(StorageKind.RUNTIME),
     },

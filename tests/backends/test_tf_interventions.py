@@ -312,5 +312,5 @@ def test_tf_backward_direction_refuses_typed() -> None:
             _relu_plus_ten,
             x,
             backend="tf",
-            intervene=tl.when(tl.func("relu"), tl.zero_ablate(), direction="backward"),
+            intervene=tl.when(tl.grad(tl.func("relu")), tl.zero_ablate()),
         )

@@ -28,8 +28,6 @@ CaptureOptions.module_identity_mode
 CaptureOptions.name
 CaptureOptions.optimizer
 CaptureOptions.output_device
-CaptureOptions.output_head
-CaptureOptions.output_style
 CaptureOptions.output_transform
 CaptureOptions.payload_policy
 CaptureOptions.raise_on_nan

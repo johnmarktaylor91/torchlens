@@ -182,14 +182,16 @@ subsystem (new run modes, run-time state interventions, segment or backward repl
 products). Everything else inside the runnable machinery is internal and may change
 without notice.
 
-**Binding rule.** `torchlens/_runnable_execution.py` is a namespace-aggregator facade over
-its slice modules; slice modules have no importers besides the aggregator. Every extension
-point below is named on ONE of `torchlens/_runnable.py`, `torchlens/_runnable_seam.py`,
-`torchlens/_runnable_execution.py`, or `torchlens/_runnable_state.py` (the coordinator
-verbs additionally have their transport-side homes in `torchlens/_io/runnable.py` and
-`torchlens/_io/runnable_load.py`, reached through the coordinator boundary). Consumers
-never import a slice module directly; moving a name off its contract module is a contract
-change.
+**Binding rule.** `torchlens/_runnable_execution.py` is the hub of the runnable
+machinery: it defines the shared state and binds the names of its split modules
+(`_runnable_transaction.py`, `_runnable_providers.py`, `_runnable_until.py` and their
+siblings) at the bottom of the module, so every extension point stays reachable from
+the hub. Every extension point below is named on ONE of `torchlens/_runnable.py`,
+`torchlens/_runnable_seam.py`, `torchlens/_runnable_execution.py`, or
+`torchlens/_runnable_state.py` (the coordinator verbs additionally have their
+transport-side homes in `torchlens/_io/runnable.py` and `torchlens/_io/runnable_load.py`,
+reached through the coordinator boundary). Consumers bind to the contract modules, not to
+a split module; moving a name off its contract module is a contract change.
 
 **E1 -- Descriptor.** `SparseRunDescriptor` plus the closed enums and dataclasses in
 `torchlens._runnable`, mirrored 1:1 by the exhaustive contract document. The registries a

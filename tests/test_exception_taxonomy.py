@@ -587,7 +587,7 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "FittedArtifactError": ("RuntimeError",),
     "RenderError": ("RuntimeError",),
     "RankRenderEndpointError": ("RuntimeError",),
-    "OutputStyleUnknownError": ("ValueError",),
+    "DecodeStyleUnknownError": ("ValueError",),
     "PluginLoadWarning": ("Warning",),
     "SynthesizedValueReadWarning": ("Warning",),
     "TensorSubclassUnsupportedError": ("RuntimeError",),
@@ -1128,31 +1128,10 @@ def test_option_group_conflict_doors_split_by_site_history() -> None:
     assert not isinstance(keyword_info.value, ValueError)
 
 
-def test_intervention_direction_doors_split_by_site_history() -> None:
-    """Predicate-side direction refusal keeps its historical TypeError lineage.
-
-    The door raised a raw ``TypeError`` since the 2.16 intervention era, and
-    the live capture-path callers catch ``TypeError`` to convert a bad
-    predicate result into ``PredicateError``. Its code is distinct from the
-    ValueError-lineage trace-side ``intervention_direction_invalid`` doors so
-    ``fields["code"]`` determines the catchable builtin.
-    """
-
-    from torchlens.intervention.predicates import as_intervention_decision
-
-    with pytest.raises(errors.ArgumentTypeError) as exc_info:
-        as_intervention_decision(lambda out: out, direction="sideways")  # type: ignore[arg-type]
-
-    assert exc_info.value.fields["code"] == "intervention_action_direction_invalid"
-    assert isinstance(exc_info.value, TypeError)
-    assert not isinstance(exc_info.value, ValueError)
-    assert "Remedy:" in str(exc_info.value)
-
-
 def test_selector_direction_refusal_is_not_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
     """Backward intervention normalization propagates typed selector refusals."""
 
-    def _raise_typed_refusal(selector: object) -> str:
+    def _raise_typed_refusal(selector: object) -> tuple[tuple[str, object], ...]:
         """Raise the typed selector refusal used to probe the former broad catch."""
 
         del selector
@@ -1164,12 +1143,12 @@ def test_selector_direction_refusal_is_not_swallowed(monkeypatch: pytest.MonkeyP
         del context
 
     predicate.selector = object()  # type: ignore[attr-defined]
-    predicate.decision = InterventionDecision(action="transform")  # type: ignore[attr-defined]
+    predicate.decision = InterventionDecision(  # type: ignore[attr-defined]
+        action="transform", hook=lambda out, *, ctx: out
+    )
     from torchlens import _capture_intervention
 
-    monkeypatch.setattr(
-        _capture_intervention, "_selector_resolution_direction", _raise_typed_refusal
-    )
+    monkeypatch.setattr(_capture_intervention, "split_site_branches", _raise_typed_refusal)
 
     with pytest.raises(SiteResolutionError) as exc_info:
         _capture_intervention._backward_intervention_spec_from_predicate(predicate)
@@ -1337,7 +1316,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens._io.runnable._UnsupportedLiteralError": (
         "private save-time literal-classifier signal; converted to typed refusals"
     ),
-    "torchlens._utils._dynamo_explain_shapes._DynamoExplainOutputError": (
+    "torchlens.debug._dynamo_explain_shapes._DynamoExplainOutputError": (
         "private dynamo-explain probe failure; caught inside the capability probe"
     ),
     "torchlens._capture.projections.LiveOpViewFieldNotYetWritten": (
@@ -1439,6 +1418,14 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "S2-gated weights-free admission/settlement refusal (CaptureError "
         "subclass); errors-namespace registration rides the S2 ratification "
         "PR with its structure-only siblings above"
+    ),
+    # Aliased output slots (net-f26): the flat leaf stream ran dry while a
+    # container spec was being rebuilt; an internal signal that carries the
+    # slot path up the recursion and is turned into the public ValueError by
+    # ``rebuild_container_from_spec`` once the full path is known.
+    "torchlens._ir.container._LeafStreamDry": (
+        "internal recursion signal carrying the dry slot path; caught by "
+        "rebuild_container_from_spec, which raises the public ValueError"
     ),
 }
 

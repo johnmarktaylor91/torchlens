@@ -19,15 +19,13 @@ Selection	toy	referenced	F36-freeze
 Selector	toy	referenced	F36-freeze
 Trace	R1	referenced	F36-freeze
 add	R1	referenced	F36-freeze
-add_grad_noise	toy	referenced	F36-freeze
 add_noise	toy	referenced	F36-freeze
 at_step	toy	referenced	3.0-rename
 between	toy	referenced	F36-freeze
 changed	R1	referenced	F36-freeze
 clamp	toy	referenced	F36-freeze
-clamp_grad	toy	referenced	F36-freeze
 clear_cache	toy	referenced	F36-freeze
-clip_grad	toy	referenced	F36-freeze
+clip_norm	toy	referenced	F36-freeze
 dead	toy	referenced	F36-freeze
 export	toy	referenced	F36-freeze
 extract	R1	referenced	F36-freeze
@@ -39,11 +37,11 @@ fingerprint	toy	referenced	F36-freeze
 followed_by	toy	referenced	F36-freeze
 func	R1	referenced	F36-freeze
 func_transform	toy	referenced	F36-freeze
+grad	toy	referenced	F36-freeze
 grad_fn	toy	referenced	F36-freeze
 grad_input	toy	referenced	F36-freeze
 grad_output	toy	referenced	F36-freeze
 head	R1	referenced	F36-freeze
-hook_grad	toy	referenced	F36-freeze
 in_backward_pass	toy	referenced	F36-freeze
 in_module	toy	referenced	F36-freeze
 label	toy	referenced	F36-freeze
@@ -73,7 +71,6 @@ release_model	R1	referenced	F36-freeze
 replace_with	toy	referenced	F36-freeze
 saturated	toy	referenced	F36-freeze
 scale	R1	referenced	F36-freeze
-scale_grad	toy	referenced	F36-freeze
 sign	toy	referenced	F36-freeze
 site	toy	referenced	3.0-rename
 splice_module	toy	referenced	F36-freeze
@@ -95,4 +92,3 @@ when	R1	referenced	F36-freeze
 where	toy	referenced	F36-freeze
 without_op	toy	referenced	F36-freeze
 zero_ablate	R1	referenced	F36-freeze
-zero_grad	toy	referenced	F36-freeze

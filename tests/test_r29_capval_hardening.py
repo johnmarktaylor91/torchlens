@@ -60,7 +60,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.backends.torch.ops as tlops
+import torchlens.backends.torch._ops_exhaustive
+import torchlens.backends.torch._ops_predicate_events
+import torchlens.backends.torch._ops_shared_fields
 from torchlens._runnable import PathFaithfulness
 from torchlens.errors import PathDivergenceError, RunnablePreflightError
 from torchlens.options import CaptureOptions
@@ -241,7 +243,7 @@ def test_f3a_dropped_param_edge_fails_validation(
     fail.
     """
 
-    original = tlops._build_param_fields
+    original = torchlens.backends.torch._ops_predicate_events._build_param_fields
     state = {"dropped": 0}
 
     def patched(self: Any, fields_dict: dict, arg_parameters: list) -> dict:
@@ -252,7 +254,12 @@ def test_f3a_dropped_param_edge_fails_validation(
             arg_parameters = []
         return original(self, fields_dict, arg_parameters)
 
-    monkeypatch.setattr(tlops, "_build_param_fields", patched)
+    # The helper lives in _ops_predicate_events; _ops_shared_fields calls a from-import copy.
+    for module in (
+        torchlens.backends.torch._ops_predicate_events,
+        torchlens.backends.torch._ops_shared_fields,
+    ):
+        monkeypatch.setattr(module, "_build_param_fields", patched)
     torch.manual_seed(0)
     result = tl.validate(model_cls().eval(), x, scope="forward")
     assert state["dropped"] > 0, "injection did not drop any parameter -- inconclusive"
@@ -305,7 +312,7 @@ def test_f3c_slot_permutation_fails_validation(monkeypatch: pytest.MonkeyPatch) 
     witness must stamp both slots and fail public validation.
     """
 
-    original = tlops._build_graph_relationship_fields
+    original = torchlens.backends.torch._ops_predicate_events._build_graph_relationship_fields
     state = {"permuted": 0}
 
     def patched(
@@ -329,7 +336,13 @@ def test_f3c_slot_permutation_fails_validation(monkeypatch: pytest.MonkeyPatch) 
                 state["permuted"] += 1
         return result
 
-    monkeypatch.setattr(tlops, "_build_graph_relationship_fields", patched)
+    # Home plus every module that bound the name by from-import.
+    for module in (
+        torchlens.backends.torch._ops_predicate_events,
+        torchlens.backends.torch._ops_shared_fields,
+        torchlens.backends.torch._ops_exhaustive,
+    ):
+        monkeypatch.setattr(module, "_build_graph_relationship_fields", patched)
     torch.manual_seed(0)
     x = torch.randn(4)
     trace = tl.trace(_TwinSub().eval(), x)

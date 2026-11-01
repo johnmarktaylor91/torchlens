@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 import torch
 
@@ -22,22 +22,6 @@ from .errors import (
     RunCapabilityUnavailableError,
     RunPreconditionError,
 )
-
-if TYPE_CHECKING:
-    from ._runnable_execution import (
-        _INPUT_DERIVED_LAYOUT_FACT_NAME,
-        _MODEL_INPUT_LITERAL_FACT_KEY,
-        _MODEL_INPUT_LITERAL_SITE_PREFIX,
-        _MODEL_INPUT_METADATA_FACT_KEY,
-        _MODEL_INPUT_METADATA_SITE_PREFIX,
-        _contract_check,
-        _decode_literal,
-        _input_site_value,
-        _live_runtime_input_leaves,
-        _positions_are_mixed,
-        _split_mixed_inputs,
-        _value_at_path,
-    )
 
 __all__ = (
     "_INPUT_CHECK_UNAVAILABLE",
@@ -618,3 +602,27 @@ def _runtime_top_level_positions(inputs: Any, positions: set[Any]) -> set[Any] |
             return None
         return {("kwarg", key) for key in inputs}
     return None
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._runnable_execution import (  # noqa: E402
+    _INPUT_DERIVED_LAYOUT_FACT_NAME,
+    _MODEL_INPUT_LITERAL_FACT_KEY,
+    _MODEL_INPUT_LITERAL_SITE_PREFIX,
+    _MODEL_INPUT_METADATA_FACT_KEY,
+    _MODEL_INPUT_METADATA_SITE_PREFIX,
+)
+from ._runnable_input_aliases import (  # noqa: E402
+    _input_site_value,
+    _positions_are_mixed,
+    _split_mixed_inputs,
+)
+from ._runnable_transaction import (  # noqa: E402
+    _live_runtime_input_leaves,
+)
+from ._runnable_verification import (  # noqa: E402
+    _contract_check,
+    _decode_literal,
+    _value_at_path,
+)

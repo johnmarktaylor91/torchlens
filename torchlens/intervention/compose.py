@@ -115,21 +115,16 @@ def _validate_leaves(leaves: list[Edit]) -> None:
                 "shape-changing edit alone",
                 argument="edits",
             )
-    kinds = {leaf.kind for leaf in leaves}
-    if kinds != {"forward"}:
-        names = ", ".join(
-            f"compose[{i}]={leaf.helper_name}:{leaf.kind}" for i, leaf in enumerate(leaves)
-        )
-        raise InvalidArgumentError(
-            f"compose chains forward VALUE edits only in v1 ({names}); backward "
-            "hook signatures vary by grad kind, so a backward chain would fire "
-            "wrong call shapes silently -- the exact defect class this family "
-            "exists to kill",
-            code="compose_kind_mismatch",
-            remedy="chain forward helpers only; attach backward helpers as "
-            "separate rules (tl.when per site)",
-            argument="edits",
-        )
+
+
+def _chain_portability(leaves: list[Edit]) -> HelperPortability:
+    """Return the weakest portability across the chained leaves."""
+
+    portability: HelperPortability = "builtin"
+    for leaf in leaves:
+        if _PORTABILITY_RANK[leaf.portability] > _PORTABILITY_RANK[portability]:
+            portability = leaf.portability
+    return portability
 
 
 def compose(*edits: Any) -> Edit:
@@ -172,7 +167,7 @@ def compose(*edits: Any) -> Edit:
             for index, leaf_hook in enumerate(leaf_hooks):
                 # Thread the composed-leaf path for the derived-seed law (D6):
                 # two stochastic leaves inside one compose cannot collide.
-                ctx.ctx["compose_leaf_path"] = (index,)
+                ctx.state["compose_leaf_path"] = (index,)
                 try:
                     current = leaf_hook(current, ctx=ctx)
                 except Exception as exc:
@@ -196,15 +191,10 @@ def compose(*edits: Any) -> Edit:
                         leaf_index=index,
                         leaf_name=leaves[index].helper_name,
                     )
-            ctx.ctx.pop("compose_leaf_path", None)
+            ctx.state.pop("compose_leaf_path", None)
             return current
 
         return _hook
-
-    portability: HelperPortability = "builtin"
-    for leaf in leaves:
-        if _PORTABILITY_RANK[leaf.portability] > _PORTABILITY_RANK[portability]:
-            portability = leaf.portability
 
     from .helpers import _helper_spec
 
@@ -212,7 +202,9 @@ def compose(*edits: Any) -> Edit:
         "compose",
         args=tuple(leaves),
         factory=factory,
-        portability=portability,
+        portability=_chain_portability(leaves),
+        # A chain that reads recorded forward state anywhere reads it as a whole.
+        signal="forward" if any(leaf.signal == "forward" for leaf in leaves) else None,
         batch_independent=all(leaf.batch_independent for leaf in leaves),
         compatible_with_append=all(leaf.compatible_with_append for leaf in leaves),
         metadata={

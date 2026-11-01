@@ -10,6 +10,8 @@ from .._errors import InvalidArgumentError
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
 from ._backward_inventory import (
     BackwardStyleInventory,
+    _backward_dot_call_node_name,
+    _backward_dot_node_name,
     _backward_pass_row,
     compute_backward_style_inventory,
 )
@@ -25,50 +27,11 @@ _BRANCH_KIND_SEARCH_LIMIT = 256
 _BACKWARD_ROWS: ContextVar[Any] = ContextVar("torchlens_backward_rows", default=None)
 
 
-def _backward_dot_node_name(grad_fn_handle: "GradFn") -> str:
-    """Return a DOT-safe node name for a grad_fn_handle log.
-
-    Parameters
-    ----------
-    grad_fn_handle:
-        GradFn to name.
-
-    Returns
-    -------
-    str
-        DOT-safe node identifier.
-    """
-
-    return f"grad_fn_{grad_fn_handle.grad_fn_object_id}"
-
-
 if TYPE_CHECKING:
     from .._data_classes.grad_fn import GradFn
     from .._data_classes.module import Module
     from .._data_classes.trace import Trace
     from .auto_collapse import ModuleRepeatFold
-
-
-def _backward_dot_call_node_name(grad_fn_handle: "GradFn", call: Any) -> str:
-    """Return a DOT-safe node name for one GradFnCall.
-
-    Parameters
-    ----------
-    grad_fn_handle:
-        GradFn owning the call.
-    call:
-        GradFnCall-like record.
-
-    Returns
-    -------
-    str
-        DOT-safe node identifier.
-    """
-
-    return (
-        f"grad_fn_{grad_fn_handle.grad_fn_object_id}_"
-        f"bwd{getattr(call, 'backward_pass_index', 0)}_call{getattr(call, 'call_index', 0)}"
-    )
 
 
 def _grad_fn_call_matches_backward_filter(call: Any, pass_filter: BackwardPassFilter) -> bool:
@@ -839,18 +802,26 @@ def _add_collapsed_container_node(
     leaves: Sequence[GraphNode],
     *,
     vis_mode: str,
+    label_lines_sink: dict[str, list[str]] | None = None,
 ) -> None:
-    """Record a collapsed container summary node for later emission."""
+    """Record a collapsed container summary node for later emission.
+
+    ``label_lines_sink``, when given, receives the summary's label lines by
+    node name (nodes mode adds the container role to them).
+    """
 
     first = leaves[0]
     group_id = cast(str, _container_group_id(cast(BaseGraphNode, first)))
     kind = _container_kind(cast(BaseGraphNode, first)) or "container"
     shape = "x".join(str(dim) for dim in (getattr(first, "shape", ()) or ())) or "scalar"
     node_name = _collapsed_container_node_name(group_id)
+    label_lines = [f"{kind} x{len(leaves)}", shape]
+    if label_lines_sink is not None:
+        label_lines_sink[node_name] = label_lines
     pending_nodes.append(
         {
             "name": node_name,
-            "label": render_lines_to_html([f"{kind} x{len(leaves)}", shape]),
+            "label": render_lines_to_html(label_lines),
             "shape": "box",
             "style": "filled,dashed",
             "fillcolor": "white",

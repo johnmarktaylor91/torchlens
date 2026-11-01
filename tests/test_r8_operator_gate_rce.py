@@ -42,7 +42,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import LiteralTorchSymbol, PathFaithfulness
-from torchlens._runnable_execution import _decode_literal
+from torchlens._runnable_verification import _decode_literal
 from torchlens._utils._callable_safety import is_pure_forward_callable
 from torchlens.errors.runnable import RunPreconditionError
 from torchlens.intervention.errors import UntrustedCallableError

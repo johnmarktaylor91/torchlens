@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 import warnings
+import weakref
 from collections import Counter
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
@@ -20,8 +21,12 @@ from .._input_coerce import _coerce_input_args
 from .._trace_state import TraceState
 from .._utils._torch_compat import tensor_has_named_dims
 from .._utils.hashing import compute_graph_shape_hash
+from ..backends.torch.backward import _register_forward_grad_fn
 from ..options import ReplayOptions, merge_replay_options
 from ._helper_fingerprint import refuse_changed_staged_helpers
+from ._rerun_ledger import (
+    _build_ledger_record,
+)
 from ._rerun_predicate import (
     plan_rerun_spec,
     refuse_unmatchable_staged_labels,
@@ -143,7 +148,6 @@ def run(
     hook_fire_count, unfired_hook_ids = _reconcile_rerun_hook_fires(
         new_log, hook_plan, source_log=trace
     )
-
     divergence_count = _validate_rerun_result(new_log, trace, strict=replay_options.strict)
     fast_refresh = False
     if divergence_count == 0:
@@ -153,6 +157,7 @@ def run(
         _release_discarded_capture(new_log)
     else:
         trace.replace_state_from(new_log)
+    _adopt_rerun_backward_graph(trace, new_log)
     trace.is_appended = False
     trace._append_sequence_id = 0
     trace.append_history = []
@@ -196,6 +201,47 @@ def run(
     trace._has_direct_writes = False
     trace._out_recipe_revision = getattr(trace, "_spec_revision", 0)
     return trace
+
+
+#: Rerun captures whose autograd graph a backward-ready rerun result adopted,
+#: kept alive exactly as long as that result (their tensor hooks route there).
+_RERUN_GRAPH_SOURCES: weakref.WeakKeyDictionary[Any, Any] = weakref.WeakKeyDictionary()
+
+
+def _adopt_rerun_backward_graph(trace: Trace, new_log: Trace) -> None:
+    """Make a backward-ready rerun result own the rerun capture's autograd graph.
+
+    The rerun's forward ran under ``new_log``, so its tensor grad hooks and
+    grad_fn registrations name ``new_log``, which the state swap discards. A
+    later ``trace.backward(loss)`` on the result would then record nothing on
+    the result (and an implicit pass on the discarded capture). Route the
+    capture's tensor hooks to ``trace`` and register its grad_fns there, the
+    same rebind the refresh projector performs, so a gradient edit armed on a
+    rerun result fires and ``.grad`` lands on the result. Traces that are not
+    backward-ready keep no graph and are left as they are.
+
+    Parameters
+    ----------
+    trace:
+        The rerun result (updated in place).
+    new_log:
+        The rerun's own capture.
+    """
+
+    if not getattr(trace, "backward_ready", False):
+        return
+    new_log._refresh_projection_target_ref = weakref.ref(trace)
+    _RERUN_GRAPH_SOURCES[trace] = new_log
+    # The redirected hooks pass the one-owner-per-label check against the
+    # result's map, so the result adopts the rerun capture's hook ownership
+    # (the map the state swap left names the previous capture's tensors).
+    for key in ("_tl_grad_hook_owner_by_label", "_tl_backward_hooked_tensor_keys"):
+        if key in new_log.__dict__:
+            trace.__dict__[key] = new_log.__dict__[key]
+    for layer in trace.layer_list:
+        _register_forward_grad_fn(
+            trace, getattr(layer, "grad_fn_handle", None), layer._layer_label_raw
+        )
 
 
 def _release_discarded_capture(new_log: Trace) -> None:
@@ -1341,74 +1387,6 @@ def _make_raw_index_save_predicate(selected_indices: set[int]) -> Callable[[Any]
     return keep_selected_raw_index
 
 
-def _build_ledger_record(
-    log: Trace,
-    *,
-    started_at: float,
-    old_hash: str | None,
-    new_hash: str | None,
-    old_raw_hash: str | None,
-    new_raw_hash: str | None,
-    hook_plan: list[NormalizedHookEntry],
-    strict: bool,
-    divergence_count: int,
-    fast_refresh: bool,
-    hook_fire_count: int,
-    unfired_hook_count: int,
-) -> dict[str, Any]:
-    """Create the append-only operation history record for a rerun.
-
-    Parameters
-    ----------
-    log:
-        Trace after state replacement.
-    started_at:
-        Monotonic start time for the rerun.
-    old_hash:
-        Graph-shape hash before rerun.
-    new_hash:
-        Candidate graph-shape hash from the fresh capture.
-    old_raw_hash:
-        Raw-event shape hash before rerun.
-    new_raw_hash:
-        Candidate raw-event shape hash from the fresh capture.
-    hook_plan:
-        Normalized hook entries active during rerun.
-    strict:
-        Whether strict divergence handling was requested.
-    divergence_count:
-        Number of divergence events detected.
-    fast_refresh:
-        Whether the rerun refreshed existing graph containers in place.
-    hook_fire_count:
-        Number of live hook firings observed on the candidate capture.
-    unfired_hook_count:
-        Number of planned hook entries that fired nowhere.
-
-    Returns
-    -------
-    dict[str, Any]
-        Operation-history entry.
-    """
-
-    return {
-        "op": "rerun",
-        "engine": "rerun",
-        "started_at": started_at,
-        "strict": strict,
-        "append": False,
-        "hook_count": len(hook_plan),
-        "hook_fire_count": hook_fire_count,
-        "unfired_hook_count": unfired_hook_count,
-        "divergence_count": divergence_count,
-        "fast_refresh": fast_refresh,
-        "old_graph_shape_hash": old_hash,
-        "new_graph_shape_hash": new_hash,
-        "old_raw_event_shape_hash": old_raw_hash,
-        "new_raw_event_shape_hash": new_raw_hash,
-    }
-
-
 def _assign_unique_plan_ids(hook_plan: list[NormalizedHookEntry]) -> list[NormalizedHookEntry]:
     """Give every planned entry a unique, stable accounting identifier.
 
@@ -1496,10 +1474,13 @@ def _reconcile_rerun_hook_fires(
         corresponding fire, retaining multiplicity for duplicate plans.
     """
 
-    plan_ids = [_hook_plan_identifier(entry) for entry in hook_plan]
+    # Only forward entries can fire during the rerun's forward; a gradient or
+    # node entry is armed for the result's next backward and settles there.
+    forward_plan = [entry for entry in hook_plan if entry.signal == "forward"]
+    plan_ids = [_hook_plan_identifier(entry) for entry in forward_plan]
     base_by_id = {
         plan_id: str(entry.metadata.get("plan_id_base", plan_id))
-        for entry, plan_id in zip(hook_plan, plan_ids)
+        for entry, plan_id in zip(forward_plan, plan_ids)
     }
     planned = Counter(plan_ids)
     fired: Counter[str] = Counter()
@@ -1517,7 +1498,7 @@ def _reconcile_rerun_hook_fires(
         fallback_fired.update(
             str(record.helper_name)
             for record in (getattr(op, "interventions", None) or ())
-            if getattr(record, "direction", None) == "forward"
+            if getattr(record, "signal", None) == "forward"
             and getattr(record, "helper_name", None) is not None
         )
     total_fired = sum(fired.values()) + sum(fallback_fired.values())
@@ -1530,15 +1511,12 @@ def _reconcile_rerun_hook_fires(
         unfired.extend([plan_id] * (shortfall - consumed))
     if unfired:
         _refuse_source_matched_zero_fire(source_log, new_log, hook_plan, unfired)
-    if unfired:
-        # First CONTRACTED S-18 row (compo wave 0): the disclosure standing
-        # between a user and a silently un-applied intervention carries a
-        # stable machine-readable code and a structured remedy -- consumers
-        # branch on ``fields["code"]``, never on message text. The typed
-        # refusals above fire first, whatever the on_zero_fire policy says;
-        # the policy settles the rest (default: this coded warning). Under
-        # "error" the refusal raises here, before the swap, so the trace is
-        # unchanged.
+        # First CONTRACTED S-18 row (compo wave 0): the disclosure standing between a user and a
+        # silently un-applied intervention carries a stable machine-readable code and a structured
+        # remedy -- consumers branch on ``fields["code"]``, never on message text. The typed
+        # refusals above fire first, whatever the on_zero_fire policy says; the policy settles the
+        # rest (default: this coded warning). Under "error" the refusal raises here, before the
+        # swap, so the trace is unchanged.
         message = (
             "Rerun hook plan entries fired at zero sites on the new inputs: "
             f"{unfired!r}. The rerun completed, but those interventions were "
@@ -1698,8 +1676,6 @@ def _refuse_source_matched_zero_fire(
             continue
         if not matched:
             continue
-        if _is_gradient_edit(entry):
-            _refuse_gradient_edit_rerun(plan_id, matched)
         raise LiveModeLabelError(
             f"A staged edit ({plan_id}) matched {matched} site(s) {where} but fired at none "
             f"during the rerun's forward, and {why}, so the rerun would return an un-edited "
@@ -1714,37 +1690,6 @@ def _refuse_source_matched_zero_fire(
             unfired_plan_id=plan_id,
             source_site_count=matched,
         )
-
-
-def _refuse_gradient_edit_rerun(plan_id: str, matched: int) -> None:
-    """Refuse a rerun whose unfired staged edit is a gradient edit (its real cause).
-
-    Raises
-    ------
-    LiveModeLabelError
-        ``rerun_gradient_edit_unsupported``: a rerun replays the forward only.
-    """
-
-    raise LiveModeLabelError(
-        f"A staged gradient edit ({plan_id}) matched {matched} site(s) on this trace, "
-        "but a rerun replays the forward only, so a gradient edit can never fire "
-        "there. The rerun is refused and the trace is unchanged. Remedy: capture "
-        "with tl.options.CaptureOptions(backward_ready=True), attach the edit with "
-        "trace.attach_hooks(site, edit) or intervene=tl.when(site, edit), and run "
-        "trace.backward(loss)",
-        code="rerun_gradient_edit_unsupported",
-        unfired_plan_id=plan_id,
-        source_site_count=matched,
-    )
-
-
-def _is_gradient_edit(entry: Any) -> bool:
-    """Return whether one planned hook entry edits gradients."""
-
-    helper = getattr(entry, "helper_spec", None)
-    if helper is not None and (helper.kind == "backward" or helper.direction == "backward"):
-        return True
-    return entry.metadata.get("direction") == "backward"
 
 
 __all__ = ["run"]

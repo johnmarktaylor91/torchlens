@@ -16,6 +16,8 @@ import torchlens.validation.consolidated as consolidated_validation
 from torchlens._data_classes.grad_fn import GradFn
 from torchlens._ir.events import BackwardPassStart, OpGradObserved
 from torchlens.options import CaptureOptions, SaveOptions
+from torchlens.validation import last_validation_failure
+from torchlens.validation.diagnostics import CHECK_BACKWARD
 
 _NO_GRAD_AUTOGRAD_ERROR = "element 0 of tensors does not require grad and does not have a grad_fn"
 
@@ -425,7 +427,7 @@ def test_backward_events_share_one_monotonic_seq_domain() -> None:
 
 def _invariant_check(trace: tl.Trace) -> None:
     """Run the backward event-flow invariant directly."""
-    from torchlens.validation.invariants import _check_backward_event_flow_invariants
+    from torchlens.validation._invariants_backward_flow import _check_backward_event_flow_invariants
 
     _check_backward_event_flow_invariants(trace, "backward_graph_invariants")
 
@@ -1924,10 +1926,8 @@ def test_journal_seq_spans_forward_and_backward_lanes() -> None:
 def test_journal_seq_invariant_fires_on_planted_mutations() -> None:
     """The journal-wide seq invariant is independently armed per failure mode."""
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
-    from torchlens.validation.invariants import (
-        MetadataInvariantError,
-        _check_journal_seq_invariants,
-    )
+    from torchlens.validation._invariants_backward_domain import _check_journal_seq_invariants
+    from torchlens.validation.invariants import MetadataInvariantError
 
     _model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace))
@@ -2001,11 +2001,8 @@ def test_journal_seq_invariant_fires_on_event_deletion() -> None:
     """
 
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
-    from torchlens.validation.invariants import (
-        MetadataInvariantError,
-        _check_journal_seq_invariants,
-        check_metadata_invariants,
-    )
+    from torchlens.validation._invariants_backward_domain import _check_journal_seq_invariants
+    from torchlens.validation.invariants import MetadataInvariantError, check_metadata_invariants
 
     _model, _x, trace = _logged_model()
     trace.log_backward(_output_loss(trace))
@@ -2056,10 +2053,8 @@ def test_amendment_lane_deletion_is_visible_to_the_journal_invariant() -> None:
     """
 
     from torchlens._ir.capture_events import CaptureEvents
-    from torchlens.validation.invariants import (
-        MetadataInvariantError,
-        _check_journal_seq_invariants,
-    )
+    from torchlens.validation._invariants_backward_domain import _check_journal_seq_invariants
+    from torchlens.validation.invariants import MetadataInvariantError
 
     _model, _x, trace = _logged_model()
     stream = trace._capture_events
@@ -2256,6 +2251,9 @@ def test_validate_backward_fails_closed_on_coverage_gaps() -> None:
             seed=11,
         )
     assert passed is False
+    failure = last_validation_failure()
+    assert failure is not None and failure.check_name == CHECK_BACKWARD
+    assert failure.extra["reason"] == "backward_coverage_gap"
 
 
 class _ForeachInplaceModel(nn.Module):

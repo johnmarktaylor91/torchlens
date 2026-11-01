@@ -18,10 +18,12 @@ F40b declared-derivation doc of record (``docs/reference/episode_capture.md``).
 from __future__ import annotations
 
 import hashlib
-import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+from .._utils.hashing import sha256_canonical_json
+from ..errors.episode import EpisodeDeclarationError
 
 if TYPE_CHECKING:
     from ._episode_ledger import ResolvedEpisode
@@ -46,8 +48,6 @@ _LEGACY_CAPTURE_DIGEST_SCHEMA = "episode_capture_digest_v1"
 
 def _declaration_error(message: str, *, code: str | None = None) -> Exception:
     """Build the typed entry refusal (import-local to keep the leaf light)."""
-
-    from ..errors.episode import EpisodeDeclarationError
 
     return EpisodeDeclarationError(
         message,
@@ -585,8 +585,7 @@ def _product_identity(trace: Any, address: str, started: int) -> dict[str, Any]:
 def _canonical_digest(payload: Mapping[str, Any]) -> str:
     """sha256 over the canonical (sorted, compact) JSON form of ``payload``."""
 
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return sha256_canonical_json(payload, default=str)
 
 
 def _ledger_content(ledger_payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -716,8 +715,6 @@ def rederived_evidence_matches(trace: Any, ledger_payload: Mapping[str, Any]) ->
     ledger). Digests bind content; this check binds the content to the
     product's own values.
     """
-
-    from ..errors.episode import EpisodeDeclarationError
 
     rows = list(ledger_payload.get("rows") or [])
     if not rows or any(

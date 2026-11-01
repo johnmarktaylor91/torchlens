@@ -63,7 +63,7 @@ Required reading for this area: [Current 2.x Surface](docs/agent-reference/curre
 - Do not expect fused kernels to expose hidden internal tensors.
 - Do not put opaque callables in portable artifacts unless audit-only behavior is
   acceptable.
-- Do not add new top-level API names casually; use submodules. Interim-phase policy is remove-and-rename, never deprecation shims (tests/test_deprecation_inventory.py pins the package deprecation-free).
+- Do not add new top-level API names casually; use submodules. Interim-phase policy is remove-and-rename, never deprecation shims (scripts/checks/deprecation_inventory.py pins the package deprecation-free).
 
 ## Validation Integrity (LOCKED PRINCIPLE — never violate)
 
@@ -132,7 +132,8 @@ pytest tests/ -m "not rare and not slow" -x --tb=short  # phase-boundary backsto
 Byte goldens enforce only in the pinned environment (python 3.10, torch 2.13.0) and fail closed
 outside it and outside CI, so only the script's answer equals CI's (`tests/AGENTS.md`, "The smoke tier").
 
-Tiers by cost: `smoke` selects ~1.5k tests (1,500/24,471 collect-only, measured 2026-10-16),
+Tiers by cost (every tier's count: `tests/tiers/collection.json`): `smoke` selects
+~1.5k tests (1,482/37,032 collect-only, measured 2026-11-01),
 a coverage-chosen subset of the former ~9.9k-test tier (see `tests/AGENTS.md`, "The smoke
 tier"); under `-m smoke` the conftest skips test modules with no smoke mark before import.
 The instrumented smoke wall measurement (measured 2026-10-02, one 4-core Linux worker,

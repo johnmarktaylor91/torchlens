@@ -919,7 +919,7 @@ def _commit_region_occurrence(
         helper=None,
         site_label=child_op.layer_label,
         timing="post",
-        direction="forward",
+        signal="forward",
         helper_name=(
             edit.helper_name if isinstance(edit, Edit) else getattr(edit, "__name__", "region_edit")
         ),

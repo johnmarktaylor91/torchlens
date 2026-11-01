@@ -8,10 +8,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
-    from .invariants import (
-        MetadataInvariantError,
-        _resolve_op_grad_event_label,
-    )
 
 __all__ = (
     "_check_backward_event_flow_invariants",
@@ -518,11 +514,18 @@ def _is_func_call_id_exempt(layer: Op) -> bool:
     # with a nulled func_call_id and a rewritten func_name pass the whole
     # suite (deephunt M2).
     func_name = str(getattr(layer, "func_name", "")).lower()
-    return (
+    if (
         func_name == "none"
         and bool(getattr(layer, "is_internal_source", False))
         and getattr(layer, "func", None) is None
-    )
+    ):
+        return True
+    # A closure-constant source (SPEC 2 rule 1) is a functionless source like
+    # a buffer: no torch call, so no ``func_call_id``. The predicate is the
+    # narrow shared one (parentless, internal source, no callable, no call id).
+    from ._constant_source import is_closure_constant_source
+
+    return is_closure_constant_source(layer)
 
 
 def _plain_func_call_group_signature(layer: Op) -> tuple[object, ...]:
@@ -543,3 +546,13 @@ def _plain_func_call_group_signature(layer: Op) -> tuple[object, ...]:
         getattr(layer, "func_name", None),
         repr(getattr(layer, "container_spec", None)),
     )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._invariants_backward_domain import (  # noqa: E402
+    _resolve_op_grad_event_label,
+)
+from .invariants import (  # noqa: E402
+    MetadataInvariantError,
+)

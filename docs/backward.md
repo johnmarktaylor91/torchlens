@@ -126,9 +126,14 @@ created. When attribution cannot be resolved deterministically, `order` is `None
 
 ## Intervention And Replay
 
-Backward interventions use `intervene=tl.when(<backward selector>, <grad helper>)` on `tl.trace`.
-Helpers include `tl.zero_grad`, `tl.scale_grad`, `tl.clip_grad`, `tl.add_grad_noise`, `tl.clamp_grad`,
-and custom hooks.
+Gradient interventions address a gradient as a site: `tl.grad("relu_3")` is the gradient of
+relu_3's output, bare `"relu_3"` is its activation, and `tl.grad("relu_3") | "relu_3"` is both. Use
+`intervene=tl.when(tl.grad(<site>), <edit>)` on `tl.trace`, where the edit is an ordinary one
+(`tl.scale`, `tl.zero_ablate`, `tl.clamp`, `tl.add_noise`, `tl.clip_norm`) or a callable
+`fn(grad, *, ctx)`. The capture arms the edit and `trace.backward(loss)` applies it. On an existing
+trace, `trace.do(tl.grad(<site>), <edit>, model=model, inputs=x)` reruns the forward with the edit armed
+(audit status `"armed"` until a backward settles it); pass `loss=lambda t: ...` to arm and run the
+backward in one call. Replay cannot edit gradients (`replay_gradient_edit_unsupported`).
 
 Differentiable replay creates a new trace:
 

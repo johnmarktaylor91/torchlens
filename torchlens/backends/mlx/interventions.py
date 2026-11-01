@@ -27,6 +27,9 @@ from ...intervention.selectors import BaseSelector
 from ...intervention.types import Edit, InterventionDecision
 from ..registry import BackendUnsupportedError
 
+#: Refusal code for gradient-universe sites (registered in `_protocols.mlx`).
+_MLX_REFUSAL_BACKWARD = "backward_capture_unsupported"
+
 MLX_STATIC_INTERVENTION_SELECTOR_KINDS = _STATIC_INTERVENTION_SELECTOR_KINDS
 """Selector kinds resolvable from static capture-time labels on MLX.
 
@@ -153,6 +156,7 @@ def resolve_mlx_intervention_plan(
                 "tl.when(tl.func(...) | tl.label(...) | tl.in_module(...), action) "
                 "or the PyTorch backend."
             )
+        _reject_gradient_site(selector)
         _reject_non_static_selector(selector, surface="intervene")
         plan = MLXInterventionPlan(
             selector=selector,
@@ -169,6 +173,20 @@ def resolve_mlx_intervention_plan(
         _reject_non_static_selector(halt, surface="halt")
         halt_selector = halt
     return plan, halt_selector
+
+
+def _reject_gradient_site(selector: BaseSelector) -> None:
+    """Refuse a site outside the activation universe: MLX has no backward capture."""
+
+    from ...intervention.hooks import split_site_branches
+
+    if any(universe != "activation" for universe, _branch in split_site_branches(selector)):
+        raise BackendUnsupportedError(
+            "MLX backend supports forward interventions only; the site "
+            f"{selector!r} addresses a gradient, which needs backward capture "
+            "that MLX does not declare. Use the PyTorch backend for gradient edits.",
+            code=_MLX_REFUSAL_BACKWARD,
+        )
 
 
 def _reject_non_static_selector(selector: BaseSelector, *, surface: str) -> None:
@@ -215,15 +233,11 @@ def _resolve_decision_applier(decision: InterventionDecision, mx: Any) -> MLXHoo
     Raises
     ------
     BackendUnsupportedError
-        For directions, actions, flags, or helpers outside the MLX contract.
+        For actions, flags, or helpers outside the MLX contract.
     """
 
-    if decision.direction != "forward":
-        raise BackendUnsupportedError(
-            "MLX backend supports forward interventions only; direction "
-            f"{decision.direction!r} requires backward capture, which MLX does "
-            "not support (functional AD has no per-op backward nodes)."
-        )
+    # Gradient sites (tl.grad(...)) are outside the static selector kinds the
+    # caller admits, so every decision reaching here edits an activation.
     if decision.keep_grad or decision.isolate:
         raise BackendUnsupportedError(
             "MLX backend interventions do not support keep_grad or isolate; "
@@ -324,7 +338,7 @@ def _resolve_callable_applier(hook: Callable[..., Any]) -> MLXHookApplier:
         Applier invoking the callable with a minimal hook context.
     """
 
-    normalized = normalize_hook(hook, direction="forward")
+    normalized = normalize_hook(hook)
     identity = f"callable:{getattr(hook, '__qualname__', type(hook).__name__)}"
 
     def _apply(out: Any) -> Any:

@@ -1,9 +1,9 @@
 ## Public Surface
 
-`torchlens.__all__` is intentionally small and currently has 87 names. New user-facing
+`torchlens.__all__` is intentionally small and currently has 83 names. New user-facing
 objects should usually live under submodules (`torchlens.io`, `torchlens.options`,
 `torchlens.bridge`, `torchlens.errors`, etc.). Interim-phase policy is remove-and-rename,
-never deprecation shims (tests/test_deprecation_inventory.py pins the package
+never deprecation shims (scripts/checks/deprecation_inventory.py pins the package
 deprecation-free).
 
 Unified capture examples:
@@ -73,10 +73,9 @@ run preparation behind a no-allocation readiness capability gate.
 Provisional semantic I/O examples (review-day names):
 
 ```python
-classifier_trace = tl.trace(
-    model, x, capture=tl.options.CaptureOptions(output_style="classification", output_head="logits")
-)
+classifier_trace = tl.trace(model, x)
 classifier_trace.output_table(k=5)
+classifier_trace.decode_output(style="classification", head="logits")  # read-time override
 
 input_trace = tl.trace(
     model,
@@ -92,7 +91,6 @@ image_trace = tl.trace(
     capture=tl.options.CaptureOptions(input_transform=image_batch_to_tensor),
     save=mds_layers,
     save_raw_input=True,
-    output_style="classification",
 )
 image_trace.model_profile
 image_trace.output_table(k=5)

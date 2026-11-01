@@ -27,32 +27,44 @@ from typing import Any
 
 import pytest
 
-from torchlens.validation.invariants import (
-    MetadataInvariantError,
-    _check_backend_identity_invariants,
-    _check_backend_neutral_graph_topology,
-    _check_buffer_xrefs,
-    _check_distance_invariants,
-    _check_edge_use_parent_arg_invariants,
-    _check_equivalence_symmetry,
-    _check_graph_connectivity,
-    _check_graph_ordering,
-    _check_graph_topology,
+from torchlens.validation._invariants_buffers import _check_buffer_xrefs
+from torchlens.validation._invariants_conditional_base import _check_recurrence_invariants
+from torchlens.validation._invariants_conditional_modules import (
     _check_layer_pass_to_layer_log_xrefs,
-    _check_lookup_key_consistency,
-    _check_loop_detection_invariants,
-    _check_module_containment_logic,
     _check_module_hierarchy,
     _check_module_layer_containment,
-    _check_non_torch_backward_inert,
-    _check_non_torch_primitive_op_inert,
-    _check_op_log_fields,
-    _check_param_xrefs,
     _check_pass_count_consistency,
-    _check_recurrence_invariants,
+)
+from torchlens.validation._invariants_connectivity import (
+    _check_distance_invariants,
+    _check_graph_connectivity,
+    _check_lookup_key_consistency,
+    _check_module_containment_logic,
+)
+from torchlens.validation._invariants_entry import (
+    _check_backend_identity_invariants,
+    _check_non_torch_backward_inert,
+    check_func_call_id_invariant,
+)
+from torchlens.validation._invariants_equivalence import (
+    _check_equivalence_symmetry,
+    _check_graph_ordering,
+    _check_loop_detection_invariants,
+)
+from torchlens.validation._invariants_modules_params import _check_param_xrefs
+from torchlens.validation._invariants_payloads import (
+    _check_backend_neutral_graph_topology,
+    _check_edge_use_parent_arg_invariants,
+    _check_op_log_fields,
+)
+from torchlens.validation._invariants_topology import (
+    _check_graph_topology,
     _check_special_layer_lists,
     _check_trace_self_consistency,
-    check_func_call_id_invariant,
+)
+from torchlens.validation.invariants import (
+    MetadataInvariantError,
+    _check_non_torch_primitive_op_inert,
 )
 
 
@@ -465,23 +477,27 @@ def test_graph_connectivity_fires_on_leaked_retained_orphan() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_graph_ordering_fires_on_duplicate_raw_index() -> None:
-    """Arm 0: raw_index must be unique across layers."""
+@pytest.mark.parametrize(
+    ("first_raw_index", "second_raw_index", "match"),
+    [
+        (1, 1, "Duplicate raw_index"),
+        (5, 3, "not monotonically increasing"),
+    ],
+    ids=[
+        "graph_ordering_fires_on_duplicate_raw_index",
+        "graph_ordering_fires_on_non_monotonic_raw_index",
+    ],
+)
+def test_graph_ordering_fires(first_raw_index: int, second_raw_index: int, match: str) -> None:
+    """Arm 0: raw_index must be unique across layers.
 
-    layer1 = SimpleNamespace(layer_label="a", raw_index=1)
-    layer2 = SimpleNamespace(layer_label="b", raw_index=1)
+    Arm 1: raw_index must increase monotonically in layer_list order.
+    """
+
+    layer1 = SimpleNamespace(layer_label="a", raw_index=first_raw_index)
+    layer2 = SimpleNamespace(layer_label="b", raw_index=second_raw_index)
     fake_trace = SimpleNamespace(layer_list=[layer1, layer2])
-    with pytest.raises(MetadataInvariantError, match="Duplicate raw_index"):
-        _check_graph_ordering(fake_trace)  # type: ignore[arg-type]
-
-
-def test_graph_ordering_fires_on_non_monotonic_raw_index() -> None:
-    """Arm 1: raw_index must increase monotonically in layer_list order."""
-
-    layer1 = SimpleNamespace(layer_label="a", raw_index=5)
-    layer2 = SimpleNamespace(layer_label="b", raw_index=3)
-    fake_trace = SimpleNamespace(layer_list=[layer1, layer2])
-    with pytest.raises(MetadataInvariantError, match="not monotonically increasing"):
+    with pytest.raises(MetadataInvariantError, match=match):
         _check_graph_ordering(fake_trace)  # type: ignore[arg-type]
 
 
@@ -590,23 +606,29 @@ def test_graph_topology_fires_on_out_versions_by_child_outside_children() -> Non
 # ---------------------------------------------------------------------------
 
 
-def test_layer_pass_layer_log_xrefs_fires_on_pass_index_mismatch() -> None:
-    """Arm 2: an Op's pass_index must match its dict key in Layer.ops."""
+@pytest.mark.parametrize(
+    ("op_pass_index", "op_layer_label", "match"),
+    [
+        (2, "relu_1", r"pass key=1 but Op.pass_index=2"),
+        (1, "wrong_label", "parent Layer.layer_label"),
+    ],
+    ids=[
+        "layer_pass_layer_log_xrefs_fires_on_pass_index_mismatch",
+        "layer_pass_layer_log_xrefs_fires_on_op_layer_label_mismatch",
+    ],
+)
+def test_layer_pass_layer_log_xrefs_fires(
+    op_pass_index: int, op_layer_label: str, match: str
+) -> None:
+    """Arm 2: an Op's pass_index must match its dict key in Layer.ops.
 
-    op = SimpleNamespace(pass_index=2, layer_label="relu_1")
+    Arm 3: an Op's layer_label must match its parent Layer's layer_label.
+    """
+
+    op = SimpleNamespace(pass_index=op_pass_index, layer_label=op_layer_label)
     layer = SimpleNamespace(layer_label="relu_1", num_passes=1, ops={1: op})
     fake_trace = SimpleNamespace(layer_logs={"relu_1": layer})
-    with pytest.raises(MetadataInvariantError, match=r"pass key=1 but Op.pass_index=2"):
-        _check_layer_pass_to_layer_log_xrefs(fake_trace)  # type: ignore[arg-type]
-
-
-def test_layer_pass_layer_log_xrefs_fires_on_op_layer_label_mismatch() -> None:
-    """Arm 3: an Op's layer_label must match its parent Layer's layer_label."""
-
-    op = SimpleNamespace(pass_index=1, layer_label="wrong_label")
-    layer = SimpleNamespace(layer_label="relu_1", num_passes=1, ops={1: op})
-    fake_trace = SimpleNamespace(layer_logs={"relu_1": layer})
-    with pytest.raises(MetadataInvariantError, match="parent Layer.layer_label"):
+    with pytest.raises(MetadataInvariantError, match=match):
         _check_layer_pass_to_layer_log_xrefs(fake_trace)  # type: ignore[arg-type]
 
 
@@ -650,15 +672,31 @@ def test_lookup_key_consistency_fires_on_reverse_key_missing_from_forward() -> N
 # ---------------------------------------------------------------------------
 
 
-def test_loop_detection_invariants_fires_on_shortcut_func_mismatch() -> None:
-    """Arm 0: a later pass sharing an already-validated group must still agree on func_name."""
+@pytest.mark.parametrize(
+    ("first_is_input", "second_func_name", "second_num_passes", "match"),
+    [
+        (True, "sigmoid", 2, "recurrent_ops func mismatch"),
+        (False, "relu", 99, "num_passes=99"),
+    ],
+    ids=[
+        "loop_detection_invariants_fires_on_shortcut_func_mismatch",
+        "loop_detection_invariants_fires_on_shortcut_num_passes_mismatch",
+    ],
+)
+def test_loop_detection_invariants_fires_on_shortcut_mismatch(
+    first_is_input: bool, second_func_name: str, second_num_passes: int, match: str
+) -> None:
+    """Arm 0: a later pass sharing an already-validated group must still agree on func_name.
+
+    Arm 1: a later pass sharing an already-validated group must match num_passes.
+    """
 
     layer1 = SimpleNamespace(
         label="relu_1:1",
         layer_label="relu_1",
         recurrent_ops=["relu_1:1", "relu_1:2"],
         equivalence_class="type_a",
-        is_input=True,
+        is_input=first_is_input,
         is_buffer=False,
         is_output=False,
         func_name="relu",
@@ -673,8 +711,8 @@ def test_loop_detection_invariants_fires_on_shortcut_func_mismatch() -> None:
         is_input=False,
         is_buffer=False,
         is_output=False,
-        func_name="sigmoid",
-        num_passes=2,
+        func_name=second_func_name,
+        num_passes=second_num_passes,
         pass_index=2,
     )
     fake_trace = SimpleNamespace(
@@ -684,45 +722,7 @@ def test_loop_detection_invariants_fires_on_shortcut_func_mismatch() -> None:
         layer_dict_all_keys={"relu_1:1": layer1, "relu_1:2": layer2},
         op_equivalence_classes={},
     )
-    with pytest.raises(MetadataInvariantError, match="recurrent_ops func mismatch"):
-        _check_loop_detection_invariants(fake_trace)  # type: ignore[arg-type]
-
-
-def test_loop_detection_invariants_fires_on_shortcut_num_passes_mismatch() -> None:
-    """Arm 1: a later pass sharing an already-validated group must match num_passes."""
-
-    layer1 = SimpleNamespace(
-        label="relu_1:1",
-        layer_label="relu_1",
-        recurrent_ops=["relu_1:1", "relu_1:2"],
-        equivalence_class="type_a",
-        is_input=False,
-        is_buffer=False,
-        is_output=False,
-        func_name="relu",
-        num_passes=2,
-        pass_index=1,
-    )
-    layer2 = SimpleNamespace(
-        label="relu_1:2",
-        layer_label="relu_1",
-        recurrent_ops=["relu_1:1", "relu_1:2"],
-        equivalence_class="type_a",
-        is_input=False,
-        is_buffer=False,
-        is_output=False,
-        func_name="relu",
-        num_passes=99,
-        pass_index=2,
-    )
-    fake_trace = SimpleNamespace(
-        layer_list=[layer1, layer2],
-        op_labels=["relu_1:1", "relu_1:2"],
-        layer_logs={},
-        layer_dict_all_keys={"relu_1:1": layer1, "relu_1:2": layer2},
-        op_equivalence_classes={},
-    )
-    with pytest.raises(MetadataInvariantError, match="num_passes=99"):
+    with pytest.raises(MetadataInvariantError, match=match):
         _check_loop_detection_invariants(fake_trace)  # type: ignore[arg-type]
 
 
@@ -857,27 +857,29 @@ def test_loop_detection_invariants_fires_on_cross_pass_equivalence_type_drift() 
 # ---------------------------------------------------------------------------
 
 
-def test_module_containment_logic_fires_on_leaf_module_mismatch() -> None:
-    """Arm 3: a layer's last nested module must match its module field."""
+@pytest.mark.parametrize(
+    ("nested_module", "module", "match"),
+    [
+        ("encoder", "decoder", "last nested module"),
+        ("ghost_module", "ghost_module", "unknown module address"),
+    ],
+    ids=[
+        "module_containment_logic_fires_on_leaf_module_mismatch",
+        "module_containment_logic_fires_on_unknown_nested_module_address",
+    ],
+)
+def test_module_containment_logic_fires(nested_module: str, module: str, match: str) -> None:
+    """Arm 3: a layer's last nested module must match its module field.
+
+    Arm 4: every nested module path entry must be a known module address.
+    """
 
     mod_self = SimpleNamespace(
         address="self", address_parent=None, address_depth=0, address_children=[]
     )
-    layer = SimpleNamespace(layer_label="relu_1", modules=["encoder"], module="decoder")
+    layer = SimpleNamespace(layer_label="relu_1", modules=[nested_module], module=module)
     fake_trace = SimpleNamespace(modules=_AddrIndexed([mod_self]), layer_list=[layer])
-    with pytest.raises(MetadataInvariantError, match="last nested module"):
-        _check_module_containment_logic(fake_trace)  # type: ignore[arg-type]
-
-
-def test_module_containment_logic_fires_on_unknown_nested_module_address() -> None:
-    """Arm 4: every nested module path entry must be a known module address."""
-
-    mod_self = SimpleNamespace(
-        address="self", address_parent=None, address_depth=0, address_children=[]
-    )
-    layer = SimpleNamespace(layer_label="relu_1", modules=["ghost_module"], module="ghost_module")
-    fake_trace = SimpleNamespace(modules=_AddrIndexed([mod_self]), layer_list=[layer])
-    with pytest.raises(MetadataInvariantError, match="unknown module address"):
+    with pytest.raises(MetadataInvariantError, match=match):
         _check_module_containment_logic(fake_trace)  # type: ignore[arg-type]
 
 
@@ -1260,23 +1262,29 @@ def test_param_xrefs_fires_on_layers_with_params_outside_layer_labels() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_pass_count_consistency_fires_on_op_pass_index_mismatch() -> None:
-    """Arm 1: a stored op's pass_index must match its key in Layer.ops."""
+@pytest.mark.parametrize(
+    ("op_pass_index", "op_num_passes", "match"),
+    [
+        (2, 1, "stores op with pass_index=2"),
+        (1, 99, "num_passes=99"),
+    ],
+    ids=[
+        "pass_count_consistency_fires_on_op_pass_index_mismatch",
+        "pass_count_consistency_fires_on_op_num_passes_mismatch",
+    ],
+)
+def test_pass_count_consistency_fires_on_op_mismatch(
+    op_pass_index: int, op_num_passes: int, match: str
+) -> None:
+    """Arm 1: a stored op's pass_index must match its key in Layer.ops.
 
-    op = SimpleNamespace(pass_index=2, num_passes=1, label="relu_1:1")
+    Arm 2: a stored op's num_passes must match its Layer's num_passes.
+    """
+
+    op = SimpleNamespace(pass_index=op_pass_index, num_passes=op_num_passes, label="relu_1:1")
     layer_log = SimpleNamespace(ops={1: op}, num_passes=1)
     fake_trace = SimpleNamespace(layer_logs={"relu_1": layer_log}, layer_num_calls={})
-    with pytest.raises(MetadataInvariantError, match="stores op with pass_index=2"):
-        _check_pass_count_consistency(fake_trace)  # type: ignore[arg-type]
-
-
-def test_pass_count_consistency_fires_on_op_num_passes_mismatch() -> None:
-    """Arm 2: a stored op's num_passes must match its Layer's num_passes."""
-
-    op = SimpleNamespace(pass_index=1, num_passes=99, label="relu_1:1")
-    layer_log = SimpleNamespace(ops={1: op}, num_passes=1)
-    fake_trace = SimpleNamespace(layer_logs={"relu_1": layer_log}, layer_num_calls={})
-    with pytest.raises(MetadataInvariantError, match="num_passes=99"):
+    with pytest.raises(MetadataInvariantError, match=match):
         _check_pass_count_consistency(fake_trace)  # type: ignore[arg-type]
 
 

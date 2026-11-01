@@ -52,6 +52,7 @@ import torch
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
+from ._module_call_dispatch import probe_module_call_dispatch_frame
 from ._torch_symbols import shadowed_torch_submodule, torch_attr
 
 __all__ = [
@@ -125,6 +126,7 @@ __all__ = [
     "HAS_SAVED_TENSORS_HOOKS_PATCHABLE",
     "HAS_CODE_POSITIONS",
     "HAS_CODE_QUALNAME",
+    "HAS_MODULE_CALL_DISPATCH_FRAME",
     "HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG",
     "HAS_ATTENTION_CAUSAL_BIAS",
     "HAS_EXPANDED_WEIGHTS_CONV_PICKER",
@@ -497,11 +499,10 @@ def resolve_runnable_torch_alias(
     source_qualname:
         Fully qualified recorded callable path.
     recorded_version:
-        Torch version that produced the registry key. Aliases may be bounded
-        to supported minor releases; monotonic moves with an open upper bound
-        rely on the live target-existence capability probe. Unknown versions
-        retain compatibility behavior for descriptors that predate this
-        metadata.
+        Torch version that produced the registry key. Aliases may be bounded to
+        supported minor releases; monotonic moves with an open upper bound rely on
+        the live target-existence capability probe. Unknown versions retain
+        compatibility behavior for descriptors that predate this metadata.
 
     Returns
     -------
@@ -509,6 +510,8 @@ def resolve_runnable_torch_alias(
         Target namespace, target qualname, and stable provenance, or ``None``
         when the path has no explicit monotonic alias.
     """
+
+    from ._producer_version import _torch_minor_version
 
     parsed_version = _torch_minor_version(recorded_version)
     for alias in _RUNNABLE_TORCH_ALIASES:
@@ -544,29 +547,6 @@ def resolve_runnable_torch_alias(
             continue
         return alias.target_namespace, target_qualname, alias.provenance
     return None
-
-
-def _torch_minor_version(version: str | None) -> tuple[int, int] | None:
-    """Parse a torch major/minor prefix without inspecting the live runtime.
-
-    Parameters
-    ----------
-    version:
-        Producer torch version from runnable compatibility metadata.
-
-    Returns
-    -------
-    tuple[int, int] | None
-        Major/minor pair, or ``None`` when producer metadata is absent or not
-        parseable (for example a legacy placeholder).
-    """
-
-    if version is None:
-        return None
-    components = version.split("+", maxsplit=1)[0].split(".")
-    if len(components) < 2 or not components[0].isdigit() or not components[1].isdigit():
-        return None
-    return int(components[0]), int(components[1])
 
 
 def _probe_device_type_arg_supported() -> bool:
@@ -830,10 +810,10 @@ def _probe_safe_weights_only_load() -> bool:
     CVE-2025-32434 (critical, CVSS 9.3; affects torch <= 2.5.1, fixed in torch
     2.6.0) is a remote-code-execution reachable through ``torch.load`` *itself*
     even with ``weights_only=True``: the pre-2.6 weights-only unpickler could be
-    bypassed. TorchLens routes an embedded-tensor reconstruction through
-    ``torch.load(BytesIO, weights_only=True)`` (see
-    ``torchlens._io._safe_unpickle._safe_load_from_bytes``), so on an affected
-    runtime that "restricted" nested load is a working RCE and must fail closed.
+    bypassed. TorchLens no longer hands file bytes to ``torch.load`` (the metadata
+    unpickler refuses ``torch.storage._load_from_bytes`` by name; plain metadata
+    tensors use its own inline reduction), so this flag gates no TorchLens code
+    path; it stays a reported capability in the capability snapshot and ``doctor()``.
 
     The patched behavior is internal to the unpickler and has NO version-string-
     free *behavioral* signature we can cheaply exercise, so -- consistent with this
@@ -1710,6 +1690,9 @@ HAS_SAVED_TENSORS_HOOK_INTROSPECTION: bool = _probe_saved_tensors_hook_introspec
 HAS_SAVED_TENSORS_HOOKS_PATCHABLE: bool = _probe_saved_tensors_hooks_patchable()
 HAS_CODE_POSITIONS: bool = _probe_code_positions()
 HAS_CODE_QUALNAME: bool = _probe_code_qualname()
+#: ``Module.__call__`` frames that call ``forward`` (see ``_module_call_dispatch``).
+_FORWARD_CALLERS = tuple(getattr(torch.nn.Module, n, None) for n in ("_call_impl", "_slow_forward"))
+HAS_MODULE_CALL_DISPATCH_FRAME: bool = probe_module_call_dispatch_frame(_FORWARD_CALLERS)
 HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG: bool = _probe_transformer_activation_fastpath_flag()
 HAS_ATTENTION_CAUSAL_BIAS: bool = _probe_attention_causal_bias()
 HAS_EXPANDED_WEIGHTS_CONV_PICKER: bool = _probe_expanded_weights_conv_picker()
@@ -1916,6 +1899,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_SAVED_TENSORS_HOOKS_PATCHABLE",
     "HAS_CODE_POSITIONS",
     "HAS_CODE_QUALNAME",
+    "HAS_MODULE_CALL_DISPATCH_FRAME",
     "HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG",
     "HAS_ATTENTION_CAUSAL_BIAS",
     "HAS_EXPANDED_WEIGHTS_CONV_PICKER",
@@ -2191,7 +2175,7 @@ def mark_torch_capability_missing(capability_name: str, detail: str) -> None:
     Setting the ``TORCHLENS_SUPPRESS_TORCH_CAPABILITY_WARNINGS`` environment
     variable to a closed-vocabulary true spelling (``1``/``true``/``yes``/
     ``on``) suppresses the warning (the flag still flips, and the degradation
-    stays visible through ``tl.compat.report()`` / ``tl.report.doctor()``);
+    stays visible through ``tl.report.doctor()``);
     false spellings and unset keep the warning, and unrecognized values
     refuse (``env_flag_invalid``) -- the historical any-non-empty-value
     truthiness meant ``=false`` SUPPRESSED, the exact silent-inversion class
@@ -2246,9 +2230,9 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     # get_dynamo_optimized_module_type / get_fsdp_wrapper_type /
     # get_dtensor_type / get_device_mesh_type / get_pipelining_module_types) to
     # avoid unconditional torch._dynamo / torch.distributed imports on the
-    # capture hot path. Diagnostic snapshot consumers (tl.compat.report(),
-    # tl.report.doctor()) are not on that hot path, so force the probes here to
-    # report the real capabilities instead of the pre-probe placeholders.
+    # capture hot path. The diagnostic snapshot consumer (tl.report.doctor()) is
+    # not on that hot path, so force the probes here to report the real
+    # capabilities instead of the pre-probe placeholders.
     get_dynamo_optimized_module_type(force_probe=True)
     get_fsdp_wrapper_type(force_probe=True)
     get_dtensor_type(force_probe=True)
@@ -2779,7 +2763,7 @@ def get_funcol_group_resolvers(
     ``torch.distributed.distributed_c10d._resolve_process_group`` maps a group
     name to its live ProcessGroup. Both are torch-private surfaces, so their
     absence flips the named ``HAS_FUNCOL_GROUP_RESOLUTION`` flag (visible in
-    ``doctor()`` / ``compat.report()``) instead of failing mid-capture; the
+    ``tl.report.doctor()``) instead of failing mid-capture; the
     boundary wrap then refuses captured funcol calls typed rather than letting
     an uncorrelatable collective execute silently.
     """
@@ -2900,7 +2884,7 @@ def get_funcol_module() -> Any | None:
     calls), so this accessor hands out the module itself. The import is
     eager on first call -- callers only reach it at distributed arm/disarm
     time, never on the plain-capture hot path. Absence flips the named
-    ``HAS_FUNCOL_MODULE`` flag (visible in ``doctor()`` / ``compat.report()``)
+    ``HAS_FUNCOL_MODULE`` flag (visible in ``tl.report.doctor()``)
     and funcol calls then run unwrapped, exactly the pre-C2 disclosure class.
     """
 
@@ -3546,8 +3530,10 @@ def warm_lazy_torch_imports() -> None:
     silent, order-dependent breach of the contract's "a plain deterministic
     capture records nothing" pin. The monitor calls this BEFORE arming any
     patch so the cascade runs outside every window. ``torch.backends.opt_einsum``
-    (imported inside ``torch.einsum``) is warmed too: an in-window import's
-    ``sys.meta_path`` finder frames become deep-inventory roots (see ``rng.py``).
+    (imported inside ``torch.einsum``) is warmed too, as is TorchLens's own
+    producer-version parser (imported lazily by ``resolve_runnable_torch_alias``):
+    an in-window import's ``sys.meta_path`` finder frames become deep-inventory
+    roots (see ``rng.py``). The list lives in ``_lazy_import_warm``.
 
     Failure is benign and intentionally unlatched: a partially-executed failed
     import is evicted from ``sys.modules``, so a later in-window retry re-runs
@@ -3564,30 +3550,10 @@ def warm_lazy_torch_imports() -> None:
 
     if _LAZY_TORCH_IMPORTS_WARMED:
         return
-    # The RNG-channel fix above (running this BEFORE the monitor's own
-    # patches install) only protects THAT one census. The broader capture
-    # logging/dispatch window is already armed by the time this runs (it
-    # fires from inside ``run_and_log_inputs_through_model``), so the
-    # cascade's own tensor ops -- torch._dynamo.variables.torch_function's
-    # module-level ``populate_builtin_to_tensor_fn_map()`` calls
-    # ``torch.ones`` plus several builtin unary ops (``abs``, ...) as an
-    # import side effect -- went through TorchLens's OWN wrapped functions
-    # and were recorded as unattributable "unmodeled_tensor_return" /
-    # "caught_exception_control" dispatch-census facts, permanently
-    # ceilinging the capture's witness completeness even though nothing in
-    # the user's model caused them. ``pause_logging()`` is the general
-    # mechanism for exactly this (critical invariant 2): it hides the
-    # cascade from every capture-time witness, not just the RNG monitor.
-    from .._state import pause_logging
+    # Function-local: keeps the warm list's module out of this module's import closure.
+    from ._lazy_import_warm import import_first_capture_lazy_modules
 
-    warmed = True
-    with pause_logging():
-        for module_name in ("torch._compile", "torch._dynamo", "torch.backends.opt_einsum"):
-            try:
-                importlib.import_module(module_name)
-            except Exception:
-                warmed = False
-    _LAZY_TORCH_IMPORTS_WARMED = warmed
+    _LAZY_TORCH_IMPORTS_WARMED = import_first_capture_lazy_modules()
 
 
 @contextlib.contextmanager

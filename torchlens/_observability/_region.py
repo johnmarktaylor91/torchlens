@@ -121,7 +121,7 @@ def region(name: str, **metadata: Any) -> Iterator[RegionRecord]:
             if capture_active:
                 # Record-tier support rides the SHIPPED record-span surface
                 # (one span vocabulary; never a parallel stack).
-                span_record = stack.enter_context(observers.span(label, direction="both"))
+                span_record = stack.enter_context(observers.span(label, signal="both"))
                 span_record["region"] = {
                     "occurrence": occurrence,
                     "parent": parent,

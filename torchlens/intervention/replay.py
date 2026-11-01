@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 import warnings
 from collections import OrderedDict, deque
-from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 import torch
@@ -36,8 +36,17 @@ from ._replay_context import (
     REPLAY_CAPTURE_DIGESTS_KEY,
     _ensure_replay_run_ctx,
     _final_label_for_ref,
+    _func_call_groups,
+    _group_for_site,
+    _group_representative,
     _record_capture_digest,
     _replay_site_key,
+)
+from ._replay_values import (
+    _call_mutates_tensor_args,
+    _clone_tensors_in,
+    _is_inplace_none_return,
+    _looks_like_template_dict,
 )
 from .audit import _hook_name, _replay_fire_record
 from .edge_substitution import require_depth1_arg_path
@@ -56,6 +65,7 @@ from .hooks import (
 )
 from .resolver import _label_index_scope
 from .runtime import _execute_hook
+from .spec import is_gradient_site
 from .types import (
     CapturedArgTemplate,
     FireRecord,
@@ -161,6 +171,7 @@ def push(
 
     replay_options = merge_replay_options(replay=replay)
     _preflight_log(trace)
+    _refuse_armed_gradient_rules(trace, replay_options.hooks)
     _warn_if_direct_writes_will_be_overlaid(trace)
     hook_entries = _normalize_replay_hooks(trace, replay_options.hooks)
     origins = _origin_sites_for_hooks(trace, hook_entries, strict=replay_options.strict)
@@ -181,6 +192,73 @@ def push(
             hook_entries=hook_entries,
             strict=replay_options.strict,
             preserve_origins=False,
+        )
+
+
+def gradient_edit_replay_text(sites: str) -> tuple[str, str]:
+    """Return the ONE ``(message, remedy)`` for a gradient edit meeting replay.
+
+    Every door that refuses ``replay_gradient_edit_unsupported`` for a
+    gradient site (``do`` with a replay engine, ``push`` on an armed recipe)
+    raises with this text, so the spelling lives in one place.
+
+    Parameters
+    ----------
+    sites:
+        Rendering of the gradient sites the edit addresses.
+
+    Returns
+    -------
+    tuple[str, str]
+        The refusal message and its remedy.
+    """
+
+    message = (
+        f"Replay re-executes forward ops only and cannot edit the gradient at {sites}. "
+        "Pass model= and x= to rerun with the edit armed, then call "
+        "result.backward(loss) (or pass loss=), or stage it with engine='set_only' "
+        "and call trace.backward(loss) on this trace."
+    )
+    remedy = (
+        "trace.do(tl.grad(site), edit, model=model, inputs=x, loss=fn), or "
+        "do(..., intervention=InterventionOptions(engine='set_only')) then trace.backward(loss)"
+    )
+    return message, remedy
+
+
+def _refuse_armed_gradient_rules(trace: Trace, hooks: Any = None) -> None:
+    """Refuse a push whose recipe or explicit replay hooks address a gradient.
+
+    Replay recomputes forward values off the autograd graph, so a gradient
+    rule could never fire there, whether the recipe arms it or the call
+    passes it as ``ReplayOptions(hooks={tl.grad(site): edit})``; refusing
+    keeps a push from returning a result that silently dropped it.
+
+    Parameters
+    ----------
+    trace:
+        Trace about to be pushed.
+    hooks:
+        The push's explicit ``ReplayOptions.hooks`` mapping, or ``None``.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``replay_gradient_edit_unsupported`` naming the gradient sites.
+    """
+
+    spec = trace._intervention_spec
+    targets = [hook_spec.site_target for hook_spec in getattr(spec, "hook_specs", ())]
+    if isinstance(hooks, Mapping):
+        targets.extend(hooks)
+    sites = [repr(target) for target in targets if is_gradient_site(target)]
+    if sites:
+        message, remedy = gradient_edit_replay_text(", ".join(dict.fromkeys(sites)))
+        raise InvalidArgumentError(
+            message,
+            code="replay_gradient_edit_unsupported",
+            remedy=remedy,
+            argument="hooks_or_site",
         )
 
 
@@ -600,10 +678,18 @@ def _run_replay(
                     continue
                 threaded = _threaded_buffer_value(member, log, overlay, strict=strict)
                 if threaded is None:
-                    continue
+                    # Nothing threads into this version (an initial read, or
+                    # an undisclosed gap kept its captured value). A hook
+                    # aimed AT the record still fires, on the captured value:
+                    # that value is what the version's consumers read, so the
+                    # edit propagates through the cone from here. Without a
+                    # hook there is nothing to recompute.
+                    if member_key not in hook_targets or not isinstance(member.out, torch.Tensor):
+                        continue
+                    threaded = member.out
                 # Clone: buffer records keep their own storage at capture, so
                 # the committed buffer out must not alias the writing op's
-                # committed out.
+                # committed out (nor the captured payload a hook edits).
                 tensor = threaded.clone()
                 tensor, records = _apply_replay_hooks(
                     tensor,
@@ -623,26 +709,7 @@ def _run_replay(
                     _install_replay_tensor_hook(log, member, tensor)
                 _check_edge_expectations(member, strict=strict)
             continue
-        # A synthesized boundary output node carries the parent call's
-        # template but ``func=identity`` -- it replays THROUGH its parent's
-        # function call, so a member that carries the call's real func must
-        # execute the group. Fall back to the full (cone-unfiltered) call
-        # group when the cone holds only boundary nodes (an output-node
-        # origin replayed with recomputation).
-        representative = next(
-            (member for member in replay_group if not getattr(member, "is_output", False)),
-            None,
-        )
-        if representative is None:
-            representative = next(
-                (
-                    member
-                    for member in call_groups.get(site.func_call_id, ())
-                    if not getattr(member, "is_output", False)
-                    and not getattr(member, "is_buffer", False)
-                ),
-                replay_group[0],
-            )
+        representative = _group_representative(replay_group, call_groups, site)
         args, kwargs = _reconstruct_args_from_template(
             _template_for_site(representative),
             representative,
@@ -1596,57 +1663,6 @@ def _resolve_single_origin(
     return cast("Op", log._resolve_sites(site, strict=strict, max_fanout=1).first())
 
 
-def _func_call_groups(log: Trace) -> dict[int | None, tuple[Op, ...]]:
-    """Return function-call groups in topological order.
-
-    Parameters
-    ----------
-    log:
-        Model log to inspect.
-
-    Returns
-    -------
-    dict[int | None, tuple[Op, ...]]
-        Sites grouped by ``func_call_id``.
-    """
-
-    groups: dict[int | None, list[Op]] = {}
-    for layer in log.layer_list:
-        groups.setdefault(layer.func_call_id, []).append(layer)
-    return {call_id: tuple(layers) for call_id, layers in groups.items()}
-
-
-def _group_for_site(
-    site: Op,
-    call_groups: Mapping[int | None, Sequence[Op]],
-    cone_keys: Collection[str],
-) -> tuple[Op, ...]:
-    """Return same-call group members for a site.
-
-    Parameters
-    ----------
-    site:
-        Representative site.
-    call_groups:
-        Function-call grouping map.
-    cone_keys:
-        Replay keys of the current replay cone, computed once per replay.
-
-    Returns
-    -------
-    tuple[Op, ...]
-        Same-call members in topological order.
-    """
-
-    if site.func_call_id is None:
-        return (site,)
-    return tuple(
-        member
-        for member in call_groups.get(site.func_call_id, (site,))
-        if _replay_site_key(member) in cone_keys
-    )
-
-
 def _child_labels(site: Op) -> tuple[str, ...]:
     """Return child labels from edge and tensor-version metadata.
 
@@ -1699,23 +1715,6 @@ def _index_output_component(output: Any, component: OutputPathComponent) -> Any:
             return output[component]
         return getattr(output, component)
     raise ReplayPreconditionError(f"unsupported output path component {component!r}")
-
-
-def _looks_like_template_dict(component: tuple[Any, ...]) -> bool:
-    """Return whether a tuple encodes a captured dict argument.
-
-    Parameters
-    ----------
-    component:
-        Tuple template component.
-
-    Returns
-    -------
-    bool
-        Whether all items are key/value pairs.
-    """
-
-    return all(isinstance(item, tuple) and len(item) == 2 for item in component)
 
 
 def _warn_if_unexpected_parent(
@@ -1780,79 +1779,6 @@ def _check_edge_expectations(site: Op, *, strict: bool) -> None:
         if strict:
             raise ControlFlowDivergenceError(message)
         warnings.warn(message, ControlFlowDivergenceWarning, stacklevel=3)
-
-
-def _is_inplace_none_return(site: Op) -> bool:
-    """Return whether a None return should be treated as mutated arg zero.
-
-    Parameters
-    ----------
-    site:
-        Replayed site.
-
-    Returns
-    -------
-    bool
-        Whether to use the first positional argument as output.
-    """
-
-    func_name = getattr(site.func, "__name__", "") if site.func is not None else ""
-    return bool(site.is_inplace) or func_name in {"__setitem__", "zero_", "__delitem__"}
-
-
-def _call_mutates_tensor_args(site: Op, kwargs: Mapping[str, Any]) -> bool:
-    """Return whether a replayed call may write into its argument tensors.
-
-    Covers the captured in-place flag, the torch trailing-underscore
-    convention (dunders excluded), the explicit mutator set from
-    :func:`_is_inplace_none_return`, and a tensor ``out=`` destination. A
-    false positive only costs one defensive clone; a false negative lets the
-    replayed call mutate captured payloads by identity.
-
-    Parameters
-    ----------
-    site:
-        Replayed site.
-    kwargs:
-        Reconstructed keyword arguments.
-
-    Returns
-    -------
-    bool
-        Whether argument tensors must be cloned before execution.
-    """
-
-    if _is_inplace_none_return(site):
-        return True
-    func_name = getattr(site.func, "__name__", "") if site.func is not None else ""
-    if func_name.endswith("_") and not func_name.endswith("__"):
-        return True
-    return isinstance(kwargs.get("out"), torch.Tensor)
-
-
-def _clone_tensors_in(value: Any) -> Any:
-    """Return ``value`` with every tensor leaf cloned, containers rebuilt.
-
-    Parameters
-    ----------
-    value:
-        Resolved argument value (tensor, container, or opaque object).
-
-    Returns
-    -------
-    Any
-        Structure with cloned tensor leaves; non-tensor leaves unchanged.
-    """
-
-    if isinstance(value, torch.Tensor):
-        return value.clone()
-    if isinstance(value, tuple):
-        return tuple(_clone_tensors_in(item) for item in value)
-    if isinstance(value, list):
-        return [_clone_tensors_in(item) for item in value]
-    if isinstance(value, dict):
-        return {key: _clone_tensors_in(item) for key, item in value.items()}
-    return value
 
 
 def _threaded_buffer_value(
@@ -1952,23 +1878,6 @@ def _threaded_buffer_value(
         )
         return None
     return recomputed
-
-
-def _is_namedtuple_instance(value: Any) -> bool:
-    """Return whether a value is a namedtuple instance.
-
-    Parameters
-    ----------
-    value:
-        Candidate value.
-
-    Returns
-    -------
-    bool
-        Whether it is a namedtuple instance.
-    """
-
-    return isinstance(value, tuple) and hasattr(value, "_fields")
 
 
 __all__ = [

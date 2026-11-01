@@ -19,8 +19,8 @@ from safetensors.torch import save_file
 import torchlens._io.lazy as lazy
 from torchlens._io import ArtifactError
 from torchlens._io.lazy import LazyActivationRef
-from torchlens._io.manifest import sha256_of_file
 from torchlens._io.streaming import BundleStreamWriter
+from torchlens._utils.hashing import sha256_file
 
 
 def _make_lazy_ref(bundle_dir: Path, tensor: torch.Tensor) -> tuple[LazyActivationRef, Path]:
@@ -39,7 +39,7 @@ def _make_lazy_ref(bundle_dir: Path, tensor: torch.Tensor) -> tuple[LazyActivati
         source_bundle_path=bundle_dir,
         relative_path=relative_path,
         kind="out",
-        expected_sha256=sha256_of_file(blob_path),
+        expected_sha256=sha256_file(blob_path),
     )
     return ref, blob_path
 
@@ -110,7 +110,7 @@ def test_large_blob_branch_refuses_swap_between_hash_and_load(
     ref, _ = _make_lazy_ref(tmp_path, original)
     monkeypatch.setattr(lazy, "_INLINE_LOAD_MAX_BYTES", 0)
 
-    real_sha256_of_file = lazy.sha256_of_file
+    real_sha256_of_file = lazy.sha256_file
 
     def swapping_sha256_of_file(path: Path | str) -> str:
         # Hash the original bytes (integrity check passes) then rename-replace
@@ -121,7 +121,7 @@ def test_large_blob_branch_refuses_swap_between_hash_and_load(
         swap_tmp.replace(path)
         return digest
 
-    monkeypatch.setattr(lazy, "sha256_of_file", swapping_sha256_of_file)
+    monkeypatch.setattr(lazy, "sha256_file", swapping_sha256_of_file)
 
     with pytest.raises(ArtifactError, match="changed between integrity check and load"):
         ref.materialize()

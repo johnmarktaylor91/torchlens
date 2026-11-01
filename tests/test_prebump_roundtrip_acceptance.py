@@ -911,34 +911,34 @@ def test_tamper_structure_only_with_payload_refuses_typed(tmp_path) -> None:
     assert refusal.fields["reason"] == "value_payload_present"
 
 
-def test_tamper_structure_only_verified_claim_refuses_typed(tmp_path) -> None:
-    """M-C3: a marked trace claiming capture_verified=True refuses loudly."""
+@pytest.mark.parametrize(
+    ("forged_field", "forged_value", "tamper_name", "reason"),
+    [
+        ("capture_verified", True, "structure_only_verified", "verification_claim"),
+        ("structure_only", "yes", "structure_only_type", "type"),
+    ],
+    ids=[
+        "tamper_structure_only_verified_claim_refuses_typed",
+        "tamper_structure_only_nonbool_marker_refuses_typed",
+    ],
+)
+def test_tamper_structure_only_refuses_typed(
+    tmp_path, forged_field: str, forged_value: object, tamper_name: str, reason: str
+) -> None:
+    """M-C3: a marked trace claiming capture_verified=True (a forged positive
+    verdict) refuses loudly; a non-bool marker value refuses (closed type,
+    never truthiness)."""
 
     trace = _structure_only_trace()
-    trace.__dict__["capture_verified"] = True  # forged positive verdict
+    trace.__dict__[forged_field] = forged_value
     refusal = _tampered_refuses(
         trace,
         tmp_path,
-        "structure_only_verified",
+        tamper_name,
         field="Trace.structure_only",
     )
     assert refusal.fields["code"] == "artifact_structure_only_incoherent"
-    assert refusal.fields["reason"] == "verification_claim"
-
-
-def test_tamper_structure_only_nonbool_marker_refuses_typed(tmp_path) -> None:
-    """A non-bool marker value refuses (closed type, never truthiness)."""
-
-    trace = _structure_only_trace()
-    trace.__dict__["structure_only"] = "yes"
-    refusal = _tampered_refuses(
-        trace,
-        tmp_path,
-        "structure_only_type",
-        field="Trace.structure_only",
-    )
-    assert refusal.fields["code"] == "artifact_structure_only_incoherent"
-    assert refusal.fields["reason"] == "type"
+    assert refusal.fields["reason"] == reason
 
 
 # ---------------------------------------------------------------------------

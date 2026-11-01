@@ -99,6 +99,7 @@ def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
         Emits at most one warning for each configured selector slot.
     """
 
+    from ..intervention.hooks import site_universe
     from ..intervention.selectors import BaseSelector
 
     save_selector = state.options.keep_op
@@ -114,10 +115,9 @@ def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
                 stacklevel=3,
             )
     intervene_selector = getattr(state.options.intervene, "selector", None)
-    intervene_decision = getattr(state.options.intervene, "decision", None)
     if (
         isinstance(intervene_selector, BaseSelector)
-        and getattr(intervene_decision, "direction", None) == "forward"
+        and site_universe(intervene_selector) == "activation"
         and state.intervene_selector_fire_count == 0
     ):
         warnings.warn(

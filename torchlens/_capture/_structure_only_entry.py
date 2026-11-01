@@ -217,11 +217,6 @@ def _refuse_structure_only_option_payloads(
             "structure_only=True cannot retain the raw output payload",
             "save_transformed_output",
         )
-    if capture_options.is_field_explicit("output_style") and capture_options.output_style:
-        _refuse_values(
-            "structure_only=True cannot decode output VALUES via output_style",
-            "output_style",
-        )
     if facts.lookback_payload_policy != "metadata_only":
         _refuse_values(
             "structure_only=True supports only the metadata-only lookback "

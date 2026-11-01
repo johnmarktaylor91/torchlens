@@ -201,14 +201,6 @@ def _verb_meaning(edit: Any) -> str:
     if not isinstance(edit, Edit):
         return "coordinates"
     verb = edit.helper_name
-    if edit.kind != "forward" or edit.direction == "backward":
-        raise _unsupported(
-            verb,
-            "backward-direction verbs edit gradients, not the forward component",
-            "attach the gradient verb at capture time: tl.trace(model, x, "
-            "intervene=tl.when(tl.module(name), tl.zero_grad()))",
-            code="subspace_edit_unsupported",
-        )
     if verb == AFFINE_SOURCE_NAME:
         return "source"
     if verb in _COORDINATE_VERBS or verb in _VALUE_VERBS:

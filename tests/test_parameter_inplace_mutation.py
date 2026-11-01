@@ -19,9 +19,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils.tensor_leaves import iter_tensors
 from torchlens.backends.torch import param_mutation, wrappers
 from torchlens.errors import TorchLensWarning
 from torchlens.options import CaptureOptions
+from torchlens.validation import last_validation_failure
+from torchlens.validation.diagnostics import CHECK_BACKWARD
 from torchlens.validation.invariants import MetadataInvariantError
 
 
@@ -508,7 +511,7 @@ def test_operand_scan_reaches_nested_containers() -> None:
     grad = torch.ones(2, requires_grad=True)
     plain = torch.ones(2)
     operand = (plain, [{"values": grad}], 3)
-    found = list(param_mutation._iter_operand_tensors(operand))
+    found = list(iter_tensors(operand))
     assert len(found) == 2
     assert found[0] is plain and found[1] is grad
 
@@ -660,6 +663,9 @@ def test_backward_validation_refuses_an_already_run_model_loudly() -> None:
         assert tl.validate(model, x, scope="backward") is False
     codes = [getattr(w.message, "fields", {}).get("code") for w in caught]
     assert "backward_validation_non_leaf_parameter" in codes
+    failure = last_validation_failure()
+    assert failure is not None and failure.check_name == CHECK_BACKWARD
+    assert failure.extra["reason"] == "non_leaf_parameter"
     assert model.temp.is_leaf is False
 
 

@@ -555,7 +555,7 @@ def test_buffer_merge_repoints_step5_conditional_edges(monkeypatch) -> None:
     import torchlens._postprocess as pp
     import torchlens._postprocess.control_flow as cf
 
-    real_fix = pp._fix_buffer_layers
+    real_fix = pp.control_flow._fix_buffer_layers
     merged: dict[str, str] = {}
 
     def fix_and_merge(trace: Trace) -> None:
@@ -573,7 +573,7 @@ def test_buffer_merge_repoints_step5_conditional_edges(monkeypatch) -> None:
         cf._merge_buffer_entries(trace, survivor, removed, deferred_removals=deferred)
         cf._finish_deferred_buffer_removals(trace, deferred)
 
-    monkeypatch.setattr(pp, "_fix_buffer_layers", fix_and_merge)
+    monkeypatch.setattr(pp.control_flow, "_fix_buffer_layers", fix_and_merge)
 
     traced = trace_fn(WrittenBufferBranchModel(), torch.ones(2))
 

@@ -35,6 +35,7 @@ from typing import Any, cast
 from .._errors import _actionable_message, _ActionableErrorMixin
 from .._io import _json
 from .._io._durability import fsync_dir, fsync_file
+from .._utils.hashing import sha256_canonical_json, update_hasher_from_file
 from ..errors._base import ConfigurationError
 
 __tl_layer__ = "L3"
@@ -207,7 +208,7 @@ def stimulus_ids_digest(ids: list[str] | None) -> str | None:
 
     if ids is None:
         return None
-    return "sha256:" + hashlib.sha256(_canonical_dumps(list(ids)).encode()).hexdigest()
+    return "sha256:" + sha256_canonical_json(list(ids), default=None)
 
 
 def _crc32_file(path: Path) -> int:
@@ -588,12 +589,7 @@ class ArtifactWriter:
         }
         if self.checksums == "crypto":
             file_hasher = hashlib.blake2b(digest_size=32)
-            with open(final_path, "rb") as shard_handle:
-                while True:
-                    chunk = shard_handle.read(1 << 20)
-                    if not chunk:
-                        break
-                    file_hasher.update(chunk)
+            update_hasher_from_file(file_hasher, final_path)
             row["file_digest"] = f"blake2b:{file_hasher.hexdigest()}"
         line = _canonical_dumps(row) + "\n"
         with open(self._ledger_path, "a", encoding="utf-8") as handle:

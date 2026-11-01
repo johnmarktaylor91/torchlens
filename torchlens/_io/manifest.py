@@ -15,7 +15,6 @@ import os
 import sys
 import warnings
 from dataclasses import asdict, dataclass
-from hashlib import sha256
 from pathlib import Path
 from typing import Any, TypeGuard
 
@@ -60,6 +59,7 @@ def _is_plain_nonnegative_int(value: Any) -> TypeGuard[int]:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
+_TORCH_BACKEND_NAME = "torch"
 _SCHEMA_REMEDY = "re-save the artifact with trace.save(); do not hand-edit manifest.json"
 
 
@@ -818,27 +818,6 @@ class Manifest:
             raise _schema_refuse("Manifest n_auxiliary_blobs does not match tensor entries.")
 
 
-def sha256_of_file(path: str | Path) -> str:
-    """Compute the SHA-256 digest of one file's bytes.
-
-    Parameters
-    ----------
-    path:
-        File path to hash.
-
-    Returns
-    -------
-    str
-        Lowercase hexadecimal digest.
-    """
-
-    digest = sha256()
-    with Path(path).open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 def _is_sha256(value: Any) -> bool:
     """Return whether a value is a lowercase or uppercase SHA-256 hex digest.
 
@@ -1116,3 +1095,18 @@ def _validate_unsupported_tensors(raw_value: Any) -> list[dict[str, str]]:
             validated_entry[key] = value
         validated.append(validated_entry)
     return validated
+
+
+def _manifest_uses_audit_only_payloads(manifest: Manifest | dict[str, Any]) -> bool:
+    """Return whether the manifest declares metadata-only payload loading."""
+
+    if isinstance(manifest, Manifest):
+        backend_name = getattr(manifest, "_tl_logical_backend", "torch")
+        materializes = getattr(manifest, "_tl_payload_materialization_supported", True)
+        return backend_name != _TORCH_BACKEND_NAME and not bool(materializes)
+    if manifest.get("backend", _TORCH_BACKEND_NAME) == _TORCH_BACKEND_NAME:
+        return False
+    payload_policy = manifest.get("payload_policy", {})
+    if not isinstance(payload_policy, dict):
+        return False
+    return not bool(payload_policy.get("materialization_supported", False))

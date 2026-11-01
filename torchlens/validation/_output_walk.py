@@ -2,7 +2,7 @@
 
 Ground-truth output enumeration used to share its root with capture: both
 ``backends/torch/backend.py`` (output extraction) and the validation oracle
-resolved through ``backends.torch.ops._walk_output_tensors_with_paths``, so a
+resolved through ``backends.torch._ops_containers._walk_output_tensors_with_paths``, so a
 walker defect made capture AND the oracle drop the same output leaf and
 ``validate_forward_pass`` returned True over a missing output (sol's live
 plant). This module is the independent second root: a deliberately small,

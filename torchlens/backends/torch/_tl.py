@@ -12,7 +12,6 @@ from torch import Tensor, nn
 from torch.utils.weak import WeakIdKeyDictionary
 
 from ... import _state
-from ..._utils._torch_compat import get_async_collective_tensor_type
 
 __all__ = [
     "TorchLensMeta",
@@ -216,6 +215,10 @@ class ModuleMeta(TorchLensMeta):
 
     address: str | None = None
     module_type: str | None = None
+    # Set (and kept) once a capture enters the module by a direct
+    # ``module.forward(x)`` call, which no torch hook observes; the fast live
+    # run routes exactly these modules around its hooks (``_fast_run``).
+    direct_forward_called: bool = False
 
 
 @dataclass
@@ -359,7 +362,7 @@ def mark_detached_saved_activation(
     # scalar reads so the r65 host-escape witness does not record them as host declared-state
     # facts. Import locally: completeness_witness imports from this module, so a top-level
     # import here would create a cycle.
-    from .completeness_witness import internal_scalar_read
+    from ._completeness_origins import internal_scalar_read
 
     with internal_scalar_read():
         source_was_connected = bool(source.requires_grad and source.grad_fn is not None)
@@ -1041,34 +1044,6 @@ def _ensure_tensor_meta(t: Any) -> TensorMeta:
     return meta
 
 
-def _async_collective_elem(t: Any) -> Any | None:
-    """Return an AsyncCollectiveTensor's inner ``.elem``, else ``None``.
-
-    Parameters
-    ----------
-    t : Any
-        Candidate tensor-like object.
-
-    Returns
-    -------
-    Any | None
-        The plain inner tensor when ``t`` is a funcol ACT wrapper; ``None``
-        for every other value or on builds without functional collectives.
-
-    Notes
-    -----
-    The ACT class resolves through the compat chokepoint
-    (``get_async_collective_tensor_type``), which stays ``sys.modules``-
-    deferred: this runs on the per-tensor label hot path and never pays the
-    ``torch.distributed`` import on plain captures.
-    """
-
-    act_cls = get_async_collective_tensor_type()
-    if act_cls is not None and isinstance(t, act_cls):
-        return t.elem
-    return None
-
-
 def set_tensor_label(t: Any, label: str) -> None:
     """Set the raw capture label on a tensor.
 
@@ -1123,7 +1098,7 @@ def set_tensor_label(t: Any, label: str) -> None:
     # user raw-pointer escape and fail-close EVERY runnable capture to
     # UNVERIFIABLE (r15-H1 ``_HOST_ESCAPE_RAW_POINTER``).
     if meta.label_storage is not None:
-        from .completeness_witness import internal_scalar_read
+        from ._completeness_origins import internal_scalar_read
 
         try:
             with _state.pause_logging(), internal_scalar_read():
@@ -1168,14 +1143,15 @@ def get_tensor_label(t: Any) -> str | None:
     """
     meta = get_tensor_meta(t)
     if meta is None or meta.label_raw is None:
-        # AsyncCollectiveTensor is a transparent async view of its inner
-        # ``.elem`` (merge-ranks C2 recording): the funcol boundary labels the
-        # inner tensor through the ordinary relabel dance, while user code
-        # holds the ACT wrapper. Delegating the read here -- the ONE label
-        # chokepoint -- lets every consumer parent on the boundary without
-        # stamping the wrapper (whose storage pin would not validate). The
-        # ``.elem`` read is a wrapper attribute access and never triggers the
-        # ACT's wait.
+        # AsyncCollectiveTensor is a transparent async view of its inner ``.elem``
+        # (merge-ranks C2 recording): the funcol boundary labels the inner tensor
+        # through the ordinary relabel dance, while user code holds the ACT wrapper.
+        # Delegating the read here -- the ONE label chokepoint -- lets every consumer
+        # parent on the boundary without stamping the wrapper (whose storage pin would
+        # not validate). The ``.elem`` read is a wrapper attribute access and never
+        # triggers the ACT's wait.
+        from ._tl_collective import _async_collective_elem
+
         inner = _async_collective_elem(t)
         if inner is not None:
             return get_tensor_label(inner)

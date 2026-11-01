@@ -25,8 +25,7 @@ code after backward, outside the pipeline.
 """
 
 import time
-import warnings
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import torch
 
@@ -35,57 +34,28 @@ from .._data_classes._compaction import compact_op_metadata as _compact_op_metad
 from .._ir.capture_events import _clone_op_event_for_replay
 from .._trace_core.relation_views import freeze_trace_relation_views as _freeze_relation_views
 from .._utils.hashing import (
-    compute_graph_shape_hash,
     compute_raw_event_shape_hash,
-    populate_normalized_layer_addresses,
 )
-from .._utils.tensor_utils import _is_cuda_available
-from ..backends.torch.ops import _compact_ancestor_sets
+from ..backends.torch._ops_capture_records import _compact_ancestor_sets
 from . import ast_branches
 from ._executor import StepContext, run_pipeline
 from ._materialize import materialize_from_events
 from ._primitive_profile import _finalize_forward_primitive_profile
-from .ast_branches import resolve_var_names
-from .control_flow import (
-    _fix_buffer_layers,
-    _mark_conditional_branches,
-)
 from .finalization import (
-    _build_layer_logs,
-    _build_module_logs,
-    _evict_streamed_outs,
-    _finalize_param_logs,
-    _finalize_streamed_bundle,
-    _log_time_elapsed,
     _set_tracing_finished,
-    _undecorate_all_saved_tensors,
 )
 from .graph_traversal import (
-    _add_output_layers,
-    _find_output_ancestors,
-    _mark_layer_depths,
-    _remove_orphan_nodes,
     _resolve_output_parent_labels,
 )
-from .labeling import (
-    _build_lookup_keys_and_finalize_retained_layers,
-    _log_final_info_for_layers,
-    _map_raw_labels_to_final_labels,
-    _rename_model_history_layer_names,
-)
-from .loop_detection import _detect_and_label_loops, _group_by_shared_params
 from .loop_grouping_adapter import (
     RecurrenceAssignment,
     RecurrenceGroupingGraph,
     RecurrenceNode,
     group_recurrent_nodes,
 )
-from .saved_summary import refresh_pinned_autograd_memory, refresh_saved_module_call_count
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
-
-from .._quantities import Bytes
 
 __all__ = [
     "RecurrenceAssignment",
@@ -95,156 +65,6 @@ __all__ = [
     "postprocess",
 ]
 from .._utils.display import _vprint, _vtimed, user_stacklevel
-
-#: The executor resolves every step callable through THIS module namespace
-#: at call time (late binding, design-ppdag-v3 §5.2) — the names below are
-#: consumed via getattr, not textual reference, and several are load-bearing
-#: monkeypatch seams (tests patch torchlens._postprocess._add_output_layers,
-#: _rename_model_history_layer_names, _find_output_ancestors, ...).
-_EXECUTOR_STEP_NAMESPACE: tuple[object, ...] = (
-    _add_output_layers,
-    _find_output_ancestors,
-    _remove_orphan_nodes,
-    _mark_layer_depths,
-    _mark_conditional_branches,
-    _fix_buffer_layers,
-    _detect_and_label_loops,
-    _group_by_shared_params,
-    _map_raw_labels_to_final_labels,
-    _log_final_info_for_layers,
-    _rename_model_history_layer_names,
-    _build_lookup_keys_and_finalize_retained_layers,
-    _undecorate_all_saved_tensors,
-    _is_cuda_available,
-    _log_time_elapsed,
-    _finalize_param_logs,
-    _build_layer_logs,
-    _build_module_logs,
-    refresh_saved_module_call_count,
-    populate_normalized_layer_addresses,
-    compute_graph_shape_hash,
-    _finalize_streamed_bundle,
-    _evict_streamed_outs,
-)
-
-
-def _unattributed_op_offenders(ops: Any) -> list[str]:
-    """Return ``"label (positions)"`` rows for non-output ops with source-less args."""
-
-    offenders: list[str] = []
-    for op in ops:
-        if getattr(op, "type", None) == "output":
-            continue
-        positions = tuple(getattr(op, "unattributed_tensor_args", ()) or ())
-        if not positions:
-            continue
-        label = getattr(op, "label", None) or getattr(op, "layer_label", None) or op._label_raw
-        offenders.append(f"{label} ({', '.join(positions)})")
-    return offenders
-
-
-def _pop_boundary_adoptions(self: "Trace", field_name: str, suffix: str) -> list[str]:
-    """Pop one module-boundary adoption queue into human-readable offender rows."""
-
-    return [
-        f"{label} (adopted at module {boundary} {module_address}{suffix})"
-        for label, boundary, module_address in (self.__dict__.pop(field_name, None) or ())
-    ]
-
-
-def _warn_unattributed_tensor_args(self: "Trace") -> None:
-    """Warn once for tensor arguments without graph/source provenance.
-
-    Parameters
-    ----------
-    self:
-        Trace being postprocessed.
-
-    Returns
-    -------
-    None
-        Emits at most one aggregate warning.
-    """
-
-    from .._capture_honesty import (
-        ADVISORY_MODULE_BOUNDARY_ADOPTION,
-        ADVISORY_ORPHAN_UNATTRIBUTED_ARGS,
-        ADVISORY_UNRECORDED_OPERATOR_MUTATION,
-        append_capture_advisory,
-    )
-
-    offenders = _unattributed_op_offenders(getattr(self, "layer_list", ()) or ())
-    # Orphan pruning (step 3) runs BEFORE this step and strips the pruned ops, so a
-    # source-less tensor whose only consumer was pruned (``G.sum().item()``, a
-    # control-flow predicate on a global) would lose its witness with the op;
-    # ``_remove_orphan_nodes`` reads the witness before removal.
-    orphans = list(self.__dict__.pop("_orphan_unattributed_tensor_args", None) or ())
-    self.__dict__.pop("_plain_scalar_escape_labels", None)
-    # A direct data read (``G.tolist()``, ``float(G)``) of a source-less tensor has
-    # no op at all to carry the witness; the plain escape belt queued it.
-    orphans += list(self.__dict__.pop("_plain_direct_escape_gaps", None) or ())
-    # R16: module-entry adoptions of untagged tensors (outside disclosed
-    # transform/dynamo regions) are the module-consumed twin of the
-    # unattributed-args case; without this fold, a stale-ref escape whose
-    # output was first consumed by a MODULE was laundered into a clean
-    # ``internalsource`` node -- no warning, no rescue,
-    # consumption-order-dependent disclosure. Module-EXIT adoptions are the
-    # module-returned twin (a stale ref whose output a module returns, e.g.
-    # transformers' ``GELUActivation``): the boundary op tagged it before any
-    # consumer could flag it.
-    adoptions = _pop_boundary_adoptions(self, "_module_boundary_adoptions", "")
-    # Closure/forward-global tensors a module consumes or returns directly: no
-    # escape (they predate the forward), but no source either.
-    outside = _pop_boundary_adoptions(
-        self, "_module_boundary_outside_sources", ", closure or forward-global tensor"
-    )
-    # Direct ``torch.ops`` calls that wrote an argument the recorder could not record
-    # in place (``_torch_ops_calls._disclose_unrecorded_mutation``).
-    mutations = list(self.__dict__.pop("_unrecorded_operator_mutations", None) or ())
-    if not (offenders or orphans or adoptions or outside or mutations):
-        return
-    # Adopted tensors leave a functionless internal-source node that replays and
-    # validates, and pruned ops leave nothing at all; persist both so forward
-    # validation fails them (retained per-op positions already persist as
-    # ``Op.unattributed_tensor_args``). Rows are written before the warning,
-    # which a warning filter may raise.
-    append_capture_advisory(self, ADVISORY_MODULE_BOUNDARY_ADOPTION, adoptions + outside)
-    append_capture_advisory(self, ADVISORY_ORPHAN_UNATTRIBUTED_ARGS, orphans)
-    append_capture_advisory(self, ADVISORY_UNRECORDED_OPERATOR_MUTATION, mutations)
-    if offenders or orphans or adoptions:
-        # Session-time escape signal: the capture entry reads this flag to decide
-        # whether a rescue re-run (TorchFunctionMode net) should be attempted.
-        self._had_unattributed_tensor_args = True
-    warnings.warn(
-        "TorchLens found tensor arguments with no graph/source provenance. "
-        "These are usually tensors captured from outside the traced model; "
-        "module tensor attributes, inputs, parameters, and buffers are known sources. "
-        "Offending ops/arg positions: "
-        + "; ".join(offenders + orphans + adoptions + outside + mutations),
-        UserWarning,
-        stacklevel=2,
-    )
-
-
-def _populate_var_names(self: "Trace") -> None:
-    """Populate source assignment names for captured operation call sites.
-
-    Parameters
-    ----------
-    self:
-        Trace being postprocessed.
-    """
-
-    if not getattr(self, "save_code_context", False):
-        return
-    for op in getattr(self, "layer_list", ()):
-        if getattr(op, "type", None) == "output":
-            op.var_names = []
-            continue
-        op.var_names = resolve_var_names(
-            getattr(op, "code_context", []) or [],
-            getattr(op, "func_name", None),
-        )
 
 
 def _drop_transient_capture_state(self: "Trace") -> None:
@@ -279,13 +99,11 @@ def _drop_transient_capture_state(self: "Trace") -> None:
         "_wrapper_runtime_ws",
         "capture_events",
         "_output_container_specs_by_raw_label",
-        # B1-02: session-time semantic-output scratch. Two of the four pin live
+        # B1-02: session-time semantic-output scratch. Both pin live
         # user objects (an HF tokenizer, a model-derived metadata key), so this
         # seam is the postprocess-side belt for the capture-boundary drop in
         # ``_capture/trace.py`` -- including the halted postprocess, which
         # reaches here through ``_finalize_halted_trace``.
-        "_output_style",
-        "_output_head",
         "_output_tokenizer",
         "_semantic_output_metadata",
         # B1-17 companion (INTERVENED axis): capture-time dedup caches for the
@@ -321,36 +139,6 @@ def _drop_transient_capture_state(self: "Trace") -> None:
         )
     for field_name in field_names:
         self.__dict__.pop(field_name, None)
-
-
-def _refresh_fast_saved_summary(self: "Trace") -> None:
-    """Refresh saved-output counters after retained layers are finalized.
-
-    Args:
-        self: Trace whose final retained layer entries were updated.
-
-    Returns:
-        None. Mutates aggregate saved-output fields on ``self``.
-    """
-
-    saved_layers = [
-        layer_entry
-        for layer_entry in self.layer_list
-        if getattr(layer_entry, "has_saved_activation", False)
-        and not getattr(layer_entry, "is_orphan", False)
-    ]
-    self.num_saved_ops = len(saved_layers)
-    # F20 (brainpipe D-17): read the ONE byte model -- physically retained
-    # alias-aware bytes -- never a sum of raw activation_memory fields. The
-    # explorer P4 memory truth (reduce-only captures count the retained
-    # TRANSFORMED bytes, raw-retaining captures the raw bytes) is served by
-    # this same aggregate: it counts the payloads capture actually kept.
-    from .._save_budget import retained_activation_bytes
-
-    self.saved_activation_memory = Bytes(retained_activation_bytes(saved_layers))
-    self.num_saved_layers = len({layer_entry.layer_label for layer_entry in saved_layers})
-    refresh_saved_module_call_count(self, {layer_entry.label for layer_entry in saved_layers})
-    refresh_pinned_autograd_memory(self, saved_layers)
 
 
 def postprocess(

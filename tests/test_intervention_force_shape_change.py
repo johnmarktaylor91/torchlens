@@ -68,8 +68,8 @@ _FLAG_HELPERS: dict[str, Callable[[], Edit]] = {
     "scramble_elements": lambda: tl.intervention.scramble_elements(seed=0, allow_shape_change=True),
     "add": lambda: tl.add(1.0, allow_shape_change=True),
     "splice_module": lambda: tl.splice_module(_ToDouble(), allow_shape_change=True),
-    "grad_zero": lambda: tl.zero_grad(allow_shape_change=True),
-    "grad_scale": lambda: tl.scale_grad(2.0, allow_shape_change=True),
+    "grad_zero": lambda: tl.zero_ablate(allow_shape_change=True),
+    "grad_scale": lambda: tl.scale(2.0, allow_shape_change=True),
 }
 
 
@@ -79,7 +79,10 @@ def test_helper_flag_reaches_entry_metadata(helper_name: str) -> None:
     """helper(force_shape_change=True) must stamp True on every plan entry."""
 
     helper = _FLAG_HELPERS[helper_name]()
-    entries = normalize_hook_plan(helper, default_site_target=tl.func("relu"))
+    site = tl.func("relu")
+    if helper_name.startswith("grad_"):
+        site = tl.grad(site)
+    entries = normalize_hook_plan(helper, default_site_target=site)
     assert entries, f"{helper_name} produced no hook-plan entries"
     for entry in entries:
         assert entry.metadata.get("allow_shape_change") is True, (

@@ -244,9 +244,7 @@ def test_pruned_empty_driven_branch_is_unverifiable(tmp_path: Path) -> None:
     predicate chain is recorded by the shared pruned-nondeterministic-control
     recorder, so the run ceilings even though the DAG never sees the chain."""
 
-    from torchlens.backends.torch.completeness_witness import (
-        pruned_rng_control_source_labels,
-    )
+    from torchlens.backends.torch._completeness_escape_state import pruned_rng_control_source_labels
 
     x = torch.randn(2, 4)
     trace = tl.trace(EmptyBranchPrunedModel(), x.clone(), capture=_CAPTURE)
@@ -266,9 +264,7 @@ def test_pruned_empty_then_fill_walk_is_sanitized(tmp_path: Path) -> None:
     generalization would have added). Pre-existing conservative nets may still
     govern the overall verdict; this pins MY layer's no-fire."""
 
-    from torchlens.backends.torch.completeness_witness import (
-        pruned_rng_control_source_labels,
-    )
+    from torchlens.backends.torch._completeness_escape_state import pruned_rng_control_source_labels
 
     x = torch.randn(2, 4)
     trace = tl.trace(EmptyFillBranchPrunedModel(), x.clone(), capture=_CAPTURE)
@@ -565,7 +561,7 @@ def test_python_method_surface_witness_recognition() -> None:
     method surface consults the single ``utils/rng.py`` table block and applies
     the size-vs-data gate; undecidable forms fail closed to recognized."""
 
-    from torchlens.backends.torch.completeness_witness import (
+    from torchlens.backends.torch._completeness_origins import (
         _python_tensor_method_uninit_family_tail as tail_of,
     )
 
@@ -590,7 +586,7 @@ def test_new_size_form_redispatches_uninit_family_aten() -> None:
 
     from torch.utils._python_dispatch import TorchDispatchMode
 
-    from torchlens.backends.torch.completeness_witness import _operator_uninit_family_tail
+    from torchlens.backends.torch._completeness_origins import _operator_uninit_family_tail
 
     calls: list[Any] = []
 

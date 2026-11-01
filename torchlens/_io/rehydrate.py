@@ -26,19 +26,25 @@ from torchlens.backends.registry import BackendRuntimeCompatibilityError
 from .._data_classes._state_adapter import state_items
 from .._data_classes.trace import Trace
 from .._ir.workspaces import LEGACY_TRACE_BUILD_STATE_KEYS
+from .._utils._torch_symbols import torch_dtype_named
+from .._utils.hashing import sha256_file
 from . import ArtifactError, BlobRef, FieldPolicy, PayloadLoadHints, prerelease as _prerelease
-from ._torch_symbols import torch_attr
-from .accessor_rebuild import rebuild_trace_accessors
-from .lazy import LazyActivationRef, _file_identity
-from .manifest import Manifest, TensorEntry, sha256_of_file
-from .paths import resolve_bundle_blob_path, resolve_bundle_blobs_dir
-from .payload_codec import materialize_transport_tensor
-from .scrub import (
+from ._small_raw import (
     _RAW_IMAGE_SENTINEL,
     _RAW_INPUT_IMAGE_BYTES_LIMIT,
     _RAW_INPUT_IMAGE_MAX_EDGE,
-    _pin_in_memo,
 )
+from .accessor_rebuild import rebuild_trace_accessors
+from .lazy import LazyActivationRef, _file_identity
+from .manifest import (
+    _TORCH_BACKEND_NAME,
+    Manifest,
+    TensorEntry,
+    _manifest_uses_audit_only_payloads,
+)
+from .paths import resolve_bundle_blob_path, resolve_bundle_blobs_dir
+from .payload_codec import materialize_transport_tensor
+from .scrub import _pin_in_memo
 from .state_contract import governed_artifact_load
 from .state_keys import invalidate_static_class_attr_cache, static_class_attr
 
@@ -50,7 +56,6 @@ _LEGACY_CAPTURE_TRACE_KEYS = {
     "_wrapper_runtime_ws",
     "_pending_live_fire_records",
 }
-_TORCH_BACKEND_NAME = "torch"
 _PORTABLE_WALK_MAX_DEPTH = 200
 _REHYDRATE_IN_PROGRESS = object()
 
@@ -881,7 +886,7 @@ def _materialize_blob_ref(
         pre_hash_identity = _file_identity(blob_path.stat())
     except OSError as exc:
         raise ArtifactError(f"Failed to access blob at {blob_path}.") from exc
-    observed_sha256 = sha256_of_file(blob_path)
+    observed_sha256 = sha256_file(blob_path)
     expected_sha256 = entry.sha256 if isinstance(entry, TensorEntry) else entry.get("sha256")
     if expected_sha256 is not None and observed_sha256 != expected_sha256:
         raise ArtifactError(
@@ -1063,8 +1068,8 @@ def _dtype_from_manifest_string(dtype_name: str) -> torch.dtype:
     # deprecated ``has_cuda``) fires NO lazy submodule import, NO deprecated ``replacement()``,
     # and leaks NO raw ``ImportError`` before the ``isinstance`` value gate below. Every real
     # dtype is a ``torch.__dict__`` entry and still resolves.
-    dtype_obj = torch_attr(dtype_name)
-    if not isinstance(dtype_obj, torch.dtype):
+    dtype_obj = torch_dtype_named(dtype_name)
+    if dtype_obj is None:
         raise ArtifactError(f"Unsupported dtype string in manifest: {dtype_name}.")
     return dtype_obj
 
@@ -1209,21 +1214,6 @@ def _payload_hints_are_explicit(
     return sharding is not None or reconstruct
 
 
-def _manifest_uses_audit_only_payloads(manifest: Manifest | dict[str, Any]) -> bool:
-    """Return whether the manifest declares metadata-only payload loading."""
-
-    if isinstance(manifest, Manifest):
-        backend_name = getattr(manifest, "_tl_logical_backend", "torch")
-        materializes = getattr(manifest, "_tl_payload_materialization_supported", True)
-        return backend_name != _TORCH_BACKEND_NAME and not bool(materializes)
-    if manifest.get("backend", _TORCH_BACKEND_NAME) == _TORCH_BACKEND_NAME:
-        return False
-    payload_policy = manifest.get("payload_policy", {})
-    if not isinstance(payload_policy, dict):
-        return False
-    return not bool(payload_policy.get("materialization_supported", False))
-
-
 def _entry_logical_backend(entry: dict[str, Any] | TensorEntry) -> str:
     """Return the manifest entry logical backend, defaulting legacy entries to torch."""
 
@@ -1272,7 +1262,7 @@ def rehydrate_nested(
 
     expected_manifest_sha256 = getattr(trace, "_source_bundle_manifest_sha256", None)
     if expected_manifest_sha256 is not None:
-        observed_manifest_sha256 = sha256_of_file(manifest_path)
+        observed_manifest_sha256 = sha256_file(manifest_path)
         if observed_manifest_sha256 != expected_manifest_sha256:
             raise ArtifactError(
                 "source bundle manifest has changed since load; materialize refs and retry"

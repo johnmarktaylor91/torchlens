@@ -12,8 +12,10 @@ from typing import Any, Literal
 from weakref import ref
 
 from .. import _state
+from .._data_classes._trace_grad_sites import gradient_rule_sites
 from .._ir.events import OpEvent
 from .._utils.tensor_utils import safe_copy
+from ._retention import _negative_selector_windows, _selector_needs_backward_context
 from .outcome import CaptureOutcome
 from .plan import CapturePlan, EnrichmentLevel, RetentionKind, RetentionProfile
 
@@ -595,15 +597,7 @@ class CaptureSession:
 
         activation_selector = getattr(trace, "_deferred_retention_selector", None)
         if activation_selector is not None:
-            live_output_by_raw_index: dict[int, Any] = {}
-            for output_label, output_tensor in zip(
-                trace.output_layers, output_tensors, strict=True
-            ):
-                output_op = trace.layer_dict_all_keys[output_label]
-                live_output_by_raw_index[output_op.raw_index] = output_tensor
-                for parent_label in output_op.parents:
-                    parent = trace.layer_dict_all_keys[parent_label]
-                    live_output_by_raw_index[parent.raw_index] = output_tensor
+            live_output_by_raw_index = _live_output_by_raw_index(trace, output_tensors)
             from .._ir.selector_eval import selector_contains_kind
             from ..intervention.selectors import BaseSelector
 
@@ -721,7 +715,7 @@ class CaptureSession:
                     ),
                     stacklevel=user_stacklevel(),
                 )
-            from .._postprocess import _refresh_fast_saved_summary
+            from .._postprocess.saved_summary import _refresh_fast_saved_summary
 
             _refresh_fast_saved_summary(trace)
             trace._layer_nums_to_save = sorted(selected_nums)
@@ -769,6 +763,11 @@ class CaptureSession:
             if selected_grads == "all"
             else set(selected_grads)
         )
+        # A tl.grad(site) edit fires at the boundary the gradient hook owns, so
+        # every op a capture-time gradient rule addresses keeps its hook even
+        # when save_grads selects other ops (placement is a superset; retention
+        # stays exact through _grad_op_nums_to_save).
+        hook_nums.update(_gradient_rule_raw_indices(trace))
         for op in trace.layer_list:
             if op.raw_index in hook_nums and getattr(op, "layer_type", None) == "output":
                 hook_nums.update(
@@ -1099,61 +1098,52 @@ def compile_legacy_capture_plan(
     )
 
 
-#: Selector kinds decidable only with backward-fire context (pass number,
-#: grad kind, grad_fn identity); site-lifecycle evaluation reads them as
-#: False, so hook placement must not consult site resolution for them.
-_BACKWARD_CONTEXT_SELECTOR_KINDS = frozenset(
-    {"backward_pass", "grad_kind", "grad_fn", "grad_fn_handle", "grad_fn_label"}
-)
-
-
-def _selector_needs_backward_context(selector: Any) -> bool:
-    """Return whether a selector tree contains a backward-context leaf.
+def _live_output_by_raw_index(trace: Any, output_tensors: list[Any]) -> dict[int, Any]:
+    """Map each output op and its parents' raw index to the live model output tensor.
 
     Parameters
     ----------
-    selector
-        Selector (possibly composite/negated) supplied as ``save_grads``.
+    trace:
+        Trace finishing its capture.
+    output_tensors:
+        Live model outputs, aligned with ``trace.output_layers``.
 
     Returns
     -------
-    bool
-        Whether any leaf requires backward-fire context to evaluate.
+    dict[int, Any]
+        Raw index of every output op and output parent to its live output tensor.
     """
 
-    stack: list[Any] = [selector]
-    while stack:
-        node = stack.pop()
-        if getattr(node, "selector_kind", None) in _BACKWARD_CONTEXT_SELECTOR_KINDS:
-            return True
-        children = getattr(node, "selectors", None)
-        if isinstance(children, (list, tuple)):
-            stack.extend(children)
-        wrapped = getattr(node, "selector", None)
-        if wrapped is not None:
-            stack.append(wrapped)
-    return False
+    live_output_by_raw_index: dict[int, Any] = {}
+    for output_label, output_tensor in zip(trace.output_layers, output_tensors, strict=True):
+        output_op = trace.layer_dict_all_keys[output_label]
+        live_output_by_raw_index[output_op.raw_index] = output_tensor
+        for parent_label in output_op.parents:
+            parent = trace.layer_dict_all_keys[parent_label]
+            live_output_by_raw_index[parent.raw_index] = output_tensor
+    return live_output_by_raw_index
 
 
-def _negative_selector_windows(selector: Any) -> tuple[int, ...]:
-    """Return rolling-window bounds declared by negative integer selectors.
+def _gradient_rule_raw_indices(trace: Any) -> set[int]:
+    """Return the raw indices of the ops a capture-time ``tl.grad(site)`` rule addresses.
 
     Parameters
     ----------
-    selector
-        Legacy selector value or nested selector container.
+    trace:
+        Trace finishing its capture, carrying the capture-time intervention spec.
 
     Returns
     -------
-    tuple[int, ...]
-        Positive tail-window sizes in encounter order.
+    set[int]
+        Raw indices of every op whose output gradient a gradient rule edits.
     """
 
-    if isinstance(selector, int) and selector < 0:
-        return (-selector,)
-    if isinstance(selector, (list, tuple, set, frozenset)):
-        return tuple(window for item in selector for window in _negative_selector_windows(item))
-    return ()
+    indices: set[int] = set()
+    for site in gradient_rule_sites(trace):
+        raw_index = getattr(site, "raw_index", None)
+        if isinstance(raw_index, int):
+            indices.add(raw_index)
+    return indices
 
 
 def attach_legacy_capture_session(

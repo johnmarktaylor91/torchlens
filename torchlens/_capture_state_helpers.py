@@ -30,19 +30,20 @@ from ._plain_attr_fidelity import (
     restore_simple_plain_attrs_on_copy,
 )
 from ._trace_selector_helpers import _stable_cache_fragment
+from ._utils._package_frames import is_torchlens_code
 from ._utils._torch_compat import (
     force_eager_stance_scope,
     get_dynamo_optimized_module_type,
     get_fsdp_wrapper_type,
     is_dynamo_compiled_callable,
 )
+from ._utils.tensor_leaves import iter_tensors
 from ._validation_state_snapshot import describe_copy_failure, warn_copy_failed
 
 # Content-fingerprint / attribute-fragment family: split to _capture_fingerprint.py
 # under the R43 file-size ratchet. Re-exported here because the historical import
 # surface for the capture-cache key helpers is torchlens._capture_state_helpers.
 from ._capture_fingerprint import (  # noqa: F401  isort: skip
-    _iter_tensor_inputs,
     _ATTRIBUTE_FRAGMENT_DEPTH_CEILING,
     _ATTRIBUTE_FRAGMENT_ITEM_CEILING,
     _attribute_state_fragment,
@@ -1455,7 +1456,7 @@ def _input_id_for_relationship_evidence(input_args: Any) -> int:
         the input container.
     """
 
-    tensors = _iter_tensor_inputs(input_args)
+    tensors = list(iter_tensors(input_args, sort_keys=True))
     if len(tensors) == 1:
         return id(tensors[0])
     return id(input_args)
@@ -1486,7 +1487,7 @@ def _hash_input_signatures(input_args: Any, input_kwargs: Any) -> str:
     path 2: a shape/dtype/device hash is value-blind).
     """
 
-    tensors = _iter_tensor_inputs((input_args, input_kwargs))
+    tensors = list(iter_tensors((input_args, input_kwargs), sort_keys=True))
     entries = [(tuple(tensor.shape), str(tensor.dtype), str(tensor.device)) for tensor in tensors]
     return hashlib.sha256(repr(entries).encode("utf-8")).hexdigest()
 
@@ -1653,9 +1654,6 @@ def _fingerprint_model_implementation(model: nn.Module) -> str:
     return hasher.hexdigest()
 
 
-_TORCHLENS_PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-
 def _is_torchlens_instrumentation(func: Any) -> bool:
     """Return whether an instance ``forward`` is TorchLens' own prepared wrapper.
 
@@ -1671,11 +1669,13 @@ def _is_torchlens_instrumentation(func: Any) -> bool:
     code = getattr(target, "__code__", None)
     if not isinstance(code, types.CodeType):
         return False
-    # The separator matters: a bare prefix match also claimed sibling installs
-    # such as ``site-packages/torchlens_contrib/model.py``, silently EXCLUDING
-    # a user-owned forward override from the implementation signature (edits
-    # then hit the stale cache).
-    return code.co_filename.startswith(_TORCHLENS_PACKAGE_DIR + os.sep)
+    # Spelling-independent, separator-checked (``_package_frames``): a bare
+    # prefix match once claimed sibling installs such as
+    # ``site-packages/torchlens_contrib/model.py``, silently EXCLUDING a
+    # user-owned forward override from the implementation signature (edits then
+    # hit the stale cache), and a raw-filename match missed the wrapper itself
+    # when the package was imported through a ``sys.path`` entry of ``"."``.
+    return is_torchlens_code(code)
 
 
 def _capture_cache_dir(cache_dir: str | Path | None) -> Path:

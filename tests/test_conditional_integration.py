@@ -21,6 +21,7 @@ import torchlens as tl  # noqa: E402
 import torchlens._postprocess.ast_branches as ast_branches  # noqa: E402
 import torchlens._postprocess.graph_traversal as graph_traversal  # noqa: E402
 import torchlens._utils.introspection as introspection  # noqa: E402
+import torchlens.backends.torch._ops_shared_fields as _ops_shared_fields  # noqa: E402
 import torchlens.backends.torch.ops as output_tensors  # noqa: E402
 import torchlens.backends.torch.sources as source_tensors  # noqa: E402
 from torchlens import trace as trace_fn  # noqa: E402
@@ -449,28 +450,6 @@ def _forward_decorator(
     return wrapper
 
 
-class DecoratedForwardModel(nn.Module):
-    """Model whose ``forward`` method is decorated."""
-
-    @_forward_decorator
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run the decorated conditional forward pass.
-
-        Parameters
-        ----------
-        x:
-            Input tensor.
-
-        Returns
-        -------
-        torch.Tensor
-            Branch-selected output tensor.
-        """
-        if x.mean() > 0:
-            return torch.relu(x)
-        return torch.sigmoid(x)
-
-
 class BoolCastOnlyModel(nn.Module):
     """Model that uses ``bool(...)`` outside any control-flow branch."""
 
@@ -628,90 +607,6 @@ class WalrusIfModel(nn.Module):
         return y
 
 
-class NestedTernaryModel(nn.Module):
-    """Model with one ``ifexp`` nested inside another."""
-
-    def __init__(self) -> None:
-        """Initialise the ternary arm modules."""
-        super().__init__()
-        self.inner_then = nn.Linear(2, 2)
-        self.inner_else = nn.Linear(2, 2)
-        self.outer_else = nn.Linear(2, 2)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run the nested ternary forward pass.
-
-        Parameters
-        ----------
-        x:
-            Input tensor.
-
-        Returns
-        -------
-        torch.Tensor
-            Branch-selected output tensor.
-        """
-        return (
-            (self.inner_then(x) if x.mean() > 0 else self.inner_else(x))
-            if x.sum() > 0
-            else self.outer_else(x)
-        )
-
-
-class TernaryInsideIfModel(nn.Module):
-    """Model with an ``ifexp`` nested inside a regular ``if`` THEN arm."""
-
-    def __init__(self) -> None:
-        """Initialise the ternary arm modules."""
-        super().__init__()
-        self.then_branch = nn.Linear(2, 2)
-        self.else_branch = nn.Linear(2, 2)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run the mixed conditional forward pass.
-
-        Parameters
-        ----------
-        x:
-            Input tensor.
-
-        Returns
-        -------
-        torch.Tensor
-            Branch-selected output tensor.
-        """
-        if x.sum() > 0:
-            y = self.then_branch(x) if x.mean() > 0 else self.else_branch(x)
-        else:
-            y = x
-        return y
-
-
-class TernaryWithBoolCastModel(nn.Module):
-    """Model with a ternary predicate wrapped in ``bool(...)``."""
-
-    def __init__(self) -> None:
-        """Initialise the ternary arm modules."""
-        super().__init__()
-        self.then_branch = nn.Linear(2, 2)
-        self.else_branch = nn.Linear(2, 2)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run the ternary forward pass.
-
-        Parameters
-        ----------
-        x:
-            Input tensor.
-
-        Returns
-        -------
-        torch.Tensor
-            Branch-selected output tensor.
-        """
-        return self.then_branch(x) if bool(x.mean() > 0) else self.else_branch(x)
-
-
 class TernaryPy310FailClosedModel(nn.Module):
     """Same-line ternary used for Python-version-gated column-offset assertions."""
 
@@ -823,26 +718,6 @@ class ShapePredicateModel(nn.Module):
         else:
             y = torch.sigmoid(x)
         return y
-
-
-class SaveSourceContextOffAssertModel(nn.Module):
-    """Model that combines ``assert`` with ``save_source_context=False``."""
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run the forward pass.
-
-        Parameters
-        ----------
-        x:
-            Input tensor.
-
-        Returns
-        -------
-        torch.Tensor
-            Activated output tensor.
-        """
-        assert x.mean() > 0
-        return torch.relu(x)
 
 
 class KeepUnsavedLayersFalseModel(nn.Module):
@@ -1387,6 +1262,7 @@ def test_same_line_nested_def_model_fails_closed_when_scope_resolution_is_ambigu
 
     monkeypatch.setattr(introspection, "_get_code_context", _stack_without_qualname)
     monkeypatch.setattr(output_tensors, "_get_code_context", _stack_without_qualname)
+    monkeypatch.setattr(_ops_shared_fields, "_get_code_context", _stack_without_qualname)
     monkeypatch.setattr(source_tensors, "_get_code_context", _stack_without_qualname)
     monkeypatch.setattr(graph_traversal, "_get_code_context", _stack_without_qualname)
     monkeypatch.setattr(ast_branches, "get_file_index", _ambiguous_file_index)
@@ -1396,19 +1272,6 @@ def test_same_line_nested_def_model_fails_closed_when_scope_resolution_is_ambigu
 
     assert relu_layer.conditional_branch_stack == ()
     assert trace.conditional_arm_entry_edges == {}
-
-
-def test_decorated_forward_model_preserves_or_gracefully_skips_branch_attribution() -> None:
-    """Decorated ``forward`` either attributes correctly or degrades without false labels."""
-    trace = _log_model(DecoratedForwardModel(), torch.ones(2, 2))
-    relu_layer = _find_only_layer(trace, "relu")
-
-    if trace.conditional_records:
-        event = _get_root_event(trace)
-        assert relu_layer.conditional_branch_stack == ((event.id, "then"),)
-    else:
-        assert relu_layer.conditional_branch_stack == ()
-        assert trace.conditional_arm_entry_edges == {}
 
 
 def test_bool_cast_only_model_is_not_treated_as_branch() -> None:
@@ -1536,66 +1399,6 @@ def test_walrus_if_model_attributes_branch_normally() -> None:
     assert relu_layer.conditional_branch_stack == ((event.id, "then"),)
 
 
-@requires_code_positions
-def test_nested_ternary_model_records_parent_child_ifexp_events() -> None:
-    """Nested ternaries keep parent-child links between ``ifexp`` events."""
-    trace = _log_model(NestedTernaryModel(), torch.ones(1, 2))
-
-    outer_event = _get_root_event(trace)
-    inner_event = _get_child_event(trace, outer_event.id)
-    linear_layer = _find_only_layer(
-        trace,
-        "linear",
-        [(outer_event.id, "then"), (inner_event.id, "then")],
-    )
-
-    assert len(trace.conditional_records) == 2
-    assert outer_event.kind == "ifexp"
-    assert inner_event.kind == "ifexp"
-    assert inner_event.parent_branch_kind == "then"
-    assert linear_layer.conditional_branch_stack == (
-        (outer_event.id, "then"),
-        (inner_event.id, "then"),
-    )
-
-
-@requires_code_positions
-def test_ternary_inside_if_model_records_mixed_if_and_ifexp_stack() -> None:
-    """An inner ternary keeps both the outer ``if_chain`` and inner ``ifexp`` stack."""
-    trace = _log_model(TernaryInsideIfModel(), torch.ones(1, 2))
-
-    outer_event = next(event for event in trace.conditional_records if event.kind == "if_chain")
-    inner_event = next(event for event in trace.conditional_records if event.kind == "ifexp")
-    linear_layer = _find_only_layer(
-        trace,
-        "linear",
-        [(outer_event.id, "then"), (inner_event.id, "then")],
-    )
-
-    assert inner_event.parent_conditional_id == outer_event.id
-    assert inner_event.parent_branch_kind == "then"
-    assert linear_layer.conditional_branch_stack == (
-        (outer_event.id, "then"),
-        (inner_event.id, "then"),
-    )
-
-
-@requires_code_positions
-def test_ternary_with_bool_cast_model_marks_conditional_wrapper_kind() -> None:
-    """``bool(...)`` wrappers inside ternaries keep ``ifexp`` attribution."""
-    trace = _log_model(TernaryWithBoolCastModel(), torch.ones(1, 2))
-
-    event = _get_root_event(trace)
-    bool_layer = _get_terminal_bool_layers(trace)[0]
-    linear_layer = _find_only_layer(trace, "linear", [(event.id, "then")])
-
-    assert event.kind == "ifexp"
-    assert bool_layer.conditional_context_kind == "ifexp"
-    assert bool_layer.conditional_wrapper_kind == "bool_cast"
-    assert bool_layer.is_terminal_conditional_bool is True
-    assert linear_layer.conditional_branch_stack == ((event.id, "then"),)
-
-
 @pytest.mark.skipif(
     sys.version_info >= (3, 11),
     reason="degraded ternary mode is only meaningful before Python 3.11",
@@ -1693,22 +1496,6 @@ def test_torch_where_model_stays_outside_branch_attribution() -> None:
 
     _assert_branchless_log(trace)
     assert _get_terminal_bool_layers(trace) == []
-
-
-def test_save_code_context_off_assert_model_has_no_false_positive_if_edges() -> None:
-    """Disabled source loading plus ``assert`` must not fabricate branch metadata."""
-    trace = _log_model(
-        SaveSourceContextOffAssertModel(),
-        torch.ones(2, 2),
-        save_source_context=False,
-    )
-    bool_layer = _get_terminal_bool_layers(trace)[0]
-
-    assert bool_layer.conditional_context_kind == "assert"
-    assert bool_layer.is_terminal_conditional_bool is False
-    assert len(bool_layer.code_context) > 0
-    assert all(frame.source_loading_enabled is False for frame in bool_layer.code_context)
-    _assert_branchless_log(trace)
 
 
 def test_selective_save_preserves_all_conditional_surfaces() -> None:

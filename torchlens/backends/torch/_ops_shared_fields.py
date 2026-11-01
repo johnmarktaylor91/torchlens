@@ -25,6 +25,7 @@ from ..._utils.introspection import (
 from ..._utils.tensor_utils import (
     tensor_nanequal,
 )
+from ._completeness_origins import internal_scalar_read
 from ._tl import (
     get_live_label_list,
     get_tensor_label,
@@ -35,8 +36,7 @@ from .aliasing import (
     parent_label_has_alias_contract,
 )
 from .buffer_writes import resolve_registered_buffer_address, session_validated_buffer_address
-from .completeness_witness import internal_scalar_read
-from .sources import log_source_tensor
+from .sources import log_closure_constant_if_known, log_source_tensor
 from .tensor_tracking import (
     _add_tensor_backward_hook,
 )
@@ -44,19 +44,6 @@ from .tensor_tracking import (
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
 
-if TYPE_CHECKING:
-    from .ops import (
-        TRANSFORM_FUNC_NAMES,
-        _bind_writeback_receiver_label,
-        _build_args_template,
-        _build_graph_relationship_fields,
-        _build_module_context_fields,
-        _build_param_fields,
-        _check_if_tensor_arg,
-        _extract_arg_tensors_and_params,
-        _record_label_version_snapshot,
-        _unattributed_tensor_arg_positions,
-    )
 
 __all__ = (
     "_build_shared_fields_dict",
@@ -64,6 +51,21 @@ __all__ = (
     "_tag_tensor_and_track_variations",
     "_get_parent_output_version_snapshot",
 )
+
+
+def _set_grad_info_fields(self: "Trace", fields_dict: dict[str, Any]) -> None:
+    """Seed the gradient fields every op starts with before any backward pass."""
+    # Grad info
+    fields_dict["grad"] = None
+    fields_dict["transformed_grad"] = None
+    fields_dict["save_grads"] = getattr(self, "save_grads", None) not in (None, False)
+    fields_dict["has_grad"] = False
+    fields_dict["grad_shape"] = None
+    fields_dict["transformed_grad_shape"] = None
+    fields_dict["grad_dtype"] = None
+    fields_dict["transformed_grad_dtype"] = None
+    fields_dict["gradient_memory"] = 0
+    fields_dict["transformed_gradient_memory"] = None
 
 
 def _build_shared_fields_dict(
@@ -107,6 +109,8 @@ def _build_shared_fields_dict(
             buffer_address = resolve_registered_buffer_address(self, tensor)
         if buffer_address is not None:
             log_source_tensor(self, tensor, "buffer", buffer_address)
+        else:
+            log_closure_constant_if_known(self, tensor)
 
     # Separate tensor args (which define graph edges) from non-tensor args
     # (which become metadata and feed into equivalence_class hashing).
@@ -139,22 +143,17 @@ def _build_shared_fields_dict(
     else:
         fields_dict["args_template"] = None
         fields_dict["kwargs_template"] = None
-        fields_dict["func_id"] = None
+        # A capture that saves arguments is replay-ready; its portable function
+        # identity lets replay validation resolve the callable on a loaded
+        # bundle (``validation/_loaded_callables.py``), which carries no callables.
+        fields_dict["func_id"] = (
+            _function_registry_key(func, func_name) if self.save_arg_values else None
+        )
     fields_dict["container_path"] = ()
     fields_dict["container_spec"] = None
     fields_dict["multi_output_name"] = None
 
-    # Grad info
-    fields_dict["grad"] = None
-    fields_dict["transformed_grad"] = None
-    fields_dict["save_grads"] = getattr(self, "save_grads", None) not in (None, False)
-    fields_dict["has_grad"] = False
-    fields_dict["grad_shape"] = None
-    fields_dict["transformed_grad_shape"] = None
-    fields_dict["grad_dtype"] = None
-    fields_dict["transformed_grad_dtype"] = None
-    fields_dict["gradient_memory"] = 0
-    fields_dict["transformed_gradient_memory"] = None
+    _set_grad_info_fields(self, fields_dict)
 
     # Function call info
     fields_dict["func"] = func
@@ -382,3 +381,30 @@ def _get_parent_output_version_snapshot(
     if should_snapshot:
         return parent_tensor_contents
     return None
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_arguments import (  # noqa: E402
+    _build_args_template,
+    _function_registry_key,
+)
+from ._ops_capture_records import (  # noqa: E402
+    _bind_writeback_receiver_label,
+    _record_label_version_snapshot,
+)
+from ._ops_emission import (  # noqa: E402
+    _unattributed_tensor_arg_positions,
+)
+from ._ops_exhaustive import (  # noqa: E402
+    _check_if_tensor_arg,
+)
+from ._ops_predicate_events import (  # noqa: E402
+    _build_graph_relationship_fields,
+    _build_module_context_fields,
+    _build_param_fields,
+    _extract_arg_tensors_and_params,
+)
+from .ops import (  # noqa: E402
+    TRANSFORM_FUNC_NAMES,
+)

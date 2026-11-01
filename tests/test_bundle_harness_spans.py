@@ -476,9 +476,9 @@ def _statement(source: str, head: str) -> str:
     return source[start : source.index("]", start) + 1]
 
 
-def test_members_render_refuses_a_backward_direction(model: _TinyLM) -> None:
-    with pytest.raises(ValueError, match="direction"):
-        _visualization.show_bundle_graph(_harness(model), nodes="members", direction="backward")
+def test_members_render_refuses_a_backward_signal(model: _TinyLM) -> None:
+    with pytest.raises(ValueError, match="signal"):
+        _visualization.show_bundle_graph(_harness(model), nodes="members", signal="backward")
     with pytest.raises(ValueError, match="nodes"):
         _visualization.show_bundle_graph(_harness(model), nodes="layers")  # type: ignore[arg-type]
 

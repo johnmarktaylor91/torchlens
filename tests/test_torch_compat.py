@@ -529,6 +529,10 @@ def test_torch_capability_snapshot_contract() -> None:
         # runtime capabilities of the interpreter, so mirror the live values.
         "HAS_CODE_POSITIONS": tc.HAS_CODE_POSITIONS,
         "HAS_CODE_QUALNAME": tc.HAS_CODE_QUALNAME,
+        # Direct ``module.forward(x)`` detection: the caller frame against torch's
+        # Module.__call__ dispatch code. Present across the supported range;
+        # without it the fast run keeps refusing hook-invisible module calls.
+        "HAS_MODULE_CALL_DISPATCH_FRAME": True,
         # Identity-shim sites (sf-fastpath): torch-internal `x is F.y` checks
         # normalized while wrappers are installed. The transformer flag and the
         # private expanded-weights machinery exist across the supported range
@@ -586,10 +590,10 @@ def test_completeness_census_check_fails_closed_on_probe_failure(
     the census-blind ``_disable_current_modes()`` regions it exists to cover.
     """
 
-    from torchlens.backends.torch import completeness_witness as cw
+    import torchlens.backends.torch._completeness_storage
 
     monkeypatch.setattr(tc, "get_current_dispatch_mode_stack", lambda: None)
-    assert cw._completeness_census_active() is False
+    assert torchlens.backends.torch._completeness_storage._completeness_census_active() is False
 
 
 def test_completeness_census_check_reads_live_stack(
@@ -597,13 +601,14 @@ def test_completeness_census_check_reads_live_stack(
 ) -> None:
     """The census check still discriminates active vs inactive census modes."""
 
+    import torchlens.backends.torch._completeness_storage
     from torchlens.backends.torch import completeness_witness as cw
 
     census_mode = cw._CompletenessDispatchMode.__new__(cw._CompletenessDispatchMode)
     monkeypatch.setattr(tc, "get_current_dispatch_mode_stack", lambda: [census_mode])
-    assert cw._completeness_census_active() is True
+    assert torchlens.backends.torch._completeness_storage._completeness_census_active() is True
     monkeypatch.setattr(tc, "get_current_dispatch_mode_stack", lambda: [])
-    assert cw._completeness_census_active() is False
+    assert torchlens.backends.torch._completeness_storage._completeness_census_active() is False
 
 
 @pytest.mark.smoke

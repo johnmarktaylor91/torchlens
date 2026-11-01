@@ -28,6 +28,7 @@ from ._capture_state_helpers import (
 from ._data_classes.trace import Trace
 from ._deploy_env import restore_state_dict_resilient
 from ._deprecations import MISSING, MissingType
+from ._errors import CaptureNotActiveError, InvalidArgumentError
 from ._input_coerce import _coerce_input_args
 from ._literals import (
     BufferVisibilityLiteral,
@@ -392,8 +393,6 @@ def _validate_summary_grammar(summary_kwargs: dict[str, Any]) -> None:
 def _validate_summary_modes(execution_mode: str, grad_mode: str) -> None:
     """Refuse unknown one-call summary execution/grad mode tokens typed."""
 
-    from ._errors import InvalidArgumentError
-
     if execution_mode not in ("eval", "train", "same"):
         raise InvalidArgumentError(
             f"execution_mode must be 'eval', 'train', or 'same'; got {execution_mode!r}.",
@@ -436,8 +435,6 @@ def _maybe_weightsfree_summary(
     if not _all_meta_model(model):
         return None
     if input_args is None and not input_kwargs and input_size is None:
-        from ._errors import InvalidArgumentError
-
         raise InvalidArgumentError(
             "summary() on a meta-built model needs input evidence: the "
             "zero-argument inference rung runs real probing forwards, which "
@@ -817,7 +814,7 @@ def show_bundle_graph(
     bundle: Any,
     path: str = "bundle_modelgraph",
     vis_mode: VisModeLiteral = "unrolled",
-    direction: str = "forward",
+    signal: str = "forward",
     vis_direction: VisDirectionLiteral = "bottomup",
     vis_graph_overrides: dict[str, Any] | None = None,
     vis_node_overrides: dict[str, Any] | None = None,
@@ -838,8 +835,8 @@ def show_bundle_graph(
         Output path for Graphviz rendering.
     vis_mode:
         ``"rolled"``, ``"unrolled"``, or ``"none"``.
-    direction:
-        Graph content direction: ``"forward"``, ``"backward"``, ``"both"``, or
+    signal:
+        Which pass's graph to draw: ``"forward"``, ``"backward"``, ``"both"``, or
         ``"overlay"``.
     vis_direction:
         Graphviz layout direction.
@@ -861,7 +858,7 @@ def show_bundle_graph(
         ``label`` and, on ``fed_by``, its basis and coverage; solid edges
         carry token spans TorchLens checked, every other row is dashed.
         Node overrides key by member name, edge overrides by
-        ``(earlier, later)``; ``direction`` must stay ``"forward"``.
+        ``(earlier, later)``; ``signal`` must stay ``"forward"``.
     theme:
         Skin preset, the names ``Trace.draw`` takes: ``"torchlens"`` (default),
         ``"paper"``, ``"dark"``, ``"colorblind"`` or ``"high_contrast"``.
@@ -878,14 +875,14 @@ def show_bundle_graph(
 
     if nodes not in {"ops", "members"}:
         raise ValueError("nodes must be 'ops' or 'members'.")
-    if nodes == "members" and direction != "forward":
-        raise ValueError("nodes='members' draws the relation graph; leave direction='forward'.")
+    if nodes == "members" and signal != "forward":
+        raise ValueError("nodes='members' draws the relation graph; leave signal='forward'.")
     if vis_mode == "none":
         return None
     if vis_mode not in {"rolled", "unrolled"}:
         raise ValueError("vis_mode must be 'rolled', 'unrolled', or 'none'.")
-    if direction not in {"forward", "backward", "both", "overlay"}:
-        raise ValueError("direction must be 'forward', 'backward', 'both', or 'overlay'.")
+    if signal not in {"forward", "backward", "both", "overlay"}:
+        raise ValueError("signal must be 'forward', 'backward', 'both', or 'overlay'.")
 
     from ._visualization._bundle_graph import BundlePictureOptions, render_bundle_graph
     from ._visualization._render_utils import direction_to_rankdir
@@ -893,7 +890,7 @@ def show_bundle_graph(
     options = BundlePictureOptions(
         outpath=path,
         vis_mode=vis_mode,
-        direction=direction,
+        direction=signal,
         rankdir=direction_to_rankdir(vis_direction),
         graph_overrides=vis_graph_overrides,
         node_overrides=vis_node_overrides,
@@ -1396,7 +1393,6 @@ def _validate_forward_pass_torch(
     # contract as tl.trace -- a bound method of an nn.Module wraps into the
     # TL-authored synthetic root before the module-shaped preflights run;
     # other callables refuse typed (previously a bare AttributeError leak).
-    from ._errors import InvalidArgumentError
     from .backends.torch.bound_root import TLBoundMethodRoot, is_bound_method_of_module
 
     if not isinstance(model, nn.Module):
@@ -1537,8 +1533,7 @@ def _validate_forward_pass_torch(
                 _trace_observer,
                 {"code": COPY_FAILED_CODE} if plain_attr_snapshot.copy_failure else None,
             )
-        from ._errors import CaptureNotActiveError
-        from .backends.torch.ops import _walk_output_tensors_with_paths
+        from .backends.torch._ops_containers import _walk_output_tensors_with_paths
         from .validation._pristine import pristine_torch_oracle
 
         # R75-1: the phase-0 ground truth must observe through PRISTINE

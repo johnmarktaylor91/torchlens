@@ -1215,7 +1215,7 @@ def _record_runnable_input_tensor_sites(
 
     if sites:
         runnable_trace_state(trace).input_tensor_sites = sites
-        from ..backends.torch.completeness_witness import record_runnable_input_storage_sites
+        from ..backends.torch._completeness_boundaries import record_runnable_input_storage_sites
 
         record_runnable_input_storage_sites(trace, tensor_leaves)
 
@@ -1259,15 +1259,13 @@ def _record_runnable_module_training_modes(trace: "Trace", model: Any) -> None:
 
 #: Session-time semantic-output scratch (B1-02). Written at capture entry
 #: (``user_funcs.py``) and consumed ONLY by ``decode_outputs_for_trace`` on the
-#: normal forward-return arm. Two of the four pin LIVE USER OBJECTS -- an HF
+#: normal forward-return arm. Both pin LIVE USER OBJECTS -- an HF
 #: tokenizer (``bridge/hf.py``) and a model-derived metadata key -- so a copy
 #: surviving onto a settled product is both a retention leak and a privacy leak:
 #: plain ``pickle``/``torch.save`` of the Trace serializes the tokenizer's
 #: vocab/merges into an artifact the user believes is a graph. Declared
 #: ``FieldPolicy.DROP`` on ``Trace`` and dropped on EVERY settlement path.
 _SEMANTIC_OUTPUT_TRANSIENT_FIELDS: tuple[str, ...] = (
-    "_output_style",
-    "_output_head",
     "_output_tokenizer",
     "_semantic_output_metadata",
 )
@@ -2035,12 +2033,7 @@ def run_and_log_inputs_through_model(
         self.raw_output = output_transform(outputs) if output_transform is not None else None
         from .._autoroute._builtin_output import decode_outputs_for_trace
 
-        decode_outputs_for_trace(
-            self,
-            outputs,
-            output_style=getattr(self, "_output_style", None),
-            output_head=getattr(self, "_output_head", None),
-        )
+        decode_outputs_for_trace(self, outputs)
         # Tight window on the normal arm: drop immediately after the only
         # consumer. The outer ``finally`` repeats this for the arms that never
         # reach here (halt, failure, interrupt) -- see B1-02.

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Callable, Iterable, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import torch
 from torch import nn
@@ -13,9 +13,10 @@ from .._deprecations import MISSING, MissingType
 from .._errors import ArgumentTypeError, InvalidArgumentError
 from ..bundle import Bundle
 from ..errors import TorchLensWarning
+from ..options import CaptureOptions
 from .hooks import HookContext
 from .selectors import BaseSelector, func, label
-from .spec import Recipe, when
+from .spec import Recipe, refuse_invalid_loss, site_signal, when
 from .types import Edit
 
 if TYPE_CHECKING:
@@ -33,6 +34,7 @@ def sweep(
     input_kwargs: dict[Any, Any] | None = None,
     names: Sequence[str] | None = None,
     include_baseline: bool = False,
+    loss: Callable[[Trace], torch.Tensor] | None = None,
     **trace_kwargs: Any,
 ) -> Bundle:
     """Capture one intervened trace per swept replacement value.
@@ -47,7 +49,9 @@ def sweep(
         Intervention site target. Strings match either an exact TorchLens label
         or a function name; selectors and predicate callables are used directly.
     values:
-        Replacement values to sweep at ``site``.
+        Replacement values to sweep at ``site``, or edits (``tl.scale(0.5)``,
+        a callable) applied there. With ``site=tl.grad(s)`` each member's
+        edit changes the gradient of ``s``'s output.
     input_kwargs:
         Optional keyword inputs passed to ``model.forward``.
     names:
@@ -60,6 +64,13 @@ def sweep(
         ``BaselineUndeterminedError`` (F03 ledger memo item 2). The default
         ``False`` keeps the legacy member cardinality and DISCLOSES the
         missing baseline at construction with one coded warning.
+    loss:
+        Callable of one member trace returning its scalar loss. Each member
+        (baseline included) then runs ``member.backward(loss(member))`` after
+        its capture, so every member holds gradients and armed gradient edits
+        fire. Without it, gradient-site members stay armed. Refuses like
+        ``Trace.do(loss=)`` (``do_loss_not_callable``,
+        ``do_loss_without_gradient_site``).
     **trace_kwargs:
         Additional keyword arguments forwarded to ``tl.trace``.
 
@@ -102,10 +113,7 @@ def sweep(
     # so site= must be omitted, and mixing spec and plain values is refused
     # (a plain value NEEDS site=, a spec FORBIDS it; guessing per-element
     # would silently re-target half the sweep).
-    from collections.abc import Iterable as _EarlyIterable
-    from typing import cast as _cast
-
-    early_values = list(_cast("_EarlyIterable[Any]", values))
+    early_values = list(cast("Iterable[Any]", values))
     spec_count = sum(isinstance(value, Recipe) for value in early_values)
     if spec_count:
         if spec_count != len(early_values):
@@ -128,15 +136,18 @@ def sweep(
                 remedy="drop site= when sweeping over InterventionSpec values",
                 argument="at",
             )
-        return _sweep_over_specs(
+        _refuse_spec_door_loss(loss, early_values)
+        baseline, traces, params = _sweep_over_specs(
             model,
             inputs,
             early_values,
             input_kwargs=input_kwargs,
             names=names,
             include_baseline=include_baseline,
-            **trace_kwargs,
+            **_backward_ready_trace_kwargs(trace_kwargs, loss),
         )
+        _run_member_losses(baseline, traces, loss)
+        return _assemble_sweep_bundle(baseline, traces, params=params)
 
     if site is MISSING:
         raise ArgumentTypeError(
@@ -145,13 +156,7 @@ def sweep(
             remedy="pass site as a label, selector, or predicate callable",
             argument="at",
         )
-    else:
-        resolved_at = site
-
-    # At this point both resolved_at and values are fully resolved (not MISSING).
-    from typing import cast
-
-    resolved_at_typed = cast("str | BaseSelector | Callable[[Any], bool]", resolved_at)
+    resolved_at_typed = cast("str | BaseSelector | Callable[[Any], bool]", site)
 
     # early_values already materialized the iterable once (generators would
     # be exhausted by a second pass).
@@ -171,11 +176,12 @@ def sweep(
             argument="names",
         )
 
+    refuse_invalid_loss(
+        loss, has_gradient_site=site_signal(resolved_at_typed) != "forward", door="sweep"
+    )
+    trace_kwargs = _backward_ready_trace_kwargs(trace_kwargs, loss)
     site = _coerce_sweep_site(resolved_at_typed)
     member_names = list(names) if names is not None else _default_member_names(len(swept_values))
-    traces = {}
-    from .._user_funcs import trace as _trace
-
     baseline = _mint_pristine_baseline(
         model,
         inputs,
@@ -184,18 +190,10 @@ def sweep(
         input_kwargs=input_kwargs,
         **trace_kwargs,
     )
-    for member_name, value in zip(member_names, swept_values, strict=True):
-        # C03 (ledger memo item 1): the swept value rides a TYPED builtin
-        # helper spec whose args carry the value, never an anonymous closure
-        # -- before this, a swept member's only value linkage was its default
-        # name (measured amnesia: byte-identical audit rows across members).
-        traces[member_name] = _trace(
-            model,
-            inputs,
-            input_kwargs=input_kwargs,
-            intervene=when(site, sweep_replace(value)),
-            **trace_kwargs,
-        )
+    traces = _capture_swept_members(
+        model, inputs, site, member_names, swept_values, input_kwargs=input_kwargs, **trace_kwargs
+    )
+    _run_member_losses(baseline, traces, loss)
     return _assemble_sweep_bundle(
         baseline,
         traces,
@@ -203,6 +201,52 @@ def sweep(
             "values": [repr(value) for value in swept_values],
             "include_baseline": include_baseline,
         },
+    )
+
+
+def _capture_swept_members(
+    model: nn.Module,
+    inputs: Any,
+    site: Callable[[Any], bool],
+    member_names: Sequence[str],
+    swept_values: Sequence[Any],
+    **trace_kwargs: Any,
+) -> dict[str, Trace]:
+    """Capture one intervened trace per swept value at ``site``.
+
+    ``input_kwargs`` rides ``**trace_kwargs`` (it is forwarded verbatim to
+    every capture alongside the other trace kwargs).
+    """
+
+    from .._user_funcs import trace as _trace
+
+    traces = {}
+    for member_name, value in zip(member_names, swept_values, strict=True):
+        # C03 (ledger memo item 1): the swept value rides a TYPED builtin
+        # helper spec whose args carry the value, never an anonymous closure
+        # -- before this, a swept member's only value linkage was its default
+        # name (measured amnesia: byte-identical audit rows across members).
+        edit = value if isinstance(value, Edit) or callable(value) else sweep_replace(value)
+        traces[member_name] = _trace(
+            model,
+            inputs,
+            intervene=when(site, edit),
+            **trace_kwargs,
+        )
+    return traces
+
+
+def _refuse_spec_door_loss(
+    loss: Callable[[Trace], torch.Tensor] | None, specs: list[Recipe]
+) -> None:
+    """Refuse an invalid ``loss=`` on the spec door like ``Trace.do(loss=)``."""
+
+    refuse_invalid_loss(
+        loss,
+        has_gradient_site=any(
+            site_signal(rule.target) != "forward" for spec in specs for rule in spec.rules
+        ),
+        door="sweep",
     )
 
 
@@ -214,11 +258,13 @@ def _sweep_over_specs(
     names: Sequence[str] | None,
     include_baseline: bool = False,
     **trace_kwargs: Any,
-) -> Bundle:
+) -> tuple[Trace | None, dict[str, Trace], dict[str, Any]]:
     """Capture one intervened trace per swept InterventionSpec (C03 spec door).
 
     ``input_kwargs`` rides ``**trace_kwargs`` (it is forwarded verbatim to
-    every capture alongside the other trace kwargs).
+    every capture alongside the other trace kwargs). Returns the baseline,
+    the member traces and the bundle params; the caller runs the member
+    losses and assembles the Bundle.
     """
 
     if not specs:
@@ -256,14 +302,55 @@ def _sweep_over_specs(
             intervene=member_spec,
             **trace_kwargs,
         )
-    return _assemble_sweep_bundle(
+    return (
         baseline,
         traces,
-        params={
+        {
             "spec_digests": [spec.digest for spec in specs],
             "include_baseline": include_baseline,
         },
     )
+
+
+def _backward_ready_trace_kwargs(
+    trace_kwargs: dict[str, Any], loss: Callable[[Trace], torch.Tensor] | None
+) -> dict[str, Any]:
+    """Return capture kwargs that keep the autograd graph when ``loss=`` is given.
+
+    A member's backward needs graph-connected outputs, so a sweep with
+    ``loss=`` captures every member with ``backward_ready=True`` whatever the
+    caller's ``capture=`` options chose (as ``Trace.do`` forces it on its
+    rerun).
+    """
+
+    if loss is None:
+        return trace_kwargs
+    capture = trace_kwargs.get("capture")
+    if capture is None:
+        capture = CaptureOptions(backward_ready=True)
+    elif not capture.backward_ready:
+        # Keep the caller's explicit-field record: a plain dataclass replace
+        # would mark every field explicit, and explicit backend-only fields
+        # refuse on the torch backend.
+        capture = CaptureOptions.from_values(
+            {**capture.as_dict(), "backward_ready": True},
+            capture._specified_fields | {"backward_ready"},
+        )
+    return {**trace_kwargs, "capture": capture}
+
+
+def _run_member_losses(
+    baseline: Trace | None,
+    traces: dict[str, Trace],
+    loss: Callable[[Trace], torch.Tensor] | None,
+) -> None:
+    """Run ``member.backward(loss(member))`` on every member, baseline first."""
+
+    if loss is None:
+        return
+    members = ([baseline] if baseline is not None else []) + list(traces.values())
+    for member in members:
+        member.backward(loss(member))
 
 
 def _mint_pristine_baseline(

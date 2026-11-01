@@ -1,6 +1,6 @@
 ## Current 2.x Surface
 
-- Top-level `torchlens.__all__` has 87 names: capture, save/load, intervention,
+- Top-level `torchlens.__all__` has 83 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
 - Fast paths (doc of record [docs/guides/fast_paths.md](../guides/fast_paths.md)):
   `spec.bind(model)` (`tl.when(site, action).bind(model)`) is the capture-free bound executor,
@@ -17,14 +17,17 @@
   reason).
 - Intervention nouns (spellings DOCUMENTED-UNSTABLE): `tl.Recipe` is the immutable multi-clause
   spec (`tl.when(...)` builds one; `Recipe.merge` or `&` joins them); each clause in
-  `Recipe.rules` is a `tl.intervention.Rule` (`target`, `edit`, `direction`);
+  `Recipe.rules` is a `tl.intervention.Rule` (`target`, `edit`; `Rule.signal` is a derived, read-only `"forward"`/`"backward"` property);
   `spec.bind(model)` returns a `tl.intervention.BoundModel`, whose `.recipe` is the bound spec.
   `tl.intervention.population(source, *, origin, ...)` builds the provenance-stamped donor
   population, a `tl.intervention.Population` (`origin=` is required; `.members`, `.origin`,
   `.identity`, `.mean(dim=None, ...)`, `.std(dim=None, ...)`).
-- Value helpers `tl.add_noise` and `tl.project_out` take `allow_shape_change=`. Gradient helpers:
-  `tl.hook_grad` (live or rerun backward hook), `tl.zero_grad`, `tl.scale_grad`, `tl.clamp_grad`,
-  `tl.clip_grad` and `tl.add_grad_noise` edit gradients during the backward pass.
+- Value helpers `tl.add_noise` and `tl.project_out` take `allow_shape_change=`. There are no
+  gradient-only helpers: `tl.grad(site)` addresses the gradient of the site's OUTPUT, and the
+  ordinary edits (`tl.scale`, `tl.zero_ablate`, `tl.clamp`, `tl.add_noise`, `tl.clip_norm(max_norm,
+  norm_type=2.0)` or a callable `fn(grad, *, ctx)`) apply to whichever tensor the site names. See
+  "Gradient sites" in [common-patterns.md](common-patterns.md). Hook scratch dicts are `ctx.state` (per site and hook) and
+  `ctx.run_state` (run-scoped); `ctx.signal` is `"forward"` or `"backward"`.
 - Report and statistics additions: `tl.debug.amp_scaled_grads_hint` returns the GradScaler
   loss-scale disclosure text; `tl.report.flops_vs_dispatch` runs the two-way FLOP cross-check;
   `tl.stats.cosine_distance`, `tl.stats.relative_l1` and `tl.stats.relative_l2` are the 0-d
@@ -381,6 +384,29 @@
   errors. Public backend-neutral metadata lives on `Trace.backend`, `Trace.module_identity_mode`,
   `Trace.param_source`, and record fields such as `dtype_ref`, `device_ref`,
   `backend_address`, and `resolver_status`.
+- BACKEND PROTOCOL: every backend, torch included, fills `tl.backends.BackendProtocol`
+  (`BackendSpec.protocol()` returns it; `torchlens/backends/_protocols/<name>.py`). Members:
+  `name`, `maturity` (`"stable"` for torch, `"preview"` for tf, jax, mlx, paddle, tinygrad;
+  `BackendSpec.maturity` is the single source), `framework` (`tl.backends.FrameworkRequirement`:
+  distributions, `[minimum, below)`, `tested_through`, CI `pinned`, install `extra`),
+  `materialization` (`"eager"` or `"lazy"`; lazy backends realize once), `capabilities()`,
+  `runtime_available()`, `can_handle`, `capture`, `reference_output` (no TorchLens wrapper
+  installed), `validate` (a `ValidationStatus` whose decisions use `tl.backends.VALIDATION_REASONS`),
+  `is_tensor`, `host_copy`, `realize_once`, `trace_options()`, `refusal_codes()` (a subset of
+  `tl.backends.REFUSAL_CODES`). Refusals are `BackendUnsupportedError` with `exc.code` from that
+  registry, raised before any framework side effect. Closure constants are parentless `constant`
+  ops with saved payloads. `CaptureBackend` (`backends/_protocol.py`) is torch's internal
+  orchestration seam, not the contract.
+
+  Example: `protocol = tl.backends.spec("torch").protocol()`, then
+  `status = protocol.validate(protocol.capture(model, x, None), protocol.reference_output(model, x, None))`
+  reads `status.state == "passed"` on a plain torch module.
+
+  Each backend ships a measured scorecard (`torchlens/backends/<name>/scorecard.json`, checked by
+  `python -m torchlens.conformance.scorecard --backend <name> --check` in its CI leg);
+  `tl.report.doctor()` shows it as the `backend_scorecard:<name>` row;
+  `torchlens.conformance.graduation_report(name)` returns the
+  advisory six-item `GraduationReport`. Per-backend pages: `docs/backends/<name>.md`.
 - TensorFlow is available as `backend="tf"` / `backend="tensorflow"` for the Keras-3 / TF>=2.16
   preview when `keras.backend.backend() == "tensorflow"`. The shipped path is eager live capture
   with `op_callbacks` as the primary mechanism: real values, real taken-branch control flow,
@@ -1254,9 +1280,13 @@
   switch). The compatibility window and `tl.migrate` left with the 2.x saved-file readers:
   a file saved by torchlens 2.x refuses at `tl.load` with one typed error.
   `torchlens.conformance` holds the C0-C2 packs, plus the preview-backend
-  scorecard (DOCUMENTED-UNSTABLE): `preview_scorecard`, `PreviewScorecard`,
-  `ScorecardCell`, `PREVIEW_BACKENDS`, and `RosterModel.expected_op_kinds`
-  (the op-inventory check that fails when a backend silently drops an op).
+  scorecard (DOCUMENTED-UNSTABLE): `preview_scorecard`, `PreviewScorecard`
+  (v2: `maturity`, `framework_requirement`, `capabilities`, `roster_groups`,
+  `graduation`), `ScorecardCell`, `PREVIEW_BACKENDS`, `graduation_report`
+  (`GraduationReport`, `GraduationItem`), `RosterModel.expected_op_kinds`
+  (the op-inventory check that fails when a backend silently drops an op) and the
+  protocol roster fields `RosterModel.expected_intermediates`,
+  `RosterModel.has_constants`, `RosterModel.random_init` and `RosterModel.group`.
 - LIVE NARRATION (F28; DOCUMENTED-UNSTABLE): `narrate=` on `tl.trace`/`tl.record`
   streams compact per-op narration (the torchsnooper niche on the capture
   substrate, 3-4x cheaper than settrace); `torchlens._snoop` owns

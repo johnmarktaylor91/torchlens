@@ -11,13 +11,9 @@ bundle.
 from __future__ import annotations
 
 import io
-import os
 import pickle
 import platform
-import sys
 import threading
-import uuid
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -27,16 +23,19 @@ from safetensors.torch import save_file
 
 from .. import __version__ as TORCHLENS_VERSION
 from .._state import pause_logging
+from .._utils.hashing import sha256_file
 from . import TLSPEC_VERSION, ArtifactError
 from ._canonical_pickle import dump_canonical_metadata
-from ._durability import fsync_dir, fsync_tree
-from .manifest import Manifest, TensorEntry, sha256_of_file
+from ._durability import _restrict_mode, fsync_dir, fsync_tree
+from .manifest import Manifest, TensorEntry, _runtime_python_version
+from .paths import _make_tmp_bundle_path, reject_symlink_path
 from .scrub import BlobSpec
 from .streaming_async import (
     DEFAULT_MAX_PENDING_BYTES,
     AsyncWriteEngine,
     AsyncWriteFailedError,
     PendingWrite,
+    _PreparedPayload,
 )
 from .tensor_policy import FailReason, Ok, SkipReason, is_supported_for_save
 from .tlspec import _TlSpecWriter
@@ -44,51 +43,6 @@ from .tlspec import _TlSpecWriter
 PARTIAL_SENTINEL = "PARTIAL"
 REASON_SENTINEL = "REASON.txt"
 _BLOB_TENSOR_KEY = "data"
-
-
-@dataclass(frozen=True)
-class _PreparedPayload:
-    """One serialization-ready payload plus its origin-tensor manifest facts.
-
-    Parameters
-    ----------
-    payload:
-        Contiguous tensor to serialize (CPU-resident when prepared for the
-        async worker).
-    device_at_save:
-        Device string of the ORIGINAL tensor at submission time.
-    requires_grad:
-        ``requires_grad`` of the original tensor at submission time.
-    """
-
-    payload: torch.Tensor
-    device_at_save: str
-    requires_grad: bool
-
-
-def _restrict_mode(path: Path, mode: int) -> None:
-    """Best-effort tighten a streamed bundle path's permissions (POSIX only).
-
-    Twin of ``_io/bundle.py::_restrict_mode``: ``mkdir``/``open`` honor the
-    ambient umask, so under umask 002 the streaming bundle dir and its metadata
-    sidecars were left group-writable while the core bundle writer tightens
-    them. Best-effort: a filesystem that ignores mode bits is not a save
-    failure.
-
-    Parameters
-    ----------
-    path:
-        Bundle directory or file to tighten.
-    mode:
-        Target permission bits (``0o700`` for directories, ``0o600`` for files).
-    """
-
-    if os.name != "posix":
-        return
-    try:
-        path.chmod(mode)
-    except OSError:
-        pass
 
 
 def next_blob_id(blob_index: int) -> str:
@@ -158,12 +112,11 @@ class BundleStreamWriter:
         self.include_custom_attributes = include_custom_attributes
         self.include_buffer_values = include_buffer_values
         self.final_path = Path(path)
-        if self.final_path.is_symlink():
-            raise ArtifactError(f"Refusing symlinked save target: {self.final_path}.")
+        reject_symlink_path(self.final_path, context="save target")
         if self.final_path.exists():
             raise ArtifactError(f"Bundle path already exists: {self.final_path}")
 
-        self.tmp_path = self.final_path.parent / f"{self.final_path.name}.tmp.{uuid.uuid4().hex}"
+        self.tmp_path = _make_tmp_bundle_path(self.final_path)
         self.blobs_path = self.tmp_path / "blobs"
         self._blob_counter = 0
         self._closed = False
@@ -254,6 +207,11 @@ class BundleStreamWriter:
 
         self._blob_counter += 1
         return next_blob_id(self._blob_counter)
+
+    def _issued_blob_count(self) -> int:
+        """Return how many ids :meth:`next_blob_id` issued; save-time scrub ids start past it."""
+
+        return self._blob_counter
 
     def write_blob(
         self,
@@ -487,19 +445,18 @@ class BundleStreamWriter:
         try:
             for blob_id, tensor, kind, label in blob_specs:
                 if blob_id in self._entries_by_blob_id:
-                    continue
+                    # Every streamed blob a scrubbed ref reuses was filtered out of
+                    # ``blob_specs``, and scrub ids start past the stream's ids, so a
+                    # remaining spec with an already-written id is a collision: the
+                    # scrubbed ref would silently resolve to ANOTHER op's payload.
+                    existing = self._entries_by_blob_id[blob_id]
+                    raise ArtifactError(
+                        f"Streaming bundle blob id {blob_id} for {label!r} collides with "
+                        f"the blob already streamed for {existing.label!r}."
+                    )
                 self.write_blob(blob_id, tensor, kind=kind, label=label)
 
-            legacy_manifest = self._build_manifest(
-                scrubbed_state=scrubbed_state, unsupported=unsupported, trace=trace
-            )
-            _TlSpecWriter.write_trace_manifest(
-                path=self.tmp_path / "manifest.json",
-                trace=trace,
-                legacy_manifest=legacy_manifest,
-                save_level="portable",
-            )
-            _restrict_mode(self.tmp_path / "manifest.json", 0o600)
+            self._write_manifest(scrubbed_state, unsupported, trace)
         except ArtifactError:
             raise
         except (OSError, TypeError, ValueError, pickle.PickleError) as exc:
@@ -815,7 +772,7 @@ class BundleStreamWriter:
             device_at_save=prepared.device_at_save,
             layout=str(payload.layout).replace("torch.", ""),
             bytes=int(payload.numel() * payload.element_size()),
-            sha256=sha256_of_file(blob_path),
+            sha256=sha256_file(blob_path),
             requires_grad=prepared.requires_grad,
         )
 
@@ -965,14 +922,13 @@ class BundleStreamWriter:
             engine.shutdown(discard=False)
             self._async_engine = None
 
-    def _build_manifest(
+    def _write_manifest(
         self,
-        *,
         scrubbed_state: dict[str, Any],
         unsupported: list[dict[str, str]],
         trace: Any,
-    ) -> Manifest:
-        """Build the final manifest for the streamed bundle."""
+    ) -> None:
+        """Build the final manifest for the streamed bundle and write it as ``manifest.json``."""
 
         tensor_entries = list(self._tensor_entries)
         n_out_blobs = sum(1 for entry in tensor_entries if entry.kind == "out")
@@ -998,13 +954,11 @@ class BundleStreamWriter:
         buffer_disclosure = _buffer_values_disclosure(trace, included=self.include_buffer_values)
         _warn_buffer_value_embedding(buffer_disclosure)
 
-        return Manifest(
+        legacy_manifest = Manifest(
             tlspec_version=TLSPEC_VERSION,
             torchlens_version=TORCHLENS_VERSION,
             torch_version=torch.__version__,
-            python_version=(
-                f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-            ),
+            python_version=_runtime_python_version(),
             platform=f"{platform.system().lower()}-{platform.machine().lower()}",
             created_at=datetime.now(timezone.utc)
             .replace(microsecond=0)
@@ -1020,6 +974,13 @@ class BundleStreamWriter:
             custom_attributes_disclosure=disclosure,
             buffer_values_disclosure=buffer_disclosure,
         )
+        _TlSpecWriter.write_trace_manifest(
+            path=self.tmp_path / "manifest.json",
+            trace=trace,
+            legacy_manifest=legacy_manifest,
+            save_level="portable",
+        )
+        _restrict_mode(self.tmp_path / "manifest.json", 0o600)
 
     def _ensure_writable(self) -> None:
         """Raise if the writer has already been closed."""

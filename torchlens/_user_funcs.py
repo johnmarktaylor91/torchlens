@@ -36,11 +36,7 @@ from torch import nn
 from torchlens.backends.registry import BackendUnsupportedError
 
 from . import _state
-from ._autoroute._builtin_output import (
-    check_output_style,
-    refuse_unresolved_output_style,
-    semantic_output_cache_key,
-)
+from ._autoroute._builtin_output import semantic_output_cache_key
 from ._capture._episode_failed import attach_failed_episode_ledger
 from ._capture._episode_ledger import (
     attach_episode_header,
@@ -58,6 +54,7 @@ from ._capture_intervention import (
     _intervention_spec_from_hook_plan,
     _merge_intervention_spec_hooks,
     _record_capture_intervention_event,
+    activation_only_predicate as _activation_only_predicate,
     intervene_selector_fired_nowhere,
 )
 from ._capture_state_helpers import (
@@ -137,9 +134,14 @@ from ._training_validation import (
     effective_inference_only,
     validate_training_compatibility,
 )
-from ._utils._torch_compat import is_dynamo_compiled_callable
+from ._user_funcs_guards import (
+    _refuse_non_torch_episode,
+    _reject_auto_environment,
+    _reject_compiled_plain_callable,
+    _reject_unrouted_jax_options,
+    _trace_option_refusal_code,
+)
 from ._utils.display import _vprint, ensure_trace_visualizer_dir, warn_parallel
-from ._utils.env_flags import closed_bool_env
 from ._utils.introspection import _get_code_context
 from ._utils.tensor_utils import SaveMode
 from ._visualization.code_panel import (
@@ -168,10 +170,15 @@ from .bridge import transformers as _hf_bridge
 from .intervention import injection as _injection, model_door as _model_door
 from .intervention._module_alias_guard import refuse_model_alias_spellings
 from .intervention._zero_fire import settle_capture_zero_fire, zero_fire_policy_scope
+from .intervention.audit import rule_signal as _rule_signal
 from .intervention.errors import ChunkedForwardConfigError
-from .intervention.hooks import normalize_hook_plan
+from .intervention.hooks import (
+    normalize_hook_plan,
+    site_universe as _site_universe,
+    split_site_branches as _split_site_branches,
+)
 from .intervention.predicates import InterventionPredicate
-from .intervention.resolver import _resolve_sites, _selector_resolution_direction
+from .intervention.resolver import _resolve_sites
 from .intervention.selectors import BaseSelector
 from .intervention.types import InterventionDecision
 from .options import (
@@ -758,8 +765,6 @@ def _trace_mlx_model(
     save_raw_input: str | bool | MissingType,
     batch_render: str | MissingType,
     output_transform: Callable[[Any], Any] | None | MissingType,
-    output_style: str | None | MissingType,
-    output_head: str | None | MissingType,
     save_transformed_output: str | bool | MissingType,
     layer_visualizers: dict[Any, Callable[..., Any]] | None | MissingType,
     save_visualizations: bool | MissingType,
@@ -1025,8 +1030,6 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
         save_raw_input=kwargs.get("save_raw_input", MISSING),
         batch_render=kwargs.get("batch_render", MISSING),
         output_transform=kwargs.get("output_transform", MISSING),
-        output_style=kwargs.get("output_style", MISSING),
-        output_head=kwargs.get("output_head", MISSING),
         save_transformed_output=kwargs.get("save_raw_output", MISSING),
         layer_visualizers=MISSING,
         save_visualizations=MISSING,
@@ -1079,8 +1082,6 @@ CAPTURE_CACHE_KEY_CURATED: frozenset[str] = frozenset(
         "layers_to_save",
         "save_raw_input",
         "output_transform",
-        "output_style",
-        "output_head",
         "save_transformed_output",
         "layer_visualizers",
         "save_visualizations",
@@ -1299,7 +1300,6 @@ def _warn_zero_match_capture_selectors(
     *,
     save_selector: Any,
     intervene_selector: Any,
-    intervene_direction: str | None,
     halt_selector: Any = None,
     layers_to_save_request: Any = None,
 ) -> None:
@@ -1312,9 +1312,9 @@ def _warn_zero_match_capture_selectors(
     save_selector:
         Capture-time save selector, if configured.
     intervene_selector:
-        Capture-time intervention selector, if configured.
-    intervene_direction:
-        Intervention direction whose live phase determines warning timing.
+        Capture-time intervention selector, if configured. Its site branches
+        decide the warning timing: an autograd-node branch settles after the
+        backward pass.
     halt_selector:
         Capture-time halt predicate, if configured. ``halt=`` was the one
         selector slot outside the zero-match disclosure family: a typo'd
@@ -1345,7 +1345,7 @@ def _warn_zero_match_capture_selectors(
         layer does not matter" on the returned and saved Trace alike.
     """
 
-    def _record_unmatched(slot: str, selector: Any, direction: str | None = None) -> None:
+    def _record_unmatched(slot: str, selector: Any, signal: str | None = None) -> None:
         """Append one zero-match fact to the persisted trace annotations."""
 
         annotations = getattr(trace, "annotations", None)
@@ -1361,8 +1361,8 @@ def _warn_zero_match_capture_selectors(
             "slot": slot,
             "selector": _relativize_path_literals(repr(selector)),
         }
-        if direction is not None:
-            entry["direction"] = str(direction)
+        if signal is not None:
+            entry["signal"] = str(signal)
         annotations.setdefault("unmatched_capture_selectors", []).append(entry)
 
     defer_backward_intervention = False
@@ -1379,16 +1379,16 @@ def _warn_zero_match_capture_selectors(
                 stacklevel=3,
             )
         if isinstance(intervene_selector, BaseSelector):
-            selector_direction = _selector_resolution_direction(intervene_selector)
-            defer_backward_intervention = (
-                selector_direction == "backward" and intervene_direction in {"backward", "both"}
+            # A gradient or node branch fires at backward time: keep its fire
+            # counter for the after-backward reconciliation.
+            defer_backward_intervention = any(
+                universe != "activation"
+                for universe, _branch in _split_site_branches(intervene_selector)
             )
-        if (
-            isinstance(intervene_selector, BaseSelector)
-            and not defer_backward_intervention
-            and intervene_selector_fired_nowhere(trace, intervene_selector, intervene_direction)
+        if isinstance(intervene_selector, BaseSelector) and intervene_selector_fired_nowhere(
+            trace, intervene_selector
         ):
-            _record_unmatched("intervene", intervene_selector, intervene_direction)
+            _record_unmatched("intervene", intervene_selector, _rule_signal(intervene_selector))
             settle_capture_zero_fire(
                 f"Capture-time intervention selector {intervene_selector!r} matched zero sites; "
                 "no intervention fired.",
@@ -1574,8 +1574,6 @@ def _run_model_and_save_specified_outs(
     save_raw_input: str | bool = "small",
     batch_render: str = "auto",
     output_transform: Callable[[Any], Any] | None = None,
-    output_style: str | None = None,
-    output_head: str | None = None,
     save_transformed_output: str | bool = "small",
     layer_visualizers: dict[Any, Callable[..., Any]] | None = None,
     save_visualizations: bool = False,
@@ -1723,8 +1721,6 @@ def _run_model_and_save_specified_outs(
         batch_render: Raw-input batch rendering policy for visualization.
         output_transform: Optional callable used to produce human-readable
             output metadata from model output.
-        output_style: Optional semantic output decode style.
-        output_head: Optional live-output head to decode.
         save_transformed_output: Portable save policy for the transformed raw output.
         layer_visualizers: Optional mapping from selectors to thumbnail visualizer callables.
         save_visualizations: Whether rendered thumbnails should persist in portable bundles.
@@ -1758,8 +1754,6 @@ def _run_model_and_save_specified_outs(
     alias_sources = (save_predicate, intervene_predicate, halt_predicate, hooks, intervention_spec)
     deferred = (normalized_hook_plan, _deferred_retention_selector, _deferred_gradient_selector)
     refuse_model_alias_spellings(model, *alias_sources, *deferred)
-    # An output_style no detector can resolve refuses before the forward.
-    check_output_style(output_style)
     # Auto-detect model device from its first parameter and move inputs to match.
     # This prevents silent device-mismatch errors when the model is on CUDA but
     # the user ops CPU tensors (a common mistake). A META first parameter is
@@ -1834,7 +1828,7 @@ def _run_model_and_save_specified_outs(
         and selector_contains_kind(candidate_intervene_selector, "module")
         and isinstance(candidate_intervene_decision, InterventionDecision)
         and candidate_intervene_decision.hook is not None
-        and candidate_intervene_decision.direction in {"forward", "both"}
+        and _site_universe(candidate_intervene_selector) == "activation"
     ):
         module_intervene_selector = candidate_intervene_selector
         # .selector is non-None only for single-rule specs, so rules[0] is
@@ -1855,7 +1849,6 @@ def _run_model_and_save_specified_outs(
             for entry in normalize_hook_plan(
                 candidate_intervene_selector,
                 candidate_intervene_decision.hook,
-                direction=candidate_intervene_decision.direction,
             )
         ]
         # Keep the original spec: the capture-door event must record the rules
@@ -1973,14 +1966,8 @@ def _run_model_and_save_specified_outs(
         if _refresh_projection_capture:
             trace._refresh_projection_capture = True
         _capture_output_metadata_from_model_config(trace, model)
-        trace._output_style = output_style
-        trace._output_head = output_head
         trace._output_tokenizer = getattr(model, "_torchlens_output_tokenizer", None)
-        trace._semantic_output_metadata = semantic_output_cache_key(
-            model,
-            output_style=output_style,
-            output_head=output_head,
-        )
+        trace._semantic_output_metadata = semantic_output_cache_key(model)
         if intervention_spec is not None:
             trace._intervention_spec = intervention_spec
         trace.trace_label = name
@@ -2045,7 +2032,9 @@ def _run_model_and_save_specified_outs(
                 )
             trace._predicate_save_options = RecordingOptions(
                 keep_op=save_predicate,
-                intervene=intervene_predicate,
+                # The live forward sees only activation branches; gradient and
+                # node branches armed as sticky backward hooks above.
+                intervene=_activation_only_predicate(intervene_predicate),
                 halt=halt_predicate,
                 default_op=default_op,
                 streaming=StorageOptions(
@@ -2160,7 +2149,6 @@ def _run_model_and_save_specified_outs(
         _release_capture_slot()
         if hasattr(trace, "_capture_container_structure"):
             delattr(trace, "_capture_container_structure")
-    refuse_unresolved_output_style(trace)
     if isinstance(model, TLBoundMethodRoot):
         # F41 TL-authored-root disclosure (tlspec v9 entry-dark slot, C07X
         # item (iv)): the marker lands on the root op record -- the
@@ -2171,18 +2159,12 @@ def _run_model_and_save_specified_outs(
             for output_op in trace[output_label].ops:
                 output_op.tl_authored_root = True
     finish_echo(echo_session, trace)
-    warning_intervene_decision = (
-        candidate_intervene_decision
-        if isinstance(candidate_intervene_decision, InterventionDecision)
-        else getattr(intervene_predicate, "decision", None)
-    )
     _warn_zero_match_capture_selectors(
         trace,
         save_selector=module_save_selector or save_predicate,
         intervene_selector=(
             module_intervene_selector or getattr(intervene_predicate, "selector", None)
         ),
-        intervene_direction=getattr(warning_intervene_decision, "direction", None),
         # stop_after-compiled halts carry their OWN provenance-split never-fired
         # policy at the trace entry (typed refusal / coded warning); the generic
         # halt zero-match warning would double-disclose ahead of that refusal.
@@ -2397,7 +2379,10 @@ def _filter_trace_kwargs_for_backend(
             continue
         if _trace_option_explicit(option_name, public_trace_kwargs):
             raise BackendUnsupportedError(
-                _unsupported_trace_option_message(option_name, backend_name)
+                _unsupported_trace_option_message(option_name, backend_name),
+                code=_trace_option_refusal_code(option_name),
+                backend=backend_name,
+                option=option_name,
             )
         public_trace_kwargs.pop(option_name, None)
 
@@ -2450,12 +2435,17 @@ def _enforce_capability_option_gates(
         ):
             requested = _capability_option_requested(getattr(capture_value, option_name))
         if requested:
+            from .backends._backend_protocol import refusal_code_for_capability
+
             raise BackendUnsupportedError(
                 f"backend {str(resolved_spec.name)!r} declares capability "
                 f"{flag}=False, so explicit {option_name} is refused instead of "
                 "silently ignored or run unsupported. Use a backend whose "
                 f"registered capability table declares {flag}=True (e.g. "
-                "backend='torch')."
+                "backend='torch').",
+                code=refusal_code_for_capability(flag),
+                backend=str(resolved_spec.name),
+                option=option_name,
             )
 
 
@@ -2735,17 +2725,7 @@ def trace(
             from ._quickstart._ladder import _trace_via_ladder
 
             return _trace_via_ladder(model, input_args, input_kwargs, input_shape, ladder_kwargs)
-        if not isinstance(model, nn.Module) and is_dynamo_compiled_callable(model):
-            raise InvalidArgumentError(
-                "TorchLens cannot capture a torch.compile-produced plain callable because it is "
-                "not an nn.Module",
-                code="compiled_callable_unsupported",
-                remedy=(
-                    "pass the original eager nn.Module instead of the compiled callable; to "
-                    "inspect what torch.compile generated, use tl.bridge.depyf.dump(fn, x, path)"
-                ),
-                argument="model",
-            )
+        _reject_compiled_plain_callable(model)
         _reject_extra_positional_input(grad_transform)
         public_trace_kwargs = locals().copy()
         public_trace_kwargs.pop("backend")
@@ -2769,12 +2749,7 @@ def trace(
             normalize_echo(narrate)
         if chunk_paths is not MISSING and chunk_paths is not None and chunk_size in (MISSING, None):
             raise ChunkedForwardConfigError("chunk_paths requires chunk_size.")
-        if backend is None and (jax_static_argnums is not MISSING or grad_options is not MISSING):
-            raise BackendUnsupportedError(
-                "jax_static_argnums is only supported with backend='jax'; grad_options is "
-                "only supported with backend='jax', backend='mlx', backend='tinygrad', "
-                "backend='paddle', or backend='tf'."
-            )
+        _reject_unrouted_jax_options(backend, jax_static_argnums, grad_options)
         explicit_backend_spec = None
         if backend is not None:
             explicit_backend_spec = get_backend_spec(str(backend))
@@ -2814,13 +2789,7 @@ def trace(
                 result = detector(model, input_args, **autoroute_kwargs)
                 if result is not None:
                     return cast("Trace", result)
-        if closed_bool_env("TORCHLENS_AUTO"):
-            raise CaptureNotActiveError(
-                "TORCHLENS_AUTO requested an unsupported implicit capture mode",
-                code="auto_environment_unsupported",
-                remedy="unset TORCHLENS_AUTO and call auto_capture() explicitly",
-                environment_variable="TORCHLENS_AUTO",
-            )
+        _reject_auto_environment()
         resolved_spec = explicit_backend_spec or resolve_backend_spec(
             backend, model, input_args, input_kwargs
         )
@@ -2832,19 +2801,6 @@ def trace(
         _enforce_capability_option_gates(public_trace_kwargs, resolved_spec)
         _refuse_non_torch_episode(public_trace_kwargs, resolved_spec)
         return cast("Trace", resolved_spec.capture_trace(**public_trace_kwargs))
-
-
-def _refuse_non_torch_episode(public_trace_kwargs: dict[str, Any], resolved_spec: Any) -> None:
-    """episode= capture (capture_kind=episode) is torch-only in this release."""
-
-    if str(resolved_spec.name) != "torch":
-        episode_value = public_trace_kwargs.pop("episode", None)
-        if episode_value is not None:
-            raise BackendUnsupportedError(
-                "episode= capture (capture_kind=episode) is torch-only in this "
-                f"release; backend {str(resolved_spec.name)!r} does not support "
-                "episode declarations."
-            )
 
 
 def _model_type_remedy(model: Any) -> str:
@@ -2874,8 +2830,6 @@ def _trace_torch_model(
     save_raw_input: str | bool | MissingType = MISSING,
     batch_render: str | MissingType = MISSING,
     output_transform: Callable[[Any], Any] | None | MissingType = MISSING,
-    output_style: str | None | MissingType = MISSING,
-    output_head: str | None | MissingType = MISSING,
     save_transformed_output: str | bool | MissingType = MISSING,
     keep_orphans: bool | MissingType = MISSING,
     output_device: OutputDeviceLiteral | MissingType = MISSING,
@@ -3008,8 +2962,6 @@ def _trace_torch_model(
         save_raw_input=save_raw_input,
         batch_render=batch_render,
         output_transform=output_transform,
-        output_style=output_style,
-        output_head=output_head,
         save_transformed_output=save_transformed_output,
         layer_visualizers=MISSING,
         save_visualizations=MISSING,
@@ -3232,8 +3184,6 @@ def _trace_torch_model(
     save_raw_input_policy = capture_options.save_raw_input
     batch_render_policy = capture_options.batch_render
     output_transform_value = capture_options.output_transform
-    output_style_value = capture_options.output_style
-    output_head_value = capture_options.output_head
     save_raw_output_policy = capture_options.save_transformed_output
     layer_visualizers_value = cast(
         "dict[Any, Callable[..., Any]] | None", capture_options.layer_visualizers
@@ -3525,13 +3475,7 @@ def _trace_torch_model(
             "chunk_paths": normalize_chunk_paths(chunk_paths_value),
             "capture_container_structure": capture_container_structure,
             "output_transform": _stable_cache_fragment(output_transform_value),
-            "output_style": output_style_value,
-            "output_head": output_head_value,
-            "semantic_output_cache_key": semantic_output_cache_key(
-                model,
-                output_style=output_style_value,
-                output_head=output_head_value,
-            ),
+            "semantic_output_cache_key": semantic_output_cache_key(model),
             "facets": _facet_recipe_cache_key(facet_recipes),
             "save_predicate": _predicate_cache_key(save_predicate),
             "intervene": _predicate_cache_key(intervene),
@@ -3645,8 +3589,6 @@ def _trace_torch_model(
             save_raw_input=save_raw_input_policy,
             batch_render=batch_render_policy,
             output_transform=output_transform_value,
-            output_style=output_style_value,
-            output_head=output_head_value,
             save_transformed_output=save_raw_output_policy,
             layer_visualizers=layer_visualizers_value,
             save_visualizations=save_visualizations_value,
@@ -3733,8 +3675,6 @@ def _trace_torch_model(
             save_raw_input=MISSING,
             batch_render=MISSING,
             output_transform=MISSING,
-            output_style=MISSING,
-            output_head=MISSING,
             save_transformed_output=MISSING,
             keep_orphans=MISSING,
             output_device=MISSING,
@@ -3818,8 +3758,6 @@ def _trace_torch_model(
                 save_raw_input=MISSING,
                 batch_render=MISSING,
                 output_transform=MISSING,
-                output_style=MISSING,
-                output_head=MISSING,
                 save_transformed_output=MISSING,
                 keep_orphans=MISSING,
                 output_device=MISSING,
@@ -3987,8 +3925,6 @@ def _trace_torch_model(
         save_raw_input=save_raw_input_policy,
         batch_render=batch_render_policy,
         output_transform=output_transform_value,
-        output_style=output_style_value,
-        output_head=output_head_value,
         save_transformed_output=save_raw_output_policy,
         layer_visualizers=layer_visualizers_value,
         save_visualizations=save_visualizations_value,

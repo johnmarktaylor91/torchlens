@@ -32,7 +32,6 @@ from support.r1_venue import IN_OFFLINE_VENUE
 import torchlens as tl
 from torchlens.intervention.errors import (
     BindingPreflightError,
-    LiveModeLabelError,
     MultiMatchWarning,
 )
 
@@ -72,16 +71,16 @@ def _double(grad: torch.Tensor) -> torch.Tensor:
 
 
 def _zero_hook(grad: torch.Tensor, *, ctx: Any) -> torch.Tensor:
-    """User ``bwd_hook`` callable zeroing the gradient."""
+    """User callable zeroing the gradient."""
 
     del ctx
     return torch.zeros_like(grad)
 
 
 _HELPERS: dict[str, tuple[Callable[[], Any], GradFn]] = {
-    "grad_zero": (tl.zero_grad, _zero),
-    "grad_scale": (lambda: tl.scale_grad(2.0), _double),
-    "bwd_hook": (lambda: tl.hook_grad(_zero_hook), _zero),
+    "zero_ablate": (tl.zero_ablate, _zero),
+    "scale": (lambda: tl.scale(2.0), _double),
+    "callable": (lambda: _zero_hook, _zero),
 }
 
 
@@ -207,7 +206,7 @@ def _backward_fires(trace: Any) -> int:
 
     spec = trace._intervention_spec
     records = getattr(spec, "records", ()) if spec is not None else ()
-    return sum(1 for record in records if record.direction == "backward")
+    return sum(1 for record in records if record.signal == "backward")
 
 
 def _assert_matches_oracle(got: Grads, want: Grads, clean: Grads) -> None:
@@ -231,11 +230,11 @@ def _apply_door(trace: Any, door: str, selector: Any, helper: Any) -> None:
 
     if door == "attach_hooks":
         trace.attach_hooks(selector, helper, confirm_mutation=True)
-    elif door == "layer.attach_hooks":
+    elif door == "layer_record":
+        # A Layer record addresses its gradient through tl.grad(record) on the trace;
+        # Layer.attach_hooks itself edits the activation.
         layer_label = trace.find_sites(selector).first().layer_label
-        trace[layer_label].attach_hooks(helper, confirm_mutation=True)
-    elif door == "set":
-        trace.set(selector, _zero, direction="backward", confirm_mutation=True)
+        trace.attach_hooks(tl.grad(trace[layer_label]), helper, confirm_mutation=True)
     else:
         raise AssertionError(door)
 
@@ -284,10 +283,10 @@ def tiny() -> _Fixture:
     return fixture
 
 
-_DOORS = ("intervene", "attach_hooks", "layer.attach_hooks", "set")
+_DOORS = ("intervene", "attach_hooks", "layer_record")
 
 
-# 40 cells of about 0.4 s each: heavy-class aggregate compute (tests/AGENTS.md, families).
+# 30 cells of about 0.4 s each: heavy-class aggregate compute (tests/AGENTS.md, families).
 @pytest.mark.heavy
 @pytest.mark.parametrize("opt_in", sorted(_OPT_INS))
 @pytest.mark.parametrize("runner", _RUNNERS)
@@ -295,16 +294,16 @@ _DOORS = ("intervene", "attach_hooks", "layer.attach_hooks", "set")
 def test_module_selector_grad_zero_every_spelling(
     tiny: _Fixture, door: str, runner: str, opt_in: str
 ) -> None:
-    """``tl.module`` + ``grad_zero`` matches the oracle on every door x runner x opt-in."""
+    """``tl.grad(tl.module)`` + zero_ablate matches the oracle on every door x runner x opt-in."""
 
-    selector = tl.module(_MLP)
+    selector = tl.grad(tl.module(_MLP))
     _check_spelling(
         tiny,
         door=door,
         runner=runner,
         opt_in=opt_in,
         selector=selector,
-        helper=tl.zero_grad(),
+        helper=tl.zero_ablate(),
         want=tiny.oracle("module", _MLP, _zero),
     )
 
@@ -312,7 +311,7 @@ def test_module_selector_grad_zero_every_spelling(
 @pytest.mark.parametrize("helper_name", sorted(_HELPERS))
 @pytest.mark.parametrize("door", ("intervene", "attach_hooks"))
 def test_func_selector_every_helper(tiny: _Fixture, door: str, helper_name: str) -> None:
-    """``tl.func`` reaches every layer norm, including the multi-pass graph's."""
+    """``tl.grad(tl.func)`` reaches every layer norm, including the multi-pass graph's."""
 
     build, fn = _HELPERS[helper_name]
     _check_spelling(
@@ -320,7 +319,7 @@ def test_func_selector_every_helper(tiny: _Fixture, door: str, helper_name: str)
         door=door,
         runner="trace.backward",
         opt_in="backward_ready",
-        selector=tl.func("layer_norm"),
+        selector=tl.grad(tl.func("layer_norm")),
         helper=build(),
         want=tiny.oracle("every_layernorm", "", fn),
     )
@@ -344,7 +343,7 @@ def test_grad_fn_selector_every_helper(tiny: _Fixture, door: str, helper_name: s
 
 
 def test_grad_fn_selector_grad_input_family(tiny: _Fixture) -> None:
-    """The grad_fn-mounted ``grad_clamp`` family edits grad inputs like the oracle."""
+    """A neutral clamp on a grad_fn node edits its grad inputs like the oracle."""
 
     _check_spelling(
         tiny,
@@ -352,12 +351,12 @@ def test_grad_fn_selector_grad_input_family(tiny: _Fixture) -> None:
         runner="loss.backward",
         opt_in="backward_ready",
         selector=tl.grad_fn(name=_LN_NODE),
-        helper=tl.clamp_grad(0.0, 0.0),
+        helper=tl.clamp(low=0.0, high=0.0),
         want=tiny.oracle("grad_fn", _LN_NODE, _zero),
     )
 
 
-@pytest.mark.parametrize("door", ("attach_hooks", "layer.attach_hooks", "set"))
+@pytest.mark.parametrize("door", ("attach_hooks", "layer_record"))
 def test_label_selector_post_capture_doors(tiny: _Fixture, door: str) -> None:
     """A finalized label addresses one layer norm on every post-capture door."""
 
@@ -366,8 +365,8 @@ def test_label_selector_post_capture_doors(tiny: _Fixture, door: str) -> None:
         door=door,
         runner="trace.backward",
         opt_in="backward_ready",
-        selector=tl.label(tiny.ln_label),
-        helper=tl.zero_grad(),
+        selector=tl.grad(tl.label(tiny.ln_label)),
+        helper=tl.zero_ablate(),
         want=tiny.oracle("module", _LN_SINGLE, _zero),
     )
 
@@ -382,7 +381,7 @@ def test_in_module_composite_selector(tiny: _Fixture) -> None:
             model,
             tiny.ids,
             capture=tl.options.CaptureOptions(backward_ready=True),
-            intervene=tl.when(tl.in_module(_MLP) & tl.func("addmm"), tl.zero_grad()),
+            intervene=tl.when(tl.grad(tl.in_module(_MLP) & tl.func("addmm")), tl.zero_ablate()),
         )
         got = _run_backward(trace, model, "trace.backward")
     assert _backward_fires(trace) > 0
@@ -391,17 +390,23 @@ def test_in_module_composite_selector(tiny: _Fixture) -> None:
     assert not torch.equal(got["transformer.wpe.weight"], tiny.clean["transformer.wpe.weight"])
 
 
-def test_label_selector_on_capture_door_refuses_typed(tiny: _Fixture) -> None:
-    """A finalized label at ``intervene=`` refuses typed: live selectors run pre-postprocess."""
+def test_label_selector_on_capture_door_arms_and_matches_oracle(tiny: _Fixture) -> None:
+    """A finalized label in ``tl.grad`` at ``intervene=`` arms and edits that layer norm.
 
-    with pytest.raises(LiveModeLabelError):
-        trace = tl.trace(
-            tiny.fresh(),
-            tiny.ids,
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            intervene=tl.when(tl.label(tiny.ln_label), tl.zero_grad()),
-        )
-        trace.backward(_loss(trace[trace.output_layers[0]].out))
+    SPEC 1.2 and 1.4: a gradient address resolves its inner site against the
+    finished forward ops, where finalized labels exist, and SPEC 3.5 gives the
+    capture door the same lowering as the post-capture doors.
+    """
+
+    _check_spelling(
+        tiny,
+        door="intervene",
+        runner="trace.backward",
+        opt_in="backward_ready",
+        selector=tl.grad(tl.label(tiny.ln_label)),
+        helper=tl.zero_ablate(),
+        want=tiny.oracle("module", _LN_SINGLE, _zero),
+    )
 
 
 def test_zero_match_forward_selector_gradient_edit_warns(tiny: _Fixture) -> None:
@@ -412,29 +417,31 @@ def test_zero_match_forward_selector_gradient_edit_warns(tiny: _Fixture) -> None
             tiny.fresh(),
             tiny.ids,
             capture=tl.options.CaptureOptions(backward_ready=True),
-            intervene=tl.when(tl.in_module(_MLP) & tl.func("linear"), tl.zero_grad()),
+            intervene=tl.when(tl.grad(tl.in_module(_MLP) & tl.func("linear")), tl.zero_ablate()),
         )
 
 
-def test_rerun_refuses_gradient_edit_with_its_real_cause(tiny: _Fixture) -> None:
-    """A gradient edit on the forward-only rerun engine refuses naming that cause."""
+def test_rerun_arms_gradient_edit_and_backward_matches_oracle(tiny: _Fixture) -> None:
+    """do(tl.grad(...), engine='rerun') arms the edit; the next backward matches the oracle."""
 
     model = tiny.fresh()
     trace = tl.trace(model, tiny.ids, capture=tl.options.CaptureOptions(backward_ready=True))
     # grouping rule rows 26-27: the shared block's MLP runs once per block slot,
-    # so the module selector matches its 2 calls and discloses the fan-out.
-    with (
-        pytest.warns(MultiMatchWarning, match="matched 2 sites"),
-        pytest.raises(LiveModeLabelError) as info,
-    ):
-        trace.do(
-            tl.module(_MLP),
-            tl.zero_grad(),
+    # so the module selector matches its 2 calls (both are edited, as in the oracle).
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", MultiMatchWarning)
+        result = trace.do(
+            tl.grad(tl.module(_MLP)),
+            tl.zero_ablate(),
             model=model,
             inputs=tiny.ids,
             intervention=tl.options.InterventionOptions(engine="rerun", confirm_mutation=True),
         )
-    assert info.value.fields["code"] == "rerun_gradient_edit_unsupported"
+    assert len(result.armed_edits) == 1
+    assert _backward_fires(result) == 0
+    got = _run_backward(result, model, "trace.backward")
+    _assert_matches_oracle(got, tiny.oracle("module", _MLP, _zero), tiny.clean)
+    assert _backward_fires(result) > 0
 
 
 @pytest.mark.parametrize("helper_name", sorted(_HELPERS))
@@ -442,8 +449,8 @@ def test_bind_refuses_gradient_edits_typed(tiny: _Fixture, helper_name: str) -> 
     """The capture-free bind lane refuses a gradient edit instead of editing activations."""
 
     build, _ = _HELPERS[helper_name]
-    with pytest.raises(BindingPreflightError, match="edits gradients"):
-        bound = tl.when(tl.module(_MLP), build()).bind(tiny.fresh())
+    with pytest.raises(BindingPreflightError, match="gradient"):
+        bound = tl.when(tl.grad(tl.module(_MLP)), build()).bind(tiny.fresh())
         bound(tiny.ids)
 
 
@@ -494,12 +501,12 @@ class TestRealGPT2:
         [
             ("intervene", "trace.backward"),
             ("attach_hooks", "loss.backward"),
-            ("layer.attach_hooks", "autograd.grad"),
-            ("set", "trace.log_backward"),
+            ("layer_record", "autograd.grad"),
+            ("attach_hooks", "trace.log_backward"),
         ],
     )
     def test_module_selector_doors(self, real: _Fixture, door: str, runner: str) -> None:
-        """``tl.module`` + ``grad_zero`` on a mid-stack MLP matches the oracle."""
+        """``tl.grad(tl.module)`` + zero_ablate on a mid-stack MLP matches the oracle."""
 
         target = "transformer.h.5.mlp"
         _check_spelling(
@@ -507,8 +514,8 @@ class TestRealGPT2:
             door=door,
             runner=runner,
             opt_in="backward_ready",
-            selector=tl.module(target),
-            helper=tl.zero_grad(),
+            selector=tl.grad(tl.module(target)),
+            helper=tl.zero_ablate(),
             want=real.oracle("module", target, _zero),
         )
 
@@ -523,7 +530,7 @@ class TestRealGPT2:
                 model,
                 real.ids,
                 capture=tl.options.CaptureOptions(backward_ready=True),
-                intervene=tl.when(selector, tl.scale_grad(2.0)),
+                intervene=tl.when(tl.grad(selector), tl.scale(2.0)),
             )
             got = _run_backward(trace, model, "trace.backward")
         want = _scaled_layernorm_oracle(real, ("transformer.h.3.ln_1", "transformer.h.3.ln_2"))

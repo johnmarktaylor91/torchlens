@@ -6,10 +6,20 @@ import builtins
 import re as _re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, TypeAlias
+from typing import Any, Literal, TypeAlias, cast
 
 from .._errors import ArgumentTypeError
-from .types import TargetSpec
+from ._selector_base import (
+    _NODE_KINDS,
+    _QUALIFIER_KINDS,
+    BaseSelector,
+    CompositeSelector as CompositeSelector,
+    NotSelector,
+    SelectorUniverse,
+    classify_selector_universe as classify_selector_universe,
+)
+from .errors import SelectorCompositionError
+from .types import FrozenTargetSpec, TargetSpec
 
 #: A latent facet name, ``"<sae name>[k]"`` or ``"<sae name>[j,k]"`` (see
 #: ``FacetSelector.latent``); matched for display only, never for resolution.
@@ -42,216 +52,8 @@ SelectorKind: TypeAlias = Literal[
     "preceded_by",
     "site",
     "episode_step",
+    "grad",
 ]
-
-
-#: Public ``tl.*`` spelling of each selector kind whose stored value predates its rename
-#: (the stored ``selector_kind`` stays, so persisted specs keep loading).
-_KIND_SPELLINGS: dict[str, str] = {
-    "contains": "label_contains",
-    "input_at": "model_input",
-    "output": "model_output",
-    "regex": "label_matches",
-    "grad_fn_label": "intervention.grad_fn_label",
-    "output_at": "intervention.output_at",
-}
-
-
-@dataclass(frozen=True)
-class BaseSelector:
-    """Base class for typed TorchLens site selectors."""
-
-    selector_kind: SelectorKind
-    selector_value: Any
-
-    def __and__(self, other: SelectorLike) -> CompositeSelector:
-        """Return a selector that matches the intersection of two selectors.
-
-        Parameters
-        ----------
-        other:
-            Selector to intersect with this selector.
-
-        Returns
-        -------
-        CompositeSelector
-            Intersection selector. A non-selector operand that implements
-            ``__selection__`` defers to that object's reflected operator, so
-            ``selector & rf_box`` composes as a Selection; junk operands keep
-            their shipped refusals.
-        """
-
-        if not isinstance(other, BaseSelector) and hasattr(other, "__selection__"):
-            return NotImplemented
-        _check_composition(self, other)
-        return CompositeSelector("and", _flatten_same_operator("and", self, other))
-
-    def __or__(self, other: SelectorLike) -> CompositeSelector:
-        """Return a selector that matches the union of two selectors.
-
-        Parameters
-        ----------
-        other:
-            Selector to union with this selector.
-
-        Returns
-        -------
-        CompositeSelector
-            Union selector. A non-selector operand that implements
-            ``__selection__`` defers to that object's reflected operator.
-        """
-
-        if not isinstance(other, BaseSelector) and hasattr(other, "__selection__"):
-            return NotImplemented
-        from .._ir.selector_eval import contains_followed_by
-
-        if contains_followed_by(self) or contains_followed_by(other):
-            from .errors import SelectorCompositionError
-
-            raise SelectorCompositionError(
-                "tl.followed_by(...) only supports candidate & tl.followed_by(successor); "
-                "OR-composed followed_by selectors cannot be evaluated safely."
-            )
-        _check_composition(self, other)
-        return CompositeSelector("or", _flatten_same_operator("or", self, other))
-
-    def __invert__(self) -> NotSelector:
-        """Return a selector that matches the complement of this selector.
-
-        Returns
-        -------
-        NotSelector
-            Negated selector.
-        """
-
-        from .._ir.selector_eval import contains_followed_by
-
-        if contains_followed_by(self):
-            from .errors import SelectorCompositionError
-
-            raise SelectorCompositionError(
-                "tl.followed_by(...) only supports candidate & tl.followed_by(successor); "
-                "negated followed_by selectors cannot be evaluated safely."
-            )
-        return NotSelector(self)
-
-    def __sub__(self, other: SelectorLike) -> CompositeSelector:
-        """Return a selector matching this selector minus ``other`` (DESUGAR).
-
-        ``a - b`` desugars to ``CompositeSelector("and", (a, NotSelector(b)))``
-        — no new selector kind, no spec round-trip change. Selector evaluation
-        is a per-subject characteristic function, so difference of match-sets
-        IS ``a(x) and not b(x)``; this coincides with Selection-level ``-`` on
-        whole-site lifted terms (law-tested).
-
-        Parameters
-        ----------
-        other:
-            Selector (or predicate callable) to subtract. A non-selector
-            operand implementing ``__selection__`` defers to that object's
-            reflected operator.
-
-        Returns
-        -------
-        CompositeSelector
-            Difference selector.
-        """
-
-        if not isinstance(other, BaseSelector) and hasattr(other, "__selection__"):
-            return NotImplemented
-        if isinstance(other, BaseSelector):
-            negated: SelectorLike = ~other  # shipped guards (followed_by refusal) apply
-        elif callable(other):
-            negated = NotSelector(other)
-        else:
-            raise ArgumentTypeError(
-                f"cannot subtract {type(other).__name__} from a selector; pass a "
-                "selector or predicate callable.",
-                code="selector_subtraction_operand_invalid",
-                remedy="subtract a selector, predicate callable, or region producer",
-            )
-        _check_composition(self, negated)
-        return CompositeSelector("and", _flatten_same_operator("and", self, negated))
-
-    def __selection__(self) -> Any:
-        """Lift this selector as a Selection selector-term.
-
-        The lifted term keeps predicate meaning intact: it resolves to
-        whole-site masks over matched sites. Selection-level ``~`` is mask
-        complement — users who mean "all sites not matching s" spell ``~s``
-        BEFORE lifting (``~lift(s) != lift(~s)``, pinned non-law).
-        """
-
-        from .._selection import _selection_from_selector
-
-        return _selection_from_selector(self)
-
-    def to_target_spec(self) -> TargetSpec:
-        """Convert the selector to a mutable target spec.
-
-        Returns
-        -------
-        TargetSpec
-            Target spec carrying this selector's kind and payload.
-        """
-
-        return TargetSpec(
-            selector_kind=self.selector_kind,
-            selector_value=self.selector_value,
-        )
-
-    def __dir__(self) -> list[str]:
-        """Return selector attributes for tab completion.
-
-        Returns
-        -------
-        list[str]
-            Standard selector attributes. Selectors are not bound to a
-            ``Trace``, so layer-name completion lives on log accessors.
-        """
-
-        return sorted(set(super().__dir__()) | {"selector_kind", "selector_value"})
-
-    def _ipython_key_completions_(self) -> list[str]:
-        """Return key completions for IPython.
-
-        Returns
-        -------
-        list[str]
-            Empty list because selector instances have no bound layer universe.
-        """
-
-        return []
-
-    def __repr__(self) -> str:
-        """Return a concise constructor-style representation.
-
-        Returns
-        -------
-        str
-            Repr containing the selector kind and payload.
-        """
-
-        spelling = _KIND_SPELLINGS.get(self.selector_kind, self.selector_kind)
-        return f"tl.{spelling}({self.selector_value!r})"
-
-    def __call__(self, ctx: Any) -> bool:
-        """Return whether this selector matches a predicate record context.
-
-        Parameters
-        ----------
-        ctx:
-            Capture-time ``RecordContext`` or a layer-like object.
-
-        Returns
-        -------
-        bool
-            Whether ``ctx`` matches this selector.
-        """
-
-        from .._ir.selector_eval import evaluate
-
-        return evaluate(self, ctx, lifecycle="capture")
 
 
 @dataclass(frozen=True, repr=False)
@@ -1169,122 +971,88 @@ class EpisodeStepSelector(BaseSelector):
 
 
 @dataclass(frozen=True, repr=False)
-class CompositeSelector(BaseSelector):
-    """Selector composed with ``&`` or ``|``.
+class GradSelector(BaseSelector):
+    """Gradient address: the gradient of a forward site's OUTPUT.
 
-    ``&`` / ``|`` build nested binary composites; deserialized target specs
-    may carry a flat n-ary child tuple. Both shapes evaluate identically.
-    Degenerate arities follow the standard identity semantics in evaluation
-    and spec round-trips alike: an empty ``and`` matches everything, an empty
-    ``or`` matches nothing, and a unary composite matches like its child.
+    ``tl.grad(site)`` is an address, not a computation: it never calls
+    autograd. It names the gradient of the loss with respect to the output of
+    every forward op the inner selector matches, observed at the TorchLens
+    boundary before the gradient enters the op's backward function (the
+    tensor ``trace[site].grad`` stores). A bare selector names the activation
+    and a node selector (``tl.grad_fn``) names an autograd node, so the three
+    universes never share a site.
 
     Parameters
     ----------
-    operator:
-        ``"and"`` for intersection or ``"or"`` for union.
-    selectors:
-        Selectors to combine.
+    inner:
+        Normalized forward site: a bare label string (kept verbatim, so it
+        means what a bare string means at the door that evaluates it) or an
+        activation-universe selector.
     """
 
-    operator: Literal["and", "or"]
-    selectors: tuple[SelectorLike, ...]
+    def __init__(self, inner: str | BaseSelector) -> None:
+        """Create a gradient address over one forward site."""
 
-    def __init__(self, operator: Literal["and", "or"], selectors: tuple[SelectorLike, ...]) -> None:
-        """Create a composite selector.
+        object.__setattr__(self, "selector_kind", "grad")
+        object.__setattr__(self, "selector_value", inner)
 
-        Parameters
-        ----------
-        operator:
-            ``"and"`` for intersection or ``"or"`` for union.
-        selectors:
-            Selectors to combine.
+    @property
+    def inner(self) -> str | BaseSelector:
+        """Return the forward site whose output gradient this address names.
+
+        Returns
+        -------
+        str | BaseSelector
+            The wrapped forward site.
         """
 
-        object.__setattr__(self, "selector_kind", operator)
-        object.__setattr__(self, "selector_value", selectors)
-        object.__setattr__(self, "operator", operator)
-        object.__setattr__(self, "selectors", selectors)
+        return cast("str | BaseSelector", self.selector_value)
+
+    def __invert__(self) -> GradSelector:
+        """Return the complement inside the gradient universe.
+
+        ``~tl.grad(s)`` normalises to ``tl.grad(~s)``: every forward op's
+        output gradient except those ``s`` names.
+
+        Returns
+        -------
+        GradSelector
+            Gradient address over the complemented forward site.
+        """
+
+        inner = self.inner
+        negated = ~inner if isinstance(inner, BaseSelector) else NotSelector(cast(Any, inner))
+        return GradSelector(negated)
+
+    def __selection__(self) -> Any:
+        """Refuse lifting a gradient address into an activation Selection.
+
+        Raises
+        ------
+        SelectorCompositionError
+            Always, coded ``grad_selection_unsupported``.
+        """
+
+        raise _grad_selection_refusal(self, code="grad_selection_unsupported")
 
     def to_target_spec(self) -> TargetSpec:
-        """Convert the composite selector to a target spec.
+        """Convert the gradient address to a target spec.
 
         Returns
         -------
         TargetSpec
-            Target spec with nested selector payloads.
+            Target spec of kind ``"grad"`` whose value is the inner target
+            (a nested spec, or the bare label string).
         """
 
-        nested = tuple(
-            item.to_target_spec() if isinstance(item, BaseSelector) else item
-            for item in self.selectors
-        )
-        return TargetSpec(selector_kind=self.selector_kind, selector_value=nested)
+        inner = self.inner
+        nested = inner.to_target_spec() if isinstance(inner, BaseSelector) else inner
+        return TargetSpec(selector_kind="grad", selector_value=nested)
 
     def __repr__(self) -> str:
-        """Return an infix representation of the composite selector.
+        """Return the constructor-style representation ``tl.grad(...)``."""
 
-        Returns
-        -------
-        str
-            Repr with ``&`` or ``|``.
-        """
-
-        symbol = "&" if self.operator == "and" else "|"
-        joined = f" {symbol} ".join(repr(child) for child in self.selectors)
-        return f"({joined})"
-
-
-@dataclass(frozen=True, repr=False)
-class NotSelector(BaseSelector):
-    """Selector composed with unary ``~``.
-
-    Parameters
-    ----------
-    selector:
-        Selector to negate.
-    """
-
-    selector: SelectorLike
-
-    def __init__(self, selector: SelectorLike) -> None:
-        """Create a negated selector.
-
-        Parameters
-        ----------
-        selector:
-            Selector to negate.
-        """
-
-        object.__setattr__(self, "selector_kind", "not")
-        object.__setattr__(self, "selector_value", selector)
-        object.__setattr__(self, "selector", selector)
-
-    def to_target_spec(self) -> TargetSpec:
-        """Convert the negated selector to a target spec.
-
-        Returns
-        -------
-        TargetSpec
-            Target spec with a nested selector payload.
-        """
-
-        nested = (
-            self.selector.to_target_spec()
-            if isinstance(self.selector, BaseSelector)
-            else self.selector
-        )
-        return TargetSpec(selector_kind=self.selector_kind, selector_value=nested)
-
-    def __repr__(self) -> str:
-        """Return a unary representation of the negated selector.
-
-        Returns
-        -------
-        str
-            Repr with ``~``.
-        """
-
-        return f"(~{self.selector!r})"
+        return f"tl.grad({self.inner!r})"
 
 
 SelectorLike: TypeAlias = BaseSelector | TargetSpec
@@ -1646,6 +1414,158 @@ def in_backward_pass(pass_index: int) -> BackwardPassSelector:
     return BackwardPassSelector(pass_index)
 
 
+def _grad_refusal(problem: str, *, code: str, remedy: str) -> Exception:
+    """Build one coded ``tl.grad`` construction refusal."""
+
+    return SelectorCompositionError(problem, code=code, remedy=remedy)
+
+
+def _grad_selection_refusal(value: Any, *, code: str) -> Exception:
+    """Build the refusal for a gradient address over (or lifted into) a Selection."""
+
+    if isinstance(value, BaseSelector):
+        problem = (
+            f"{value!r} addresses a gradient, and a Selection addresses activations; "
+            "gradient selections are not addressable this release."
+        )
+    else:
+        problem = (
+            f"tl.grad received a {type(value).__name__} (a Selection-algebra value); "
+            "gradient selections are not addressable this release."
+        )
+    return _grad_refusal(
+        problem,
+        code=code,
+        remedy="use tl.grad(selector) with a site selector such as tl.label, tl.func or tl.module",
+    )
+
+
+def _leaf_kind(node: Any) -> str | None:
+    """Return the selector kind of one walked selector-tree node."""
+
+    if isinstance(node, (BaseSelector, TargetSpec)):
+        return str(node.selector_kind)
+    kind = getattr(node, "selector_kind", None)
+    return None if kind is None else str(kind)
+
+
+def _check_grad_inner_tree(inner: str | BaseSelector) -> None:
+    """Refuse a ``tl.grad`` inner that is not a forward-only site address."""
+
+    if isinstance(inner, str):
+        return
+    from .._ir.selector_eval import walk_selector
+
+    kinds = [_leaf_kind(node) for node in walk_selector(inner)]
+    if "grad" in kinds:
+        raise _grad_refusal(
+            f"tl.grad({inner!r}) wraps a gradient address in another one.",
+            code="grad_selector_nested",
+            remedy="tl.grad wraps a forward site once; write tl.grad(x)",
+        )
+    if "facet" in kinds:
+        raise _grad_refusal(
+            f"tl.grad({inner!r}) addresses a facet or head; gradient facets are not "
+            "addressable this release.",
+            code="grad_facet_unsupported",
+            remedy="edit tl.grad(site) and mask inside a callable",
+        )
+    if any(kind in _QUALIFIER_KINDS for kind in kinds):
+        raise _grad_refusal(
+            f"tl.grad({inner!r}) wraps a backward pass qualifier, which filters gradient "
+            "fires and is not part of the forward site.",
+            code="grad_selector_inner_not_forward",
+            remedy="put the pass qualifier outside: tl.grad(s) & tl.in_backward_pass(2)",
+        )
+    if any(kind in _NODE_KINDS for kind in kinds):
+        raise _grad_refusal(
+            f"tl.grad({inner!r}) wraps an autograd-node selector; tl.grad wraps a forward site.",
+            code="grad_selector_inner_not_forward",
+            remedy="the autograd-node selectors already address gradients at node granularity; "
+            "use them unwrapped",
+        )
+
+
+def _normalize_grad_inner(site: Any) -> str | BaseSelector:
+    """Normalize what ``tl.grad`` wraps to a label string or a selector.
+
+    Raises
+    ------
+    SelectorCompositionError
+        Coded refusal for nested, Selection, list/mapping or other non-site
+        inputs (facet and node refusals come from the tree check).
+    """
+
+    if isinstance(site, (str, BaseSelector)):
+        return site
+    if isinstance(site, (TargetSpec, FrozenTargetSpec)):
+        from .._ir.selector_eval import normalize_selector_like
+
+        return normalize_selector_like(site, lifecycle="site")
+    if type(site).__name__ == "_SiteTable":
+        from .._ir.selector_eval import normalize_selector_like
+
+        return normalize_selector_like(site, lifecycle="site")
+    from .hooks import lower_record_site_target
+
+    lowered = lower_record_site_target(site)
+    if isinstance(lowered, BaseSelector):
+        return lowered
+    if hasattr(site, "__selection__"):
+        raise _grad_selection_refusal(site, code="grad_selection_unsupported")
+    if isinstance(site, (list, tuple, set, frozenset, dict)) or hasattr(site, "keys"):
+        raise _grad_refusal(
+            f"tl.grad received a {type(site).__name__}; it addresses one site.",
+            code="grad_selector_inner_invalid",
+            remedy="pass one site; batch shapes go to the door",
+        )
+    raise _grad_refusal(
+        f"tl.grad received {type(site).__name__} {site!r}, which is not a site.",
+        code="grad_selector_inner_invalid",
+        remedy="pass a label string, a site selector (tl.label, tl.func, tl.module, ...), "
+        "an Op or Layer record, or a find_sites() table",
+    )
+
+
+def grad(site: Any, /) -> GradSelector:
+    """Address the gradient of a forward site's output.
+
+    ``tl.grad("relu_3")`` names the gradient of relu_3's output, a bare
+    ``"relu_3"`` names its activation, and ``tl.grad("relu_3") | "relu_3"``
+    names both. The address never calls autograd; the doors decide when it
+    fires (on the next backward pass of the trace that holds it).
+
+    Parameters
+    ----------
+    site:
+        A label string (pass-qualified on multi-pass layers), an
+        activation-universe selector or composition of them, an ``Op`` or
+        ``Layer`` record, or a ``find_sites()`` table.
+
+    Returns
+    -------
+    GradSelector
+        Immutable, hashable gradient address.
+
+    Raises
+    ------
+    SelectorCompositionError
+        ``grad_selector_nested``, ``grad_selector_inner_not_forward``,
+        ``grad_facet_unsupported``, ``grad_selection_unsupported`` or
+        ``grad_selector_inner_invalid``, each with a ``remedy``.
+    """
+
+    if isinstance(site, GradSelector):
+        raise _grad_refusal(
+            f"tl.grad({site!r}) wraps a gradient address in another one.",
+            code="grad_selector_nested",
+            remedy="tl.grad wraps a forward site once; write tl.grad(x)",
+        )
+    inner = _normalize_grad_inner(site)
+    _check_grad_inner_tree(inner)
+    return GradSelector(inner)
+
+
 def at_step(*steps: int) -> EpisodeStepSelector:
     """Create an episode-step selector (lane F42's step qualifier).
 
@@ -1691,163 +1611,52 @@ def in_module(address: str) -> InModuleSelector:
     return InModuleSelector(str(address))
 
 
-def _classify_selector_direction(
-    sel: SelectorLike,
-) -> Literal["forward", "backward"] | None:
-    """Return the selector's graph-direction taxonomy bucket.
+def _and_universe(
+    left: SelectorUniverse | None,
+    right: SelectorUniverse | None,
+    left_sel: Any,
+    right_sel: Any,
+) -> SelectorUniverse | None:
+    """Combine two ``&`` operands' universes, refusing pairs that share no site."""
 
-    Parameters
-    ----------
-    sel:
-        Selector to classify.
-
-    Returns
-    -------
-    Literal["forward", "backward"] | None
-        Explicit graph direction, or None for direction-agnostic selectors.
-    """
-
-    from .errors import UnclassifiedSelectorError
-
-    if isinstance(sel, TargetSpec):
-        kind = sel.selector_kind
-        if kind in {
-            "grad_fn",
-            "grad_fn_label",
-            "grad_kind",
-            "backward_pass",
-            "intervening",
-            "without_op",
-        }:
-            return "backward"
-        if kind in {"func", "func_transform"}:
-            return "forward"
-        if kind in {
-            "label",
-            "module",
-            "output",
-            "output_at",
-            "input_at",
-            "contains",
-            "regex",
-            "predicate",
-            "in_module",
-            "facet",
-            "site",
-            "and",
-            "or",
-            "not",
-        }:
-            return None
-    if isinstance(
-        sel,
-        (
-            GradFnSelector,
-            InterveningSelector,
-            GradFnLabelSelector,
-            GradKindSelector,
-            BackwardPassSelector,
-        ),
-    ):
-        return "backward"
-    if isinstance(sel, (FuncSelector, FuncTransformSelector)):
-        return "forward"
-    if isinstance(
-        sel,
-        (
-            LabelSelector,
-            ModuleSelector,
-            OutputSelector,
-            OutputPathSelector,
-            InputPathSelector,
-            ContainsSelector,
-            RegexSelector,
-            FacetSelector,
-            WhereSelector,
-            InModuleSelector,
-            SiteSelector,
-            FollowedBySelector,
-            PrecededBySelector,
-            CompositeSelector,
-            NotSelector,
-            # Step qualification is a position fact, not a graph direction
-            # (lane F42): it narrows forward subjects by episode step and
-            # composes direction-neutrally like the other position selectors.
-            EpisodeStepSelector,
-        ),
-    ):
-        return None
-    raise UnclassifiedSelectorError(
-        f"{type(sel).__name__} has no direction classification; add an explicit bucket."
-    )
-
-
-def _flatten_same_operator(
-    operator: str, left: SelectorLike, right: SelectorLike
-) -> tuple[SelectorLike, ...]:
-    """Merge same-operator composite operands into one flat child tuple.
-
-    r-b4 R27-6a: ``&``/``|`` used to nest one binary composite per operator, so
-    a programmatically composed predicate (``functools.reduce(operator.or_,
-    [tl.func(n) for n in names])``) built a 500-deep binary tree and blew the
-    interpreter stack at trace entry. Composites are documented n-ary with
-    identical evaluation for flat and nested shapes, so chained applications of
-    ONE operator now accumulate a flat child tuple: depth stays constant and
-    evaluation walks one level. Mixed-operator composition still nests (the
-    shape is semantic there), and existing nested trees (deserialized specs)
-    keep evaluating unchanged.
-    """
-
-    children: list[SelectorLike] = []
-    for operand in (left, right):
-        if isinstance(operand, CompositeSelector) and operand.operator == operator:
-            children.extend(operand.selectors)
-        else:
-            children.append(operand)
-    return tuple(children)
-
-
-def _check_composition(a: SelectorLike, b: SelectorLike) -> None:
-    """Validate that two selectors can be composed.
-
-    Parameters
-    ----------
-    a:
-        Left selector.
-    b:
-        Right selector.
-
-    Returns
-    -------
-    None
-        Raises when composition is invalid.
-    """
-
-    from .._ir.selector_eval import contains_followed_by, flatten_and_conjuncts
-    from .errors import SelectorCompositionError
-
-    a_dir = _classify_selector_direction(a)
-    b_dir = _classify_selector_direction(b)
-    if a_dir is not None and b_dir is not None and a_dir != b_dir:
+    if left is None or right is None:
+        other = right if left is None else left
+        if other in (None, "activation"):
+            return other
+        left = left or "activation"
+        right = right or "activation"
+    if left == right and left != "mixed":
+        return left
+    pair = {left, right}
+    if "mixed" not in pair and "qualifier" in pair and pair & {"gradient", "node"}:
+        return "gradient" if "gradient" in pair else "node"
+    if pair == {"activation", "qualifier"}:
+        site, qualifier = (left_sel, right_sel) if left == "activation" else (right_sel, left_sel)
         raise SelectorCompositionError(
-            "Cross-graph composition not supported: a forward selector and a backward "
-            "selector cannot be combined. Use separate forward and backward hook sites."
+            f"{left_sel!r} & {right_sel!r} joins a backward pass qualifier to an "
+            "activation address; activations have no backward pass.",
+            code="selector_signal_mismatch",
+            remedy=f"a pass qualifier needs a gradient address: tl.grad({site!r}) & {qualifier!r}",
         )
-    if contains_followed_by(a) or contains_followed_by(b):
-        # `&` nests, so validate the FLAT conjunction: `a & fb & b` must pass
-        # exactly like `a & b & fb` and the flat three-child spec.
-        conjuncts = flatten_and_conjuncts((a, b))
-        direct = [c for c in conjuncts if isinstance(c, FollowedBySelector)]
-        buried = [
-            c
-            for c in conjuncts
-            if not isinstance(c, FollowedBySelector) and contains_followed_by(c)
-        ]
-        if len(direct) != 1 or buried:
-            raise SelectorCompositionError(
-                "tl.followed_by(...) only supports candidate & tl.followed_by(successor); "
-                "nested or multi-followed_by compositions are unsupported."
-            )
+    if "mixed" in pair:
+        remedy = "write & inside each branch of the |, e.g. (tl.grad(a) & q) | (a & b)"
+    elif pair == {"activation", "gradient"}:
+        remedy = "a gradient and an activation address never share a site; use | for both"
+    elif "activation" in pair:
+        remedy = (
+            "spell the node address alone: tl.grad_fn(label=...), or the tensor address tl.grad(s)"
+        )
+    else:
+        remedy = (
+            "the tensor address tl.grad(s) and the node address tl.grad_fn(...) differ in "
+            "payload; use one of them"
+        )
+    raise SelectorCompositionError(
+        f"Cross-universe composition not supported: {left_sel!r} & {right_sel!r} joins a "
+        f"{left} address and a {right} address, which never share a site.",
+        code="selector_cross_universe_and",
+        remedy=remedy,
+    )
 
 
 __all__ = [
@@ -1863,6 +1672,7 @@ __all__ = [
     "GradKindSelector",
     "GradFnLabelSelector",
     "GradFnSelector",
+    "GradSelector",
     "InModuleSelector",
     "InputPathSelector",
     "InterveningSelector",
@@ -1882,6 +1692,7 @@ __all__ = [
     "func",
     "func_transform",
     "followed_by",
+    "grad",
     "grad_fn",
     "grad_input",
     "grad_output",

@@ -57,6 +57,7 @@ from .._selection import _SelectionOperand
 # LayerAccessor is re-exported (not used here) so every historical
 # ``from .layer import ...`` site and pickle qualname keeps resolving.
 from ._layer_accessors import LayerAccessor, OpAccessor  # noqa: F401
+from ._layer_mirror import _layer_mirror_read, _layer_rep_op
 from ._repr import format_config_items, format_shape_list
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 
@@ -231,37 +232,6 @@ def _layer_normalize_relation_write(layer: "Layer", name: str, value: Any) -> An
     if not _layer_relations_finished(layer):
         return value
     return view_type(value)
-
-
-def _layer_rep_op(layer: "Layer") -> "Op | None":
-    """Return the representative (first-pass) op backing one Layer's mirrors.
-
-    Reads raw ``__dict__`` storage so descriptor bodies never re-enter the
-    attribute protocol. ``OpAccessor._list`` is pass-index sorted, so index 0
-    is the first pass — the op the former ``__init__`` copied from.
-    """
-
-    ops = layer.__dict__.get("ops")
-    if ops is None:
-        return None
-    item_list = ops.__dict__.get("_list")
-    return item_list[0] if item_list else None
-
-
-def _layer_mirror_read(layer: "Layer", name: str) -> Any:
-    """Return the mirror value for ``name`` (no shadow consulted).
-
-    Raises ``AttributeError`` when the layer has no representative op yet or
-    the op's source cell is unset — the caller (descriptor or state
-    enumeration) translates that into the historical missing-field behavior.
-    """
-
-    rep = _layer_rep_op(layer)
-    if rep is None:
-        raise AttributeError(name)
-    source, normalize = _LAYER_MIRROR_SPEC[name]
-    value = getattr(rep, source)
-    return normalize(value) if normalize is not None else value
 
 
 class _LayerMirrorField:
@@ -1265,6 +1235,11 @@ class Layer(_SelectionOperand):
     def grad(self) -> Any:
         """Return the saved grad for a single-pass layer.
 
+        The gradient of the layer's output for the latest backward pass, as
+        it leaves this trace's edit chain: a ``tl.grad(site)`` edit that fired
+        is what this read shows. A site the backward never reached has no
+        grad (``has_grad`` is ``False``); TorchLens never fills in zeros.
+
         Returns
         -------
         Any
@@ -1281,6 +1256,8 @@ class Layer(_SelectionOperand):
     @property
     def has_grad(self) -> bool:
         """Return whether the single pass has a saved grad.
+
+        ``False`` when no backward pass reached the layer's output.
 
         Returns
         -------

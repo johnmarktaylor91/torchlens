@@ -820,7 +820,7 @@ def _runnable_ledger_facts_for_trace(trace: Any) -> tuple[Mapping[str, Any], ...
     """Read the capture-time event-lifecycle ledger facts for one trace (r35 I2)."""
 
     try:
-        from ..backends.torch.completeness_witness import runnable_ledger_facts
+        from ..backends.torch._completeness_dispatch import runnable_ledger_facts
     except ImportError:  # pragma: no cover - torch backend always present for runnable
         return ()
     return runnable_ledger_facts(trace)
@@ -2714,7 +2714,7 @@ def _has_input_metadata_view_read(trace: Any) -> bool:
     producer must downgrade witness completeness to keep the run honest.
     """
 
-    from ..backends.torch.completeness_witness import input_metadata_view_read
+    from ..backends.torch._completeness_escape_state import input_metadata_view_read
 
     return bool(input_metadata_view_read(trace))
 
@@ -2732,7 +2732,7 @@ def _has_pruned_rng_control_flow(trace: Any) -> bool:
     (or one with only genuinely-dead RNG draws) records nothing here.
     """
 
-    from ..backends.torch.completeness_witness import pruned_rng_control_source_labels
+    from ..backends.torch._completeness_escape_state import pruned_rng_control_source_labels
 
     return bool(pruned_rng_control_source_labels(trace))
 
@@ -2750,7 +2750,7 @@ def _has_pruned_alias_mutation(trace: Any) -> bool:
     ops all target graph-connected (labelled) tensors records nothing here.
     """
 
-    from ..backends.torch.completeness_witness import pruned_alias_mutation_source_labels
+    from ..backends.torch._completeness_escape_state import pruned_alias_mutation_source_labels
 
     return bool(pruned_alias_mutation_source_labels(trace))
 
@@ -2769,7 +2769,7 @@ def _has_data_alias_mutation(trace: Any) -> bool:
         ``True`` when the canonical getter's alias lineage was mutated.
     """
 
-    from ..backends.torch.completeness_witness import data_alias_mutation_detected
+    from ..backends.torch._completeness_escape_state import data_alias_mutation_detected
 
     return data_alias_mutation_detected(trace)
 
@@ -2788,7 +2788,7 @@ def _has_forward_value_override_intervention(trace: Any) -> bool:
 
     Only forward-direction, value-replacing interventions are flagged. An
     observe-only intervention (``replaced=False``) or a backward/grad intervention
-    (``direction != "forward"``) leaves the forward output reproducible byte-for-byte
+    (``signal != "forward"``) leaves the forward output reproducible byte-for-byte
     and is intentionally NOT flagged, so it still saves and VERIFIES. A plain,
     non-intervened capture records no such op and is unchanged.
     """
@@ -2797,8 +2797,8 @@ def _has_forward_value_override_intervention(trace: Any) -> bool:
         if not getattr(op, "intervention_replaced", False):
             continue
         for record in getattr(op, "interventions", ()) or ():
-            direction = getattr(record, "direction", None)
-            if bool(getattr(record, "replaced", False)) and direction == "forward":
+            signal = getattr(record, "signal", None)
+            if bool(getattr(record, "replaced", False)) and signal == "forward":
                 return True
     return False
 
@@ -2928,7 +2928,7 @@ def _stamp_state_binding_facts(
     describe both observations.
     """
 
-    from ..backends.torch.completeness_witness import host_escape_state_metadata_facts
+    from ..backends.torch._completeness_metadata import host_escape_state_metadata_facts
 
     signatures = trace._runnable.capture_state_signatures
     signature_map: Mapping[str, Any] = signatures if isinstance(signatures, Mapping) else {}
@@ -3113,13 +3113,13 @@ def _escape_witnesses(
     are the control-witness net's domain and excluded from the tensor-op gate here.
     """
 
-    from ..backends.torch.completeness_witness import (
+    from ..backends.torch._completeness_cross_thread import host_escape_observer_install_failed
+    from ..backends.torch._completeness_escape_state import (
         host_escape_has_cross_thread_captured_tensor,
         host_escape_has_mutable_writeback,
         host_escape_has_raw_pointer,
         host_escape_has_unattributable_bool,
         host_escape_has_unattributable_opaque,
-        host_escape_observer_install_failed,
         host_escape_state_source_names,
     )
 
@@ -3331,7 +3331,7 @@ def _escape_witnesses(
 
     # ---- Structural invariant: every recorded escape fact is witnessed OR gapped ----
     # No net-exclusion may silently drop a recognized escape.
-    from ..backends.torch.completeness_witness import host_escape_bool_source_labels
+    from ..backends.torch._completeness_escape_state import host_escape_bool_source_labels
 
     raw_bool = host_escape_bool_source_labels(trace)
     raw_to_final = getattr(trace, "_raw_to_final_op_labels", {}) or {}
@@ -3378,7 +3378,7 @@ def _host_escape_source_labels(trace: Any) -> tuple[frozenset[str], frozenset[st
     STATE source is covered by the state net and never closes as a pruned chain.
     """
 
-    from ..backends.torch.completeness_witness import (
+    from ..backends.torch._completeness_escape_state import (
         host_escape_label_leaf_origins,
         host_escape_source_labels,
         host_escape_state_source_labels,
@@ -3582,7 +3582,7 @@ def required_witness_family_members(
     typed ``context_field_invalid`` refusal.
     """
 
-    from .._runnable_execution import _decode_literal
+    from .._runnable_verification import _decode_literal
 
     members: dict[str, list[str]] = {family: [] for family in WITNESS_FAMILY_REGISTRY}
     for witness in witnesses:
@@ -4135,7 +4135,7 @@ def _preflight_state_metadata(trace: Any) -> list[RunnableDiagnostic]:
     """
 
     from .._runnable_state import state_metadata_read_violations
-    from ..backends.torch.completeness_witness import (
+    from ..backends.torch._completeness_metadata import (
         host_escape_state_metadata_facts,
         host_escape_state_metadata_observations,
         host_escape_state_metadata_reads,

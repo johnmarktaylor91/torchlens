@@ -201,7 +201,11 @@ def test_every_direct_check_entry_point_is_enrolled() -> None:
         (path, function) for path, function in driver.EXEMPT_MUTANTS.values()
     }
     # Reasoned exclusions only — every entry needs a why.
-    excluded: set[tuple[str, str]] = set()
+    excluded: set[tuple[str, str]] = {
+        # The public validate_saved_outs entry's whole-run body, split out for its
+        # scratch-clearing finally; the reason lives in CORE_CHECK_EXCLUSIONS.
+        ("torchlens/validation/core.py", "_validate_saved_outs_run"),
+    }
     scope = ("torchlens/validation/core.py",)
     unenrolled = []
     for rel in scope:

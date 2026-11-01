@@ -413,7 +413,7 @@
    "status": "composes",
    "evidence": "tests/test_tlspec_runnable_forward_intervention.py::test_backward_grad_intervention_still_verifies",
    "confidence": "medium",
-   "note": "Backward-direction rules edit gradients on a live trace; a staged gradient edit refuses on rerun (rerun_gradient_edit_unsupported)."
+   "note": "Gradient rules (tl.grad(site)) edit gradients on a live trace; on a rerun they arm on the result and fire on its next backward."
   },
   {
    "a": "backward",
@@ -451,7 +451,7 @@
    "status": "composes",
    "evidence": "tests/test_run_until_backbone_grad.py::test_full_run_backward_without_carry_state_matches_eager",
    "confidence": "medium",
-   "note": "A staged gradient edit refuses on rerun (rerun_gradient_edit_unsupported)."
+   "note": "A gradient edit on a rerun arms on the result and fires on its next backward (tl.grad(site))."
   },
   {
    "a": "backward",

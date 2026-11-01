@@ -34,10 +34,11 @@ from torch import nn
 
 from torchlens._runnable import ContractCheck, RunnableDiagnostic
 
-from . import _runnable_execution as _execution
+from . import _runnable_transaction as _transaction
 from ._errors import TorchLensWarning
 from ._runnable import RunnableErrorCode
-from ._runnable_execution import _INPUT_CHECK_UNAVAILABLE, _contract_check
+from ._runnable_input_sites import _INPUT_CHECK_UNAVAILABLE
+from ._runnable_verification import _contract_check
 from .errors import RunCapabilityUnavailableError
 
 #: Op fields a native forward cannot refresh for unsaved ops; after a
@@ -98,8 +99,8 @@ def _input_admission_checks(
         return None, False
     layer_dict = getattr(trace, "layer_dict_all_keys", None) or {}
     # Module attribute, not a bound name: the guard-failure fault injection
-    # patches ``_runnable_execution._live_runtime_input_leaves``.
-    leaves = _execution._live_runtime_input_leaves(input_args, input_kwargs)
+    # patches ``_runnable_transaction._live_runtime_input_leaves``.
+    leaves = _transaction._live_runtime_input_leaves(input_args, input_kwargs)
     if leaves is None:
         return _INPUT_CHECK_UNAVAILABLE, False
     if len(leaves) != len(input_labels):
@@ -519,6 +520,25 @@ def session_is_active(session_ref: weakref.ReferenceType[Any]) -> Callable[[], b
     return active
 
 
+def apply_steer_paused(
+    session: Any, address: str, module: nn.Module, args: tuple[Any, ...], output: Any
+) -> Any:
+    """Apply the staged steer at one module exit with function collection paused.
+
+    The steer's own torch calls (its arithmetic) are recorded by capture as one
+    intervention-replacement op, never as model function events, so the live
+    session must not read them as such: a model op of the same name
+    (``__add__``) would otherwise be matched against the steer's.
+    """
+
+    prior = session.collection_paused
+    session.collection_paused = True
+    try:
+        return session.steer_plan.apply(address, module, args, output)
+    finally:
+        session.collection_paused = prior
+
+
 def install_steer_hooks(plan: SteerPlan, session_ref: weakref.ReferenceType[Any]) -> list[Any]:
     """Register one persistent forward hook per steered module.
 
@@ -545,7 +565,7 @@ def install_steer_hooks(plan: SteerPlan, session_ref: weakref.ReferenceType[Any]
             session = ref()
             if session is None or not active():
                 return None
-            return session.steer_plan.apply(address, module, args, output)
+            return apply_steer_paused(session, address, module, args, output)
 
         handles.append(module.register_forward_hook(hook))
     return handles

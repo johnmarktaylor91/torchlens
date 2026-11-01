@@ -14,6 +14,8 @@ import torch
 
 from ... import _state
 from ..._capture_state_helpers import _is_uninitialized_param
+from ..._data_classes._fork_lineage import _is_fork_relative
+from ..._data_classes._trace_grad_sites import apply_gradient_site_edits
 from ..._data_classes.op import Op
 from ..._ir.events import BackwardPassStart, OpGradObserved
 from ..._state import pause_logging
@@ -182,40 +184,6 @@ def remove_owned_state_grad_hooks(trace: Any) -> None:
     handles.clear()
 
 
-def _is_fork_relative(trace: "Trace", other: "Trace") -> bool:
-    """Return whether two traces are related through the fork parent chain.
-
-    A fork keeps a ``parent_run`` weakref to its source; two traces are
-    relatives when either appears on the other's (bounded) parent chain.
-    Structural corollary relied on by callers: fork relatives share one op
-    label space, because a fork is a structural copy of its parent.
-
-    Parameters
-    ----------
-    trace:
-        First trace.
-    other:
-        Second trace.
-
-    Returns
-    -------
-    bool
-        ``True`` when one trace is a fork ancestor of the other.
-    """
-
-    for start, target in ((trace, other), (other, trace)):
-        current: Any = start
-        for _ in range(64):
-            parent_ref = getattr(current, "parent_run", None)
-            parent = parent_ref() if callable(parent_ref) else None
-            if parent is None:
-                break
-            if parent is target:
-                return True
-            current = parent
-    return False
-
-
 def _add_tensor_backward_hook(
     trace: "Trace",
     t: torch.Tensor,
@@ -264,7 +232,7 @@ def _add_tensor_backward_hook(
     # r65: TorchLens's OWN hook-bookkeeping ``grad_fn``/``requires_grad`` reads, hoisted
     # under the explicit internal-read marker so the r65 state-metadata property observer
     # never mistakes them for user autograd reads on a registered buffer/param receiver.
-    from .completeness_witness import internal_scalar_read
+    from ._completeness_origins import internal_scalar_read
 
     with internal_scalar_read():
         _grad_fn = t.grad_fn
@@ -325,7 +293,7 @@ def _escrow_live_gradient_reference(
     """
 
     from ..._capture.session import LiveGradientReference, capture_session_for
-    from .completeness_witness import internal_scalar_read
+    from ._completeness_origins import internal_scalar_read
 
     session = capture_session_for(trace)
     if session is None:
@@ -364,7 +332,7 @@ def _add_live_gradient_reference_hook(
         Raw label of the in-place op.
     """
 
-    from .completeness_witness import internal_scalar_read
+    from ._completeness_origins import internal_scalar_read
 
     with internal_scalar_read():
         current_grad_fn = reference.tensor.grad_fn
@@ -516,37 +484,39 @@ def _install_tensor_grad_hook(
     trace_ref = weakref.ref(trace)
     hooked_tensor_id = id(t)
 
-    def log_grad_to_model_history(grad: torch.Tensor | None) -> None:
-        """Emit and optionally retain one gradient observed by a tensor hook.
+    def log_grad_to_model_history(grad: torch.Tensor | None) -> torch.Tensor | None:
+        """Edit, emit and optionally retain one gradient observed by a tensor hook.
 
         Autograd hands a hook ``None`` when no gradient reached the tensor (an
         unused output of a multi-output op: one half of ``torch.split``, the
         ``S`` of ``torch.svd``, the eigenvalues of ``torch.linalg.eig``). That
         records nothing: no gradient stored, no memory counted, no pass opened,
         so the op reads no gradient rather than an invented zero tensor.
+
+        This is the TorchLens boundary for the gradient of the op's output:
+        ``tl.grad(site)`` edits run here first (in declared order), the saved
+        gradient is the chain's final value, and the edited tensor is
+        returned so autograd feeds it into the op's backward function.
         """
         if grad is None:
-            return
+            return None
         active_trace = trace_ref()
         # One-owner-per-label: a non-owner alias registration drops its fire
         # so one logical op output emits exactly one OpGradObserved per pass.
-        if active_trace is not None:
-            owner_map = active_trace.__dict__.get("_tl_grad_hook_owner_by_label")
-            if (
-                owner_map is not None
-                and owner_map.get(tensor_label, hooked_tensor_id) != hooked_tensor_id
-            ):
-                return
+        if active_trace is not None and _foreign_label_owner(
+            active_trace, tensor_label, hooked_tensor_id
+        ):
+            return None
         refresh_target_ref = getattr(active_trace, "_refresh_projection_target_ref", None)
         if refresh_target_ref is not None:
             active_trace = refresh_target_ref()
-        if _state._rf_probe_depth > 0:
-            # A fork probe resolves here to the BASE trace whose per-trace
-            # flag is unset; the global depth suppresses grad recording on
-            # every trace while any RF/PF probe runs.
-            return
-        if active_trace is not None and getattr(active_trace, "_tl_rf_probe_active", False):
-            return
+        # A fork probe resolves here to the BASE trace whose per-trace flag
+        # is unset; the global depth suppresses grad recording on every trace
+        # while any RF/PF probe runs.
+        if _state._rf_probe_depth > 0 or (
+            active_trace is not None and getattr(active_trace, "_tl_rf_probe_active", False)
+        ):
+            return None
         # A managed backward directed at a FORK RELATIVE (a fork's
         # ``log_backward`` over the shared forward tensors) owns this
         # gradient: recording it here would silently mutate the hook trace's
@@ -554,54 +524,47 @@ def _install_tensor_grad_hook(
         # relatives share one label space, so the observation redirects to
         # the bracket-holding relative instead. Unrelated traces (e.g. two
         # composed models) keep the historical implicit-pass recording.
-        managed_trace = _state._active_trace
-        if (
-            active_trace is not None
-            and managed_trace is not None
-            and managed_trace is not active_trace
-            and getattr(managed_trace, "_tl_active_backward_bracket", False)
-            and _is_fork_relative(active_trace, managed_trace)
-        ):
-            active_trace = managed_trace
+        active_trace = _fork_redirect_target(active_trace)
         if (owning_backward_only or _is_state_entangled(trace_ref())) and not (
             _owning_backward_is_running(trace_ref(), active_trace)
         ):
-            return
-        if active_trace is not None:
-            # One-owner-per-label must hold on the FINAL emission target, not
-            # just the hook's own trace: after a refresh-projection or fork
-            # redirect, a stale source-trace hook (e.g. on an in-place live
-            # tensor) can own the label in the SOURCE map while the target's
-            # rebound map names a different tensor -- both passing their own
-            # map would emit duplicate observations for one label. A target
-            # map with no entry for the label stays permissive so redirected
-            # gradients are not silently dropped.
-            if active_trace is not trace_ref():
-                target_owner_map = active_trace.__dict__.get("_tl_grad_hook_owner_by_label")
-                if (
-                    target_owner_map is not None
-                    and target_owner_map.get(tensor_label, hooked_tensor_id) != hooked_tensor_id
-                ):
-                    return
-            prebuilt = _emit_tensor_grad_event(active_trace, grad, tensor_label)
-            # Gate the legacy layer-slot write on the ACTIVE per-call policy,
-            # not the deprecated ``save_grads`` attribute: a per-call
-            # ``log_backward(..., save_grads=False)`` sets the policy while
-            # the attribute can stay truthy, and the attribute-keyed gate
-            # kept retaining full grad payloads the caller disabled.
-            # The event-sidecar payloads are handed down for REUSE: the
-            # legacy layer-slot write used to mint a second independent
-            # clone and run grad_transform a second time, uncharged by the
-            # save budget (grind-r6 b5 R34-N1/R35-N1, fable+opus probe).
-            if _active_save_grads_policy(active_trace) not in (None, False, "none", []):
-                _log_tensor_grad(active_trace, grad, tensor_label, prebuilt=prebuilt)
+            return None
+        # One-owner-per-label must hold on the FINAL emission target, not
+        # just the hook's own trace: after a refresh-projection or fork
+        # redirect, a stale source-trace hook (e.g. on an in-place live
+        # tensor) can own the label in the SOURCE map while the target's
+        # rebound map names a different tensor -- both passing their own
+        # map would emit duplicate observations for one label. A target
+        # map with no entry for the label stays permissive so redirected
+        # gradients are not silently dropped.
+        edits_live = _state.active_capture()[0] is active_trace
+        if active_trace is None or (
+            active_trace is not trace_ref()
+            and _foreign_label_owner(active_trace, tensor_label, hooked_tensor_id)
+        ):
+            return None
+        if edits_live:
+            grad = apply_gradient_site_edits(active_trace, grad, tensor_label)
+        prebuilt = _emit_tensor_grad_event(active_trace, grad, tensor_label)
+        # Gate the legacy layer-slot write on the ACTIVE per-call policy,
+        # not the deprecated ``save_grads`` attribute: a per-call
+        # ``log_backward(..., save_grads=False)`` sets the policy while
+        # the attribute can stay truthy, and the attribute-keyed gate
+        # kept retaining full grad payloads the caller disabled.
+        # The event-sidecar payloads are handed down for REUSE: the
+        # legacy layer-slot write used to mint a second independent
+        # clone and run grad_transform a second time, uncharged by the
+        # save budget (grind-r6 b5 R34-N1/R35-N1, fable+opus probe).
+        if _active_save_grads_policy(active_trace) not in (None, False, "none", []):
+            _log_tensor_grad(active_trace, grad, tensor_label, prebuilt=prebuilt)
+        return grad
 
     # TorchLens bookkeeping: torch's ``register_hook`` reads ``self.grad_fn``
     # internally, and ``t`` can be the user's registered state receiver (an
     # in-place op output), so the read is marked internal (r65 unread-bit).
     # Paused like every TorchLens-internal torch call (Critical Invariant 2):
     # the user's forward never makes this call, so it must not count as one.
-    from .completeness_witness import internal_scalar_read
+    from ._completeness_origins import internal_scalar_read
 
     with pause_logging(), internal_scalar_read():
         if isinstance(site, torch.Tensor):
@@ -614,6 +577,30 @@ def _install_tensor_grad_hook(
             )
     if owning_backward_only:
         _OWNED_STATE_GRAD_HOOK_HANDLES.setdefault(trace, []).append(handle)
+
+
+def _fork_redirect_target(active_trace: Any) -> Any:
+    """Return the fork relative whose managed backward is running, else ``active_trace``."""
+
+    managed_trace = _state._active_trace
+    if (
+        active_trace is not None
+        and managed_trace is not None
+        and managed_trace is not active_trace
+        and getattr(managed_trace, "_tl_active_backward_bracket", False)
+        and _is_fork_relative(active_trace, managed_trace)
+    ):
+        return managed_trace
+    return active_trace
+
+
+def _foreign_label_owner(trace: Any, tensor_label: str, hooked_tensor_id: int) -> bool:
+    """Whether ``trace``'s grad-hook owner map gives ``tensor_label`` to another tensor."""
+
+    owner_map = trace.__dict__.get("_tl_grad_hook_owner_by_label")
+    return (
+        owner_map is not None and owner_map.get(tensor_label, hooked_tensor_id) != hooked_tensor_id
+    )
 
 
 def _ensure_backward_event_stream(trace: "Trace") -> Any:

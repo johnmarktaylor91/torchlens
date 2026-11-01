@@ -27,9 +27,9 @@ from ...recording._halt import StopSignal
 from ...recording.exceptions import PredicateError
 from ...recording.types import ActivationRecord, CaptureSpec
 from . import module_stack as _mstack
+from ._completeness_origins import internal_scalar_read
 from ._tl import get_tensor_meta, set_tensor_label
 from .buffer_writes import buffer_version_key
-from .completeness_witness import internal_scalar_read
 from .tensor_tracking import _add_tensor_backward_hook, _append_module_suffix_to_equivalence_class
 
 if TYPE_CHECKING:
@@ -79,24 +79,65 @@ def _predicate_event_was_appended(trace: "Trace", label_raw: str) -> bool:
     return label_raw in capture_events.op_event_by_label_raw
 
 
+#: Source kind, layer type and ``func_name`` of a closure constant's source op
+#: (SPEC section 2, rule 1; the shared spelling of ``backends/_constants.py``).
+CONSTANT_SOURCE = "constant"
+
+
 def log_source_tensor(
     self: "Trace", t: torch.Tensor, source: str, extra_address: str | None = None
 ) -> None:
     """Dispatch source tensor logging to exhaustive or fast mode.
 
-    Called explicitly for model inputs (from ``run_and_log_inputs_through_model``)
-    and for module buffers (from the module forward decorator in model_prep.py).
+    Called explicitly for model inputs (from ``run_and_log_inputs_through_model``),
+    for module buffers (from the module forward decorator in model_prep.py) and
+    for closure constants (exhaustive capture only; see
+    :func:`log_closure_constant_if_known`).
 
     Args:
-        t: The source tensor (input or buffer).
-        source: ``"input"`` or ``"buffer"``.
+        t: The source tensor (input, buffer or closure constant).
+        source: ``"input"``, ``"buffer"`` or ``"constant"``.
         extra_address: For inputs, the address string (e.g. ``"input.x"``);
-            for buffers, the buffer's module address (e.g. ``"encoder.bn.running_mean"``).
+            for buffers, the buffer's module address (e.g. ``"encoder.bn.running_mean"``);
+            unused for constants.
     """
     if self.capture_mode == "exhaustive":
         log_source_tensor_exhaustive(self, t, source, extra_address)
     elif self.capture_mode == "predicate":
         log_source_tensor_predicate(self, t, source, extra_address)
+
+
+def log_closure_constant_if_known(self: "Trace", t: torch.Tensor) -> bool:
+    """Log ``t`` as a closure-constant source op when the pre-forward snapshot proves it one.
+
+    A closure constant is a tensor reachable before the forward ONLY from a
+    forward callable (closure cell, default or referenced global; the snapshot
+    :func:`._module_boundary_adoption.collect_pre_forward_tensor_ids` takes),
+    the very object the snapshot pinned, and still untagged. Anything else --
+    a tensor first seen mid-forward, a stale reference, a ``.data`` alias --
+    is not proven pre-forward and keeps today's ``unattributed_tensor_args``
+    witness, so a lost edge still fails validation. Only exhaustive capture
+    records constants; predicate capture keeps the witness.
+
+    Parameters
+    ----------
+    t:
+        An untagged tensor argument met at an op or module boundary.
+
+    Returns
+    -------
+    bool
+        True when a constant source op was logged for ``t``.
+    """
+
+    if self.capture_mode != "exhaustive":
+        return False
+    from ._module_boundary_adoption import is_forward_closure_constant
+
+    if not is_forward_closure_constant(self, t):
+        return False
+    log_source_tensor_exhaustive(self, t, CONSTANT_SOURCE, None)
+    return True
 
 
 def _emit_source_echo(trace: "Trace", ctx: Any) -> None:
@@ -246,6 +287,47 @@ def _source_code_context_cache(self: "Trace") -> dict[Any, tuple[Any, ...]]:
     return code_context_cache
 
 
+def _source_grad_fields(self: "Trace") -> dict[str, Any]:
+    """Gradient fields a source tensor starts with before any backward pass."""
+
+    return {
+        "grad": None,
+        "transformed_grad": None,
+        "save_grads": getattr(self, "save_grads", None) not in (None, False),
+        "has_grad": False,
+        "grad_shape": None,
+        "transformed_grad_shape": None,
+        "grad_dtype": None,
+        "transformed_grad_dtype": None,
+        "gradient_memory": 0,
+        "transformed_gradient_memory": None,
+    }
+
+
+def _source_conditional_fields() -> dict[str, Any]:
+    """Conditional-capture fields a source tensor starts with, fresh per call."""
+
+    return {
+        "is_terminal_bool": False,
+        "is_terminal_conditional_bool": False,
+        "conditional_context_kind": None,
+        "conditional_wrapper_kind": None,
+        "terminal_conditional_id": None,
+        "is_scalar_bool": False,
+        "bool_value": None,
+        "in_conditionals": [],
+        "terminal_bool_for": None,
+        "is_in_conditional_body": False,
+        "conditional_branch_stack": [],
+        "conditional_branch_depth": 0,
+        "conditional_entry_children": [],
+        "conditional_then_children": [],
+        "conditional_elif_children": {},
+        "conditional_else_children": [],
+        "conditional_arm_children": {},
+    }
+
+
 def log_source_tensor_exhaustive(
     self: "Trace", t: torch.Tensor, source: str, extra_addr: str | None = None
 ) -> None:
@@ -307,8 +389,26 @@ def log_source_tensor_exhaustive(
         # to a specific module; None for detached or anonymous buffers.
         tensor_meta = get_tensor_meta(t)
         buffer_source = None if tensor_meta is None else tensor_meta.buffer_source
+    elif source == CONSTANT_SOURCE:
+        # A closure constant (SPEC 2 rule 1): a tensor that existed before the
+        # forward and is reachable only from a forward callable (closure cell,
+        # default, referenced global), never from the model tree. It is a graph
+        # source like a buffer -- internally initialized, no input ancestry --
+        # with its own kind, so it is never mistaken for model state.
+        is_input = False
+        input_was_parameter = False
+        has_input_ancestor = False
+        io_role = None
+        is_buffer = False
+        address = None
+        buffer_source = None
+        is_internal_source = True
+        has_internal_source_ancestor = True
+        internal_source_ancestors = {tensor_label}
+        input_ancestors = set()
+        equivalence_class = f"{CONSTANT_SOURCE}_{type_index}"
     else:
-        raise ValueError("source must be either 'input' or 'buffer'")
+        raise ValueError("source must be 'input', 'buffer' or 'constant'")
 
     modules = _snapshot_exhaustive_module_stack(self)
     base_equivalence_class = equivalence_class
@@ -365,21 +465,11 @@ def log_source_tensor_exhaustive(
         # Child tensor variation tracking
         "has_out_variations": False,
         "out_versions_by_child": {},
-        # Grad info:
-        "grad": None,
-        "transformed_grad": None,
-        "save_grads": getattr(self, "save_grads", None) not in (None, False),
-        "has_grad": False,
-        "grad_shape": None,
-        "transformed_grad_shape": None,
-        "grad_dtype": None,
-        "transformed_grad_dtype": None,
-        "gradient_memory": 0,
-        "transformed_gradient_memory": None,
+        **_source_grad_fields(self),
         # Function call info:
         "func": None,
         "func_call_id": None,
-        "func_name": "none",
+        "func_name": CONSTANT_SOURCE if source == CONSTANT_SOURCE else "none",
         "func_qualname": None,
         "code_context": _get_code_context(
             self.num_context_lines,
@@ -459,24 +549,7 @@ def log_source_tensor_exhaustive(
         "internal_source_parents": [],
         "internal_source_ancestors": internal_source_ancestors,
         "is_internal_sink": False,
-        # Conditional info:
-        "is_terminal_bool": False,
-        "is_terminal_conditional_bool": False,
-        "conditional_context_kind": None,
-        "conditional_wrapper_kind": None,
-        "terminal_conditional_id": None,
-        "is_scalar_bool": False,
-        "bool_value": None,
-        "in_conditionals": [],
-        "terminal_bool_for": None,
-        "is_in_conditional_body": False,
-        "conditional_branch_stack": [],
-        "conditional_branch_depth": 0,
-        "conditional_entry_children": [],
-        "conditional_then_children": [],
-        "conditional_elif_children": {},
-        "conditional_else_children": [],
-        "conditional_arm_children": {},
+        **_source_conditional_fields(),
         # Module info:
         "module": modules[-1] if modules else None,
         "modules": modules,
@@ -494,7 +567,7 @@ def log_source_tensor_exhaustive(
 
     # Reuse the shared entry-creation logic from output_tensors.
     # Imported here (not at module level) to avoid circular imports.
-    from .ops import _make_layer_log_entry
+    from ._ops_finalize import _make_layer_log_entry
 
     # Creates a Buffer if is_buffer=True, else Op.
     _make_layer_log_entry(self, t, fields_dict, (), {}, self.activation_transform)
@@ -510,6 +583,8 @@ def log_source_tensor_exhaustive(
         self.buffer_layers.append(tensor_label)
         self.internal_source_ops.append(tensor_label)
         self._raw_graph_ws.buffer_version_keys[tensor_label] = buffer_version_key(t)
+    if source == CONSTANT_SOURCE:
+        self.internal_source_ops.append(tensor_label)
 
     # Register backward hook for sidecar capture; payload retention is decided at fire time.
     _add_tensor_backward_hook(self, t, tensor_label)

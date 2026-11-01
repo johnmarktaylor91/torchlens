@@ -54,18 +54,19 @@ results = tl.stats.aggregate(
 print(results["relu_1_2"]["Mean"], sorted(results["output"]))
 ```
 
-Gradient statistics stream the same way: pass `target="grad"` and a
-`loss_fn=` used to build the backward pass from `(output, *batch_tail)`:
+Gradient statistics stream the same way: key the metric by the gradient site
+`tl.grad(site)` and pass a `loss_fn=` used to build the backward pass from
+`(output, *batch_tail)`. A gradient key without `loss_fn=` refuses
+(`aggregate_loss_fn_required`). The result is keyed by the site's repr:
 
 ```python
 grad_results = tl.stats.aggregate(
     model,
     [(torch.rand(2, 3, 16, 16),) for _ in range(2)],
-    metrics={"relu_1_2": tl.stats.Norm()},
-    target="grad",
+    metrics={tl.grad("relu_1_2"): tl.stats.Norm()},
     loss_fn=lambda output: output.square().mean(),
 )
-print(grad_results["relu_1_2"] >= 0.0)
+print(grad_results["tl.grad('relu_1_2')"] >= 0.0)
 ```
 
 ## Per-unit statistics: neurons, channels and SAE latents
