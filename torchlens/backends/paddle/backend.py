@@ -559,14 +559,12 @@ class PaddleBackend:
             trace.forward_duration = Duration(time.time() - trace.capture_start_time)
             from ..._capture.output_readback import returned, stopped
 
-            trace._output_slot = (
-                stopped(halt_signal.reason) if halt_signal is not None else returned(output)
-            )
             trace._paddle_capture_gap_markers.extend(
                 f"{PARAMETER_WRITE_MARKER}: {address}"
                 for address in self._param_write_guard.written_addresses(trace)
             )
             if halt_signal is not None:
+                trace._output_slot = stopped(halt_signal.reason)
                 trace.halted = True
                 trace.halt_reason = halt_signal.reason
                 trace.halt_frontier = halt_signal.reason
@@ -574,6 +572,7 @@ class PaddleBackend:
             elif intervention_runtime is not None:
                 intervention_runtime.warn_if_zero_matches()
             if halt_signal is None:
+                trace._output_slot = returned(output)
                 trace.raw_output = output_transform(output) if callable(output_transform) else None
             self._mark_outputs(trace, output)
             materialize_from_events(trace, trace.capture_events)
