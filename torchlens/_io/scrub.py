@@ -847,6 +847,7 @@ def _portable_default_factory(
     return None
 
 
+@dataclass(frozen=True, slots=True, eq=False)
 class _ScrubWalk:
     """Per-pass state shared by every node of one portable scrub walk.
 
@@ -857,31 +858,12 @@ class _ScrubWalk:
     leaves (:func:`_scrub_object_node`) and in their cycle/depth wording.
     """
 
-    __slots__ = (
-        "options",
-        "memo",
-        "blob_specs",
-        "blob_counter",
-        "stringify_unknown",
-        "payload_owner",
-    )
-
-    def __init__(
-        self,
-        options: _ScrubOptions,
-        memo: dict[int, Any],
-        blob_specs: list[BlobSpec],
-        blob_counter: list[int],
-        *,
-        stringify_unknown: bool = False,
-        payload_owner: tuple[Any, str] | None = None,
-    ) -> None:
-        self.options = options
-        self.memo = memo
-        self.blob_specs = blob_specs
-        self.blob_counter = blob_counter
-        self.stringify_unknown = stringify_unknown
-        self.payload_owner = payload_owner
+    options: _ScrubOptions
+    memo: dict[int, Any]
+    blob_specs: list[BlobSpec]
+    blob_counter: list[int]
+    stringify_unknown: bool = False
+    payload_owner: tuple[Any, str] | None = None
 
     @property
     def noun(self) -> str:
@@ -935,7 +917,7 @@ def _scrub_node(value: Any, walk: _ScrubWalk, depth: int) -> Any:
     """Scrub one node by dispatching on its memoized value kind.
 
     One cached type lookup replaces the up-to-ten ``isinstance`` chain the
-    old branch table re-ran for every one of the ~225k nodes a ResNet scrub
+    old branch table re-ran for every one of the quarter-million nodes a ResNet scrub
     visits; :func:`_scrub_value_kind` resolves the kinds in the identical
     order, so the selected rule is unchanged.
     """
@@ -1008,13 +990,17 @@ def _rebuild_frozenset_value(
     return frozenset(items)
 
 
+@dataclass(frozen=True, slots=True)
+class _ImmutableRule:
+    """How :func:`_scrub_immutable_collection` rebuilds one container kind."""
+
+    rebuild: Callable[[Any, Iterable[Any], _ScrubOptions | None], Any]
+    noun: str
+    disclose_subclass: bool
+
+
 def _scrub_immutable_collection(
-    value: Any,
-    walk: _ScrubWalk,
-    depth: int,
-    rebuild: Callable[[Any, Iterable[Any], _ScrubOptions | None], Any],
-    noun: str,
-    disclose_subclass: bool,
+    value: Any, walk: _ScrubWalk, depth: int, rule: _ImmutableRule
 ) -> Any:
     """Rebuild an immutable container whose identity exists only once built.
 
@@ -1030,10 +1016,10 @@ def _scrub_immutable_collection(
     obj_id = id(value)
     cached = memo.get(obj_id)
     if cached is _SCRUB_IN_PROGRESS:
-        raise ArtifactError(f"Portable {walk.noun} contains a cycle through a {noun}.")
+        raise ArtifactError(f"Portable {walk.noun} contains a cycle through a {rule.noun}.")
     if cached is not None:
         return cached
-    if disclose_subclass and type(value) is not frozenset and walk.payload_owner is None:
+    if rule.disclose_subclass and type(value) is not frozenset and walk.payload_owner is None:
         _disclose_container_downgrade(
             walk.options,
             value,
@@ -1046,7 +1032,7 @@ def _scrub_immutable_collection(
         items: list[Any] = []
         for item in value:
             items.append(_scrub_node(item, walk, depth + 1))
-        rebuilt = rebuild(value, items, walk.options)
+        rebuilt = rule.rebuild(value, items, walk.options)
     except BaseException:
         memo.pop(obj_id, None)
         raise
@@ -1122,7 +1108,7 @@ def _scrub_spec_object(value: Any, walk: _ScrubWalk, depth: int) -> Any:
     An undeclared live field is refused (:func:`_undeclared_field_error`)
     unless it is a ``functools.cached_property`` cell (derived state, skipped).
     DROP/WEAKREF_STRIP and plain KEEP are resolved inline, in ``_scrub_field``'s
-    own branch order, because this loop scrubs ~160k fields per ResNet save
+    own branch order, because this loop scrubs hundreds of thousands of fields per ResNet save
     and one Python call per field was measurable.
     """
 
@@ -1189,16 +1175,12 @@ _SCRUB_NODE_HANDLERS: tuple[Callable[[Any, _ScrubWalk, int], Any], ...] = (
     functools.partial(_scrub_mutable_collection, builtin=list),  # _SCRUB_LIST
     functools.partial(  # _SCRUB_TUPLE
         _scrub_immutable_collection,
-        rebuild=_rebuild_tuple_value,
-        noun="tuple",
-        disclose_subclass=False,
+        rule=_ImmutableRule(_rebuild_tuple_value, "tuple", disclose_subclass=False),
     ),
     functools.partial(_scrub_mutable_collection, builtin=set),  # _SCRUB_SET
     functools.partial(  # _SCRUB_FROZENSET
         _scrub_immutable_collection,
-        rebuild=_rebuild_frozenset_value,
-        noun="frozenset",
-        disclose_subclass=True,
+        rule=_ImmutableRule(_rebuild_frozenset_value, "frozenset", disclose_subclass=True),
     ),
     _scrub_object_node,  # _SCRUB_OBJECT
     _scrub_mapping_node,  # _SCRUB_ORDERED_DICT
