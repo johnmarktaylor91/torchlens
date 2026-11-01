@@ -1316,7 +1316,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     "torchlens._io.runnable._UnsupportedLiteralError": (
         "private save-time literal-classifier signal; converted to typed refusals"
     ),
-    "torchlens._utils._dynamo_explain_shapes._DynamoExplainOutputError": (
+    "torchlens.debug._dynamo_explain_shapes._DynamoExplainOutputError": (
         "private dynamo-explain probe failure; caught inside the capability probe"
     ),
     "torchlens._capture.projections.LiveOpViewFieldNotYetWritten": (

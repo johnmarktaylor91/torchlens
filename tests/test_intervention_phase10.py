@@ -915,9 +915,9 @@ def test_red_team_custom_module_side_effect_is_not_imported(
 
 _R2_TORCHLENS_PATH_TO_FOREIGN_CALLABLE = [
     ("torchlens._io.tlspec:os.system", "system"),
-    ("torchlens._utils:importlib.import_module", "import_module"),
+    ("torchlens.report._environment:importlib.import_module", "import_module"),
     ("torchlens.intervention.selectors:builtins.eval", "eval"),
-    ("torchlens._utils:subprocess.getoutput", "getoutput"),
+    ("torchlens.report._environment:subprocess.getoutput", "getoutput"),
 ]
 
 

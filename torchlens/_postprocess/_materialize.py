@@ -29,10 +29,10 @@ from .._data_classes._module_role_hints import (
     role_hints_for_module_class,
 )
 from .._ir.workspaces import _init_module_hierarchy_data
-from .._utils import get_vars_of_type_from_obj
 from .._utils._torch_compat import tensor_version_or_none
 from .._utils._torch_symbols import torch_attr
 from .._utils.display import _record_phase_timing
+from .._utils.introspection import get_vars_of_type_from_obj
 from ..backends.torch._tl import get_buffer_address, get_tensor_label, get_tensor_meta
 from ._buffer_addresses import (
     _buffer_addresses_by_label,

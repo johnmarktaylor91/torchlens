@@ -10,8 +10,8 @@ from typing import Any, Literal
 import torch
 from torch import nn
 
-from .._utils import _environment_checks, capability_snapshot
 from ..compat._report import _model_checks, _qualified_type_name
+from ._environment import _environment_checks, capability_snapshot
 
 Status = Literal["pass", "known_broken", "scope", "not_tested"]
 Severity = Literal["ok", "info", "warning", "error"]

@@ -40,13 +40,13 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens._utils as tlutils
 from torchlens._io import ArtifactError
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
 from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.intervention.resolver import resolve_import_ref
 from torchlens.intervention.save import LazyImportRef
 from torchlens.options import CaptureOptions
+from torchlens.report import _environment as tl_environment
 
 _CAP = CaptureOptions(
     replayable=True,
@@ -182,10 +182,10 @@ def test_r21_and_import_sink_gadgets_still_denied() -> None:
     """The r21 private import gadget and other torchlens callables stay denied."""
 
     unpickler = SafeBundleUnpickler(io.BytesIO(b""))
-    # r21 gadget: torchlens._utils._module_is_installed (importlib.import_module sink).
-    assert hasattr(tlutils, "_module_is_installed")
+    # r21 gadget: torchlens.report._environment._module_is_installed (importlib.import_module sink).
+    assert hasattr(tl_environment, "_module_is_installed")
     with pytest.raises(pickle.UnpicklingError):
-        unpickler.find_class("torchlens._utils", "_module_is_installed")
+        unpickler.find_class("torchlens.report._environment", "_module_is_installed")
     # A stdlib module reached off a torchlens module path is still denied (real module
     # pickle, not torchlens-owned).
     with pytest.raises(pickle.UnpicklingError):
