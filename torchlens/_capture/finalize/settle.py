@@ -316,7 +316,7 @@ _SEMANTIC_OUTPUT_TRANSIENT_FIELDS: tuple[str, ...] = (
 def _drop_semantic_output_transients(self: "Trace") -> None:
     """Drop the session-time semantic-output scratch from one trace.
 
-    Two call sites (B1-02): ``finalize.arms.finalize_completed`` drops right
+    Two call sites: ``finalize.arms.finalize_completed`` drops right
     after the sole consumer (``decode_outputs_for_trace``) on the completed
     arm, and ``run._finish_run`` repeats the drop in RUN's outermost
     ``finally`` so the halted, failed and interrupted arms (which never
