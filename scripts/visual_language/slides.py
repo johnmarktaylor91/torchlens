@@ -754,6 +754,7 @@ SLIDES: tuple[Slide, ...] = (
                 "a",
                 "Shared",
                 call="surgery",
+                kwargs={"highlight": "interventions"},
                 capture={"intervention_ready": True, "save_args": True},
                 prep="fork_edit",
                 # The edit fires on pass 1; pass 2 carries the cohort note (one mark per pass
@@ -1351,7 +1352,11 @@ CHEAT_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         "show_buffers, show_containers, show_orphans",
         ("show_buffers", "show_containers", "container_max_inline", "show_orphans"),
     ),
-    ("Edits", "vis_intervention_mode", ("vis_intervention_mode", "vis_show_cone")),
+    (
+        "Edits",
+        "vis_intervention_mode, highlight",
+        ("vis_intervention_mode", "vis_show_cone", "highlight"),
+    ),
     (
         "Measurements",
         "color_by, size_by, node_overlay",
