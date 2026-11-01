@@ -81,7 +81,6 @@ SPEC_FORMAT_VERSIONS: tuple[SpecFormatVersion, ...] = (
 )
 _CURRENT_FORMAT = next(row for row in SPEC_FORMAT_VERSIONS if row.status == "current")
 TLSPEC_FORMAT_VERSION = _CURRENT_FORMAT.version
-_PRE_3_FORMAT_VERSION = "1"  # the row torchlens 2.x wrote; kept for the refusal's wording
 _SPEC_FILE = "spec.json"
 
 

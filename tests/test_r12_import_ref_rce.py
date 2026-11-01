@@ -241,14 +241,17 @@ def test_no_ungated_import_module_remains_in_bundle_resolvers() -> None:
     """Grep-proof: no bundle-reachable ``importlib.import_module`` outside the gated resolver.
 
     Every remaining ``importlib.import_module`` in the intervention resolver surface must live
-    inside ``resolver.resolve_function_registry_key`` (already trust-gated). ``save.py``'s
-    ``_resolve_import_ref`` must no longer import directly -- it delegates to the shared gate.
+    inside ``_resolver_registry.resolve_import_ref`` (already trust-gated). The spec codec
+    modules (``save.py``, ``_spec_codec.py`` and ``_spec_values.py``, home of
+    ``_resolve_import_ref``) must not import directly -- they delegate to the shared gate.
     """
 
+    import torchlens.intervention._spec_codec as codec_mod
+    import torchlens.intervention._spec_values as values_mod
     import torchlens.intervention.save as save_mod
 
-    save_src = Path(save_mod.__file__).read_text()
-    assert "importlib.import_module" not in save_src
+    for module in (save_mod, codec_mod, values_mod):
+        assert "importlib.import_module" not in Path(module.__file__).read_text(), module.__name__
 
 
 def test_lazy_import_ref_resaves_as_import_ref() -> None:
