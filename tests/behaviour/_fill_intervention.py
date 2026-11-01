@@ -322,28 +322,19 @@ def _rule_facts(recipe: Any) -> list[tuple[str, Any]]:
 
 
 def _self_hook_outputs(cell: Cell, trace: Any, labels: set[str]) -> set[str]:
-    """Return the ``labels`` that are outputs of a module call the model hooks itself.
+    """Return the ``labels`` a model's own forward hook may have stamped as replaced.
 
     A model's own ``register_forward_hook`` that returns another tensor is
     recorded as a replaced module output (``intervention_replaced``) by design,
-    the disclosure a runnable save and validation need; those ops, and only
-    those, may carry the stamp without a rule of the recipe selecting them.
+    the disclosure a runnable save and validation need. Only a model that
+    registers such hooks itself gets the allowance, and only for ops no rule of
+    the recipe fired on (they carry no ``scale`` fire record).
     """
 
-    hooked = {
-        address
-        for address, module in cell.model.named_modules()
-        if getattr(module, "_forward_hooks", None)
-    }
-    if not hooked:
+    if not any(getattr(module, "_forward_hooks", None) for module in cell.model.modules()):
         return set()
     return {
-        label
-        for label in labels
-        if any(
-            str(call).rsplit(":", 1)[0] in hooked
-            for call in trace[label].output_of_module_calls or ()
-        )
+        label for label in labels if "scale" not in [name for name, *_ in _fire_facts(trace[label])]
     }
 
 
