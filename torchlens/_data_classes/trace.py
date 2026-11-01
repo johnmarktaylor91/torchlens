@@ -892,7 +892,10 @@ class Trace(
         """Return the model's exact forward return value, held in memory only.
 
         This is the original object, independent of saved activations and
-        output transforms. It is never written to a bundle or pickle.
+        output transforms. It is never written to a bundle or pickle. The trace
+        keeps it alive for as long as the trace exists (for a Hugging Face
+        model this includes ``past_key_values``); it is released when the
+        trace is dropped.
 
         Returns
         -------

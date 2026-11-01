@@ -839,7 +839,9 @@ class Recording(TraceLike):
 
         The tensor, tuple, dict, Hugging Face output object or distribution the
         forward returned (for a multi-pass ``Recorder``, the last pass's). Held in
-        memory only.
+        memory only: the recording keeps it alive for as long as the recording
+        exists (for a Hugging Face model this includes ``past_key_values``); it
+        is released when the recording is dropped.
 
         Returns
         -------

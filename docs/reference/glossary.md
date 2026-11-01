@@ -44,8 +44,10 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `generate()` returned. `Trace.output` is the exact return from a live `tl.trace` forward,
   independent of `save=` and output transforms; it is neither transformed `raw_output` nor
   the saved-payload rebuild from `reconstruct_output()`. Traces cooked from recordings,
-  forked, or merged from chunks have no live forward return. Held in memory only: a trace
-  or recording loaded from disk or unpickled refuses
+  forked, or merged from chunks have no live forward return. The trace or recording keeps
+  that object alive for as long as it exists (for a Hugging Face model this includes
+  `past_key_values`); the object is released when the trace or recording is dropped. Held in
+  memory only: a trace or recording loaded from disk or unpickled refuses
   with `output_not_stored`, a failed partial recording (`on_forward_error="return_partial"`)
   with `output_forward_failed`, and a capture that `stop_after=` ended before the model
   returned with `output_capture_stopped` (all `PayloadUnavailableError`); it never returns
