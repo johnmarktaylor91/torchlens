@@ -3868,6 +3868,7 @@ Members of classes whose public home changed, one entry per class.
 | `retained_bytes=` | field and constructor keyword of `MemoryFacts`, `SummaryTotals` |
 | `retained_lazy_ops=` | field and constructor keyword of `MemoryFacts` |
 | `retained_present_ops=` | field and constructor keyword of `MemoryFacts` |
+| `run_state=` | field and constructor keyword of `HookContext`: the run-scoped scratch dict (`ctx.run_state`) |
 | `serve=` | keyword of `tl.export.netron`: open the exported graph in a local viewer |
 | `signal=` | keyword of `tl.observers.span` (`"forward"`, `"backward"` or `"both"`) and `tl.visualization.show_bundle_graph` (`"forward"` or `"backward"`) |
 | `source_ref=` | keyword of `tl.types.Accessor`: weak reference to the owning trace |
