@@ -255,8 +255,11 @@ def _norm_intermediates() -> dict[str, np.ndarray | list[np.ndarray]]:
 def _conv_intermediates() -> dict[str, np.ndarray | list[np.ndarray]]:
     """Compute SAME convolution and VALID max pooling with NumPy only."""
     padded = np.pad(_IMG, ((0, 0), (1, 1), (1, 1), (0, 0)))
-    windows = np.lib.stride_tricks.sliding_window_view(padded, (3, 3), axis=(1, 2))
-    convolved = np.repeat((windows * np.float32(0.1)).sum((-1, -2)), 2, axis=-1)
+    height, width = _IMG.shape[1], _IMG.shape[2]
+    taps = np.stack(
+        [padded[:, i : i + height, j : j + width, :] for i in range(3) for j in range(3)]
+    )
+    convolved = np.repeat(taps.sum(axis=0) * np.float32(0.1), 2, axis=-1)
     relu = np.maximum(convolved, 0)
     pooled = relu.reshape(1, 3, 2, 3, 2, 2).max(axis=(2, 4))
     flattened = pooled.reshape(1, -1)
