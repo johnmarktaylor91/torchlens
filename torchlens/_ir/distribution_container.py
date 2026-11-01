@@ -311,7 +311,7 @@ def replace_distribution_field(value: Any, name: str, new_value: Any) -> Any:
     return copied
 
 
-__all__ = [
+__all__ = (
     "DISTRIBUTION_CONTAINER_KIND",
     "DISTRIBUTION_STATE_UNRECORDABLE",
     "DistributionLayout",
@@ -322,4 +322,4 @@ __all__ = [
     "is_distribution_type",
     "rebuild_distribution",
     "replace_distribution_field",
-]
+)
