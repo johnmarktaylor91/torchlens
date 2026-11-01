@@ -2259,7 +2259,7 @@ def test_validate_backward_fails_closed_on_coverage_gaps() -> None:
         )
     assert passed is False
     failure = last_validation_failure()
-    assert failure is not None and failure.check == CHECK_BACKWARD
+    assert failure is not None and failure.check_name == CHECK_BACKWARD
     assert failure.extra["reason"] == "backward_coverage_gap"
 
 

@@ -47,7 +47,7 @@ class _WithChild(nn.Module):
 
 def _validate() -> bool:
     torch.manual_seed(0)
-    return bool(tl.validate(_WithChild(), torch.randn(4, 3), scope="backward", random_seed=0))
+    return bool(tl.validate(_WithChild(), torch.randn(4, 3), scope="backward", seed=0))
 
 
 def _recorded() -> ValidationFailure:

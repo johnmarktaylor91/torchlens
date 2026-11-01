@@ -31,7 +31,7 @@ def _validate_backward(model: nn.Module, inputs: Any, **kwargs: Any) -> bool:
     torch.manual_seed(0)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        return bool(tl.validate(model, inputs, scope="backward", random_seed=0, **kwargs))
+        return bool(tl.validate(model, inputs, scope="backward", seed=0, **kwargs))
 
 
 def _reason() -> str:

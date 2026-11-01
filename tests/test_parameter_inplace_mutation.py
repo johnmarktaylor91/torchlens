@@ -663,7 +663,7 @@ def test_backward_validation_refuses_an_already_run_model_loudly() -> None:
     codes = [getattr(w.message, "fields", {}).get("code") for w in caught]
     assert "backward_validation_non_leaf_parameter" in codes
     failure = last_validation_failure()
-    assert failure is not None and failure.check == CHECK_BACKWARD
+    assert failure is not None and failure.check_name == CHECK_BACKWARD
     assert failure.extra["reason"] == "non_leaf_parameter"
     assert model.temp.is_leaf is False
 
