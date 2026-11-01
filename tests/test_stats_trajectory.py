@@ -201,7 +201,7 @@ def test_trajectory_equals_hand_loop_float64(mask: bool) -> None:
         assert got.position_means[name].dtype == torch.float64
         assert torch.equal(got.position_means[name], want["means"][name]), name
         for layer in got.module_addresses:
-            assert got.running_stats[name][layer].result() == want["spines"][name][layer].result()
+            assert got.running_stats[name][layer].compute() == want["spines"][name][layer].compute()
 
 
 def test_trajectory_default_statistics_without_targets() -> None:
@@ -373,4 +373,4 @@ def test_trajectory_spines_save_and_reload(tmp_path: Any) -> None:
     got = tl.mechinterp.measure_trajectory(_model(), _batches(1))
     spine = got.running_stats["entropy"]["b1"]
     path = tl.stats.save_fitted(spine, tmp_path / "entropy-b1.safetensors")
-    assert tl.stats.load_fitted(path).result() == spine.result()
+    assert tl.stats.load_fitted(path).compute() == spine.compute()

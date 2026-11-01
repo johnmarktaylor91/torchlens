@@ -89,7 +89,7 @@ try:  # POSIX-only; the getrusage recipe skips on platforms without it.
 except ImportError:  # pragma: no cover - non-POSIX platforms
     _resource = None  # type: ignore[assignment]
 
-_CAP = {"intervention_ready": True, "capture_container_structure": True, "cache": False}
+_CAP = {"replayable": True, "capture_container_structure": True, "cache": False}
 
 # Pre-window held references (module import time == before any monitor window).
 _HELD_TIME = _time.time

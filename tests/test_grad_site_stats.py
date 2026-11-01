@@ -38,7 +38,7 @@ _Y = torch.tensor([0, 1, 0])
 
 def _relu_label(model: nn.Module) -> str:
     trace = tl.trace(model, _X)
-    return next(str(op.layer_label) for op in trace.layer_list if op.func_name == "relu")
+    return next(str(op.layer_label) for op in trace._layer_list if op.func_name == "relu")
 
 
 @dataclass(frozen=True)
@@ -115,7 +115,7 @@ def test_sweep_gradient_site_with_loss_runs_every_backward() -> None:  # A32
     for member in members.values():
         assert member.num_backward_passes == 1
     fc1 = next(
-        str(op.layer_label) for op in members["baseline"].layer_list if op.func_name == "linear"
+        str(op.layer_label) for op in members["baseline"]._layer_list if op.func_name == "linear"
     )
     base = members["baseline"][fc1].grad
     assert torch.count_nonzero(members["zero"][fc1].grad) == 0

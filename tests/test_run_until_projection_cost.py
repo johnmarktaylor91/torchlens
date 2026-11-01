@@ -131,8 +131,8 @@ def test_until_values_match_the_full_run(until):
     full = log.run(inputs=x2)
     truncated = log.run(inputs=x2, until=until)
     executed = 0
-    for layer in truncated.trace.layer_list:
-        if layer.layer_type in ("input", "output") or layer.out is None:
+    for layer in truncated.trace._layer_list:
+        if layer.type in ("input", "output") or layer.out is None:
             continue
         assert torch.equal(layer.out, full.trace[layer.layer_label].out), layer.layer_label
         executed += 1

@@ -61,7 +61,7 @@ class Toy(nn.Module):
 
 torch.manual_seed(0)
 trace = tl.trace(
-    Toy(), torch.randn(5, 4), capture=tl.options.CaptureOptions(intervention_ready=True)
+    Toy(), torch.randn(5, 4), capture=tl.options.CaptureOptions(replayable=True)
 )
 site = tl.label("relu_1_2")
 donors = population(torch.randn(3, 4), origin="three donor rows from another dataset")
@@ -104,7 +104,7 @@ class Toy(nn.Module):
 
 torch.manual_seed(0)
 trace = tl.trace(
-    Toy(), torch.randn(5, 4), capture=tl.options.CaptureOptions(intervention_ready=True)
+    Toy(), torch.randn(5, 4), capture=tl.options.CaptureOptions(replayable=True)
 )
 site = tl.label("relu_1_2")
 clean = trace["relu_1_2"].out
@@ -158,7 +158,7 @@ class Toy(nn.Module):
 
 torch.manual_seed(0)
 trace = tl.trace(
-    Toy(), torch.randn(5, 4), capture=tl.options.CaptureOptions(intervention_ready=True)
+    Toy(), torch.randn(5, 4), capture=tl.options.CaptureOptions(replayable=True)
 )
 donors = population(torch.randn(6, 5, 4), origin="six recorded activations of this site")
 patched = trace.fork("patched")

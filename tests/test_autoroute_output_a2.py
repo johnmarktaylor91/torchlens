@@ -22,9 +22,9 @@ from torchlens._user_funcs import semantic_output_cache_key
 def _decoded_rows(trace: tl.Trace) -> list[dict[str, Any]]:
     """Return classification decoded rows from the typed A3 representation."""
 
-    assert trace.decoded_output is not None
-    assert trace.decoded_output["kind"] == "batch_topk"
-    return trace.decoded_output["rows"]
+    assert trace._decoded_output is not None
+    assert trace._decoded_output["kind"] == "batch_topk"
+    return trace._decoded_output["rows"]
 
 
 class _Config:
@@ -139,8 +139,8 @@ def test_config_id2label_decodes_topk_labels_and_probs() -> None:
 
     trace = tl.trace(model, torch.ones(1, 2))
 
-    assert trace.output_postprocessor is not None
-    assert trace.output_postprocessor.source == "hf_config"
+    assert trace.provenance.output_postprocessor is not None
+    assert trace.provenance.output_postprocessor.source == "hf_config"
     rows = _decoded_rows(trace)
     assert rows[0]["label"] == "positive"
     assert rows[0]["class_index"] == 1
@@ -158,8 +158,8 @@ def test_read_time_head_decodes_the_named_retained_head() -> None:
     trace = tl.trace(model, torch.ones(1, 2))
 
     assert trace.decoded_output is None
-    assert trace.output_postprocessor is not None
-    assert trace.output_postprocessor.ambiguous is True
+    assert trace.provenance.output_postprocessor is not None
+    assert trace.provenance.output_postprocessor.ambiguous is True
 
     decoded = trace.decode_output(head="main")
     assert decoded["kind"] == "batch_topk"
@@ -229,20 +229,20 @@ def test_multi_output_selects_logits_and_fails_closed_on_ambiguity() -> None:
     x = torch.ones(1, 2)
 
     tuple_trace = tl.trace(_TupleClassifier(torch.tensor([[0.0, 3.0]]), labels).eval(), x)
-    assert tuple_trace.decoded_output is not None
-    assert tuple_trace.output_postprocessor is not None
-    assert tuple_trace.output_postprocessor.selected_output_head == "1"
+    assert tuple_trace._decoded_output is not None
+    assert tuple_trace.provenance.output_postprocessor is not None
+    assert tuple_trace.provenance.output_postprocessor.selected_output_head == "1"
 
     hf_trace = tl.trace(_HFLikeClassifier(torch.tensor([[4.0, 1.0]]), labels).eval(), x)
-    assert hf_trace.decoded_output is not None
-    assert hf_trace.output_postprocessor is not None
-    assert hf_trace.output_postprocessor.selected_output_head == "logits"
+    assert hf_trace._decoded_output is not None
+    assert hf_trace.provenance.output_postprocessor is not None
+    assert hf_trace.provenance.output_postprocessor.selected_output_head == "logits"
 
     ambiguous = tl.trace(
         _TupleClassifier(torch.tensor([[0.0, 3.0]]), labels, ambiguous=True).eval(),
         x,
     )
-    assert ambiguous.decoded_output is None
+    assert ambiguous._decoded_output is None
     assert ambiguous.output_postprocessor is not None
     assert (
         "call trace.decode_output(style=..., head=...)"
@@ -256,8 +256,8 @@ def test_generic_1000_width_tensor_without_verified_metadata_does_not_decode() -
     model = _Classifier(torch.zeros(1, 1000)).eval()
     trace = tl.trace(model, torch.ones(1, 2))
 
-    assert trace.decoded_output is None
-    assert trace.output_postprocessor is None
+    assert trace._decoded_output is None
+    assert trace.provenance.output_postprocessor is None
 
 
 def test_hf_text_decode_uses_attached_tokenizer() -> None:
@@ -268,9 +268,9 @@ def test_hf_text_decode_uses_attached_tokenizer() -> None:
 
     trace = tl.trace(model, torch.ones(1, 2))
 
-    assert trace.output_postprocessor is not None
-    assert trace.output_postprocessor.style == "hf_text"
-    assert trace.decoded_output == [
+    assert trace.provenance.output_postprocessor is not None
+    assert trace.provenance.output_postprocessor.style == "hf_text"
+    assert trace._decoded_output == [
         {"batch_item": 0, "rank": 1, "text": "tok1 tok0", "token_ids": [1, 0]}
     ]
 
@@ -295,7 +295,7 @@ def test_hf_text_decode_handles_batch_greater_than_one_independently() -> None:
 
     trace = tl.trace(model, torch.ones(2, 2))
 
-    assert trace.decoded_output == [
+    assert trace._decoded_output == [
         {"batch_item": 0, "rank": 1, "text": "tok1 tok0", "token_ids": [1, 0]},
         {"batch_item": 1, "rank": 1, "text": "tok0 tok1", "token_ids": [0, 1]},
     ]
@@ -311,10 +311,10 @@ def test_decoded_output_roundtrips_tlspec_and_decode_output_is_bounded(tmp_path:
     trace.save(bundle_path)
     restored = tl.load(bundle_path)
 
-    assert restored.decoded_output == trace.decoded_output
+    assert restored._decoded_output == trace._decoded_output
     assert restored.decode_output(k=1) == {
         "kind": "batch_topk",
-        "rows": [trace.decoded_output["rows"][0]],
+        "rows": [trace._decoded_output["rows"][0]],
     }
     assert len(restored.decode_output(k=10)["rows"]) == 3
 
@@ -333,11 +333,11 @@ def test_cache_key_changes_when_only_id2label_changes(tmp_path: Path) -> None:
         model, input_tensor, capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path)
     )
 
-    assert first.capture_cache_key != second.capture_cache_key
-    assert first.decoded_output is not None
-    assert second.decoded_output is not None
-    assert first.decoded_output["rows"][0]["label"] == "old-yes"
-    assert second.decoded_output["rows"][0]["label"] == "new-yes"
+    assert first.provenance.cache_key != second.provenance.cache_key
+    assert first._decoded_output is not None
+    assert second._decoded_output is not None
+    assert first._decoded_output["rows"][0]["label"] == "old-yes"
+    assert second._decoded_output["rows"][0]["label"] == "new-yes"
     assert semantic_output_cache_key(model)["config"]["id2label"] == {0: "new-no", 1: "new-yes"}
 
 
@@ -425,6 +425,6 @@ def test_detector_exception_degrades_to_disclosed_warning_not_abort() -> None:
     try:
         with pytest.warns(TorchLensWarning, match="Semantic output decode skipped"):
             trace = tl.trace(nn.Linear(3, 3).eval(), torch.randn(2, 3))
-        assert trace.decoded_output is None
+        assert trace._decoded_output is None
     finally:
         autoroute_output.unregister("raising_probe_detector")

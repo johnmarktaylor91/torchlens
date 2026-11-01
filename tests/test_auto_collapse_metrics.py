@@ -1291,7 +1291,7 @@ def _add_reference_fallback_collision(trace: tl.Trace) -> str:
         Relationship label deliberately removed from the fast index.
     """
 
-    input_op = next(op for op in trace.layer_list if op.is_input)
+    input_op = next(op for op in trace._layer_list if op.is_input)
     collision_op = next(op for op in trace.ops if not op.is_input and not op.is_output)
     collision_op._label_raw = input_op.layer_label
     return str(input_op.layer_label)
@@ -1929,9 +1929,9 @@ def test_adjacency_index_matches_forced_accessor_reference(
         if case_name == "recurrent":
             assert any(module.num_calls > 1 for module in trace.modules)
         if case_name == "batchnorm_buffer":
-            assert any(op.is_buffer for op in trace.layer_list)
+            assert any(op.is_buffer for op in trace._layer_list)
         if case_name == "write_version":
-            assert any(op.buffer_write_kind is not None for op in trace.layer_list)
+            assert any(op.buffer_write_kind is not None for op in trace._layer_list)
 
         optimized = _collapse_artifact_snapshot(trace, tmp_path, f"{case_name}_indexed")
         if case_name == "external_endpoints":
@@ -2201,7 +2201,7 @@ def test_auto_collapse_run_fold_representative_uses_single_instance_stats(
         )
         rep_line = _collapsed_node_line(source, "blocks.0")
 
-        assert fold.num_layers != representative.num_layers
+        assert fold.num_layers != len(representative.layer_labels)
         assert fold.num_params != representative.num_params
         assert f"... +{fold.multiplicity - 1} more {fold.class_name}" in source
         assert _module_contents_label(trace, representative) in rep_line
@@ -2290,7 +2290,7 @@ def test_auto_collapse_parallel_fold_representative_uses_single_instance_stats(
         )
         rep_line = _collapsed_node_line(source, "branches.0")
 
-        assert fold.num_layers != representative.num_layers
+        assert fold.num_layers != len(representative.layer_labels)
         assert fold.num_params != representative.num_params
         assert f"... +{fold.multiplicity - 1} more {fold.class_name}" in source
         assert _module_contents_label(trace, representative) in rep_line
@@ -2698,7 +2698,7 @@ def test_max_collapsed_box_labels_exclude_surfaced_own_output_ops(
         module = trace.modules["block"]
         surfaced_ops = _atomic_own_output_ops(trace, "block")
         surfaced_params = sum(int(getattr(op, "num_params", 0) or 0) for op in surfaced_ops)
-        remainder_layers = module.num_layers - len(surfaced_ops)
+        remainder_layers = len(module.layer_labels) - len(surfaced_ops)
         remainder_buffers = sum(trace[label].is_buffer for label in module.layer_labels) - sum(
             op.is_buffer for op in surfaced_ops
         )

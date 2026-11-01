@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 import torch
 
+from .._record_type import first_op
 from ..intervention.errors import MultiMatchWarning
 from ._annotation_gate import (
     _VERB_VOCABULARY,
@@ -292,7 +293,7 @@ def _selected_mds_sites(
 
     selected: list[tuple[str, Any, Any, str]] = []
     for layer_label, layer_sites in selected_by_layer.items():
-        layer = trace.layer_logs[layer_label]
+        layer = trace._layer_logs[layer_label]
         if int(getattr(layer, "num_passes", 1)) > 1:
             if len(layer_sites) != 1 and not expand_passes:
                 _raise_recurrent_layer_requires_pass(layer, verb=verb)
@@ -484,7 +485,7 @@ def _single_pass_layer_mds_site(
     if not bool(getattr(layer, "has_saved_activation", False)):
         _raise_unsaved_activation(layer_label, verb=verb)
     payload, kind = _saved_payload_with_kind(layer, layer_label, verb=verb)
-    return f"layer:{layer_label}", layer.ops[0], payload, kind
+    return f"layer:{layer_label}", first_op(layer), payload, kind
 
 
 def _op_mds_site(op: Any, *, verb: str = "mds_evolution") -> tuple[str, Any, Any, str]:
@@ -584,7 +585,7 @@ def _store_annotation_tensor(trace: Any, key: str, tensor: torch.Tensor) -> None
 
     if not isinstance(tensor, torch.Tensor):
         raise TypeError("_store_annotation_tensor requires a torch.Tensor payload.")
-    backend_name = str(getattr(trace, "backend", "torch"))
+    backend_name = str(trace._provenance_backend)
     if backend_name != "torch":
         raise ValueError(
             "Tensor annotation blobs are supported only for torch traces in this "

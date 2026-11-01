@@ -2,7 +2,7 @@
 
 VERSION DISCIPLINE (persistence-schema seam): no active schema change ships
 under the CURRENT ``tlspec_version``. A new portable field therefore lands in
-its record's ``FIELD_POLICY`` declared ``FieldPolicy.DROP`` (non-persisting)
+its record's ``_FIELD_POLICY`` declared ``FieldPolicy.DROP`` (non-persisting)
 and is REGISTERED here. Portability and round-trip exit gates run under the
 TEST-ONLY activation switch, which does exactly two things while active:
 
@@ -95,7 +95,7 @@ def register_prerelease_field(
         raise ValueError(
             f"{owner.__name__}.{field_name} is not a declared portable field; "
             "pre-release fields must be declared in the owning record's "
-            "FIELD_POLICY before registration."
+            "_FIELD_POLICY before registration."
         )
     if spec[field_name] is not FieldPolicy.DROP:
         raise ValueError(

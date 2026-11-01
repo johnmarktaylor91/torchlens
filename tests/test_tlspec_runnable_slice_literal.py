@@ -112,7 +112,7 @@ def _save_runnable(model: nn.Module, capture_input: torch.Tensor, path: Path) ->
         model,
         capture_input,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -220,7 +220,7 @@ def test_callable_literal_argument_still_refuses_with_unsupported_literal(
         model,
         capture_input,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -314,9 +314,7 @@ def _b_capture(model: nn.Module, inputs: Any) -> tl.Trace:
     return tl.trace(
         model,
         inputs,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
 
 
@@ -355,7 +353,7 @@ def test_r71b_semantic_slice_component_refuses_typed_at_save(name: str, tmp_path
     with pytest.raises(RunnablePreflightError) as excinfo:
         _b_save(_b_capture(_SliceInput(), [x, slice(0, value)]), tmp_path / f"b_{name}.tlspec")
     diagnostics = str(excinfo.value.fields.get("diagnostics"))
-    assert "missing_input_container_contract" in diagnostics
+    assert "input_container_contract_missing" in diagnostics
     assert "semantic_scalar_type" in diagnostics
 
 

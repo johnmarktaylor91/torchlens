@@ -15,6 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 
 
@@ -31,9 +32,15 @@ def _refuse_edge_intervened_save(trace: Any) -> None:
     silently presenting post-edit values with zero edge provenance.
     """
 
+    from .._data_classes.trace import Trace
+
+    if not isinstance(trace, Trace):
+        # A Recording or other non-Trace save subject holds no Ops, so it
+        # cannot carry edge substitutions; its own refusal fires later.
+        return
     carriers = [
         op.label
-        for op in getattr(trace, "layer_list", ()) or ()
+        for op in (trace._layer_list if is_live_trace(trace) else ()) or ()
         if getattr(op, "edge_substitutions", None)
     ]
     if not carriers:
@@ -42,7 +49,7 @@ def _refuse_edge_intervened_save(trace: Any) -> None:
     from . import FieldPolicy
     from .prerelease import prerelease_fields_active
 
-    policy_entry = _Op.FIELD_POLICY.get("edge_substitutions")
+    policy_entry = _Op._FIELD_POLICY.get("edge_substitutions")
     portable_policy = getattr(policy_entry, "portable_policy", policy_entry)
     if portable_policy is not None and portable_policy is not FieldPolicy.DROP:
         return
@@ -76,13 +83,17 @@ def _refuse_shard_local_erasure(trace: Any) -> None:
     never a narrowing, no D-ruling owed.
     """
 
-    if getattr(trace, "distributed_scope", None) != "rank_local_shard":
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
+    if (
+        trace._provenance_distributed_scope if is_live_trace(trace) else None
+    ) != "rank_local_shard":
         return
     from .._data_classes.trace import Trace as _Trace
     from . import FieldPolicy
     from .prerelease import prerelease_fields_active
 
-    policy_entry = _Trace.FIELD_POLICY.get("distributed_scope")
+    policy_entry = _Trace._FIELD_POLICY.get("_provenance_distributed_scope")
     portable_policy = getattr(policy_entry, "portable_policy", policy_entry)
     if portable_policy is not None and portable_policy is not FieldPolicy.DROP:
         return

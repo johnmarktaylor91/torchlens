@@ -173,7 +173,7 @@ def _warn_unattributed_tensor_args(self: "Trace") -> None:
         append_capture_advisory,
     )
 
-    offenders = _unattributed_op_offenders(getattr(self, "layer_list", ()) or ())
+    offenders = _unattributed_op_offenders(self._layer_list or ())
     # Orphan pruning (step 3) runs BEFORE this step and strips the pruned ops, so a
     # source-less tensor whose only consumer was pruned (``G.sum().item()``, a
     # control-flow predicate on a global) would lose its witness with the op;
@@ -235,9 +235,9 @@ def _populate_var_names(self: "Trace") -> None:
         Trace being postprocessed.
     """
 
-    if not getattr(self, "save_code_context", False):
+    if not self._options_save_source_context:
         return
-    for op in getattr(self, "layer_list", ()):
+    for op in self._layer_list:
         if getattr(op, "type", None) == "output":
             op.var_names = []
             continue
@@ -333,11 +333,11 @@ def _refresh_fast_saved_summary(self: "Trace") -> None:
 
     saved_layers = [
         layer_entry
-        for layer_entry in self.layer_list
+        for layer_entry in self._layer_list
         if getattr(layer_entry, "has_saved_activation", False)
         and not getattr(layer_entry, "is_orphan", False)
     ]
-    self.num_saved_ops = len(saved_layers)
+    self._num_saved_ops = len(saved_layers)
     # F20 (brainpipe D-17): read the ONE byte model -- physically retained
     # alias-aware bytes -- never a sum of raw activation_memory fields. The
     # explorer P4 memory truth (reduce-only captures count the retained
@@ -345,8 +345,7 @@ def _refresh_fast_saved_summary(self: "Trace") -> None:
     # this same aggregate: it counts the payloads capture actually kept.
     from .._save_budget import retained_activation_bytes
 
-    self.saved_activation_memory = Bytes(retained_activation_bytes(saved_layers))
-    self.num_saved_layers = len({layer_entry.layer_label for layer_entry in saved_layers})
+    self._cost_saved_activation_memory = Bytes(retained_activation_bytes(saved_layers))
     refresh_saved_module_call_count(self, {layer_entry.label for layer_entry in saved_layers})
     refresh_pinned_autograd_memory(self, saved_layers)
 
@@ -447,7 +446,7 @@ def _postprocess_body(
         f"Postprocessing {len(self._raw_graph_ws.raw_layer_labels_list):,} layers "
         f"({len(self.buffer_layers):,} buffers)...",
     )
-    _post_t0 = time.time() if getattr(self, "verbose", False) else 0
+    _post_t0 = time.time() if self._options_verbose else 0
 
     # Steps 1-20 run through the executor (_executor.py): each step body
     # resolves its callable through this module's namespace at call time.

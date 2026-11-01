@@ -123,7 +123,7 @@ model = nn.ReLU()
 x = torch.randn(4)
 wrap_torch(escape_detector="shadow")
 trace = tl.trace(model, x)
-print(trace.escape_detector_event_count, trace.escape_detector_callback_ns)
+print(trace.health.num_escape_detector_events, trace.health.escape_detector_callback_ns)
 unwrap_torch()
 ```
 
@@ -158,8 +158,8 @@ wrap_torch(
     completeness_witness=True,
 )
 trace = tl.trace(model, x)
-print(trace.completeness_witness_verified)
-print(trace.completeness_witness_unaccounted_count)
+print(trace.health.completeness_verified)
+print(trace.health.num_unaccounted_witness_events)
 unwrap_torch()
 ```
 
@@ -169,9 +169,9 @@ census result.
 
 The witness attaches each aten dispatch to the live wrapper token, `func_call_id`, and leaf barcode;
 it does not correlate by clock time. A captured Python call may own several ordered aten operations,
-recorded in `trace.completeness_decompositions`. Dispatches with no owner, or owned by a wrapper whose
+recorded in `trace.health.completeness_decompositions`. Dispatches with no owner, or owned by a wrapper whose
 `func_call_id` emits no logged op, produce a `CaptureGapWarning`, set
-`trace.completeness_witness_verified=False`, and append structured rows to
+`trace._health_completeness_verified=False`, and append structured rows to
 `trace.completeness_diagnostics`. Work under `pause_logging()` is outside the census. The documented
 torch.func/functorch transform boundary runs its interior under that paused scope, and fused or opaque
 kernel interiors below the dispatcher are not observable; the dispatched boundary operator itself is

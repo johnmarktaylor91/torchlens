@@ -70,14 +70,14 @@ def _injected_rows(state):
     """The forged artifact's injected op rows."""
 
     return [
-        op for op in state["layer_list"] if getattr(op, "injection_provenance", None) is not None
+        op for op in state["_layer_list"] if getattr(op, "injection_provenance", None) is not None
     ]
 
 
 def _model_rows(state):
     """The forged artifact's ordinary model op rows."""
 
-    return [op for op in state["layer_list"] if getattr(op, "injection_provenance", None) is None]
+    return [op for op in state["_layer_list"] if getattr(op, "injection_provenance", None) is None]
 
 
 def _assert_refuses(tmp_path, tamper, code: str, reason: str | None = None) -> None:
@@ -155,12 +155,12 @@ def test_carve_out_theft_refuses(tmp_path) -> None:
 
 
 def test_replaced_stamp_on_injected_row_refuses(tmp_path) -> None:
-    """An injected row claiming intervention_replaced refuses record_func."""
+    """An injected row claiming is_edited refuses record_func."""
 
     def tamper(state) -> None:
         """Forge the replacement stamp."""
 
-        _injected_rows(state)[0].intervention_replaced = True
+        _injected_rows(state)[0].is_edited = True
 
     _assert_refuses(tmp_path, tamper, "artifact_injection_codec_invalid", "record_func")
 
@@ -171,8 +171,8 @@ def test_graph_entangled_injected_row_refuses(tmp_path) -> None:
     def tamper(state) -> None:
         """Forge a dataflow edge onto the injected row."""
 
-        model_label = _model_rows(state)[0].layer_label
-        _injected_rows(state)[0].parents = [model_label]
+        model_name = _model_rows(state)[0].layer_label
+        _injected_rows(state)[0].parents = [model_name]
 
     _assert_refuses(tmp_path, tamper, "artifact_injection_codec_invalid", "record_graph_entangled")
 
@@ -309,7 +309,7 @@ def test_internal_codec_guards_are_typed(tmp_path) -> None:
     )
     with pytest.raises(Exception) as excinfo:
         append_injected_op_rows(
-            logged, {"layer_list": None}, [], include_outs=True, backend_name="torch"
+            logged, {"_layer_list": None}, [], include_outs=True, backend_name="torch"
         )
     assert excinfo.value.fields["code"] == "injection_persist_state_invalid"
     with pytest.raises(Exception) as excinfo:

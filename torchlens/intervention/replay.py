@@ -329,13 +329,13 @@ def _run_differentiable_replay(
     log._record_operation(
         "fork",
         source_id=id(log),
-        name=replay_log.trace_label,
+        name=replay_log.name,
         source_cone_labels=tuple(_disclosure_label(site) for site in source_cone),
     )
     _reset_backward_projection(replay_log)
     _run_replay(
         replay_log,
-        [replay_log.layer_dict_all_keys[_replay_site_key(origin)] for origin in origins],
+        [replay_log._layer_dict_all_keys[_replay_site_key(origin)] for origin in origins],
         hook_entries=hook_entries,
         strict=strict,
         preserve_origins=preserve_origins,
@@ -345,15 +345,15 @@ def _run_differentiable_replay(
         **(replay_log.last_run if isinstance(replay_log.last_run, dict) else {}),
         "engine": "replay",
         "differentiable": True,
-        "source_trace_label": getattr(log, "trace_label", None),
-        "frontier": tuple(replay_log.replay_frontier),
+        "source_trace_label": getattr(log, "name", None),
+        "frontier": tuple(replay_log._replay_frontier),
     }
     if replay_log.state_history and isinstance(replay_log.state_history[-1], dict):
         replay_log.state_history[-1].update(
             {
                 "differentiable": True,
-                "source_trace_label": getattr(log, "trace_label", None),
-                "frontier": tuple(replay_log.replay_frontier),
+                "source_trace_label": getattr(log, "name", None),
+                "frontier": tuple(replay_log._replay_frontier),
             }
         )
     return replay_log
@@ -373,7 +373,7 @@ def _differentiable_replay_name(log: Trace) -> str:
         Trace label for the replay fork.
     """
 
-    base_name = getattr(log, "trace_label", None) or "trace"
+    base_name = getattr(log, "name", None) or "trace"
     return f"{base_name}_replay"
 
 
@@ -400,26 +400,26 @@ def _reset_backward_projection(log: Trace) -> None:
     log.__dict__.pop("_backward_projection_event_count", None)
     log.__dict__.pop("_backward_projection_revision", None)
     log.__dict__.pop("_backward_projection_fold_state", None)
-    log.has_backward_pass = False
-    log.has_gradients = False
+    log._autograd_has_backward_pass = False
+    log._autograd_has_grads = False
     log._saved_grad_labels = set()
-    log.grad_fn_logs = OrderedDict()
-    log.grad_fn_order = []
-    log.backward_pass_logs = OrderedDict()
-    log.backward_root_grad_fn_object_ids = []
-    log.backward_durations = []
-    log.num_backward_passes = 0
-    log.backward_peak_memory = Bytes(0)
+    log._grad_fn_logs = OrderedDict()
+    log._autograd_grad_fn_order = []
+    log._backward_pass_logs = OrderedDict()
+    log._autograd_backward_root_grad_fn_object_ids = []
+    log._cost_backward_durations = []
+    log._num_backward_passes = 0
+    log._cost_backward_peak_memory = Bytes(0)
     log.backward_peak_memory_reason = None
-    log.total_backward_memory = Bytes(0)
-    log.total_gradient_memory = Bytes(0)
-    log.saved_gradient_memory = Bytes(0)
-    log.total_param_gradient_memory = Bytes(0)
-    log.backward_memory_backend = "unknown"
-    log.replay_frontier = {}
-    for op in getattr(log, "layer_list", ()):
+    log._cost_total_backward_memory = Bytes(0)
+    log._cost_total_grad_memory = Bytes(0)
+    log._cost_saved_grad_memory = Bytes(0)
+    log._cost_total_param_grad_memory = Bytes(0)
+    log._provenance_backward_memory_backend = "unknown"
+    log._replay_frontier = {}
+    for op in log._layer_list:
         _clear_op_gradient_projection(op)
-    for param_log in getattr(log, "param_logs", {}).values():
+    for param_log in log._param_logs.values():
         _clear_param_gradient_projection(param_log)
 
 
@@ -485,7 +485,7 @@ def _label_key_map(trace: Trace) -> dict[str, tuple[str, ...]]:
     """
 
     mapping: dict[str, list[str]] = {}
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         key = _replay_site_key(op)
         spellings = {key, op.layer_label}
         for spelling in getattr(op, "lookup_keys", ()) or ():
@@ -543,7 +543,7 @@ def cone_of_effect(trace: Trace, origins: Iterable[Op]) -> list[Op]:
     """
 
     origins = _validated_cone_origins(origins)
-    all_keys = trace.layer_dict_all_keys
+    all_keys = trace._layer_dict_all_keys
     label_keys = _label_key_map(trace)
     call_groups = _func_call_groups(trace)
     visited: set[str] = set()
@@ -587,7 +587,7 @@ def cone_of_effect(trace: Trace, origins: Iterable[Op]) -> list[Op]:
 
         _enqueue_children(layer)
 
-    return [layer for layer in trace.layer_list if _replay_site_key(layer) in visited]
+    return [layer for layer in trace._layer_list if _replay_site_key(layer) in visited]
 
 
 def _run_replay(
@@ -801,7 +801,7 @@ def _run_replay(
     )
     log._has_direct_writes = False
     if differentiable_frontier is not None:
-        log.replay_frontier = dict(differentiable_frontier)
+        log._replay_frontier = dict(differentiable_frontier)
     return log
 
 
@@ -968,10 +968,12 @@ def _boundary_slot_parent_op(
     parent_label = parents[0]
     candidate_keys = label_keys.get(parent_label, ())
     candidates = [
-        trace.layer_dict_all_keys[key] for key in candidate_keys if key in trace.layer_dict_all_keys
+        trace._layer_dict_all_keys[key]
+        for key in candidate_keys
+        if key in trace._layer_dict_all_keys
     ]
-    if not candidates and parent_label in trace.layer_dict_all_keys:
-        candidates = [trace.layer_dict_all_keys[parent_label]]
+    if not candidates and parent_label in trace._layer_dict_all_keys:
+        candidates = [trace._layer_dict_all_keys[parent_label]]
     same_call = [
         candidate
         for candidate in candidates
@@ -1054,7 +1056,7 @@ def _resolve_arg_component(
         label_keys = _label_key_map(trace)
     if isinstance(component, ParentRef):
         parent_label = _final_label_for_ref(trace, component.parent_label)
-        if parent_label not in trace.layer_dict_all_keys:
+        if parent_label not in trace._layer_dict_all_keys:
             raise ReplayPreconditionError(
                 f"{pass_log.layer_label} references missing parent {component.parent_label!r}"
             )
@@ -1069,7 +1071,7 @@ def _resolve_arg_component(
                 f"{len(parent_keys)} passes of that layer "
                 f"({', '.join(repr(key) for key in parent_keys)}); refusing to guess a pass."
             )
-        parent = trace.layer_dict_all_keys[parent_keys[0] if parent_keys else parent_label]
+        parent = trace._layer_dict_all_keys[parent_keys[0] if parent_keys else parent_label]
         parent_key = _replay_site_key(parent)
         _warn_if_unexpected_parent(pass_log, parent, label_keys, strict=strict)
         if parent_key in overlay:
@@ -1373,7 +1375,7 @@ def _commit_replay_updates(
     new_digests: dict[str, str] = {}
     try:
         for label, tensor in pending_updates.items():
-            site = log.layer_dict_all_keys[label]
+            site = log._layer_dict_all_keys[label]
             _record_capture_digest(site, known_digests, new_digests)
             snapshots[label] = {
                 "out": site.out,
@@ -1384,8 +1386,8 @@ def _commit_replay_updates(
                 "transformed_out_dtype": site.transformed_out_dtype,
                 "memory": site.activation_memory,
                 "transformed_activation_memory": site.transformed_activation_memory,
-                "interventions": list(site.interventions),
-                "intervention_replaced": site.intervention_replaced,
+                "edits": list(site.edits),
+                "is_edited": site.is_edited,
             }
             _apply_out_update(site, tensor)
             new_records = list(pending_records.get(label, ()))
@@ -1396,7 +1398,7 @@ def _commit_replay_updates(
                 # two records, never three). Live-door records (capture
                 # facts), edge records (tier-(ii) corroboration), and
                 # records on sites this push did not fire at survive.
-                old_records = list(site.interventions or ())
+                old_records = list(site.edits or ())
                 surviving = [
                     record
                     for record in old_records
@@ -1406,12 +1408,10 @@ def _commit_replay_updates(
                 # component (a user-injected tensor mints no FireRecord);
                 # preserve exactly that component across the replacement.
                 record_replaced_before = any(record.replaced for record in old_records)
-                nonrecord_component = bool(site.intervention_replaced) and (
-                    not record_replaced_before
-                )
-                site._internal_set("interventions", surviving + new_records)
+                nonrecord_component = bool(site.is_edited) and (not record_replaced_before)
+                site._internal_set("edits", surviving + new_records)
                 site._internal_set(
-                    "intervention_replaced",
+                    "is_edited",
                     bool(
                         nonrecord_component
                         or any(record.replaced for record in surviving + new_records)
@@ -1419,7 +1419,7 @@ def _commit_replay_updates(
                 )
     except Exception:
         for label, state in snapshots.items():
-            site = log.layer_dict_all_keys[label]
+            site = log._layer_dict_all_keys[label]
             for field_name, value in state.items():
                 site._internal_set(field_name, value)
         raise
@@ -1460,8 +1460,8 @@ def _preflight_log(log: Trace) -> None:
     refuse_poisoned_trace(log, "path-assuming intervention chaining")
     if not getattr(log, "_tracing_finished", False):
         raise ReplayPreconditionError("replay requires a completed Trace")
-    if not getattr(log, "intervention_ready", False):
-        raise ReplayPreconditionError("replay requires intervention_ready=True capture metadata")
+    if not getattr(log, "is_replayable", False):
+        raise ReplayPreconditionError("replay requires replayable=True capture metadata")
 
 
 def _preflight_group(group: Sequence[Op]) -> None:
@@ -1603,10 +1603,10 @@ def _origin_sites_for_hooks(
     with _label_index_scope():  # resolution reads the trace; nothing relabels it here
         for entry in hook_entries:
             for site in log._resolve_sites(
-                entry.site_target, strict=strict, max_fanout=len(log.layer_list)
+                entry.site_target, strict=strict, max_fanout=len(log._layer_list)
             ):
                 target_keys.add(_replay_site_key(site))
-    return [site for site in log.layer_list if _replay_site_key(site) in target_keys]
+    return [site for site in log._layer_list if _replay_site_key(site) in target_keys]
 
 
 def _hook_targets_by_label(
@@ -1637,7 +1637,7 @@ def _hook_targets_by_label(
     with _label_index_scope():  # resolution reads the trace; nothing relabels it here
         for entry in hook_entries:
             for site in log._resolve_sites(
-                entry.site_target, strict=strict, max_fanout=len(log.layer_list)
+                entry.site_target, strict=strict, max_fanout=len(log._layer_list)
             ):
                 targets.setdefault(_replay_site_key(site), []).append(entry)
     return {label: tuple(entries) for label, entries in targets.items()}
@@ -1686,7 +1686,7 @@ def _func_call_groups(log: Trace) -> dict[int | None, tuple[Op, ...]]:
     """
 
     groups: dict[int | None, list[Op]] = {}
-    for layer in log.layer_list:
+    for layer in log._layer_list:
         groups.setdefault(layer.func_call_id, []).append(layer)
     return {call_id: tuple(layers) for call_id, layers in groups.items()}
 
@@ -1760,13 +1760,13 @@ def _index_output_component(output: Any, component: OutputPathComponent) -> Any:
     if isinstance(component, TupleIndex):
         return output[component.index]
     if isinstance(component, DictKey):
-        return output[component.key]
+        return output[component._key]
     if isinstance(component, NamedField):
-        return getattr(output, component.name)
+        return getattr(output, component._name)
     if isinstance(component, DataclassField):
-        return getattr(output, component.name)
+        return getattr(output, component._name)
     if isinstance(component, HFKey):
-        return output[component.key]
+        return output[component._key]
     if isinstance(component, int):
         return output[component]
     if isinstance(component, str):
@@ -1881,7 +1881,7 @@ def _threaded_buffer_value(
         # captured value is the honest replay value.
         return None
     producer_key = parents[0] if len(parents) == 1 else None
-    producer = trace.layer_dict_all_keys.get(producer_key) if producer_key is not None else None
+    producer = trace._layer_dict_all_keys.get(producer_key) if producer_key is not None else None
     # The overlay is keyed by the pass-qualified replay key while a
     # SINGLE-pass producer spells its parent label bare (``copy_1_4`` vs
     # ``copy_1_4:1``); resolve the producer first and look up ITS replay key,

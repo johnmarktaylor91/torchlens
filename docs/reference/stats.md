@@ -11,7 +11,7 @@ pending naming-session ratification.
 ## The accumulators
 
 Every accumulator implements the `tl.stats.StreamingStat` protocol --
-`update(value)` folds one batch, `result()` finalizes:
+`update(value)` folds one batch, `compute()` finalizes (`tl.stats.Histogram` finalizes with `result()`):
 
 | Accumulator | Result | Notes |
 |---|---|---|
@@ -116,7 +116,7 @@ sae_encoder = nn.Sequential(nn.Linear(8, 16), nn.ReLU()).eval()  # a tiny SAE en
 stimuli = [torch.randn(3, 4) for _ in range(3)]  # 9 examples, ragged batches welcome
 
 relu_label = next(
-    op.layer_label for op in tl.trace(mlp, stimuli[0]).layer_list if op.layer_type == "relu"
+    op.layer_label for op in tl.trace(mlp, stimuli[0]).ops if op.type == "relu"
 )
 per_unit = tl.stats.aggregate(
     mlp,
@@ -267,12 +267,12 @@ x = torch.rand(2, 3, 16, 16)
 reduced = tl.trace(model, x, save="stats")
 spines = tl.stats.site_stats(reduced)
 label = next(iter(spines))
-print(label, spines[label].result().count_total, spines[label].result().mean)
+print(label, spines[label].compute().numel, spines[label].compute().mean)
 
 full = tl.trace(model, x)
 reference = tl.stats.RunningStats()
 reference.update(full[label].out)
-print(reference.result() == spines[label].result())
+print(reference.compute() == spines[label].compute())
 ```
 
 ## Trajectory statistics: `tl.mechinterp.measure_trajectory`

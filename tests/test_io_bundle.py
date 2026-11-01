@@ -139,7 +139,7 @@ def _build_sparse_out_log() -> Trace:
     """
 
     trace = _build_conv_log()
-    first_saved_layer = next(layer for layer in trace.layer_list if layer.has_saved_activation)
+    first_saved_layer = next(layer for layer in trace._layer_list if layer.has_saved_activation)
     assert isinstance(first_saved_layer.out, torch.Tensor)
     first_saved_layer.out = first_saved_layer.out.to_sparse()
     return trace
@@ -155,9 +155,9 @@ def _build_non_tensor_out_log() -> Trace:
     """
 
     trace = _build_conv_log()
-    first_saved_layer = next(layer for layer in trace.layer_list if layer.has_saved_activation)
+    first_saved_layer = next(layer for layer in trace._layer_list if layer.has_saved_activation)
     first_saved_layer.transformed_out = 1.0
-    trace.activation_transform = lambda tensor: float(tensor.mean().item())
+    trace._options_activation_transform = lambda tensor: float(tensor.mean().item())
     return trace
 
 
@@ -176,7 +176,7 @@ def _build_complex_out_log(*, dtype: torch.dtype) -> Trace:
     """
 
     trace = _build_conv_log()
-    first_saved_layer = next(layer for layer in trace.layer_list if layer.has_saved_activation)
+    first_saved_layer = next(layer for layer in trace._layer_list if layer.has_saved_activation)
     assert isinstance(first_saved_layer.out, torch.Tensor)
     real = first_saved_layer.out
     first_saved_layer.out = torch.complex(real, real).to(dtype)
@@ -293,7 +293,7 @@ def test_manifest_provenance_roundtrip_and_hash_determinism(tmp_path: Path) -> N
     first = Manifest.read(first_path / "manifest.json")
     second = Manifest.read(second_path / "manifest.json")
 
-    assert restored.num_ops == captured.num_ops
+    assert restored._num_ops == captured._num_ops
     assert first.provenance is not None
     assert second.provenance is not None
     assert first.provenance.provenance_version == 1
@@ -328,7 +328,7 @@ def test_manifest_provenance_sentinel_round_trips_and_tamper_refuses(tmp_path: P
     assert recorded.startswith("unavailable:")
     assert recorded.partition(":")[2].isidentifier()
     restored = load(bundle_path)
-    assert restored.num_ops == captured.num_ops
+    assert restored._num_ops == captured._num_ops
 
     for forged in ("deadbeef", "unavailable:", "unavailable:not an identifier", "x" * 64):
         manifest["provenance"]["input_hash"] = forged
@@ -349,7 +349,7 @@ def test_manifest_without_optional_provenance_still_loads(tmp_path: Path) -> Non
     restored = load(bundle_path)
 
     assert parsed.provenance is None
-    assert restored.num_ops > 0
+    assert restored._num_ops > 0
 
 
 def test_manifest_git_commit_is_absent_outside_repository(
@@ -391,12 +391,12 @@ def test_bundle_roundtrip_preserves_saved_outs_bit_exactly(tmp_path: Path) -> No
 
     live_by_label = {
         layer.layer_label: layer.out
-        for layer in live_log.layer_list
+        for layer in live_log._layer_list
         if layer.has_saved_activation and isinstance(layer.out, torch.Tensor)
     }
     restored_by_label = {
         layer.layer_label: layer.out
-        for layer in restored.layer_list
+        for layer in restored._layer_list
         if layer.has_saved_activation and isinstance(layer.out, torch.Tensor)
     }
 
@@ -412,28 +412,28 @@ def test_semantic_output_fields_default_none_roundtrip(tmp_path: Path) -> None:
 
     trace = _build_conv_log()
 
-    assert trace.output_postprocessor is None
-    assert trace.transform_repr is None
+    assert trace.provenance.output_postprocessor is None
+    assert trace.options.input_transform is None
     assert trace.output_id2label is None
     assert trace.output_num_classes is None
-    assert trace.decoded_output is None
+    assert trace._decoded_output is None
 
     bundle_path = tmp_path / "semantic_defaults.tlspec"
     trace.save(bundle_path)
     restored = load(bundle_path)
 
-    assert restored.output_postprocessor is None
-    assert restored.transform_repr is None
+    assert restored.provenance.output_postprocessor is None
+    assert restored.options.input_transform is None
     assert restored.output_id2label is None
     assert restored.output_num_classes is None
-    assert restored.decoded_output is None
+    assert restored._decoded_output is None
 
 
 def test_resolved_postprocessing_roundtrips_through_tlspec(tmp_path: Path) -> None:
     """Resolved output postprocessing provenance is portable state."""
 
     trace = _build_conv_log()
-    trace.output_postprocessor = ResolvedPostprocessing(
+    trace._provenance_output_postprocessor = ResolvedPostprocessing(
         source="hf_config",
         identifier="tiny-classifier",
         verified=True,
@@ -447,14 +447,14 @@ def test_resolved_postprocessing_roundtrips_through_tlspec(tmp_path: Path) -> No
         top_n_captured=5,
         ambiguous=False,
     )
-    trace.decoded_output = [{"batch_item": 0, "rank": 1, "label": "cat", "prob": 0.8}]
+    trace._decoded_output = [{"batch_item": 0, "rank": 1, "label": "cat", "prob": 0.8}]
 
     bundle_path = tmp_path / "postprocessor.tlspec"
     trace.save(bundle_path)
     restored = load(bundle_path)
 
-    assert restored.output_postprocessor == trace.output_postprocessor
-    assert restored.decoded_output == trace.decoded_output
+    assert restored.provenance.output_postprocessor == trace.provenance.output_postprocessor
+    assert restored._decoded_output == trace._decoded_output
 
 
 def test_input_transform_repr_roundtrips_while_callable_drops(tmp_path: Path) -> None:
@@ -481,14 +481,14 @@ def test_input_transform_repr_roundtrips_while_callable_drops(tmp_path: Path) ->
         torch.ones(1, 2),
         capture=tl.options.CaptureOptions(input_transform=double_input),
     )
-    assert trace.transform_repr == repr(double_input)
+    assert trace.options.input_transform == repr(double_input)
     assert trace._transform is double_input
 
     bundle_path = tmp_path / "input_transform.tlspec"
     trace.save(bundle_path)
     restored = load(bundle_path)
 
-    assert restored.transform_repr == trace.transform_repr
+    assert restored.options.input_transform == trace.options.input_transform
     assert restored._transform is None
 
 
@@ -573,14 +573,14 @@ def test_bundle_save_complex64_still_round_trips(tmp_path: Path) -> None:
 
     trace = _build_complex_out_log(dtype=torch.complex64)
     bundle_path = tmp_path / "complex64_bundle.tl"
-    first_saved_layer = next(layer for layer in trace.layer_list if layer.has_saved_activation)
+    first_saved_layer = next(layer for layer in trace._layer_list if layer.has_saved_activation)
     original_out = first_saved_layer.out
     assert isinstance(original_out, torch.Tensor)
     assert original_out.dtype == torch.complex64
 
     trace.save(bundle_path)
     restored = load(bundle_path)
-    restored_layer = next(layer for layer in restored.layer_list if layer.has_saved_activation)
+    restored_layer = next(layer for layer in restored._layer_list if layer.has_saved_activation)
 
     assert isinstance(restored_layer.out, torch.Tensor)
     assert restored_layer.out.dtype == torch.complex64
@@ -603,7 +603,7 @@ def test_bundle_save_complex64_still_round_trips(tmp_path: Path) -> None:
             "saved by torchlens 2.x",
         ),
         (
-            "io_format_between_floor_and_current",
+            "io_format_at_floor",
             lambda manifest: manifest.__setitem__("tlspec_version", MIN_TLSPEC_VERSION),
             "raise",
             "saved by torchlens 2.x",
@@ -643,9 +643,9 @@ def test_bundle_save_complex64_still_round_trips(tmp_path: Path) -> None:
         (
             # An older writer of the same major release loads and is logged.
             "torchlens_older_supported",
-            lambda manifest: manifest.__setitem__("torchlens_version", "2.36.0"),
+            lambda manifest: manifest.__setitem__("torchlens_version", "2.36.1"),
             "info_log",
-            "2.36.0",
+            "2.36.1",
         ),
         (
             "python_major_mismatch",
@@ -689,7 +689,7 @@ def test_bundle_version_policy_rows(
         (bundle_path / "blobs" / "extra.bin").write_bytes(b"extra")
         with pytest.warns(UserWarning, match="unreferenced extra files"):
             loaded = load(bundle_path)
-        assert loaded.model_class_name == "_ConvBundleModel"
+        assert loaded.source.class_name == "_ConvBundleModel"
         return
 
     if expectation == "raise":
@@ -700,20 +700,20 @@ def test_bundle_version_policy_rows(
     if expectation == "warning":
         with pytest.warns(UserWarning, match=resolved_expected_text or ""):
             loaded = load(bundle_path)
-        assert loaded.model_class_name == "_ConvBundleModel"
+        assert loaded.source.class_name == "_ConvBundleModel"
         return
 
     if expectation == "info_log":
         with caplog.at_level(logging.INFO, logger="torchlens._io.manifest"):
             loaded = load(bundle_path)
-        assert loaded.model_class_name == "_ConvBundleModel"
+        assert loaded.source.class_name == "_ConvBundleModel"
         assert resolved_expected_text is not None
         assert resolved_expected_text in caplog.text
         assert "older than runtime torchlens_version" in caplog.text
         return
 
     loaded = load(bundle_path)
-    assert loaded.model_class_name == "_ConvBundleModel"
+    assert loaded.source.class_name == "_ConvBundleModel"
 
 
 def test_bundle_load_raises_for_missing_safetensors_backend(
@@ -798,9 +798,9 @@ def test_bundle_save_overwrite_true_replaces_existing_bundle(tmp_path: Path) -> 
     second_log.save(bundle_path, overwrite=True)
     restored = load(bundle_path)
 
-    first_output = first_log.layer_list[-1].out
-    second_output = second_log.layer_list[-1].out
-    restored_output = restored.layer_list[-1].out
+    first_output = first_log._layer_list[-1].out
+    second_output = second_log._layer_list[-1].out
+    restored_output = restored._layer_list[-1].out
 
     assert isinstance(first_output, torch.Tensor)
     assert isinstance(second_output, torch.Tensor)
@@ -847,8 +847,8 @@ def test_bundle_save_overwrite_typeerror_preserves_original_and_marks_partial(
     # The original (pre-overwrite) bundle must survive the failed overwrite.
     assert bundle_path.exists()
     restored = load(bundle_path)
-    first_output = first_log.layer_list[-1].out
-    restored_output = restored.layer_list[-1].out
+    first_output = first_log._layer_list[-1].out
+    restored_output = restored._layer_list[-1].out
     assert isinstance(first_output, torch.Tensor)
     assert isinstance(restored_output, torch.Tensor)
     assert torch.equal(first_output, restored_output)
@@ -924,8 +924,8 @@ def test_bundle_save_overwrite_arbitrary_exception_preserves_original_and_marks_
     # regardless of which exception type the write raised.
     assert bundle_path.exists()
     restored = load(bundle_path)
-    first_output = first_log.layer_list[-1].out
-    restored_output = restored.layer_list[-1].out
+    first_output = first_log._layer_list[-1].out
+    restored_output = restored._layer_list[-1].out
     assert isinstance(first_output, torch.Tensor)
     assert isinstance(restored_output, torch.Tensor)
     assert torch.equal(first_output, restored_output)
@@ -1018,15 +1018,15 @@ def test_bundle_save_raw_input_stringifies_unpicklable_value_keeps_tensors(
             input_transform=lambda d: d["tensor"], save_raw_input=True, seed=0
         ),
     )
-    assert isinstance(trace.raw_input["meta"], type(make_generator()))
+    assert isinstance(trace.input["meta"], type(make_generator()))
 
     bundle_path = tmp_path / "raw_input_bundle.tl"
     trace.save(bundle_path)
 
     loaded = load(bundle_path)
-    assert isinstance(loaded.raw_input["tensor"], torch.Tensor)
-    assert torch.equal(loaded.raw_input["tensor"], raw_input["tensor"])
-    assert loaded.raw_input["meta"] == "<scrubbed:generator>"
+    assert isinstance(loaded.input["tensor"], torch.Tensor)
+    assert torch.equal(loaded.input["tensor"], raw_input["tensor"])
+    assert loaded.input["meta"] == "<scrubbed:generator>"
 
 
 def test_bundle_save_raw_input_large_tensor_skips_picklability_probe(
@@ -1074,8 +1074,8 @@ def test_bundle_save_raw_input_large_tensor_skips_picklability_probe(
     assert tensor_dumps_calls == 0
 
     loaded = load(bundle_path)
-    assert isinstance(loaded.raw_input["tensor"], torch.Tensor)
-    assert torch.equal(loaded.raw_input["tensor"], large_tensor)
+    assert isinstance(loaded.input["tensor"], torch.Tensor)
+    assert torch.equal(loaded.input["tensor"], large_tensor)
 
 
 def test_bundle_save_raw_input_numeric_ndarray_skips_picklability_probe(
@@ -1114,8 +1114,8 @@ def test_bundle_save_raw_input_numeric_ndarray_skips_picklability_probe(
     assert ndarray_dumps_calls == 0
 
     loaded = load(bundle_path)
-    assert isinstance(loaded.raw_input["array"], np.ndarray)
-    np.testing.assert_array_equal(loaded.raw_input["array"], numeric_array)
+    assert isinstance(loaded.input["array"], np.ndarray)
+    np.testing.assert_array_equal(loaded.input["array"], numeric_array)
 
 
 def test_bundle_save_raw_input_object_dtype_ndarray_stringifies_unpicklable_element(
@@ -1152,7 +1152,7 @@ def test_bundle_save_raw_input_object_dtype_ndarray_stringifies_unpicklable_elem
     trace.save(bundle_path)
 
     loaded = load(bundle_path)
-    assert loaded.raw_input["array"] == "<scrubbed:ndarray>"
+    assert loaded.input["array"] == "<scrubbed:ndarray>"
 
 
 def test_bundle_save_raw_input_structured_ndarray_object_field_stringifies_unpicklable_element(
@@ -1197,7 +1197,7 @@ def test_bundle_save_raw_input_structured_ndarray_object_field_stringifies_unpic
     trace.save(bundle_path)
 
     loaded = load(bundle_path)
-    assert loaded.raw_input["array"] == "<scrubbed:ndarray>"
+    assert loaded.input["array"] == "<scrubbed:ndarray>"
 
 
 def test_bundle_save_rejects_symlink_target(tmp_path: Path) -> None:

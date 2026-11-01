@@ -120,9 +120,12 @@ def _receiver_param(op: Any) -> Any | None:
         The receiver ``Param``, or ``None``.
     """
 
+    from torchlens._data_classes.layer import Layer
+    from torchlens._data_classes.op import Op
+
     if not _is_inplace_func_name(getattr(op, "func_name", None)):
         return None
-    param_logs = tuple(getattr(op, "_param_logs", ()) or ())
+    param_logs = tuple((op._param_logs if isinstance(op, (Op, Layer)) else ()) or ())
     if not param_logs:
         return None
     positions = getattr(op, "parent_arg_positions", None) or {}
@@ -147,7 +150,7 @@ def find_mutated_parameter_sources(trace: Trace) -> tuple[MutatedParameterSource
         when nothing was mutated.
     """
 
-    ops = list(getattr(trace, "layer_list", ()) or ())
+    ops = list(trace._layer_list or ())
     first: dict[str, tuple[Any, int]] = {}
     for index, op in enumerate(ops):
         param = _receiver_param(op)
@@ -157,7 +160,7 @@ def find_mutated_parameter_sources(trace: Trace) -> tuple[MutatedParameterSource
         return ()
     readers: dict[str, list[Any]] = {address: [] for address in first}
     for index, op in enumerate(ops):
-        for param in getattr(op, "_param_logs", ()) or ():
+        for param in op._param_logs or ():
             entry = first.get(param.address)
             if entry is not None and index <= entry[1]:
                 readers[param.address].append(op)

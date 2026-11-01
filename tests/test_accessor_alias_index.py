@@ -177,11 +177,11 @@ def _op_probe_keys(accessor: TraceOpAccessor) -> list[str]:
     for op in accessor:
         keys += [
             op.label,
-            op.label_short,
+            op.short_label,
             op._label_raw,
             op.raw_label,
             op.layer_label,
-            op.layer_label_short,
+            op.short_layer_label,
         ]
         keys += list(op.children) + list(op.parents)
     keys += ["nope", "", ":", "1", "self", "linear", "relu_1_1:99"]
@@ -290,8 +290,8 @@ def test_module_call_and_grad_fn_call_indexes_match_scan() -> None:
 
         grad_fn_calls = trace.autograd.grad_fn_calls
         assert len(grad_fn_calls) > 0
-        grad_fn_keys = [getattr(call, "label", None) for call in grad_fn_calls]
-        grad_fn_keys += [getattr(call, "call_label", None) for call in grad_fn_calls]
+        grad_fn_keys = [getattr(call, "grad_fn_label", None) for call in grad_fn_calls]
+        grad_fn_keys += [getattr(call, "label", None) for call in grad_fn_calls]
         grad_fn_keys += ["nope", "AddBackward0"]
         ambiguous_grad_fns = 0
         for key in dict.fromkeys(k for k in grad_fn_keys if isinstance(k, str)):
@@ -314,7 +314,7 @@ def test_edge_counters_match_unmemoized_reference() -> None:
     for name, model, trace in _traces():
         try:
             ops = trace.ops
-            rows = trace.layer_list  # every row: edges touch input/output/buffer rows too
+            rows = trace._layer_list  # every row: edges touch input/output/buffer rows too
             direct_edges = {
                 (op.label, ops[child_label].label) for op in rows for child_label in op.children
             }
@@ -363,7 +363,7 @@ def test_alias_index_build_failure_falls_back_to_scan(monkeypatch: pytest.Monkey
         ops = list(trace.ops)
         assert len(ops) > 2
         first, last = ops[0], ops[-1]
-        probe_key = first.label_short
+        probe_key = first.short_label
         assert isinstance(probe_key, str)
 
         original = Op.raw_label
@@ -376,7 +376,7 @@ def test_alias_index_build_failure_falls_back_to_scan(monkeypatch: pytest.Monkey
             return original.fget(op)
 
         monkeypatch.setattr(Op, "raw_label", property(raising_raw_label))
-        accessor = TraceOpAccessor(ops, trace.layer_num_calls)
+        accessor = TraceOpAccessor(ops, trace._layer_num_calls)
         assert accessor._resolve_substring(probe_key) is first
         assert accessor._alias_index_unavailable is True
         assert accessor._alias_indexes is None

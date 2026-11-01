@@ -41,7 +41,7 @@ output = trace.reconstruct_output()
 
 The FINAL model-output snapshot is recorded on every capture (one `ContainerSpec` per capture), so `trace.reconstruct_output()` and a live `trace.run()` rebuild the exact tuple/dict/namedtuple/dataclass/`ModelOutput` the model returned on a default capture too; the output op records still carry `container_spec=None` unless the structure opt-in below is set. A container holding a tensor-bearing object the codec cannot represent (for example a HuggingFace `DynamicCache`) is recorded as `opaque`: `reconstruct_output()` refuses typed and the runnable save refuses at preflight instead of advertising a contract it cannot fill.
 
-Input-container reconstruction and module-boundary container records require container structure to be captured. Use `capture_container_structure=True` when you need nested inputs or per-op container specs recorded after capture or after `.tlspec` load without enabling intervention replay metadata. `intervention_ready=True` also captures that structure as part of its broader replay-template metadata. (The former `capture_output_structure=` alias is removed.)
+Input-container reconstruction and module-boundary container records require container structure to be captured. Use `capture_container_structure=True` when you need nested inputs or per-op container specs recorded after capture or after `.tlspec` load without enabling intervention replay metadata. `replayable=True` also captures that structure as part of its broader replay-template metadata. (The former `capture_output_structure=` alias is removed.)
 
 ## Visualization
 

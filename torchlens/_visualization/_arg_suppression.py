@@ -33,6 +33,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._record_type import record_type
 from ..backends.registry import TORCH_BACKEND_NAME
 
 if TYPE_CHECKING:  # typing only
@@ -121,7 +122,7 @@ def _parent_shape(trace: Trace, node: Any, op_by_label: dict[str, Any]) -> tuple
     parent = op_by_label.get(parent_label)
     if parent is not None:
         return _record_output_shape(parent)
-    layer_logs = getattr(trace, "layer_logs", None)
+    layer_logs = trace._layer_logs
     if layer_logs is not None and parent_label in layer_logs:
         return _record_output_shape(layer_logs[parent_label])
     return None
@@ -162,7 +163,7 @@ def suppressed_arg_keys_for_record(
     config = getattr(node, "func_config", None)
     if not config:
         return frozenset()
-    normalized_type = str(getattr(node, "layer_type", "")).lower().replace("_", "")
+    normalized_type = str(record_type(node, "")).lower().replace("_", "")
     rows = SUPPRESSION_CANDIDATE_TABLE.get(normalized_type)
     if not rows:
         return frozenset()
@@ -195,12 +196,12 @@ def compute_suppressed_arg_keys(trace: Trace, universe: Any) -> dict[int, frozen
     live on the trace).
     """
 
-    if str(getattr(trace, "backend", "")) != TORCH_BACKEND_NAME:
+    if str(trace._provenance_backend) != TORCH_BACKEND_NAME:
         # Non-torch capture backends are never candidates (the axis
         # semantics in the table are the PyTorch module contract).
         return {}
     op_by_label: dict[str, Any] = {}
-    for op in getattr(trace, "layer_list", ()) or ():
+    for op in trace._layer_list or ():
         label = getattr(op, "label", None)
         if isinstance(label, str):
             op_by_label.setdefault(label, op)

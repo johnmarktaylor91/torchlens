@@ -63,6 +63,7 @@ from _oracle_env import (  # noqa: E402 - tests/ is on sys.path under pytest
 from torch import nn
 
 import torchlens as tl
+from torchlens._record_type import record_type
 from torchlens.intervention.selectors import (
     BaseSelector,
     CompositeSelector,
@@ -243,7 +244,7 @@ def _probe_capture(model_key: str, make_selector: Callable[[], Any]) -> Any:
     except Exception as exc:  # noqa: BLE001 - characterization records error shape
         return _error_cell(exc)
     return sorted(
-        str(op.layer_label) for op in log.layer_list if getattr(op, "has_saved_activation", False)
+        str(op.layer_label) for op in log._layer_list if getattr(op, "has_saved_activation", False)
     )
 
 
@@ -443,7 +444,7 @@ def _rebuilt_selector_labels(rebuilt: Any, model_key: str, *, backward: bool) ->
 
 
 def _where_relu() -> Any:
-    return tl.where(lambda p: getattr(p, "layer_type", None) == "relu", name_hint="type_relu")
+    return tl.where(lambda p: record_type(p, None) == "relu", name_hint="type_relu")
 
 
 #: (cell_name, model_key, selector factory). Every entry gets capture/sites/live

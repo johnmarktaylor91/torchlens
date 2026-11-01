@@ -59,10 +59,12 @@ def model_explorer_diff(
         The written directory.
     """
 
+    from ..._data_classes._trace_missing_attrs import is_live_trace
+
     left, right, names = _resolve_pair(members)
     destination = Path(path)
     destination.mkdir(parents=True, exist_ok=True)
-    base = str(label or getattr(left, "model_class_name", None) or "model")
+    base = str(label or (left._source_class_name if is_live_trace(left) else None) or "model")
     payloads = {}
     for side, trace, name in (("left", left, names[0]), ("right", right, names[1])):
         payload = to_model_explorer_dict(

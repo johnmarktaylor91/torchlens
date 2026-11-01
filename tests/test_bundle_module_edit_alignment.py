@@ -54,18 +54,18 @@ def clean_and_ablated():
 
 
 def _head(trace):
-    return [op for op in trace.layer_list if op.func_name == "linear"][-1]
+    return [op for op in trace._layer_list if op.func_name == "linear"][-1]
 
 
 def _edit_ops(trace):
-    return [op for op in trace.layer_list if op.func_name == "intervention_replacement"]
+    return [op for op in trace._layer_list if op.func_name == "intervention_replacement"]
 
 
 def test_module_edit_is_recorded_as_its_own_op(clean_and_ablated) -> None:
     clean, ablated, module_out, expected_ablated_output = clean_and_ablated
     edits = _edit_ops(ablated)
     assert len(edits) == 1
-    assert edits[0].intervention_replaced is True
+    assert edits[0].is_edited is True
     assert torch.equal(edits[0].out, torch.zeros_like(module_out))
     assert len(edits[0].parents) == 1
     module_last_op = ablated[edits[0].parents[0]]
@@ -91,10 +91,10 @@ def test_site_reads_score_the_renumbered_ops(clean_and_ablated) -> None:
     expected = _independent_cosine_distance(_head(clean).out, _head(ablated).out)
     assert expected > 0.01
 
-    ranked = dict(bundle.rank_changes(k=len(clean.layer_list)))
-    assert set(ranked) == {op.layer_label for op in clean.layer_list}
+    ranked = dict(bundle.rank_changes(k=len(clean._layer_list)))
+    assert set(ranked) == {op.layer_label for op in clean._layer_list}
     assert ranked[head_label] == pytest.approx(expected, rel=1e-4, abs=1e-6)
 
     pair_rows = dict(bundle.compare("clean", "ablated"))
-    assert set(pair_rows) == {op.layer_label for op in clean.layer_list}
+    assert set(pair_rows) == {op.layer_label for op in clean._layer_list}
     assert pair_rows[head_label] == pytest.approx(expected, rel=1e-4, abs=1e-6)

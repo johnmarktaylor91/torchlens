@@ -31,6 +31,17 @@ class _DoTransaction(NamedTuple):
     audit_rows_before: int
 
 
+def _edit_identity(edit: Any) -> str:
+    """String identity of an edit for an audit row: its ``Edit.name`` when that is a string,
+    else the callable's ``__name__``, else its type name (a replacement tensor answers
+    ``name`` with a non-string)."""
+
+    name = getattr(edit, "name", None)
+    if isinstance(name, str) and name:
+        return name
+    return str(getattr(edit, "__name__", type(edit).__name__))
+
+
 def do_event_edit_names(
     trace: Trace, hooks_or_site: Any, value_or_hook: Any
 ) -> tuple[tuple[str, ...], Any]:
@@ -55,23 +66,10 @@ def do_event_edit_names(
         # One transactional envelope for the whole batch (D33): per-pair
         # edits named in order, plus the kind-specific staged-store slots
         # disclosure so cross-kind completion needs no schema change.
-        edit_names = tuple(
-            str(
-                getattr(
-                    pair_edit,
-                    "helper_name",
-                    getattr(pair_edit, "__name__", type(pair_edit).__name__),
-                )
-            )
-            for _sel, pair_edit in hooks_or_site
-        )
+        edit_names = tuple(_edit_identity(pair_edit) for _sel, pair_edit in hooks_or_site)
         selection_repr = " ; ".join(repr(sel) for sel, _pair_edit in hooks_or_site)
         return edit_names, selection_repr
-    edit_name = getattr(
-        value_or_hook,
-        "helper_name",
-        getattr(value_or_hook, "__name__", type(value_or_hook).__name__),
-    )
+    edit_name = _edit_identity(value_or_hook)
     selection_repr = trace._history_site_payload(hooks_or_site)
     if not isinstance(selection_repr, str):
         selection_repr = repr(selection_repr)

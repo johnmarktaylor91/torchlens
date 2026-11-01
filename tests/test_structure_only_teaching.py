@@ -185,7 +185,7 @@ def test_float_truthiness_gate_is_lifted_in_mode_only() -> None:
     assert excinfo.value.fields["consumer_kind"] == "if_test"
     # Companion: the default path still captures this model without raising.
     log = tl.trace(FloatTruthiness(), torch.randn(2, 4))
-    assert log.structure_only is False
+    assert log.options.structure_only is False
 
 
 def test_internal_frame_reads_do_not_trip_the_belt() -> None:
@@ -202,8 +202,8 @@ def test_internal_frame_reads_do_not_trip_the_belt() -> None:
             return torch.relu(self.fc(x))
 
     log = _structure_trace(Clean(), torch.randn(2, 4))
-    assert log.structure_only is True
-    assert len(log.layer_list) >= 3
+    assert log.options.structure_only is True
+    assert len(log._layer_list) >= 3
 
 
 # ---------------------------------------------------------------------------
@@ -378,7 +378,7 @@ def test_install_census_every_surface_member_is_escalated_in_mode() -> None:
     from torchlens.backends.torch import structure_only_belt as belt
 
     class _FakeTrace:
-        structure_only = True
+        _options_structure_only = True
 
     tensor_originals = {
         name: getattr(torch.Tensor, name, None) for name in belt._TENSOR_METHOD_SURFACE

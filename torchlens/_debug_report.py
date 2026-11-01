@@ -398,4 +398,6 @@ def table_report(
 def trace_subject(trace: Any) -> str:
     """Name a trace for a report subject (its model class)."""
 
-    return str(getattr(trace, "model_class_name", None) or type(trace).__name__)
+    from ._data_classes._trace_missing_attrs import is_live_trace
+
+    return str((trace._source_class_name if is_live_trace(trace) else None) or type(trace).__name__)

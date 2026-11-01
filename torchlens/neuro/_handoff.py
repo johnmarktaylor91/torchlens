@@ -391,11 +391,12 @@ def _source_kind(source: Any) -> str:
         ``neuro_source_invalid`` for unsupported source types.
     """
 
+    from .._data_classes._trace_missing_attrs import is_live_trace
     from ..dataset_extraction import LoadedExtraction
 
     if isinstance(source, (LoadedExtraction, str, Path)):
         return "extraction"
-    if hasattr(source, "layers") and hasattr(source, "layer_logs"):
+    if hasattr(source, "layers") and is_live_trace(source):
         return "trace"
     raise NeuroHandoffError(
         f"unsupported source type {type(source).__name__}: expected a "
@@ -526,7 +527,7 @@ def _trace_site_payload(record: Any, key: str, requested: str, verb: str) -> Sit
         _raise_unsaved_activation(key, verb=verb)
     matrix, per_stimulus_shape = _shape_payload(cast(torch.Tensor, out))
     num_passes = int(getattr(record, "num_passes", 1))
-    pass_index = getattr(record, "pass_index", None)
+    pass_index = getattr(record, "pass_number", None)
     return SitePayload(
         key=key,
         requested=requested,
@@ -851,6 +852,7 @@ def base_descriptors(
 
     import torchlens
 
+    from .._data_classes._trace_missing_attrs import is_live_trace
     from ..features import SHAPING_OP
 
     descriptors: dict[str, Any] = {
@@ -876,7 +878,7 @@ def base_descriptors(
     if payload.pass_index is not None:
         descriptors["pass_index"] = payload.pass_index
     if trace is not None:
-        model_name = getattr(trace, "model_class_name", None)
+        model_name = trace._source_class_name if is_live_trace(trace) else None
         if model_name:
             # The reserved multi-model slot (memo section 8): one factual
             # model identity per Dataset today, a stack key tomorrow.

@@ -15,6 +15,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
+from .._record_type import record_type
+
 if TYPE_CHECKING:
     from .._data_classes.module import Module
     from .._data_classes.op import Op
@@ -171,7 +173,7 @@ def _compute_child_condensed_flow_graphs(
     """
 
     graphs: dict[str, ChildCondensedFlowGraph] = {}
-    op_order = {op.label: index for index, op in enumerate(trace.layer_list)}
+    op_order = {op.label: index for index, op in enumerate(trace._layer_list)}
     for module in trace.modules:
         parent = module.address
         child_addresses = tuple(
@@ -569,7 +571,7 @@ def _child_has_junction_op(trace: Trace, op_labels: set[str]) -> bool:
 def _op_func_name(op: Op) -> str:
     """Return a stable operation function name for digesting."""
 
-    return str(getattr(op, "func_name", None) or getattr(op, "layer_type", "") or "")
+    return str(getattr(op, "func_name", None) or record_type(op, "") or "")
 
 
 def _count_landmark_edges(

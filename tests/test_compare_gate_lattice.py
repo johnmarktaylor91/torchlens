@@ -23,7 +23,7 @@ import torchlens as tl
 from torchlens.intervention.errors import BundleComparisonError
 from torchlens.types import Relationship
 
-_OPTS = tl.options.CaptureOptions(intervention_ready=True)
+_OPTS = tl.options.CaptureOptions(replayable=True)
 
 
 class _TwoLayer(nn.Module):
@@ -402,7 +402,7 @@ def test_at_label_compare_runs_the_comparison_gate() -> None:
     )
     label = next(
         str(layer.layer_label)
-        for layer in cross_input["a"].layer_list
+        for layer in cross_input["a"]._layer_list
         if "relu" in str(layer.layer_label)
     )
     view = cross_input.at(label)

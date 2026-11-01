@@ -55,7 +55,7 @@ def _op(trace: object, name: str, index: int = 0) -> object:
         Selected operation.
     """
 
-    matches = [op for op in trace.layer_list if op.func_name == name]  # type: ignore[attr-defined]
+    matches = [op for op in trace._layer_list if op.func_name == name]  # type: ignore[attr-defined]
     return matches[index]
 
 

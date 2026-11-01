@@ -535,7 +535,7 @@ class TFEagerCaptureSession:
             is_scalar_bool=_is_scalar_bool_tensor_ref(tensor_ref),
             bool_value=_bool_value(tensor_ref.payload),
             intervention_fired=False,
-            intervention_replaced=False,
+            is_edited=False,
             fire_results=(),
             intervention_template_ref=None,
             record_context=record_context,
@@ -576,7 +576,7 @@ class TFEagerCaptureSession:
             {
                 "address": frame.address,
                 "module_type": frame.module_type,
-                "pass_index": frame.call_index,
+                "pass_number": frame.call_index,
             }
             for frame in self.module_stack
         )
@@ -584,7 +584,7 @@ class TFEagerCaptureSession:
             kind="op",
             label=label.label,
             raw_label=label.label_raw,
-            pass_index=1,
+            pass_number=1,
             event_index=label.raw_index,
             step_index=label.raw_index,
             layer_type=label.layer_type,
@@ -593,7 +593,7 @@ class TFEagerCaptureSession:
             func_name=op_type_text,
             address=None,
             module_type=None,
-            module_pass_index=None,
+            module_pass_number=None,
             module_stack=module_frames,
             recent_events=(),
             recent_ops=(),
@@ -871,7 +871,7 @@ class TFEagerCaptureSession:
             is_scalar_bool=_is_scalar_bool_tensor_ref(tensor_ref),
             bool_value=_bool_value(tensor_ref.payload),
             intervention_fired=False,
-            intervention_replaced=False,
+            is_edited=False,
             fire_results=(),
             intervention_template_ref=None,
         )

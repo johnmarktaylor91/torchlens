@@ -301,17 +301,17 @@ def _tf_helper_hook(spec: Edit, tf: Any) -> Callable[[Any], Any]:
         TensorFlow replacement callable.
     """
 
-    if spec.helper_name == "zero_ablate":
+    if spec.name == "zero_ablate":
         return lambda out: tf.zeros_like(out)
-    if spec.helper_name == "scale":
+    if spec.name == "scale":
         factor = spec.args[0]
         return lambda out: out * tf.cast(factor, out.dtype)
-    if spec.helper_name == "add":
+    if spec.name == "add":
         delta = spec.args[0]
         return lambda out: out + tf.cast(delta, out.dtype)
     raise BackendUnsupportedError(
         f"tf backend interventions implement the curated helpers zero_ablate, scale, "
-        f"and add; helper {spec.helper_name!r} has no TensorFlow implementation. Pass "
+        f"and add; helper {spec.name!r} has no TensorFlow implementation. Pass "
         "a callable action for custom replacements."
     )
 
@@ -526,7 +526,7 @@ def apply_tf_module_intervention(
             {
                 "address": item.address,
                 "module_type": item.module_type,
-                "pass_index": item.call_index,
+                "pass_number": item.call_index,
             }
             for item in module_stack
         ),
@@ -658,7 +658,7 @@ def _mark_intervention_event(session: Any, label: str, fire_result: FireResult) 
             event.seq,
             label,
             intervention_fired=True,
-            intervention_replaced=fire_result.replaced,
+            is_edited=fire_result.replaced,
             fire_results=(*event.fire_results, fire_result),
         )
     )

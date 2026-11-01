@@ -58,7 +58,7 @@ def test_core_import_capture_and_show_without_optional_tabular_or_notebook_use()
 
     log = _make_log()
 
-    assert len(log.layer_list) > 0
+    assert len(log._layer_list) > 0
     assert log.show(vis_mode="none") is None
 
 

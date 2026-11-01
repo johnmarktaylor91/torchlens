@@ -57,7 +57,7 @@ def _assert_mlflow_run(
     tmp_path.mkdir(parents=True, exist_ok=True)  # download_artifacts needs an existing dir
     run = client.get_run(run_id)
     assert run.data.metrics == {f"{prefix}.{key}": float(result[key]) for key in _KEYS}
-    assert run.data.metrics[f"{prefix}.num_layers"] == len(trace.layer_list)
+    assert run.data.metrics[f"{prefix}.num_layers"] == len(trace._layer_list)
 
     artifacts = {item.path for item in client.list_artifacts(run_id, prefix)}
     assert artifacts == {f"{prefix}/layers.json", f"{prefix}/report.txt"}
@@ -66,7 +66,7 @@ def _assert_mlflow_run(
     layers = json.loads(
         Path(client.download_artifacts(run_id, f"{prefix}/layers.json", str(tmp_path))).read_text()
     )
-    assert len(layers["data"]) == len(trace.layer_list) == len(result["table"])
+    assert len(layers["data"]) == len(trace._layer_list) == len(result["table"])
     assert list(layers["columns"]) == list(result["table"].columns)
 
     report = Path(
@@ -215,7 +215,7 @@ def _assert_aim_parity(trace: Any, result: dict[str, Any], recorder: Any, read: 
         assert values == [float(result[key])]
     # Per-layer table: lossless run param, one row per layer, same columns.
     rows = read["tl.layers"]
-    assert len(rows) == len(trace.layer_list) == len(result["table"])
+    assert len(rows) == len(trace._layer_list) == len(result["table"])
     assert set(rows[0]) == set(result["table"].columns)
     # ... plus one chartable series per numeric column, step = row index.
     column = next(

@@ -5,6 +5,7 @@
 import re as _re
 
 from .._errors import InvalidArgumentError
+from .._record_type import record_type
 from ._label_format import compute_selected_node_lines as _compute_selected_node_lines
 from ._render_common import *
 from ._render_edges import *
@@ -111,7 +112,7 @@ def _get_hidden_parent_buffer_addresses(
         if isinstance(source_node, Op):
             parent_node = trace[parent_label]
         else:
-            parent_node = trace.layer_logs[parent_label]
+            parent_node = trace._layer_logs[parent_label]
         if not parent_node.is_buffer or _is_buffer_visible(parent_node, show_buffer_layers):
             continue
         address = parent_node.address
@@ -284,7 +285,7 @@ def _op_for_occurrence_label(trace: "Trace", label: str | None) -> Op | None:
         return None
     if label in trace.ops:
         return trace.ops[label]
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if (
             getattr(op, "layer_label_raw", None) == label
             or getattr(op, "_layer_label_raw", None) == label
@@ -313,13 +314,13 @@ def _render_output_node_name_for_path(
     """
 
     output_labels = set(getattr(trace, "output_layers", ()) or ())
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if getattr(op, "layer_label", None) not in output_labels:
             continue
         if tuple(getattr(op, "container_path", ()) or ()) == path:
             return _render_node_name(op, "unrolled")
     for output_label in getattr(trace, "output_layers", ()) or ():
-        output_op = trace.layer_dict_all_keys.get(output_label)
+        output_op = trace._layer_dict_all_keys.get(output_label)
         if output_op is None:
             continue
         if tuple(getattr(output_op, "container_path", ()) or ()) == path:
@@ -637,7 +638,7 @@ def _build_layer_node(
     if node.is_input:
         raw_input_attrs = _render_raw_input(
             self,
-            getattr(self, "raw_input", None),
+            getattr(self, "input", None),
             batch_render=getattr(self, "batch_render", "auto"),
         )
         if raw_input_attrs is not None:
@@ -645,9 +646,9 @@ def _build_layer_node(
         if show_input_transform_summary:
             node_args.update(_input_transform_summary_attrs(self, node_args))
     elif node.is_output:
-        raw_output_attrs = _render_raw_output(getattr(self, "decoded_output", None))
+        raw_output_attrs = _render_raw_output(self._decoded_output)
         if raw_output_attrs is None:
-            raw_output_attrs = _render_raw_output(getattr(self, "raw_output", None))
+            raw_output_attrs = _render_raw_output(getattr(self, "transformed_output", None))
         if raw_output_attrs is not None:
             node_args.update(raw_output_attrs)
     node_args["name"] = _render_node_name(node, vis_mode)
@@ -824,7 +825,7 @@ def _input_transform_summary_attrs(trace: "Trace", node_args: dict[str, str]) ->
         preprocessing record is present.
     """
 
-    record = getattr(trace, "input_preprocessor", None)
+    record = trace._provenance_input_preprocessor
     if record is None:
         return {}
     verified = bool(getattr(record, "verified", False))
@@ -1588,7 +1589,7 @@ def _atomic_module_sibling_counts(trace: "Trace") -> dict[str, int]:
     """
 
     counts: dict[str, int] = {}
-    for other in trace.layer_logs.values():
+    for other in trace._layer_logs.values():
         if isinstance(other, Layer) and getattr(other, "is_atomic_module", False) and other.modules:
             other_address = other.modules[-1].rsplit(":", 1)[0]
             counts[other_address] = counts.get(other_address, 0) + 1
@@ -1760,7 +1761,7 @@ def _get_node_address_shape_color(
         )
         if annotation is not None and annotation.buffer_versions:
             address = f"{source_node.address}:{_compact_int_ranges(annotation.buffer_versions)}"
-        elif self.buffer_num_calls[source_node.address] == 1:
+        elif self._buffer_num_calls[source_node.address] == 1:
             address = source_node.address
         else:
             address = f"{source_node.address}:{source_node.buffer_pass}"
@@ -1815,7 +1816,7 @@ def _is_only_non_buffer_in_module(
         if isinstance(source_node, Op):
             parent_layer = self[parent_layer_label]
         else:
-            parent_layer = self.layer_logs[parent_layer_label]
+            parent_layer = self._layer_logs[parent_layer_label]
         if (
             (not parent_layer.is_buffer) or _is_buffer_visible(parent_layer, show_buffer_layers)
         ) and ((len(parent_layer.modules) > 0) and parent_layer.modules[-1] == node.modules[-1]):
@@ -1837,6 +1838,10 @@ def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
     Returns:
         node_bg_color: background color of the node
     """
+    from torchlens._data_classes.layer import Layer
+    from torchlens._data_classes.op import Op
+    from torchlens.visualization._render_common import BoundaryNode
+
     if node.is_input:
         bg_color = INPUT_COLOR
     elif node.is_output:
@@ -1846,7 +1851,7 @@ def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
     elif node.is_buffer:
         bg_color = BUFFER_NODE_COLOR
     elif node.has_params:
-        param_logs = getattr(node, "_param_logs", [])
+        param_logs = node._param_logs if isinstance(node, (Op, Layer, BoundaryNode)) else []
         if param_logs:
             trainable_flags = [pl.is_trainable for pl in param_logs]
             all_trainable = all(trainable_flags)
@@ -1941,7 +1946,7 @@ def _layer_log_for_node(trace: "Trace", node: GraphNode) -> "Layer":
         raise ValueError("Synthetic boundary nodes do not have Layer metadata.")
     if isinstance(node, Layer):
         return node
-    return trace.layer_logs[node.layer_label]
+    return trace._layer_logs[node.layer_label]
 
 
 def compute_default_node_lines(
@@ -2000,7 +2005,7 @@ def compute_default_node_lines(
         ":" in node_address
     )
     if (layer_log.num_passes > 1) and (vis_mode == "unrolled"):
-        call_label = f":{layer_log.pass_index}"
+        call_label = f":{layer_log.pass_number}"
     elif (layer_log.num_passes > 1) and (vis_mode == "rolled"):
         if atomic_marking_has_range:
             call_label = ""
@@ -2019,11 +2024,13 @@ def compute_default_node_lines(
         # The latter renumbers the ordinal from this pass's step_index and yields an
         # un-lookup-able label (linear_1_3:2 for what is really linear_1_1:2), so
         # users copying the displayed name got a "not found" ValueError.
-        title = f"{layer_log.layer_label}:{layer_log.pass_index}"
-    elif layer_log.layer_type in ["input", "output", "buffer"]:
-        title = f"{layer_log.layer_type}_{layer_log.type_index}{call_label}"
+        title = f"{layer_log.layer_label}:{layer_log.pass_number}"
+    elif record_type(layer_log) in ["input", "output", "buffer"]:
+        title = f"{record_type(layer_log)}_{layer_log.type_index}{call_label}"
     else:
-        title = f"{layer_log.layer_type}_{layer_log.type_index}_{layer_log.step_index}{call_label}"
+        title = (
+            f"{record_type(layer_log)}_{layer_log.type_index}_{layer_log.step_index}{call_label}"
+        )
 
     lines: list[str] = []
     if layer_log.is_terminal_bool:

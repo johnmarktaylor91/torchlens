@@ -76,7 +76,7 @@ def _materialize_layer_mirrors_for_removed(
     mirroring — their reads are unaffected by the removal.
     """
 
-    layer_logs = trace.__dict__.get("layer_logs")
+    layer_logs = trace.__dict__.get("_layer_logs")
     if not layer_logs:
         return
     from .layer import _layer_rep_op, materialize_layer_mirrors
@@ -108,8 +108,8 @@ def _apply_run_save_selection(result: Any, selected: Any) -> Any:
         return result
     from .._capture.projectors import RefreshProjector
 
-    for layer in result.trace.layer_list:
-        if layer.layer_type in ("input", "output"):
+    for layer in result.trace._layer_list:
+        if layer.type in ("input", "output"):
             continue
         if layer.layer_label in selected:
             continue
@@ -272,7 +272,7 @@ def _loaded_non_torch_validation_replay_unavailable(trace: Any) -> bool:
 
     if not bool(getattr(trace, "_loaded_from_bundle", False)):
         return False
-    backend = str(getattr(trace, "backend", "torch"))
+    backend = str(trace._provenance_backend)
     if backend == _MLX_VALIDATION_REPLAY_BACKEND:
         return True
     if backend == _JAX_VALIDATION_REPLAY_BACKEND:
@@ -404,7 +404,7 @@ class TraceValidationMixin(_TraceMixinBase):
         if bool(getattr(self, "_loaded_from_bundle", False)) and not status.is_available:
             setattr(self, "_validation_replay_status", status)
             return status
-        spec = get_backend_spec(getattr(self, "backend", "torch"))
+        spec = get_backend_spec(self._provenance_backend)
         validation_result = spec.validate_trace(
             self,
             ground_truth_output_tensors=ground_truth_output_tensors,
@@ -437,7 +437,7 @@ class TraceValidationMixin(_TraceMixinBase):
         cached_status = getattr(self, "_validation_replay_status", None)
         if isinstance(cached_status, ValidationStatus):
             return cached_status
-        backend = str(getattr(self, "backend", "torch"))
+        backend = str(self._provenance_backend)
         if _loaded_non_torch_validation_replay_unavailable(self):
             return ValidationStatus.unavailable_loaded_runtime_stripped(
                 backend=backend,
@@ -860,7 +860,7 @@ class TraceValidationMixin(_TraceMixinBase):
                     executed_raw = frozenset(until_preview.executed_raw_labels)
                     executed_final = {
                         layer.layer_label
-                        for layer in self.layer_list
+                        for layer in self._layer_list
                         if layer._layer_label_raw in executed_raw
                     }
                     outside = sorted(run_save_labels - executed_final)
@@ -954,7 +954,7 @@ class TraceValidationMixin(_TraceMixinBase):
                     or (getattr(self, "last_run", None) or {}).get("engine") == "guarded_fast"
                 ),
             )
-            source_ref = getattr(self, "_source_model_ref", None)
+            source_ref = self._source_model_ref
             live_model = source_ref() if source_ref is not None else None
             if live_model is not None:
                 _warn_stateful_live_run_once(self, live_model)
@@ -1029,7 +1029,7 @@ class TraceValidationMixin(_TraceMixinBase):
             run_model = model
             user_input = x
         else:
-            source_ref = getattr(self, "_source_model_ref", None)
+            source_ref = self._source_model_ref
             user_input = model
             if x is not None:
                 raise KeywordConflictError(
@@ -1076,7 +1076,7 @@ class TraceValidationMixin(_TraceMixinBase):
                     self, run_model, transformed_input, output_transform=resolved_output_transform
                 )
                 if fast_done:
-                    self.raw_input = user_input
+                    self.input = user_input
                     refuse_unfired_fast_run(self)
                     return self
             result = _impl(
@@ -1091,7 +1091,7 @@ class TraceValidationMixin(_TraceMixinBase):
         # Atomic swap rebuilds Trace state; restore raw_input to the new
         # user-supplied value so visualization / save-load report the
         # current input rather than the prior trace's.
-        result.raw_input = user_input
+        result.input = user_input
         return result
 
     def _apply_rerun_transform(
@@ -1199,12 +1199,12 @@ class TraceValidationMixin(_TraceMixinBase):
         None
             This method mutates ParamLogs in place.
         """
-        if hasattr(self.param_logs, "_rehydrate_on_iter"):
-            self.param_logs._rehydrate_on_iter = False
-        for param_log in self.param_logs.values():
+        if hasattr(self._param_logs, "_rehydrate_on_iter"):
+            self._param_logs._rehydrate_on_iter = False
+        for param_log in self._param_logs.values():
             param_log._release_param_ref()
-        if hasattr(self.param_logs, "_rehydrate_on_iter"):
-            self.param_logs._rehydrate_on_iter = allow_iter_rehydrate
+        if hasattr(self._param_logs, "_rehydrate_on_iter"):
+            self._param_logs._rehydrate_on_iter = allow_iter_rehydrate
 
     def _postprocess(
         self: "Trace",
@@ -1297,11 +1297,11 @@ class TraceValidationMixin(_TraceMixinBase):
         require_structure_only_capability(self, "backward_grads")
         _refuse_stats_capture(self, "backward_grads")
         _refuse_loaded_backward_capture(self, "log_backward")
-        spec = get_backend_spec(getattr(self, "backend", "torch"))
+        spec = get_backend_spec(self._provenance_backend)
         if not spec.capabilities.backward_capture:
             raise BackendUnsupportedError(
                 f"Backend {spec.name!r} does not support backward capture. "
-                "Use trace.derived_grads when this backend exposes leaf-level "
+                "Use trace._autograd_derived_grads when this backend exposes leaf-level "
                 "derived gradients."
             )
         from ..backends.torch.backward import log_backward as _impl
@@ -1345,11 +1345,11 @@ class TraceValidationMixin(_TraceMixinBase):
         require_structure_only_capability(self, "backward_grads")
         _refuse_stats_capture(self, "backward_grads")
         _refuse_loaded_backward_capture(self, "recording_backward")
-        spec = get_backend_spec(getattr(self, "backend", "torch"))
+        spec = get_backend_spec(self._provenance_backend)
         if not spec.capabilities.backward_capture:
             raise BackendUnsupportedError(
                 f"Backend {spec.name!r} does not support backward capture. "
-                "Use trace.derived_grads when this backend exposes leaf-level "
+                "Use trace._autograd_derived_grads when this backend exposes leaf-level "
                 "derived gradients."
             )
         from ..backends.torch.backward import recording_backward as _impl
@@ -1435,8 +1435,8 @@ class TraceValidationMixin(_TraceMixinBase):
             collection = getattr(self, field_name)
             collection[:] = [label for label in collection if label not in labels_to_remove]
 
-        self.conditional_branch_edges = _substitute_conditional_branch_edges(
-            self.conditional_branch_edges, labels_to_remove, replacement_labels
+        self._graph_conditional_branch_edges = _substitute_conditional_branch_edges(
+            self._graph_conditional_branch_edges, labels_to_remove, replacement_labels
         )
 
         for param_group, tensor_labels in list(self.layers_with_params.items()):
@@ -1449,11 +1449,11 @@ class TraceValidationMixin(_TraceMixinBase):
             if len(tensor_labels) > 0
         }
 
-        for _equiv_group, equivalent_label_set in list(self.op_equivalence_classes.items()):
+        for _equiv_group, equivalent_label_set in list(self._graph_op_equivalence_classes.items()):
             equivalent_label_set -= labels_to_remove
-        self.op_equivalence_classes = {
+        self._graph_op_equivalence_classes = {
             equiv_group: equivalent_label_set
-            for equiv_group, equivalent_label_set in self.op_equivalence_classes.items()
+            for equiv_group, equivalent_label_set in self._graph_op_equivalence_classes.items()
             if len(equivalent_label_set) > 0
         }
 

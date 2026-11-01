@@ -756,9 +756,12 @@ def _graph_connected(trace: Any, address: str, from_call: int, to_call: int) -> 
         """Resolve a (possibly bare) label to its single Op, else ``None``."""
 
         try:
-            ops = trace[label].ops
+            record = trace[label]
         except (LookupError, AttributeError, TypeError, ValueError):
             return None
+        ops = getattr(record, "ops", None)
+        if ops is None:  # a pass-qualified label resolves to the Op, its own pass
+            return record
         return ops[0] if len(ops) == 1 else None
 
     seen: set[str] = set()

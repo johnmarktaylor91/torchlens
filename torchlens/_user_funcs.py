@@ -778,7 +778,7 @@ def _trace_mlx_model(
     num_context_lines: int | MissingType,
     compute_input_output_distances: bool | MissingType,
     recurrence_detection: bool | MissingType,
-    intervention_ready: bool | MissingType,
+    replayable: bool | MissingType,
     hooks: Any | None | MissingType,
     capture: CaptureOptions | None,
     save: SaveOptions | None,
@@ -834,7 +834,7 @@ def _trace_mlx_model(
         mark_layer_depths=MISSING,
         detach_saved_activations=MISSING,
         recurrence_detection=recurrence_detection,
-        intervention_ready=intervention_ready,
+        replayable=replayable,
         hooks=hooks,
         unwrap_when_done=MISSING,
         verbose=verbose,
@@ -855,12 +855,12 @@ def _trace_mlx_model(
         save_raw_activations=save_raw_activations,
         save_raw_grads=save_raw_grads,
     )
-    if capture_options.intervention_ready:
+    if capture_options.replayable:
         raise BackendUnsupportedError(
-            "MLX backend does not support intervention_ready=True: post-capture "
+            "MLX backend does not support replayable=True: post-capture "
             "rerun readiness requires PyTorch autograd integration not present in "
             "MLX. Live static-label trace(intervene=tl.when(...)) IS supported; "
-            "omit intervention_ready or set False."
+            "omit replayable or set False."
         )
     if capture_options.hooks:
         raise BackendUnsupportedError(
@@ -960,7 +960,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
     # ``capture=CaptureOptions(...)`` call fail with "does not support:
     # capture" regardless of content; the real per-field support/rejection
     # already happens downstream in ``_trace_mlx_model`` (e.g.
-    # ``capture_options.intervention_ready``, ``capture_options.hooks``).
+    # ``capture_options.replayable``, ``capture_options.hooks``).
     reject_extra_trace_kwargs(
         {
             "lookback": kwargs["lookback"],
@@ -1043,7 +1043,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
         num_context_lines=kwargs.get("num_context_lines", MISSING),
         compute_input_output_distances=kwargs.get("compute_input_output_distances", MISSING),
         recurrence_detection=kwargs.get("recurrence_detection", MISSING),
-        intervention_ready=kwargs.get("intervention_ready", MISSING),
+        replayable=kwargs.get("replayable", MISSING),
         hooks=kwargs.get("hooks", MISSING),
         capture=kwargs["capture"],
         save=save_options,
@@ -1093,7 +1093,7 @@ CAPTURE_CACHE_KEY_CURATED: frozenset[str] = frozenset(
         "compute_input_output_distances",
         "detach_saved_activations",
         "recurrence_detection",
-        "intervention_ready",
+        "replayable",
         "capture_container_structure",
         "track_device_memory",
         "measure_host_peak_memory",
@@ -1389,7 +1389,9 @@ def _warn_zero_match_capture_selectors(
                 "no intervention fired.",
                 selector=repr(intervene_selector),
             )
-        if isinstance(halt_selector, BaseSelector) and not bool(getattr(trace, "halted", False)):
+        if isinstance(halt_selector, BaseSelector) and not bool(
+            getattr(trace, "is_stopped", False)
+        ):
             _record_unmatched("halt", halt_selector)
             warnings.warn(
                 f"Capture-time halt selector {halt_selector!r} matched zero sites; "
@@ -1464,7 +1466,7 @@ def register_tensor_connection(parent: torch.Tensor, child: torch.Tensor) -> Non
             remedy="pass tensors produced by already-captured operations in the active trace",
             argument="parent/child",
         )
-    trace.manual_tensor_connections.append((parent_label, child_label))
+    trace._graph_manual_tensor_connections.append((parent_label, child_label))
     _register_live_tensor_connection(trace, parent_label, child_label)
 
 
@@ -1503,7 +1505,7 @@ def _register_live_tensor_connection(
             child_label,
             parents=(
                 *event.parents,
-                ParentEdge(parent_label_raw=parent_label, arg_position=None, edge_use="output"),
+                ParentEdge(parent_label_raw=parent_label, arg_position=None, _edge_use="output"),
             ),
             parent_arg_positions=parent_arg_positions,
         )
@@ -1543,7 +1545,7 @@ def _run_model_and_save_specified_outs(
     grad_storage_path: str | Path | None = None,
     retain_grads_in_memory: bool = True,
     out_sink: Callable[[str, torch.Tensor], None] | None = None,
-    intervention_ready: bool = False,
+    replayable: bool = False,
     capture_container_structure: bool = False,
     hooks: Any | None = None,
     intervention_spec: Any | None = None,
@@ -1639,7 +1641,7 @@ def _run_model_and_save_specified_outs(
             every exit path, so code after the capture continues its own streams. When
             None the seed is drawn from a private entropy-seeded stream, so an outer
             ``torch.manual_seed`` does not make an unseeded capture reproducible. The
-            seed used is recorded on ``trace.random_seed``.
+            seed used is recorded on ``trace.options.seed``.
         num_context_lines: Number of source-code context lines stored per function call.
         optimizer: Optional optimizer - used to tag which parameters have optimizers attached.
         recurrence_detection: If True (default), run full isomorphic subgraph expansion to
@@ -1666,7 +1668,7 @@ def _run_model_and_save_specified_outs(
             backward finalization.
         out_sink: Optional callback invoked with ``(label, tensor)`` for each
             saved out.
-        intervention_ready: If True, capture replay-template metadata and mark the
+        replayable: If True, capture replay-template metadata and mark the
             returned log as eligible for intervention mutators, replay, rerun, and
             intervention spec persistence.
         capture_container_structure: If True, persist input and output container
@@ -1889,7 +1891,7 @@ def _run_model_and_save_specified_outs(
         _state.configure_capture_runtime_context(
             hook_plan=hook_plan,
             intervention_spec=intervention_spec,
-            capture_replay_templates=intervention_ready,
+            capture_replay_templates=replayable,
             model_object_id=model_object_id,
             model_class_qualname=model_class_qualname,
             weight_fingerprint=weight_fingerprint,
@@ -1933,14 +1935,14 @@ def _run_model_and_save_specified_outs(
             distributed_witness=distributed_witness,
             save_budget=save_budget,
             input_transform=transform,
-            raw_input=raw_input,
+            input=raw_input,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=output_transform,
             save_transformed_output=save_transformed_output,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
-            facet_registry_snapshot=facets_mod.snapshot(recipes),
+            facet_functions=facets_mod.snapshot(recipes),
         )
         # One session field carries the capture's save request: the torch
         # backend reads its output-parent retention flag during the forward,
@@ -1965,27 +1967,27 @@ def _run_model_and_save_specified_outs(
         trace._semantic_output_metadata = semantic_output_cache_key(model)
         if intervention_spec is not None:
             trace._intervention_spec = intervention_spec
-        trace.trace_label = name
-        trace.code_context = _get_code_context(
+        trace.name = name
+        trace._source_frames = _get_code_context(
             num_context_lines,
             source_loading_enabled=save_source_context,
         )
         forward_code = getattr(model.forward, "__code__", None)
-        trace.forward_source_line = getattr(forward_code, "co_firstlineno", None)
-        trace.intervention_ready = intervention_ready
+        trace._source_forward_line = getattr(forward_code, "co_firstlineno", None)
+        trace.is_replayable = replayable
         trace._capture_container_structure = capture_container_structure
         if hook_plan:
             trace.state = TraceState.LIVE_CAPTURED
-        trace.model_object_id = model_object_id
-        trace.model_class_qualname = model_class_qualname
-        trace.param_hash_quick = weight_fingerprint
-        trace.param_hash_full = weight_fingerprint
+        trace._provenance_model_object_id = model_object_id
+        trace._source_class_qualname = model_class_qualname
+        trace._provenance_param_hash_quick = weight_fingerprint
+        trace._provenance_param_hash_full = weight_fingerprint
         # C07X (iv)/D10: unconditional write; F41's fail-closed gate reads it.
         # module_call for plain module roots, bound_method for the F41
         # TL-authored wrapper root (derived beside the identity fields above).
-        trace.root_entry_point = root_entry_point
-        trace.input_object_id = input_object_id
-        trace.input_signature_hash = input_signature_hash
+        trace._provenance_root_entry_point = root_entry_point
+        trace._provenance_input_object_id = input_object_id
+        trace._provenance_input_signature_hash = input_signature_hash
         trace._source_code_blob = capture_model_source_code(model)
         trace._source_model_ref = make_weak_model_ref(model)
         trace._out_sink = out_sink
@@ -1993,7 +1995,7 @@ def _run_model_and_save_specified_outs(
         trace._grad_stream_retain_in_memory = retain_grads_in_memory
         trace._defer_streaming_bundle_finalization = grad_storage_path is not None
         trace._wrapper_runtime_ws.in_exhaustive_pass = True
-        trace.raise_on_nan = raise_on_nan
+        trace._options_on_nonfinite = raise_on_nan
         trace.track_nonfinite = track_nonfinite
         trace.track_device_memory = track_device_memory
         trace.measure_host_peak_memory = measure_host_peak_memory
@@ -2003,7 +2005,7 @@ def _run_model_and_save_specified_outs(
         # ratification the settlement-side stamp moves to the
         # _capture/outcome.py witness machinery in the S2 author's PR; this
         # entry write stays as the declared-mode source of truth.
-        trace.structure_only = structure_only
+        trace._options_structure_only = structure_only
         trace._stop_directive = StopDirective(
             halt_options=getattr(trace, "_predicate_save_options", None),
             raise_on_nan=raise_on_nan,
@@ -2197,7 +2199,7 @@ def _render_layer_visualizers(
     output_dir = ensure_trace_visualizer_dir(trace)
     visualizer_dir = output_dir / "visualizers"
     visualizer_dir.mkdir(parents=True, exist_ok=True)
-    max_fanout = max(1, len(trace.layer_list))
+    max_fanout = max(1, len(trace._layer_list))
 
     for selector, visualizer in layer_visualizers.items():
         try:
@@ -2604,7 +2606,7 @@ def trace(
     capture:
         Grouped capture options (``CaptureOptions``). The one spelling for
         every capture knob (``layers_to_save``, ``random_seed``,
-        ``intervention_ready``, ``verbose``, ``structure_only``, ...); the
+        ``replayable``, ``verbose``, ``structure_only``, ...); the
         former flat kwargs are removed.
     intervene:
         Optional predicate returning an intervention decision for
@@ -2645,8 +2647,8 @@ def trace(
         grouping), ``"strict_shapes"`` (reserved; refuses typed until its
         own reviewed design lands), ``"fold_sites"`` (the D1 folding axis;
         refuses typed on plain captures until an affirmative D1 ruling).
-        The requested value is recorded on ``trace.grouping`` and the
-        policy that actually ran on ``trace.grouping_policy``. Distinct
+        The requested value is recorded on ``trace.options.grouping`` and the
+        policy that actually ran on ``trace.options.grouping_policy``. Distinct
         from the display-only ``fold_repeats`` viz knob, which folds
         repeated module runs at RENDER time and never changes grouping.
     narrate:
@@ -2873,7 +2875,7 @@ def _trace_torch_model(
     save_outs_to: str | Path | None | MissingType = MISSING,
     keep_outs_in_memory: bool | MissingType = MISSING,
     out_sink: Callable[[str, torch.Tensor], None] | None | MissingType = MISSING,
-    intervention_ready: bool | MissingType = MISSING,
+    replayable: bool | MissingType = MISSING,
     capture_container_structure: bool | MissingType = MISSING,
     hooks: Any | None | MissingType = MISSING,
     unwrap_when_done: bool | MissingType = MISSING,
@@ -3001,7 +3003,7 @@ def _trace_torch_model(
         mark_layer_depths=mark_layer_depths,
         detach_saved_activations=detach_saved_activations,
         recurrence_detection=recurrence_detection,
-        intervention_ready=intervention_ready,
+        replayable=replayable,
         capture_container_structure=capture_container_structure,
         capture_output_structure=capture_output_structure,
         hooks=hooks,
@@ -3235,7 +3237,7 @@ def _trace_torch_model(
     compute_input_output_distances = capture_options.compute_input_output_distances
     detach_saved_activations = capture_options.detach_saved_activations
     recurrence_detection = capture_options.recurrence_detection
-    intervention_ready = capture_options.intervention_ready
+    replayable = capture_options.replayable
     capture_container_structure = capture_options.capture_container_structure
     hooks = capture_options.hooks
     unwrap_when_done = capture_options.unwrap_when_done
@@ -3349,7 +3351,7 @@ def _trace_torch_model(
                 lookback_payload_policy=lookback_payload_policy,
                 raise_on_nan_value=capture_options.raise_on_nan,
                 track_nonfinite_value=capture_options.track_nonfinite,
-                intervention_ready=intervention_ready,
+                replayable=replayable,
                 should_save_grads=should_save_grads,
             ),
         )
@@ -3362,8 +3364,8 @@ def _trace_torch_model(
         inference_only_conflicts.append("backward_ready")
     if capture_options.is_field_explicit("save_grads") and should_save_grads:
         inference_only_conflicts.append("save_grads")
-    if capture_options.is_field_explicit("intervention_ready") and intervention_ready is True:
-        inference_only_conflicts.append("intervention_ready")
+    if capture_options.is_field_explicit("replayable") and replayable is True:
+        inference_only_conflicts.append("replayable")
     backward_opted_in = (
         capture_options.is_field_explicit("save_grads")
         and should_save_grads
@@ -3400,7 +3402,7 @@ def _trace_torch_model(
     )
     inference_only_value = effective_inference_only(
         capture_options,
-        backward_requested=bool(train_mode_value or should_save_grads or intervention_ready),
+        backward_requested=bool(train_mode_value or should_save_grads or replayable),
     )
     chunk_plan = None
     if normalized_chunk_size is not None:
@@ -3509,11 +3511,11 @@ def _trace_torch_model(
             # Capability / payload-policy options that change WHAT is captured or
             # stored in the returned trace. Omitting any of these let a second
             # trace() with a different capability silently return an earlier cached
-            # trace built with the wrong capability (e.g. asked intervention_ready=True,
+            # trace built with the wrong capability (e.g. asked replayable=True,
             # got a cached False). Include them so a capability change misses the cache;
             # callables are repr-keyed (conservative -- a distinct object misses rather
             # than risking a false hit), matching how output_transform is keyed above.
-            "intervention_ready": intervention_ready,
+            "replayable": replayable,
             "structure_only": capture_options.structure_only,
             "track_device_memory": capture_options.track_device_memory,
             # A cached capture without the opt-in holds no CPU peak.
@@ -3570,9 +3572,9 @@ def _trace_torch_model(
                     os.utime(cache_path, None)
                 except OSError:
                     pass
-                cached_log.capture_cache_hit = True
-                cached_log.capture_cache_key = cache_key
-                cached_log.capture_cache_path = str(cache_path)
+                cached_log._provenance_cache_hit = True
+                cached_log._provenance_cache_key = cache_key
+                cached_log._provenance_cache_path = str(cache_path)
                 cached_log.batch_render = batch_render_policy
                 return cached_log
     # list-A row 30: tracing runs the model's REAL forward, so train-mode norm
@@ -3626,7 +3628,7 @@ def _trace_torch_model(
             compute_input_output_distances=compute_input_output_distances,
             detach_saved_activations=detach_saved_activations,
             recurrence_detection=recurrence_detection,
-            intervention_ready=intervention_ready,
+            replayable=replayable,
             capture_container_structure=capture_container_structure,
             hooks=MISSING,
             unwrap_when_done=False,
@@ -3718,7 +3720,7 @@ def _trace_torch_model(
             save_outs_to=MISSING,
             keep_outs_in_memory=MISSING,
             out_sink=MISSING,
-            intervention_ready=MISSING,
+            replayable=MISSING,
             capture_container_structure=MISSING,
             hooks=MISSING,
             unwrap_when_done=MISSING,
@@ -3801,7 +3803,7 @@ def _trace_torch_model(
                 save_outs_to=MISSING,
                 keep_outs_in_memory=MISSING,
                 out_sink=MISSING,
-                intervention_ready=MISSING,
+                replayable=MISSING,
                 capture_container_structure=MISSING,
                 hooks=MISSING,
                 unwrap_when_done=MISSING,
@@ -3854,8 +3856,8 @@ def _trace_torch_model(
                     chunk_paths=normalize_chunk_paths(chunk_paths_value),
                 ),
             )
-        trace.append_history = [initial_record, *trace.append_history]
-        trace.chunked_forward = True
+        trace._append_history = [initial_record, *trace._append_history]
+        trace._options_chunk_size = True
         trace.last_run = dict(trace.last_run or {})
         trace.last_run["chunk_size"] = normalized_chunk_size
         trace.last_run["chunk_paths"] = normalize_chunk_paths(chunk_paths_value)
@@ -3863,8 +3865,8 @@ def _trace_torch_model(
         if uses_selective_layers_to_save:
             trace._layer_nums_to_save = [
                 op.raw_index
-                for op in trace.layer_list
-                if op.has_saved_activation and op.layer_type not in {"input", "output"}
+                for op in trace._layer_list
+                if op.has_saved_activation and op.type not in {"input", "output"}
             ]
             if not save_args:
                 trace._replay_arg_version_data_complete = False
@@ -3875,9 +3877,9 @@ def _trace_torch_model(
 
             unwrap_torch()
         if cache_path is not None and cache_key is not None and cache_secret is not None:
-            trace.capture_cache_hit = False
-            trace.capture_cache_key = cache_key
-            trace.capture_cache_path = str(cache_path)
+            trace._provenance_cache_hit = False
+            trace._provenance_cache_key = cache_key
+            trace._provenance_cache_path = str(cache_path)
             _prepare_log_for_capture_cache(trace)
             if _store_authenticated_capture_cache(trace, cache_path, cache_secret):
                 _evict_capture_cache(cache_path.parent, keep=cache_path)
@@ -3918,7 +3920,7 @@ def _trace_torch_model(
         grad_storage_path=grad_storage_path_value,
         retain_grads_in_memory=retain_grads_in_memory_value,
         out_sink=streaming_options.on_save,
-        intervention_ready=intervention_ready,
+        replayable=replayable,
         capture_container_structure=capture_container_structure,
         hooks=hooks,
         intervention_spec=None,
@@ -4040,7 +4042,7 @@ def _trace_torch_model(
                 # masking the user's exception.
                 attach_failed_episode_ledger(capture_exc, episode_resolved)
             raise
-    if stop_after_site is not None and not bool(getattr(trace, "halted", False)):
+    if stop_after_site is not None and not bool(getattr(trace, "is_stopped", False)):
         # Never-fired policy split by provenance (brainpipe D-16): a
         # selector-shaped site that never fired is a typo-shaped wrong result
         # (the full forward ran; the caller asked for a frontier) and refuses
@@ -4082,7 +4084,7 @@ def _trace_torch_model(
     if (
         capture_options.module_filter is not None
         and module_filter_suppressed > 0
-        and int(getattr(trace, "num_saved_ops", 0) or 0) == 0
+        and len(getattr(trace, "saved_ops", ())) == 0
     ):
         from .errors import TorchLensWarning as _TorchLensWarning
 
@@ -4103,12 +4105,12 @@ def _trace_torch_model(
     if input_transform is not None:
         stamp_user_transform_provenance(trace, input_transform)
     trace.profile_enabled = profile_enabled
-    trace.save_grads = save_grads_policy
+    trace._options_save_grads = save_grads_policy
     if uses_selective_layers_to_save:
         trace._layer_nums_to_save = [
             op.raw_index
-            for op in trace.layer_list
-            if op.has_saved_activation and op.layer_type not in {"input", "output"}
+            for op in trace._layer_list
+            if op.has_saved_activation and op.type not in {"input", "output"}
         ]
         if not save_args:
             trace._replay_arg_version_data_complete = False
@@ -4116,9 +4118,9 @@ def _trace_torch_model(
     # Print final summary.
     _vprint(
         trace,
-        f"Done: {len(trace.layer_logs)} layers, "
-        f"{trace.num_saved_ops} saved, "
-        f"{trace.total_activation_memory}",
+        f"Done: {len(trace._layer_logs)} layers, "
+        f"{len(trace.saved_ops)} saved, "
+        f"{trace._cost_total_activation_memory}",
     )
 
     if layer_visualizers_value:
@@ -4130,9 +4132,9 @@ def _trace_torch_model(
         unwrap_torch()
 
     if cache_path is not None and cache_key is not None and cache_secret is not None:
-        trace.capture_cache_hit = False
-        trace.capture_cache_key = cache_key
-        trace.capture_cache_path = str(cache_path)
+        trace._provenance_cache_hit = False
+        trace._provenance_cache_key = cache_key
+        trace._provenance_cache_path = str(cache_path)
         _prepare_log_for_capture_cache(trace)
         if _store_authenticated_capture_cache(trace, cache_path, cache_secret):
             _evict_capture_cache(cache_path.parent, keep=cache_path)

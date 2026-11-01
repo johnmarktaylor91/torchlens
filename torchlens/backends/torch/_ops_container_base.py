@@ -105,7 +105,7 @@ def _op_record_from_log(
         raw_index=fields_dict["raw_index"],
         type_index=fields_dict["type_index"],
         step_index=fields_dict["step_index"] or 0,
-        pass_index=fields_dict["pass_index"],
+        pass_index=fields_dict["pass_number"],
         parents=_parent_edges_from_fields(fields_dict),
         output=_exhaustive_output_ref(fields_dict, tensor_ref, transformed_ref),
         is_bottom_level=True,
@@ -134,7 +134,7 @@ def _op_record_from_log(
     parent_params = tuple(fields_dict["parent_params"])
     is_scalar_bool = fields_dict["is_scalar_bool"]
     bool_value = fields_dict["bool_value"]
-    intervention_replaced = fields_dict["intervention_replaced"]
+    is_edited = fields_dict["is_edited"]
     return OpRecord(
         core=core,
         function=_resolve_call_function_ref(fields_dict, call_ref_box),
@@ -234,10 +234,10 @@ def _op_record_from_log(
         intervention=(
             InterventionFacet(
                 intervention_fired=bool(fire_results),
-                intervention_replaced=intervention_replaced,
+                is_edited=is_edited,
                 fire_results=fire_results,
             )
-            if (bool(fire_results) or intervention_replaced or fire_results)
+            if (bool(fire_results) or is_edited or fire_results)
             else None
         ),
     )

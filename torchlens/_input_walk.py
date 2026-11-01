@@ -1334,7 +1334,7 @@ def snapshot_input_boundary(value: Any) -> dict[str, Any]:
     instance state, non-total namedtuple schemas, unset declared fields, container cycles
     or over-deep nests, throwing/nonconforming or state-incomplete registrations -- and
     the runnable producer refuses the save on any of them (the existing
-    ``missing_input_container_contract``); analysis captures are unaffected.
+    ``input_container_contract_missing``); analysis captures are unaffected.
 
     ``size`` on a namedtuple node is the PHYSICAL tuple arity. Without it, two instances
     of a one-field namedtuple built as ``tuple.__new__(P, (t, extra))`` with different

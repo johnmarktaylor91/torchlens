@@ -139,7 +139,7 @@ def main() -> None:
         top_n=1,
         style="classification",
     )
-    print(f"auto postprocessor: {auto_trace.output_postprocessor.description}")
+    print(f"auto postprocessor: {auto_trace.provenance.output_postprocessor.description}")
 
     register_custom_decoder()
     try:
@@ -157,7 +157,7 @@ def main() -> None:
         "0.1,0.2,2.0,1.0",
         capture=tl.options.CaptureOptions(input_transform=text_to_tensor),
     )
-    text_trace.input_preprocessor = ResolvedPreprocessing(
+    text_trace._provenance_input_preprocessor = ResolvedPreprocessing(
         source="example.transform",
         identifier="comma-vector-v1",
         verified=True,
@@ -165,8 +165,8 @@ def main() -> None:
         description="comma-separated text -> rank-2 float tensor",
     )
     print("\n## original input + preprocessing provenance")
-    print(f"raw_input: {text_trace.raw_input!r}")
-    print(f"input_preprocessor: {text_trace.input_preprocessor.description}")
+    print(f"raw_input: {text_trace.input!r}")
+    print(f"input_preprocessor: {text_trace.provenance.input_preprocessor.description}")
     with tempfile.TemporaryDirectory(prefix="torchlens_semantic_io_") as tmpdir:
         outpath = Path(tmpdir) / "semantic_io_input"
         text_trace.draw(

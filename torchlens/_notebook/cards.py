@@ -31,6 +31,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._record_type import first_op
 from ._access import CopyRoot, resolve_copy_root
 from ._axis_labels import sdpa_attention_hint
 from ._grid import GridBudgets, array_grid_html
@@ -131,13 +132,17 @@ def _proof_section(trace_like: Any) -> CardSection:
     Rendered OPEN (honesty is never folded).
     """
 
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
     facts: list[CardNode] = []
     outcome = getattr(trace_like, "outcome", None)
     status = getattr(getattr(outcome, "status", None), "name", None)
     facts.append(CardText(f"capture outcome: {status or 'UNKNOWN'}"))
-    verified = getattr(trace_like, "capture_verified", None)
+    verified = trace_like._provenance_verified if is_live_trace(trace_like) else None
     if verified is False:
-        reason = getattr(trace_like, "capture_verification_reason", None) or "unverified"
+        reason = (
+            trace_like._provenance_verification_reason if is_live_trace(trace_like) else None
+        ) or "unverified"
         facts.append(CardText(f"capture NOT verified: {reason}", role="notice"))
     elif verified is True:
         facts.append(CardText("capture verified"))
@@ -153,7 +158,7 @@ def _proof_section(trace_like: Any) -> CardSection:
 def _save_counts(trace_like: Any) -> tuple[int | None, int | None]:
     """(total op records, saved op records) on ONE consistent basis.
 
-    ``num_ops`` counts only real computation ops while ``num_saved_ops``
+    ``len(trace.ops)`` counts only real computation ops while ``len(trace.saved_ops)``
     counts every saved record including input/output boundaries -- mixing
     them printed ``saved 4/2``. The record count is the honest denominator.
     """
@@ -162,7 +167,7 @@ def _save_counts(trace_like: Any) -> tuple[int | None, int | None]:
         total: int | None = len(tuple(trace_like.op_labels or ()))
     except Exception:  # noqa: BLE001 - unfinished/legacy logs may lack labels
         total = None
-    saved = getattr(trace_like, "num_saved_ops", None)
+    saved = len(trace_like.saved_ops) if hasattr(trace_like, "saved_ops") else None
     return total, saved
 
 
@@ -193,7 +198,7 @@ def _identity_zone(op: Any, root: CopyRoot) -> tuple[CardNode, ...]:
     """Op identity: label, pass, function, module, site key, access key."""
 
     label = str(getattr(op, "label", "?"))
-    pass_index = getattr(op, "pass_index", None)
+    pass_index = getattr(op, "pass_number", None)
     num_passes = getattr(op, "num_passes", None)
     identity = f"{getattr(op, 'func_name', '?')}"
     if pass_index is not None and num_passes is not None and num_passes > 1:
@@ -274,7 +279,7 @@ def _intervention_badges(op: Any) -> tuple[CardNode, ...]:
     """Intervention disclosures (row X2): shown whenever evidence exists."""
 
     nodes: list[CardNode] = []
-    if getattr(op, "intervention_replaced", False):
+    if getattr(op, "is_edited", False):
         nodes.append(CardText("intervened: value replaced", role="notice"))
     if getattr(op, "edge_substitutions", None):
         nodes.append(CardText("intervened: edge substitution", role="notice"))
@@ -316,7 +321,7 @@ def layer_card(layer: Any, *, root: str | None = None) -> Card:
     if num_passes <= 1:
         # ``OpAccessor`` indexes by 0-based POSITION (its repr teaches the
         # basis); the single pass is position 0.
-        return op_card(layer.ops[0], root=root, kind="layer")
+        return op_card(first_op(layer), root=root, kind="layer")
     resolved_root = _root_for(layer, root)
     rows: list[CardNode] = []
     for pass_index in range(1, num_passes + 1):
@@ -370,14 +375,16 @@ def _layer_proof(layer: Any) -> tuple[CardNode, ...]:
 def trace_card(trace: Any, *, root: str | None = None) -> Card:
     """Assemble the Trace overview card (replaces the 525-byte box)."""
 
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
     resolved_root = resolve_copy_root(trace, explicit_root=root)
-    layers = list(getattr(trace, "layer_logs", {}) or {})
+    layers = list(trace._layer_logs or {})
     total, saved = _save_counts(trace)
     facts: list[CardNode] = [
         CardText(
-            f"Layers: {len(layers)} | Ops: {getattr(trace, 'num_ops', '?')} | "
-            f"backend: {getattr(trace, 'backend', '?')} | "
-            f"modules: {getattr(trace, 'num_modules', '?')}"
+            f"Layers: {len(layers)} | Ops: {trace._num_ops} | "
+            f"backend: {(trace._provenance_backend if is_live_trace(trace) else '?')} | "
+            f"modules: {len(trace.modules) if hasattr(trace, 'modules') else '?'}"
         ),
         CardText(
             f"params: {getattr(trace, 'num_params', '?')} | "
@@ -404,7 +411,7 @@ def trace_card(trace: Any, *, root: str | None = None) -> Card:
         *modules,
         _proof_section(trace),
     )
-    title = str(getattr(trace, "trace_label", None) or getattr(trace, "model_label", "Trace"))
+    title = str(getattr(trace, "name", None) or getattr(trace, "model_name", "Trace"))
     status = getattr(getattr(trace, "outcome", None), "status", None)
     return Card(
         title=f"TorchLens Trace: {title}",

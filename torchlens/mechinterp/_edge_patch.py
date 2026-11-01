@@ -69,7 +69,7 @@ def _input_edge_record(trace: Any, receiver: Any) -> Any:
             f"{receiver.input_label!r} into its norm {receiver.norm_address!r}; one is needed "
             "to address the edge.",
             remedy="capture with tl.options.CaptureOptions(layers_to_save='all', "
-            "intervention_ready=True) and rebuild the graph from that trace",
+            "replayable=True) and rebuild the graph from that trace",
             receiver=receiver.name,
         )
     return matches[0]
@@ -156,7 +156,7 @@ def _projection_values(trace: Any, attention: list[tuple[Any, torch.Tensor]]) ->
                     message=f"The projection output behind {attention[index][0].name!r} was "
                     f"not recomputed: {reason}",
                     remedy="capture with tl.options.CaptureOptions(layers_to_save='all', "
-                    "intervention_ready=True)",
+                    "replayable=True)",
                     receiver=attention[index][0].name,
                 )
             values[index] = projection.detach().clone()
@@ -197,7 +197,7 @@ def patch_edges(trace: Any, edges: Iterable[Any], *, corrupted_graph: Any) -> An
     ----------
     trace:
         The clean trace the edges' graph was built from, captured with
-        ``layers_to_save='all'`` and ``intervention_ready=True``.
+        ``layers_to_save='all'`` and ``replayable=True``.
     edges:
         :class:`ComponentEdge` objects, into one receiver or several. A
         circuit runs as one call: pass every edge outside it,

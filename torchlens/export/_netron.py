@@ -185,6 +185,8 @@ def _metadata_props(
 ) -> list[tuple[str, str]]:
     """Assemble the ordered honesty metadata rows (memo D-19)."""
 
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
     rows: list[tuple[str, str]] = [
         ("torchlens.lossy_export", "true"),
         ("torchlens._runnable", "false"),
@@ -194,7 +196,9 @@ def _metadata_props(
     outcome = _capture_outcome_marker(log)
     if outcome:
         rows.append(("torchlens.capture_outcome", outcome))
-    rows.append(("torchlens.model_class", str(getattr(log, "model_class_name", ""))))
+    rows.append(
+        ("torchlens.model_class", str(log._source_class_name if is_live_trace(log) else ""))
+    )
     rows.append(("torchlens.granularity", projection.granularity))
     if projection.module_depth is not None:
         rows.append(("torchlens.module_depth", str(projection.module_depth)))
@@ -357,6 +361,8 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
         The written JSON path, or ``None`` for the memory-only serve mode.
     """
 
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
     _require_trace(trace, exporter="tl.export.netron")
     _validate_options(granularity, depth, show_buffers)
     if path is None and not serve:
@@ -376,7 +382,7 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
     projection = _build_projection(trace, granularity, depth, show_buffers)
     _warn_extent(projection)
     baseline_text, diff = _baseline_slot(trace, baseline, projection)
-    graph_name = str(getattr(trace, "model_class_name", "TorchLens graph"))
+    graph_name = str(trace._source_class_name if is_live_trace(trace) else "TorchLens graph")
     text = emit_model_json(
         projection,
         graph_name=graph_name,

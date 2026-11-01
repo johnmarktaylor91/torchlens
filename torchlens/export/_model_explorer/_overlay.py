@@ -121,6 +121,8 @@ def _resolve_source(
 ) -> tuple[str, str, Callable[[Any], Any]]:
     """Resolve a provider source into (display name, slug, node resolver)."""
 
+    from ..._data_classes._trace_missing_attrs import is_live_trace
+
     if callable(source) and not isinstance(source, str):
         name = f"callable:{getattr(source, '__name__', 'anonymous')}"
         return name, _slug(name), _callable_resolver(source)
@@ -140,7 +142,9 @@ def _resolve_source(
             remedy="export with privacy_profile='local', or drop this provider",
             argument="overlays",
         )
-    if getattr(log, "structure_only", False) and canonical in _VALUE_DERIVED:
+    if (
+        log._options_structure_only if is_live_trace(log) else False
+    ) and canonical in _VALUE_DERIVED:
         raise ModelExplorerExportError(
             f"Overlay provider {canonical!r} needs activation/gradient values, and a "
             "structure-only capture retained none",

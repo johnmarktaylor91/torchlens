@@ -14,6 +14,7 @@ from weakref import WeakKeyDictionary
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._ir.capture_events import _clone_op_event_for_replay
 from .._ir.events import OpEvent
+from .._record_type import record_type
 from .session import CapturedRunCore
 
 if TYPE_CHECKING:
@@ -187,7 +188,7 @@ _RERUN_EXTRA_OP_FIELDS = (
     "_pending_grad_blob_id",
     "_pending_transformed_grad_blob_id",
     "annotations",
-    "interventions",
+    "edits",
     "container_spec",
     "args_template",
     "kwargs_template",
@@ -296,7 +297,7 @@ class RefreshProjector:
         # i of one list the same op as index i of the other.
         shape_changed: list[str] = []
         for layer, refreshed_layer in zip(
-            self.target.layer_list, refreshed.layer_list, strict=True
+            self.target._layer_list, refreshed._layer_list, strict=True
         ):
             new_shape = refreshed_layer.shape
             if layer.shape is not None and new_shape != layer.shape:
@@ -314,13 +315,13 @@ class RefreshProjector:
             )
         from .._data_classes._state_adapter import state_items
 
-        preserved_states = [dict(state_items(layer)) for layer in self.target.layer_list]
+        preserved_states = [dict(state_items(layer)) for layer in self.target._layer_list]
         if not self.target._refresh_matching_rerun_state_from(refreshed):
             raise self._graph_change_error(
                 refreshed,
                 "raw/final layer labels no longer align during refresh projection",
             )
-        for layer, preserved in zip(self.target.layer_list, preserved_states, strict=False):
+        for layer, preserved in zip(self.target._layer_list, preserved_states, strict=False):
             for field_name, value in preserved.items():
                 if field_name not in self._DYNAMIC_OP_FIELDS:
                     layer._internal_set(field_name, value)
@@ -333,12 +334,12 @@ class RefreshProjector:
         if self.layer_nums_to_save != "all":
             selected = set(self.layer_nums_to_save)
             for output_label in self.target.output_layers:
-                output = self.target.layer_dict_all_keys[output_label]
+                output = self.target._layer_dict_all_keys[output_label]
                 selected.add(output.raw_index)
                 selected.update(
-                    self.target.layer_dict_all_keys[parent].raw_index for parent in output.parents
+                    self.target._layer_dict_all_keys[parent].raw_index for parent in output.parents
                 )
-            for layer in self.target.layer_list:
+            for layer in self.target._layer_list:
                 if layer.raw_index not in selected:
                     self._clear_payload(layer)
 
@@ -362,10 +363,10 @@ class RefreshProjector:
         self._check_buffer_sink_routing(refreshed, executed_raw_labels=executed)
         target_prefix = [
             layer
-            for layer in self.target.layer_list
-            if layer.layer_type != "output" and layer._layer_label_raw in executed
+            for layer in self.target._layer_list
+            if layer.type != "output" and layer._layer_label_raw in executed
         ]
-        refreshed_prefix = [layer for layer in refreshed.layer_list if layer.layer_type != "output"]
+        refreshed_prefix = [layer for layer in refreshed._layer_list if layer.type != "output"]
 
         def _prefix_signature(layers: list[Any]) -> tuple[tuple[Any, ...], ...]:
             """Return the structural (label, type, parents) prefix signature."""
@@ -373,7 +374,7 @@ class RefreshProjector:
             return tuple(
                 (
                     layer._layer_label_raw,
-                    layer.layer_type,
+                    layer.type,
                     tuple(layer.parents),
                     _normalized_parent_arg_positions(layer.parent_arg_positions),
                 )
@@ -395,8 +396,8 @@ class RefreshProjector:
         # 3.3.3 sanitation: skipped records are retained structure-only; value
         # payloads are cleared at fork-finalization so omission never reads as
         # a fresh value.
-        for layer in self.target.layer_list:
-            if layer.layer_type == "output" or layer._layer_label_raw not in executed:
+        for layer in self.target._layer_list:
+            if layer.type == "output" or layer._layer_label_raw not in executed:
                 self._clear_payload(layer)
         self.target.__dict__["_run_truncation_skipped_raw_labels"] = tuple(plan.skipped_raw_labels)
         self.target._layer_nums_to_save = self.layer_nums_to_save
@@ -494,8 +495,8 @@ class RefreshProjector:
 
         rows: list[tuple[str, Any, Any]] = []
         for label in getattr(trace, "internal_sink_ops", ()):
-            layer = trace.layer_dict_all_keys[label]
-            if layer.layer_type != "buffer":
+            layer = trace._layer_dict_all_keys[label]
+            if record_type(layer) != "buffer":
                 continue
             rows.append(
                 (
@@ -526,9 +527,9 @@ class RefreshProjector:
         if not is_mode_sensitive_qualname(qualname):
             return claims
         source_label = getattr(sink_layer, "buffer_source", None)
-        if not source_label or source_label not in trace.layer_dict_all_keys:
+        if not source_label or source_label not in trace._layer_dict_all_keys:
             return claims
-        source = trace.layer_dict_all_keys[source_label]
+        source = trace._layer_dict_all_keys[source_label]
         tail = (qualname or "").rsplit(".", 1)[-1].removesuffix("_")
         mode_argument = "use_input_stats" if tail.endswith("instance_norm") else "training"
         kwargs = getattr(source, "non_tensor_kwargs", None) or {}
@@ -584,7 +585,7 @@ class RefreshProjector:
         """Return the innermost module call of a buffer sink's producing op."""
 
         source_label = getattr(sink_layer, "buffer_source", None)
-        layers = self.target.layer_dict_all_keys
+        layers = self.target._layer_dict_all_keys
         if not source_label or source_label not in layers:
             return None
         modules = tuple(getattr(layers[source_label], "modules", ()) or ())
@@ -617,12 +618,12 @@ class RefreshProjector:
         """
 
         target_sinks = [
-            self.target.layer_dict_all_keys[label]
+            self.target._layer_dict_all_keys[label]
             for label in getattr(self.target, "internal_sink_ops", ())
-            if self.target.layer_dict_all_keys[label].layer_type == "buffer"
+            if record_type(self.target._layer_dict_all_keys[label]) == "buffer"
             and (
                 executed_raw_labels is None
-                or self.target.layer_dict_all_keys[label]._layer_label_raw in executed_raw_labels
+                or self.target._layer_dict_all_keys[label]._layer_label_raw in executed_raw_labels
             )
         ]
         target_rows = tuple(
@@ -722,8 +723,8 @@ class RefreshProjector:
             Human-readable reason that names the changed graph fact.
         """
 
-        target_layers = self.target.layer_list
-        refreshed_layers = refreshed.layer_list
+        target_layers = self.target._layer_list
+        refreshed_layers = refreshed._layer_list
         if len(target_layers) != len(refreshed_layers):
             return (
                 f"layer count changed: expected {len(target_layers)}, got {len(refreshed_layers)}"
@@ -735,11 +736,11 @@ class RefreshProjector:
                     f"expected {target_layer._layer_label_raw!r}, "
                     f"got {refreshed_layer._layer_label_raw!r}"
                 )
-            if target_layer.layer_type != refreshed_layer.layer_type:
+            if record_type(target_layer) != record_type(refreshed_layer):
                 return (
                     f"layer_type changed for {target_layer._layer_label_raw!r}: "
-                    f"expected {target_layer.layer_type!r}, "
-                    f"got {refreshed_layer.layer_type!r}"
+                    f"expected {record_type(target_layer)!r}, "
+                    f"got {record_type(refreshed_layer)!r}"
                 )
             expected_parents = tuple(target_layer.parents)
             actual_parents = tuple(refreshed_layer.parents)
@@ -778,7 +779,7 @@ class RefreshProjector:
 
         self.target.__dict__["_tl_backward_hooked_tensor_keys"] = set()
         self.target.__dict__["_tl_grad_hook_owner_by_label"] = {}
-        for layer in self.target.layer_list:
+        for layer in self.target._layer_list:
             if raw_labels is not None and layer._layer_label_raw not in raw_labels:
                 continue
             grad_fn_handle = layer.grad_fn_handle
@@ -805,10 +806,10 @@ class RefreshProjector:
         from .._utils.tensor_utils import safe_copy
 
         for output_label in self.target.output_layers:
-            output = self.target.layer_dict_all_keys[output_label]
+            output = self.target._layer_dict_all_keys[output_label]
             if not output.parents or output.out is None:
                 continue
-            parent_out = self.target.layer_dict_all_keys[output.parents[0]].out
+            parent_out = self.target._layer_dict_all_keys[output.parents[0]].out
             if output_payload_aliases_parent(output.out, parent_out):
                 output._internal_set("out", parent_out)
                 continue
@@ -816,7 +817,7 @@ class RefreshProjector:
                 "out",
                 safe_copy(
                     output.out,
-                    detach_tensor=self.target.detach_saved_activations,
+                    detach_tensor=self.target._options_detach_saved_activations,
                 ),
             )
 
@@ -857,11 +858,11 @@ class RefreshProjector:
         return tuple(
             (
                 layer._layer_label_raw,
-                layer.layer_type,
+                record_type(layer),
                 tuple(layer.parents),
                 _normalized_parent_arg_positions(layer.parent_arg_positions),
             )
-            for layer in trace.layer_list
+            for layer in trace._layer_list
         )
 
 
@@ -893,14 +894,14 @@ class RecordingProjection:
 
         trace.buffer_layers = list(self.buffer_layers)
         trace.internal_source_ops = list(self.internal_source_ops)
-        trace.capture_start_time = self.trace_facts["capture_start_time"]
-        trace.setup_duration = self.trace_facts["setup_duration"]
-        trace.forward_duration = self.trace_facts["forward_duration"]
-        trace.forward_peak_memory = self.trace_facts["forward_peak_memory"]
-        trace.forward_peak_memory_reason = self.trace_facts.get("forward_peak_memory_reason")
-        trace.forward_memory_backend = self.trace_facts["forward_memory_backend"]
+        trace._provenance_start_time = self.trace_facts["capture_start_time"]
+        trace._provenance_setup_duration = self.trace_facts["setup_duration"]
+        trace._cost_forward_duration = self.trace_facts["forward_duration"]
+        trace._cost_forward_peak_memory = self.trace_facts["forward_peak_memory"]
+        trace._cost_forward_peak_memory_reason = self.trace_facts.get("forward_peak_memory_reason")
+        trace._provenance_forward_memory_backend = self.trace_facts["forward_memory_backend"]
         trace._source_model_ref = self.trace_facts["source_model_ref"]
-        trace.random_seed = self.trace_facts["random_seed"]
+        trace._options_seed = self.trace_facts["random_seed"]
         trace._raw_graph_ws.layer_counter = cast(int, self.trace_facts["layer_counter"])
 
         from ..backends.torch._tl import get_tensor_label, set_tensor_label
@@ -966,9 +967,9 @@ class RecordingProjector:
             for record in projected_records:
                 index = len(records)
                 records.append(record)
-                by_pass.setdefault(record.ctx.pass_index, []).append(index)
+                by_pass.setdefault(record.ctx.pass_number, []).append(index)
                 for label_key in _distinct_label_index_keys(record.ctx.label, record.ctx.raw_label):
-                    by_label.setdefault(label_key, []).append((record.ctx.pass_index, index))
+                    by_label.setdefault(label_key, []).append((record.ctx.pass_number, index))
                 if record.ctx.address is not None:
                     by_address.setdefault(record.ctx.address, []).append(index)
         last_facts = captured_cores[-1].projection_facts if captured_cores else {}

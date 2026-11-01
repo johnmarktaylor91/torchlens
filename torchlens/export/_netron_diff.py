@@ -151,6 +151,8 @@ def build_baseline_diff(
 
     from torchlens.differential import diff
 
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
     report = diff(subject, reference)
     rows_by_label: dict[str, Any] = {}
     rows_by_layer: dict[str, list[Any]] = {}
@@ -173,7 +175,9 @@ def build_baseline_diff(
         "schema": BASELINE_SUMMARY_SCHEMA,
         "source": "torchlens.report.diff",
         "direction": "subject - reference",
-        "reference_model_class": str(getattr(reference, "model_class_name", "")),
+        "reference_model_class": str(
+            reference._source_class_name if is_live_trace(reference) else ""
+        ),
         "row_counts": dict(sorted(report.counts.items())),
         "nodes_with_diff_facts": len(node_facts),
         "removed_count": len(removed),

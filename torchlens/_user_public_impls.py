@@ -40,6 +40,7 @@ from ._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
+from ._record_type import record_type
 from ._robustness import check_model_and_input_variants
 from ._save_budget import SaveBudgetOption
 from ._utils.arg_handling import normalize_input_args, safe_copy_input_tree
@@ -508,7 +509,7 @@ def _weightsfree_summary_facade(
         capture=_CaptureOptions(structure_only=True),
     )
     try:
-        envelope = trace.structure_evidence
+        envelope = trace._graph_structure_evidence
         if isinstance(envelope, dict) and isinstance(envelope.get("input_plan"), dict):
             envelope["input_plan"]["selection_source"] = "summary_facade_auto"
             if input_size is not None:
@@ -1040,16 +1041,16 @@ def _first_reproducibility_divergence(left: Trace, right: Trace) -> str | None:
         available.
     """
 
-    for index, (left_layer, right_layer) in enumerate(zip(left.layer_list, right.layer_list)):
+    for index, (left_layer, right_layer) in enumerate(zip(left._layer_list, right._layer_list)):
         left_sig = (
-            getattr(left_layer, "layer_type", None),
+            record_type(left_layer, None),
             getattr(left_layer, "func_name", None),
             len(getattr(left_layer, "parents", ()) or ()),
             bool(getattr(left_layer, "is_output", False)),
             bool(getattr(left_layer, "is_buffer", False)),
         )
         right_sig = (
-            getattr(right_layer, "layer_type", None),
+            record_type(right_layer, None),
             getattr(right_layer, "func_name", None),
             len(getattr(right_layer, "parents", ()) or ()),
             bool(getattr(right_layer, "is_output", False)),
@@ -1061,8 +1062,8 @@ def _first_reproducibility_divergence(left: Trace, right: Trace) -> str | None:
                 f"{getattr(left_layer, 'func_name', None)!r} vs "
                 f"{getattr(right_layer, 'func_name', None)!r}"
             )
-    if len(left.layer_list) != len(right.layer_list):
-        return f"op count changed: {len(left.layer_list)} vs {len(right.layer_list)}"
+    if len(left._layer_list) != len(right._layer_list):
+        return f"op count changed: {len(left._layer_list)} vs {len(right._layer_list)}"
     return None
 
 
@@ -1104,7 +1105,7 @@ def _warn_if_validation_trace_not_reproducible(
 
     # Read outside the guard below: a trace without its save options must fail
     # loudly, never read as an "unavailable" re-trace.
-    retrace_output_device = cast(OutputDeviceLiteral, first_trace.output_device)
+    retrace_output_device = cast(OutputDeviceLiteral, first_trace._options_output_device)
     retrace_save_budget = first_trace.save_budget
     second_trace: Trace | None = None
     try:
@@ -1161,8 +1162,8 @@ def _warn_if_validation_trace_not_reproducible(
                 extra={
                     "first_graph_hash": first_hash,
                     "retrace_graph_hash": second_hash,
-                    "first_op_count": len(first_trace.layer_list),
-                    "retrace_op_count": len(second_trace.layer_list),
+                    "first_op_count": len(first_trace._layer_list),
+                    "retrace_op_count": len(second_trace._layer_list),
                     "first_divergence": hint,
                 },
             ),
@@ -1172,8 +1173,8 @@ def _warn_if_validation_trace_not_reproducible(
                 message,
                 first_graph_hash=first_hash,
                 retrace_graph_hash=second_hash,
-                first_op_count=len(first_trace.layer_list),
-                retrace_op_count=len(second_trace.layer_list),
+                first_op_count=len(first_trace._layer_list),
+                retrace_op_count=len(second_trace._layer_list),
                 first_divergence=hint,
             ),
             stacklevel=2,

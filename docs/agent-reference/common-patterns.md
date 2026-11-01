@@ -108,7 +108,7 @@ recording = tl.record(model, x, save=tl.func("relu"))
 full_structure = recording.to_trace()
 
 # Selection algebra (L6): compose regions, resolve explicitly, edit with do().
-log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 u1, u2 = log["relu_1_2"], log["conv2d_2_3"]
 inter = u1.receptive_field.at((3, 3)) & u2.receptive_field.at((5, 5))  # a Selection
 resolved = log[inter]  # frozen, trace-bound, session-only
@@ -127,7 +127,7 @@ Use `backend=` only when the backend is intentionally part of the test or exampl
 ```python
 torch_trace = tl.trace(model, x, backend="torch")
 tf_trace = tl.trace(tf_model, tf_x, backend="tf")
-assert torch_trace.backend == "torch"
+assert torch_trace.provenance.backend == "torch"
 ```
 
 Before debugging wrapper-specific failures, run:

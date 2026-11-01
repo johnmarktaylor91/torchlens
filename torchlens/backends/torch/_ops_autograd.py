@@ -304,7 +304,7 @@ def _register_call_output_container_snapshot(
     """
 
     if not (
-        getattr(trace, "intervention_ready", False)
+        getattr(trace, "is_replayable", False)
         or getattr(trace, "_capture_container_structure", False)
     ):
         return

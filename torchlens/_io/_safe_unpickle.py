@@ -1381,7 +1381,7 @@ class SafeBundleUnpickler(pickle._Unpickler):
                 "with this release and save it again; or load the file with the "
                 "release that wrote it, replace the tensors in trace.annotations with "
                 "plain values (for example tensor.tolist()), set "
-                "trace.save_raw_input = False and trace.save_raw_output = False, and "
+                "trace._options_save_raw_input = False and trace._options_save_transformed_output = False, and "
                 "save: the re-saved file loads here. If no TorchLens release wrote "
                 "this file, it is corrupt."
             )

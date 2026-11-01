@@ -149,7 +149,7 @@ def test_phase0_op_event_fields_are_populated(monkeypatch: pytest.MonkeyPatch) -
     assert {edge.arg_kind for edge in add_event._edge_uses} == {"positional", "keyword"}
     assert any(parent.arg_position == (0, 0) for parent in cat_event.parents)
     assert any(
-        parent.arg_position == "other" and parent.edge_use == "kwarg"
+        parent.arg_position == "other" and parent._edge_use == "kwarg"
         for parent in add_event.parents
     )
 
@@ -228,9 +228,9 @@ def test_phase0_trace_param_source_and_neutral_param_refs() -> None:
     x = torch.randn(2, 3)
     trace = tl.trace(model, x)
 
-    assert trace.backend == "torch"
-    assert trace.module_identity_mode == "torch_module"
-    assert trace.param_source == "native-module"
+    assert trace.provenance.backend == "torch"
+    assert trace.options.module_identity_mode == "torch_module"
+    assert trace.provenance.param_source == "native-module"
     param = trace.params["linear.weight"]
     assert param.dtype_ref == DtypeRef.from_value(param.dtype)
     assert param.device_ref is None
@@ -247,7 +247,7 @@ def test_phase0_neutral_refs_default_fill_legacy_object_state() -> None:
 
     trace_state = trace.__getstate__()
     trace_state.pop("module_identity_mode")
-    trace_state.pop("param_source")
+    trace_state.pop("_provenance_param_source")
     loaded = type(trace).__new__(type(trace))
     loaded.__setstate__(trace_state)
 
@@ -265,8 +265,8 @@ def test_phase0_neutral_refs_default_fill_legacy_object_state() -> None:
     loaded_param = type(param).__new__(type(param))
     loaded_param.__setstate__(param_state)
 
-    assert loaded.module_identity_mode == "torch_module"
-    assert loaded.param_source == "native-module"
+    assert loaded.options.module_identity_mode == "torch_module"
+    assert loaded.provenance.param_source == "native-module"
     assert loaded_op.dtype_ref == DtypeRef.from_value(loaded_op.dtype)
     assert loaded_op.resolver_status == "resolved"
     assert loaded_param.dtype_ref == DtypeRef.from_value(loaded_param.dtype)

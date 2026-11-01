@@ -50,7 +50,7 @@ _X = torch.randn(2, 4, generator=torch.Generator().manual_seed(3))
 
 
 def _ready(model: nn.Module) -> Any:
-    return tl.trace(model, _X, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(model, _X, capture=tl.options.CaptureOptions(replayable=True))
 
 
 @pytest.mark.parametrize("edit", sorted(_EDITS))

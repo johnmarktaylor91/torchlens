@@ -79,7 +79,7 @@ def test_user_hook_shared_object_cannot_steal_labels() -> None:
     assert first_children == ("mul_1_4",)
     assert second_children == ("mul_2_5",)
     # The internal mint must not enter the captured graph.
-    assert not any("clone" in op.label for op in log.layer_list)
+    assert not any("clone" in op.label for op in log._layer_list)
 
 
 def test_inplace_mutating_hook_records_replaced_true() -> None:
@@ -107,8 +107,8 @@ def test_inplace_mutating_hook_records_replaced_true() -> None:
         intervene=tl.when(tl.func("relu"), inplace_hook),
     )
     op = log["relu_1_2"]
-    assert op.intervention_replaced is True
-    fire_records = list(op.interventions)
+    assert op.is_edited is True
+    fire_records = list(op.edits)
     assert fire_records and fire_records[-1].replaced is True
     assert bool((op.out == 0).all())
 
@@ -138,8 +138,8 @@ def test_data_alias_mutating_hook_records_replaced_true() -> None:
         intervene=tl.when(tl.func("relu"), data_alias_hook),
     )
     op = log["relu_1_2"]
-    assert op.intervention_replaced is True
-    fire_records = list(op.interventions)
+    assert op.is_edited is True
+    fire_records = list(op.edits)
     assert fire_records and fire_records[-1].replaced is True
     assert bool((op.out == 0).all())
 

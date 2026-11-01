@@ -53,7 +53,7 @@ def _trace(model: nn.Module, **capture: Any) -> Any:
 
 
 def _relu_label(trace: Any) -> str:
-    return next(str(op.layer_label) for op in trace.layer_list if op.func_name == "relu")
+    return next(str(op.layer_label) for op in trace._layer_list if op.func_name == "relu")
 
 
 def _events(trace: Any, **match: Any) -> list[dict[str, Any]]:
@@ -217,7 +217,7 @@ def test_loss_needs_a_gradient_site() -> None:
             tl.scale(0.5),
             model=model,
             inputs=_X,
-            loss=lambda result: result.layer_list[-1].out.sum(),
+            loss=lambda result: result._layer_list[-1].out.sum(),
         )
     assert excinfo.value.fields["code"] == "do_loss_without_gradient_site"
     assert _snapshot(trace) == before
@@ -260,9 +260,9 @@ class _Fire:
 
     def __init__(self, helper: Any, *, pass_index: int, label: str) -> None:
         self.signal = "backward"
-        self.backward_pass_index = pass_index
-        self.helper = helper
-        self.helper_name = getattr(helper, "helper_name", None)
+        self.backward_pass_number = pass_index
+        self.edit = helper
+        self.edit_name = getattr(helper, "name", None)
         self.site_label = label
         self.target_label = label
 
@@ -474,14 +474,14 @@ def test_mixed_plan_edits_the_activation_then_the_gradient() -> None:  # A24
 def test_set_only_arms_in_place_and_fires_on_this_trace() -> None:  # A25
     model = _BranchNet()
     trace = _trace(model, backward_ready=True)
-    layers_before = trace.layer_list
+    layers_before = trace._layer_list
     returned = trace.do(
         tl.grad(_RELU),
         tl.scale(0),
         intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
     )
     assert returned is trace
-    assert trace.layer_list is layers_before
+    assert trace._layer_list is layers_before
     assert trace.intervention_audit[-1]["status"] == "armed"
     assert len(trace.armed_edits) == 1
     trace.backward(_loss(trace))
@@ -502,7 +502,7 @@ def test_rerun_forces_backward_readiness_and_discloses_it() -> None:  # A26
 def test_unreached_and_pass_filtered_gradient_sites_settle_no_fire() -> None:  # A27
     model = _BranchNet()
     source = _trace(model, backward_ready=True, save_grads="all")
-    side = next(str(op.layer_label) for op in source.layer_list if op.func_name == "sigmoid")
+    side = next(str(op.layer_label) for op in source._layer_list if op.func_name == "sigmoid")
     result = source.do(tl.grad(tl.func("sigmoid")), tl.scale(0), model=model, inputs=_X)
     result.backward(result[result.output_layers[0]].out.sum())
     (row,) = _events(result, door="backward")

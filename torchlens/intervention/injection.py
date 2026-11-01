@@ -457,7 +457,7 @@ def injected_ops(trace: Any) -> tuple[InjectedOp, ...]:
         return tuple(records)
     import dataclasses
 
-    ops = tuple(getattr(trace, "layer_list", ()) or ())
+    ops = tuple(trace._layer_list or ())
     by_raw: dict[str, Any] = {}
     for op in ops:
         raw = getattr(op, "raw_label", None)
@@ -482,7 +482,9 @@ def injected_ops(trace: Any) -> tuple[InjectedOp, ...]:
                 provenance=dataclasses.replace(
                     record.provenance,
                     host_site_key=getattr(host, "site_key", None),
-                    host_pass=int(getattr(host, "pass_index", None) or record.provenance.host_pass),
+                    host_pass=int(
+                        getattr(host, "pass_number", None) or record.provenance.host_pass
+                    ),
                 ),
             )
         )
@@ -499,7 +501,7 @@ def _module_boundary_host(ops: tuple[Any, ...], host_label: str) -> Any | None:
     that raw label. The host is the retained op that PRODUCED that module
     call's output: the ``interventionreplacement`` op the capture mints at
     module exit when the hook replaced the value (preferred -- it carries
-    ``intervention_replaced=True``), else the module's own output op. Both
+    ``is_edited=True``), else the module's own output op. Both
     list the module call in ``output_of_module_calls``. ``None`` when no
     retained op exits that module call (the record stays unanchored and the
     codec refuses to persist it typed).
@@ -510,7 +512,7 @@ def _module_boundary_host(ops: tuple[Any, ...], host_label: str) -> Any | None:
         exits = getattr(op, "output_of_module_calls", None) or ()
         if host_label not in exits:
             continue
-        if getattr(op, "intervention_replaced", False):
+        if getattr(op, "is_edited", False):
             return op
         if fallback is None:
             fallback = op

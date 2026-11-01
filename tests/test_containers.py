@@ -247,7 +247,7 @@ def test_hf_model_output_container_reconstructs_round_trip() -> None:
     trace = tl.trace(
         HFLikeModel(),
         torch.tensor([1.0]),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     rebuilt = trace.reconstruct_output()
 
@@ -267,7 +267,7 @@ def test_container_repr_summary_uses_output_cross_references() -> None:
     trace = tl.trace(
         HFLikeModel(),
         torch.tensor([1.0]),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     output_container = trace.ops[trace.output_layers[0]].container
 
@@ -286,7 +286,7 @@ def test_trace_to_pandas_adds_output_role_column() -> None:
     trace = tl.trace(
         HFLikeModel(),
         torch.tensor([1.0]),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     frame = trace.to_pandas()
     roles = dict(zip(frame["layer_label"], frame["output_role"], strict=True))
@@ -307,7 +307,7 @@ def test_capture_container_structure_reconstructs_without_intervention_ready() -
     )
     rebuilt = trace.reconstruct_output()
 
-    assert trace.intervention_ready is False
+    assert trace.is_replayable is False
     assert isinstance(rebuilt, DemoModelOutput)
     assert torch.equal(rebuilt["logits"], torch.tensor([2.0]))
     assert torch.equal(rebuilt["past_key_values"][0][1], torch.tensor([4.0]))
@@ -330,7 +330,7 @@ def test_capture_container_structure_default_off_preserves_output_shape_metadata
         capture=tl.options.CaptureOptions(seed=0, capture_container_structure=False),
     )
 
-    assert default_trace.graph_shape_hash == explicit_false_trace.graph_shape_hash
+    assert default_trace.provenance.fingerprint == explicit_false_trace.provenance.fingerprint
     assert (
         [default_trace.ops[label].container_spec for label in default_trace.output_layers]
         == [
@@ -387,7 +387,7 @@ def test_custom_registered_container_reconstructs() -> None:
     trace = tl.trace(
         PairBoxModel(),
         torch.tensor([2.0]),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     rebuilt = trace.reconstruct_output()
 
@@ -402,7 +402,7 @@ def test_output_at_selects_nested_container_path() -> None:
     trace = tl.trace(
         HFLikeModel(),
         torch.tensor([1.0]),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     site = trace[trace[output_at(("past_key_values", 0, 1))].labels[0]]
 
@@ -416,7 +416,7 @@ def test_post_load_reconstruct_output_round_trips(tmp_path: Path) -> None:
     trace = tl.trace(
         HFLikeModel(),
         torch.tensor([1.0]),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     path = tmp_path / "container.tlspec"
     trace.save(path)
@@ -435,7 +435,7 @@ def test_path_only_container_view_degrades_without_reconstruction() -> None:
     trace = tl.trace(
         TupleModel(),
         torch.tensor([1.0]),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     # The final-output snapshot is registered on every capture; a PATH-ONLY view is
     # what a final-output op exposes when no registry record backs it (a legacy
@@ -462,7 +462,7 @@ def test_paths_only_backend_registry_view_does_not_fake_reconstruct() -> None:
         (torch.tensor([1.0]), torch.tensor([2.0])),
         capture=tl.options.CaptureOptions(capture_container_structure=True),
     )
-    trace.backend = "jax"
+    trace._provenance_backend = "jax"
 
     container = trace.ops[trace.output_layers[0]].container
     stack_op = next(op for op in trace.ops if op.func_name == "stack")
@@ -487,7 +487,7 @@ def test_backend_none_container_capability_returns_no_false_view() -> None:
         (torch.tensor([1.0]), torch.tensor([2.0])),
         capture=tl.options.CaptureOptions(capture_container_structure=True),
     )
-    trace.backend = "mlx"
+    trace._provenance_backend = "mlx"
 
     output_op = trace.ops[trace.output_layers[0]]
     stack_op = next(op for op in trace.ops if op.func_name == "stack")
@@ -520,11 +520,12 @@ def test_trace_container_capability_fails_closed_on_unknown_backend() -> None:
 
     from torchlens._data_classes.container import Role, _trace_container_capability
 
-    unknown = SimpleNamespace(backend="no_such_backend_zzz")
+    unknown = SimpleNamespace(_provenance_backend="no_such_backend_zzz")
     assert _trace_container_capability(unknown, Role.CALL_OUTPUT) == "none"
     assert _trace_container_capability(unknown, Role.MODEL_INPUT) == "none"
 
-    legacy = SimpleNamespace()  # no backend attribute at all
+    # A legacy trace without a backend: the stored key holds no backend name.
+    legacy = SimpleNamespace(_provenance_backend=None)
     torch_caps = tl.backends.spec("torch").capabilities
     assert _trace_container_capability(legacy, Role.CALL_OUTPUT) == str(
         torch_caps.output_container_structure

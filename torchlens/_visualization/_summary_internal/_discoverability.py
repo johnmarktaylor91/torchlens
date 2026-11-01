@@ -1,7 +1,7 @@
-"""The capture-provenance block served by ``trace.provenance()``.
+"""The capture-provenance block served by ``trace.provenance.summary()``.
 
 The ~35-line block and its exclusive helpers (formerly the summary
-preamble; the F08 rebuild moved it to ``trace.provenance()`` byte-identically).
+preamble; the F08 rebuild moved it to ``trace.provenance.summary()`` byte-identically).
 """
 
 from __future__ import annotations
@@ -43,8 +43,8 @@ def format_discoverability_summary(
     lines = [
         "TorchLens Discoverability Summary",
         "Capture:",
-        f"  name: {getattr(trace, 'trace_label', None)!r}",
-        f"  model_class_qualname: {getattr(trace, 'model_class_name', None)}",
+        f"  name: {getattr(trace, 'name', None)!r}",
+        f"  model_class_qualname: {trace._source_class_name}",
         f"  input_shape: {_input_shape_summary(trace)}",
         *_input_preprocessing_lines(
             trace,
@@ -52,12 +52,12 @@ def format_discoverability_summary(
         ),
         *_output_postprocessing_lines(trace),
         f"  capture_timestamp: {_capture_timestamp(trace)}",
-        f"  intervention_ready: {bool(getattr(trace, 'intervention_ready', False))}",
-        f"  save_arg_templates: {bool(getattr(trace, 'save_arg_templates', False))}",
+        f"  replayable: {bool(getattr(trace, 'is_replayable', False))}",
+        f"  save_arg_templates: {bool(trace._options_save_arg_templates)}",
         "Run state:",
         f"  state: {_run_state_name(trace)}",
         f"  direct_write_dirty: {bool(getattr(trace, '_has_direct_writes', False))}",
-        f"  append: is_appended={bool(getattr(trace, 'is_appended', False))}, "
+        f"  append: is_appended={bool(trace._provenance_is_appended)}, "
         f"sequence_id={getattr(trace, '_append_sequence_id', 0)}",
         f"  stale_spec: {_stale_spec_status(trace)}",
         f"  last_run: {_last_run_summary(trace)}",
@@ -71,9 +71,9 @@ def format_discoverability_summary(
         f"  parent_run: {_parent_run_summary(trace)}",
         f"  fork_chain: {_fork_chain_summary(trace)}",
         "Graph and relationship evidence:",
-        f"  graph_shape_hash: {_truncated(getattr(trace, 'graph_shape_hash', None))}",
-        f"  model_class_qualname: {getattr(trace, 'model_class_qualname', None)}",
-        f"  weight_fingerprint: {_truncated(getattr(trace, 'param_hash_quick', None))}",
+        f"  graph_shape_hash: {_truncated(trace._provenance_fingerprint)}",
+        f"  model_class_qualname: {trace._source_class_qualname}",
+        f"  weight_fingerprint: {_truncated(trace._provenance_param_hash_quick)}",
         f"  relationship_evidence: {_relationship_evidence_summary(trace)}",
         "Next operations:",
         f"  {_next_operation_hint(trace)}",
@@ -104,7 +104,7 @@ def _input_preprocessing_lines(
         two-line summary block.
     """
 
-    record = getattr(trace, "input_preprocessor", None)
+    record = trace._provenance_input_preprocessor
     if record is None:
         return []
     lines = ["Input preprocessing:", f"  {record.description}"]
@@ -135,7 +135,7 @@ def _output_postprocessing_lines(trace: Trace) -> list[str]:
         Compact output decode provenance and preview lines.
     """
 
-    record = getattr(trace, "output_postprocessor", None)
+    record = trace._provenance_output_postprocessor
     if record is None:
         return [
             "Output postprocessing:",
@@ -169,7 +169,7 @@ def _decoded_output_preview(trace: Trace) -> str | None:
         Preview text, if a batch top-k table is available.
     """
 
-    rows = _decoded_batch_topk_rows(getattr(trace, "decoded_output", None))
+    rows = _decoded_batch_topk_rows(trace._decoded_output)
     if not rows:
         return None
     parts: list[str] = []
@@ -228,7 +228,7 @@ def _input_shape_summary(trace: Trace) -> str:
     shape = _combined_shape_str(trace, layers)
     if shape and shape != "-":
         return shape
-    metadata = getattr(trace, "input_annotations", {}) or {}
+    metadata = trace._provenance_input_annotations or {}
     if metadata:
         return _shorten(repr(metadata), limit=80)
     return "unknown"
@@ -248,8 +248,8 @@ def _capture_timestamp(trace: Trace) -> str:
         Pass start/end timing information.
     """
 
-    pass_start = float(getattr(trace, "capture_start_time", 0.0) or 0.0)
-    pass_end = float(getattr(trace, "capture_end_time", 0.0) or 0.0)
+    pass_start = float(trace._provenance_start_time or 0.0)
+    pass_end = float(trace._provenance_end_time or 0.0)
     if pass_start <= 0:
         return "unknown"
     if pass_end > 0:
@@ -466,13 +466,15 @@ def _parent_run_summary(trace: Trace) -> str:
         Parent summary.
     """
 
-    parent_ref = getattr(trace, "parent_run", None)
+    from ..._data_classes._trace_missing_attrs import is_live_trace
+
+    parent_ref = trace._parent_run
     if parent_ref is None:
         return "none"
     parent = parent_ref()
     if parent is None:
         return "collected"
-    return f"{getattr(parent, 'trace_label', None)!r} ({getattr(parent, 'model_class_name', None)})"
+    return f"{getattr(parent, 'name', None)!r} ({(parent._source_class_name if is_live_trace(parent) else None)})"
 
 
 def _fork_chain_summary(trace: Trace) -> str:
@@ -489,17 +491,19 @@ def _fork_chain_summary(trace: Trace) -> str:
         Fork chain from root to current log.
     """
 
-    names = [str(getattr(trace, "trace_label", None))]
+    from ..._data_classes._trace_missing_attrs import is_live_trace
+
+    names = [str(getattr(trace, "name", None))]
     seen = {id(trace)}
     current = trace
     while True:
-        parent_ref = getattr(current, "parent_run", None)
+        parent_ref = current._parent_run if is_live_trace(current) else None
         if parent_ref is None:
             break
         parent = parent_ref()
         if parent is None or id(parent) in seen:
             break
-        names.append(str(getattr(parent, "trace_label", None)))
+        names.append(str(getattr(parent, "name", None)))
         seen.add(id(parent))
         current = parent
     return " <- ".join(reversed(names))
@@ -541,7 +545,7 @@ def _relationship_evidence_summary(trace: Trace) -> str:
         Compact relationship summary.
     """
 
-    evidence = getattr(trace, "relationship_evidence", {}) or {}
+    evidence = trace._graph_relationship_evidence or {}
     if not evidence:
         return "unknown"
     parts = []
@@ -569,8 +573,8 @@ def _next_operation_hint(trace: Trace) -> str:
         return "direct writes present; replay() or rerun() will overlay recipe state"
     if getattr(trace, "_spec_revision", 0) != getattr(trace, "_out_recipe_revision", 0):
         return "spec stale; call replay() or rerun() to propagate"
-    if not getattr(trace, "intervention_ready", False):
-        return "not intervention-ready; recapture with intervention_ready=True for replay templates"
+    if not getattr(trace, "is_replayable", False):
+        return "not intervention-ready; recapture with replayable=True for replay templates"
     return "ready for set(), attach_hooks(), do(), replay(), rerun(), or fork()"
 
 
@@ -589,14 +593,14 @@ def _rng_note_summary(trace: Trace) -> str:
     """
 
     notes = []
-    for layer in getattr(trace, "layer_list", []) or []:
-        for record in getattr(layer, "interventions", []) or []:
+    for layer in trace._layer_list or []:
+        for record in getattr(layer, "edits", []) or []:
             note = getattr(record, "determinism_note", None)
             if note:
                 notes.append(str(note))
     if notes:
         return _shorten("; ".join(notes[:3]), limit=140)
-    if getattr(trace, "save_rng_states", False):
+    if trace._options_save_rng:
         return "per-operation RNG states captured"
     return "no unseeded helper RNG notes"
 

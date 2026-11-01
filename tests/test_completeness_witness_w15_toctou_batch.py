@@ -26,7 +26,7 @@ from torchlens.backends.torch import completeness_witness as cw
 from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )

@@ -41,6 +41,12 @@ from torchlens._io.writer_contract import writer_contract
 _HERE = Path(__file__).parent
 SCHEMAS = _HERE.parent / "torchlens" / "schemas"
 V10_CONTRACT = SCHEMAS / "writer_contract_v10.json"
+V11_CONTRACT = SCHEMAS / "writer_contract_v11.json"
+
+#: SHA-256 of the frozen v10 contract of record (frozen since the v11 bump).
+V10_CONTRACT_SHA256 = (
+    "f49ae6370c46c171074c335a4ac2e6ce3734935bb7194668840672c2ea570fea"  # pragma: allowlist secret
+)
 
 #: The v10 FIELD REGISTRY: record contract key -> {field name -> FieldPolicy
 #: value} for every persisted field admitted over the v9 contract. A lane adds
@@ -133,8 +139,8 @@ def test_step_score_names_are_reserved_and_credited() -> None:
 def test_facet_snapshot_stays_a_drop_field() -> None:
     """R2-36: the facet snapshot never persists (pickle round-trip: test_fw2b_*)."""
 
-    trace_contract = _record_contracts(V10_CONTRACT)["trace"]
-    assert trace_contract["field_policies"]["facet_registry_snapshot"] == "drop"
+    trace_contract = _record_contracts(V11_CONTRACT)["trace"]
+    assert trace_contract["field_policies"]["facet_functions"] == "drop"
 
 
 def test_v10_admissions_match_the_v10_contract() -> None:

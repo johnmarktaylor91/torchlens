@@ -217,7 +217,7 @@ def _log_output_tensor_info(
         )
         base_equivalence_class = equivalence_class
         self.layers_with_params[equivalence_class].append(_label_raw)
-        fields_dict["pass_index"] = len(self.layers_with_params[equivalence_class])
+        fields_dict["pass_number"] = len(self.layers_with_params[equivalence_class])
         equivalence_class = _append_module_suffix_to_equivalence_class(
             equivalence_class, fields_dict["modules"]
         )
@@ -239,7 +239,7 @@ def _log_output_tensor_info(
             equivalence_class, fields_dict["modules"]
         )
         fields_dict["equivalence_class"] = equivalence_class
-        fields_dict["pass_index"] = 1
+        fields_dict["pass_number"] = 1
 
     # Call-site grouping (step 7, ``callsite_v1``): when the capture walk saw
     # where this op ran, record its call-site class in the raw-graph workspace
@@ -256,10 +256,10 @@ def _log_output_tensor_info(
     # Defensive: if equivalence_class isn't yet registered (e.g. user-injected
     # tensor through intervention/raw-hook with a fresh hash), create the
     # set on demand rather than crashing with KeyError.
-    if base_equivalence_class not in self.op_equivalence_classes:
-        self.op_equivalence_classes[base_equivalence_class] = set()
-    self.op_equivalence_classes[base_equivalence_class].add(_label_raw)
-    fields_dict["equivalent_ops"] = self.op_equivalence_classes[base_equivalence_class]
+    if base_equivalence_class not in self._graph_op_equivalence_classes:
+        self._graph_op_equivalence_classes[base_equivalence_class] = set()
+    self._graph_op_equivalence_classes[base_equivalence_class].add(_label_raw)
+    fields_dict["equivalent_ops"] = self._graph_op_equivalence_classes[base_equivalence_class]
 
     # In-place ops return the same tensor object, which already has a raw label -- but so
     # does a NON-mutating identity return (``x.cpu()`` on CPU, ``x.contiguous()`` on a
@@ -393,11 +393,11 @@ def _log_output_tensor_info(
 
     # Other labeling info
     fields_dict["layer_label"] = None
-    fields_dict["layer_label_short"] = None
+    fields_dict["short_layer_label"] = None
     fields_dict["label"] = None
-    fields_dict["label_short"] = None
+    fields_dict["short_label"] = None
     fields_dict["layer_label"] = None
-    fields_dict["layer_label_short"] = None
+    fields_dict["short_layer_label"] = None
     fields_dict["type"] = layer_type
     fields_dict["_layer_label_raw"] = _label_raw
     fields_dict["type_index"] = type_index
@@ -408,7 +408,7 @@ def _log_output_tensor_info(
     fields_dict["out"] = None
     fields_dict["transformed_out"] = None
     fields_dict["has_saved_activation"] = False
-    fields_dict["activation_transform"] = self.activation_transform
+    fields_dict["activation_transform"] = self._options_activation_transform
     # Collective boundary nodes carry their portable collective_boundary_v1
     # payload in the reserved "collective" annotations namespace; the wrapper
     # stamps it on the replay callable (same channel as the __tl_transform_*
@@ -430,7 +430,7 @@ def _log_output_tensor_info(
                 session.register_annotation_copy(fields_dict["annotations"]["collective"])
     else:
         fields_dict["annotations"] = {}
-    fields_dict["intervention_replaced"] = False
+    fields_dict["is_edited"] = False
     fields_dict["fire_results"] = ()
     fields_dict["has_saved_args"] = False
     fields_dict["saved_args"] = None
@@ -525,7 +525,7 @@ def _save_activation_fields(
             func_name=fields_dict.get("func_name"),
             is_inplace=bool(fields_dict.get("is_inplace", False)),
         )
-        save_raw_activations = getattr(trace, "save_raw_activations", True)
+        save_raw_activations = trace._options_save_raw_activations
         store_raw = save_raw_activations or activation_transform is None
         # Explorer P2: when nothing raw is retained AND the transform declares
         # the non-differentiable summary role, the transient safe_copy is
@@ -561,7 +561,7 @@ def _save_activation_fields(
                 trace,
                 t,
                 fields_dict["annotations"],
-                getattr(trace, "save_arg_values", False),
+                trace._options_save_args,
             )
             if store_raw and save_mode == "copy"
             else None
@@ -607,7 +607,7 @@ def _save_activation_fields(
                     raw_out,
                     fields_dict["_layer_label_raw"],
                     fields_dict["annotations"],
-                    getattr(trace, "save_arg_values", False),
+                    trace._options_save_args,
                 )
             if isinstance(raw_out, torch.Tensor):
                 mark_detached_saved_activation(
@@ -635,9 +635,7 @@ def _save_activation_fields(
                 transformed_tensor=transformed_out,
                 transform_kind="activation",
                 tripwire_armed=train_mode_tripwire_armed(
-                    backward_ready=fields_dict.get(
-                        "backward_ready", getattr(trace, "backward_ready", False)
-                    ),
+                    backward_ready=fields_dict.get("backward_ready", trace._options_backward_ready),
                     transform=activation_transform,
                 ),
                 label=fields_dict.get("_layer_label_raw"),
@@ -679,7 +677,7 @@ def _save_activation_fields(
         if out_sink is not None and isinstance(fields_dict["out"], torch.Tensor):
             out_sink(fields_dict["_label_raw"], fields_dict["out"])
 
-        if trace.save_arg_values:
+        if trace._options_save_args:
             # Admit BEFORE the clones allocate (r8 R34, sol 2): the snapshot
             # used to clone every tensor argument first and charge after.
             from ._ops_retention import _copy_saved_arg_tree

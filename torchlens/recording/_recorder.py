@@ -402,6 +402,8 @@ class Recorder:
     ) -> None:
         """Finalize or abort the recorder resource scope."""
 
+        from .._data_classes._trace_missing_attrs import is_live_trace
+
         _ = exc_type, traceback
         if not self._entered or self._exited or self._state is None:
             raise RecorderStateError("Recorder is not active")
@@ -429,7 +431,12 @@ class Recorder:
 
             if getattr(self._recording, "_outcome", None) is None:
                 recording = self._recording
-                inference_only = bool(getattr(self._state.runtime_trace, "inference_only", False))
+                inference_only = bool(
+                    self._state.runtime_trace._options_inference_only
+                    if self._state.runtime_trace is not None
+                    and is_live_trace(self._state.runtime_trace)
+                    else False
+                )
                 if recording.is_stopped:
                     stamped = CaptureOutcome(
                         status=CaptureStatus.STOPPED,
@@ -523,7 +530,7 @@ class Recorder:
             backward_ready=True,
             inference_only=inference_only,
         )
-        trace.capture_mode = "predicate"
+        trace._options_mode = "predicate"
         trace._fastlog_recording = self._state.recording
         trace._predicate_save_options = self.options
         trace._stop_directive = StopDirective(
@@ -577,7 +584,7 @@ class Recorder:
                 max(self._state.recording.num_ops, self._next_pass_index),
             )
             self._mark_halted_pass(
-                self._next_pass_index, halt_exc, inference_only=trace.inference_only
+                self._next_pass_index, halt_exc, inference_only=trace._options_inference_only
             )
             if self._echo_session is not None:
                 # Halted is not failed: no crash tail, one typed disclosure.

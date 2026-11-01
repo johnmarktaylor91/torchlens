@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import gc
 from collections.abc import Iterable
-from typing import Any, Protocol, TypeVar, runtime_checkable
+from typing import Any, Protocol, TypeVar, cast, runtime_checkable
 
 from torchlens._ir.capture_events import CaptureEvents
 
@@ -35,10 +35,11 @@ def forget_event_stream(run: object) -> None:
 
 @runtime_checkable
 class _ActivationLookup(Protocol[ActivationT]):
-    """Protocol for raw-label/pass/address activation lookup consumers."""
+    """Protocol for raw-label/pass/address activation lookup consumers.
 
-    by_pass: dict[int, list[int]]
-    orphan_records: list[dict[str, Any]]
+    The pass index and orphan stores are each sibling's own storage
+    (``Trace._by_pass`` is private), so the protocol names only the lookups.
+    """
 
     def activation_by_raw_label(
         self, raw_label: str, *, pass_index: int | None = None
@@ -228,6 +229,8 @@ class TraceLike:
     def _iter_activation_records(self) -> Iterable[Any]:
         """Iterate projection-specific retained activation records."""
 
+        from ._data_classes._trace_missing_attrs import is_live_trace
+
         if hasattr(self, "records"):
             ensure_records = getattr(self, "_ensure_records", None)
             if ensure_records is not None:
@@ -235,7 +238,7 @@ class TraceLike:
             return tuple(getattr(self, "records", ()))
         return tuple(
             op
-            for op in getattr(self, "layer_list", ())
+            for op in (cast(Any, self)._layer_list if is_live_trace(self) else ())
             if getattr(op, "has_saved_activation", False)
         )
 
@@ -252,8 +255,8 @@ class TraceLike:
 
         ctx = getattr(activation, "ctx", None)
         if ctx is not None:
-            return getattr(ctx, "pass_index", None)
-        return getattr(activation, "pass_index", None)
+            return getattr(ctx, "pass_number", None)
+        return getattr(activation, "pass_number", None)
 
     def _activation_address(self, activation: Any) -> str | None:
         """Return the module or buffer address for one projection-specific activation.

@@ -485,7 +485,7 @@ def in_notebook() -> bool:
 
 def _vprint(trace: "Trace", message: str) -> None:
     """Print a progress message if verbose mode is enabled on the Trace."""
-    if getattr(trace, "verbose", False):
+    if trace._options_verbose:
         print(f"[torchlens] {message}")
 
 
@@ -497,7 +497,7 @@ def _vtimed(trace: "Trace", description: str) -> Iterator[None]:
     on exit.
     """
     bucket = f"postprocess:{description.strip()}"
-    if not getattr(trace, "verbose", False):
+    if not trace._options_verbose:
         with _timed_phase(trace, bucket):
             yield
         return

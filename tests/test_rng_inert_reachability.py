@@ -668,7 +668,7 @@ def test_hidden_generator_preexisting_thread_draw_is_unverifiable(
             model,
             x.clone(),
             capture=CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 capture_container_structure=True,
                 cache=False,
                 seed=1,
@@ -710,7 +710,7 @@ def test_benign_model_with_c_callables_stays_verified(tmp_path: Path) -> None:
         _Benign().eval(),
         x.clone(),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
             seed=1,
@@ -852,7 +852,7 @@ def test_ambient_graph_subclass_generator_draw_still_unverifiable(tmp_path: Path
             _Model().eval(),
             x.clone(),
             capture=CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 capture_container_structure=True,
                 cache=False,
                 seed=1,

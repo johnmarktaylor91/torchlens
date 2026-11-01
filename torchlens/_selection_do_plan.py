@@ -71,7 +71,7 @@ def _build_selection_do_plan(
         ops = [
             op
             for op in _find_act_ops(trace, layer_label)
-            if getattr(op, "pass_index", 1) == pass_index
+            if getattr(op, "pass_number", 1) == pass_index
         ]
         if not ops:
             raise _unresolvable(

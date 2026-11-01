@@ -106,7 +106,10 @@ def test_named_head_resolves_an_ambiguous_multi_output_model() -> None:
     trace = tl.trace(_TwoHeads(torch.tensor([[1.0, 5.0]]), labels).eval(), torch.ones(1, 2))
 
     assert trace.decoded_output is None
-    assert trace.output_postprocessor is not None and trace.output_postprocessor.ambiguous
+    assert (
+        trace.provenance.output_postprocessor is not None
+        and trace.provenance.output_postprocessor.ambiguous
+    )
     assert trace.decode_output(head="main")["rows"][0]["label"] == "hot"
     assert trace.decode_output(head="aux")["rows"][0]["label"] == "cold"
 
@@ -183,7 +186,7 @@ def test_attached_tokenizer_decodes_text_automatically_only_from_a_logits_head()
     encoder._torchlens_output_tokenizer = _Tokenizer()
     trace = tl.trace(encoder, torch.ones(1, 2))
     assert trace.decoded_output is None
-    assert trace.output_postprocessor is None
+    assert trace.provenance.output_postprocessor is None
 
     class _LM(_Encoder):
         def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:  # noqa: D102
@@ -193,9 +196,9 @@ def test_attached_tokenizer_decodes_text_automatically_only_from_a_logits_head()
     language_model = _LM().eval()
     language_model._torchlens_output_tokenizer = _Tokenizer()
     trace = tl.trace(language_model, torch.ones(1, 2))
-    assert trace.output_postprocessor is not None
-    assert trace.output_postprocessor.style == "hf_text"
-    assert trace.output_postprocessor.selected_output_head == "logits"
+    assert trace.provenance.output_postprocessor is not None
+    assert trace.provenance.output_postprocessor.style == "hf_text"
+    assert trace.provenance.output_postprocessor.selected_output_head == "logits"
     assert trace.decoded_output == [
         {"batch_item": 0, "rank": 1, "text": "tok1 tok0", "token_ids": [1, 0]}
     ]
@@ -208,8 +211,8 @@ def test_attached_tokenizer_never_overrides_a_labelled_classifier() -> None:
     model._torchlens_output_tokenizer = _Tokenizer()
     trace = tl.trace(model, torch.ones(1, 2))
 
-    assert trace.output_postprocessor is not None
-    assert trace.output_postprocessor.style == "classification"
+    assert trace.provenance.output_postprocessor is not None
+    assert trace.provenance.output_postprocessor.style == "classification"
     assert trace.decoded_output["rows"][0]["label"] == "pos"
 
 

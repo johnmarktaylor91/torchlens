@@ -162,7 +162,7 @@ def _fire_row(record: Any) -> tuple[Any, ...]:
         record.site_label,
         record.timing,
         record.signal,
-        record.helper_name,
+        record.edit_name,
         record.seed,
     )
 
@@ -254,9 +254,9 @@ def _trace_fingerprint(spec_name: str, *, force_legacy: bool) -> dict[str, Any]:
         "labels": [str(op.label) for op in trace.ops],
         "saved": saved,
         "fire_records": {
-            str(op.label): [_fire_row(record) for record in op.interventions]
+            str(op.label): [_fire_row(record) for record in op.edits]
             for op in trace.ops
-            if op.interventions
+            if op.edits
         },
         "fires": fires,
         "output": _thash(trace[trace.output_layers[0]].out),

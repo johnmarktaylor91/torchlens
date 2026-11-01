@@ -34,7 +34,7 @@ def _pass_indices(trace: Any) -> dict[str, tuple[int, list[int]]]:
     declared: dict[str, int] = {}
     for op in trace.ops:
         layer = op.layer_label.split(":")[0]
-        seen[layer].append(op.pass_index)
+        seen[layer].append(op.pass_number)
         declared[layer] = op.num_passes
     return {layer: (declared[layer], indices) for layer, indices in seen.items()}
 
@@ -52,8 +52,8 @@ def test_cooked_recording_stamps_structural_grouper_and_numbers_passes(model_cls
     cooked = _cooked(model_cls(), x)
     exhaustive = tl.trace(model_cls().eval(), x)
 
-    assert cooked.grouping_policy["detector"] == "grouper_v1"
-    assert cooked.grouping_policy["requested"] == "structural"
+    assert cooked.options.grouping_policy["detector"] == "grouper_v1"
+    assert cooked.options.grouping_policy["requested"] == "structural"
     assert exhaustive.grouping_policy["detector"] == "callsite_v1"
     passes = _pass_indices(cooked)
     assert passes, "the cooked trace must contain ops"

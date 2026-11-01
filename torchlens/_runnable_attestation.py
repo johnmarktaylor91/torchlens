@@ -253,7 +253,7 @@ def _descriptor_has_nondeterministic_rng(descriptor: SparseRunDescriptor) -> boo
     taint that reaches an archived-activation member slot or a model output
     slot makes the artifact declared-nondeterministic, so numeric attestation
     is ``not_applicable`` UPFRONT -- never the r52 contradictory
-    ``numeric_attestation_failed`` raise on bytes the recorded computation
+    ``replay_value_mismatch`` raise on bytes the recorded computation
     never determined. Fully sanitized flows (``empty`` then a total write) and
     dead tainted intermediates keep the run attestation-eligible, and a byte
     mismatch on an UNTAINTED slot still raises (the tripwire is untouched).

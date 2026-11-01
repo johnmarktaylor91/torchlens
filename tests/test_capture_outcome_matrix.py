@@ -124,7 +124,7 @@ def test_never_fired_halt_predicate_stays_complete() -> None:
         torch.ones(1, 3),
         halt=lambda ctx: ctx.kind == "op" and ctx.func_name == "definitely_absent",
     )
-    assert trace.halted is False
+    assert trace.is_stopped is False
     assert trace.outcome.status is CaptureStatus.COMPLETE
 
 

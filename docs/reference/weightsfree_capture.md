@@ -113,7 +113,7 @@ works on every backend and discharges against a real ids-only run.
 ## The evidence envelope
 
 Every structure-only capture carries ONE immutable envelope
-(`Trace.structure_evidence`, persisted, load-validated fail-closed):
+(`Trace.graph.structure_evidence`, persisted, load-validated fail-closed):
 capture mode, substrate, `values_available: false`, outcome, factory-device
 policy, ambient-mode provenance, wrap generation, input plan, and the claim
 table. Every surface — repr, summary, slices, draw captions, exports, agent

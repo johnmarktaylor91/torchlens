@@ -503,7 +503,7 @@ def lower_record_site_target(site_target: Any) -> Any:
     """Lower an ``Op``/``Layer`` RECORD used as a hook site to an exact selector.
 
     A record is the most precise site spelling a user can hold (``do(
-    log["relu_1_2:2"].ops[0], edit)``), yet the post-hoc resolver only knew
+    log["relu_1_2:2"], edit)``), yet the post-hoc resolver only knew
     selector-likes and refused it ("Unsupported site query"), while the
     spec lowering would have dropped an ``Op`` to its BARE ``layer_label``
     -- the last pass of a multi-pass layer -- had it been accepted
@@ -537,12 +537,14 @@ def _record_site_pass_labels(site_target: Any) -> list[str] | None:
         site_target, "layer_label"
     ):
         return None
-    ops = getattr(site_target, "ops", None)
+    from .._data_classes.op import Op
+
+    # ``Layer.ops`` is an accessor (iterable, not a builtin sequence); an
+    # ``Op`` addresses itself.
+    ops = (site_target,) if isinstance(site_target, Op) else getattr(site_target, "ops", None)
     if ops is None or isinstance(ops, (str, bytes)):
         return None
     try:
-        # ``Layer.ops`` is an accessor (iterable, not a builtin sequence);
-        # ``Op.ops`` is the one-tuple of the record itself.
         op_records = list(ops)
     except TypeError:
         return None
@@ -1528,7 +1530,7 @@ def _iter_facet_records(log: Any) -> Iterator[Any]:
         yield from modules
     except TypeError:
         pass
-    yield from getattr(log, "layer_list", ())
+    yield from log._layer_list
 
 
 def _facet_home_label(spec: Any) -> str:

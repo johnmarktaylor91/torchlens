@@ -27,14 +27,14 @@ def _give_user_feedback_about_lookup_key(
         Either ``"get_one_item"`` for single-item access or
         ``"query_multiple"`` for multi-layer queries.
     """
-    if isinstance(key, int) and (key >= len(self.layer_list) or key < -len(self.layer_list)):
+    if isinstance(key, int) and (key >= len(self._layer_list) or key < -len(self._layer_list)):
         raise InvalidArgumentError(
-            f"You specified the layer with index {key}, but there are only {len(self.layer_list)} "
+            f"You specified the layer with index {key}, but there are only {len(self._layer_list)} "
             f"layers; please specify an index in the range "
-            f"-{len(self.layer_list)} - {len(self.layer_list) - 1}",
+            f"-{len(self._layer_list)} - {len(self._layer_list) - 1}",
             code="op_lookup_index_out_of_range",
             remedy=(
-                f"pass an index in the range -{len(self.layer_list)} - {len(self.layer_list) - 1}"
+                f"pass an index in the range -{len(self._layer_list)} - {len(self._layer_list) - 1}"
             ),
             key=key,
         )
@@ -60,7 +60,7 @@ def _give_user_feedback_about_lookup_key(
         )
 
     if key in self.layer_labels:
-        layer_num_calls = self.layer_num_calls.get(key, 1)
+        layer_num_calls = self._layer_num_calls.get(key, 1)
         if layer_num_calls > 1:
             raise InvalidArgumentError(
                 f"You specified output of layer {key}, but it has {layer_num_calls} ops; "
@@ -72,7 +72,7 @@ def _give_user_feedback_about_lookup_key(
 
     if key.rsplit(":", 1)[0] in self.layer_labels:
         layer_label, call_index = key.rsplit(":", 1)
-        layer_num_calls_for_label = self.layer_num_calls.get(layer_label)
+        layer_num_calls_for_label = self._layer_num_calls.get(layer_label)
         layer_num_calls_msg: int | str = (
             layer_num_calls_for_label if layer_num_calls_for_label is not None else "unknown"
         )

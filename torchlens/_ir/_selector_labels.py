@@ -6,8 +6,8 @@ from typing import Any
 
 #: String-label attribute universes per lifecycle, in match order.
 _STRING_LABEL_ATTRS: dict[str, tuple[str, ...]] = {
-    "capture": ("label", "raw_label", "label_raw", "layer_label", "layer_label_short"),
-    "site": ("layer_label", "label", "layer_label_short", "label_short", "_layer_label_raw"),
+    "capture": ("label", "raw_label", "label_raw", "layer_label", "short_layer_label"),
+    "site": ("layer_label", "label", "short_layer_label", "short_label", "_layer_label_raw"),
     "live": ("_layer_label_raw", "_label_raw", "layer_label"),
 }
 

@@ -86,7 +86,7 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
                 # capture_verified / capture_verification_reason left this
                 # ledger in fixwave-5 (2020c7c2): the negative verification
                 # verdict now PERSISTS across save/load (FieldPolicy.KEEP).
-                "rescue_rerun",
+                "_rescue_rerun",
                 "completeness_decompositions",
                 "completeness_diagnostics",
                 "completeness_witness_accounted_count",
@@ -102,7 +102,7 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
                 "escape_detector_mode",
                 "escape_detector_verified",
                 "escape_diagnostics",
-                "facet_registry_snapshot",
+                "facet_functions",
                 "grad_transform",
                 # grouping/grouping_policy, distributed_scope,
                 # intervention_audit, and structure_only left this ledger at
@@ -110,13 +110,12 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
                 # (FieldPolicy.KEEP) with load validation.
                 "last_run",
                 "layer_visualizers",
-                "module_filter",
-                "num_modules",
-                "parent_run",
+                "_module_filter",
+                "_parent_run",
                 # R2-37: the live pinned-graph disclosure; a loaded trace pins
                 # nothing, so it never persists.
                 "pinned_autograd_memory",
-                "replay_frontier",
+                "_replay_frontier",
             }
         ),
     ),
@@ -142,7 +141,7 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
                 "input_memory",
                 "input_ops",
                 "input_shapes",
-                # "interventions" became a KEEP (portable) ordered field in
+                # "edits" became a KEEP (portable) ordered field in
                 # cert10, so it is no longer a documented DROP display field.
                 # The public computed flag flipped KEEP->DROP in 00bc67d3; the
                 # raw _is_in_conditional_body datum stays KEEP (portable-only
@@ -306,10 +305,11 @@ def test_known_glossary_aliases_have_backed_field_order_names() -> None:
     assert "memory" not in constants.OP_LOG_FIELD_ORDER
     assert "memory" not in constants.LAYER_LOG_FIELD_ORDER
 
-    assert "buffer_overwrite_index" in constants.BUFFER_LOG_FIELD_ORDER
-    assert "buffer_pass" in constants.BUFFER_LOG_FIELD_ORDER
-    assert hasattr(Buffer, "buffer_overwrite_index")
-    assert hasattr(Buffer, "buffer_pass")
+    assert "overwrite_index" in constants.BUFFER_LOG_FIELD_ORDER
+    assert "buffer_overwrite_index" not in constants.BUFFER_LOG_FIELD_ORDER
+    assert "buffer_pass" not in constants.BUFFER_LOG_FIELD_ORDER
+    assert hasattr(Buffer, "overwrite_index")
+    assert not hasattr(Buffer, "buffer_overwrite_index")
 
     assert "has_op" in constants.GRAD_FN_LOG_FIELD_ORDER
     assert "is_intervening" not in constants.GRAD_FN_LOG_FIELD_ORDER

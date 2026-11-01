@@ -470,7 +470,9 @@ def _is_appended_trace(value: Any) -> bool:
         True only for objects carrying the appended Trace state marker.
     """
 
-    return bool(getattr(value, "is_appended", False))
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
+    return bool(value._provenance_is_appended if is_live_trace(value) else False)
 
 
 def _warn_and_skip_appended_trace_validation(trace: Any) -> bool:

@@ -234,8 +234,8 @@ def test_real_replay_mismatch_on_empty_like_dest_still_fails() -> None:
     try:
         # Corrupt a __setitem__ op's replay so the recomputed value diverges.
         patched = False
-        for layer in trace.layer_list:
-            op = layer.ops[1] if hasattr(layer.ops, "_list") else layer
+        for layer in trace._layer_list:
+            op = layer.ops[1] if hasattr(getattr(layer, "ops", None), "_list") else layer
             if getattr(op, "func_name", None) == "__setitem__":
                 original = op.func
 
@@ -311,8 +311,8 @@ def test_chained_index_copy_dropped_dest_dependency_still_fails() -> None:
     try:
         # Locate the SECOND index_copy_ (destination parent is the first write).
         second = None
-        for layer in trace.layer_list:
-            op = layer.ops[1] if hasattr(layer.ops, "_list") else layer
+        for layer in trace._layer_list:
+            op = layer.ops[1] if hasattr(getattr(layer, "ops", None), "_list") else layer
             if op.func_name in ("index_copy_", "indexcopy_") and str(
                 op.parent_arg_positions["args"].get(0, "")
             ).startswith("indexcopy"):

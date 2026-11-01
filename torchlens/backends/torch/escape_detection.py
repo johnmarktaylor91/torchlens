@@ -583,7 +583,7 @@ def _report_escape(
         "storage_hint": _storage_hint(callsite),
         "owner_thread_id": guard.owner_thread_id,
         "guard_pass_index": guard.guard_pass_index,
-        "capture_mode": getattr(guard.trace, "capture_mode", None),
+        "capture_mode": guard.trace._options_mode,
         "exhaustive_pass": guard.trace._wrapper_runtime_ws.in_exhaustive_pass,
         "stack": tuple(traceback.format_stack(callsite, limit=5)),
         "witness_corroborated": False,
@@ -591,9 +591,9 @@ def _report_escape(
     }
     reports = guard.trace.__dict__.setdefault("escape_diagnostics", [])
     reports.append(detail)
-    guard.trace.escape_detector_verified = False
-    guard.trace.capture_verified = False
-    guard.trace.capture_verification_reason = "callable_escape_shadow_report"
+    guard.trace._health_escape_detector_verified = False
+    guard.trace._provenance_verified = False
+    guard.trace._provenance_verification_reason = "callable_escape_shadow_report"
     callable_name = _safe_qualname(original)
     warnings.warn(
         "TorchLens shadow detector observed a raw torch callable outside its registered "
@@ -817,33 +817,36 @@ def _copy_recording_diagnostics(trace: Any) -> None:
     recording = getattr(trace, "_fastlog_recording", None)
     if recording is None:
         return
-    for field_name in (
-        "escape_detector_mode",
-        "escape_detector_verified",
-        "completeness_witness_mode",
-        "completeness_witness_verified",
-        "capture_owner_thread_id",
-        "capture_owner_thread_qualified",
-        "capture_thread_count_start",
-        "capture_thread_count_end",
-        "capture_thread_activity_detected",
-        "capture_verified",
-        "capture_verification_reason",
-        "escape_detector_backward_coverage",
-        "escape_diagnostics",
-        "escape_detector_event_count",
-        "escape_detector_callback_ns",
-        "completeness_diagnostics",
-        "completeness_decompositions",
-        "completeness_witness_event_count",
-        "completeness_witness_accounted_count",
-        "completeness_witness_expected_opaque_count",
-        "completeness_witness_unaccounted_count",
-        "completeness_witness_callback_ns",
-        "capture_guard_passes",
+    for recording_name, trace_name in (
+        ("escape_detector_mode", "_health_escape_detector_mode"),
+        ("escape_detector_verified", "_health_escape_detector_verified"),
+        ("completeness_witness_mode", "_health_completeness_mode"),
+        ("completeness_witness_verified", "_health_completeness_verified"),
+        ("capture_owner_thread_id", "_provenance_owner_thread_id"),
+        ("capture_owner_thread_qualified", "_provenance_owner_thread_qualified"),
+        ("capture_thread_count_start", "_provenance_thread_count_start"),
+        ("capture_thread_count_end", "_provenance_thread_count_end"),
+        ("capture_thread_activity_detected", "_provenance_thread_activity_detected"),
+        ("capture_verified", "_provenance_verified"),
+        ("capture_verification_reason", "_provenance_verification_reason"),
+        ("escape_detector_backward_coverage", "_autograd_escape_detector_backward_coverage"),
+        ("escape_diagnostics", "escape_diagnostics"),
+        ("escape_detector_event_count", "_health_num_escape_detector_events"),
+        ("escape_detector_callback_ns", "_health_escape_detector_callback_ns"),
+        ("completeness_diagnostics", "completeness_diagnostics"),
+        ("completeness_decompositions", "_health_completeness_decompositions"),
+        ("completeness_witness_event_count", "_health_num_witness_events"),
+        ("completeness_witness_accounted_count", "_health_num_accounted_witness_events"),
+        (
+            "completeness_witness_expected_opaque_count",
+            "_health_num_expected_opaque_witness_events",
+        ),
+        ("completeness_witness_unaccounted_count", "_health_num_unaccounted_witness_events"),
+        ("completeness_witness_callback_ns", "_health_completeness_callback_ns"),
+        ("capture_guard_passes", "capture_guard_passes"),
     ):
-        if hasattr(trace, field_name):
-            object.__setattr__(recording, field_name, getattr(trace, field_name))
+        if hasattr(trace, trace_name):
+            object.__setattr__(recording, recording_name, getattr(trace, trace_name))
 
 
 @contextmanager
@@ -870,23 +873,23 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
     guard_passes.append(
         {
             "guard_pass_index": guard_pass_index,
-            "capture_mode": getattr(trace, "capture_mode", None),
+            "capture_mode": trace._options_mode,
             "owner_thread_id": owner_thread_id,
         }
     )
     guard = _GuardState(trace, tables, owner_thread_id, mode, guard_pass_index)
-    trace.escape_detector_mode = mode
-    if not hasattr(trace, "escape_detector_verified"):
-        trace.escape_detector_verified = True if mode == "shadow" else None
-    trace.capture_owner_thread_id = owner_thread_id
-    trace.capture_owner_thread_qualified = True
-    trace.capture_thread_count_start = thread_count_start
-    trace.capture_thread_activity_detected = False
-    trace.escape_detector_backward_coverage = "not_armed"
+    trace._health_escape_detector_mode = mode
+    if "_health_escape_detector_verified" not in trace.__dict__:
+        trace._health_escape_detector_verified = True if mode == "shadow" else None
+    trace._provenance_owner_thread_id = owner_thread_id
+    trace._provenance_owner_thread_qualified = True
+    trace._provenance_thread_count_start = thread_count_start
+    trace._provenance_thread_activity_detected = False
+    trace._autograd_escape_detector_backward_coverage = "not_armed"
     trace.__dict__.setdefault("escape_diagnostics", [])
-    trace.__dict__.setdefault("rescue_rerun", None)
-    trace.capture_verified = False if mode == "shadow" else None
-    trace.capture_verification_reason = "shadow_diagnostic_mode" if mode == "shadow" else None
+    trace.__dict__.setdefault("_rescue_rerun", None)
+    trace._provenance_verified = False if mode == "shadow" else None
+    trace._provenance_verification_reason = "shadow_diagnostic_mode" if mode == "shadow" else None
     _THREAD_STATE.guard = guard
     try:
         if mode == "shadow":
@@ -910,11 +913,11 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
                 if sys.getprofile() is _profile_callback:
                     with contextlib.suppress(Exception):
                         sys.setprofile(guard.prior_profile)
-                trace.escape_detector_verified = False
-                if getattr(trace, "completeness_witness_verified", None) is True:
-                    trace.completeness_witness_verified = False
-                trace.capture_verified = False
-                trace.capture_verification_reason = "escape_detector_teardown_failed"
+                trace._health_escape_detector_verified = False
+                if trace.__dict__.get("_health_completeness_verified") is True:
+                    trace._health_completeness_verified = False
+                trace._provenance_verified = False
+                trace._provenance_verification_reason = "escape_detector_teardown_failed"
                 reports = trace.__dict__.setdefault("escape_diagnostics", [])
                 reports.append(
                     {
@@ -934,21 +937,21 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
                     stacklevel=2,
                 )
         thread_count_end = threading.active_count()
-        trace.capture_thread_count_end = thread_count_end
-        trace.capture_thread_activity_detected = thread_count_end != thread_count_start
-        trace.escape_detector_event_count = (
-            int(getattr(trace, "escape_detector_event_count", 0)) + guard.event_count
+        trace._provenance_thread_count_end = thread_count_end
+        trace._provenance_thread_activity_detected = thread_count_end != thread_count_start
+        trace._health_num_escape_detector_events = (
+            int(trace.__dict__.get("_health_num_escape_detector_events", 0)) + guard.event_count
         )
-        trace.escape_detector_callback_ns = (
-            int(getattr(trace, "escape_detector_callback_ns", 0)) + guard.callback_ns
+        trace._health_escape_detector_callback_ns = (
+            int(trace.__dict__.get("_health_escape_detector_callback_ns", 0)) + guard.callback_ns
         )
-        if trace.capture_thread_activity_detected:
+        if trace._provenance_thread_activity_detected:
             if mode == "shadow":
-                trace.escape_detector_verified = False
-            if getattr(trace, "completeness_witness_verified", None) is True:
-                trace.completeness_witness_verified = False
-            trace.capture_verified = False
-            trace.capture_verification_reason = "owner_thread_tripwire_changed"
+                trace._health_escape_detector_verified = False
+            if trace.__dict__.get("_health_completeness_verified") is True:
+                trace._health_completeness_verified = False
+            trace._provenance_verified = False
+            trace._provenance_verification_reason = "owner_thread_tripwire_changed"
             warnings.warn(
                 "TorchLens observed a thread-count change during capture. The supported proof "
                 "domain is the capture-owner thread; move model tensor work into that thread "
@@ -964,6 +967,6 @@ def capture_escape_guard(trace: Any) -> Iterator[None]:
             # unlogged compiled region is honest-but-misleading, so name the real cause.
             # This is the last verdict site in the capture scope, hence the unconditional
             # override; it only ever ceilings the verdict, never lifts one.
-            trace.capture_verified = False
-            trace.capture_verification_reason = "dynamo_region_not_logged"
+            trace._provenance_verified = False
+            trace._provenance_verification_reason = "dynamo_region_not_logged"
         _copy_recording_diagnostics(trace)

@@ -50,7 +50,7 @@ from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens._utils.rng import _rng_exempt_instances, host_nondeterminism_monitor
 from torchlens.options import CaptureOptions
 
-_CAP = {"intervention_ready": True, "capture_container_structure": True, "cache": False}
+_CAP = {"replayable": True, "capture_container_structure": True, "cache": False}
 
 
 def _make_monitor(model: nn.Module) -> host_nondeterminism_monitor:

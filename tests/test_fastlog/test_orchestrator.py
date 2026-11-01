@@ -114,7 +114,7 @@ def test_shared_module_called_twice_has_balanced_events() -> None:
         "module_enter",
         "module_exit",
     ]
-    assert [ctx.module_pass_index for ctx in child_events] == [1, 1, 2, 2]
+    assert [ctx.module_pass_number for ctx in child_events] == [1, 1, 2, 2]
 
 
 def test_identity_passthrough_has_module_events() -> None:

@@ -187,7 +187,7 @@ def test_tf_validation_identity_annotation_passes_legitimate_passthrough() -> No
     assert trace.validation_replay_status.state == "passed"
     assert (
         getattr(trace, "_tf_validation_result").classes[
-            next(op._label_raw for op in trace.layer_list if op.func_name == "Identity")
+            next(op._label_raw for op in trace._layer_list if op.func_name == "Identity")
         ]
         == "annotation"
     )
@@ -245,7 +245,7 @@ def test_tf_validation_fails_on_unclassified_op_type() -> None:
         return x + tf.constant([1.0, 2.0])
 
     trace = tl.trace(chain, tf.constant([1.0, 2.0]), backend="tf")
-    add = next(op for op in trace.layer_list if op.func_name == "AddV2")
+    add = next(op for op in trace._layer_list if op.func_name == "AddV2")
     add.func_name = "DefinitelyUnknownTfOp"
 
     assert _validate(trace) is False
@@ -276,7 +276,7 @@ def test_tf_validation_positive_cnn_and_transformer_report_replay_coverage() -> 
 
 
 def test_tf_num_layers_with_params_populated_in_object_module_mode() -> None:
-    """``_finish_trace`` must populate ``trace.num_layers_with_params``.
+    """``_finish_trace`` must populate ``trace._num_layers_with_params``.
 
     Sibling-gap regression test for the Paddle backend's identical bug: TF's
     ``TFBackend._finish_trace`` (``torchlens/backends/tf/backend.py``) calls
@@ -285,7 +285,7 @@ def test_tf_num_layers_with_params_populated_in_object_module_mode() -> None:
     ``_param_logs`` are attached correctly) but -- before this fix -- without
     ``count_layers_with_attached_params=True`` and without
     ``update_param_totals_from_layers=True``, so the trace-level summary
-    counter ``trace.num_layers_with_params`` stayed at its dataclass default
+    counter ``trace._num_layers_with_params`` stayed at its dataclass default
     of ``0`` for every parameterized Keras model. That trips the
     ``[param_xrefs]`` metadata invariant
     (``_check_layer_param_aggregate_dedup``) for any object-module-mode
@@ -296,8 +296,8 @@ def test_tf_num_layers_with_params_populated_in_object_module_mode() -> None:
 
     trace = tl.trace(SmallCnn(), tf.ones((1, 8, 8, 1), dtype=tf.float32), backend="tf")
 
-    assert trace.module_identity_mode == "object_module"
-    assert trace.num_layers_with_params > 0
+    assert trace.options.module_identity_mode == "object_module"
+    assert trace._num_layers_with_params > 0
     assert check_metadata_invariants(trace) is True
 
 
@@ -379,7 +379,7 @@ def test_tf_validation_depthwise_and_relu6_corruption_fails() -> None:
 
     for op_type in ("Pad", "DepthwiseConv2dNative", "Relu6"):
         trace = tl.trace(_depthwise_relu6, _depthwise_inputs(), backend="tf")
-        target = next(op for op in trace.layer_list if op.func_name == op_type)
+        target = next(op for op in trace._layer_list if op.func_name == op_type)
         target.out = target.out + 0.5
 
         assert _validate(trace) is False
@@ -404,8 +404,8 @@ def test_tf_function_root_trace_has_buffers_and_graph_shape_hash() -> None:
     second = tl.trace(chain, x, backend="tf")
     different = tl.trace(other, x, backend="tf")
 
-    assert first.module_identity_mode == "function_root"
+    assert first.options.module_identity_mode == "function_root"
     assert first.buffers is not None and len(first.buffers) == 0
-    assert isinstance(first.graph_shape_hash, str)
-    assert first.graph_shape_hash == second.graph_shape_hash
-    assert different.graph_shape_hash != first.graph_shape_hash
+    assert isinstance(first.provenance.fingerprint, str)
+    assert first.provenance.fingerprint == second.provenance.fingerprint
+    assert different.provenance.fingerprint != first.provenance.fingerprint

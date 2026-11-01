@@ -10,7 +10,7 @@ capability truth.
   intermediates (`intermediate_derived_grads=True`).
 - Live forward `intervene=` AND `halt=` both ship (the wrapper holds each
   concrete output before the caller sees it); combining `grad_options=` with
-  either refuses typed. Halted traces set `halted` / `stop_reason` /
+  either refuses typed. Halted traces set `is_stopped` / `stop_reason` /
   `halt_frontier`.
 - Intervention/halt predicates may be VALUE-DEPENDENT: dygraph is eager, so the
   `RecordContext` fields `tensor_requires_grad`, `is_scalar_bool`, and

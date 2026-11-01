@@ -22,9 +22,9 @@ class _ConvNet(nn.Module):
         return torch.relu(self.c1(x))
 
 
-def _log(*, intervention_ready: bool = False) -> tl.Trace:
+def _log(*, replayable: bool = False) -> tl.Trace:
     torch.manual_seed(0)
-    capture = tl.options.CaptureOptions(intervention_ready=intervention_ready)
+    capture = tl.options.CaptureOptions(replayable=replayable)
     return tl.trace(_ConvNet().eval(), torch.randn(2, 1, 4, 4), capture=capture)
 
 
@@ -69,7 +69,7 @@ def test_live_unseeded_note_never_leaks_raw_labels() -> None:
     )
     notes = [
         record.determinism_note
-        for record in (log["relu_1_2"].interventions or [])
+        for record in (log["relu_1_2"].edits or [])
         if record.determinism_note
     ]
     assert notes, "unseeded scramble must disclose nondeterminism"

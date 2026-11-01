@@ -16,6 +16,7 @@ from typing import Any, Literal, cast
 import torch
 from torch import nn
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .errors import AmbiguousAxisError, HookValueError, NonExecutableSpecError
 from .hooks import HookContext
 from .stochastic import _NAMED_AXIS_TOKENS, _resolve_over_axes
@@ -88,7 +89,7 @@ def _helper_spec(
     """
 
     return Edit(
-        helper_name=helper_name,
+        name=helper_name,
         args=args,
         kwargs=tuple(sorted((kwargs or {}).items())),
         portability=portability,
@@ -205,7 +206,7 @@ def _non_executable_builtin_placeholder(
         )
 
     return Edit(
-        helper_name=name,
+        name=name,
         portability="opaque_audit",
         signal=cast(Any, data.get("signal")),
         factory=factory,
@@ -459,7 +460,9 @@ def _patch_source_identity(
 
     identity = {
         "source_trace_label": str(getattr(source, "trace_label", "") or ""),
-        "source_model_class": str(getattr(source, "model_class_qualname", "") or ""),
+        "source_model_class": str(
+            (source._source_class_qualname if is_live_trace(source) else "") or ""
+        ),
         "source_object_id": str(id(source)),
     }
     if source_site is not None:

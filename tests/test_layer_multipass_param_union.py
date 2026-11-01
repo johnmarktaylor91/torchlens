@@ -36,10 +36,10 @@ class _WeightLoop(nn.Module):
 def _linear_layer(trace: Any) -> Any:
     layers = [
         layer
-        for layer in trace.layer_logs.values()
+        for layer in trace._layer_logs.values()
         if layer.layer_label.startswith("linear_") and len(layer.ops) > 1
     ]
-    assert len(layers) == 1, [layer.layer_label for layer in trace.layer_logs.values()]
+    assert len(layers) == 1, [layer.layer_label for layer in trace._layer_logs.values()]
     return layers[0]
 
 
@@ -66,7 +66,7 @@ def test_layer_params_are_the_union_over_passes_with_per_pass_disclosure() -> No
 
     # The tanh after it runs over equal (empty) parameters, so it carries no marker.
     tanh_layer = next(
-        layer for layer in trace.layer_logs.values() if layer.layer_label.startswith("tanh_")
+        layer for layer in trace._layer_logs.values() if layer.layer_label.startswith("tanh_")
     )
     assert tanh_layer.num_passes == 3
     assert "params" not in tanh_layer.annotations.get("varying_across_passes", {})

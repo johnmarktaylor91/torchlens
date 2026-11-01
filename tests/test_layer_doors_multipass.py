@@ -67,7 +67,7 @@ def captured() -> Iterator[tuple[_SharedThenFresh, torch.Tensor, tl.Trace]]:
 def _linear_labels(trace: tl.Trace) -> tuple[str, str]:
     """Return the multi-pass shared and the single-pass fresh linear layer labels."""
 
-    linears = [layer for layer in trace.layer_logs.values() if layer.layer_type == "linear"]
+    linears = [layer for layer in trace._layer_logs.values() if layer.layer_type == "linear"]
     shared = [layer.layer_label for layer in linears if layer.num_passes == 2]
     fresh = [layer.layer_label for layer in linears if layer.num_passes == 1]
     assert len(shared) == 1 and len(fresh) == 1

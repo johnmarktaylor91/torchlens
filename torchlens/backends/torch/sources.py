@@ -51,7 +51,7 @@ def _snapshot_exhaustive_module_stack(self: "Trace") -> list[tuple[str, int]]:
     """
 
     return [
-        (frame.address, frame.pass_index)
+        (frame.address, frame.pass_number)
         for frame in _mstack.snapshot(self._module_capture_ws.exhaustive_module_stack)
     ]
 
@@ -93,9 +93,9 @@ def log_source_tensor(
         extra_address: For inputs, the address string (e.g. ``"input.x"``);
             for buffers, the buffer's module address (e.g. ``"encoder.bn.running_mean"``).
     """
-    if self.capture_mode == "exhaustive":
+    if self._options_mode == "exhaustive":
         log_source_tensor_exhaustive(self, t, source, extra_address)
-    elif self.capture_mode == "predicate":
+    elif self._options_mode == "predicate":
         log_source_tensor_predicate(self, t, source, extra_address)
 
 
@@ -147,7 +147,7 @@ def log_source_tensor_predicate(
             "tensor": t,
             "address": module_frame.address if module_frame else None,
             "module_type": module_frame.module_type if module_frame else None,
-            "module_pass_index": module_frame.pass_index if module_frame else None,
+            "module_pass_number": module_frame.pass_number if module_frame else None,
         },
         module_stack=state.module_stack,
         history=tuple(state.history),
@@ -155,7 +155,7 @@ def log_source_tensor_predicate(
         pass_index=state.pass_index,
         event_index=state.event_index,
         step_index=None,
-        time_since_pass_start=time.time() - self.capture_start_time,
+        time_since_pass_start=time.time() - self._provenance_start_time,
         include_source_events=state.options.include_source_events,
         sample_id=state.sample_id,
     )
@@ -328,24 +328,24 @@ def log_source_tensor_exhaustive(
         "_construction_done": False,
         # Label Info:
         "label": None,
-        "label_short": None,
+        "short_label": None,
         "layer_label": None,
-        "layer_label_short": None,
+        "short_layer_label": None,
         "type": layer_type,
         "type_index": type_index,
-        "pass_index": 1,
+        "pass_number": 1,
         "num_passes": 1,
         "lookup_keys": [],
         # Saved tensor info:
         "out": None,
         "transformed_out": None,
         "has_saved_activation": False,
-        "activation_transform": self.activation_transform,
+        "activation_transform": self._options_activation_transform,
         "annotations": {},
-        "interventions": [],
-        "intervention_replaced": False,
-        "detach_saved_activations": self.detach_saved_activations,
-        "output_device": self.output_device,
+        "edits": [],
+        "is_edited": False,
+        "detach_saved_activations": self._options_detach_saved_activations,
+        "output_device": self._options_output_device,
         "has_saved_args": False,
         "saved_args": None,
         "saved_kwargs": None,
@@ -368,7 +368,7 @@ def log_source_tensor_exhaustive(
         # Grad info:
         "grad": None,
         "transformed_grad": None,
-        "save_grads": getattr(self, "save_grads", None) not in (None, False),
+        "save_grads": self._options_save_grads not in (None, False),
         "has_grad": False,
         "grad_shape": None,
         "transformed_grad_shape": None,
@@ -383,14 +383,16 @@ def log_source_tensor_exhaustive(
         "func_qualname": None,
         "code_context": _get_code_context(
             self.num_context_lines,
-            source_loading_enabled=self.save_code_context,
+            source_loading_enabled=self._options_save_source_context,
             disable_col_offset=False,
             context_cache=_source_code_context_cache(self),
         ),
         "func_duration": 0,
         "flops_forward": 0,
         "flops_backward": 0,
-        "func_rng_states": log_current_rng_states(torch_only=True) if self.save_rng_states else {},
+        "func_rng_states": log_current_rng_states(torch_only=True)
+        if self._options_save_rng
+        else {},
         "func_autocast_state": {},
         "arg_names": (),
         "num_args_total": 0,
@@ -422,7 +424,7 @@ def log_source_tensor_exhaustive(
         "param_memory": 0,
         # Corresponding layer info:
         "equivalence_class": equivalence_class,
-        "equivalent_ops": self.op_equivalence_classes[base_equivalence_class],
+        "equivalent_ops": self._graph_op_equivalence_classes[base_equivalence_class],
         "recurrent_ops": [],
         # Graph info:
         "parents": [],
@@ -497,13 +499,13 @@ def log_source_tensor_exhaustive(
     from .ops import _make_layer_log_entry
 
     # Creates a Buffer if is_buffer=True, else Op.
-    _make_layer_log_entry(self, t, fields_dict, (), {}, self.activation_transform)
+    _make_layer_log_entry(self, t, fields_dict, (), {}, self._options_activation_transform)
 
     # Tag the live tensor so downstream operations can find this tensor's label.
     set_tensor_label(t, tensor_label)
 
     # Register in Trace-level tracking structures.
-    self.op_equivalence_classes[base_equivalence_class].add(tensor_label)
+    self._graph_op_equivalence_classes[base_equivalence_class].add(tensor_label)
     if source == "input":
         self.input_layers.append(tensor_label)
     if source == "buffer":
@@ -540,7 +542,7 @@ def log_source_tensor_exhaustive(
             pass_index=1,
             event_index=raw_index,
             step_index=None,
-            time_since_pass_start=time.time() - self.capture_start_time,
+            time_since_pass_start=time.time() - self._provenance_start_time,
             include_source_events=True,
             sample_id=None,
         )

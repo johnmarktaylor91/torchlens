@@ -391,7 +391,7 @@ def record_host_string_escape_source(trace: Any, tensor: Any) -> None:
     marked internal reads (``internal_scalar_read``). A no-string forward records nothing.
     """
 
-    if not getattr(trace, "intervention_ready", False):
+    if not getattr(trace, "is_replayable", False):
         return
     if not isinstance(tensor, torch.Tensor):
         return

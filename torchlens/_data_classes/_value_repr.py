@@ -123,7 +123,7 @@ def _edited_token(op: Any) -> str | None:
     flag or a tier-(ii) edge substitution on this record.
     """
 
-    if getattr(op, "intervention_replaced", False):
+    if getattr(op, "is_edited", False):
         return EDITED
     if getattr(op, "edge_substitutions", None):
         return EDITED
@@ -133,14 +133,16 @@ def _edited_token(op: Any) -> str | None:
 def _trace_token(record: Any) -> str | None:
     """Short owning-trace token (model class name), or None when detached."""
 
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
     trace = fail_open(lambda: record.source_trace, lambda _error: None)
-    return getattr(trace, "model_class_name", None)
+    return trace._source_class_name if is_live_trace(trace) else None
 
 
 def _op_position(op: Any) -> str | None:
     """Graph position token ``step/total`` for one op, or None."""
 
-    total = fail_open(lambda: op.source_trace.num_ops, lambda _error: None)
+    total = fail_open(lambda: op.source_trace._num_ops, lambda _error: None)
     step = getattr(op, "step_index", None)
     if step is None or total is None:
         return None
@@ -150,7 +152,7 @@ def _op_position(op: Any) -> str | None:
 def _pass_token(op: Any) -> str:
     """Pass tag ``k/n`` (``(pass 1/1)`` on single-pass ops stays explicit)."""
 
-    return f"{getattr(op, 'pass_index', 1)}/{getattr(op, 'num_passes', 1)}"
+    return f"{getattr(op, 'pass_number', 1)}/{getattr(op, 'num_passes', 1)}"
 
 
 def op_repr_line(op: Any) -> str:
@@ -433,7 +435,7 @@ def module_call_repr_line(call: Any) -> str:
     module_class = getattr(call, "class_name", None)
     if not module_class:
         module_class = fail_open(lambda: call.module.class_name, lambda _error: "?")
-    label = getattr(call, "call_label", "?")
+    label = getattr(call, "label", "?")
     core = f"{module_class} ops={len(getattr(call, 'ops', ()) or ())}"
     return envelope_line(core, address=label, bracket=("module_call",))
 

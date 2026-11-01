@@ -59,7 +59,7 @@ def _observed(
         stream=stream,
         phase=phase,
         presence="observed",
-        spine=spine.result(),
+        spine=spine.compute(),
         sketch=sketch,
         grad_scale=grad_scale,
     )
@@ -237,7 +237,7 @@ class TestHistogramPayload:
         )
         row = observation_row(gap)
         assert row["presence"] == "site_absent"
-        assert row["mean"] is None and row["count_total"] is None
+        assert row["mean"] is None and row["numel"] is None
 
 
 class TestHistoryView:

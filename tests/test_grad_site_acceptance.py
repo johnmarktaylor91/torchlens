@@ -68,7 +68,7 @@ def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
 def _label(trace: tl.Trace, *func_names: str) -> str:
     """Return the one layer label whose function is in ``func_names``."""
 
-    labels = [layer.label for layer in trace.layer_list if layer.func_name in func_names]
+    labels = [layer.label for layer in trace._layer_list if layer.func_name in func_names]
     assert len(labels) == 1, (func_names, labels)
     return labels[0]
 

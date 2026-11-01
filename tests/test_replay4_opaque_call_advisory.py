@@ -143,7 +143,7 @@ def test_eager_twin_emits_nothing() -> None:
     trace, caught = _capture(_EagerTwin())
 
     assert _advisories(caught) == []
-    assert trace.capture_verified is True
+    assert trace.provenance.verified is True
 
 
 def test_scripted_static_method_through_self_is_resolved() -> None:
@@ -275,7 +275,7 @@ _SUBPROCESS_SCRIPT = textwrap.dedent(
     unwrap_torch()
     wrap_torch(completeness_witness=True)
     trace = tl.trace(M(), torch.randn(2, 4))
-    print(json.dumps({"verified": trace.capture_verified,
+    print(json.dumps({"verified": trace.provenance.verified,
                       "funcs": [layer.func_name for layer in trace.layers]}))
     """
 )

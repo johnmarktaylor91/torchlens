@@ -49,7 +49,7 @@ from torchlens._runnable_execution import _container_spec_reconstruction_lossy
 from torchlens.options import CaptureOptions
 
 _CAP = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )

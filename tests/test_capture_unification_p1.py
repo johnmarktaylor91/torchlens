@@ -68,10 +68,10 @@ def _assert_trace_structure(trace: tl.Trace) -> None:
         assert op.shape is None or isinstance(op.shape, tuple)
         assert op.dtype is None or str(op.dtype)
         for parent in op.parents:
-            assert parent in trace.layer_dict_all_keys
+            assert parent in trace._layer_dict_all_keys
             assert op.layer_label in trace[parent].children or op.label in trace[parent].children
         for child in op.children:
-            assert child in trace.layer_dict_all_keys
+            assert child in trace._layer_dict_all_keys
             assert op.layer_label in trace[child].parents or op.label in trace[child].parents
 
 
@@ -86,7 +86,7 @@ def test_phase1_event_materializer_small_cnn() -> None:
     _assert_trace_structure(trace)
     assert "conv" in trace.modules
     assert "norm" in trace.modules
-    assert any(op.layer_type == "conv2d" for op in trace.ops)
+    assert any(op.type == "conv2d" for op in trace.ops)
     assert validate_forward_pass(model, x)
 
 

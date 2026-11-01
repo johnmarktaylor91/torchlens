@@ -107,14 +107,14 @@ def test_door_flags_match_the_old_helpers() -> None:
     self_global, self_axis = tl.mean_ablate(dim=None), tl.mean_ablate(dim=0)
     pop_elementwise, pop_axis = tl.mean_ablate(donors, dim=None), tl.mean_ablate(donors, dim=0)
     for spec in (self_global, self_axis):
-        assert spec.batch_independent is False and spec.portability == "builtin"
+        assert spec.is_batch_independent is False and spec.portability == "builtin"
         assert dict(spec.metadata)["batch_coherent"] is True
     for spec in (pop_elementwise, pop_axis):
-        assert spec.batch_independent is True and spec.portability == "opaque_audit"
+        assert spec.is_batch_independent is True and spec.portability == "opaque_audit"
         assert "batch_coherent" not in dict(spec.metadata)
         assert dict(spec.kwargs)["population_identity"] == donors.identity
     for spec in (self_global, self_axis, pop_elementwise, pop_axis):
-        assert spec.helper_name == "mean_ablate"
+        assert spec.name == "mean_ablate"
         assert dict(spec.metadata)["stochastic"] is False
     assert dict(self_global.kwargs)["dim"] is None
     assert dict(self_axis.kwargs)["dim"] == (0,)
@@ -146,11 +146,11 @@ def test_named_axis_refuses_until_evidence(token: str) -> None:
 @pytest.mark.smoke
 def test_derived_flags() -> None:
     donors = population(torch.randn(3, 5, 4), origin="pop")
-    assert tl.mean_ablate(dim=None).batch_independent is False
-    assert tl.mean_ablate(dim=0).batch_independent is False
+    assert tl.mean_ablate(dim=None).is_batch_independent is False
+    assert tl.mean_ablate(dim=0).is_batch_independent is False
     assert dict(tl.mean_ablate(dim=None).metadata)["batch_coherent"] is True
-    assert tl.mean_ablate(source=torch.ones(4), dim=None).batch_independent is True
-    assert tl.mean_ablate(donors, dim=None).batch_independent is True
+    assert tl.mean_ablate(source=torch.ones(4), dim=None).is_batch_independent is True
+    assert tl.mean_ablate(donors, dim=None).is_batch_independent is True
     assert tl.mean_ablate(donors, dim=None).portability == "opaque_audit"
     assert dict(tl.mean_ablate(dim=(1, 0)).kwargs)["dim"] == (1, 0)
     assert dict(tl.mean_ablate(dim=1).kwargs)["dim"] == (1,)

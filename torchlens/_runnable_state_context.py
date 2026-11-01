@@ -92,7 +92,7 @@ def _state_contract_checks(
         )
         # r37 R5 in-transaction tripwire: staging is the sole placement authority,
         # so a device mismatch HERE is a broken staging/state hook -- a typed state
-        # failure before any callable, never a mid-call runtime_signature_drift.
+        # failure before any callable, never a mid-call runtime_signature_mismatch.
         device_ok = value.device.type == slot.device_type and (
             slot.device_index is None
             or value.device.index is None

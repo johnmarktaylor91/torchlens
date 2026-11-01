@@ -65,6 +65,7 @@ import torch
 
 from torchlens._selection import SelectionError
 
+from .._record_type import first_op
 from .._selection import (
     Selection,
     Site,
@@ -466,15 +467,15 @@ def _derive_entry_occurrences(
     rows: list[tuple[Any, str, list[tuple[str, tuple[Any, ...], torch.Tensor]]]] = []
     staged_op_ids: set[int] = set()
     for consumer_label in consumers:
-        layer = trace.layer_dict_all_keys.get(consumer_label)
-        if layer is None or not getattr(layer, "ops", None):
+        layer = trace._layer_dict_all_keys.get(consumer_label)
+        if layer is None or (getattr(layer, "ops", None) is not None and not layer.ops):
             raise _underivable(
                 f"consumer {consumer_label!r} of parameter {param_address!r} "
                 "is not present on this trace.",
                 param_address=param_address,
                 site=consumer_label,
             )
-        child_op = layer.ops[0]
+        child_op = first_op(layer)
         if (
             int(getattr(child_op, "num_passes", 1) or 1) > 1
             and consumer_label == child_op.layer_label
@@ -524,7 +525,7 @@ def _check_multipass_coverage(
         num_passes = int(getattr(child_op, "num_passes", 1) or 1)
         if num_passes > 1:
             covered.setdefault(child_op.layer_label, set()).add(
-                int(getattr(child_op, "pass_index", 0) or 0)
+                int(getattr(child_op, "pass_number", 0) or 0)
             )
             total_passes[child_op.layer_label] = num_passes
     for bare_label, seen in covered.items():
@@ -595,7 +596,7 @@ def _propagate_staged(trace: Trace, staging: _Staging, *, strict: bool) -> None:
         preserve_origins=False,
     )
     for label, records in staging.pending_records.items():
-        trace.layer_dict_all_keys[label].ops[0].interventions.extend(records)
+        first_op(trace._layer_dict_all_keys[label]).edits.extend(records)
 
 
 def _stamp_param_kind(child_op: Any, store_key: tuple[Any, ...], param_address: str) -> None:
@@ -632,7 +633,7 @@ def _param_fire_record(
         func_call_id=child_op.func_call_id,
         container_path=tuple(child_op.container_path or ()),
         engine="replay",
-        helper=(
+        edit=(
             dataclasses.replace(
                 helper_spec,
                 selection_recipe={
@@ -650,7 +651,7 @@ def _param_fire_record(
         site_label=child_op.layer_label,
         timing="post",
         signal="forward",
-        helper_name=helper_name,
+        edit_name=helper_name,
         # Parameter substitution replaces no node's OUTPUT: the child's
         # output is derived by re-execution, so the node-level
         # corroboration key must not fire (same rule as edge substitution).
@@ -724,7 +725,7 @@ def buffer_operand_selection(trace: Trace, selection: Any) -> Any:
         raise SelectionError(
             f"buffer {node.name!r} has no recorded initial version with a saved value, so "
             "its consumers' operand cannot be substituted. Remedy: re-capture with "
-            "intervention_ready=True so buffer versions keep their values.",
+            "replayable=True so buffer versions keep their values.",
             code="param_substitution_occurrence_underivable",
             param_address=node.name,
         )

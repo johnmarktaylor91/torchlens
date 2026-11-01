@@ -220,7 +220,7 @@ def intervention_sites_for_log(trace: Trace) -> list[Op]:
 
     by_label: dict[str, Op] = {}
     for target in targets:
-        table = _resolve_sites(trace, target, max_fanout=max(1, len(trace.layer_list)))
+        table = _resolve_sites(trace, target, max_fanout=max(1, len(trace._layer_list)))
         for site in table:
             forward_site = _forward_site(site)
             # Key by the pass-qualified label (op.label, e.g. relu_1_1:2) so
@@ -232,9 +232,7 @@ def intervention_sites_for_log(trace: Trace) -> list[Op]:
                 site_label = getattr(forward_site, "layer_label", None)
             if isinstance(site_label, str):
                 by_label.setdefault(site_label, cast("Op", forward_site))
-    execution_order = {
-        _site_sort_key(op): index for index, op in enumerate(getattr(trace, "layer_list", ()))
-    }
+    execution_order = {_site_sort_key(op): index for index, op in enumerate(trace._layer_list)}
     return sorted(by_label.values(), key=lambda site: execution_order.get(_site_sort_key(site), 0))
 
 
@@ -322,7 +320,7 @@ def _is_downstream(
         return pass_label in cone_pass_labels
     cone_match_labels = {
         str(getattr(layer_log, "layer_label", "")),
-        str(getattr(layer_log, "layer_label_short", "")),
+        str(getattr(layer_log, "short_layer_label", "")),
     }
     cone_match_labels.update(str(label) for label in getattr(layer_log, "call_labels", ()) or ())
     return bool(cone_match_labels & cone_labels)

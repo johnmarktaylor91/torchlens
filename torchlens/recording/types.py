@@ -74,6 +74,7 @@ def _backfill_cooked_ancestry(events: Any) -> None:
     by_raw_label = events.live_index.by_raw_label
     mutated = False
     for index, record in enumerate(folded):
+        # Journal op records (OpRecord / compat events) carry layer_type; never an Op.
         layer_type = getattr(record, "layer_type", None)
         if layer_type in (None, "module_enter", "module_exit"):
             continue
@@ -267,7 +268,7 @@ class ActivationRecord:
             dtype = str(payload.dtype).replace("torch.", "")
             descriptor = f"{dtype}[{','.join(str(d) for d in payload.shape)}]"
         return (
-            f"ActivationRecord(label={self.ctx.label!r}, pass={self.ctx.pass_index}, "
+            f"ActivationRecord(label={self.ctx.label!r}, pass={self.ctx.pass_number}, "
             f"payload={descriptor}, stored={'+'.join(stores) if stores else 'none'})"
         )
 
@@ -304,7 +305,7 @@ class GradRecordContext:
     module_stack: tuple[Any, ...] = ()
     has_forward_op: bool = False
     has_op: bool = False
-    pass_index: int | None = None
+    pass_number: int | None = None
     order: int | None = None
     event_index: int | None = None
     shape: tuple[int, ...] | None = None
@@ -435,7 +436,7 @@ _RAW_METADATA_FIELDS = (
     "kind",
     "label",
     "raw_label",
-    "pass_index",
+    "pass_number",
     "event_index",
     "step_index",
     "layer_type",
@@ -444,7 +445,7 @@ _RAW_METADATA_FIELDS = (
     "func_name",
     "address",
     "module_type",
-    "module_pass_index",
+    "module_pass_number",
     "module_stack",
     "parent_labels",
     "input_output_address",
@@ -746,9 +747,9 @@ class Recording(TraceLike):
                     continue
                 index = len(records)
                 records.append(record)
-                self.by_pass.setdefault(record.ctx.pass_index, []).append(index)
+                self.by_pass.setdefault(record.ctx.pass_number, []).append(index)
                 for label_key in _distinct_label_index_keys(record.ctx.label, record.ctx.raw_label):
-                    self.by_label.setdefault(label_key, []).append((record.ctx.pass_index, index))
+                    self.by_label.setdefault(label_key, []).append((record.ctx.pass_number, index))
                 if record.ctx.address is not None:
                     self.by_address.setdefault(record.ctx.address, []).append(index)
         object.__setattr__(self, "_records_built", True)
@@ -824,11 +825,13 @@ class Recording(TraceLike):
                 ),
             )
         self._ensure_records()
-        retained_keys = {(record.ctx.pass_index, record.ctx.event_index) for record in self.records}
+        retained_keys = {
+            (record.ctx.pass_number, record.ctx.event_index) for record in self.records
+        }
         rows: list[dict[str, Any]] = []
         for ctx in self.lazy_trace.contexts:
             row = {name: getattr(ctx, name) for name in _RAW_METADATA_FIELDS}
-            row["retained"] = (ctx.pass_index, ctx.event_index) in retained_keys
+            row["retained"] = (ctx.pass_number, ctx.event_index) in retained_keys
             rows.append(row)
         return tuple(rows)
 
@@ -855,8 +858,8 @@ class Recording(TraceLike):
 
         index = len(self.grad_records)
         self.grad_records.append(record)
-        if record.ctx.pass_index is not None:
-            self.grad_by_pass.setdefault(record.ctx.pass_index, []).append(index)
+        if record.ctx.pass_number is not None:
+            self.grad_by_pass.setdefault(record.ctx.pass_number, []).append(index)
         if record.ctx.layer_label is not None:
             self.grad_by_label.setdefault(record.ctx.layer_label, []).append(index)
         self.grad_by_label.setdefault(record.ctx.label, []).append(index)
@@ -905,6 +908,8 @@ class Recording(TraceLike):
         # output to root the backward walk -- the same capability boundary
         # that refuses halted-no-payload ``to_trace()``. Documented in
         # docs/reference/capture_outcomes.md.
+        from .._data_classes._trace_missing_attrs import is_live_trace
+
         if self.is_failed:
             from .exceptions import RecorderStateError
 
@@ -931,7 +936,11 @@ class Recording(TraceLike):
         # no autograd graph: either backward would capture nothing.
         state = getattr(self, "_recording_state", None)
         runtime_trace = getattr(state, "runtime_trace", None)
-        if getattr(runtime_trace, "inference_only", False):
+        if (
+            runtime_trace is not None
+            and is_live_trace(runtime_trace)
+            and runtime_trace._options_inference_only
+        ):
             from .exceptions import RecorderStateError
 
             raise RecorderStateError(
@@ -1008,7 +1017,7 @@ class Recording(TraceLike):
             {
                 "kind": record.ctx.kind,
                 "label": record.ctx.label,
-                "pass_index": record.ctx.pass_index,
+                "pass_number": record.ctx.pass_number,
                 "event_index": record.ctx.event_index,
                 "save_out": record.spec.save_out,
                 "save_metadata": record.spec.save_metadata,
@@ -1112,7 +1121,7 @@ class Recording(TraceLike):
           captured, a training-mode buffer-writing model yields FEWER graph
           nodes than exhaustive capture, which shifts the global-index component
           of every final label downstream of the first buffer write. For such
-          models ``halt_reason`` / ``halt_frontier`` (and other final labels)
+          models ``stop_reason`` / ``halt_frontier`` (and other final labels)
           can differ from ``tl.trace(model, x, halt=...)`` even though both
           describe the same semantic halt point. Eval-mode and
           buffer-write-free models are unaffected: halt provenance matches
@@ -1163,7 +1172,7 @@ class Recording(TraceLike):
         # cooked projection; the honest provenance fact is the marker below,
         # which records that this Trace was cooked from a Recording rather
         # than captured live.
-        trace.capture_mode = "exhaustive"
+        trace._options_mode = "exhaustive"
         trace._cooked_from = "recording"
         trace._predicate_save_options = RecordingOptions()
         trace._replay_arg_version_data_complete = False
@@ -1189,7 +1198,7 @@ class Recording(TraceLike):
         # (the output-marking step that stamps it only runs on a completed
         # pass). The exhaustive path handles this in _finalize_halted_trace
         # (_capture/trace.py): it recovers a frontier-output tensor, sets
-        # halted/halt_reason/halt_frontier, and marks that frontier as the
+        # halted/stop_reason/halt_frontier, and marks that frontier as the
         # output parent so postprocess Step 1 synthesizes a dedicated output_N
         # node. Mirror that here so a halted Recording.to_trace() yields a
         # VALID halted Trace whose .halted is True (not silently False) and
@@ -1203,10 +1212,10 @@ class Recording(TraceLike):
         if self.is_stopped:
             frontier_label, frontier_tensor = self._recover_halt_frontier()
             projection.bind_halt_frontier(frontier_tensor, frontier_label)
-            trace.halted = True
-            trace.halt_reason = self.stop_reason
-            trace.halt_frontier = self.stop_reason
-            trace.raw_output = None
+            trace.is_stopped = True
+            trace.stop_reason = self.stop_reason
+            trace._graph_stop_frontier = self.stop_reason
+            trace.transformed_output = None
             trace.output_layers = [frontier_label]
             halt_output_tensors = [frontier_tensor]
             halt_output_addresses = [""]
@@ -1233,13 +1242,13 @@ class Recording(TraceLike):
             # FINAL labels; the settled record mirrors them (settle_halted
             # parity) instead of stamping the Recording-space raw label into an
             # outcome whose frontier is final. boundary_kind rides the
-            # Recording's own settled outcome; the raw halt_reason stays the
+            # Recording's own settled outcome; the raw stop_reason stays the
             # fallback when the remap did not run.
-            remapped_reason = getattr(trace, "halt_reason", None)
+            remapped_reason = getattr(trace, "stop_reason", None)
             cooked_reason = (
                 remapped_reason if isinstance(remapped_reason, str) else self.stop_reason
             )
-            remapped_frontier = getattr(trace, "halt_frontier", None)
+            remapped_frontier = trace._graph_stop_frontier
             cooked_boundary = (
                 remapped_frontier if isinstance(remapped_frontier, str) else cooked_reason
             )

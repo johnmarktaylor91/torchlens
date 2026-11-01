@@ -492,7 +492,7 @@ def _execute_sparse_call(
         # r59 section 2.4: an allocation-classed death from the REAL call is a capability
         # fact, not signature drift -- re-type it typed at ``op_allocation_execution`` so a
         # gate-4-passing run whose live+transient peak still overruns the host reports an
-        # allocation refusal, never a misleading ``runtime_signature_drift``.
+        # allocation refusal, never a misleading ``runtime_signature_mismatch``.
         if _is_allocator_death(exc):
             raise RunCapabilityUnavailableError(
                 f"Sparse call {call.call_id!r} failed with an allocation error during "

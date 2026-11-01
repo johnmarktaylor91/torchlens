@@ -304,7 +304,7 @@ def log_function_output_tensors(
     # path pays one attribute read; imports stay INSIDE the branch because
     # ops.py rebinds this function under its own globals (the split-module
     # pattern), so module-level helpers here are not visible at runtime.
-    if getattr(self, "structure_only", False):
+    if self._options_structure_only:
         from ..._capture._weightsfree_admission import weightsfree_meta_active
 
         if weightsfree_meta_active(self):
@@ -314,7 +314,7 @@ def log_function_output_tensors(
                 return False
     policy = getattr(self, "_capture_producer_policy", None)
     if policy is None:
-        policy = get_capture_producer_policy(cast(CaptureProducerMode, self.capture_mode))
+        policy = get_capture_producer_policy(cast(CaptureProducerMode, self._options_mode))
         self._capture_producer_policy = policy
     layer_counter_before = self._raw_graph_ws.layer_counter
     _emit_operation_events(
@@ -451,7 +451,7 @@ def apply_live_hooks_to_outputs(
 
     intervene_options = _trace_intervene_options(self)
     hook_plan = _st._active_hook_plan
-    if (not hook_plan and intervene_options is None) or self.capture_mode not in {
+    if (not hook_plan and intervene_options is None) or self._options_mode not in {
         "exhaustive",
         "predicate",
     }:

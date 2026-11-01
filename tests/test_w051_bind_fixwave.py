@@ -24,7 +24,7 @@ from torchlens.intervention.errors import BindingPreflightError
 from torchlens.intervention.injection import attest_injected_ops, injected_ops
 
 _LOGGED = tl.options.CaptureOptions(log_injections=True)
-_READY = tl.options.CaptureOptions(intervention_ready=True)
+_READY = tl.options.CaptureOptions(replayable=True)
 
 
 class _MLP(nn.Module):
@@ -147,14 +147,14 @@ def _injected_rows(state):
     """Injected op rows of a pickled artifact state."""
 
     return [
-        op for op in state["layer_list"] if getattr(op, "injection_provenance", None) is not None
+        op for op in state["_layer_list"] if getattr(op, "injection_provenance", None) is not None
     ]
 
 
 def _model_rows(state):
     """Model op rows of a pickled artifact state."""
 
-    return [op for op in state["layer_list"] if getattr(op, "injection_provenance", None) is None]
+    return [op for op in state["_layer_list"] if getattr(op, "injection_provenance", None) is None]
 
 
 # ---------------------------------------------------------------------------
@@ -276,8 +276,8 @@ def test_reanchored_rows_refuse_at_load(tmp_path) -> None:
             row.injection_provenance["host_site_key"] = tanh.site_key
             row.injection_provenance["host_pass"] = 7
             row.injection_provenance["spec_rule_id"] = "r-forged"
-            envelope["host_label"] = f"{tanh.layer_label}:{tanh.pass_index}"
-            row.layer_label = f"{tanh.layer_label}:{tanh.pass_index}{suffix}"
+            envelope["host_label"] = f"{tanh.layer_label}:{tanh.pass_number}"
+            row.layer_label = f"{tanh.layer_label}:{tanh.pass_number}{suffix}"
 
     with pytest.raises(Exception) as excinfo:
         _save_tamper_load(tmp_path, logged, reanchor)
@@ -353,7 +353,7 @@ def test_bind_site_keys_match_capture_for_submodule_ops() -> None:
     trace = tl.trace(model, x)
     capture_keys: dict[str, list[str]] = {}
     for op in trace.ops:
-        capture_keys.setdefault(op.layer_type, []).append(op.site_key)
+        capture_keys.setdefault(op.type, []).append(op.site_key)
     for func_name in ("linear", "relu"):
         bound = tl.when(tl.func(func_name), tl.scale(1.0)).bind(model, on_zero_fire="disclose")
         bound(x)
@@ -523,12 +523,12 @@ def test_module_boundary_injected_ops_anchor_and_round_trip(tmp_path) -> None:
     logged = tl.trace(model, x, intervene=spec, capture=_LOGGED)
     records = injected_ops(logged)
     assert records
-    host = next(op for op in logged.ops if getattr(op, "intervention_replaced", False))
+    host = next(op for op in logged.ops if getattr(op, "is_edited", False))
     assert "fc1:1" in host.output_of_module_calls
     for record in records:
         assert record.host_label == host.label
         assert record.provenance.host_site_key == host.site_key
-        assert record.provenance.host_pass == host.pass_index
+        assert record.provenance.host_pass == host.pass_number
     path = tmp_path / "module_boundary.tlspec"
     logged.save(str(path))
     loaded = tl.load(str(path))
@@ -545,7 +545,7 @@ def test_module_boundary_reused_block_anchors_each_call(tmp_path) -> None:
     model, x = _seeded(_Nested)
     logged = tl.trace(model, x, intervene=tl.when(tl.module("blk"), tl.scale(0.5)), capture=_LOGGED)
     hosts = {record.host_label for record in injected_ops(logged)}
-    replaced = {op.label for op in logged.ops if getattr(op, "intervention_replaced", False)}
+    replaced = {op.label for op in logged.ops if getattr(op, "is_edited", False)}
     assert len(hosts) == 2 and hosts == replaced
     assert all(record.provenance.host_site_key for record in injected_ops(logged))
     logged.save(str(tmp_path / "blk.tlspec"))

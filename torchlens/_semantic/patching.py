@@ -12,6 +12,7 @@ from typing import Any
 import torch
 from torch import nn
 
+from .._record_type import record_type
 from .._user_funcs import trace
 from ..errors._base import TorchLensError, TorchLensWarning
 from ..intervention.selectors import facet
@@ -1008,8 +1009,8 @@ def _require_effective_patch(
     if isinstance(started_at, (int, float)):
         # Fire records are minted DURING the run, so they are filtered by the
         # run's start time; the run's end ``timestamp`` would exclude them all.
-        for layer in getattr(patched_log, "layer_list", []) or []:
-            for record in getattr(layer, "interventions", []) or []:
+        for layer in patched_log._layer_list or []:
+            for record in getattr(layer, "edits", []) or []:
                 record_timestamp = getattr(record, "timestamp", None)
                 if isinstance(record_timestamp, (int, float)) and record_timestamp >= started_at:
                     records.append(record)
@@ -1084,7 +1085,7 @@ def _model_input_home_role(log: Any, facet_name: str, address: str) -> str | Non
     except (AttributeError, KeyError, RuntimeError, ValueError):
         return None
     home = getattr(spec, "home", None)
-    if home is None or getattr(home, "layer_type", None) != "input":
+    if home is None or record_type(home, None) != "input":
         return None
     home_label = str(getattr(home, "label", ""))
     home_op = next(

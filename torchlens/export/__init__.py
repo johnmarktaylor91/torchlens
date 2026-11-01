@@ -25,6 +25,7 @@ from .._capture.structure_only import (
 )
 from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
 from .._io._json import loads_bounded
+from .._record_type import record_type
 from .._utils.display import atomic_write_text
 from ._common import _iter_layers, _scalarize_cell, _static_graph_data
 from ._graphs import netron
@@ -383,6 +384,8 @@ def speedscope(trace: Any, path: str | Path) -> Path:
     # structure-only capture -- timings/allocator peaks are measurements a
     # value-free capture never made; rendering meta-dispatch cost as
     # 'measured' inverts real cost rankings. One chokepoint, typed code.
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
     _require_structure_only_capability(trace, "measurement_exports")
 
     destination = Path(path)
@@ -404,7 +407,7 @@ def speedscope(trace: Any, path: str | Path) -> Path:
         "profiles": [
             {
                 "type": "evented",
-                "name": getattr(trace, "model_class_name", "TorchLens forward"),
+                "name": trace._source_class_name if is_live_trace(trace) else "TorchLens forward",
                 "unit": "microseconds",
                 "startValue": 0,
                 "endValue": cursor_us,
@@ -441,12 +444,14 @@ def flamegraph(trace: Any, path: str | Path) -> Path:
     # structure-only capture -- timings/allocator peaks are measurements a
     # value-free capture never made; rendering meta-dispatch cost as
     # 'measured' inverts real cost rankings. One chokepoint, typed code.
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
     _require_structure_only_capability(trace, "measurement_exports")
 
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     lines = []
-    model_class_name = str(getattr(trace, "model_class_name", "TorchLens"))
+    model_class_name = str(trace._source_class_name if is_live_trace(trace) else "TorchLens")
     # The folded-stack format has no comment/metadata slot, so the honesty
     # facts ride a ZERO-WEIGHT synthetic frame: standard flamegraph tools
     # accept the line and render nothing for weight 0, but the exported file
@@ -881,7 +886,7 @@ def _layer_display_name(layer: Any) -> str:
     """
 
     label = str(getattr(layer, "layer_label", ""))
-    func_name = str(getattr(layer, "func_name", "") or getattr(layer, "layer_type", ""))
+    func_name = str(getattr(layer, "func_name", "") or record_type(layer, ""))
     return f"{label} ({func_name})" if func_name and func_name != label else label
 
 
@@ -899,13 +904,17 @@ def _chrome_trace_events(log: Any) -> list[dict[str, Any]]:
         Chrome trace event records.
     """
 
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
     events: list[dict[str, Any]] = [
         {
             "name": "process_name",
             "ph": "M",
             "pid": 1,
             "tid": 0,
-            "args": {"name": str(getattr(log, "model_class_name", "TorchLens forward"))},
+            "args": {
+                "name": str(log._source_class_name if is_live_trace(log) else "TorchLens forward")
+            },
         }
     ]
     cursor_us = 0

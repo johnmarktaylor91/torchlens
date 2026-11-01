@@ -16,6 +16,7 @@ from torchlens import trace as trace_fn
 from torchlens._data_classes.trace import Trace
 from torchlens._io import ArtifactError, streaming as streaming_module
 from torchlens._io.manifest import Manifest
+from torchlens._record_type import record_type
 from torchlens.errors import ArgumentConflictError, UserTransformError
 from torchlens.io import cleanup_tmp, detect_tlspec_format
 from torchlens.validation import validate_tlspec
@@ -78,7 +79,7 @@ def _saved_layers(trace: Trace) -> list[Any]:
         Saved layer-pass entries.
     """
 
-    return [layer for layer in trace.layer_list if layer.has_saved_activation]
+    return [layer for layer in trace._layer_list if layer.has_saved_activation]
 
 
 def _tmp_dirs_for(bundle_path: Path) -> list[Path]:
@@ -450,7 +451,7 @@ def test_selective_streaming_save_writes_selected_payloads(tmp_path: Path) -> No
     )
 
     saved = _saved_layers(trace)
-    saved_types = {layer.layer_type for layer in saved}
+    saved_types = {record_type(layer) for layer in saved}
     assert bundle_path.exists()
     assert "linear" in saved_types
     assert saved_types <= {"linear", "output"}
@@ -541,7 +542,7 @@ def test_streaming_bundle_manifest_is_unified_and_schema_valid(tmp_path: Path) -
 
     loaded = tl.load(bundle_path)
     assert isinstance(loaded, Trace)
-    assert loaded.num_ops == trace.num_ops
+    assert loaded._num_ops == trace._num_ops
 
 
 class _AttrStreamingModel(nn.Module):

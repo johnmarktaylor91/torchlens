@@ -94,16 +94,9 @@ def _render_container_path(path: Any) -> str:
     to declare; the default source is the whole output).
     """
 
-    parts: list[str] = []
-    for segment in tuple(path or ()):
-        for attr in ("key", "name", "index"):
-            value = getattr(segment, attr, None)
-            if value is not None:
-                parts.append(str(value))
-                break
-        else:
-            parts.append(str(segment))
-    return ".".join(parts)
+    from .._utils.collections import _path_component_key
+
+    return ".".join(str(_path_component_key(segment)) for segment in tuple(path or ()))
 
 
 def _resolve_step_output_source(trace: Any, resolved: ResolvedEpisode) -> Any:
@@ -573,9 +566,9 @@ def _derive_step_column(
 def _product_identity(trace: Any, address: str, started: int) -> dict[str, Any]:
     """The D4-clause recomputable identity facts of one episode product."""
 
-    labels = [str(getattr(op, "label", op)) for op in (getattr(trace, "layer_list", None) or ())]
+    labels = [str(getattr(op, "label", op)) for op in (trace._layer_list or ())]
     return {
-        "entry_seed": getattr(trace, "random_seed", None),
+        "entry_seed": trace._options_seed,
         "stepped_module": address,
         "stepped_calls": started,
         "op_labels": labels,

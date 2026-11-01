@@ -48,10 +48,10 @@ def _check_conditional_arm_edges_match_graph(
     # parent->child topology, so conditional edge metadata can never reference
     # an edge that does not exist in the graph.
     rolled_graph_edges: set[tuple[str, str]] = set()
-    for layer in ml.layer_list:
+    for layer in ml._layer_list:
         for child_label in layer.children:
             rolled_graph_edges.add((layer.layer_label, _strip_pass_suffix(child_label)))
-    for (conditional_id, branch_kind), edge_list in ml.conditional_arm_entry_edges.items():
+    for (conditional_id, branch_kind), edge_list in ml._graph_conditional_arm_entry_edges.items():
         for parent_label, child_label in edge_list:
             rolled_edge = (
                 _strip_pass_suffix(parent_label),
@@ -86,12 +86,12 @@ def _check_conditional_branch_membership_records(
     # membership; the depth counter and any 'body' roles in
     # ``in_conditionals`` must be consistent with it.
     event_id_by_bool_label: dict[str, int] = {}
-    for event in ml.conditional_records:
+    for event in ml._graph_conditional_records:
         for bool_label in event.bool_layers:
             event_id_by_bool_label[bool_label] = event.id
     event_id_by_conditional_id: dict[str, int] = {}
     branch_kind_by_conditional_arm: dict[tuple[str, int], str] = {}
-    for conditional in getattr(ml, "conditionals", []) or []:
+    for conditional in ml._graph_conditionals or []:
         for arm in conditional.arms:
             if arm.terminal_bool_op_label is not None:
                 event_id = event_id_by_bool_label.get(arm.terminal_bool_op_label)
@@ -104,12 +104,12 @@ def _check_conditional_branch_membership_records(
             else:
                 branch_kind_by_conditional_arm[(conditional.id, arm_index)] = arm.kind
     stack_entries_by_layer_label: dict[str, set[tuple[int, str]]] = {}
-    for layer in ml.layer_list:
+    for layer in ml._layer_list:
         stack_entries_by_layer_label.setdefault(layer.layer_label, set()).update(
             layer.conditional_branch_stack
         )
 
-    for layer in ml.layer_list:
+    for layer in ml._layer_list:
         if layer.conditional_branch_depth != len(layer.conditional_branch_stack):
             _fail_conditional_invariant(
                 name,
@@ -170,13 +170,13 @@ def _check_conditional_public_accessor_summary(
         Invariant check name for raised errors.
     """
 
-    conditionals = list(getattr(ml, "conditionals", []) or [])
+    conditionals = list(ml._graph_conditionals or [])
     conditional_ids = [conditional.id for conditional in conditionals]
     if len(conditional_ids) != len(set(conditional_ids)):
         _fail_conditional_invariant(
             name,
             16,
-            f"Trace.conditionals contains duplicate ids: {conditional_ids}",
+            f"Trace.graph.conditionals contains duplicate ids: {conditional_ids}",
         )
 
     for conditional in conditionals:
@@ -221,7 +221,7 @@ def _check_layer_pass_to_layer_log_xrefs(ml: Trace) -> None:
     """
     name = "layer_pass_layer_log_xrefs"
 
-    for ll_label, ll in ml.layer_logs.items():
+    for ll_label, ll in ml._layer_logs.items():
         if ll.layer_label != ll_label:
             raise MetadataInvariantError(
                 name,
@@ -237,10 +237,10 @@ def _check_layer_pass_to_layer_log_xrefs(ml: Trace) -> None:
             )
 
         for call_index, lpl in ll.ops.items():
-            if lpl.pass_index != call_index:
+            if lpl.pass_number != call_index:
                 raise MetadataInvariantError(
                     name,
-                    f"Layer '{ll_label}' pass key={call_index} but Op.pass_index={lpl.pass_index}",
+                    f"Layer '{ll_label}' pass key={call_index} but Op.pass_number={lpl.pass_number}",
                 )
             if lpl.layer_label != ll.layer_label:
                 raise MetadataInvariantError(
@@ -266,8 +266,8 @@ def _check_pass_count_consistency(ml: Trace) -> None:
     """
 
     name = "pass_count_consistency"
-    layer_num_calls = getattr(ml, "layer_num_calls", {}) or {}
-    for layer_label, layer_log in ml.layer_logs.items():
+    layer_num_calls = ml._layer_num_calls or {}
+    for layer_label, layer_log in ml._layer_logs.items():
         ops = getattr(layer_log, "ops", {}) or {}
         expected_keys = set(range(1, getattr(layer_log, "num_passes", 0) + 1))
         # OpAccessor iteration yields Ops (C02 basis fix); the pass-index key
@@ -280,11 +280,11 @@ def _check_pass_count_consistency(ml: Trace) -> None:
                 f"num_passes={getattr(layer_log, 'num_passes', None)!r}",
             )
         for pass_index, op in ops.items():
-            if getattr(op, "pass_index", None) != pass_index:
+            if getattr(op, "pass_number", None) != pass_index:
                 raise MetadataInvariantError(
                     name,
                     f"Layer '{layer_label}' stores op with pass_index="
-                    f"{getattr(op, 'pass_index', None)!r} under key {pass_index!r}",
+                    f"{getattr(op, 'pass_number', None)!r} under key {pass_index!r}",
                 )
             if getattr(op, "num_passes", None) != getattr(layer_log, "num_passes", None):
                 raise MetadataInvariantError(
@@ -324,17 +324,19 @@ def _check_module_layer_containment(ml: Trace) -> None:
 
         # Module.layer_labels exist in layer_logs
         for lbl in mod_log.layer_labels:
-            if lbl not in ml.layer_logs:
+            if lbl not in ml._layer_logs:
                 raise MetadataInvariantError(
                     name,
-                    f"Module '{addr}' layers contains '{lbl}' not in trace.layer_logs",
+                    f"Module '{addr}' layers contains '{lbl}' not in trace._layer_logs",
                 )
 
-        if mod_log.num_layers != len(mod_log.layer_labels):
+        # len(layer_labels) is the Module's layer count: it is honest only
+        # when no Layer is listed twice.
+        if len(mod_log.layer_labels) != len(set(mod_log.layer_labels)):
             raise MetadataInvariantError(
                 name,
-                f"Module '{addr}': num_layers={mod_log.num_layers} != "
-                f"len(layer_labels)={len(mod_log.layer_labels)}",
+                f"Module '{addr}': len(layer_labels)={len(mod_log.layer_labels)} != "
+                f"distinct layer labels={len(set(mod_log.layer_labels))}",
             )
 
         # ModuleCall checks
@@ -349,11 +351,13 @@ def _check_module_layer_containment(ml: Trace) -> None:
                         f"'{lbl}' not in op_labels or layer_labels",
                     )
 
-            # num_ops is len(ops); num_layers counts the distinct Layers the
-            # ops resolve to through the trace (an unresolvable op is itself
-            # the problem). One raise site for the check.
+            # len(ops) is the call's op count, honest only when no
+            # pass-qualified op is listed twice; num_layers counts the distinct
+            # Layers the ops resolve to through the trace (an unresolvable op
+            # is itself the problem). One raise site for the check.
+            qualified_ops = [lbl for lbl in mpl.ops if ":" in str(lbl)]
             resolved = [
-                getattr(ml.layer_dict_all_keys.get(lbl), "layer_label", None) for lbl in mpl.ops
+                getattr(ml._layer_dict_all_keys.get(lbl), "layer_label", None) for lbl in mpl.ops
             ]
             unresolved = [
                 lbl
@@ -361,8 +365,11 @@ def _check_module_layer_containment(ml: Trace) -> None:
                 if not isinstance(layer, str)
             ]
             count_problem = None
-            if mpl.num_ops != len(mpl.ops):
-                count_problem = f"num_ops={mpl.num_ops} != len(ops)={len(mpl.ops)}"
+            if len(qualified_ops) != len(set(qualified_ops)):
+                count_problem = (
+                    f"len(ops) counts a pass-qualified op twice "
+                    f"({len(qualified_ops)} listed, {len(set(qualified_ops))} distinct)"
+                )
             elif unresolved:
                 count_problem = f"op '{unresolved[0]}' resolves to no Layer"
             elif mpl.num_layers != len(set(resolved)):
@@ -388,7 +395,7 @@ def _check_module_layer_containment(ml: Trace) -> None:
                     )
 
     # Reverse check: layer's module exists in modules
-    for lpl in ml.layer_list:
+    for lpl in ml._layer_list:
         cmo = lpl.module
         if cmo:
             # module may include pass suffix (e.g. 'fc:1')

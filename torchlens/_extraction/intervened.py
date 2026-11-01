@@ -14,7 +14,7 @@ a record.
 Only address classes whose execution gate is certified run
 (:data:`.harvest_schema.EXECUTABLE_ADDRESS_CLASSES`); finer classes refuse
 typed and are never coarsened. Every helper must declare
-``batch_independent=True`` (the append gate's rule): a helper that couples
+``is_batch_independent=True`` (the append gate's rule): a helper that couples
 batch rows would make stimulus ``i``'s row depend on its batch-mates, which
 breaks the row-is-stimulus contract the artifact states.
 """
@@ -165,11 +165,11 @@ def _refuse_batch_dependent(rule: Any) -> None:
     """
 
     helper = _rule_helper(rule)
-    if helper is not None and bool(helper.batch_independent):
+    if helper is not None and bool(helper.is_batch_independent):
         return
-    name = helper.helper_name if helper is not None else rule.action_repr
+    name = helper.name if helper is not None else rule.action_repr
     raise InvalidArgumentError(
-        f"Intervention action {name!r} does not declare batch_independent=True. "
+        f"Intervention action {name!r} does not declare is_batch_independent=True. "
         "Extraction stores one row per stimulus, so an edit whose value reads "
         "the other rows of its batch (or an opaque callable that cannot say) "
         "would make each stored row depend on which stimuli shared its batch.",
@@ -287,7 +287,7 @@ def batch_receipt(trace: Any) -> dict[str, Any]:
     fired: list[str] = []
     fire_count = 0
     for label in trace.op_labels:
-        records = getattr(trace.ops[label], "interventions", None) or ()
+        records = getattr(trace.ops[label], "edits", None) or ()
         if records:
             fired.append(label)
             fire_count += len(records)

@@ -22,6 +22,8 @@ from __future__ import annotations
 import contextlib
 from typing import Any
 
+from ._data_classes._trace_missing_attrs import is_live_trace
+
 #: Schema identifier stamped on the shared honesty fact block.
 CAPTURE_HONESTY_SCHEMA = "torchlens.capture_honesty.v1"
 
@@ -109,14 +111,18 @@ def capture_verification(log: Any) -> dict[str, Any]:
         ``None``), ``capture_verification_reason``, and ``rescue_rerun``.
     """
 
+    from ._data_classes._trace_missing_attrs import is_live_trace
+
     outcome = getattr(log, "outcome", None)
     status = getattr(outcome, "status", None)
     status_value = getattr(status, "value", None)
     return {
         "capture_status": str(status_value) if status_value is not None else "unknown",
-        "capture_verified": getattr(log, "capture_verified", None),
-        "capture_verification_reason": getattr(log, "capture_verification_reason", None),
-        "rescue_rerun": bool(getattr(log, "rescue_rerun", None) or False),
+        "capture_verified": log._provenance_verified if is_live_trace(log) else None,
+        "capture_verification_reason": log._provenance_verification_reason
+        if is_live_trace(log)
+        else None,
+        "rescue_rerun": bool(getattr(log, "__dict__", {}).get("_rescue_rerun") or False),
     }
 
 
@@ -252,7 +258,7 @@ def record_host_tensor_source_advisory(trace: Any) -> None:
         Completed capture.
     """
 
-    if getattr(trace, "capture_verified", None) is not None:
+    if trace._provenance_verified is not None:
         return
     annotations = getattr(trace, "annotations", None)
     if not isinstance(annotations, dict):
@@ -328,7 +334,7 @@ def intervention_facts(log: Any) -> dict[str, Any] | None:
     :func:`capture_honesty_facts` must therefore carry the intervention evidence,
     or an agent reading a zero-ablated dump has no way to know the numbers are
     not the model's. Evidence is read from the persisted record, never inferred:
-    per-op ``intervention_replaced`` flags and ``FireRecord`` lists, plus the
+    per-op ``is_edited`` flags and ``FireRecord`` lists, plus the
     ``intervention_audit`` rows (fork-side ``do()`` / ``PARAM`` / ``EVENT`` kinds).
 
     Parameters
@@ -344,12 +350,17 @@ def intervention_facts(log: Any) -> dict[str, Any] | None:
         intervention evidence exists; ``None`` for an untouched log.
     """
 
+    from ._data_classes._trace_missing_attrs import is_live_trace
+
     replaced: list[str] = []
     fires = 0
-    for layer in getattr(log, "layer_list", None) or ():
-        records = getattr(layer, "interventions", None) or ()
+    # Export subjects include accessors, records, a PartialTrace and husked
+    # traces; only a live Trace has layers whose edit records count here.
+    layers = log._layer_list if is_live_trace(log) else None
+    for layer in layers or ():
+        records = getattr(layer, "edits", None) or ()
         fires += len(records)
-        if bool(getattr(layer, "intervention_replaced", False)):
+        if bool(getattr(layer, "is_edited", False)):
             label = getattr(layer, "layer_label", None)
             if isinstance(label, str):
                 replaced.append(label)
@@ -384,10 +395,12 @@ def capture_honesty_facts(log: Any) -> dict[str, Any]:
         disclosure (when present, M5), and advisories (when present).
     """
 
+    from ._data_classes._trace_missing_attrs import is_live_trace
+
     facts: dict[str, Any] = {
         "schema": CAPTURE_HONESTY_SCHEMA,
         **capture_verification(log),
-        "structure_only": bool(getattr(log, "structure_only", False)),
+        "structure_only": bool(log._options_structure_only if is_live_trace(log) else False),
         **poison_facts(log),
     }
     if facts["structure_only"]:
@@ -422,7 +435,7 @@ def _structure_evidence_facts(log: Any) -> dict[str, Any]:
         "claim_status": claim_status_for(log).value,
         "values_available": False,
     }
-    envelope = getattr(log, "structure_evidence", None)
+    envelope = log._graph_structure_evidence if is_live_trace(log) else None
     if isinstance(envelope, dict):
         facts["substrate"] = envelope.get("substrate")
         facts["structure_evidence"] = envelope
@@ -657,7 +670,7 @@ _PRESENTER_REMEDIES: dict[str, str] = {
         "merged.to_pandas()) or report on one member rank Trace"
     ),
     "TraceSlice": (
-        "report on the slice's source trace (slice.source_trace.explain()); "
+        "report on the trace the slice was taken from (trace.explain()); "
         "the slice itself discloses via slice.summary()"
     ),
     "Bundle": "report on one member Trace (e.g. bundle[name].explain())",

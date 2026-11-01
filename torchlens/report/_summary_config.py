@@ -40,7 +40,7 @@ REMOVED_SUMMARY_LEVELS: dict[str, str] = {
         "the summary footer carries the memory totals"
     ),
     "control_flow": (
-        "trace.conditional_records and the conditional_* columns of trace.to_pandas() "
+        "trace._graph_conditional_records and the conditional_* columns of trace.to_pandas() "
         "(multi-pass layers: num_passes)"
     ),
     "waterfall": (
@@ -64,7 +64,7 @@ REMOVED_SUMMARY_OPTIONS: dict[str, str] = {
     "print_to": "report.print(file=...) on the returned report, or print_to(str(report))",
     "count_fma_as_two": "flop_convention='fma2' (was True) or flop_convention='fma1' (was False)",
     "show_input_preprocessing_details": (
-        "trace.provenance() and trace.input_preprocessor (verified, source, identifier)"
+        "trace.provenance.summary() and trace.input_preprocessor (verified, source, identifier)"
     ),
 }
 

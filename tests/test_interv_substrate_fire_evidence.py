@@ -39,7 +39,7 @@ def _ready_trace(model: nn.Module) -> tl.Trace:
     return tl.trace(
         model,
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 
@@ -236,7 +236,7 @@ def test_fire_records_carry_uniform_timestamps() -> None:
     records = [
         record
         for label in fork.op_labels
-        for record in (getattr(fork.ops[label], "interventions", None) or ())
+        for record in (getattr(fork.ops[label], "edits", None) or ())
     ]
     assert records
     assert all(record.timestamp is not None for record in records)

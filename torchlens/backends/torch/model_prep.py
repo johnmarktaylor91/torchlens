@@ -309,10 +309,12 @@ def _refuse_release_during_active_capture() -> None:
     if _state._active_trace is None and not _state._logging_enabled:
         return
     trace = _state._active_trace
-    model_label = getattr(trace, "model_label", None) or getattr(trace, "model_class_name", None)
+    model_name = getattr(trace, "model_name", None) or (
+        trace._source_class_name if trace is not None else None
+    )
     raise CaptureNotActiveError(
         "tl.release_model() was called while a TorchLens capture is still active"
-        + (f" for model {model_label!r}" if model_label else ""),
+        + (f" for model {model_name!r}" if model_name else ""),
         code="release_during_active_capture",
         remedy=(
             "let the capture finish before releasing the model — releasing "
@@ -506,39 +508,41 @@ def _prepare_model_session(
     else:
         identity_cls = type(model)
         entry_callable = getattr(identity_cls, "forward", None)
-    trace.model_class_name = str(identity_cls.__name__)
-    trace.class_docstring = identity_cls.__doc__
+    trace._source_class_name = str(identity_cls.__name__)
+    trace._source_class_docstring = identity_cls.__doc__
     init_method = getattr(identity_cls, "__init__", None)
     forward_method = entry_callable
     try:
-        trace.init_signature = str(inspect.signature(init_method)) if init_method else None
+        trace._source_init_signature = str(inspect.signature(init_method)) if init_method else None
     except (TypeError, ValueError):
-        trace.init_signature = None
-    trace.init_docstring = getattr(init_method, "__doc__", None)
+        trace._source_init_signature = None
+    trace._source_init_docstring = getattr(init_method, "__doc__", None)
     try:
-        trace.forward_signature = str(inspect.signature(forward_method)) if forward_method else None
+        trace._source_forward_signature = (
+            str(inspect.signature(forward_method)) if forward_method else None
+        )
     except (TypeError, ValueError):
-        trace.forward_signature = None
-    trace.forward_docstring = getattr(forward_method, "__doc__", None)
+        trace._source_forward_signature = None
+    trace._source_forward_docstring = getattr(forward_method, "__doc__", None)
     try:
-        trace.class_source_file = inspect.getfile(identity_cls)
-        trace.class_source_line = _source_start_line(identity_cls)
-        trace.init_source_file = inspect.getfile(identity_cls.__init__)
-        trace.init_source_line = _source_start_line(identity_cls.__init__)
+        trace._source_class_file = inspect.getfile(identity_cls)
+        trace._source_class_line = _source_start_line(identity_cls)
+        trace._source_init_file = inspect.getfile(identity_cls.__init__)
+        trace._source_init_line = _source_start_line(identity_cls.__init__)
     except (OSError, TypeError):
-        trace.class_source_file = None
-        trace.class_source_line = None
-        trace.init_source_file = None
-        trace.init_source_line = None
+        trace._source_class_file = None
+        trace._source_class_line = None
+        trace._source_init_file = None
+        trace._source_init_line = None
     try:
         forward_func = model.forward if entry_callable is None else entry_callable
-        trace.forward_source_file = inspect.getsourcefile(forward_func) or inspect.getfile(
+        trace._source_forward_file = inspect.getsourcefile(forward_func) or inspect.getfile(
             forward_func
         )
-        trace.forward_source_line = _source_start_line(forward_func)
+        trace._source_forward_line = _source_start_line(forward_func)
     except (OSError, TypeError):
-        trace.forward_source_file = None
-        trace.forward_source_line = None
+        trace._source_forward_file = None
+        trace._source_forward_line = None
 
     # Track seen module ids to detect shared modules (same module at multiple addresses).
     _seen_module_ids: dict[int, str] = {}
@@ -611,7 +615,7 @@ def _prepare_model_session(
             trace._module_capture_ws.mod_call_labels[mod_id] = []
             trace._module_capture_ws.mod_entered[mod_id] = []
             trace._module_capture_ws.mod_exited[mod_id] = []
-    if trace.capture_mode != "predicate":
+    if trace._options_mode != "predicate":
         _create_session_param_logs(trace, model, optimizer)
     prepare_buffer_tensors(trace, model)
     # Pre-forward ownership snapshot for the R16 module-entry adoption
@@ -622,7 +626,7 @@ def _prepare_model_session(
     trace._module_capture_ws.module_build_data["forward_outside_tensor_ids_at_entry"] = (
         forward_outside_ids
     )
-    if trace.capture_mode == "exhaustive":
+    if trace._options_mode == "exhaustive":
         from .buffer_writes import install_buffer_write_tracker
 
         install_buffer_write_tracker(trace, model)
@@ -705,7 +709,7 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
             if (
                 not param_is_lazy
                 and param.is_leaf  # a non-leaf already requires grad; its flag is read-only
-                and not getattr(trace, "backward_ready", False)
+                and not trace._options_backward_ready
                 and (torch.is_floating_point(param) or torch.is_complex(param))
             ):
                 param.requires_grad = True
@@ -740,7 +744,7 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
     _add_shared_module_aliases(model, param_logs, param_id_to_address)
     trace._param_log_by_pid = param_id_to_address
     trace._session_param_inventory = stamped_params
-    trace.param_logs = ParamAccessor(param_logs)
+    trace._param_logs = ParamAccessor(param_logs)
 
 
 def _add_shared_module_aliases(
@@ -940,7 +944,7 @@ def _capture_module_metadata(
     # Start from cached class-level metadata. dict() creates a shallow copy;
     # mutable fields (all_addresses, custom_attributes, custom_methods) are replaced
     # below with fresh instances per module, so no cross-contamination.
-    save_source = getattr(trace, "save_code_context", False)
+    save_source = trace._options_save_source_context
     class_meta = _get_class_metadata(type(module), save_source_context=save_source)
     meta = dict(class_meta)
     meta["all_addresses"] = [address]
@@ -1179,7 +1183,7 @@ def _record_module_entry_metadata(
         module_call_label=module_call_label_str,
     )
     should_capture_template = bool(
-        getattr(trace, "intervention_ready", False) or getattr(trace, "save_arg_templates", False)
+        getattr(trace, "is_replayable", False) or trace._options_save_arg_templates
     )
     forward_args_template = None
     forward_kwargs_template = None
@@ -1205,14 +1209,14 @@ def _record_module_entry_metadata(
         trace._code_context_cache = code_context_cache
     code_context = _get_code_context(
         num_context_lines=trace.num_context_lines,
-        source_loading_enabled=trace.save_code_context,
+        source_loading_enabled=trace._options_save_source_context,
         context_cache=code_context_cache,
     )
     trace._module_capture_ws.module_build_data.setdefault("module_code_contexts", {})[
         module_call_label_str
     ] = code_context
     call_stack = [
-        f"{frame.address}:{frame.pass_index}"
+        f"{frame.address}:{frame.pass_number}"
         for frame in trace._module_capture_ws.exhaustive_module_stack[:-1]
     ]
     trace._module_capture_ws.module_build_data.setdefault("module_call_stacks", {})[
@@ -1238,7 +1242,7 @@ def _record_module_entry_metadata(
             # An untagged tensor enters a module. A genuine raw
             # ``register_forward_hook`` output replacement is already tagged at
             # module exit by ``_make_user_forward_hook_wrapper`` (with
-            # intervention_replaced=True), so anything still untagged here is an
+            # is_edited=True), so anything still untagged here is an
             # internally generated tensor whose construction TorchLens could not
             # trace (e.g. an attention mask built inside ``torch.vmap``). Log it
             # as a clean graph source -- NOT a user intervention -- so it
@@ -1533,7 +1537,7 @@ def _ensure_module_output_tensor_logged(
 
     * ``kind="intervention_replacement"`` -- a genuine raw
       ``register_forward_hook`` that replaced a module's output with a fresh
-      tensor the user injected. The op is marked ``intervention_replaced`` and
+      tensor the user injected. The op is marked ``is_edited`` and
       is legitimately functionless (the user-supplied callable is opaque).
     * ``kind="internal_source"`` -- an internally generated tensor (e.g. an
       attention mask built inside ``torch.vmap``, whose construction TorchLens
@@ -1659,23 +1663,23 @@ def _ensure_module_output_tensor_logged(
             "_tracing_finished": False,
             "_construction_done": False,
             "label": None,
-            "label_short": None,
+            "short_label": None,
             "layer_label": None,
-            "layer_label_short": None,
+            "short_layer_label": None,
             "type": layer_type,
             "type_index": type_index,
-            "pass_index": 1,
+            "pass_number": 1,
             "num_passes": 1,
             "lookup_keys": [],
             "out": None,
             "transformed_out": None,
             "has_saved_activation": False,
-            "activation_transform": trace.activation_transform,
+            "activation_transform": trace._options_activation_transform,
             "annotations": {},
-            "interventions": [],
-            "intervention_replaced": not is_internal_source,
-            "detach_saved_activations": trace.detach_saved_activations,
-            "output_device": trace.output_device,
+            "edits": [],
+            "is_edited": not is_internal_source,
+            "detach_saved_activations": trace._options_detach_saved_activations,
+            "output_device": trace._options_output_device,
             "has_saved_args": False,
             "saved_args": None,
             "saved_kwargs": None,
@@ -1700,7 +1704,7 @@ def _ensure_module_output_tensor_logged(
             "out_versions_by_child": {},
             "grad": None,
             "transformed_grad": None,
-            "save_grads": getattr(trace, "save_grads", None) not in (None, False),
+            "save_grads": trace._options_save_grads not in (None, False),
             "has_grad": False,
             "grad_shape": None,
             "transformed_grad_shape": None,
@@ -1758,7 +1762,7 @@ def _ensure_module_output_tensor_logged(
             "num_params_frozen": 0,
             "param_memory": 0,
             "equivalence_class": equivalence_class,
-            "equivalent_ops": trace.op_equivalence_classes[raw_label],
+            "equivalent_ops": trace._graph_op_equivalence_classes[raw_label],
             "recurrent_ops": [],
             "parents": parent_labels,
             "parent_arg_positions": {"args": {}, "kwargs": {}},
@@ -1830,20 +1834,20 @@ def _ensure_module_output_tensor_logged(
     fire_results = _pop_tensor_live_fire_results(tensor)
     if fire_results:
         fields_dict["fire_results"] = fire_results
-        fields_dict["interventions"] = [
+        fields_dict["edits"] = [
             result.fire_record for result in fire_results if result.fire_record is not None
         ]
-        fields_dict["intervention_replaced"] = any(result.replaced for result in fire_results)
+        fields_dict["is_edited"] = any(result.replaced for result in fire_results)
         # Fire results only mint replacement-event evidence when the live-fire
         # machinery is actually armed for THIS capture; a stale
         # ``_tl_live_fire_results`` attribute leaked from an earlier intervened
         # trace stays unledgered, so validation refuses the placeholder it
         # would otherwise launder into a plain capture.
-        if fields_dict["intervention_replaced"] and _live_intervention_machinery_armed():
+        if fields_dict["is_edited"] and _live_intervention_machinery_armed():
             _note_replacement_event(trace, raw_label, origin="live_fire")
-    trace.op_equivalence_classes[raw_label].add(raw_label)
+    trace._graph_op_equivalence_classes[raw_label].add(raw_label)
     new_entry = _make_layer_log_entry(
-        trace, tensor, fields_dict, (), {}, trace.activation_transform
+        trace, tensor, fields_dict, (), {}, trace._options_activation_transform
     )
     if is_internal_source:
         # Keep the special-list <-> flag invariant satisfied: every op with
@@ -1923,15 +1927,15 @@ def _make_user_forward_hook_wrapper(
                         amend_raw_hook_intervention(
                             replaced_event.seq,
                             replacement_label,
-                            intervention_replaced=True,
+                            is_edited=True,
                         )
                     )
                 # The hook returned an ALREADY-TRACED tensor: that REWIRES the
                 # module boundary to reuse an existing op's value, it does not
                 # replace that op's own computation. The durable
-                # ``intervention_replaced`` stamp above stays as the
+                # ``is_edited`` stamp above stays as the
                 # intervened-capture disclosure (runnable save keys its
-                # user_intervention_not_replayable refusal on it), but NO
+                # user_intervention_unsupported refusal on it), but NO
                 # trace-level replacement-event ledger entry is minted here:
                 # that ledger corroboration is what exempts FUNCTIONLESS
                 # ``intervention_replacement`` ops from validation, and a
@@ -2093,7 +2097,7 @@ def _record_module_exit_metadata(
                             exit_event.seq,
                             tensor_label,
                             intervention_fired=True,
-                            intervention_replaced=any_replaced,
+                            is_edited=any_replaced,
                             fire_results=remaining_fire_results,
                         )
                     )
@@ -2195,7 +2199,7 @@ def _record_predicate_module_boundary_outputs(
         if ctx.kind == "op" and ctx.raw_label is not None
     }
     existing = {
-        (record.ctx.raw_label, record.ctx.pass_index)
+        (record.ctx.raw_label, record.ctx.pass_number)
         for record in state.recording.records
         if record.ctx.raw_label is not None
     }
@@ -2242,7 +2246,7 @@ def _record_predicate_module_boundary_outputs(
         trace._tl_save_selector_fire_count = (
             int(getattr(trace, "_tl_save_selector_fire_count", 0)) + 1
         )
-        key = (boundary_ctx.raw_label, boundary_ctx.pass_index)
+        key = (boundary_ctx.raw_label, boundary_ctx.pass_number)
         if key in existing:
             continue
         existing.add(key)
@@ -2339,7 +2343,7 @@ def module_forward_decorator(
         # address is read per call because role swaps re-address modules.
         _state.note_fingerprint_token(_state.module_token(_module_address(module)))
 
-        if trace.capture_mode == "predicate":
+        if trace._options_mode == "predicate":
             from ..._capture.predicates import (
                 _evaluate_halt,
                 _is_halt_only_capture,
@@ -2356,15 +2360,15 @@ def module_forward_decorator(
             frame = _mstack.push_frame(trace, state.module_stack, module)
             from .prehook_provenance import bind_invocation
 
-            bind_invocation(trace, module, frame.address, frame.pass_index, (args, kwargs))
+            bind_invocation(trace, module, frame.address, frame.pass_number, (args, kwargs))
             state.event_index += 1
             enter_ctx = _build_record_context(
                 kind="module_enter",
                 op_log_or_op_data={
-                    "label": f"{frame.address}:enter:{frame.pass_index}",
+                    "label": f"{frame.address}:enter:{frame.pass_number}",
                     "address": frame.address,
                     "module_type": frame.module_type,
-                    "module_pass_index": frame.pass_index,
+                    "module_pass_number": frame.pass_number,
                 },
                 module_stack=state.module_stack,
                 history=tuple(state.history),
@@ -2432,7 +2436,7 @@ def module_forward_decorator(
                 out = _apply_module_boundary_live_hooks(
                     out,
                     module_address=frame.address,
-                    module_call_index=frame.pass_index,
+                    module_call_index=frame.pass_number,
                     module_type=frame.module_type,
                     call_args=args,
                     call_kwargs=dict(kwargs),
@@ -2442,7 +2446,7 @@ def module_forward_decorator(
                     state,
                     out,
                     module_address=frame.address,
-                    module_call_index=frame.pass_index,
+                    module_call_index=frame.pass_number,
                 )
                 return out
             finally:
@@ -2451,10 +2455,10 @@ def module_forward_decorator(
                 exit_ctx = _build_record_context(
                     kind="module_exit",
                     op_log_or_op_data={
-                        "label": f"{frame.address}:exit:{frame.pass_index}",
+                        "label": f"{frame.address}:exit:{frame.pass_number}",
                         "address": frame.address,
                         "module_type": frame.module_type,
-                        "module_pass_index": frame.pass_index,
+                        "module_pass_number": frame.pass_number,
                     },
                     module_stack=state.module_stack,
                     history=tuple(state.history),
@@ -2518,7 +2522,7 @@ def module_forward_decorator(
         frame = _mstack.push_frame(trace, trace._module_capture_ws.exhaustive_module_stack, module)
         from .prehook_provenance import bind_invocation
 
-        bind_invocation(trace, module, frame.address, frame.pass_index, (args, kwargs))
+        bind_invocation(trace, module, frame.address, frame.pass_number, (args, kwargs))
         try:
             input_tensor_labels, input_tensor_labels_at_entry = _record_module_entry_metadata(
                 trace, module, args, kwargs
@@ -2545,7 +2549,7 @@ def module_forward_decorator(
                 out = _apply_module_boundary_live_hooks(
                     out,
                     module_address=frame.address,
-                    module_call_index=frame.pass_index,
+                    module_call_index=frame.pass_number,
                     module_type=_module_type(module),
                     call_args=args,
                     call_kwargs=dict(kwargs),
@@ -2581,17 +2585,17 @@ def module_forward_decorator(
                 exit_ctx = _build_record_context(
                     kind="module_exit",
                     op_log_or_op_data={
-                        "label": f"{frame.address}:exit:{frame.pass_index}",
+                        "label": f"{frame.address}:exit:{frame.pass_number}",
                         "address": frame.address,
                         "module_type": _module_type(module),
-                        "module_pass_index": frame.pass_index,
+                        "module_pass_number": frame.pass_number,
                         # tl.module evaluates capture-time subjects through
                         # output_of_module_calls, so a module-boundary halt
                         # (incl. compiled stop_after= module addresses) can only
                         # fire if this exit ctx names its own module call; the
                         # exhaustive path previously left it empty and every
                         # tl.module halt silently ran the full forward.
-                        "output_of_module_calls": (f"{frame.address}:{frame.pass_index}",),
+                        "output_of_module_calls": (f"{frame.address}:{frame.pass_number}",),
                     },
                     module_stack=[],
                     history=(),

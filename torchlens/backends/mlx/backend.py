@@ -41,6 +41,7 @@ from ..._ir.semantics import BackendSemantics, CapturePolicy
 from ..._ir.workspaces import RawGraphWorkspace
 from ..._postprocess._materialize import materialize_from_events
 from ..._quantities import Duration
+from ..._record_type import record_type
 from ..._trace_core.relation_views import freeze_trace_relation_views
 from ...backends.registry import (
     BackendName,
@@ -247,7 +248,7 @@ class _MLXIntermediateTapObserver:
             Finalized trace containing input operations.
         """
 
-        for op in trace.layer_list:
+        for op in trace._layer_list:
             if not op.is_input or op.out is None:
                 continue
             self.labels_by_id[id(op.out)] = str(op._label_raw)
@@ -905,7 +906,7 @@ class MLXBackend:
             kind="op",
             label=reserved.label,
             raw_label=reserved.label_raw,
-            pass_index=1,
+            pass_number=1,
             event_index=reserved.raw_index,
             step_index=None,
             layer_type=reserved.layer_type,
@@ -914,7 +915,7 @@ class MLXBackend:
             func_name=func_event_input.func_name,
             address=None,
             module_type=None,
-            module_pass_index=None,
+            module_pass_number=None,
             module_stack=func_event_input.module_stack,
             recent_events=(),
             recent_ops=(),
@@ -1151,7 +1152,7 @@ class MLXBackend:
         halt_selector = None
         if intervene is not None or halt is not None:
             spec = get_backend_spec("mlx")
-            if not spec.capabilities.interventions:
+            if not spec.capabilities.can_intervene:
                 raise BackendUnsupportedError(
                     "MLX backend capability table declares interventions=False; "
                     "refusing trace(intervene=/halt=) instead of silently "
@@ -1160,7 +1161,7 @@ class MLXBackend:
             # The registered binding IS the dispatch surface: resolution and
             # application come from the capability implementation, so a bound-
             # but-unregistered or in-place-flipped table refuses typed.
-            resolve = cast(Any, require_capability_implementation(spec, "interventions"))
+            resolve = cast(Any, require_capability_implementation(spec, "can_intervene"))
             intervention_plan, halt_selector = resolve(intervene, halt, self.mx)
             if grad_options is not None:
                 raise BackendUnsupportedError(
@@ -1203,7 +1204,7 @@ class MLXBackend:
             module_filter=cast("Callable[[Any], bool] | None", module_filter),
             emit_nvtx=False,
             input_transform=cast("Callable[[Any], Any] | None", transform),
-            raw_input=raw_input,
+            input=raw_input,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=cast("Callable[[Any], Any] | None", output_transform),
@@ -1211,16 +1212,16 @@ class MLXBackend:
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
         )
-        trace.trace_label = name
-        trace.backend = cast(BackendName, self.name)
+        trace.name = name
+        trace._provenance_backend = cast(BackendName, self.name)
         # Root entry-point identity fact (C07X item (iv)): tf's spelling for a module
         # root, backends/_finalize.py new_preview_function_trace's for a function root.
         if module_tree is not None:
             root_qualname = f"{type(model).__module__}.{type(model).__qualname__}"
-            trace.root_entry_point = f"module_call:{root_qualname}.__call__"
+            trace._provenance_root_entry_point = f"module_call:{root_qualname}.__call__"
         else:
-            trace.root_entry_point = (
-                f"function_call:{getattr(model, '__qualname__', trace.model_class_name)}"
+            trace._provenance_root_entry_point = (
+                f"function_call:{getattr(model, '__qualname__', trace._source_class_name)}"
             )
         if compiled_attribute_paths:
             # Conservative ceiling, not a refusal: the attribute may never be
@@ -1234,8 +1235,8 @@ class MLXBackend:
                 UserWarning,
                 stacklevel=2,
             )
-            trace.capture_verified = False
-            trace.capture_verification_reason = "mlx_compiled_attribute_not_logged"
+            trace._provenance_verified = False
+            trace._provenance_verification_reason = "mlx_compiled_attribute_not_logged"
         trace.capture_events = CaptureEvents()
         trace._mlx_saved_payloads = []
         trace._mlx_capture_depth = 0
@@ -1243,11 +1244,7 @@ class MLXBackend:
         trace._mlx_intervention_plan = intervention_plan
         trace._mlx_halt_selector = halt_selector
         trace._pre_forward_rng_states = None
-        setattr(
-            trace,
-            "random_seed",
-            cast(int, seed) if seed is not None else random.randint(1, 4294967294),
-        )
+        trace._options_seed = cast(int, seed) if seed is not None else random.randint(1, 4294967294)
         self.tensor_store.clear()
         # R07: the try owns the wrap call itself -- a raise anywhere between
         # wrapper install and the forward (session prep, input normalization,
@@ -1260,7 +1257,7 @@ class MLXBackend:
             args = self._normalize_input_args(input_args)
             kwargs = {} if input_kwargs is None else dict(input_kwargs)
             self._label_source_arrays(trace, args, kwargs)
-            trace.capture_start_time = time.time()
+            trace._provenance_start_time = time.time()
             halt_signal: StopSignal | None = None
             try:
                 with self.active_logging(trace):
@@ -1270,9 +1267,9 @@ class MLXBackend:
                 # appended before the signal, so the partial graph ends at it.
                 halt_signal = signal
                 output = signal.frontier_output
-                trace.halted = True
-                trace.halt_reason = signal.reason
-                trace.halt_frontier = signal.reason
+                trace.is_stopped = True
+                trace.stop_reason = signal.reason
+                trace._graph_stop_frontier = signal.reason
             # Forward-time-only state: the emit path reads these during the
             # model call; leaving them on the trace breaks the portable-state
             # scrub (they are not in _PORTABLE_STATE_SPEC by design).
@@ -1297,31 +1294,33 @@ class MLXBackend:
                     UserWarning,
                     stacklevel=2,
                 )
-            trace.forward_duration = Duration(time.time() - trace.capture_start_time)
+            trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
             if halt_signal is not None:
-                trace.raw_output = None
+                trace.transformed_output = None
             else:
-                trace.raw_output = output_transform(output) if callable(output_transform) else None
+                trace.transformed_output = (
+                    output_transform(output) if callable(output_transform) else None
+                )
             self.finalize_forward_session(trace, trace._raw_graph_ws)
             self._mark_outputs(trace, output)
             materialize_from_events(trace, trace.capture_events)
             delattr(trace, "capture_events")
             if use_object_module and module_tree is not None:
-                trace.param_logs = ParamAccessor(mlx_param_logs(module_tree, trace))
-                trace.num_param_tensors = len(trace.param_logs)
-                trace.num_params = sum(param.num_params for param in trace.param_logs)
+                trace._param_logs = ParamAccessor(mlx_param_logs(module_tree, trace))
+                trace._num_param_tensors = len(trace._param_logs)
+                trace.num_params = sum(param.num_params for param in trace._param_logs)
                 trace.num_params_trainable = sum(
-                    param.num_params for param in trace.param_logs if param.is_trainable
+                    param.num_params for param in trace._param_logs if param.is_trainable
                 )
                 trace.num_params_frozen = trace.num_params - trace.num_params_trainable
-                trace.param_source = "native-module"
+                trace._provenance_param_source = "native-module"
             else:
-                trace.param_logs = ParamAccessor({})
-                trace.num_param_tensors = 0
+                trace._param_logs = ParamAccessor({})
+                trace._num_param_tensors = 0
                 trace.num_params = 0
                 trace.num_params_trainable = 0
                 trace.num_params_frozen = 0
-                trace.param_source = "none"
+                trace._provenance_param_source = "none"
             self._finish_trace(trace, module_tree if use_object_module else None)
             if halt_signal is not None:
                 self._restrict_halted_param_logs(trace)
@@ -1366,14 +1365,14 @@ class MLXBackend:
 
         attached = {
             barcode
-            for op in trace.layer_list
+            for op in trace._layer_list
             for barcode in (getattr(op, "_param_barcodes", None) or ())
         }
         kept = {
             address: param for address, param in trace.params.items() if param.barcode in attached
         }
-        trace.param_logs = ParamAccessor(kept)
-        trace.num_param_tensors = len(kept)
+        trace._param_logs = ParamAccessor(kept)
+        trace._num_param_tensors = len(kept)
         trace.num_params = sum(param.num_params for param in kept.values())
         trace.num_params_trainable = sum(
             param.num_params for param in kept.values() if param.is_trainable
@@ -1410,7 +1409,7 @@ class MLXBackend:
         Returns
         -------
         None
-            ``trace.derived_grads`` and unambiguous param gradient slots are populated.
+            ``trace.autograd.derived_grads`` and unambiguous param gradient slots are populated.
         """
 
         params = grad_options.params
@@ -1499,7 +1498,7 @@ class MLXBackend:
             if not _mlx_trees_close(aux_output, captured_output):
                 raise ValueError(
                     "MLX derived gradient run raw output diverged from captured raw output; "
-                    "refusing to expose trace.derived_grads."
+                    "refusing to expose trace._autograd_derived_grads."
                 )
             grad_trees = grads if len(differentiated_argnums) != 1 else (grads,)
             records: dict[str, DerivedGradRecord] = {}
@@ -1539,7 +1538,7 @@ class MLXBackend:
                 update = getattr(model, "update", None)
                 if callable(update):
                     update(original_params)
-        trace.derived_grads = DerivedGradAccessor(records)
+        trace._autograd_derived_grads = DerivedGradAccessor(records)
         mirror_param_derived_grads(trace, records)
 
     def _records_for_intermediate_mlx_grads(
@@ -1577,7 +1576,7 @@ class MLXBackend:
 
         selected_ops = tuple(
             op
-            for op in trace.layer_list
+            for op in trace._layer_list
             if op.has_saved_activation and not op.is_input and _is_float_mlx_array(op.out)
         )
         if len(selected_ops) > grad_options.max_intermediate_grads:
@@ -2032,11 +2031,11 @@ class MLXBackend:
                     )
                 )
 
-    def _capture_policy(self, session: object) -> CapturePolicy:
+    def _capture_policy(self, session: Any) -> CapturePolicy:
         """Return the MLX capture policy for one event."""
 
         return CapturePolicy(
-            save_payload=bool(getattr(session, "save_raw_activations", True)),
+            save_payload=bool(session._options_save_raw_activations),
             save_grad=False,
         )
 
@@ -2087,7 +2086,7 @@ class MLXBackend:
     def _build_event(
         self,
         *,
-        session: object,
+        session: Any,
         kind: str,
         reserved: ReservedLabel,
         func_event_input: FunctionEventInput,
@@ -2156,8 +2155,8 @@ class MLXBackend:
                 transformed_tensor=None,
                 has_saved_activation=policy.save_payload,
                 output_device="same",
-                activation_transform=getattr(session, "activation_transform", None),
-                detach_saved_activations=bool(getattr(session, "detach_saved_activations", False)),
+                activation_transform=session._options_activation_transform,
+                detach_saved_activations=bool(session._options_detach_saved_activations),
                 visualizer_path=None,
                 multi_output_index=None,
                 in_multi_output=False,
@@ -2207,7 +2206,7 @@ class MLXBackend:
             is_scalar_bool=None,
             bool_value=None,
             intervention_fired=bool(fire_results),
-            intervention_replaced=any(result.replaced for result in fire_results),
+            is_edited=any(result.replaced for result in fire_results),
             fire_results=fire_results,
             intervention_template_ref=None,
             record_context=self.build_record_context(
@@ -2236,7 +2235,7 @@ class MLXBackend:
 
             if any(edge.parent_label_raw == label for edge in edges):
                 return
-            edges.append(ParentEdge(parent_label_raw=label, arg_position=position, edge_use=use))
+            edges.append(ParentEdge(parent_label_raw=label, arg_position=position, _edge_use=use))
             edge_uses.append((label, position, use))
 
         for index, value in enumerate(args):
@@ -2291,7 +2290,7 @@ class MLXBackend:
             attach_object_module_logs=self._attach_object_module_logs,
             attach_op_params=attach_module_owned_op_params,
             count_layers_with_attached_params=True,
-            recurrence_detection=bool(getattr(trace, "recurrence_detection", False)),
+            recurrence_detection=bool(trace._options_recurrence_detection),
         )
 
     def _attach_object_module_logs(self, trace: Trace, tree: MLXModuleTree) -> None:
@@ -2825,7 +2824,7 @@ def _mlx_trace_intermediate_signatures(
         source_trace = op._source_trace_or_none()
         if source_trace is None:
             continue
-        for trace_op in getattr(source_trace, "layer_list", ()):
+        for trace_op in source_trace._layer_list:
             label_raw = getattr(trace_op, "_label_raw", None)
             if not isinstance(label_raw, str):
                 continue
@@ -2839,7 +2838,7 @@ def _mlx_trace_intermediate_signatures(
     grouped: dict[_MLXIntermediateSignature, list[Any]] = defaultdict(list)
     for op in ops:
         signature = _MLXIntermediateSignature(
-            op_name=str(op.func_name or op.layer_type),
+            op_name=str(op.func_name or record_type(op)),
             call_ordinal=int(op.func_call_id or 0),
             parent_labels=tuple(
                 final_to_raw.get(str(parent), str(parent)) for parent in getattr(op, "parents", ())
@@ -2946,7 +2945,7 @@ def _mlx_model_args_from_value_args(value_args: tuple[Any, ...], trace: Trace) -
         Positional model input arguments.
     """
 
-    if getattr(trace, "param_source", "none") == "native-module" and len(value_args) > 1:
+    if trace._provenance_param_source == "native-module" and len(value_args) > 1:
         return value_args[1:]
     return value_args
 
@@ -3118,7 +3117,7 @@ def _max_mlx_input_raw_index(trace: Trace) -> int:
 
     indexes = [
         int(getattr(op, "step_index", 0) or 0)
-        for op in trace.layer_list
+        for op in trace._layer_list
         if getattr(op, "is_input", False)
     ]
     return max(indexes, default=0)

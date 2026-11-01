@@ -1,9 +1,9 @@
-"""The counted executed backward survives save and load (BackwardPass.executed_flops_record).
+"""The counted executed backward survives save and load (BackwardPass._executed_flops_record).
 
 A live pass contributes its census attribution as a closed record when the
 trace is saved; a loaded trace reads the counted answer and its attribution
-from it. Artifacts written before the field (v9, and v10 before it existed)
-load the record as ``None`` and read unknown. A malformed record refuses at
+from it. Pass states stamped v9 or v10 were written by torchlens 2.x and refuse
+under the floor; a loaded pass with no record reads unknown. A malformed record refuses at
 load with ``artifact_executed_flops_record_invalid``, never coerced.
 """
 
@@ -18,6 +18,7 @@ import torchlens as tl
 from tests.test_flops1_backward_dispatch import ZOO_BUILDERS, _traced_backward
 from tests.test_flops2_backward_attribution import SEGMENT_FORWARD, _checkpointed_trace
 from torchlens._data_classes.backward_pass import BackwardPass
+from torchlens._io import ArtifactTooOldError
 from torchlens.report import backward_status
 from torchlens.report._backward_attribution import executed_flops_record_problem
 
@@ -55,7 +56,7 @@ def test_loaded_trace_reads_the_saved_count_and_attribution(case: str, tmp_path:
         assert attribution.source == "saved record" and attribution.other_trace_ops is None
         (record,) = loaded.autograd.backward_passes
         assert record.aten_ops is None
-        assert executed_flops_record_problem(record.executed_flops_record) is None
+        assert executed_flops_record_problem(record._executed_flops_record) is None
     finally:
         trace.cleanup()
 
@@ -73,23 +74,29 @@ def test_loaded_checkpointed_trace_keeps_its_recompute_label(tmp_path: Path) -> 
         trace.cleanup()
 
 
-def test_artifacts_saved_without_the_field_load_none_and_read_unknown(tmp_path: Path) -> None:
-    """A pre-field v10 pass state default-fills None; the status reads unknown."""
+@pytest.mark.parametrize("version", [9, 10])
+def test_pass_states_stamped_below_the_floor_refuse(version: int) -> None:
+    """A v9 or v10 pass state was written by torchlens 2.x: it refuses, never default-fills."""
 
-    record = BackwardPass(pass_index=1, trigger="log_backward", implicit=False)
+    record = BackwardPass(pass_number=1, trigger="log_backward", implicit=False)
     state = dict(record.__getstate__())
-    state.pop("executed_flops_record", None)
-    state["tlspec_version"] = 10
+    state.pop("_executed_flops_record", None)
+    state["tlspec_version"] = version
     restored = BackwardPass.__new__(BackwardPass)
-    restored.__setstate__(state)
-    assert restored.executed_flops_record is None
-    assert restored.flops_attribution is None
+    with pytest.raises(ArtifactTooOldError) as excinfo:
+        restored.__setstate__(state)
+    assert excinfo.value.fields["code"] == "artifact_version_below_floor"
+    assert f"tlspec_version={version}" in str(excinfo.value)
+
+
+def test_loaded_pass_without_a_record_reads_unknown(tmp_path: Path) -> None:
+    """A loaded pass holding no dispatch record reads unknown, never a guessed count."""
 
     trace = _traced_backward(*ZOO_BUILDERS["frozen_backbone"]())
     try:
-        loaded = _save_load(trace, tmp_path, "pre_field")
+        loaded = _save_load(trace, tmp_path, "no_record")
         (loaded_pass,) = loaded.autograd.backward_passes
-        loaded_pass.executed_flops_record = None  # what an artifact saved before the field holds
+        loaded_pass._executed_flops_record = None  # a pass that carries no record
         status = backward_status(loaded)
         assert status.executed_flops is None and status.executed_evidence == "unknown"
         assert "no dispatch record" in status.reason
@@ -140,7 +147,7 @@ def test_malformed_record_refuses_at_load(tmp_path: Path) -> None:
         loaded = _save_load(trace, tmp_path, "tampered")
         (loaded_pass,) = loaded.autograd.backward_passes
         validate_persisted_forgery_surfaces(loaded)
-        loaded_pass.executed_flops_record = {**_GOOD, "executed_flops": -1}
+        loaded_pass._executed_flops_record = {**_GOOD, "executed_flops": -1}
         with pytest.raises(ArtifactError) as refusal:
             validate_persisted_forgery_surfaces(loaded)
         assert refusal.value.fields["code"] == "artifact_executed_flops_record_invalid"

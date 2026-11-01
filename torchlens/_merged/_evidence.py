@@ -166,6 +166,8 @@ def extract_rank_evidence(trace: Any, source: str) -> RankEvidence:
         or its boundary records disagree about the rank's own identity.
     """
 
+    from .._data_classes._trace_missing_attrs import is_live_trace
+
     record = getattr(trace, "annotations", {}).get("distributed")
     if not isinstance(record, dict) or not record.get("boundaries"):
         raise MergeInputError(
@@ -345,7 +347,10 @@ def extract_rank_evidence(trace: Any, source: str) -> RankEvidence:
         # anything other than the exact marker string reads False -- absence
         # of the marker never blocks, presence of ANY other value never
         # blocks; only the one documented value engages the scope guard.
-        shard_local=(getattr(trace, "distributed_scope", None) == "rank_local_shard"),
+        shard_local=(
+            (trace._provenance_distributed_scope if is_live_trace(trace) else None)
+            == "rank_local_shard"
+        ),
     )
 
 

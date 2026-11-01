@@ -38,7 +38,7 @@ def _spine_of(values: torch.Tensor):
 
     kernel = RunningStats()
     kernel.update(values)
-    return kernel.result()
+    return kernel.compute()
 
 
 def _sketch_of(values: torch.Tensor, descriptor: HistogramDescriptor | None = None):
@@ -168,7 +168,7 @@ class TestAmpCorrection:
         assert corrected.finite_max == oracle.finite_max
         assert corrected.sum == oracle.sum
         assert corrected.sum_squares == oracle.sum_squares
-        assert corrected.count_finite == oracle.count_finite
+        assert corrected.num_finite == oracle.num_finite
 
     def test_histogram_correction_exact_bin_shift(self) -> None:
         """Power-of-two scales shift the log2 grid by an exact bin offset."""

@@ -75,7 +75,7 @@ _LIVE_OUTPUT_REASON_REMEDIES: dict[str, str] = {
         "this capture recorded the output leaf paths but no output-container contract "
         "(the default capture does not persist it); re-capture with "
         "capture=CaptureOptions(capture_container_structure=True) -- or "
-        "intervention_ready=True, which implies it -- so the live run can rebuild the "
+        "replayable=True, which implies it -- so the live run can rebuild the "
         "exact tuple/dict/ModelOutput, or wrap the model to return a bare tensor"
     ),
     "opaque_root": (

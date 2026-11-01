@@ -86,11 +86,10 @@ def _state(stat: Any) -> str:
 def _final(stat: Any) -> Any:
     """Return a statistic's final value (``result()`` or ``compute()``, per type).
 
-    ``Histogram`` and ``RunningStats`` keep ``result()``; the rest use ``compute()``.
+    ``Histogram`` keeps ``result()``; the rest, ``RunningStats`` included, use ``compute()``.
     """
 
-    keeps_result = (tl.stats.Histogram, tl.stats.RunningStats)
-    return stat.result() if isinstance(stat, keeps_result) else stat.compute()
+    return stat.result() if isinstance(stat, tl.stats.Histogram) else stat.compute()
 
 
 def _assert_same(left: Any, right: Any) -> None:

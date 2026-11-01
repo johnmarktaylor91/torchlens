@@ -122,7 +122,7 @@ def _resolve_output_parent_labels(
 
         # Lazily index the source model's registered buffers by identity.
         if buffer_addresses_by_id is None:
-            model_ref = getattr(self, "_source_model_ref", None)
+            model_ref = self._source_model_ref
             model = model_ref() if model_ref is not None else None
             buffer_addresses_by_id = (
                 {id(buffer): address for address, buffer in model.named_buffers()}
@@ -276,12 +276,12 @@ def _add_output_layers(
         # Internal output-node synthesis is a builder row append on the
         # trace's own store (detached only for legacy/preview traces).
         new_output_node = cast(Op, output_node._copy_for_output(_store=_op_store))
-        new_output_node.layer_type = "output"
+        new_output_node.type = "output"
         new_output_node.is_output = True
         new_output_node.is_input = False
         new_output_node.is_buffer = False
-        new_output_node._internal_set("interventions", [])
-        new_output_node._internal_set("intervention_replaced", False)
+        new_output_node._internal_set("edits", [])
+        new_output_node._internal_set("is_edited", False)
         if i == len(paired_outputs) - 1:
             new_output_node.is_final_output = True
         self._raw_graph_ws.layer_counter += 1
@@ -328,13 +328,13 @@ def _add_output_layers(
         new_output_node.flops_backward = None
         new_output_node.code_context = _get_code_context(
             self.num_context_lines,
-            source_loading_enabled=self.save_code_context,
+            source_loading_enabled=self._options_save_source_context,
             disable_col_offset=False,
         )
         new_output_node.var_names = []
         new_output_node.func_duration = Duration(0)
         new_output_node.func_rng_states = (
-            log_current_rng_states(torch_only=True) if self.save_rng_states else {}
+            log_current_rng_states(torch_only=True) if self._options_save_rng else {}
         )
         new_output_node.arg_names = ()
         new_output_node.num_args_total = 0
@@ -434,7 +434,7 @@ def _add_output_layers(
         new_output_node.dropped_edge_tensor_args = ()
 
         # Fix layer equivalence information:
-        new_output_node.pass_index = 1
+        new_output_node.pass_number = 1
         new_output_node.num_passes = 1
         new_output_node.equivalent_ops = {new_output_node._label_raw}
         new_output_node.recurrent_ops = []
@@ -443,7 +443,7 @@ def _add_output_layers(
             f"{str(new_output_node.dtype)}"
         )
         new_output_node.equivalence_class = equiv_type
-        self.op_equivalence_classes[equiv_type].add(new_output_node._label_raw)
+        self._graph_op_equivalence_classes[equiv_type].add(new_output_node._label_raw)
 
         # Track child tensor variations for output nodes.
         new_output_node.has_out_variations = False
@@ -475,10 +475,10 @@ def _add_output_layers(
                 if output_node.output_device not in [str(actual_output_raw.device), "same"]:
                     actual_output_raw = safe_to(actual_output_raw, output_node.output_device)
             actual_output_transformed = None
-            if self.activation_transform is not None:
+            if self._options_activation_transform is not None:
                 actual_output_transformed = output_node._apply_transform(
                     actual_output_raw,
-                    self.activation_transform,
+                    self._options_activation_transform,
                     transform_kind="out",
                     streaming_active=getattr(self, "_out_writer", None) is not None,
                 )
@@ -624,7 +624,7 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     self._orphan_logs = tuple(
         self._raw_graph_ws.raw_layer_dict[label] for label in self._orphan_labels
     )
-    self.orphan_records = [
+    self._orphan_records = [
         {
             "raw_label": orphan._label_raw,
             "label": orphan.label,
@@ -645,7 +645,7 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     # silently loses the mutation. Recording it lets the runnable descriptor stay honestly
     # UNVERIFIABLE instead of VERIFYING a replay that omits the write.
     _record_pruned_alias_mutation(self, orphan_nodes)
-    if getattr(self, "keep_orphans", False):
+    if self._options_keep_orphans:
         for orphan_label in orphan_nodes:
             self._raw_graph_ws.raw_layer_dict[orphan_label].is_orphan = True
         return
@@ -949,7 +949,7 @@ def _mark_layer_depths(self: "Trace") -> None:
     min_distance_from_{input,output} and max_distance_from_{input,output} on
     every reachable node.
 
-    This step is CONDITIONAL on ``self.mark_layer_depths`` — it is
+    This step is CONDITIONAL on ``self._options_mark_layer_depths`` — it is
     skipped when the user doesn't need distance metadata.
     """
     _flood_graph_from_input_or_output_nodes(self, "input")

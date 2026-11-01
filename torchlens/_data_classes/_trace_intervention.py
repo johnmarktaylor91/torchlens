@@ -129,7 +129,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         filter. Spelling DOCUMENTED-UNSTABLE.
         """
 
-        return tuple(self.layer_list)
+        return tuple(self._layer_list)
 
     def save_intervention(
         self: "Trace",
@@ -457,7 +457,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             Normalized hook entries about to attach.
         """
 
-        if not getattr(self, "chunked_forward", False):
+        if not self._options_chunk_size:
             return
         for entry in entries:
             helper = getattr(entry, "helper_spec", None)
@@ -465,7 +465,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 continue
             if dict(helper.metadata).get("batch_coherent"):
                 raise InvalidArgumentError(
-                    f"edit {helper.helper_name!r} reads or exchanges the WHOLE "
+                    f"edit {helper.name!r} reads or exchanges the WHOLE "
                     "batch at fire time, but this trace was captured in forward "
                     "chunks (chunked_forward=True): each fire would see one "
                     "chunk and treat it as the full batch",
@@ -608,7 +608,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         One ``EdgeUseRecord`` per parent->child occurrence (parallel edges
         first-class), in execution order; rows are the identity-stable
         provenance records themselves (immutable finalized views). Requires
-        an ``intervention_ready`` capture — otherwise refuses typed
+        an ``replayable`` capture — otherwise refuses typed
         (``edge_provenance_unavailable``). DOCUMENTED-UNSTABLE spelling
         pending naming-session ratification.
         """
@@ -888,7 +888,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             edit_names = tuple(str(rule["action"]) for rule in rules)
             selection_repr = " | ".join(str(rule["where"]) for rule in rules)
             fired_action_reprs = {
-                _canonical_repr(record.helper) for record in fires if record.helper is not None
+                _canonical_repr(record.edit) for record in fires if record.edit is not None
             }
             zero_fire_rule_ids = tuple(
                 str(rule["rule_id"])
@@ -947,7 +947,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         """
 
         fork = self._fork_trace(name=name)
-        self._record_operation("fork", source_id=id(self), name=fork.trace_label)
+        self._record_operation("fork", source_id=id(self), name=fork.name)
         return fork
 
     def _record_operation(self: "Trace", op: str, **payload: Any) -> None:
@@ -984,7 +984,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             Whether the caller explicitly accepted in-place mutation.
         """
 
-        if confirm_mutation or self.parent_run is not None or self._warned_mutate_in_place:
+        if confirm_mutation or self._parent_run is not None or self._warned_mutate_in_place:
             return
         from ..intervention.errors import TraceMutationWarning
         from ..options import suppress_mutate_warnings
@@ -1519,7 +1519,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 "kind": "EDGE",
                 "selection_repr": repr(selection),
                 "resolve_digest": resolved_edges.digest,
-                "edit": getattr(edit, "helper_name", getattr(edit, "__name__", "value")),
+                "edit": getattr(edit, "name", getattr(edit, "__name__", "value")),
                 **payload,
             }
         )
@@ -1571,7 +1571,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 "kind": "PARAM",
                 "selection_repr": repr(selection),
                 "resolve_digest": resolved_params.digest,
-                "edit": getattr(edit, "helper_name", getattr(edit, "__name__", "value")),
+                "edit": getattr(edit, "name", getattr(edit, "__name__", "value")),
                 **payload,
             }
         )
@@ -1609,12 +1609,12 @@ class TraceInterventionMixin(_TraceMixinBase):
                 if derived.factory is None:
                     raise _apply_invalid(
                         "not_maskable",
-                        f"edit {derived.helper_name!r} has no runtime factory.",
+                        f"edit {derived.name!r} has no runtime factory.",
                         site=op.label,
                     )
                 hook_callable = derived.factory()
                 helper_spec: Edit | None = derived
-                helper_name = derived.helper_name
+                helper_name = derived.name
             else:
                 hook_callable = derived
                 helper_spec = None
@@ -1644,11 +1644,11 @@ class TraceInterventionMixin(_TraceMixinBase):
                     func_call_id=op.func_call_id,
                     container_path=tuple(op.container_path or ()),
                     engine="replay",
-                    helper=helper_spec,
+                    edit=helper_spec,
                     site_label=op.layer_label,
                     timing="post",
                     signal="forward",
-                    helper_name=helper_name,
+                    edit_name=helper_name,
                     run_ctx=getattr(context, "run_state", None),
                     replaced=applied is not saved,
                 )
@@ -1684,7 +1684,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         # say verified -- the silent-wrongness door the ruling closes).
         # Interim posture: bound-method captures refuse rerun/append; never
         # widened past the ruling.
-        root_fact = getattr(self, "root_entry_point", None)
+        root_fact = self._provenance_root_entry_point
         if root_fact is None:
             raise ModelMismatchError(
                 "rerun/append identity gate is fail-closed on the root "
@@ -1692,7 +1692,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 "artifact saved before the fact was written unconditionally). "
                 "The gate cannot prove the supplied model is the captured "
                 "entry point. Remedy: re-capture with a current TorchLens "
-                "(every capture writes Trace.root_entry_point), or use the "
+                "(every capture writes Trace.provenance.root_entry_point), or use the "
                 "replay engine, which re-executes recorded ops and needs no "
                 "live model",
                 code="root_entry_point_unavailable",
@@ -1724,7 +1724,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 root_entry_point=str(root_fact),
             )
 
-        expected_class = getattr(self, "model_class_qualname", None)
+        expected_class = self._source_class_qualname
         actual_class = _qualname_for_model(model)
         if expected_class is not None and actual_class != expected_class:
             raise ModelMismatchError(
@@ -1732,7 +1732,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 f"expected {expected_class!r}, got {actual_class!r}."
             )
 
-        expected_fingerprint = getattr(self, "param_hash_quick", None)
+        expected_fingerprint = self._provenance_param_hash_quick
         if expected_fingerprint is None:
             return
         actual_fingerprint = _fingerprint_model_weights(model)
@@ -1765,7 +1765,7 @@ class TraceInterventionMixin(_TraceMixinBase):
     def _next_fork_name(self: "Trace") -> str:
         """Return a deterministic default fork name for this parent log."""
 
-        base_name = self.trace_label or "trace"
+        base_name = self.name or "trace"
         fork_count = sum(
             1
             for record in self.state_history
@@ -1781,10 +1781,10 @@ class TraceInterventionMixin(_TraceMixinBase):
         owner reference (and drop stale facet caches) afterwards.
         """
 
-        for layer_pass in self.layer_list:
+        for layer_pass in self._layer_list:
             layer_pass.source_trace = self
             del layer_pass.facets
-        for layer_log in self.layer_logs.values():
+        for layer_log in self._layer_logs.values():
             layer_log.source_trace = self
         for module_log in self.modules:
             module_log._source_trace = self
@@ -1864,7 +1864,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         # inner selector against the forward ops like any activation site.
         if addresses_autograd_nodes(site):
             return
-        max_fanout = max(1, len(self.layer_list))
+        max_fanout = max(1, len(self._layer_list))
         self._resolve_sites(site, strict=strict, max_fanout=max_fanout)
 
     def _target_spec_from_site(self: "Trace", site: Any, *, strict: bool) -> TargetSpec:

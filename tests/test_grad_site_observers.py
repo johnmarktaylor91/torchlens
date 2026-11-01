@@ -109,7 +109,7 @@ _X = torch.randn(3, 4, generator=torch.Generator().manual_seed(11))
 
 def _relu_label(model: nn.Module) -> str:
     trace = tl.trace(model, _X)
-    return next(str(op.layer_label) for op in trace.layer_list if op.func_name == "relu")
+    return next(str(op.layer_label) for op in trace._layer_list if op.func_name == "relu")
 
 
 def test_tap_on_a_gradient_site_records_backward_fires() -> None:  # A29

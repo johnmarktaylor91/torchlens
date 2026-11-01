@@ -16,6 +16,7 @@ else:
     _TraceMixinBase = object
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavailableError
+from .._utils.collections import _path_component_key
 from .interface import _format_conditional_branch_stack
 
 
@@ -36,11 +37,7 @@ def _output_role_from_container_path(path: Any) -> str | None:
     components = tuple(path or ())
     if not components:
         return None
-    component = components[-1]
-    for attr_name in ("index", "key", "name"):
-        if hasattr(component, attr_name):
-            return str(getattr(component, attr_name))
-    return str(component)
+    return str(_path_component_key(components[-1]))
 
 
 def _is_batch_topk_decoded(value: Any) -> bool:
@@ -183,7 +180,7 @@ _TO_PANDAS_EXCLUDED_OP_FIELDS: frozenset[str] = frozenset(
         "grad_fn_handle",
         "grad_fn_object_id",
         "activation_transform",
-        "interventions",
+        "edits",
         "code_context",
         "transform_fn_source",
         "args_template",
@@ -452,8 +449,8 @@ class TraceExportMixin(_TraceMixinBase):
         lead_columns = [
             "layer_label",
             "label",
-            "layer_label_short",
-            "label_short",
+            "short_layer_label",
+            "short_label",
             "layer_type",
         ]
         property_columns = [
@@ -485,7 +482,7 @@ class TraceExportMixin(_TraceMixinBase):
             "type_index": int,
             "step_index": int,
             "num_passes": int,
-            "pass_index": int,
+            "pass_number": int,
             "is_inplace": bool,
             "is_input": bool,
             "is_output": bool,
@@ -506,13 +503,16 @@ class TraceExportMixin(_TraceMixinBase):
         }
 
         model_df_dictlist: list[dict[str, Any]] = []
-        for layer_entry in self.layer_list:
+        for layer_entry in self._layer_list:
             layer_dict: dict[str, Any] = {}
             for field_name in fields_for_df:
                 if field_name == "conditional_branch_stack":
                     layer_dict[field_name] = _format_conditional_branch_stack(
                         layer_entry.conditional_branch_stack
                     )
+                elif field_name == "layer_type":
+                    # The table keeps its layer_type column; an Op names it type.
+                    layer_dict[field_name] = layer_entry.type
                 elif field_name == "grad":
                     layer_dict[field_name] = getattr(layer_entry, "grad")
                 elif field_name == "num_saved_grads":
@@ -600,8 +600,8 @@ class TraceExportMixin(_TraceMixinBase):
         if self.decoded_output is None:
             return _recompute_or_refuse(self, k)
         if k is None:
-            return self.decoded_output
-        captured_top_n = getattr(self.output_postprocessor, "top_n_captured", None)
+            return self._decoded_output
+        captured_top_n = getattr(self._provenance_output_postprocessor, "top_n_captured", None)
         if captured_top_n is not None and k > captured_top_n:
             return _recompute_above_captured(self, k, captured_top_n)
         return _rank_filtered(self.decoded_output, k)
@@ -683,7 +683,7 @@ class TraceExportMixin(_TraceMixinBase):
             ``None``.
         """
 
-        postprocessor = getattr(self, "output_postprocessor", None)
+        postprocessor = self._provenance_output_postprocessor
         if postprocessor is None or getattr(postprocessor, "style", None) == "hf_text":
             return None
         logits = _retained_output_logits(self)
@@ -707,7 +707,9 @@ class TraceExportMixin(_TraceMixinBase):
             First decoded row summary, or ``None`` when unavailable.
         """
 
-        rows = _decoded_batch_topk_rows(getattr(self, "decoded_output", None))
+        rows = _decoded_batch_topk_rows(
+            None if self.__dict__.get("_tl_cleaned_up", False) else self._decoded_output
+        )
         if not rows:
             return None
         first_item = int(rows[0].get("batch_item", 0))

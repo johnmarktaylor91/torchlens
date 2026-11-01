@@ -15,9 +15,9 @@ from .registry import (
 )
 
 TRACE_OPTION_CAPABILITY_GATES: dict[str, str] = {
-    "intervene": "interventions",
-    "halt": "interventions",
-    "facets": "interventions",
+    "intervene": "can_intervene",
+    "halt": "can_intervene",
+    "facets": "can_intervene",
     "storage": "has_streaming",
     "streaming": "has_streaming",
     "save_grads": "backward_capture",

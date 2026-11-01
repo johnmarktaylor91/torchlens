@@ -198,7 +198,9 @@ def _prepare_backend(cell: Cell) -> None:
 def _after_backend(cell: Cell) -> None:
     for name, trace in (("live", cell.trace), ("loaded", cell.loaded)):
         if trace is not None:
-            cell.expect(trace.backend == "torch", f"{name} backend {trace.backend!r}")
+            cell.expect(
+                trace.provenance.backend == "torch", f"{name} backend {trace.provenance.backend!r}"
+            )
 
 
 def _prepare_reporting(cell: Cell) -> None:
@@ -208,8 +210,8 @@ def _prepare_reporting(cell: Cell) -> None:
 
 def _after_reporting(cell: Cell) -> None:
     trace = cell.require_trace()
-    cell.expect(trace.grouping == "structural", f"grouping {trace.grouping!r}")
-    cell.expect(trace.capture_duration is not None, "profiled capture records no duration")
+    cell.expect(trace.options.grouping == "structural", f"grouping {trace.options.grouping!r}")
+    cell.expect(trace.provenance.duration is not None, "profiled capture records no duration")
 
 
 def _noop_recipe(module: Any) -> dict[str, Any]:

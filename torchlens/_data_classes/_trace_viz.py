@@ -394,15 +394,15 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
         label = str(getattr(site, "layer_label", site))
         base_label = label.split(":", 1)[0]
-        if base_label not in self.layer_logs:
+        if base_label not in self._layer_logs:
             raise KeyError(f"Unknown layer site {label!r}.")
-        layer = self.layer_logs[base_label]
+        layer = self._layer_logs[base_label]
         pass_entries = list(getattr(layer, "ops", ()) or [])
         if not pass_entries:
             pass_entries = [self[label]]
         frames = [
             {
-                "pass": int(getattr(entry, "pass_index", index + 1) or index + 1),
+                "pass": int(getattr(entry, "pass_number", index + 1) or index + 1),
                 "label": str(getattr(entry, "layer_label", base_label)),
                 "shape": "x".join(str(dim) for dim in getattr(entry, "shape", ()) or ()),
                 "memory": str(getattr(entry, "activation_memory", "")),
@@ -719,17 +719,17 @@ class TraceVisualizationMixin(_TraceMixinBase):
         if not isinstance(timestamp, (int, float)):
             return ()
         records = []
-        for layer in getattr(self, "layer_list", []) or []:
-            for record in getattr(layer, "interventions", []) or []:
+        for layer in ([] if self.__dict__.get("_tl_cleaned_up", False) else self._layer_list) or []:
+            for record in getattr(layer, "edits", []) or []:
                 record_timestamp = getattr(record, "timestamp", None)
                 if isinstance(record_timestamp, (int, float)) and record_timestamp >= timestamp:
                     records.append(record)
-        for grad_fn in getattr(self, "grad_fn_logs", {}).values():
+        for grad_fn in (
+            {} if self.__dict__.get("_tl_cleaned_up", False) else self._grad_fn_logs
+        ).values():
             calls = getattr(getattr(grad_fn, "calls", None), "_list", [])
             for call in calls:
-                for record in _flatten_backward_fire_ref(
-                    getattr(call, "intervention_fire_ref", None)
-                ):
+                for record in _flatten_backward_fire_ref(getattr(call, "fire_record", None)):
                     record_timestamp = getattr(record, "timestamp", None)
                     if isinstance(record_timestamp, (int, float)) and record_timestamp >= timestamp:
                         records.append(record)
@@ -905,26 +905,6 @@ class TraceVisualizationMixin(_TraceMixinBase):
             execution_note=_execution_note,
             input_synthesis=_input_synthesis,
         )
-
-    def provenance(self: "Trace") -> str:
-        """The capture-provenance block (the relocated summary preamble).
-
-        Returns the historical discoverability preamble BYTE-FOR-BYTE
-        (summary memo 3.6): agent/MCP consumers that parsed it out of the
-        old summary text keep an exact source after the preamble left the
-        default view.
-
-        Returns
-        -------
-        str
-            Multi-section capture/provenance text.
-        """
-
-        from .._visualization._summary_internal._discoverability import (
-            format_discoverability_summary,
-        )
-
-        return format_discoverability_summary(self)
 
     def render_dagua_graph(
         self: "Trace",

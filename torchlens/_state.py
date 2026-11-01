@@ -301,7 +301,9 @@ def list_logs() -> tuple["Trace", ...]:
     """
 
     snapshot = list(_log_registry)
-    return tuple(log for log in snapshot if log is not None and hasattr(log, "layer_list"))
+    return tuple(
+        log for log in snapshot if log is not None and not log.__dict__.get("_tl_cleaned_up", False)
+    )
 
 
 def _strip_hf_suffix(class_name: str) -> str:
@@ -535,7 +537,7 @@ _completeness_witness_mode: str = "off"
 """Dispatcher completeness witness mode: ``"off"`` or diagnostic ``"shadow"``.
 
 OFF BY DEFAULT (AUD-HONESTY H4): a plain ``tl.trace()`` never arms the aten-dispatch
-census, so ``Trace.capture_verified`` stays ``None`` (NOT RECORDED -- never a clean
+census, so ``Trace.provenance.verified`` stays ``None`` (NOT RECORDED -- never a clean
 bill) and host escapes only the census can see (``from_numpy``/``as_tensor``/
 ``from_dlpack`` round-trips in a plain forward, in-forward storage writes) leave no
 ceiling. A numpy- or dlpack-backed ``autograd.Function`` forward is the one such
@@ -551,7 +553,7 @@ _runnable_ledger_armed: bool = False
 _aten_recording_armed: bool = False
 """Whether the r35 event-lifecycle ledger requires wrapper ownership tokens.
 
-Armed only around a runnable-eligible (``intervention_ready``) capture forward so
+Armed only around a runnable-eligible (``replayable``) capture forward so
 the dispatch census can attribute raised / host-returning aten events to their
 exact wrapper owner even when both diagnostic shadow modes are off.
 """
@@ -811,9 +813,13 @@ def _reentrant_refusal() -> ReentrantTraceError:
         Refusal naming the active model when one is identifiable.
     """
 
-    active_model = getattr(_active_trace, "model_label", None)
-    if active_model is None:
-        active_model = getattr(_active_trace, "model_class_name", None)
+    active_model = getattr(_active_trace, "model_name", None)
+    if (
+        active_model is None
+        and _active_trace is not None
+        and not _active_trace.__dict__.get("_tl_cleaned_up", False)
+    ):
+        active_model = _active_trace._source_class_name
     active_model_text = f" for active model {active_model!r}" if active_model else ""
     return ReentrantTraceError(
         "torchlens.trace / active_logging is not re-entrant: "

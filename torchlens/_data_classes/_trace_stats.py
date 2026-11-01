@@ -14,7 +14,15 @@ if TYPE_CHECKING:
     )
     from ..report._explain import ExplainReport
     from ..report._profile import ProfileReport
-    from ._trace_groups import TraceAutograd, TraceCost, TraceGraph, TraceSource
+    from ._trace_groups import (
+        TraceAutograd,
+        TraceCost,
+        TraceGraph,
+        TraceHealth,
+        TraceOptions,
+        TraceProvenance,
+        TraceSource,
+    )
     from .buffer import BufferAccessor
     from .layer import LayerAccessor
     from .module import Module, ModuleCall
@@ -160,9 +168,33 @@ class TraceStatsMixin(_TraceMixinBase):
         return TraceSource(self)
 
     @property
+    def provenance(self: "Trace") -> "TraceProvenance":
+        """How, when and from what this Trace was captured."""
+
+        from ._trace_groups import TraceProvenance
+
+        return TraceProvenance(self)
+
+    @property
+    def options(self: "Trace") -> "TraceOptions":
+        """The capture options this Trace ran with (the stored snapshot)."""
+
+        from ._trace_groups import TraceOptions
+
+        return TraceOptions(self)
+
+    @property
+    def health(self: "Trace") -> "TraceHealth":
+        """Honesty diagnostics of the capture: witness and escape-detector facts."""
+
+        from ._trace_groups import TraceHealth
+
+        return TraceHealth(self)
+
+    @property
     def _graph_is_recurrent(self: "Trace") -> bool:
         """Whether any layer has more than one pass."""
-        return any(v > 1 for v in self.layer_num_calls.values())
+        return any(v > 1 for v in self._layer_num_calls.values())
 
     @property
     def _cost_forward_peak_memory_pair(self: "Trace") -> "dict[str, Any] | None":
@@ -191,7 +223,7 @@ class TraceStatsMixin(_TraceMixinBase):
 
         return LayerAccessor(
             OrderedDict(
-                (label, layer) for label, layer in self.layer_logs.items() if layer.num_passes > 1
+                (label, layer) for label, layer in self._layer_logs.items() if layer.num_passes > 1
             ),
             source_trace=self,
         )
@@ -199,23 +231,23 @@ class TraceStatsMixin(_TraceMixinBase):
     @property
     def _graph_max_ops_per_layer(self: "Trace") -> int:
         """Maximum number of ops for any layer."""
-        return max(self.layer_num_calls.values(), default=1)
+        return max(self._layer_num_calls.values(), default=1)
 
     @property
     def _graph_is_branching(self: "Trace") -> bool:
         """Whether any layer has more than one child."""
-        return any(len(entry.children) > 1 for entry in self.layer_list)
+        return any(len(entry.children) > 1 for entry in self._layer_list)
 
     @property
     def _graph_has_conditional_branching(self: "Trace") -> bool:
         """Whether any layer is in a conditional branch."""
-        return any(entry.is_in_conditional_body for entry in self.layer_list)
+        return any(entry.is_in_conditional_body for entry in self._layer_list)
 
     @property
     def _graph_has_conditionals(self: "Trace") -> bool:
         """Whether this Trace contains conditional-flow records."""
 
-        return len(self.conditionals) > 0
+        return len(self._graph_conditionals) > 0
 
     @property
     def _graph_is_dynamic(self: "Trace") -> bool:
@@ -227,63 +259,63 @@ class TraceStatsMixin(_TraceMixinBase):
     def _source_forward_location(self: "Trace") -> str | None:
         """Combined forward source location."""
 
-        if self.forward_source_file is None or self.forward_source_line is None:
+        if self._source_forward_file is None or self._source_forward_line is None:
             return None
-        return f"{self.forward_source_file}:{self.forward_source_line}"
+        return f"{self._source_forward_file}:{self._source_forward_line}"
 
     @property
     def _source_class_location(self: "Trace") -> str | None:
         """Combined model class source location."""
 
-        if self.class_source_file is None or self.class_source_line is None:
+        if self._source_class_file is None or self._source_class_line is None:
             return None
-        return f"{self.class_source_file}:{self.class_source_line}"
+        return f"{self._source_class_file}:{self._source_class_line}"
 
     @property
     def _source_init_location(self: "Trace") -> str | None:
         """Combined model ``__init__`` source location."""
 
-        if self.init_source_file is None or self.init_source_line is None:
+        if self._source_init_file is None or self._source_init_line is None:
             return None
-        return f"{self.init_source_file}:{self.init_source_line}"
+        return f"{self._source_init_file}:{self._source_init_line}"
 
     @property
     def _cost_last_backward_duration(self: "Trace") -> Duration | None:
         """Most recent backward-pass duration, if any."""
 
-        if not self.backward_durations:
+        if not self._cost_backward_durations:
             return None
-        return as_duration(self.backward_durations[-1])
+        return as_duration(self._cost_backward_durations[-1])
 
     @property
     def _cost_total_backward_duration(self: "Trace") -> Duration:
         """Sum of all captured backward-pass durations."""
 
-        return Duration(sum(self.backward_durations))
+        return Duration(sum(self._cost_backward_durations))
 
     @property
     def _autograd_last_backward_root_grad_fn_object_id(self: "Trace") -> int | None:
         """Most recent backward root grad_fn_handle object id, if any."""
 
-        if not self.backward_root_grad_fn_object_ids:
+        if not self._autograd_backward_root_grad_fn_object_ids:
             return None
-        return self.backward_root_grad_fn_object_ids[-1]
+        return self._autograd_backward_root_grad_fn_object_ids[-1]
 
     @property
     def _cost_overhead_duration(self: "Trace") -> Duration:
         """Time spent on TorchLens overhead (total minus function calls)."""
-        return self.capture_duration - self.func_calls_duration
+        return self._provenance_duration - self._cost_func_calls_duration
 
     @property
-    def capture_duration(self: "Trace") -> Duration:
+    def _provenance_duration(self: "Trace") -> Duration:
         """Total capture-phase duration in seconds."""
 
-        if not self.capture_start_time or not self.capture_end_time:
+        if not self._provenance_start_time or not self._provenance_end_time:
             return Duration(0)
-        return Duration(self.capture_end_time - self.capture_start_time)
+        return Duration(self._provenance_end_time - self._provenance_start_time)
 
     @property
-    def capture_kind(self: "Trace") -> str:
+    def _provenance_kind(self: "Trace") -> str:
         """Return this product's capture kind: ``"episode"`` or ``"plain"``.
 
         Discoverability seam only (lane F40a; spelling DOCUMENTED-UNSTABLE
@@ -358,7 +390,7 @@ class TraceStatsMixin(_TraceMixinBase):
         return Flops(
             sum(
                 entry.flops_backward
-                for entry in self.layer_list
+                for entry in self._layer_list
                 if entry.flops_backward is not None
             )
         )
@@ -379,8 +411,8 @@ class TraceStatsMixin(_TraceMixinBase):
 
         result: dict[str, dict[str, int | Flops]] = {}
         rows_by_label = {row.label: row for row in compute_aggregation(self).rows}
-        for entry in self.layer_list:
-            lt = entry.layer_type
+        for entry in self._layer_list:
+            lt = entry.type
             if lt not in result:
                 result[lt] = {"forward": Flops(0), "backward": Flops(0), "count": 0}
             result[lt]["count"] += 1
@@ -520,8 +552,8 @@ class TraceStatsMixin(_TraceMixinBase):
 
         result: dict[str, dict[str, int | Macs | None]] = {}
         rows_by_label = {row.label: row for row in compute_aggregation(self).rows}
-        for entry in self.layer_list:
-            lt = entry.layer_type
+        for entry in self._layer_list:
+            lt = entry.type
             if lt not in result:
                 result[lt] = {"forward": Macs(0), "backward": None, "count": 0}
             bucket = result[lt]
@@ -538,7 +570,7 @@ class TraceStatsMixin(_TraceMixinBase):
     @property
     def params(self: "Trace") -> ParamAccessor:
         """Access parameter metadata by address, short name, or index."""
-        return self.param_logs
+        return self._param_logs
 
     # Parameter-truth read surface (A2/A3; DOCUMENTED-UNSTABLE spellings
     # pending naming-session ratification). The accounting basis everywhere is
@@ -550,7 +582,7 @@ class TraceStatsMixin(_TraceMixinBase):
         """Alias-address groups of parameters registered at more than one path."""
 
         groups = []
-        for pl in self.param_logs:
+        for pl in self._param_logs:
             addresses = tuple(getattr(pl, "all_addresses", None) or (pl.address,))
             if len(addresses) > 1:
                 groups.append(addresses)
@@ -576,7 +608,7 @@ class TraceStatsMixin(_TraceMixinBase):
         # key. Direct user in-place mutation of this build product is outside
         # the memo's auto-detection contract -- the supported spellings are
         # reassignment or the explicit invalidator.
-        container = self.layer_list
+        container = self._layer_list
         cache_entry = self.__dict__.get(_TRACE_OP_ACCESSOR_ATTR)
         if (
             cache_entry is not None
@@ -584,7 +616,7 @@ class TraceStatsMixin(_TraceMixinBase):
             and cache_entry[1] == len(container)
         ):
             return cast(TraceOpAccessor, cache_entry[2])
-        accessor = TraceOpAccessor(container, self.layer_num_calls, counted_view=True)
+        accessor = TraceOpAccessor(container, self._layer_num_calls, counted_view=True)
         self.__dict__[_TRACE_OP_ACCESSOR_ATTR] = (container, len(container), accessor)
         return accessor
 
@@ -598,7 +630,7 @@ class TraceStatsMixin(_TraceMixinBase):
             Ops whose ``is_transform`` role flag is true.
         """
 
-        return tuple(op for op in self.layer_list if getattr(op, "is_transform", False))
+        return tuple(op for op in self._layer_list if getattr(op, "is_transform", False))
 
     @property
     def model_profile(self: "Trace") -> ModelProfile:
@@ -611,8 +643,8 @@ class TraceStatsMixin(_TraceMixinBase):
             output-label metadata. This property is not persisted.
         """
 
-        input_preprocessor = self.input_preprocessor
-        output_postprocessor = self.output_postprocessor
+        input_preprocessor = self._provenance_input_preprocessor
+        output_postprocessor = self._provenance_output_postprocessor
         input_source = input_preprocessor.source if input_preprocessor is not None else None
         output_source = output_postprocessor.source if output_postprocessor is not None else None
         has_output_labels = bool(self.output_id2label)
@@ -621,15 +653,15 @@ class TraceStatsMixin(_TraceMixinBase):
             if self.output_id2label is not None
             else self.output_num_classes
         )
-        has_raw_images = _raw_input_contains_images(self.raw_input)
-        input_modality = _infer_input_modality(self.raw_input, input_source)
+        has_raw_images = _raw_input_contains_images(self.input)
+        input_modality = _infer_input_modality(self.input, input_source)
         return ModelProfile(
             input_modality=input_modality,
             input_preprocessing_source=input_source,
             output_postprocessing_source=output_source,
             output_label_count=output_label_count,
             has_output_labels=has_output_labels,
-            num_stimuli=_raw_input_num_stimuli(self.raw_input),
+            num_stimuli=_raw_input_num_stimuli(self.input),
             has_raw_images=has_raw_images,
             keystone_applicable=bool(
                 input_modality == "image"
@@ -858,7 +890,7 @@ class TraceStatsMixin(_TraceMixinBase):
         # reassignment changes identity, removal changes length, and the
         # in-place rename/refresh paths call the explicit invalidator
         # (r3 R52-1 -- the by-value key priced every HIT at O(n)).
-        container = self.layer_logs
+        container = self._layer_logs
         cache_entry = self.__dict__.get(_TRACE_LAYER_ACCESSOR_ATTR)
         if (
             cache_entry is not None
@@ -899,7 +931,7 @@ class TraceStatsMixin(_TraceMixinBase):
         from .._visualization.collapse_estimator import PATHOLOGICAL_OP_MULTIPLIER
 
         ceiling = collapse_optimizer.COLLAPSE_OPTIMIZER_MAX_OPS * PATHOLOGICAL_OP_MULTIPLIER
-        if len(self.layer_list) > ceiling:
+        if len(self._layer_list) > ceiling:
             return []
         signals = analyze_collapse(self).signals
         largest = max((signal.hidden_ops for signal in signals.values()), default=0)
@@ -1061,7 +1093,7 @@ class TraceStatsMixin(_TraceMixinBase):
         calls: OrderedDict[str, Any] = OrderedDict()
         for module in self._module_logs:
             for call in module.calls.values():
-                calls[call.call_label] = call
+                calls[call.label] = call
         accessor = TraceModuleCallAccessor(calls)
         self.__dict__[_TRACE_MODULE_CALL_ACCESSOR_ATTR] = accessor
         return accessor
@@ -1150,7 +1182,7 @@ class TraceStatsMixin(_TraceMixinBase):
         return len(
             {
                 (op.label, resolve(child_label).label)
-                for op in self.layer_list
+                for op in self._layer_list
                 for child_label in op.children
             }
         )
@@ -1179,7 +1211,7 @@ class TraceStatsMixin(_TraceMixinBase):
         return len(
             {
                 (op.label, resolve(child_label).label)
-                for op in self.layer_list
+                for op in self._layer_list
                 for child_label in op.children
                 if op.is_buffer or resolve(child_label).is_buffer
             }
@@ -1201,7 +1233,7 @@ class TraceStatsMixin(_TraceMixinBase):
     def _autograd_num_backward_edges(self: "Trace") -> int | None:
         """Distinct edges in the backward GradFn graph, or ``None`` if ungated."""
 
-        if not self.has_backward_pass:
+        if not self._autograd_has_backward_pass:
             return None
         return len(
             {
@@ -1286,16 +1318,6 @@ class TraceStatsMixin(_TraceMixinBase):
         return self._buffer_accessor  # type: ignore[return-value]
 
     @property
-    def num_modules(self: "Trace") -> int:
-        """Total number of registered source-model submodules."""
-
-        return len(self._module_logs)
-
-    @num_modules.deleter
-    def num_modules(self: "Trace") -> None:
-        """Ignore cleanup deletion for derived module count."""
-
-    @property
     def _graph_orphans(self: "Trace") -> OrphanAccessor:
         """Access retained orphan island operations by raw or final label."""
 
@@ -1308,7 +1330,7 @@ class TraceStatsMixin(_TraceMixinBase):
     def _autograd_grad_fns(self: "Trace") -> GradFnAccessor:
         """Access backward grad_fn_handle metadata by label, index, pass label, or substring."""
         self._sync_backward_projection_if_needed()
-        return GradFnAccessor(self.grad_fn_logs, self.grad_fn_order)
+        return GradFnAccessor(self._grad_fn_logs, self._autograd_grad_fn_order)
 
     @property
     def _autograd_grad_fn_calls(self: "Trace") -> TraceGradFnCallAccessor:
@@ -1318,7 +1340,7 @@ class TraceStatsMixin(_TraceMixinBase):
         calls: OrderedDict[str, Any] = OrderedDict()
         for grad_fn_handle in self.autograd.grad_fns:
             for call_index, call in grad_fn_handle.calls.items():
-                call.source_trace = self
+                call._source_trace = self
                 calls[f"{grad_fn_handle.label}:{call_index}"] = call
         return TraceGradFnCallAccessor(calls)
 
@@ -1354,7 +1376,9 @@ class TraceStatsMixin(_TraceMixinBase):
         # Evidence test, not a load flag: a rehydrated trace owns a fresh
         # EMPTY stream, so backward records without any fire event mean the
         # runtime evidence did not travel (loaded artifact or cleaned trace).
-        if stream is None or (not fired and getattr(self, "grad_fn_logs", {})):
+        if stream is None or (
+            not fired and ({} if self.__dict__.get("_tl_cleaned_up", False) else self._grad_fn_logs)
+        ):
             raise InvalidArgumentError(
                 "Per-fire backward timing is served from the runtime capture "
                 "event stream, which never persists: this trace (loaded from "
@@ -1369,7 +1393,7 @@ class TraceStatsMixin(_TraceMixinBase):
             )
         timings: OrderedDict[str, Duration | None] = OrderedDict()
         per_object_ordinals: dict[int, int] = {}
-        grad_fn_logs = getattr(self, "grad_fn_logs", {})
+        grad_fn_logs = {} if self.__dict__.get("_tl_cleaned_up", False) else self._grad_fn_logs
         # Mirrors the _fold_fired_events sort key and per-object ordinal walk
         # so keys line up 1:1 with trace.autograd.grad_fn_calls.
         for event in sorted(fired, key=lambda item: (item.pass_index, item.timestamp, item.seq)):
@@ -1423,8 +1447,12 @@ class TraceStatsMixin(_TraceMixinBase):
         summary: OrderedDict[str | None, dict[str, Any]] = OrderedDict()
         any_op_backed = False
         any_keyed = False
-        layer_lookup = getattr(self, "layer_dict_all_keys", {})
-        for grad_fn_record in getattr(self, "grad_fn_logs", {}).values():
+        layer_lookup = (
+            {} if self.__dict__.get("_tl_cleaned_up", False) else self._layer_dict_all_keys
+        )
+        for grad_fn_record in (
+            {} if self.__dict__.get("_tl_cleaned_up", False) else self._grad_fn_logs
+        ).values():
             site_key, op_backed = _grad_fn_site_key(grad_fn_record, layer_lookup)
             any_op_backed = any_op_backed or op_backed
             any_keyed = any_keyed or site_key is not None
@@ -1458,7 +1486,7 @@ class TraceStatsMixin(_TraceMixinBase):
 
         raise_if_no_backward_capture(self, plural_subject="backward_passes")
         self._sync_backward_projection_if_needed()
-        return BackwardPassAccessor(self.backward_pass_logs)
+        return BackwardPassAccessor(self._backward_pass_logs)
 
     @property
     def _autograd_last_backward_pass(self: "Trace") -> BackwardPass | None:
@@ -1495,8 +1523,8 @@ class TraceStatsMixin(_TraceMixinBase):
         """Access Ops with saved activations."""
 
         return TraceOpAccessor(
-            [op for op in self.layer_list if op.has_saved_activation],
-            self.layer_num_calls,
+            [op for op in self._layer_list if op.has_saved_activation],
+            self._layer_num_calls,
         )
 
     @property
@@ -1505,8 +1533,8 @@ class TraceStatsMixin(_TraceMixinBase):
 
         raise_if_no_backward_capture(self, plural_subject="op-level saved gradients")
         return TraceOpAccessor(
-            [op for op in self.layer_list if op.has_grad],
-            self.layer_num_calls,
+            [op for op in self._layer_list if op.has_grad],
+            self._layer_num_calls,
         )
 
     @property
@@ -1518,7 +1546,7 @@ class TraceStatsMixin(_TraceMixinBase):
         return LayerAccessor(
             OrderedDict(
                 (label, layer)
-                for label, layer in self.layer_logs.items()
+                for label, layer in self._layer_logs.items()
                 if any(op.has_saved_activation for op in layer.ops.values())
             ),
             source_trace=self,
@@ -1533,7 +1561,7 @@ class TraceStatsMixin(_TraceMixinBase):
         return LayerAccessor(
             OrderedDict(
                 (label, layer)
-                for label, layer in self.layer_logs.items()
+                for label, layer in self._layer_logs.items()
                 if any(op.has_grad for op in layer.ops.values())
             ),
             source_trace=self,
@@ -1570,7 +1598,7 @@ class TraceStatsMixin(_TraceMixinBase):
             if any(
                 aliases.get(label, label) in op_labels for label in getattr(call, "output_ops", [])
             ):
-                calls[call.call_label] = call
+                calls[call.label] = call
         return TraceModuleCallAccessor(calls)
 
     @property
@@ -1624,7 +1652,7 @@ class TraceStatsMixin(_TraceMixinBase):
 
         items = OrderedDict(
             (grad_fn_object_id, grad_fn_handle)
-            for grad_fn_object_id, grad_fn_handle in self.grad_fn_logs.items()
+            for grad_fn_object_id, grad_fn_handle in self._grad_fn_logs.items()
             if any(
                 getattr(call, "grad_inputs", None) is not None
                 or getattr(call, "grad_outputs", None) is not None
@@ -1638,8 +1666,8 @@ class TraceStatsMixin(_TraceMixinBase):
         """Access Ops that are not graph-boundary sentinels."""
 
         return TraceOpAccessor(
-            [op for op in self.layer_list if not (op.is_input or op.is_output or op.is_buffer)],
-            self.layer_num_calls,
+            [op for op in self._layer_list if not (op.is_input or op.is_output or op.is_buffer)],
+            self._layer_num_calls,
         )
 
     @property
@@ -1651,7 +1679,7 @@ class TraceStatsMixin(_TraceMixinBase):
         return LayerAccessor(
             OrderedDict(
                 (label, layer)
-                for label, layer in self.layer_logs.items()
+                for label, layer in self._layer_logs.items()
                 if label in {op.layer_label for op in self.compute_ops}
             ),
             source_trace=self,
@@ -1662,7 +1690,7 @@ class TraceStatsMixin(_TraceMixinBase):
         """Access flat input-boundary Ops."""
 
         return TraceOpAccessor(
-            boundary_label_ops(self.input_layers, self.__getitem__), self.layer_num_calls
+            boundary_label_ops(self.input_layers, self.__getitem__), self._layer_num_calls
         )
 
     @property
@@ -1676,7 +1704,7 @@ class TraceStatsMixin(_TraceMixinBase):
         """Access flat output-boundary Ops."""
 
         return TraceOpAccessor(
-            boundary_label_ops(self.output_layers, self.__getitem__), self.layer_num_calls
+            boundary_label_ops(self.output_layers, self.__getitem__), self._layer_num_calls
         )
 
     @property
@@ -1699,7 +1727,9 @@ class TraceStatsMixin(_TraceMixinBase):
     def buffer_read_ops(self: "Trace") -> list[str]:
         """Labels for buffer Ops that read registered-buffer values into the graph."""
 
-        return [op.label for op in self.layer_list if op.is_buffer and op.buffer_write_kind is None]
+        return [
+            op.label for op in self._layer_list if op.is_buffer and op.buffer_write_kind is None
+        ]
 
     @property
     def buffer_write_ops(self: "Trace") -> list[str]:
@@ -1714,7 +1744,7 @@ class TraceStatsMixin(_TraceMixinBase):
         """
 
         return [
-            op.label for op in self.layer_list if op.is_buffer and op.buffer_write_kind is not None
+            op.label for op in self._layer_list if op.is_buffer and op.buffer_write_kind is not None
         ]
 
     @property
@@ -1757,7 +1787,7 @@ class TraceStatsMixin(_TraceMixinBase):
         stored = self.__dict__.get("_uncalled_module_addresses")
         if stored is not None:
             return len(stored)
-        source_ref = getattr(self, "_source_model_ref", None)
+        source_ref = None if self.__dict__.get("_tl_cleaned_up", False) else self._source_model_ref
         if source_ref is None or source_ref() is None:
             return None
         return len(self.uncalled_modules)
@@ -1767,8 +1797,8 @@ class TraceStatsMixin(_TraceMixinBase):
         """Access Ops that use at least one parameter tensor."""
 
         return TraceOpAccessor(
-            [op for op in self.layer_list if op.num_params > 0],
-            self.layer_num_calls,
+            [op for op in self._layer_list if op.num_params > 0],
+            self._layer_num_calls,
         )
 
     def between(self: "Trace", sources: Any, sinks: Any) -> "TraceSlice":

@@ -19,7 +19,7 @@ def count_saved_module_calls_from_output_ops(
         Trace whose module calls should be counted.
     saved_op_labels:
         Optional saved Op labels. When omitted, labels are derived from saved
-        activations on ``trace.layer_list``.
+        activations on ``trace._layer_list``.
 
     Returns
     -------
@@ -31,7 +31,7 @@ def count_saved_module_calls_from_output_ops(
     if saved_op_labels is None:
         saved_labels = {
             op.label
-            for op in getattr(trace, "layer_list", ())
+            for op in trace._layer_list
             if getattr(op, "has_saved_activation", False) and not getattr(op, "is_orphan", False)
         }
     else:
@@ -68,7 +68,7 @@ def op_label_aliases(trace: "Trace") -> dict[str, str]:
     """
 
     by_layer: dict[str, list[str]] = {}
-    for op in getattr(trace, "layer_list", ()):
+    for op in trace._layer_list:
         by_layer.setdefault(op.layer_label, []).append(op.label)
     return {layer: labels[0] for layer, labels in by_layer.items() if len(labels) == 1}
 
@@ -77,12 +77,12 @@ def refresh_saved_module_call_count(
     trace: "Trace",
     saved_op_labels: Iterable[str] | None = None,
 ) -> int:
-    """Refresh and return ``trace.num_saved_module_calls``.
+    """Return the saved ModuleCall count.
 
     Parameters
     ----------
     trace:
-        Trace whose stored counter should be refreshed.
+        Trace whose saved ModuleCalls are counted.
     saved_op_labels:
         Optional saved Op labels forwarded to
         ``count_saved_module_calls_from_output_ops``.
@@ -90,11 +90,10 @@ def refresh_saved_module_call_count(
     Returns
     -------
     int
-        Refreshed saved ModuleCall count.
+        Saved ModuleCall count.
     """
 
     count = count_saved_module_calls_from_output_ops(trace, saved_op_labels)
-    trace.num_saved_module_calls = count
     return count
 
 
@@ -110,7 +109,7 @@ def refresh_pinned_autograd_memory(trace: "Trace", saved_ops: Iterable[object]) 
 
     Notes
     -----
-    Sets ``trace.pinned_autograd_memory``: ``Bytes(0)`` when every
+    Sets ``trace.cost.pinned_autograd_memory``: ``Bytes(0)`` when every
     payload is detached, ``None`` on a non-torch backend, where the walk does
     not apply.
     """
@@ -118,9 +117,9 @@ def refresh_pinned_autograd_memory(trace: "Trace", saved_ops: Iterable[object]) 
     from .._quantities import Bytes
     from ..backends import TORCH_BACKEND_NAME
 
-    backend_name = str(getattr(trace, "backend", TORCH_BACKEND_NAME) or TORCH_BACKEND_NAME)
+    backend_name = str(trace._provenance_backend or TORCH_BACKEND_NAME)
     if backend_name != TORCH_BACKEND_NAME:
-        trace.pinned_autograd_memory = None
+        trace._cost_pinned_autograd_memory = None
         return
     from ..backends.torch._pinned_graph import pinned_autograd_bytes
 
@@ -129,7 +128,7 @@ def refresh_pinned_autograd_memory(trace: "Trace", saved_ops: Iterable[object]) 
         for op in saved_ops
         for payload in (getattr(op, "out", None), getattr(op, "transformed_out", None))
     ]
-    trace.pinned_autograd_memory = Bytes(pinned_autograd_bytes(payloads))
+    trace._cost_pinned_autograd_memory = Bytes(pinned_autograd_bytes(payloads))
 
 
 def _has_retained_gradient_payloads(self: "Trace") -> bool:
@@ -148,7 +147,7 @@ def _has_retained_gradient_payloads(self: "Trace") -> bool:
 
     Notes
     -----
-    The projection is the authority here, rather than ``Trace.save_grads``:
+    The projection is the authority here, rather than ``Trace.options.save_grads``:
     ``log_backward(save_grads=...)`` may override that capture-time default on
     each pass.
     """

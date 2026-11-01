@@ -234,7 +234,7 @@ class _SubgraphReplay:
     def _reads_input_param(self, op: Op) -> bool:
         """Return whether ``op`` consumed a parameter that is a boundary input."""
 
-        for param_log in tuple(getattr(op, "_param_logs", ()) or ()):
+        for param_log in tuple(op._param_logs or ()):
             try:
                 handle = getattr(param_log, "handle", None)
             except Exception:

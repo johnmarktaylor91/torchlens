@@ -386,7 +386,7 @@ def _numeric_attestation_check(
             # skipped only when the archive is intact and the same tight bound
             # holds. This stays fail-closed: a tampered archive
             # (archived_digest != byte_digest) or any divergence beyond the tight
-            # ULP bound STILL raises numeric_attestation_failed -- the byte-exact
+            # ULP bound STILL raises replay_value_mismatch -- the byte-exact
             # tripwire is preserved, never widened into a tolerance gate.
             if archived_digest == member.byte_digest and _is_benign_layout_nonreproducible(
                 descriptor, member, recomputed, archived_value
@@ -540,7 +540,7 @@ def _is_benign_layout_nonreproducible(
     the F1 fallback: such a slot reports ``not_applicable`` instead of raising,
     because a byte-faithful replay is genuinely infeasible from the no-grad run
     path. Every other mismatch (non-BLAS op, larger-than-ULP divergence, or a
-    non-tensor slot) still raises ``numeric_attestation_failed``.
+    non-tensor slot) still raises ``replay_value_mismatch``.
 
     Parameters
     ----------

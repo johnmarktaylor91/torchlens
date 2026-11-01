@@ -82,8 +82,8 @@ def test_raw_lookup_keys_exist_for_all_multi_exit_ops() -> None:
     for op in _split_exit_ops(trace):
         assert op.raw_label in op.lookup_keys
         assert op._label_raw in op.lookup_keys
-        assert op.raw_label in trace.layer_dict_all_keys
-        assert op._label_raw in trace.layer_dict_all_keys
+        assert op.raw_label in trace._layer_dict_all_keys
+        assert op._label_raw in trace._layer_dict_all_keys
 
 
 def test_colliding_module_alias_requires_explicit_op_lookup() -> None:
@@ -92,7 +92,7 @@ def test_colliding_module_alias_requires_explicit_op_lookup() -> None:
     trace = _multi_exit_trace()
 
     assert "split" in trace._ambiguous_lookup_keys
-    assert trace.layer_dict_all_keys["split"] in _split_exit_ops(trace)
+    assert trace._layer_dict_all_keys["split"] in _split_exit_ops(trace)
     with pytest.raises(AmbiguousOpLookupError):
         trace["split"]
 

@@ -54,7 +54,7 @@ def _verdict(trace: Trace) -> dict[str, Any]:
 def _capture(model: nn.Module) -> tuple[torch.Tensor, Trace]:
     torch.manual_seed(0)
     x = torch.randn(2, 4)
-    return x, tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
+    return x, tl.trace(model, x, capture=CaptureOptions(replayable=True))
 
 
 def _rerun_with(trace: Trace, model: nn.Module, x: torch.Tensor, edit: Any) -> Trace:

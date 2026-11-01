@@ -2,7 +2,7 @@
 
 ONE service shared by load, inspect, and digest generation: it enumerates the
 known fields per record contract (through the field registry, which derives
-them from the same ``FIELD_POLICY`` / ``_PORTABLE_STATE_SPEC`` tables the
+them from the same ``_FIELD_POLICY`` / ``_PORTABLE_STATE_SPEC`` tables the
 serializers use), partitions incoming state into known/unknown BEFORE any
 object mutation, and refuses unknown fields TYPED and SYMMETRICALLY -- the
 refusal fires whether the writer is newer than the reader (additive field)

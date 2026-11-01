@@ -129,11 +129,11 @@ BASE = {
     "export:tl.io.old_save": _row(
         "export:tl.io.old_save", "export", "old_save", "tl.io.old_save", "f-save"
     ),
-    "member:m:Trace.layer_list": _row(
-        "member:m:Trace.layer_list",
+    "member:m:Trace._layer_list": _row(
+        "member:m:Trace._layer_list",
         "member",
-        "layer_list",
-        "Trace.layer_list",
+        "_layer_list",
+        "Trace._layer_list",
         "f-list",
         owner_names=["Trace"],
     ),
@@ -160,12 +160,12 @@ def test_diff_lists_new_removed_and_renamed() -> None:
     # Two removed rows share the fresh row's fingerprint, so neither pairs.
     assert {row["id"] for row in plain.new} == {"member:m:Trace.ops", "export:tl.io.fresh"}
     assert {row["id"] for row in plain.removed} == {
-        "member:m:Trace.layer_list",
+        "member:m:Trace._layer_list",
         "export:tl.io.gone",
         "export:tl.io.gone2",
     }
-    declared = diff_inventories(BASE, HEAD, {"member:m:Trace.layer_list": "ops"})
-    assert ("member:m:Trace.layer_list", "member:m:Trace.ops", "declared") in [
+    declared = diff_inventories(BASE, HEAD, {"member:m:Trace._layer_list": "ops"})
+    assert ("member:m:Trace._layer_list", "member:m:Trace.ops", "declared") in [
         (r.old_id, r.new_id, r.basis) for r in declared.renamed
     ]
     assert declared.to_json()["counts"] == {"new": 1, "removed": 2, "renamed": 2, "moved": 0}
@@ -174,7 +174,7 @@ def test_diff_lists_new_removed_and_renamed() -> None:
 def test_renamed_id_and_proposal_map() -> None:
     """Respelled ids keep their owner; params regroup under the new name."""
 
-    assert renamed_id(BASE["member:m:Trace.layer_list"], "ops") == "member:m:Trace.ops"
+    assert renamed_id(BASE["member:m:Trace._layer_list"], "ops") == "member:m:Trace.ops"
     assert renamed_id({"id": "param:dim", "kind": "param", "name": "dim"}, "axis") == "param:axis"
     rows = {
         "a": {"id": "a", "name": "x", "proposed": "y"},
@@ -205,9 +205,9 @@ def test_check_reports_missing_glossary_and_stale_spellings(tmp_path: Path) -> N
     corpus = _lockstep_repo(
         tmp_path,
         glossary="**Trace**\n: The record. `tl.io.old_save` writes it.\n",
-        example="trace.layer_list\ntl.io.gone(trace)\n",
+        example="trace._layer_list\ntl.io.gone(trace)\n",
     )
-    surface_diff = diff_inventories(BASE, HEAD, {"member:m:Trace.layer_list": "ops"})
+    surface_diff = diff_inventories(BASE, HEAD, {"member:m:Trace._layer_list": "ops"})
     findings = check.check_lockstep(surface_diff, corpus, HEAD)
     rendered = {(f.row_id, f.place, f.problem, f.location) for f in findings}
     assert ("export:tl.io.dump", "glossary", "missing", "glossary") in rendered
@@ -228,8 +228,8 @@ def test_check_passes_a_complete_change(tmp_path: Path) -> None:
     )
     head = {key: HEAD[key] for key in ("root:tl.trace", "export:tl.io.dump", "member:m:Trace.ops")}
     base = {key: BASE[key] for key in ("root:tl.trace", "export:tl.io.old_save")}
-    base["member:m:Trace.layer_list"] = BASE["member:m:Trace.layer_list"]
-    surface_diff = diff_inventories(base, head, {"member:m:Trace.layer_list": "ops"})
+    base["member:m:Trace._layer_list"] = BASE["member:m:Trace._layer_list"]
+    surface_diff = diff_inventories(base, head, {"member:m:Trace._layer_list": "ops"})
     assert check.check_lockstep(surface_diff, corpus, head) == []
 
 

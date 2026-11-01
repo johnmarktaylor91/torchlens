@@ -208,7 +208,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # driver) and the settlement seam (wrap-generation stamp + envelope
     # write) land at the trace entry by design; conscious raise, split
     # target unchanged.
-    # 4230 -> 4235: C07X adds the unconditional Trace.root_entry_point
+    # 4230 -> 4235: C07X adds the unconditional Trace.provenance.root_entry_point
     # identity-fact write (foldA D10) at the one-door capture site -- a
     # 2-line addition with no extractable seam; a split here would be
     # confetti (R43: never split code merely to satisfy the number).
@@ -320,7 +320,8 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # measure_host_peak_memory DROP knob and the KEEP backward_peak_memory_reason
     # field need their policy, init, default-fill and rerun-refresh rows here,
     # beside their forward twins; the file sat at 3998.
-    "torchlens/_data_classes/trace.py": 4050,
+    # 4050 -> 3950 (2026-10-31 v11-rest): the private-store rows shrank the file to 3903.
+    "torchlens/_data_classes/trace.py": 3950,
     # 3550 -> 3800: fix/private-probe-routing moved the last 9 stray private
     # torch touches (funcol module/ACT/wait-redispatch, checkpoint hook class,
     # engine queue_callback) behind named HAS_* families IN this file -- the
@@ -400,7 +401,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # replay leaking torch's matmul precision fields; measured 4930. Debloat
     # target unchanged: 3450.
     # 4950 -> 5000 (2026-10-03 fix/ff-tf32): read_legacy_fp32_controls (the
-    # safe legacy TF32 readers that stop intervention_ready capture and
+    # safe legacy TF32 readers that stop replayable capture and
     # check_determinism crashing under torch >= 2.9 per-backend fp32_precision
     # policies) plus the replay reset of the controls no legacy setter writes;
     # extends FE's fp32_precision pair, no second flag or snapshot path;

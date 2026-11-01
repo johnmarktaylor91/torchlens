@@ -91,7 +91,7 @@ def test_logging_state_cleared_after_guard_fires() -> None:
 
     # Follow-up forward pass should succeed — the outer `with` cleaned up.
     log = tl.trace(model, x, capture=CaptureOptions(layers_to_save="none"))
-    assert len(log.layer_logs) > 0
+    assert len(log._layer_logs) > 0
 
 
 # ---------------------------------------------------------------------------

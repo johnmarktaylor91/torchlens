@@ -179,7 +179,7 @@ def _record_instances(trace: Trace, cls: type[Any]) -> Iterable[Any]:
 
 
 def test_layer_field_order_includes_live_aggregate_fields() -> None:
-    """Layer FIELD_ORDER includes aggregate fields kept by FIELD_POLICY."""
+    """Layer FIELD_ORDER includes aggregate fields kept by _FIELD_POLICY."""
 
     expected_fields = {
         "io_role",
@@ -198,7 +198,7 @@ def test_layer_field_order_includes_live_aggregate_fields() -> None:
 def test_record_field_policy_is_field_order_source(case: RecordCase) -> None:
     """Every record's user-facing policy entries exactly match FIELD_ORDER."""
 
-    policy = case.cls.FIELD_POLICY
+    policy = case.cls._FIELD_POLICY
     assert field_order_from_policy(policy) == case.field_order
     assert [name for name, item in policy.items() if item.user_facing] == case.field_order
     assert len(case.field_order) == len(set(case.field_order))
@@ -206,16 +206,16 @@ def test_record_field_policy_is_field_order_source(case: RecordCase) -> None:
 
 @pytest.mark.parametrize("case", RECORD_CASES, ids=lambda case: case.cls.__name__)
 def test_record_portable_spec_is_generated_from_policy(case: RecordCase) -> None:
-    """Class portable specs are generated views over FIELD_POLICY."""
+    """Class portable specs are generated views over _FIELD_POLICY."""
 
-    assert portable_state_spec_from_policy(case.cls.FIELD_POLICY) == case.cls._PORTABLE_STATE_SPEC
+    assert portable_state_spec_from_policy(case.cls._FIELD_POLICY) == case.cls._PORTABLE_STATE_SPEC
 
 
 def test_trace_and_op_generated_policy_views_match_old_names() -> None:
     """Trace/Op fork-policy views are generated from their field policy tables."""
 
-    assert fork_policy_from_policy(Trace.FIELD_POLICY) == Trace.FIELD_FORK_POLICY
-    assert fork_policy_from_policy(Op.FIELD_POLICY) == Op.FIELD_FORK_POLICY
+    assert fork_policy_from_policy(Trace._FIELD_POLICY) == Trace._FIELD_FORK_POLICY
+    assert fork_policy_from_policy(Op._FIELD_POLICY) == Op._FIELD_FORK_POLICY
 
 
 @pytest.mark.parametrize("case", RECORD_CASES, ids=lambda case: case.cls.__name__)
@@ -251,7 +251,7 @@ def test_trace_runnable_field_order_slots_are_live_and_loaded_values_override(
         _RunnablePolicyModel().eval(),
         torch.randn(2, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -270,7 +270,7 @@ def test_trace_runnable_field_order_slots_are_live_and_loaded_values_override(
         trace.save(path, level="runnable")
         loaded = tl.load(path)
         try:
-            assert loaded.runnable_descriptor is not None
+            assert loaded._sparse_run_descriptor is not None
             assert loaded.readiness is not None
             assert loaded.readiness.status is ReadinessStatus.READY
             assert loaded._runnable.path_faithfulness is None

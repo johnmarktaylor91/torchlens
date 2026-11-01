@@ -240,7 +240,7 @@ def _promote_layers_to_save_output_parent(
         in_ram=streaming is None or streaming.path is None or streaming.retain_in_memory,
         on_disk=streaming is not None and streaming.path is not None,
     )
-    output_device = getattr(trace, "output_device", None)
+    output_device: str | None = trace._options_output_device
     if output_device == "same":
         output_device = None
     spec = CaptureSpec(
@@ -248,7 +248,7 @@ def _promote_layers_to_save_output_parent(
         save_metadata=True,
         save_grad=False,
         device=output_device,
-        save_mode=cast(Any, getattr(trace, "save_mode", "copy")),
+        save_mode=cast(Any, trace._options_save_mode),
     )
     # Output-parent promotion retains real payloads and must be visible to
     # the save-budget accountant like every other RAM retention: this path
@@ -270,11 +270,11 @@ def _promote_layers_to_save_output_parent(
         tensor,
         spec,
         intent,
-        activation_transform=getattr(trace, "activation_transform", None),
-        save_raw_activations=getattr(trace, "save_raw_activations", True),
+        activation_transform=trace._options_activation_transform,
+        save_raw_activations=trace._options_save_raw_activations,
         ctx=ctx,
         kind="activation",
-        detach_saved_activations=bool(getattr(trace, "detach_saved_activations", True)),
+        detach_saved_activations=bool(trace._options_detach_saved_activations),
     )
     if budget is not None and reservation is not None:
         budget.commit(reservation, (ram_payload, transformed_ram_payload))
@@ -530,7 +530,7 @@ class TorchBackend:
         input_args, input_kwargs, input_copy_gaps = safe_copy_input_tree(
             input_args,
             input_kwargs,
-            require_distinct_tensor_sites=bool(getattr(session, "intervention_ready", False)),
+            require_distinct_tensor_sites=bool(getattr(session, "is_replayable", False)),
         )
         _record_input_semantics_gaps(
             session,
@@ -757,7 +757,7 @@ class TorchBackend:
         del session
         set_rng_from_saved_states(cast(dict[str, Any], rng_state))
 
-    def inference_context(self, session: object) -> AbstractContextManager[None]:
+    def inference_context(self, session: Any) -> AbstractContextManager[None]:
         """Return the torch inference-only context for this session.
 
         Parameters
@@ -771,11 +771,7 @@ class TorchBackend:
             ``torch.no_grad()`` when requested, otherwise a null context.
         """
 
-        return (
-            torch.no_grad()
-            if getattr(session, "inference_only", False)
-            else contextlib.nullcontext()
-        )
+        return torch.no_grad() if session._options_inference_only else contextlib.nullcontext()
 
     def log_source_tensor(
         self,
@@ -871,7 +867,7 @@ class TorchBackend:
         )
         # The per-op container_spec is only user-facing metadata when explicitly
         # opted into via capture_container_structure (or implied by
-        # intervention_ready); with the default OFF it must stay None on output
+        # replayable); with the default OFF it must stay None on output
         # layers. The container *path*, however, is always preserved so
         # forward-replay validation can slice multi-output containers back to the
         # right leaf, and the FINAL-output ContainerSpec is always registered as
@@ -879,7 +875,7 @@ class TorchBackend:
         # the exact tuple/dict/ModelOutput the model returned from that one
         # snapshot, so a default capture settles VERIFIED instead of the
         # remedy-only ``container_contract_unrecorded`` (W051-HONESTY H2).
-        persist_container_spec = getattr(self_trace, "intervention_ready", False) or getattr(
+        persist_container_spec = getattr(self_trace, "is_replayable", False) or getattr(
             self_trace, "_capture_container_structure", False
         )
         if output_entries:
@@ -973,7 +969,7 @@ class TorchBackend:
                 )
             attributable_output_tensors.append(t)
             attributable_output_tensor_addresses.append(output_address)
-            if self_trace.capture_mode in {"exhaustive", "predicate"}:
+            if self_trace._options_mode in {"exhaustive", "predicate"}:
                 self_trace.output_layers.append(_label_raw)
                 event = self_trace.capture_events.op_event_by_label_raw.get(_label_raw)
                 if event is not None:
@@ -1019,7 +1015,7 @@ class TorchBackend:
             kind="op",
             label=reserved.label,
             raw_label=reserved.label_raw,
-            pass_index=1,
+            pass_number=1,
             event_index=reserved.raw_index,
             step_index=None,
             layer_type=reserved.layer_type,
@@ -1028,7 +1024,7 @@ class TorchBackend:
             func_name=func_event_input.func_name,
             address=None,
             module_type=None,
-            module_pass_index=None,
+            module_pass_number=None,
             module_stack=func_event_input.module_stack,
             recent_events=(),
             recent_ops=(),
@@ -1219,7 +1215,7 @@ class TorchBackend:
 
     def cleanup_failed_forward_session(
         self,
-        session: object,
+        session: Any,
         prepared_model: object,
         exc: Exception,
     ) -> None:
@@ -1236,7 +1232,7 @@ class TorchBackend:
         # after an output-attribution failure (R16-2 for the failed-primary
         # trigger). Only an exhaustive session arms the tracker, so only there
         # is an empty journal proof of "no writes".
-        if getattr(session, "capture_mode", None) == "exhaustive":
+        if session._options_mode == "exhaustive":
             events = getattr(getattr(session, "capture_events", None), "buffer_write_events", None)
             if events is not None:
                 with contextlib.suppress(Exception):
@@ -1246,7 +1242,7 @@ class TorchBackend:
                         if getattr(event, "value_changed", None) is not False
                     )
 
-        if getattr(session, "capture_mode", None) == "predicate":
+        if session._options_mode == "predicate":
             from torchlens._ir.capture_events import CaptureEvents
 
             events = getattr(session, "capture_events", None)
@@ -1685,10 +1681,10 @@ def _container_path_to_address(path: tuple[Any, ...]) -> str:
     for component in path:
         if hasattr(component, "index"):
             parts.append(str(component.index))
-        elif hasattr(component, "key"):
-            parts.append(str(component.key))
-        elif hasattr(component, "name"):
-            parts.append(str(component.name))
+        elif hasattr(component, "_key"):
+            parts.append(str(component._key))
+        elif hasattr(component, "_name"):
+            parts.append(str(component._name))
         else:
             parts.append(str(component))
     return ".".join(parts)

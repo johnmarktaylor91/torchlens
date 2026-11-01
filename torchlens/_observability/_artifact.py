@@ -68,13 +68,13 @@ _SPINE_FLOAT_FIELDS = (
     "m2",
 )
 _SPINE_COUNT_FIELDS = (
-    "count_total",
-    "count_finite",
-    "count_zero",
-    "count_negative",
-    "count_nan",
-    "count_posinf",
-    "count_neginf",
+    "numel",
+    "num_finite",
+    "num_zero",
+    "num_negative",
+    "num_nan",
+    "num_posinf",
+    "num_neginf",
 )
 
 
@@ -256,16 +256,16 @@ def _spine_to_row(spine: RunningStatsResult | None) -> dict[str, Any]:
 def _spine_from_row(row: dict[str, Any]) -> RunningStatsResult | None:
     """Rebuild one spine from column cells (None cells = absent spine)."""
 
-    if row["count_total"] is None:
+    if row["numel"] is None:
         return None
     return RunningStatsResult(
-        count_total=int(row["count_total"]),
-        count_finite=int(row["count_finite"]),
-        count_zero=int(row["count_zero"]),
-        count_negative=int(row["count_negative"]),
-        count_nan=int(row["count_nan"]),
-        count_posinf=int(row["count_posinf"]),
-        count_neginf=int(row["count_neginf"]),
+        numel=int(row["numel"]),
+        num_finite=int(row["num_finite"]),
+        num_zero=int(row["num_zero"]),
+        num_negative=int(row["num_negative"]),
+        num_nan=int(row["num_nan"]),
+        num_posinf=int(row["num_posinf"]),
+        num_neginf=int(row["num_neginf"]),
         finite_min=row["finite_min"],
         finite_max=row["finite_max"],
         finite_absmax=row["finite_absmax"],
@@ -547,10 +547,10 @@ class HistoryReader:
             spine_row[name] = None if np.isnan(float_cell) else float_cell
         dtype_cell = str(data["spine_reduction_dtype"][i])
         spine_row["reduction_dtype"] = dtype_cell or None
-        if spine_row["count_total"] is None:
+        if spine_row["numel"] is None:
             return None
         # Restore payload-carried NaN extrema honestly: an observed spine
-        # keeps float cells; absent spine is keyed on count_total.
+        # keeps float cells; absent spine is keyed on numel.
         return _spine_from_row(spine_row)
 
     def _decode_sketch(self, data: Any, i: int) -> HistogramResult | None:

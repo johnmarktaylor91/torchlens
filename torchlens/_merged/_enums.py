@@ -100,11 +100,11 @@ class MergedErrorCode(str, Enum):
     GROUP_LIFETIME_EVIDENCE_CONFLICT = "group_lifetime_evidence_conflict"
     MERGE_CONFLICT = "merge_conflict"
     MERGED_SCHEMA_INVALID = "merged_schema_invalid"
-    MERGED_DESCRIPTOR_TAMPER = "merged_descriptor_tamper"
+    MERGED_DESCRIPTOR_TAMPER = "merged_descriptor_invalid"
     MERGE_RUN_UNSUPPORTED = "merge_run_unsupported"
     MERGED_SELECTOR_UNSUPPORTED = "merged_selector_unsupported"
     MERGED_SURFACE_UNSUPPORTED = "merged_surface_unsupported"
-    MERGED_MEMBER_RELEASED = "merged_member_released"
+    MERGED_MEMBER_RELEASED = "merged_member_unavailable"
 
 
 MERGE_FINDING_KINDS: Final[tuple[str, ...]] = (

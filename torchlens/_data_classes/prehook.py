@@ -22,9 +22,9 @@ class TensorInputObservation:
         Typed path beginning with ``"args"`` or ``"kwargs"``.
     source_op:
         Final producer operation label when one was available.
-    object_id:
+    python_object_id:
         In-process object identity. This diagnostic is deliberately non-portable.
-    version:
+    mutation_version:
         Captured PyTorch version counter. This diagnostic is deliberately non-portable.
     shape, dtype, device, layout, requires_grad:
         Cheap tensor metadata captured without synchronizing device contents.
@@ -41,8 +41,8 @@ class TensorInputObservation:
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "path": FieldPolicy.KEEP,
         "source_op": FieldPolicy.KEEP,
-        "object_id": FieldPolicy.DROP,
-        "version": FieldPolicy.DROP,
+        "python_object_id": FieldPolicy.DROP,
+        "mutation_version": FieldPolicy.DROP,
         "shape": FieldPolicy.KEEP,
         "dtype": FieldPolicy.KEEP,
         "device": FieldPolicy.KEEP,
@@ -56,8 +56,8 @@ class TensorInputObservation:
 
     path: TypedInputPath
     source_op: str | None
-    object_id: int | None
-    version: int | None
+    python_object_id: int | None
+    mutation_version: int | None
     shape: tuple[int, ...]
     dtype: str
     device: str
@@ -85,7 +85,7 @@ class ModuleInputSnapshot:
         Immutable compact description of the input container topology.
     tensor_observations:
         Ordered tensor observations keyed by typed input paths.
-    capture_complete:
+    is_capture_complete:
         Whether all supported mutation evidence was available.
     incomplete_reasons:
         Stable reasons explaining incomplete evidence.
@@ -98,7 +98,7 @@ class ModuleInputSnapshot:
         "_kwargs": FieldPolicy.BLOB_RECURSIVE,
         "structure": FieldPolicy.KEEP,
         "tensor_observations": FieldPolicy.KEEP,
-        "capture_complete": FieldPolicy.KEEP,
+        "is_capture_complete": FieldPolicy.KEEP,
         "incomplete_reasons": FieldPolicy.KEEP,
         "summary": FieldPolicy.KEEP,
     }
@@ -107,7 +107,7 @@ class ModuleInputSnapshot:
     _kwargs: dict[str, Any]
     structure: tuple[Any, ...]
     tensor_observations: tuple[TensorInputObservation, ...]
-    capture_complete: bool
+    is_capture_complete: bool
     incomplete_reasons: tuple[str, ...]
     summary: str
 
@@ -144,7 +144,7 @@ class PreHookEffect:
         Whether PyTorch invoked the hook with keyword arguments.
     outcome:
         Normalized execution outcome.
-    changed:
+    has_changes:
         ``True``/``False`` when mutation evidence is complete, otherwise ``None``.
     change_kinds, changed_paths:
         Compact attribution for the observed transition.
@@ -163,7 +163,7 @@ class PreHookEffect:
         "hook": FieldPolicy.KEEP,
         "with_kwargs": FieldPolicy.KEEP,
         "outcome": FieldPolicy.KEEP,
-        "changed": FieldPolicy.KEEP,
+        "has_changes": FieldPolicy.KEEP,
         "change_kinds": FieldPolicy.KEEP,
         "changed_paths": FieldPolicy.KEEP,
         "before_fingerprint": FieldPolicy.KEEP,
@@ -179,7 +179,7 @@ class PreHookEffect:
     hook: HookInfo
     with_kwargs: bool
     outcome: PreHookOutcome
-    changed: bool | None
+    has_changes: bool | None
     change_kinds: tuple[str, ...]
     changed_paths: tuple[TypedInputPath, ...]
     before_fingerprint: tuple[Any, ...]

@@ -181,7 +181,7 @@ _DERIVED_COMPOSITE_INPUTS: dict[str, tuple[str, ...]] = {
     "module_call_depth": ("modules",),
 }
 
-_PER_PASS_FIELDS = frozenset({"func_duration", "fx_call_index", "pass_index"})
+_PER_PASS_FIELDS = frozenset({"func_duration", "fx_call_index", "pass_number"})
 
 _SHAPE_FIELDS = frozenset({"shape", "transformed_out_shape"})
 
@@ -195,18 +195,16 @@ _NON_NUMERIC_FIELDS = frozenset(
     {
         # Identity / naming strings.
         "layer_label",
-        "layer_label_short",
-        # L1 grouping surface (site keys + across-pass shape summary): a
-        # percent-escaped position key, a live peer view, and a plain-data
-        # summary STRING ("2->4") — none is an encodable magnitude. The
-        # completeness pin went red the moment L1's merge added these; this
-        # row is the classification it demanded.
-        "site_key",
+        "short_layer_label",
+        # L1 grouping surface (site peers + across-pass shape summary): a
+        # live peer view and a plain-data summary STRING ("2->4"), neither an
+        # encodable magnitude. The site key is per pass (``layer.ops[k]``),
+        # not a Layer name.
         "site_peers",
         "shape_summary",
         "layer_type",
         "label",
-        "label_short",
+        "short_label",
         "fx_label",
         "fx_qualpath",
         "lookup_keys",
@@ -246,7 +244,7 @@ _NON_NUMERIC_FIELDS = frozenset(
         "buffer_replay_validated",
         "has_input_ancestor",
         "is_atomic_module",
-        "intervention_replaced",
+        "is_edited",
         "detach_saved_activations",
         "save_grads",
         "edges_vary_across_ops",
@@ -897,8 +895,8 @@ def is_record_derived_image_node(trace: Trace, node: Any) -> bool:
     if _annotation_image_path_for_node(trace, node) is not None:
         return True
     # Raw-input visual branch (montage / preview): input nodes whose label is
-    # decorated from trace.raw_input by the post-user raw merge.
-    return bool(getattr(node, "is_input", False)) and getattr(trace, "raw_input", None) is not None
+    # decorated from trace.input by the post-user raw merge.
+    return bool(getattr(node, "is_input", False)) and getattr(trace, "input", None) is not None
 
 
 def _coerce_scalar(

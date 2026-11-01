@@ -731,8 +731,8 @@ def _make_collective_wrap(site: CollectiveSite, original: Callable[..., Any]) ->
             with _BoundaryScope():
                 return original(*args, **kwargs)
 
-        trace = _state._active_trace
-        if getattr(trace, "capture_mode", None) == "predicate":
+        trace: Any = _state._active_trace  # non-None: ``capturing`` checked it
+        if trace._options_mode == "predicate":
             raise CompatibilityError(
                 "Fastlog cannot represent collective boundary journals; refusing before "
                 "the collective executes instead of returning a Recording that omits it.",
@@ -746,7 +746,7 @@ def _make_collective_wrap(site: CollectiveSite, original: Callable[..., Any]) ->
 
         from ..._utils.rng import log_current_autocast_state, log_current_rng_states
 
-        save_rng = getattr(trace, "save_rng_states", False)
+        save_rng = trace._options_save_rng
         rng_states = log_current_rng_states(torch_only=True) if save_rng else {}
         autocast_state = log_current_autocast_state()
         contribution_digests: list[str] | None = None
