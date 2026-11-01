@@ -20,6 +20,7 @@ import file_cap  # noqa: E402
 import id_lint  # noqa: E402
 import layering  # noqa: E402
 import run_all  # noqa: E402
+import tier_durations  # noqa: E402
 
 _FILES = {
     "torchlens/__init__.py": "from torchlens import a\n",
@@ -108,3 +109,13 @@ def test_run_all_reports_one_line_per_check(
     lines = capsys.readouterr().out.splitlines()
     assert len(lines) == len(run_all.CHECKS)
     assert run_all.run(repo, strict=True) == 1
+
+
+def test_tier_durations_check_skips_a_tree_without_the_file_and_judges_this_one(
+    tmp_path: Path,
+) -> None:
+    repo = _fixture(tmp_path, {"largest_scc": 2, "in_function_internal_imports": 3}, 7)
+    assert tier_durations.check(repo).status == "skip"
+    outcome = tier_durations.check(Path(__file__).resolve().parents[1])
+    assert outcome.message.startswith("tier-durations:")
+    assert all(detail.startswith("FAIL") for detail in outcome.details)
