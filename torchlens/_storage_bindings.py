@@ -19,6 +19,17 @@ from __future__ import annotations
 import torch
 from torch import nn
 
+STORAGE_CONTEXT_RECEIVER_FUNCS = frozenset({"as_strided_", "resize_", "resize_as_"})
+"""In-place storage-geometry calls whose receiver is saved with its whole storage.
+
+``as_strided_`` reads any bytes of the receiver's storage, and a ``resize_`` /
+``resize_as_`` that grows inside a larger storage exposes the bytes past the
+receiver's view, so a compact clone of the receiver cannot replay the call.
+Capture saves the receiver through :func:`copy_with_storage_context` (the
+save budget charges the whole storage, as it already projects) and validation
+replays the call on a clone of that context.
+"""
+
 
 def holds_rebindable_storage(tensor: torch.Tensor) -> bool:
     """Return whether ``Tensor.set_`` can put ``tensor`` back on a recorded storage.
@@ -89,3 +100,63 @@ def rebind_if_moved(tensor: torch.Tensor, binding: torch.Tensor) -> bool:
             binding.untyped_storage(), binding.storage_offset(), binding.size(), binding.stride()
         )
     return True
+
+
+def views_part_of_its_storage(tensor: torch.Tensor) -> bool:
+    """Return whether ``tensor`` leaves bytes of its storage outside its own view.
+
+    Parameters
+    ----------
+    tensor:
+        A dense tensor.
+
+    Returns
+    -------
+    bool
+        ``True`` when the view starts past the storage's first element or ends
+        before its last one, so a plain ``clone()`` would drop bytes a
+        storage-geometry call (``as_strided_``, a ``resize_`` that grows inside
+        the storage) can read.
+    """
+
+    if not holds_rebindable_storage(tensor) or tensor.numel() == 0:
+        return False
+    last = tensor.storage_offset() + sum(
+        (size - 1) * stride for size, stride in zip(tensor.size(), tensor.stride())
+    )
+    spanned = (last + 1) * tensor.element_size()
+    return tensor.storage_offset() != 0 or spanned != tensor.untyped_storage().nbytes()
+
+
+def copy_with_storage_context(tensor: torch.Tensor) -> torch.Tensor:
+    """Copy ``tensor`` together with the whole storage it views.
+
+    The copy views a private clone of the full storage at the same offset,
+    size and stride, so a storage-geometry call replayed on it reads the bytes
+    the original call read. A tensor that spans its whole storage from offset
+    zero gets a plain clone, which holds the same bytes.
+
+    Parameters
+    ----------
+    tensor:
+        A dense tensor on a real device.
+
+    Returns
+    -------
+    torch.Tensor
+        Detached copy carrying the original's ``requires_grad``.
+    """
+
+    if not views_part_of_its_storage(tensor):
+        copy = tensor.detach().clone()
+    else:
+        copy = torch.empty(0, dtype=tensor.dtype, device=tensor.device)
+        copy.set_(
+            tensor.untyped_storage().clone(),
+            tensor.storage_offset(),
+            tensor.size(),
+            tensor.stride(),
+        )
+    if tensor.requires_grad:
+        copy.requires_grad_(True)
+    return copy

@@ -672,6 +672,17 @@ def _decorate_direct_transforms() -> None:
 # (e.g. size() is called internally by logging code).
 funcs_not_to_log = ["numpy", "__array__", "size", "dim"]
 
+# Wrapped calls that never demote the call enclosing them to non-bottom-level
+# (the R16-5 barcode-transparency note inside ``wrapped_func``). ``as_subclass``
+# is torch's ``__torch_function__`` return conversion. The storage accessors
+# return a storage, never a tensor, so they log no value flow of their own; a
+# Python-level tensor method that reads its storage through them
+# (``Tensor.share_memory_`` calls ``_typed_storage()``) would otherwise lose its
+# bottom-level barcode and go uncaptured.
+_BARCODE_TRANSPARENT_FUNCS = frozenset(
+    {"as_subclass", "untyped_storage", "_typed_storage", "storage"}
+)
+
 # Print functions get special handling: intercepted to add TorchLens label
 # info to the repr without creating a new logged operation.
 print_funcs = ["__repr__", "__str__", "_str"]
@@ -1481,7 +1492,7 @@ def torch_func_decorator(
     elif func_name != "data" or property_accessor == "del":
         canonical_capture_callable = (func, func_name)
     # See the barcode-transparency note inside ``wrapped_func`` (R16-5).
-    is_barcode_transparent = func_name == "as_subclass"
+    is_barcode_transparent = func_name in _BARCODE_TRANSPARENT_FUNCS
     # TorchLens's synthetic ``identity`` op (Identity modules, pass-through tensors)
     # never occurs in a native forward, so it stays out of the call fingerprint.
     fingerprint_token = None if func_name == "identity" else _state.call_token(func_name)
@@ -1756,10 +1767,9 @@ def torch_func_decorator(
 
         # Snapshot args before the call in case in-place ops mutate them.
         if trace.save_arg_values:
-            from ._ops_retention import _copy_saved_arg_tree
+            from ._ops_retention import _copy_saved_call_args
 
-            arg_copies = tuple([_copy_saved_arg_tree(arg) for arg in args])
-            kwarg_copies = {k: _copy_saved_arg_tree(v) for k, v in kwargs.items()}
+            arg_copies, kwarg_copies = _copy_saved_call_args(func_name, args, kwargs)
         else:
             arg_copies = args
             kwarg_copies = kwargs

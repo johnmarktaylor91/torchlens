@@ -165,6 +165,11 @@ STRUCTURAL_ARG_POSITIONS: dict[str, set[int]] = {
     "reshapeas": {1},  # canonicalized spelling
     "view_as": {1},
     "viewas": {1},  # canonicalized spelling
+    # ``Tensor.resize_as_(the_template)`` is ``self.resize_(the_template.size())``:
+    # arg 1 is read for its SHAPE only, never its elements (the same contract as
+    # ``view_as``/``reshape_as``). Arg 0, the receiver, keeps the element prefix
+    # it carries into the output and stays perturbation-tested.
+    "resize_as_": {1},
     # F2 tightening: the legacy OOB-justified index/target/mask blankets
     # (``cross_entropy`` target, ``embedding`` indices, ``gather``/
     # ``index_select``/``scatter*`` index tensors, ``masked_fill`` masks) were
@@ -214,6 +219,7 @@ STRUCTURAL_ARG_KWARG_ALIASES: dict[str, dict[int, set[str]]] = {
     "reshapeas": {1: {"other"}},
     "view_as": {1: {"other"}},
     "viewas": {1: {"other"}},
+    "resize_as_": {1: {"the_template"}},
     "nms": {0: {"boxes"}},
     "deform_conv2d": {1: {"offset"}},
     "roi_align": {1: {"boxes", "rois"}},
