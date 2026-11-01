@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import sys
-from unittest.mock import patch
 
 import pytest
 
@@ -44,13 +43,16 @@ def test_notebook_import_stays_inert() -> None:
     assert "jupyter_client" not in sys.modules
 
 
-def test_notebook_attribute_access_reports_missing_dependency() -> None:
+def test_notebook_attribute_access_reports_missing_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Unknown attribute access teaches AttributeError-lineage regardless of deps."""
     _drop_module("torchlens._notebook")
 
     module = importlib.import_module("torchlens._notebook")
 
-    with patch.dict("sys.modules", {"IPython": None}):
+    with monkeypatch.context() as patched:
+        patched.setitem(sys.modules, "IPython", None)
         # F22 facade contract: unknown names never mask as ImportError --
         # dependency reporting belongs to KNOWN names only.
         with pytest.raises(AttributeError, match=r"torchlens\._notebook"):
@@ -113,7 +115,7 @@ def test_neuro_import_stays_inert() -> None:
         assert f"torchlens.neuro.{implementation}" not in sys.modules
 
 
-def test_neuro_attribute_access_reports_missing_dependency() -> None:
+def test_neuro_attribute_access_reports_missing_dependency(monkeypatch: pytest.MonkeyPatch) -> None:
     """Known-name access with the dependency absent names the missing package."""
     pytest.importorskip("rsatoolbox")
     _drop_module("torchlens.neuro")
@@ -122,7 +124,8 @@ def test_neuro_attribute_access_reports_missing_dependency() -> None:
 
     from torchlens._errors import MissingDependencyError
 
-    with patch.dict("sys.modules", {"rsatoolbox": None}):
+    with monkeypatch.context() as patched:
+        patched.setitem(sys.modules, "rsatoolbox", None)
         # F22 teaching refusal: a KNOWN name whose optional dependency cannot
         # import refuses typed, naming the package (AttributeError never masks
         # a real missing dependency; ImportError-shaped masking is the old
