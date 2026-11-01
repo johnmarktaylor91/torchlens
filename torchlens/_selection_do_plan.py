@@ -17,6 +17,7 @@ from ._selection import (
     Selection,
     SelectionError,
     _apply_invalid,
+    _edit_identity,
     _find_act_ops,
     _lift,
     _unresolvable,
@@ -148,19 +149,3 @@ def _resolve_do_target(trace: Any, selection_like: Any) -> Selection:
             "edge selections address edge substitution (stage 3), not node edits.",
         )
     return resolved
-
-
-def _edit_identity(edit: Any, fallback: str) -> str:
-    """Return the string identity of one edit for audit rows and messages.
-
-    An ``Edit`` carries its ``name`` and a hook callable carries ``__name__``.
-    Only string attributes count: a replacement tensor exposes a ``name``
-    attribute that is ``None``, and the persisted audit contract requires a
-    string ``edit`` field, so a value edit falls back to ``fallback``.
-    """
-
-    for attribute in ("name", "__name__"):
-        candidate = getattr(edit, attribute, None)
-        if isinstance(candidate, str):
-            return candidate
-    return fallback

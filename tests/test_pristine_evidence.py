@@ -241,7 +241,7 @@ def test_saved_artifact_reads_what_it_carries(tmp_path: Path) -> None:
 )
 def test_derivation_rule(backend: str, version: int, history: list[Any], expected: Any) -> None:
     stub = SimpleNamespace(
-        backend=backend,
+        _provenance_backend=backend,
         tlspec_version=version,
         state_history=history,
         intervention_audit=[],
@@ -257,7 +257,7 @@ def test_non_torch_backends_read_not_recorded_never_pristine() -> None:
     assert "torch" in names and len(names) > 1
     for name in sorted(names):
         stub = SimpleNamespace(
-            backend=name,
+            _provenance_backend=name,
             tlspec_version=10,
             state_history=[],
             intervention_audit=[],
@@ -283,7 +283,7 @@ def test_non_torch_backends_read_not_recorded_never_pristine() -> None:
 )
 def test_each_evidence_kind_reads_not_pristine(field: str, value: Any) -> None:
     stub = SimpleNamespace(
-        backend="torch",
+        _provenance_backend="torch",
         tlspec_version=10,
         state_history=[],
         intervention_audit=[],

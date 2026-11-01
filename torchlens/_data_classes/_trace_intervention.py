@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 else:
     _TraceMixinBase = object
 from .._errors import InvalidArgumentError
+from .._selection import _edit_identity
 from .._trace_state import TraceState
 from ..intervention.types import (
     Edit,
@@ -1520,7 +1521,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 "kind": "EDGE",
                 "selection_repr": repr(selection),
                 "resolve_digest": resolved_edges.digest,
-                "edit": edit.name if isinstance(edit, Edit) else getattr(edit, "__name__", "value"),
+                "edit": _edit_identity(edit, "value"),
                 **payload,
             }
         )
@@ -1572,7 +1573,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 "kind": "PARAM",
                 "selection_repr": repr(selection),
                 "resolve_digest": resolved_params.digest,
-                "edit": edit.name if isinstance(edit, Edit) else getattr(edit, "__name__", "value"),
+                "edit": _edit_identity(edit, "value"),
                 **payload,
             }
         )

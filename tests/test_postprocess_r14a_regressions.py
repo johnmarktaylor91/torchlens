@@ -50,11 +50,11 @@ class _ConditionalBuildTrace:
     def __init__(self) -> None:
         """Populate only the fields used by conditional finalization."""
 
-        self.conditional_records = [
+        self._graph_conditional_records = [
             _make_conditional_event(0, "gt_1_3", 7),
             _make_conditional_event(1, "gt_1_3", 12),
         ]
-        self.conditional_arm_entry_edges = {
+        self._graph_conditional_arm_entry_edges = {
             (0, "then"): [("gt_1_3", "then_1")],
             (1, "then"): [("gt_1_3", "then_2")],
         }
@@ -257,7 +257,7 @@ def test_build_conditional_records_disambiguates_colliding_bool_layers() -> None
     trace = _ConditionalBuildTrace()
     _build_conditional_records(trace)
 
-    conditionals = list(trace.graph.conditionals)
+    conditionals = list(trace._graph_conditionals)
     assert [conditional.id for conditional in conditionals] == [
         "cond_gt_1_3__event_0",
         "cond_gt_1_3__event_1",

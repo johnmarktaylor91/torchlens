@@ -1366,15 +1366,12 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         # into declared `Trace._PORTABLE_STATE_SPEC` DROP rows. This allowance is
         # consulted BEFORE the spec, so an entry here makes the declared policy
         # dead code.
-        "_provenance_jax_closed_jaxpr",
         "jax_equation_captures",
         "jax_ordered_captures",
         "jax_region_captures",
         "_jax_capture_index_to_raw_op_label",
         "jax_capture_index_to_final_op_label",
-        "_provenance_jax_inlined_call_primitives",
         "jax_outvar_key_to_capture_index",
-        "_options_jax_static_argnums",
         "_selective_save_hidden_payloads",
         # B1-02: the four semantic-output scratch names moved OUT of this
         # allowance and into `Trace._PORTABLE_STATE_SPEC` as declared

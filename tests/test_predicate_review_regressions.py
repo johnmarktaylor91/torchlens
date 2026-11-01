@@ -507,11 +507,16 @@ def test_strict_rejects_nested_where(conv_trace: Any) -> None:
 def test_capture_module_fallback_for_nontorch_backend() -> None:
     """Non-torch capture subjects fall back to the single ``module`` candidate."""
 
+    from torchlens._data_classes.trace import Trace
     from torchlens._ir.selector_eval import evaluate
 
+    # A Trace instance (built without a capture) owning a non-torch backend
+    # store; the fallback reads the backend from live Traces only.
+    mlx_session = object.__new__(Trace)
+    mlx_session.__dict__["_provenance_backend"] = "mlx"
     subject = SimpleNamespace(
         output_of_module_calls=(),
-        source_trace=SimpleNamespace(backend="mlx"),
+        source_trace=mlx_session,
         module="encoder.block",
         func_name=None,
         layer_type=None,

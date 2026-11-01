@@ -1685,7 +1685,7 @@ class JAXBackend:
         if not jax.tree.all(jax.tree.map(_values_close, aux_output, captured_output)):
             raise ValueError(
                 "JAX derived gradient run raw output diverged from captured raw output; "
-                "refusing to expose trace._autograd_derived_grads."
+                "refusing to expose trace.autograd.derived_grads."
             )
         final_closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
         reject_undeclared_consts(final_closed_jaxpr)

@@ -147,7 +147,12 @@ def positions(
             argument="axis",
         )
     inner = normalize_hook(edit)
-    inner_name = getattr(edit, "name", getattr(edit, "__qualname__", type(edit).__name__))
+    declared_name = getattr(edit, "name", None)
+    inner_name = (
+        declared_name
+        if isinstance(declared_name, str)
+        else getattr(edit, "__qualname__", type(edit).__name__)
+    )
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook restricting the inner edit to the positions."""

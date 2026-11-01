@@ -51,7 +51,7 @@ def _structure_capture(**trace_kwargs):
 
 
 def test_structure_only_defaults_false_and_validates_bool() -> None:
-    assert CaptureOptions().options.structure_only is False
+    assert CaptureOptions().structure_only is False
     assert CaptureOptions(structure_only=True).structure_only is True
     with pytest.raises(ArgumentTypeError) as excinfo:
         CaptureOptions(structure_only="yes")  # type: ignore[arg-type]
@@ -62,7 +62,7 @@ def test_grouped_structure_only_reaches_the_field() -> None:
     from torchlens.options import CaptureOptions
 
     merged = CaptureOptions(structure_only=True)
-    assert merged.options.structure_only is True
+    assert merged.structure_only is True
     assert merged.is_field_explicit("structure_only")
 
 
@@ -218,6 +218,6 @@ def test_mode_marker_persists_and_left_the_prerelease_registrar() -> None:
     the marker persists, and nothing still gates it.
     """
 
-    assert Trace._PORTABLE_STATE_SPEC["structure_only"] is FieldPolicy.KEEP
+    assert Trace._PORTABLE_STATE_SPEC["_options_structure_only"] is FieldPolicy.KEEP
     inventory = registered_prerelease_fields()
-    assert "structure_only" not in inventory.get("Trace", ())
+    assert "_options_structure_only" not in inventory.get("Trace", ())

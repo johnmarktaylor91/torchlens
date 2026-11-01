@@ -1498,7 +1498,7 @@ class MLXBackend:
             if not _mlx_trees_close(aux_output, captured_output):
                 raise ValueError(
                     "MLX derived gradient run raw output diverged from captured raw output; "
-                    "refusing to expose trace._autograd_derived_grads."
+                    "refusing to expose trace.autograd.derived_grads."
                 )
             grad_trees = grads if len(differentiated_argnums) != 1 else (grads,)
             records: dict[str, DerivedGradRecord] = {}

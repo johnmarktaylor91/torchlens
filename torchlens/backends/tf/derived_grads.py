@@ -232,7 +232,7 @@ def attach_tf_derived_grads(
         if not _tf_trees_close(tf, replay_result.output, captured_output):
             raise ValueError(
                 "TensorFlow derived gradient run raw output diverged from captured "
-                "raw output; refusing to expose trace._autograd_derived_grads."
+                "raw output; refusing to expose trace.autograd.derived_grads."
             )
         intermediate_accessor = IntermediateDerivedGradAccessor()
         if grad_options.intermediate_grads:

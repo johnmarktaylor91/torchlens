@@ -52,7 +52,7 @@ from torchlens._io.scrub import scrub_for_save
 
 #: family id -> claimed registrar rows ("Owner.field" or "Trace.annotations.key").
 ACCEPTANCE_COVERAGE: dict[str, frozenset[str]] = {
-    "l1-grouping": frozenset({"Trace.options.grouping", "Trace.options.grouping_policy"}),
+    "l1-grouping": frozenset({"Trace._options_grouping", "Trace._options_grouping_policy"}),
     "l1-site-key": frozenset({"Op.site_key"}),
     "l2-episode": frozenset({"Trace.annotations.episode"}),
     "l3-aten-profile": frozenset(
@@ -170,8 +170,8 @@ ACCEPTANCE_COVERAGE: dict[str, frozenset[str]] = {
     "l6-edges": frozenset(
         {"Op.edge_substitutions", "Op.edge_replacement_stamps", "FireRecord.edge_address"}
     ),
-    "l7a-structure-only": frozenset({"Trace.options.structure_only"}),
-    "l8-distributed-scope": frozenset({"Trace.provenance.distributed_scope"}),
+    "l7a-structure-only": frozenset({"Trace._options_structure_only"}),
+    "l8-distributed-scope": frozenset({"Trace._provenance_distributed_scope"}),
     "l9-timing-provenance": frozenset({"Trace.grad_fn_timing_provenance"}),
     "l9-checkpoint-witness": frozenset({"Trace.checkpoint_invocation_witness"}),
 }
@@ -898,7 +898,7 @@ def test_tamper_structure_only_with_payload_refuses_typed(tmp_path) -> None:
         trace.save(str(honest_path))
     metadata_path = honest_path / "metadata.pkl"
     state = _pickle.loads(metadata_path.read_bytes())
-    state["structure_only"] = True
+    state["_options_structure_only"] = True
     metadata_path.write_bytes(_pickle.dumps(state))
     with pytest.raises(ArtifactError) as excinfo:
         tl.load(str(honest_path))
@@ -912,8 +912,8 @@ def test_tamper_structure_only_with_payload_refuses_typed(tmp_path) -> None:
 @pytest.mark.parametrize(
     ("forged_field", "forged_value", "tamper_name", "reason"),
     [
-        ("capture_verified", True, "structure_only_verified", "verification_claim"),
-        ("structure_only", "yes", "structure_only_type", "type"),
+        ("_provenance_verified", True, "structure_only_verified", "verification_claim"),
+        ("_options_structure_only", "yes", "structure_only_type", "type"),
     ],
     ids=[
         "tamper_structure_only_verified_claim_refuses_typed",

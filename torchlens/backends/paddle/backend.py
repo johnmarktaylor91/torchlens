@@ -730,7 +730,7 @@ class PaddleBackend:
                 if not _paddle_trees_close(self, replay_output, captured_output):
                     raise ValueError(
                         "Paddle derived gradient run raw output diverged from captured raw "
-                        "output; refusing to expose trace._autograd_derived_grads."
+                        "output; refusing to expose trace.autograd.derived_grads."
                     )
                 intermediate_accessor = IntermediateDerivedGradAccessor()
                 if observer is not None:

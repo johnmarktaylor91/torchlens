@@ -53,7 +53,7 @@ def raise_if_no_backward_capture(trace: Any, *, plural_subject: str) -> None:
         capabilities = get_backend_spec(backend).capabilities
     except BackendRegistryError as exc:
         raise InvalidArgumentError(
-            f"trace._provenance_backend={backend!r} is not a registered backend, so "
+            f"trace.provenance.backend={backend!r} is not a registered backend, so "
             f"{plural_subject} availability cannot be capability-checked; "
             "refusing instead of returning silently-empty results",
             code="unknown_backend",
@@ -68,7 +68,7 @@ def raise_if_no_backward_capture(trace: Any, *, plural_subject: str) -> None:
             "capture true backward graphs",
             code="backend_unsupported",
             remedy=(
-                "use trace._autograd_derived_grads for leaf-level derived gradients and "
+                "use trace.autograd.derived_grads for leaf-level derived gradients and "
                 "op.derived_grad for exact op-level derived gradients"
             ),
             backend=backend,

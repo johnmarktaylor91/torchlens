@@ -225,7 +225,7 @@ def _require_seed(seed: Any, verb: str) -> int | str:
             "edits, so unacknowledged stochasticity never reaches a hook",
             code="sampling_seed_required",
             remedy="pass an explicit integer seed, or seed='auto' to derive one "
-            "from the capture's recorded trace._options_seed",
+            "from the capture's recorded trace.options.seed",
             argument="seed",
         )
     return seed
@@ -252,7 +252,7 @@ def _base_seed(
     trace_seed = ctx.run_state.get("trace_random_seed")
     if trace_seed is None:
         raise InvalidArgumentError(
-            f"{verb} seed='auto' needs the capture's recorded trace._options_seed, "
+            f"{verb} seed='auto' needs the capture's recorded trace.options.seed, "
             "and this door's run context does not carry one",
             code="sampling_trace_seed_unavailable",
             remedy="pass an explicit integer seed=, or run the edit on a door "

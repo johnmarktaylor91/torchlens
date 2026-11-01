@@ -1269,7 +1269,7 @@ class TinygradBackend:
         if getattr(trace, "tinygrad_payload_policy", None) != "dev_python_realized_copy":
             raise BackendUnsupportedError(
                 "tinygrad derived gradients require live DEV=PYTHON realized-copy payloads; "
-                "audit-only traces cannot expose trace._autograd_derived_grads."
+                "audit-only traces cannot expose trace.autograd.derived_grads."
             )
         input_argnums = _normalize_tinygrad_input_grad_argnums(
             grad_options.input_grad_argnums,
@@ -1308,7 +1308,7 @@ class TinygradBackend:
             if not _tinygrad_outputs_close(self, derived_output, captured_output):
                 raise ValueError(
                     "tinygrad derived gradient run raw output diverged from captured raw output; "
-                    "refusing to expose trace._autograd_derived_grads."
+                    "refusing to expose trace.autograd.derived_grads."
                 )
             cast(Any, loss).backward()
             records = _records_for_tinygrad_leaf_grads(
