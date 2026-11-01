@@ -445,6 +445,36 @@ def _finalize_plane_p(state: _WitnessState) -> None:
     }
 
 
+def _resolve_witness_requests(trace: Any) -> tuple[bool, bool, bool, Any]:
+    """Resolve which witness planes a capture requests and arm aten recording on its journal.
+
+    Parameters
+    ----------
+    trace:
+        Trace or Recording runtime trace receiving diagnostics.
+
+    Returns
+    -------
+    tuple[bool, bool, bool, Any]
+        ``(record_escapes, record_aten, plane_p, event_stream)``.
+    """
+
+    # A runnable-eligible (``intervention_ready``) capture always records
+    # tensor->host escape sources so the sparse descriptor can witness the escape
+    # by its producing op, keyed on the ESCAPE EVENT. This is a passive observer:
+    # it records raw op labels only and never alters a captured op, so goldens are
+    # unchanged. The default (non-runnable) capture path installs nothing.
+    from ._aten_capture import _aten_recording_requested
+
+    record_escapes = bool(getattr(trace, "intervention_ready", False))
+    record_aten = _aten_recording_requested()
+    plane_p = _plane_p_requested()
+    event_stream = getattr(trace, "capture_events", None)
+    if record_aten and event_stream is not None:
+        event_stream.aten_recording_enabled = True
+    return record_escapes, record_aten, plane_p, event_stream
+
+
 @contextmanager
 def capture_completeness_witness(trace: Any) -> Iterator[None]:
     """Optionally run an aten census around one active-logging forward.
@@ -462,19 +492,7 @@ def capture_completeness_witness(trace: Any) -> Iterator[None]:
 
     mode = _effective_mode()
     _init_witness_fields(trace, mode)
-    # A runnable-eligible (``intervention_ready``) capture always records
-    # tensor->host escape sources so the sparse descriptor can witness the escape
-    # by its producing op, keyed on the ESCAPE EVENT. This is a passive observer:
-    # it records raw op labels only and never alters a captured op, so goldens are
-    # unchanged. The default (non-runnable) capture path installs nothing.
-    from ._aten_capture import _aten_recording_requested
-
-    record_escapes = bool(getattr(trace, "intervention_ready", False))
-    record_aten = _aten_recording_requested()
-    plane_p = _plane_p_requested()
-    event_stream = getattr(trace, "capture_events", None)
-    if record_aten and event_stream is not None:
-        event_stream.aten_recording_enabled = True
+    record_escapes, record_aten, plane_p, event_stream = _resolve_witness_requests(trace)
     if mode == "off" and not record_escapes and not record_aten and not plane_p:
         try:
             yield
