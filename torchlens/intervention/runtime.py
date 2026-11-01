@@ -261,11 +261,11 @@ _GRADIENT_CALLBACK_PARAMETERS = frozenset(
 def _refuse_gradient_edit_on_forward(hook_callable: Any, hook_context: HookContext) -> None:
     """Refuse a gradient edit reached by a forward-only engine (replay, push).
 
-    A backward edit (``tl.zero_grad()``, ``tl.hook_grad(fn)``, ...) is normalized
-    to the gradient-tuple callback, whose ``grad_output``, ``grad_fn_handle``,
-    ``call_index`` and ``run_ctx`` arguments a forward value can never supply
-    (this runs only after the forward bind failed). The replay engine recomputes forward values only, so
-    such an edit has no gradient to edit there.
+    An autograd-node edit is normalized to the gradient-tuple callback, whose
+    ``grad_output``, ``grad_fn_handle``, ``call_index`` and ``run_ctx``
+    arguments a forward value can never supply (this runs only after the
+    forward bind failed). The replay engine recomputes forward values only,
+    so such an edit has no gradient to edit there.
 
     Raises
     ------
