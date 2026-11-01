@@ -1,10 +1,7 @@
-"""Typed refusals, capture options and the quiet capture used by ``extract`` and ``pluck``."""
+"""Typed refusals and capture options used by ``extract`` and ``pluck``."""
 
 from __future__ import annotations
 
-import warnings
-from collections.abc import Iterator
-from contextlib import contextmanager
 from typing import NoReturn
 
 from ._errors import InvalidArgumentError
@@ -14,7 +11,6 @@ from .options import CaptureOptions
 __all__ = [
     "CaptureOptions",
     "TorchLensError",
-    "capture_quiet",
     "refuse_activation_not_saved",
     "refuse_lookup_not_found",
 ]
@@ -45,19 +41,3 @@ def refuse_activation_not_saved(key: str) -> NoReturn:
         remedy="request the layer through extract's layers argument so the capture saves it",
         key=key,
     )
-
-
-@contextmanager
-def capture_quiet() -> Iterator[None]:
-    """Silence the capture-time ``layers_to_save`` zero-match warning during an extract capture.
-
-    ``extract`` and ``pluck`` resolve every requested layer right after the capture and refuse
-    typed (``op_lookup_not_found`` / ``activation_not_saved``) when nothing was saved, so the
-    capture's zero-match disclosure would double-report ahead of that refusal.
-    """
-
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore", message=r"layers_to_save=.* matched zero layers", category=UserWarning
-        )
-        yield

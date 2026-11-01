@@ -511,7 +511,7 @@ def pluck(
         ``activation_not_saved`` if it produced no saved tensor.
     """
 
-    from ._extract_refusals import CaptureOptions, capture_quiet
+    from ._extract_refusals import CaptureOptions
 
     # an explicit site rides the capture options, where the trace
     # validates it; without one the trace reads the ambient site itself.
@@ -520,8 +520,7 @@ def pluck(
         if stop_after is None
         else CaptureOptions(layers_to_save=[layer], stop_after=stop_after)
     )
-    with capture_quiet():
-        trace = _resolve_top_level("trace")(model, inputs, capture=capture)
+    trace = _resolve_top_level("trace")(model, inputs, capture=capture)
     return _out_from_log(trace, layer)
 
 
@@ -614,7 +613,7 @@ def _extract_layers_with_trace(
         ``op_lookup_not_found`` (no such layer) or ``activation_not_saved`` (no saved tensor).
     """
 
-    from ._extract_refusals import CaptureOptions, capture_quiet, refuse_lookup_not_found
+    from ._extract_refusals import CaptureOptions, refuse_lookup_not_found
     from ._trace_selector_helpers import canonical_module_site_key
 
     facet_plan = _extract_facet_plan(layers)
@@ -626,8 +625,7 @@ def _extract_layers_with_trace(
     capture = CaptureOptions(
         layers_to_save=list(layer_plan.values()), detach_saved_activations=detach_saved_activations
     )
-    with capture_quiet():
-        trace = _resolve_top_level("trace")(model, x, capture=capture)
+    trace = _resolve_top_level("trace")(model, x, capture=capture)
     outputs: dict[str, _torch.Tensor] = {}
     views: dict[str, _Any] = {}
     if isinstance(layers, _Mapping):

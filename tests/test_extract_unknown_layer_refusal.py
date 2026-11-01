@@ -18,7 +18,12 @@ from torch import nn
 import torchlens as tl
 from torchlens.errors import InvalidArgumentError, TorchLensError
 
-pytestmark = [pytest.mark.smoke]
+# The capture still discloses a zero-match ``layers_to_save`` request with a UserWarning
+# before the typed refusal (``tests/test_onramp.py`` pins both signals); the package's
+# error filter would otherwise surface that warning here instead of the refusal under test.
+pytestmark = [
+    pytest.mark.filterwarnings(r"default:layers_to_save=.* matched zero layers:UserWarning")
+]
 
 
 class _Tiny(nn.Module):
