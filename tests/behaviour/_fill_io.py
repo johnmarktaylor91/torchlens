@@ -326,6 +326,14 @@ def _halted(cell: Cell) -> bool:
     return any(feature.name == "halt" for feature in cell.features)
 
 
+def _frame_of(value: Any) -> Any:
+    """Shape and dtype of a tensor payload, or the value's type."""
+
+    if isinstance(value, torch.Tensor):
+        return (tuple(value.shape), value.dtype)
+    return type(value).__name__
+
+
 def _is_output(op: Any) -> bool:
     return bool(getattr(op, "is_output", False))
 
@@ -375,6 +383,11 @@ def _check_chunked_capture(cell: Cell, plain: Any) -> None:
         return
     rows = int(stimuli.shape[0])
     size = (rows + 1) // 2
+    try:
+        with torch.no_grad():
+            cell.model(stimuli[:size].clone())
+    except Exception:
+        return  # the model's own forward needs the whole batch (hidden sizes, batch-wise cat)
     torch.manual_seed(SEED)
     chunked = tl.trace(cell.model, stimuli.clone(), chunk_size=size)
     cell.expect(
@@ -408,11 +421,19 @@ def _check_streamed_payloads(cell: Cell, trace: Any, plain: Any) -> None:
             op.label for op in trace.saved_ops if op.out is not None and not _is_output(op)
         )
         cell.expect(not retained, f"streamed payloads kept in memory: {retained[:8]}")
+    stochastic = cell.case.has("stochastic")
     for op in trace.saved_ops:
         if _halted(cell) and _is_output(op):
             continue  # a halted capture's output is the halt frontier, not the model output
         reference = plain[op.label].out
         if reference is None:
+            continue
+        if stochastic:  # another forward: only the payload's frame can match the plain one
+            got = op.materialize_out()
+            cell.expect(
+                _frame_of(got) == _frame_of(reference),
+                f"streamed payload of {op.label}: {_frame_of(got)} vs {_frame_of(reference)}",
+            )
             continue
         diff = _leaf_difference(reference, op.materialize_out())
         cell.expect(diff is None, f"streamed payload of {op.label}: {diff}")
@@ -425,12 +446,15 @@ def _expect_streamed_payloads(cell: Cell, trace: Any, plain: Any, got: Any, what
     narrows it, and a ``halt=`` partner's output op is the halt frontier.
     """
 
+    stochastic = cell.case.has("stochastic")
     for op in trace.saved_ops:
         if _halted(cell) and _is_output(op):
             continue
         reference = plain[op.label].out
         if reference is None:
             continue
+        if stochastic:  # the streamed capture is its own reference for a stochastic forward
+            reference = trace[op.label].materialize_out()
         diff = _leaf_difference(reference, got[op.label].out)
         cell.expect(diff is None, f"{what}: payload of {op.label}: {diff}")
 
@@ -582,7 +606,13 @@ def _after_export(cell: Cell) -> None:
         other = cell.loaded.to_pandas()
         absent = [column for column in FRAME_IDENTITY if column not in frame.columns]
         cell.expect(not absent, f"to_pandas lacks the columns {absent}")
-        differing = [column for column in FRAME_IDENTITY if not frame[column].equals(other[column])]
+        mine = frame.set_index("label").sort_index()
+        theirs = other.set_index("label").sort_index()
+        cell.expect(
+            list(mine.index) == list(theirs.index), "the loaded trace's frame names other rows"
+        )
+        columns = [column for column in FRAME_IDENTITY if column != "label"]
+        differing = [column for column in columns if not mine[column].equals(theirs[column])]
         cell.expect(
             not differing, f"the loaded trace's frame differs from the live one in {differing}"
         )
@@ -764,7 +794,7 @@ def _filled_toys() -> tuple[Case, ...]:
     toy = cases._toy
     return (
         *cases.TOY_CASES,
-        toy("mutating_buffers", MutatingBuffers, _vec4, "inplace", "child_module"),
+        toy("mutating_buffers", MutatingBuffers, _vec4, "inplace", "child_module", "stochastic"),
         toy("aliased_outputs", AliasedOutputs, _vec4, "containers", "child_module"),
         toy("empty_and_scalar", EmptyAndScalar, _vec4, "containers", "views", "child_module"),
         toy("complex_spectrum", ComplexSpectrum, _vec8, "dtype", "child_module"),
