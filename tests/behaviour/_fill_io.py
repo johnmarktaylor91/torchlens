@@ -330,6 +330,14 @@ def _is_output(op: Any) -> bool:
     return bool(getattr(op, "is_output", False))
 
 
+#: Features whose keyword is a predicate; such captures materialize payloads on ``out`` reads.
+PREDICATE_FEATURES = frozenset({"save", "halt", "intervene"})
+
+
+def _predicate_capture(cell: Cell) -> bool:
+    return any(feature.name in PREDICATE_FEATURES for feature in cell.features)
+
+
 def _stream_path(cell: Cell) -> Path:
     return cell.tmp / "stream.tlspec"
 
@@ -385,12 +393,21 @@ def _check_chunked_capture(cell: Cell, plain: Any) -> None:
 def _check_streamed_payloads(cell: Cell, trace: Any, plain: Any) -> None:
     """Every streamed payload is the plain capture's tensor for that op."""
 
-    # The output tail is always retained (``torchlens/_user_funcs.py``, "always-retained
-    # output tail"): the caller holds that tensor anyway. Everything else must be on disk.
-    retained = sorted(
-        op.label for op in trace.saved_ops if op.out is not None and not _is_output(op)
+    # Streamed payloads live on disk: every saved op carries an ``out_ref``. The output tail is
+    # always retained (``torchlens/_user_funcs.py``, "always-retained output tail"): the caller
+    # holds that tensor anyway.
+    unstreamed = sorted(
+        op.label for op in trace.saved_ops if op.out_ref is None and not _is_output(op)
     )
-    cell.expect(not retained, f"streamed payloads kept in memory: {retained[:8]}")
+    cell.expect(not unstreamed, f"saved ops without a blob on disk: {unstreamed[:8]}")
+    # Reading ``op.out`` on a capture with predicate keywords (save=, halt=, intervene=)
+    # materializes the blob by design (the lazy-payload honesty gate in ``Op``), so the pinned
+    # ``None`` is asserted only on plain streamed captures.
+    if not _predicate_capture(cell):
+        retained = sorted(
+            op.label for op in trace.saved_ops if op.out is not None and not _is_output(op)
+        )
+        cell.expect(not retained, f"streamed payloads kept in memory: {retained[:8]}")
     for op in trace.saved_ops:
         reference = plain[op.label].out
         if reference is None:
@@ -564,7 +581,7 @@ FRAME_IDENTITY = (
     "num_passes",
     "parents",
     "children",
-    "module_address",
+    "atomic_module_call",
     "has_saved_activation",
 )
 
