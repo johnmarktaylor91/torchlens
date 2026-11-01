@@ -25,6 +25,7 @@ from .._quantities import Bytes
 from .._trace_state import TraceState
 from .._utils.display import progress_bar
 from .._utils.rng import execute_with_restored_rng_autocast
+from ..errors._base import TorchLensError
 from ..options import ReplayOptions, merge_replay_options
 from ._param_fingerprint import (
     CHANGED_PARAMS_RUN_KEY,
@@ -652,6 +653,7 @@ def _run_replay(
     errors_non_fatal = 0
     pending_updates: dict[str, torch.Tensor] = {}
     pending_records: dict[str, list[FireRecord]] = {}
+    loaded = bool(getattr(log, "_loaded_from_bundle", False))
 
     for site in progress_bar(cone, total=len(cone), desc="torchlens.push"):
         site_key = _replay_site_key(site)
@@ -665,25 +667,30 @@ def _run_replay(
             executed_call_ids.add(site.func_call_id)
         if all(preserve_origins and _replay_site_key(member) in origin_keys for member in group):
             continue
-        _preflight_group(group)
-        replay_group = [member for member in group if not getattr(member, "is_buffer", False)]
+        _preflight_group(group, loaded=loaded)
+        replay_group = [member for member in group if not _is_source_record(member)]
         if not replay_group:
-            # A buffer-only group is a written buffer VERSION record: thread
-            # the recomputed writing op's output through it so downstream
-            # consumers of the buffer read the propagated state, not the
-            # captured value.
+            # A source-only group has nothing to re-execute: a written buffer
+            # VERSION record threads the recomputed writing op's output
+            # through it so downstream consumers of the buffer read the
+            # propagated state, not the captured value; a model-input leaf
+            # keeps its captured value.
             for member in group:
                 member_key = _replay_site_key(member)
                 if preserve_origins and member_key in origin_keys:
                     continue
-                threaded = _threaded_buffer_value(member, log, overlay, strict=strict)
+                threaded = (
+                    _threaded_buffer_value(member, log, overlay, strict=strict)
+                    if getattr(member, "is_buffer", False)
+                    else None
+                )
                 if threaded is None:
-                    # Nothing threads into this version (an initial read, or
-                    # an undisclosed gap kept its captured value). A hook
-                    # aimed AT the record still fires, on the captured value:
-                    # that value is what the version's consumers read, so the
-                    # edit propagates through the cone from here. Without a
-                    # hook there is nothing to recompute.
+                    # Nothing threads into this record (an input leaf, an
+                    # initial buffer read, or an undisclosed gap kept its
+                    # captured value). A hook aimed AT the record still fires,
+                    # on the captured value: that value is what the record's
+                    # consumers read, so the edit propagates through the cone
+                    # from here. Without a hook there is nothing to recompute.
                     if member_key not in hook_targets or not isinstance(member.out, torch.Tensor):
                         continue
                     threaded = member.out
@@ -727,7 +734,12 @@ def _run_replay(
             # through copy-on-write forks, the SOURCE trace's payloads).
             args = _clone_tensors_in(args)
             kwargs = {key: _clone_tensors_in(value) for key, value in kwargs.items()}
-        output = _execute_replay_func_strict(representative, args, kwargs)
+        if _keeps_captured_draw(
+            representative, replay_group, pending_updates=pending_updates, label_keys=label_keys
+        ):
+            output = representative.out.clone()
+        else:
+            output = _execute_group_call(representative, args, kwargs, origins=origins)
         if output is None and _is_inplace_none_return(representative):
             output = args[0]
         for member in replay_group:
@@ -1214,6 +1226,112 @@ def _execute_replay_func_strict(
     )
 
 
+def _execute_group_call(
+    site: Op,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    *,
+    origins: Sequence[Op],
+) -> Any:
+    """Execute one replay call, surfacing a torch failure as a typed replay refusal.
+
+    An edit can carry a value the captured graph cannot consume downstream:
+    an index lookup fed an index past its table, a reshape fed a tensor of
+    another size. Torch then raises from the replayed callable, far from the
+    edit that caused it. The refusal names the op that raised, the edit
+    origins and the original exception (chained as ``__cause__``); nothing
+    is committed, so the fork keeps its captured values.
+
+    Parameters
+    ----------
+    site:
+        Representative site of the function-call group being replayed.
+    args:
+        Reconstructed positional arguments.
+    kwargs:
+        Reconstructed keyword arguments.
+    origins:
+        Replay origins (the edited sites).
+
+    Returns
+    -------
+    Any
+        Function return value.
+    """
+
+    try:
+        return _execute_replay_func_strict(site, args, kwargs)
+    except TorchLensError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - every torch failure is re-raised typed and chained
+        origin_labels = ", ".join(repr(_disclosure_label(origin)) for origin in origins)
+        func_name = str(getattr(site, "func_name", "") or "the saved callable")
+        raise ReplayPreconditionError(
+            f"replay of {site.layer_label!r} ({func_name}) raised {type(exc).__name__}: {exc}. "
+            f"The edit at {origin_labels} produced a value this op cannot consume on the "
+            "captured graph (an index, shape or dtype path fixed at capture). Nothing was "
+            "committed. Choose an edit that keeps the edited site inside the range the "
+            "downstream ops accept, or rerun the model with the edit staged: "
+            "trace.run(model, inputs)"
+        ) from exc
+
+
+def _keeps_captured_draw(
+    representative: Op,
+    replay_group: Sequence[Op],
+    *,
+    pending_updates: Mapping[str, torch.Tensor],
+    label_keys: Mapping[str, tuple[str, ...]],
+) -> bool:
+    """Whether a stochastic call keeps its captured output instead of re-executing.
+
+    Re-executing a random-source op (``randn_like``, ``dropout``, ...) with no
+    recorded RNG state draws fresh numbers: the replay would replace the
+    captured value with an unrelated one before any hook fires, so an edit
+    aimed at the site would edit a value the trace never held. When no
+    argument of the call changed in this replay there is nothing to
+    recompute and the captured draw stands. With RNG states recorded
+    (``save_rng_states``) the call re-executes and reproduces its draw; a
+    call whose arguments did change re-executes as well (its new draw is the
+    disclosed stochastic-propagation behaviour).
+
+    Parameters
+    ----------
+    representative:
+        Representative site of the function-call group.
+    replay_group:
+        Sites the call produced.
+    pending_updates:
+        Values this replay has recomputed so far, by replay site key.
+    label_keys:
+        Label spelling to replay site keys.
+
+    Returns
+    -------
+    bool
+        True when the captured output is the correct replay value.
+    """
+
+    from ..debug._precision import _STOCHASTIC_FUNC_NAMES
+
+    func_name = str(getattr(representative, "func_name", "") or "").rstrip("_")
+    if func_name not in _STOCHASTIC_FUNC_NAMES:
+        return False
+    if getattr(representative, "func_rng_states", None):
+        return False
+    if len(replay_group) != 1 or tuple(representative.container_path or ()):
+        return False
+    if not isinstance(representative.out, torch.Tensor):
+        return False
+    if getattr(representative, "edge_substitutions", None):
+        return False
+    for parent in representative.parents or ():
+        for key in label_keys.get(parent, (parent,)):
+            if key in pending_updates:
+                return False
+    return True
+
+
 def _apply_replay_hooks(
     out: torch.Tensor,
     *,
@@ -1456,21 +1574,74 @@ def _preflight_log(log: Trace) -> None:
         raise ReplayPreconditionError("replay requires intervention_ready=True capture metadata")
 
 
-def _preflight_group(group: Sequence[Op]) -> None:
+def _preflight_group(group: Sequence[Op], *, loaded: bool = False) -> None:
     """Validate replay preconditions for one function-call group.
 
     Parameters
     ----------
     group:
         Same-call output sites.
+    loaded:
+        Whether the trace was loaded from a saved file (no callables travel
+        with a save, so the refusal names that condition and its remedy).
     """
 
     for site in group:
-        if getattr(site, "is_buffer", False):
+        if _is_source_record(site):
             continue
         if site.func is None:
-            raise ReplayPreconditionError(f"{site.layer_label!r} has no func for replay")
+            raise ReplayPreconditionError(_no_func_message(site, loaded=loaded))
         _template_for_site(site)
+
+
+def _is_source_record(site: Op) -> bool:
+    """Whether a site is a source record with nothing to re-execute.
+
+    A buffer version record and a model-input leaf carry no callable: their
+    replay value is threaded or captured, never recomputed, and a hook aimed
+    at one fires on that value.
+
+    Parameters
+    ----------
+    site:
+        Site to classify.
+
+    Returns
+    -------
+    bool
+        True for buffer records and input leaves.
+    """
+
+    if getattr(site, "is_buffer", False):
+        return True
+    return bool(getattr(site, "is_input", False)) and site.func is None and not site.parents
+
+
+def _no_func_message(site: Op, *, loaded: bool) -> str:
+    """Return the refusal text for a site with no callable to replay.
+
+    Parameters
+    ----------
+    site:
+        Site that cannot be replayed.
+    loaded:
+        Whether the trace came from a saved file.
+
+    Returns
+    -------
+    str
+        Refusal message, naming the loaded-trace condition when that is the cause.
+    """
+
+    if not loaded:
+        return f"{site.layer_label!r} has no func for replay"
+    return (
+        f"{site.layer_label!r} has no func for replay: this trace was loaded from a saved "
+        "file, and a save keeps no capture-time callables or argument templates, so edits "
+        "cannot be replayed on it. Edit a trace captured in this process with "
+        "CaptureOptions(intervention_ready=True), or rerun the model with the edit staged: "
+        "trace.run(model, inputs)"
+    )
 
 
 def _template_for_site(site: Op) -> CapturedArgTemplate:
