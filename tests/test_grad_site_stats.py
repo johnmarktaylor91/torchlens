@@ -113,7 +113,7 @@ def test_sweep_gradient_site_with_loss_runs_every_backward() -> None:  # A32
     )
     members = {name: bundle[name] for name in ("baseline", "zero", "half")}
     for member in members.values():
-        assert member.num_backward_passes == 1
+        assert member._num_backward_passes == 1
     fc1 = next(
         str(op.layer_label) for op in members["baseline"]._layer_list if op.func_name == "linear"
     )

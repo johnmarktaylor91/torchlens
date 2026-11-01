@@ -84,23 +84,23 @@ def test_current_artifacts_load_clean(tmp_path: Path) -> None:
     ]
 
 
-def test_between_floor_stamp_refuses_as_2x(tmp_path: Path) -> None:
-    """A coherent artifact stamped older than the current format refuses, never loads.
+def test_no_between_floor_range_every_older_stamp_refuses(tmp_path: Path) -> None:
+    """The floor is the current format, so a coherently re-stamped older artifact refuses.
 
-    Every stamp from the floor up to the current one was written by torchlens 2.x, so each
-    refuses at load with the one typed error naming the 2.x origin and the remedy.
+    There is no stamp between the floor and the runtime: the stamp one below the current
+    format refuses at load with the one typed error naming the 2.x origin and the remedy.
     """
 
+    assert MIN_TLSPEC_VERSION == TLSPEC_VERSION, "a between-floor range would need its own test"
     trace = _build_trace()
-    assert MIN_TLSPEC_VERSION < TLSPEC_VERSION, "no between-floor range to exercise"
-    for version in range(MIN_TLSPEC_VERSION, TLSPEC_VERSION):
-        path = tmp_path / f"between_floor_{version}.tlspec"
-        trace.save(path)
-        _stamp_between_floor(path, version)
-        with pytest.raises(ArtifactTooOldError, match=FLOOR_MATCH) as excinfo:
-            tl.load(path)
-        assert excinfo.value.fields["code"] == "artifact_version_below_floor"
-        assert excinfo.value.fields["observed"] == f"tlspec_version={version}"
+    version = TLSPEC_VERSION - 1
+    path = tmp_path / f"older_stamp_{version}.tlspec"
+    trace.save(path)
+    _stamp_between_floor(path, version)
+    with pytest.raises(ArtifactTooOldError, match=FLOOR_MATCH) as excinfo:
+        tl.load(path)
+    assert excinfo.value.fields["code"] == "artifact_version_below_floor"
+    assert excinfo.value.fields["observed"] == f"tlspec_version={version}"
     trace.cleanup()
 
 

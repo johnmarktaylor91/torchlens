@@ -80,7 +80,7 @@ def test_fork_do_gradient_site_refuses_and_the_remedy_runs(edit: str) -> None:
         inputs=_X,
         loss=lambda t: t[t.output_layers[0]].out.sum(),
     )
-    assert result.num_backward_passes == 1
+    assert result._num_backward_passes == 1
     assert model.l1.weight.grad is not None
     if edit in ("zero_ablate", "callable"):
         assert torch.count_nonzero(model.l1.weight.grad) == 0

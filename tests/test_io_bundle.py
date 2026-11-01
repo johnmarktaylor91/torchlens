@@ -603,10 +603,12 @@ def test_bundle_save_complex64_still_round_trips(tmp_path: Path) -> None:
             "saved by torchlens 2.x",
         ),
         (
+            # The floor is the current format (MIN_TLSPEC_VERSION == TLSPEC_VERSION),
+            # so an artifact stamped at the floor is a current artifact and loads.
             "io_format_at_floor",
             lambda manifest: manifest.__setitem__("tlspec_version", MIN_TLSPEC_VERSION),
-            "raise",
-            "saved by torchlens 2.x",
+            "ok",
+            None,
         ),
         (
             "io_format_equal",

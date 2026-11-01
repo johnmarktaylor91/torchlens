@@ -169,7 +169,9 @@ def test_v10_contract_floor_text_and_version() -> None:
     contract = _load(V10_CONTRACT)["contract"]
     assert contract["tlspec_version"] == 10, "v10 stays frozen"
     assert TLSPEC_VERSION == 11
-    assert contract["min_torchlens_version"] == MIN_TORCHLENS_VERSION_TEXT == "2.31.0"
+    assert contract["min_torchlens_version"] == "2.31.0", "v10 stays frozen"
+    v11 = _load(V11_CONTRACT)["contract"]
+    assert v11["min_torchlens_version"] == MIN_TORCHLENS_VERSION_TEXT
     assert contract["min_tlspec_version"] == 6, "v10 stays frozen"
     assert MIN_TLSPEC_VERSION == 11
 

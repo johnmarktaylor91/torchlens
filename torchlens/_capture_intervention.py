@@ -217,7 +217,7 @@ def _fired_capture_records(trace: Trace) -> tuple[list[str], int, list[Any]]:
     fired_records: list[Any] = []
     for label in trace.op_labels:
         op = trace.ops[label]
-        records = getattr(op, "interventions", None) or ()
+        records = op.edits or ()
         if records:
             fired_labels.append(label)
             fire_count += len(records)

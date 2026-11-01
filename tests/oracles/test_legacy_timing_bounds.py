@@ -91,7 +91,7 @@ def test_module_and_call_durations_are_bounded(timed_trace) -> None:
     assert 0 < float(fc.forward_duration) <= float(sleeper.forward_duration) - SLEEP
     for call in (root, sleeper, fc):
         assert 0 < float(call.func_calls_duration) <= float(call.forward_duration)
-    assert float(sleeper.cost.func_calls_duration) <= float(sleeper.forward_duration) - SLEEP
+    assert float(sleeper.func_calls_duration) <= float(sleeper.forward_duration) - SLEEP
     for address, call in (("self", root), ("s", sleeper), ("s.fc", fc)):
         module = trace.modules[address]
         assert float(module.forward_duration) == pytest.approx(float(call.forward_duration))
