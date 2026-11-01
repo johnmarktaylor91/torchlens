@@ -146,7 +146,7 @@ def test_truncated_live_run_has_no_forward_return(fast: bool) -> None:
 def test_recording_conversion_has_no_live_trace_return() -> None:
     """Cooking a Recording does not invent a Trace forward."""
 
-    recording = tl.record(_ContainerOutput(), torch.ones(1, 3), save="all")
+    recording = tl.record(_ContainerOutput(), torch.ones(1, 3), save=lambda _ctx: True)
     trace = recording.to_trace()
     with pytest.raises(PayloadUnavailableError) as exc_info:
         _ = trace.output

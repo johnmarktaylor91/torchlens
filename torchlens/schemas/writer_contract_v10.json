@@ -892,6 +892,7 @@
     "_out_writer": "drop",
     "_output_container_specs_by_raw_label": "drop",
     "_output_head": "drop",
+    "_output_slot": "drop",
     "_output_style": "drop",
     "_output_tokenizer": "drop",
     "_output_transform": "drop",
@@ -3414,6 +3415,7 @@
      "_out_writer": "drop",
      "_output_container_specs_by_raw_label": "drop",
      "_output_head": "drop",
+     "_output_slot": "drop",
      "_output_style": "drop",
      "_output_tokenizer": "drop",
      "_output_transform": "drop",
@@ -4101,5 +4103,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "ad27e4069d8b1fc942412a7a2362a5aaaf1240d8e027b8c91894e4410c0aad2e"
+ "writer_contract_digest": "4cc43fcc3375a6dfc0a97a4c9b55ebce6dc7fd9dd6e780bff5320622f92d60d7"
 }
