@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 import torch
-from torch import nn
+from torch import distributions as D, nn
 from torch.distributions import (
     Categorical,
     Independent,
@@ -349,3 +349,85 @@ def test_forged_lossless_flag_cannot_bless_a_stateful_type() -> None:
         lossy_reconstruction=False,
     )
     assert _spec_node_reconstruction_lossy(honest) is False
+
+
+def _families() -> list[tuple[str, Any, bool]]:
+    """``(name, factory, lossless)`` for the standard families (the coverage table)."""
+
+    p = torch.tensor([[0.2, 0.3, 0.5], [0.6, 0.3, 0.1]])
+    loc, scale = torch.tensor([0.1, -0.2]), torch.tensor([1.5, 0.5])
+    cov = torch.tensor([[2.0, 0.3], [0.3, 1.0]])
+    return [
+        ("Normal", lambda: D.Normal(loc, scale), True),
+        ("Laplace", lambda: D.Laplace(loc, scale), True),
+        ("Cauchy", lambda: D.Cauchy(loc, scale), True),
+        ("Uniform", lambda: D.Uniform(loc - 1, loc + 1), True),
+        ("Gamma", lambda: D.Gamma(scale, scale + 1), True),
+        ("Exponential", lambda: D.Exponential(scale), True),
+        ("Poisson", lambda: D.Poisson(scale), True),
+        ("Beta", lambda: D.Beta(scale, scale + 1), True),
+        ("Dirichlet", lambda: D.Dirichlet(p), True),
+        ("StudentT", lambda: D.StudentT(scale + 2, loc, scale), True),
+        ("Bernoulli(logits)", lambda: D.Bernoulli(logits=loc), True),
+        ("Bernoulli(probs)", lambda: D.Bernoulli(probs=scale / 2), True),
+        ("ContinuousBernoulli", lambda: D.ContinuousBernoulli(probs=scale / 2), True),
+        ("Categorical(logits)", lambda: D.Categorical(logits=p.log()), True),
+        ("Categorical(probs)", lambda: D.Categorical(probs=p), True),
+        ("OneHotCategorical", lambda: D.OneHotCategorical(probs=p), True),
+        ("Binomial", lambda: D.Binomial(5, probs=scale / 2), True),
+        ("Multinomial", lambda: D.Multinomial(4, probs=p), True),
+        ("Geometric", lambda: D.Geometric(probs=scale / 2), True),
+        ("MultivariateNormal(cov)", lambda: D.MultivariateNormal(loc, cov), True),
+        (
+            "MultivariateNormal(scale_tril)",
+            lambda: D.MultivariateNormal(loc, scale_tril=torch.linalg.cholesky(cov)),
+            True,
+        ),
+        (
+            "LowRankMultivariateNormal",
+            lambda: D.LowRankMultivariateNormal(loc, torch.ones(2, 1), scale),
+            True,
+        ),
+        ("Independent(Normal)", lambda: D.Independent(D.Normal(loc, scale), 1), True),
+        (
+            "MixtureSameFamily",
+            lambda: D.MixtureSameFamily(D.Categorical(probs=p[0]), D.Normal(p[1], p[0] + 1)),
+            True,
+        ),
+        ("LogNormal", lambda: D.LogNormal(loc, scale), False),
+        ("Gumbel", lambda: D.Gumbel(loc, scale), False),
+        ("RelaxedBernoulli", lambda: D.RelaxedBernoulli(torch.tensor(0.5), probs=scale / 2), False),
+        (
+            "TransformedDistribution(tanh)",
+            lambda: D.TransformedDistribution(D.Normal(loc, scale), [TanhTransform()]),
+            False,
+        ),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("name", "factory", "lossless"), _families(), ids=lambda v: v if isinstance(v, str) else ""
+)
+def test_standard_family_losslessness_table(name: str, factory: Any, lossless: bool) -> None:
+    """Each family is lossless exactly when every instance attribute is recordable.
+
+    A lossless family rebuilds to the same type with the same instance state and the
+    same ``log_prob`` on a sample; a lossy family names the attribute it cannot record.
+    """
+
+    torch.manual_seed(0)
+    live = factory()
+    entries = list(_walk_output_tensors_with_paths(live))
+    proof = runnable_output_losslessness(live, entries)
+    assert proof["lossless"] is lossless, (name, proof["reason"])
+    spec = _try_build_container_spec(live)
+    assert spec is not None and spec.kind == DISTRIBUTION_CONTAINER_KIND
+    if not lossless:
+        assert proof["reason"].startswith(DISTRIBUTION_STATE_UNRECORDABLE)
+        assert spec.lossy_reconstruction is True
+        return
+    assert spec.lossy_reconstruction is False
+    rebuilt = rebuild_container_from_spec(spec, [tensor for tensor, _path, _spec in entries])
+    _assert_same_distribution(rebuilt, live)
+    sample = live.sample()
+    assert torch.equal(rebuilt.log_prob(sample), live.log_prob(sample))

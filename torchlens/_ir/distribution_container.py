@@ -114,6 +114,18 @@ def _parameter_names(container_type: type[Any]) -> tuple[str, ...]:
     return ()
 
 
+def _is_portable_literal(value: Any) -> bool:
+    """Return whether ``value`` is a literal (or a plain tuple of them) a spec can carry.
+
+    Exact types only: a subclass could carry behaviour the spec does not record.
+    ``ContinuousBernoulli._lims`` is a tuple of two floats.
+    """
+
+    if type(value) is tuple:
+        return all(_is_portable_literal(item) for item in value)
+    return type(value) in _LITERAL_TYPES
+
+
 def _unrecordable(value: Any, name: str) -> str:
     """Spell the lossy reason for one unrecordable attribute."""
 
@@ -159,7 +171,7 @@ def distribution_layout(value: Any) -> DistributionLayout:
                 fields.append(name)
         elif is_distribution(item):
             fields.append(name)
-        elif type(item) in _LITERAL_TYPES:
+        elif _is_portable_literal(item):
             state.append((name, item))
         else:
             lossy_reason = lossy_reason or _unrecordable(value, name)
@@ -200,7 +212,7 @@ def _parse_aux_data(
         if not isinstance(name, str) or (name.startswith("__") and name.endswith("__")):
             return state, aliases, f"it names an inadmissible attribute {name!r}"
     for name, item in state.items():
-        if type(item) not in _LITERAL_TYPES:
+        if not _is_portable_literal(item):
             return state, aliases, f"its state {name!r} is not a portable literal"
     for alias, target in aliases:
         if target not in fields:
