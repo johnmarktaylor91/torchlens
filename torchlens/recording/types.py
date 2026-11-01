@@ -5,6 +5,7 @@ from __future__ import annotations
 __tl_layer__ = "L1"
 __tl_vocabulary__ = True
 
+import dataclasses
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
@@ -32,6 +33,7 @@ __all__ = [
 if TYPE_CHECKING:
     from .._capture.session import CapturedRunCore
     from .._data_classes.trace import Trace
+    from .options import RecordingSettings
 
 
 def _backfill_cooked_ancestry(events: Any) -> None:
@@ -458,9 +460,13 @@ _RAW_METADATA_FIELDS = (
 )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class Recording(TraceLike):
     """Result of a fastlog recording session.
+
+    Built by ``tl.record`` and ``Recorder``; there is no public constructor
+    (the recorder and the bundle recovery build it through the private
+    ``_build``). ``options`` returns the settings the recording was made with.
 
     Notes
     -----
@@ -492,7 +498,6 @@ class Recording(TraceLike):
     end_times: list[float]
     predicate_failures: list[PredicateFailure]
     num_predicate_failure_overflows: int
-    keep_op_repr: str | None
     history_size: int
     orphan_records: list[dict[str, Any]] = field(default_factory=list)
     is_stopped: bool = False
@@ -512,9 +517,6 @@ class Recording(TraceLike):
     grad_by_pass: dict[int, list[int]] = field(default_factory=dict)
     grad_by_label: dict[str, list[int]] = field(default_factory=dict)
     grad_by_grad_fn_label: dict[str, list[int]] = field(default_factory=dict)
-    save_grads_repr: str | None = None
-    _grad_transform_repr: str | None = None
-    _activation_transform_repr: str | None = None
     is_recovered: bool = False
     recovery_warnings: list[str] = field(default_factory=list)
     _capture_events: Any | None = field(default=None, repr=False, compare=False)
@@ -528,6 +530,60 @@ class Recording(TraceLike):
     # (torchlens/_capture/outcome.py); ``outcome`` below derives conservatively
     # for unstamped legacy/recovered recordings.
     _outcome: Any | None = field(default=None, repr=False, compare=False)
+    # The resolved settings record behind ``options`` (a ``RecordingSettings``).
+    _options: Any | None = field(default=None, repr=False, compare=False)
+
+    @classmethod
+    def _build(cls: type[Recording], **values: Any) -> Recording:
+        """Build a Recording from field values; omitted fields take their defaults.
+
+        The one construction path (the class has no generated ``__init__``):
+        the recorder's empty session record, bundle recovery and tests. A
+        required field left out, or an unknown name, fails on assignment.
+        """
+
+        recording = object.__new__(cls)
+        for item in dataclasses.fields(cls):
+            if item.name in values:
+                value = values.pop(item.name)
+            elif item.default_factory is not dataclasses.MISSING:
+                value = item.default_factory()
+            elif item.default is not dataclasses.MISSING:
+                value = item.default
+            else:
+                value = values[item.name]  # a required field left out: KeyError names it
+            object.__setattr__(recording, item.name, value)
+        for name, value in values.items():
+            object.__setattr__(recording, name, value)
+        return recording
+
+    def _replace(self, **changes: Any) -> Recording:
+        """Return a copy with ``changes`` applied (``dataclasses.replace`` needs ``__init__``)."""
+
+        values = {
+            item.name: object.__getattribute__(self, item.name) for item in dataclasses.fields(self)
+        }
+        values.update(changes)
+        return type(self)._build(**values)
+
+    @property
+    def options(self) -> RecordingSettings:
+        """Return the settings this recording was made with (read-only).
+
+        Returns
+        -------
+        RecordingSettings
+            The resolved capture and recorder settings, as live values. On a
+            recording recovered from disk, settings that saved recordings do
+            not store (callables and objects) read ``None``.
+        """
+
+        from .options import RecordingSettings
+
+        stored = self._options
+        if isinstance(stored, RecordingSettings):
+            return stored
+        return RecordingSettings._from_values({})
 
     @property
     def outcome(self) -> Any:
@@ -831,24 +887,6 @@ class Recording(TraceLike):
             row["retained"] = (ctx.pass_index, ctx.event_index) in retained_keys
             rows.append(row)
         return tuple(rows)
-
-    @property
-    def activation_transform_repr(self) -> str | None:
-        """Canonical repr for the out transform callable.
-
-        Returns
-        -------
-        str | None
-            Callable repr captured at recording time, if any.
-        """
-
-        return self._activation_transform_repr
-
-    @property
-    def grad_transform_repr(self) -> str | None:
-        """Canonical repr for the gradient transform callable."""
-
-        return self._grad_transform_repr
 
     def add_grad_record(self, record: GradRecord) -> None:
         """Append one retained gradient record and update indexes."""

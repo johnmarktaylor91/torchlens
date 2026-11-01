@@ -34,7 +34,27 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `Recording.to_trace()` materializes full graph structure; reading a payload that was not selected
   by `save=` fails explicitly. `tl.record` installs gradient hooks only when `backward_ready=True`,
   `save_grads=` or `default_grad=` is given; without one, `Recording.backward()` refuses with
-  code `recording_backward_not_requested`.
+  code `recording_backward_not_requested`. `tl.record` and `Recorder` build it; `Recording` has no
+  public constructor.
+
+**Recording.options / RecordingSettings** *(record class spelling pending ratification)*
+: `Recording.options` returns a `tl.types.RecordingSettings`, the read-only record of the settings
+  the recording was made with, across every door that configured it: the capture knobs from
+  `capture=CaptureOptions(...)` (`RecordingSettings.save_grads`,
+  `RecordingSettings.activation_transform`, `RecordingSettings.grad_transform`,
+  `RecordingSettings.save_raw_activations`, `RecordingSettings.save_raw_grads`,
+  `RecordingSettings.detach_saved_activations`, `RecordingSettings.lookback`,
+  `RecordingSettings.lookback_payload_policy`, `RecordingSettings.seed`), the recorder knobs from
+  `recording=RecordingOptions(...)` (`RecordingSettings.keep_op`, `RecordingSettings.default_op`,
+  `RecordingSettings.default_module`, `RecordingSettings.default_grad`,
+  `RecordingSettings.history_size`, `RecordingSettings.include_source_events`,
+  `RecordingSettings.intervene`, `RecordingSettings.max_predicate_failures`,
+  `RecordingSettings.on_predicate_error`, `RecordingSettings.on_forward_error`,
+  `RecordingSettings.postprocess`) and the door keywords (`RecordingSettings.stop_after`,
+  `RecordingSettings.storage`, `RecordingSettings.narrate`). Values are the live objects the
+  recorder used, never repr strings; there is no public constructor. A recording recovered from
+  disk keeps the plain values (bools, numbers, strings); callables and objects are not stored with
+  saved recordings and read `None` there.
 
 **Saved-activation autograd history** *(knob spellings documented-unstable)*
 : `CaptureOptions(detach_saved_activations=False)`, the `tl.trace` default, keeps every saved
@@ -3009,9 +3029,9 @@ deprecation shim owed*
   `FailureOrigin.USER_OP`, `FailureOrigin.TORCHLENS` and `FailureOrigin.INTERRUPT`.
 
 **Recording state**
-: `Recording.is_failed` (`is_failed=`), `Recording.is_stopped` (`is_stopped=`),
-  `Recording.stop_reason` (`stop_reason=`), `Recording.stops_by_pass` (`stops_by_pass=`),
-  `Recording.records_in_pass(pass_index)`, `Recording.num_ops` (`num_ops=`),
+: `Recording.is_failed`, `Recording.is_stopped`,
+  `Recording.stop_reason`, `Recording.stops_by_pass`,
+  `Recording.records_in_pass(pass_index)`, `Recording.num_ops`,
   `Recording.num_committed_ops`, `Recording.num_passes`, `Recording.lazy_trace`,
   `Recording.is_recovered` and `Recording.backward(loss)`. `Recorder.__call__` runs one pass
   (`recorder(x)`) and `Recorder.backward(loss)` records its backward.
@@ -4850,7 +4870,6 @@ alphabetical order.
 | `num_joins=` | field and constructor keyword of `MergeReport` |
 | `num_multiplied_ops=` | field and constructor keyword of `BackwardEstimate` |
 | `num_pages=` | field and constructor keyword of `SavedFigure` |
-| `num_predicate_failure_overflows=` | field and constructor keyword of `Recording` |
 | `num_pure_unverified_ops=` | field and constructor keyword of `ValidationStatus` |
 | `num_query_heads=` | field and constructor keyword of `GqaInfo` |
 | `num_replayed_ops=` | field and constructor keyword of `ValidationStatus` |

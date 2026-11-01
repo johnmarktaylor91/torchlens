@@ -405,3 +405,97 @@ def _validate_resolved_recording_values(values: Mapping[str, Any]) -> None:
                 remedy=f"pass {flag_name}=True or False",
                 argument=flag_name,
             )
+
+
+#: ``RecordingSettings`` field -> the ``_RecordingConfig`` slot it reads. The
+#: record speaks the public spellings: the capture knobs keep their
+#: ``CaptureOptions`` names, the recorder knobs their ``RecordingOptions``
+#: names, and the three door-carried slots their door keywords.
+_SETTINGS_SLOTS: Final[tuple[tuple[str, str], ...]] = (
+    *((name, name) for name in _RECORDING_FIELDS),
+    ("lookback", "lookback"),
+    ("lookback_payload_policy", "lookback_payload_policy"),
+    ("seed", "seed"),
+    ("activation_transform", "activation_transform"),
+    ("save_raw_activations", "save_raw_activations"),
+    ("save_grads", "save_grads"),
+    ("grad_transform", "grad_transform"),
+    ("save_raw_grads", "save_raw_grads"),
+    ("detach_saved_activations", "detach_saved_activations"),
+    ("stop_after", "halt"),
+    ("storage", "streaming"),
+    ("narrate", "echo"),
+)
+
+#: Value types a saved recording stores verbatim (bundle ``metadata.json``).
+_PERSISTED_SETTING_TYPES: Final[tuple[type, ...]] = (bool, int, float, str)
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class RecordingSettings:
+    """The settings one recording was made with; read-only.
+
+    Returned by ``Recording.options``. One record answers "how was this
+    recording made?" across every door that configured it: the capture knobs
+    (``capture=CaptureOptions(...)``: ``save_grads``, ``activation_transform``,
+    ``grad_transform``, ``lookback``, ...), the recorder knobs
+    (``recording=RecordingOptions(...)``: ``keep_op``, ``default_op``,
+    ``history_size``, ...) and the door keywords ``stop_after=``, ``storage=``
+    and ``narrate=``. Values are the live objects the recorder used (the
+    predicate or transform callable itself, the ``CaptureSpec``), never repr
+    strings. Built by the recorder; there is no public constructor.
+
+    A recording recovered from disk carries the plain values (bools, numbers,
+    strings) that saved recordings store; a setting whose value is a callable
+    or an object (predicates, transforms, ``CaptureSpec`` values, storage and
+    narration options) is not stored with saved recordings and reads ``None``
+    there.
+    """
+
+    keep_op: PredicateFn | None
+    default_op: bool | CaptureSpec | None
+    default_module: bool | CaptureSpec | None
+    history_size: int | None
+    include_source_events: bool | None
+    intervene: InterventionPredicate | None
+    max_predicate_failures: int | None
+    on_predicate_error: PredicateErrorMode | None
+    on_forward_error: ForwardErrorMode | None
+    default_grad: bool | CaptureSpec | None
+    postprocess: str | None
+    lookback: int | None
+    lookback_payload_policy: LookbackPayloadPolicy | None
+    seed: int | None
+    activation_transform: _ActivationPostfunc | None
+    save_raw_activations: bool | None
+    save_grads: GradPredicateFn | bool | CaptureSpec | None
+    grad_transform: _GradientPostfunc | None
+    save_raw_grads: bool | None
+    detach_saved_activations: bool | None
+    stop_after: HaltPredicateFn | None
+    storage: StorageOptions | None
+    narrate: Any | None
+
+    @classmethod
+    def _from_values(cls: type[RecordingSettings], values: Mapping[str, Any]) -> RecordingSettings:
+        """Build the record; a field absent from ``values`` reads ``None``."""
+
+        record = object.__new__(cls)
+        for name, _slot in _SETTINGS_SLOTS:
+            object.__setattr__(record, name, values.get(name))
+        return record
+
+    @classmethod
+    def _from_config(cls: type[RecordingSettings], config: _RecordingConfig) -> RecordingSettings:
+        """Project the recorder's resolved config onto the public spellings."""
+
+        return cls._from_values({name: getattr(config, slot) for name, slot in _SETTINGS_SLOTS})
+
+    def _persisted_values(self) -> dict[str, Any]:
+        """Return the plain values a saved recording stores (``metadata.json``)."""
+
+        return {
+            name: value
+            for name, _slot in _SETTINGS_SLOTS
+            if isinstance(value := getattr(self, name), _PERSISTED_SETTING_TYPES)
+        }

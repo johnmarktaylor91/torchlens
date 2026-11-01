@@ -541,6 +541,20 @@ def _dtype_from_name(name: str | None) -> torch.dtype | None:
     return cast(torch.dtype, dtype_obj)
 
 
+def _setting_reprs(recording: Recording) -> dict[str, str]:
+    """Return scrubbed reprs of the callable settings a bundle cannot store."""
+
+    from .._data_classes._transform_repr import _scrubbed_transform_repr
+
+    settings = recording.options
+    reprs: dict[str, str] = {}
+    for name in ("keep_op", "activation_transform", "grad_transform", "save_grads", "stop_after"):
+        value = getattr(settings, name)
+        if callable(value):
+            reprs[name] = _scrubbed_transform_repr(value) or "<callable>"
+    return reprs
+
+
 def _write_metadata(path: Path, recording: Recording, options: _RecordingConfig) -> None:
     """Write fastlog JSON metadata."""
 
@@ -553,10 +567,13 @@ def _write_metadata(path: Path, recording: Recording, options: _RecordingConfig)
         "halted": recording.is_stopped,
         "halt_reason": recording.stop_reason,
         "halts_by_pass": recording.stops_by_pass,
-        "keep_op_repr": recording.keep_op_repr,
-        "_activation_transform_repr": recording._activation_transform_repr,
         "save_raw_activations": options.save_raw_activations,
         "history_size": options.history_size,
+        # ``Recording.options`` plain values; callables and objects are not stored.
+        "settings": recording.options._persisted_values(),
+        # Audit trail only (scrubbed of bound values and heap addresses): the
+        # recovered record reads None for these settings.
+        "_settings_reprs": _setting_reprs(recording),
     }
     with path.open("w", encoding="utf-8") as handle:
         json.dump(metadata, handle, indent=2, sort_keys=True)

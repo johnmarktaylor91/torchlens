@@ -141,7 +141,9 @@ def _resolve_storage_intent(options: _RecordingConfig) -> StorageIntent:
 def _empty_recording(options: _RecordingConfig) -> Recording:
     """Create an empty lazy Recording for a predicate capture session."""
 
-    return Recording(
+    from ..recording.options import RecordingSettings
+
+    return Recording._build(
         records=[],
         by_pass={},
         by_label={},
@@ -160,15 +162,8 @@ def _empty_recording(options: _RecordingConfig) -> Recording:
         is_stopped=False,
         stop_reason=None,
         stops_by_pass={},
-        keep_op_repr=repr(options.keep_op) if options.keep_op is not None else None,
         history_size=options.history_size,
-        save_grads_repr=repr(options.save_grads) if options.save_grads is not None else None,
-        _activation_transform_repr=(
-            repr(options.activation_transform) if options.activation_transform is not None else None
-        ),
-        _grad_transform_repr=(
-            repr(options.grad_transform) if options.grad_transform is not None else None
-        ),
+        _options=RecordingSettings._from_config(options),
     )
 
 

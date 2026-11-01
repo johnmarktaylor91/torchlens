@@ -38,7 +38,7 @@ class TinyMlp(nn.Module):
 def _empty_recording(history_size: int) -> Recording:
     """Build an empty in-memory Recording for dispatcher tests."""
 
-    return Recording(
+    return Recording._build(
         records=[],
         by_pass={},
         by_label={},
@@ -49,7 +49,6 @@ def _empty_recording(history_size: int) -> Recording:
         end_times=[],
         predicate_failures=[],
         num_predicate_failure_overflows=0,
-        keep_op_repr=None,
         history_size=history_size,
     )
 
