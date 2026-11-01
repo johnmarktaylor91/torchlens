@@ -346,7 +346,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # next 50-line step above the merged measurement.
     # 3500 -> 3400 (2026-10-29 tensordict prewrap): the storage-overlap geometry
     # moved to _storage_overlap.py (measured 3389); next 50-line step above it.
-    "torchlens/backends/torch/wrappers.py": 3400,
+    "torchlens/backends/torch/wrappers.py": 3000,
     # 3300 -> 3301 (2026-08-27 C01 item 5): same relocation import re-sort (+1).
     # 3301 -> 3400 (2026-10-01 ci-fix ratchet settle): "give the preview
     # backends torch's label convention" (8e5f966d8) landed the same
@@ -383,7 +383,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # clears the union and stays.
     # 3300 -> 3150: the quantized-module FLOPs estimator split to
     # _quantized_flops.py (3127 measured); the ceiling follows the file down.
-    "torchlens/backends/torch/model_prep.py": 3150,
+    "torchlens/backends/torch/model_prep.py": 2800,
     # 2950 -> 2800 (2026-08-29 F11 T74b fix): the call-tree display + call-scope
     # resolution helper family split to _data_classes/_call_tree.py after the
     # merged tree crossed the frozen 2950 (F10's Module lovely seam +10 atop
