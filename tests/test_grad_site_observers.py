@@ -62,9 +62,11 @@ def test_span_scopes_records_by_signal() -> None:
 
 
 def test_span_refuses_an_unknown_signal() -> None:
-    with pytest.raises(ValueError, match="signal must be 'forward', 'backward', or 'both'"):
-        with tl.observers.span("bad", signal="sideways"):  # type: ignore[arg-type]
-            pass
+    with (
+        pytest.raises(ValueError, match="signal must be 'forward', 'backward', or 'both'"),
+        tl.observers.span("bad", signal="sideways"),  # type: ignore[arg-type]
+    ):
+        pass
     assert "direction" not in inspect.signature(tl.observers.span).parameters
 
 
