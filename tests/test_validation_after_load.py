@@ -34,7 +34,10 @@ class _Block(nn.Module):
         self.lin = nn.Linear(4, 4)
 
     def forward(self, v: torch.Tensor) -> torch.Tensor:
-        return torch.relu(self.lin(v)) + v * 2.0
+        # A literal producer (``ones``), a C-module builtin (``F.gelu``) and a
+        # reduction (``mean``, a receptive-field rule that reads input shapes).
+        h = nn.functional.gelu(self.lin(v)) + torch.ones(4)
+        return torch.relu(h) + v * 2.0 + h.mean(dim=0, keepdim=True)
 
 
 def _capture(save_args: bool) -> tuple[tl.Trace, nn.Module, torch.Tensor]:
@@ -131,3 +134,20 @@ def test_pure_torch_keys_resolve_and_release() -> None:
     assert resolved == layers and all(callable(layer.func) for layer in layers)
     release_loaded_callables(resolved)
     assert all(layer.func is None for layer in layers)
+
+
+def test_literal_producer_and_torch_c_builtin_keys_resolve() -> None:
+    """A parentless ``ones`` replays (SPEC 2 rule 3); ``F.gelu``'s C-module key maps exactly."""
+
+    ones = _layer(FunctionRegistryKey("torch", "ones", "function"), "ones")
+    ones.is_internal_source = True
+    gelu = _layer(
+        FunctionRegistryKey("custom", "gelu", "function", import_path="torch._C._nn:gelu"), "gelu"
+    )
+    forged = _layer(
+        FunctionRegistryKey("custom", "gelu", "function", import_path="torch._C._nn:os.system"),
+        "gelu",
+    )
+    resolved = resolve_loaded_callables(SimpleNamespace(layer_list=[ones, gelu, forged]))
+    assert resolved == [ones, gelu]
+    assert forged.func is None

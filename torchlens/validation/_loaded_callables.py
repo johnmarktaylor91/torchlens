@@ -34,24 +34,69 @@ def _resolution_candidate(layer: Any) -> Any:
 
     if getattr(layer, "func", None) is not None:
         return None
+    # A parentless literal producer (``ones``, ``full``) is an internal source
+    # that still has a function: SPEC 2 rule 3 replays it. Functionless sources
+    # carry a structural ``func_name`` and are excluded by name below.
     if (
         getattr(layer, "is_input", False)
         or getattr(layer, "is_output", False)
         or getattr(layer, "is_buffer", False)
-        or getattr(layer, "is_internal_source", False)
     ):
         return None
     func_name = str(getattr(layer, "func_name", "none"))
     if func_name in STRUCTURAL_FUNC_NAMES:
         return None
     key = getattr(layer, "func_id", None)
-    if not isinstance(key, FunctionRegistryKey) or key.namespace not in RESOLVABLE_NAMESPACES:
+    if not isinstance(key, FunctionRegistryKey):
+        return None
+    if key.namespace == "custom":
+        key = _public_key_for_torch_c_function(key)
+        if key is None:
+            return None
+    if key.namespace not in RESOLVABLE_NAMESPACES:
         return None
     # The key must name the op's recorded function; a key that names another
     # function (an inherited or edited ``func_id``) fails closed: unresolved.
     if key.qualname.rsplit(".", maxsplit=1)[-1] != func_name:
         return None
     return key
+
+
+#: torch's own C function modules and the public namespace that exposes the
+#: same functions (``torch.nn.functional.gelu`` is ``torch._C._nn.gelu``).
+_TORCH_C_PUBLIC_NAMESPACES: dict[str, str] = {
+    "torch._C._nn": "torch.nn.functional",
+    "torch._C._VariableFunctions": "torch",
+}
+
+
+def _public_key_for_torch_c_function(key: Any) -> Any:
+    """The public torch key for a ``custom`` key naming a torch C function, else ``None``.
+
+    Capture keys a few torch C builtins (``F.gelu``, whose ``__module__`` is
+    ``torch._C._nn``) as ``custom``. The mapping is exact or nothing: the
+    public namespace's attribute of that name, unwrapped from any TorchLens
+    capture wrapper, must be the very C function. The bundle's import path is
+    only parsed, never imported; the result still passes the resolver's
+    purity gate.
+    """
+
+    import torch
+
+    from .._utils._callable_safety import _unwrap_capture_wrapper
+    from ..intervention.types import FunctionRegistryKey
+
+    module_name, _, name = str(key.import_path or "").partition(":")
+    public_name = _TORCH_C_PUBLIC_NAMESPACES.get(module_name)
+    if public_name is None or not name.isidentifier():
+        return None
+    c_module = torch._C._nn if module_name == "torch._C._nn" else torch._C._VariableFunctions
+    public = torch.nn.functional if public_name == "torch.nn.functional" else torch
+    target = getattr(c_module, name, None)
+    exposed = getattr(public, name, None)
+    if target is None or exposed is None or _unwrap_capture_wrapper(exposed) is not target:
+        return None
+    return FunctionRegistryKey(public_name, name, key.dispatch_kind)  # type: ignore[arg-type]
 
 
 def resolve_loaded_callables(trace: Any) -> list[Any]:
