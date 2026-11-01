@@ -53,7 +53,18 @@ from collections.abc import Callable
 from os import PathLike
 from typing import Any, Final, Protocol
 
-from .._record_type import record_type
+
+def _record_type(record: Any) -> Any:
+    """Return ``record.type`` for an op, else ``record.layer_type`` (``None`` when absent).
+
+    Mirrors ``torchlens._record_type.record_type`` without importing it: this module
+    stays standard-library only so it also loads standalone (module docstring).
+    """
+
+    if hasattr(record, "layer_type"):
+        return record.layer_type
+    return getattr(record, "type", None)
+
 
 HASH_CHUNK_BYTES: Final[int] = 1 << 20
 """Read size for streamed file hashing (the digest does not depend on it)."""
@@ -408,7 +419,7 @@ def compute_graph_shape_hash(
         records.append(
             {
                 "index": index,
-                "layer_type": record_type(layer, None),
+                "layer_type": _record_type(layer),
                 "func_name": str(getattr(layer, "func_name", None)),
                 "parent_indices": parent_indices,
                 "_address_normalized": hash_address,
@@ -443,7 +454,7 @@ def _replacement_layer_fold_target(
     parent's shape and dtype folds.
     """
 
-    if record_type(layer, None) != "interventionreplacement":
+    if _record_type(layer) != "interventionreplacement":
         return None
     parents = list(getattr(layer, "parents", ()) or ())
     if len(parents) != 1 or parents[0] not in order_by_label:
