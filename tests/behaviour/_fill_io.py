@@ -90,7 +90,7 @@ def _identity(op: Any) -> tuple[Any, ...]:
         str(op.dtype),
         tuple(op.parents),
         tuple(op.children),
-        op.pass_index,
+        op.pass_number,
     )
 
 
@@ -630,10 +630,10 @@ def _after_export(cell: Cell) -> None:
     live = cell.require_trace()
     frame = live.to_pandas()
     cell.expect(len(frame) == len(live), f"to_pandas has {len(frame)} rows for {len(live)} ops")
-    # One row per ``trace.layer_list`` entry: the ops plus the input and output boundary rows.
+    # One row per op row (``Trace._layer_list``): the ops plus the input and output boundary rows.
     cell.expect(
-        sorted(frame["label"]) == sorted(entry.label for entry in live.layer_list),
-        "to_pandas rows do not name the trace's layer_list entries",
+        sorted(frame["label"]) == sorted(entry.label for entry in live._layer_list),
+        "to_pandas rows do not name the trace's op rows",
     )
     if cell.loaded is not None:
         loaded = cell.loaded
@@ -667,7 +667,7 @@ FRAME_IDENTITY = (
     "func_name",
     "shape",
     "dtype",
-    "pass_index",
+    "pass_number",
     "num_passes",
     "parents",
     "children",

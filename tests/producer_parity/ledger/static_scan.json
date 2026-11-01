@@ -7689,7 +7689,7 @@
  },
  {
   "ambiguous": false,
-  "field": "intervention_replaced",
+  "field": "is_edited",
   "file": "torchlens/intervention/_replay_sites.py",
   "has_default": true,
   "sites": 1,
