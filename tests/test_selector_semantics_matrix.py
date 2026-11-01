@@ -190,11 +190,15 @@ def _model_and_input(model_key: str) -> tuple[nn.Module, Any]:
     raise KeyError(model_key)
 
 
-def _extra_trace_kwargs(model_key: str) -> dict[str, Any]:
-    """Per-model capture options (input containers need explicit opt-in)."""
+def _extra_capture_fields(model_key: str) -> dict[str, Any]:
+    """Per-model ``CaptureOptions`` fields (input containers need explicit opt-in).
+
+    Callers fold these into their own ``CaptureOptions`` so ``tl.trace`` never
+    receives ``capture=`` twice.
+    """
 
     if model_key == "dictin":
-        return {"capture": tl.options.CaptureOptions(capture_container_structure=True)}
+        return {"capture_container_structure": True}
     return {}
 
 
@@ -203,7 +207,10 @@ def _full_trace(model_key: str) -> Any:
     model, x = _model_and_input(model_key)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        return tl.trace(model, x, **_extra_trace_kwargs(model_key))
+        fields = _extra_capture_fields(model_key)
+        if not fields:
+            return tl.trace(model, x)
+        return tl.trace(model, x, capture=tl.options.CaptureOptions(**fields))
 
 
 @cache
@@ -236,9 +243,10 @@ def _probe_capture(model_key: str, make_selector: Callable[[], Any]) -> Any:
                 model,
                 x,
                 save=selector,
-                **_extra_trace_kwargs(model_key),
                 capture=tl.options.CaptureOptions(
-                    lookback=4, lookback_payload_policy="detached_raw"
+                    lookback=4,
+                    lookback_payload_policy="detached_raw",
+                    **_extra_capture_fields(model_key),
                 ),
             )
     except Exception as exc:  # noqa: BLE001 - characterization records error shape
@@ -274,27 +282,13 @@ def _probe_live(model_key: str, make_selector: Callable[[], Any]) -> Any:
 
     try:
         selector = make_selector()
-        # Fold the per-model capture opt-ins into ONE CaptureOptions so the
-        # hook wiring never collides with _extra_trace_kwargs' capture= key.
-        extra = dict(_extra_trace_kwargs(model_key))
-        base_capture = extra.pop("capture", None)
-        capture_kwargs: dict[str, Any] = {"hooks": [(selector, _probe_hook)]}
-        if base_capture is not None:
-            capture_kwargs.update(
-                {
-                    name: value
-                    for name, value in base_capture.as_dict().items()
-                    if base_capture._is_field_explicit(name)
-                }
-            )
+        capture_kwargs: dict[str, Any] = {
+            "hooks": [(selector, _probe_hook)],
+            **_extra_capture_fields(model_key),
+        }
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            tl.trace(
-                model,
-                x,
-                **extra,
-                capture=tl.options.CaptureOptions(**capture_kwargs),
-            )
+            tl.trace(model, x, capture=tl.options.CaptureOptions(**capture_kwargs))
     except Exception as exc:  # noqa: BLE001
         return _error_cell(exc)
     return sorted(fired)
