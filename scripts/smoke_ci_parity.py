@@ -131,6 +131,29 @@ def ensure_venv(venv: Path, reinstall: bool) -> Path:
     return python
 
 
+def smoke_test_files() -> list[str]:
+    """Return the test files whose source spells a smoke mark (the files `-m smoke` can select).
+
+    Collecting only these files keeps the gate's collection to the smoke tier
+    instead of the whole tree; ``tests/test_marker_lint.py`` holds every smoke
+    item to the same source token.
+    """
+
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "tier_durations", PROJECT_ROOT / "scripts" / "tier_durations.py"
+    )
+    assert spec is not None and spec.loader is not None
+    tier_durations = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tier_durations)
+    return [
+        file
+        for file in tier_durations.test_files_on_disk(PROJECT_ROOT / "tests")
+        if tier_durations.source_may_hold_smoke_items(PROJECT_ROOT / file)
+    ]
+
+
 def serial_test_files() -> list[str]:
     """Return the test files carrying the ``serial`` marker, as CI collects them."""
 
@@ -165,7 +188,7 @@ def run_gate(python: Path, workers: int, extra_args: list[str]) -> int:
     with tempfile.TemporaryDirectory(prefix="torchlens-ci-smoke-") as tmp:
         junit = str(Path(tmp) / "smoke.junit.xml")
         commands = [
-            [*pytest, "tests/", "-m", "smoke", "-n", str(workers), "--tb=short", "-q"]
+            [*pytest, *smoke_test_files(), "-m", "smoke", "-n", str(workers), "--tb=short", "-q"]
             + [f"--junitxml={junit}", *extra_args],
             [*pytest, *serial_test_files(), "-m", "serial and not slow and not rare and not heavy"]
             + ["--tb=short", "-q"],
