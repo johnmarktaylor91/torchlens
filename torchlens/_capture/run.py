@@ -472,7 +472,7 @@ def _log_inputs(self: "Trace", run: _RunState) -> None:
     input_tensor_addresses = self._raw_graph_ws.input_tensor_addresses
     for i, t in enumerate(input_tensors):
         run.backend.log_source_tensor(self, t, "input", input_tensor_addresses[i])
-    input_args, input_kwargs = run.input_args, run.input_kwargs
+    input_args, input_kwargs = run.input_args, cast(dict[Any, Any], run.input_kwargs)
     _register_model_input_container_snapshots(self, input_args, input_kwargs)
     _record_runnable_input_literal_leaves(self, input_args, input_kwargs)
     _record_runnable_input_tensor_sites(self, input_args, input_kwargs)
