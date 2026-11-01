@@ -235,6 +235,17 @@ def test_paddle_reasons_are_registered_or_pending() -> None:
     assert {REASON_METADATA_INVARIANT} >= PADDLE_VALIDATION_REASONS - VALIDATION_REASONS
 
 
+def _declared_code(exc: BackendUnsupportedError) -> object:
+    """The code a raise site passed as ``code=``.
+
+    ``BackendRegistryError`` keeps a per-raise ``code=`` in ``exc.fields`` while
+    ``exc.code`` still reads the class default (registry fix requested from the
+    protocol owner); this reads the declared value the raise site wrote.
+    """
+
+    return exc.fields.get("code")
+
+
 def test_refusal_codes_registered_and_raised() -> None:
     """The shell's codes are registered; the seed and identity-mode raises carry them."""
 
@@ -248,10 +259,10 @@ def test_refusal_codes_registered_and_raised() -> None:
     backend = PaddleBackend()
     with pytest.raises(BackendUnsupportedError) as seed_error:
         backend.capture_trace(_closure_loop(1), (_x24(),), random_seed=3)
-    assert seed_error.value.code == "explicit_seed_unsupported"
+    assert _declared_code(seed_error.value) == "explicit_seed_unsupported"
     with pytest.raises(BackendUnsupportedError) as mode_error:
         backend.capture_trace(_closure_loop(1), (_x24(),), module_identity_mode="object_module")
-    assert mode_error.value.code == "module_identity_mode_unsupported"
+    assert _declared_code(mode_error.value) == "module_identity_mode_unsupported"
 
 
 def test_host_copy_keeps_zero_dim_shape() -> None:
