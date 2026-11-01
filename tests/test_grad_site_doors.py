@@ -346,7 +346,7 @@ def test_settle_is_a_no_op_without_gradient_rules() -> None:
 
 def test_armed_edits_and_summary_line() -> None:
     edit = tl.scale(0.0)
-    trace = _armed_trace(_grad_target("relu_1_2"), edit)
+    trace = _armed_trace(tl.grad_fn("ReluBackward0").to_target_spec(), edit)
     (rule,) = trace.armed_edits
     assert rule.edit is edit
     assert rule.signal == "backward"
