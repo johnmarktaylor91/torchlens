@@ -412,6 +412,12 @@ class _DryRunUnpickler(pickle.Unpickler):
         return self._planner.probe_for(module, name, self._importer)
 
 
+def _resolver_released(module: str, name: str, import_global: Importer) -> Any:
+    """Stand in for the policy after the dry run: a late lookup is a planner bug."""
+
+    raise RuntimeError(f"pre-scan planner used after its dry run ended: {module}.{name}")
+
+
 class _DryRunPlanner:
     """Build the plan by running the stream through the C machine on recording probes.
 
@@ -437,7 +443,7 @@ class _DryRunPlanner:
         self.build_refusal = build_refusal
         self.build_type_refusal = build_type_refusal
         self.resolved: dict[tuple[str, str], Any] = {}
-        self.probes: dict[tuple[str, str], type] = {}
+        self.probes: dict[tuple[str, str], _ProbeMeta] = {}
         self.reduce_sites: list[ReduceSite] = []
         self.called_pairs: set[tuple[str, str]] = set()
         self.cls_pairs: set[tuple[str, str]] = set()
@@ -535,6 +541,8 @@ class _DryRunPlanner:
             return self._plan()
         except Exception as exc:  # noqa: BLE001 -- classified: not a verdict, a hand-off
             raise StreamNeedsInterpreter(f"dry run stopped: {type(exc).__name__}") from exc
+        finally:
+            self._release()
         value_pairs = _walk_values(root)
         mixed = self.called_pairs & (value_pairs | self.cls_pairs)
         if mixed:
@@ -542,6 +550,23 @@ class _DryRunPlanner:
                 f"globals used both as callables and otherwise: {sorted(mixed)}"
             )
         return self._plan()
+
+    def _release(self) -> None:
+        """Let go of the policy and the probe classes once the dry run has ended.
+
+        ``resolve`` is usually a bound method of the loading unpickler, and every probe
+        class points back at this planner while the planner's ``probes`` table points at
+        them: left in place, that cycle outlives ``prescan_stream`` until a cyclic
+        collection and keeps the unpickler, whose C memo (which that collector does not
+        traverse on every supported Python) holds every object the load built. Releasing
+        here lets the planner, the probes and the unpickler die by reference count, as
+        the plan the C phase consumes needs none of them.
+        """
+
+        self.resolve = _resolver_released
+        for probe in self.probes.values():
+            probe._planner = None  # type: ignore[assignment]
+        self.probes.clear()
 
     def _plan(self) -> PrescanPlan:
         """Return the plan for what the dry run recorded (and any deferred refusal)."""

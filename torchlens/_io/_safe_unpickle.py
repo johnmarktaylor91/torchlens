@@ -1931,6 +1931,11 @@ class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
             self._plan = None
             self.global_lookups = plan.global_lookups
             self.guarded_calls = plan.cursor
+            # The C memo holds every memoized object of the load (the guarded callables
+            # among them) for as long as this unpickler lives, and the cyclic collector
+            # does not traverse it on every supported Python: a retained unpickler would
+            # pin the whole loaded graph past its owner's death. The memo is load-scoped.
+            self.memo.clear()
 
 
 class _PurePythonBundleUnpickler(_BundleAllowlistPolicy, pickle._Unpickler):

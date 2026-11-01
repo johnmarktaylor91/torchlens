@@ -18,6 +18,7 @@ import pickle
 import pickletools
 import random
 import struct
+import weakref
 from collections.abc import Callable
 from dataclasses import fields, is_dataclass
 from pathlib import Path
@@ -488,6 +489,29 @@ def test_corpus_decisions_match_the_interpreter(label: str) -> None:
 
     data = _CORPUS[label]
     assert _outcome(_new_path, data) == _outcome(_old_path, data)
+
+
+def test_the_fast_path_unpickler_retains_nothing_after_load() -> None:
+    """After ``load()`` neither the unpickler nor its dry-run planner holds the loaded graph.
+
+    The C machine's memo is not traversed by the cyclic collector on every supported
+    Python, so an unpickler kept alive by a planner-to-probe cycle pinned every object a
+    load built until a later collection (``tests/test_gc.py`` saw a loaded trace survive
+    its first ``gc.collect()``). The memo empties when the load ends and the unpickler
+    dies by reference count alone.
+    """
+
+    for label, data in sorted(_HONEST.items()):
+        unpickler = SafeBundleUnpickler(io.BytesIO(data))
+        loaded = unpickler.load()
+        if unpickler.load_path != "c":
+            del loaded, unpickler
+            continue
+        assert len(unpickler.memo) == 0, f"{label}: the fast path kept its memo after load()"
+        unpickler_ref = weakref.ref(unpickler)
+        del unpickler
+        assert unpickler_ref() is None, f"{label}: a dry-run cycle kept the unpickler alive"
+        del loaded
 
 
 @pytest.mark.smoke
