@@ -280,7 +280,10 @@ ROW_SPECS: tuple[dict[str, Any], ...] = (
     _config(
         "loop3_function",
         _build_loop,
-        ("input",) + ("MatMul", "AddV2", "Relu") * 3,
+        # The closure weight and bias are ``constant`` source ops, each emitted
+        # when the first op that reads it is captured (shared constants rule).
+        ("input", "constant", "MatMul", "constant", "AddV2", "Relu")
+        + ("MatMul", "AddV2", "Relu") * 2,
         _loop_intermediates(),
         has_constants=True,
     ),
@@ -368,6 +371,7 @@ ROW_SPECS: tuple[dict[str, Any], ...] = (
             "BiasAdd",
             "Relu",
             "MaxPool",
+            "Shape",
             "Reshape",
             "ReadVariableOp",
             "MatMul",

@@ -223,9 +223,9 @@ def test_tf_validation_reports_unverified_for_pure_allowlist_gap() -> None:
     """A classified pure op outside the replay allowlist is not a green pass."""
 
     def mostly_unverified(x: Any) -> Any:
-        """Use a classified but non-allowlisted pure op."""
+        """Use a classified but non-allowlisted pure op (``Slice``)."""
 
-        return tf.math.exp(x)
+        return tf.slice(x, [0], [1])
 
     trace = tl.trace(mostly_unverified, tf.constant([1.0, 2.0]), backend="tf")
     result = _validate(trace)

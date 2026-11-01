@@ -298,7 +298,9 @@ ROW_SPECS: tuple[dict[str, Any], ...] = (
     _config(
         "loop3_function",
         _build_loop,
-        ("input",) + ("dot_general", "broadcast_in_dim", "add", "max") * 3,
+        # The closure weight and bias are ``constant`` source ops emitted before
+        # the equations (shared constants rule).
+        ("input", "constant", "constant") + ("dot_general", "broadcast_in_dim", "add", "max") * 3,
         _loop_intermediates(),
         has_constants=True,
     ),
