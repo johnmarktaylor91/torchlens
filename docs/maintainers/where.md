@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1341 modules, 624718 lines, 0 modules without a docstring.
+84 packages, 1341 modules, 624739 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -62,7 +62,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 98 | 51418 |
 | `torchlens.bridge` | External-tool bridge namespace. | 25 | 8013 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2700 |
-| `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 25 | 8325 |
+| `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 25 | 8346 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
 | `torchlens.checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 11 | 3824 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.x. | 5 | 2017 |
@@ -1338,7 +1338,7 @@ LIT (Google PAIR Language Interpretability Tool) bridge. (6 modules, 2700 lines)
 
 ### `torchlens.bundle`
 
-Single Bundle type for intervention-ready TorchLens model logs. (25 modules, 8325 lines)
+Single Bundle type for intervention-ready TorchLens model logs. (25 modules, 8346 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1354,15 +1354,15 @@ Single Bundle type for intervention-ready TorchLens model logs. (25 modules, 832
 | `_fed_by` | The ''fed_by'' relation kind: content provenance between two traced calls. | 531 |
 | `_labels` | Label-shape heuristics behind ''Bundle.at(label)''. | 198 |
 | `_lineage` | Bundle lineage: bundle_id, member-construction anchors, BundleOperation rows. | 488 |
-| `_lookup` | Bundle site lookup: ''at'', the cached supergraph and structural consistency. | 37 |
+| `_lookup` | Bundle site lookup: ''at'', the cached supergraph and structural consistency. | 43 |
 | `_measure` | ''Bundle.measure_members'': recompute a metric over the members that still exist. | 95 |
 | `_members` | Member-list coercion behind ''Bundle'' construction, ''add'' and ''remove''. | 438 |
-| `_operations` | Bundle member operations: ''do'', ''fork'', ''run'', ''map'', ''show'', the chronology ledger and the effect table. | 155 |
+| `_operations` | Bundle member operations: ''do'', ''fork'', ''run'', ''map'', ''show'', the chronology ledger and the effect table. | 166 |
 | `_outcome_fold` | Derived worst-of-members capture-outcome fold for ''Bundle'' (foldB ). | 102 |
 | `_provenance` | The provenance join: ''bundle.why'' / ''bundle.provenance'' ( item 4). | 411 |
 | `_relation_carriage` | Relation-carriage method bodies for ''Bundle'' (C07X, foldB ). | 381 |
 | `_relations` | Bundle member-relation table (grammar v2): typed, closed, OPTIONAL relations. | 780 |
-| `_save` | Bundle save: the one late-bound ''_io'' door the bundle package keeps. | 28 |
+| `_save` | Bundle save: the one late-bound ''_io'' door the bundle package keeps. | 32 |
 | `_selected_by` | The ''selected_by'' relation kind: a control decision between two traced calls. | 93 |
 | `_token_divergence` | ''Bundle.token_divergence'': where two runs of one call part, by exact token ids. | 223 |
 | `_token_spans` | Automatic ''fed_by'' span finding and the strict token-pair read. | 564 |
