@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 import weakref
-from collections.abc import Iterator, Mapping
+from collections.abc import Mapping
 from typing import Any
 
 import torch
@@ -366,27 +366,6 @@ def _snapshot_writeback_source(state: _WitnessState, source: torch.Tensor) -> No
         _HOST_ESCAPE_MUTABLE_WRITEBACK.add(state.trace)
         return
     state.writeback_watch.append((source, version, before))
-
-
-def _iter_dispatch_tensors(
-    args: tuple[Any, ...], kwargs: dict[str, Any] | None
-) -> Iterator[torch.Tensor]:
-    """Yield every ``torch.Tensor`` operand of a dispatch, flattening list/tuple containers.
-
-    Aten operands are tensors, scalars, or (for ``cat`` / ``stack`` / ``_foreach_*``) lists/tuples
-    of tensors; this walks those one-deep-or-more without importing a pytree so the per-consumption
-    watch can see every tensor an op reads.
-    """
-
-    stack: list[Any] = list(args)
-    if kwargs:
-        stack.extend(kwargs.values())
-    while stack:
-        item = stack.pop()
-        if isinstance(item, torch.Tensor):
-            yield item
-        elif isinstance(item, (list, tuple)):
-            stack.extend(item)
 
 
 def _sample_writeback_at_consumption(
@@ -802,6 +781,7 @@ from ._completeness_cross_thread import (  # noqa: E402
 )
 from ._completeness_dispatch_names import (  # noqa: E402
     _dispatch_callsite,
+    _iter_dispatch_tensors,
     _operator_base_name,
     _record_escape_source_tensor,
 )

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import functools
-import inspect
 import sys
 import threading
 import warnings
@@ -366,29 +365,6 @@ def _make_host_value_escape_method(original: Any, state: _WitnessState, name: st
     return wrapper
 
 
-def _first_scalar_escape_source() -> tuple[str | None, int | None]:
-    """Return the first non-TorchLens frame for a scalar escape call.
-
-    Returns
-    -------
-    tuple[str | None, int | None]
-        Source filename and line, or ``(None, None)`` if no user frame is visible.
-    """
-    frame = inspect.currentframe()
-    try:
-        frame = frame.f_back if frame is not None else None
-        while frame is not None:
-            filename = Path(frame.f_code.co_filename).resolve()
-            try:
-                filename.relative_to(_TORCHLENS_ROOT)
-            except ValueError:
-                return str(filename), frame.f_lineno
-            frame = frame.f_back
-    finally:
-        del frame
-    return None, None
-
-
 def _record_bool_consumer_location(trace: Any, source: torch.Tensor) -> None:
     """Record where one labelled bool tensor reached Python's ``__bool__`` protocol.
 
@@ -536,30 +512,6 @@ def _make_plain_scalar_escape_method(
         return original(self, *args, **kwargs)
 
     return wrapper
-
-
-def _external_warning_stacklevel() -> int:
-    """Return a warning stack level that resolves outside the TorchLens package.
-
-    Returns
-    -------
-    int
-        Stack level suitable for :func:`warnings.warn`.
-    """
-    level = 1
-    frame = inspect.currentframe()
-    try:
-        frame = frame.f_back if frame is not None else None
-        while frame is not None:
-            try:
-                Path(frame.f_code.co_filename).resolve().relative_to(_TORCHLENS_ROOT)
-            except ValueError:
-                return level
-            level += 1
-            frame = frame.f_back
-    finally:
-        del frame
-    return level
 
 
 @contextmanager
@@ -876,6 +828,8 @@ from ._completeness_cross_thread import (  # noqa: E402
     _nonowner_ptr_is_captured,
 )
 from ._completeness_dispatch_names import (  # noqa: E402
+    _external_warning_stacklevel,
+    _first_scalar_escape_source,
     _record_escape_source_tensor,
 )
 from ._completeness_metadata import (  # noqa: E402

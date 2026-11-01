@@ -732,30 +732,6 @@ def _iter_loggable_live_outputs(
             yield out, container_path, container_spec
 
 
-def _replace_output_tensors_by_path(
-    out_orig: Any,
-    replacements: dict[tuple[OutputPathComponent, ...], torch.Tensor],
-) -> Any:
-    """Return an output object with selected tensor paths replaced.
-
-    Parameters
-    ----------
-    out_orig
-        Original output container.
-    replacements
-        Replacement tensors keyed by output path.
-
-    Returns
-    -------
-    Any
-        Rebuilt output object when supported, otherwise the original object.
-    """
-
-    if () in replacements:
-        return replacements[()]
-    return _replace_output_value(out_orig, (), replacements)
-
-
 def _set_tensor_live_fire_results(
     tensor: torch.Tensor,
     fire_results: tuple[FireResult, ...],
@@ -840,7 +816,7 @@ from ._ops_predicate_events import (  # noqa: E402
     _extract_arg_tensors_and_params,
 )
 from ._ops_predicates import (  # noqa: E402
-    _replace_output_value,
+    _replace_output_tensors_by_path,
 )
 from ._ops_retention import (  # noqa: E402
     _build_trace_predicate_context,
