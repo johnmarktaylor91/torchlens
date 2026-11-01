@@ -200,7 +200,7 @@ substituted values and the site op keeps its original payload plus a fire record
 FAILS CLOSED: a selector matching captured ops whose calls never passed through the wrap layer
 (gen_ops/C++ paths) raises a typed unreachable error instead of silently not intervening. Curated
 helper actions are `zero_ablate`, `scale`, and `add`, plus plain callables; replacements must
-preserve shape and dtype. Conditions must be static selectors; `direction="backward"`,
+preserve shape and dtype. Conditions must be static selectors; a gradient site (`tl.grad(...)`),
 value-dependent callable conditions, shape-changing replacements, graph-only entries, and
 combining `intervene=` with `grad_options=` refuse typed. `halt=` and `recipes=` keep typed
 refusals inside the capture path.
@@ -269,7 +269,7 @@ ceilings the capture with `capture_verified=False` (`mlx_compiled_attribute_not_
 
 MLX rejects `tl.model_output(...)`, `tl.where(...)`,
 `tl.followed_by(...)`, `tl.preceded_by(...)`, value-dependent predicates, `recipes=`,
-backward-direction interventions, streaming, `save_grads=`, `backward_ready=True`, and
+gradient-site (`tl.grad(...)`) interventions, streaming, `save_grads=`, `backward_ready=True`, and
 `tl.record(backend="mlx")`. Portable MLX saves
 materialize forward and derived array payloads and load them back as `mlx.core.array` values when the
 MLX runtime is installed; loaded MLX traces report replay validation as unavailable rather than
@@ -318,7 +318,7 @@ replacement value presented as captured-native FAILS validation. Builtin helpers
 adapters are `tl.zero_ablate`, `tl.scale`, `tl.add`, and `tl.replace_with`; other helpers refuse
 typed, and raw callables receiving/returning `paddle.Tensor` are supported. Hook internals run
 outside capture logging (they do not appear as graph ops). Decisions are forward-only
-(`direction="backward"` refuses), intervention predicates and `halt=` may be value-dependent
+(a gradient site, `tl.grad(...)`, refuses), intervention predicates and `halt=` may be value-dependent
 callables (the eager `RecordContext` carries real `tensor_requires_grad` / `is_scalar_bool` /
 `bool_value`), `halt=` finalizes an honest partial trace at the matched frontier without executing
 past it, and `facets=` attaches per-trace facet recipes. `grad_options` cannot combine with
