@@ -3530,8 +3530,10 @@ def warm_lazy_torch_imports() -> None:
     silent, order-dependent breach of the contract's "a plain deterministic
     capture records nothing" pin. The monitor calls this BEFORE arming any
     patch so the cascade runs outside every window. ``torch.backends.opt_einsum``
-    (imported inside ``torch.einsum``) is warmed too: an in-window import's
-    ``sys.meta_path`` finder frames become deep-inventory roots (see ``rng.py``).
+    (imported inside ``torch.einsum``) is warmed too, as is TorchLens's own
+    producer-version parser (imported lazily by ``resolve_runnable_torch_alias``):
+    an in-window import's ``sys.meta_path`` finder frames become deep-inventory
+    roots (see ``rng.py``).
 
     Failure is benign and intentionally unlatched: a partially-executed failed
     import is evicted from ``sys.modules``, so a later in-window retry re-runs
@@ -3566,7 +3568,15 @@ def warm_lazy_torch_imports() -> None:
 
     warmed = True
     with pause_logging():
-        for module_name in ("torch._compile", "torch._dynamo", "torch.backends.opt_einsum"):
+        for module_name in (
+            "torch._compile",
+            "torch._dynamo",
+            "torch.backends.opt_einsum",
+            # TorchLens's own first-capture lazy import: ``resolve_runnable_torch_alias``
+            # (this module) imports the producer-version parser inside the call, which
+            # the first wrapped op reaches in-window (ret-w3g1 closure fix).
+            "torchlens._utils._producer_version",
+        ):
             try:
                 importlib.import_module(module_name)
             except Exception:
