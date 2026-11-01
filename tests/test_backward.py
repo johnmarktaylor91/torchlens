@@ -1851,7 +1851,7 @@ def test_fork_deep_copy_debug_mode_rethrows(monkeypatch: pytest.MonkeyPatch) -> 
     """
     import copy
 
-    from torchlens._data_classes import _trace_intervention as trace_intervention
+    from torchlens._data_classes import _trace_fork as trace_fork
 
     class _PoisonDeepCopy:
         """Object whose deepcopy always fails (shallow copy still works)."""
@@ -1860,12 +1860,12 @@ def test_fork_deep_copy_debug_mode_rethrows(monkeypatch: pytest.MonkeyPatch) -> 
             raise RuntimeError("planted deepcopy failure")
 
     monkeypatch.delenv("TORCHLENS_DEBUG_FORK_COPY", raising=False)
-    degraded = trace_intervention._memoized_deep_copy(_PoisonDeepCopy(), None, on_failure=copy.copy)
+    degraded = trace_fork._memoized_deep_copy(_PoisonDeepCopy(), None, on_failure=copy.copy)
     assert isinstance(degraded, _PoisonDeepCopy)  # default: silent degradation
 
     monkeypatch.setenv("TORCHLENS_DEBUG_FORK_COPY", "1")
     with pytest.raises(RuntimeError, match="planted deepcopy failure"):
-        trace_intervention._memoized_deep_copy(_PoisonDeepCopy(), None, on_failure=copy.copy)
+        trace_fork._memoized_deep_copy(_PoisonDeepCopy(), None, on_failure=copy.copy)
 
     # And a whole-trace fork under a poisoned field degrades (not raises) by
     # default — the historical behavior stays available.
