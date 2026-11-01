@@ -1400,7 +1400,7 @@ def _recording_setstate(self: Recording, state: list[Any]) -> None:
 # its own pickling pair on Python 3.10 even when the class defines one, and that
 # pair would pickle the live model output.
 Recording.__getstate__ = _recording_getstate  # type: ignore[method-assign,assignment]
-Recording.__setstate__ = _recording_setstate  # type: ignore[method-assign,assignment]
+Recording.__setstate__ = _recording_setstate  # type: ignore[attr-defined]
 
 
 def _mark_recording_halted(recording: Recording, pass_index: int, reason: str) -> None:
