@@ -63,7 +63,7 @@ Required reading for this area: [Current 2.x Surface](docs/agent-reference/curre
 - Do not expect fused kernels to expose hidden internal tensors.
 - Do not put opaque callables in portable artifacts unless audit-only behavior is
   acceptable.
-- Do not add new top-level API names casually; use submodules. Interim-phase policy is remove-and-rename, never deprecation shims (tests/test_deprecation_inventory.py pins the package deprecation-free).
+- Do not add new top-level API names casually; use submodules. Interim-phase policy is remove-and-rename, never deprecation shims (scripts/checks/deprecation_inventory.py pins the package deprecation-free).
 
 ## Validation Integrity (LOCKED PRINCIPLE — never violate)
 

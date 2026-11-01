@@ -2,7 +2,7 @@
 
 The 2026-08 shim-removal pass (RULINGS Batch-8: FULL deletion, clean v2)
 deleted every runtime deprecation shim, warned alias, alias property, and
-moved-name redirect. ``tests/test_deprecation_inventory.py`` pins the PACKAGE
+moved-name redirect. ``scripts/checks/deprecation_inventory.py`` pins the PACKAGE
 deprecation-free (AST scanners over shipped code); THIS module pins the REPO
 free of the deleted spellings themselves -- code, docs, notebooks, examples,
 benchmarks, scripts -- so a stale example or a resurrected alias cannot creep

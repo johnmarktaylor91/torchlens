@@ -1,7 +1,7 @@
 """The bidirectional call-time deprecation gate + plants (build item 5).
 
 Static side (zero emission sites) is owned by
-tests/test_deprecation_inventory.py and CITED, never duplicated; this gate
+scripts/checks/deprecation_inventory.py and CITED, never duplicated; this gate
 owns the CALL-TIME behavior root (D6: five of seven shims at the panel's SHA
 presented the implementation's metadata everywhere and revealed themselves
 only when called). The registry is empty today; the plants prove both red
@@ -30,7 +30,7 @@ def test_registry_is_empty_and_loads() -> None:
 
     assert load_deprecated_doors() == (), (
         "a deprecation-door row appeared; interim-phase policy is "
-        "remove-and-rename (tests/test_deprecation_inventory.py) -- a real "
+        "remove-and-rename (scripts/checks/deprecation_inventory.py) -- a real "
         "shim needs BOTH the registry row and a conscious policy change"
     )
 

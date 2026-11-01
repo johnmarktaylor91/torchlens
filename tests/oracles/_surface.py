@@ -14,7 +14,7 @@ Classification is 4-way and closed:
   gated by tests/test_api_surface.py::test_submodules_have_all).
 - ``deprecated`` -- the name is registered in the deprecation-door registry
   (``data/deprecated_doors.tsv``; empty today -- the package is pinned
-  deprecation-free by tests/test_deprecation_inventory.py).
+  deprecation-free by scripts/checks/deprecation_inventory.py).
 - ``undeclared`` -- everything else. An undeclared name is RED unless a
   dated KNOWN-GAP row licenses it (D25).
 
