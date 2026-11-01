@@ -119,7 +119,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 5350 -> 5200 (2026-10-05 rung-1 ratchet settle): the completeness
     # backstop census split to validation/_completeness_backstop.py; re-keyed
     # down to the next 50-line step above the measured 5188 (R43-F2).
-    "torchlens/validation/core.py": 5200,
+    "torchlens/validation/core.py": 4900,
     # 5250 -> 5100 (2026-08-27 C07 fix cycle): the user-transform apply +
     # validation helpers split to _op_transforms.py under R43 (the v9
     # injection_provenance rows nudged op.py over); re-keyed down to the
@@ -482,7 +482,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # clears the union and stays.
     # 3300 -> 3150: the quantized-module FLOPs estimator split to
     # _quantized_flops.py (3127 measured); the ceiling follows the file down.
-    "torchlens/backends/torch/model_prep.py": 3150,
+    "torchlens/backends/torch/model_prep.py": 2900,
     # 2950 -> 2800 (2026-08-29 F11 T74b fix): the call-tree display + call-scope
     # resolution helper family split to _data_classes/_call_tree.py after the
     # merged tree crossed the frozen 2950 (F10's Module lovely seam +10 atop
