@@ -670,7 +670,7 @@ def stamp_backend_finalized(trace: object) -> CaptureOutcome:
         raise swallowed
     if bool(getattr(trace, "is_stopped", False)):
         reason = getattr(trace, "stop_reason", None)
-        frontier_label = trace._graph_stop_frontier
+        frontier_label = getattr(trace, "_graph_stop_frontier", None)
         frontier = _preview_halt_frontier(trace)
         return _stamp(
             trace,
@@ -681,7 +681,7 @@ def stamp_backend_finalized(trace: object) -> CaptureOutcome:
                 boundary_label=frontier_label if isinstance(frontier_label, str) else None,
                 frontier_labels=frontier,
                 num_committed_ops=count_committed_ops(trace),
-                inference_only=bool(trace._options_inference_only),
+                inference_only=bool(getattr(trace, "_options_inference_only", False)),
             ),
         )
     return settle_completed(trace, None)

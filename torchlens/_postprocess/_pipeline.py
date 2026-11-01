@@ -20,6 +20,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from ..validation.invariants import MetadataInvariantError
 from . import _executor as ex
 from ._executor import StepContext
 
@@ -585,8 +586,6 @@ def _check_step_postcondition(ctx: StepContext, step: PipelineStep) -> None:
 
     violation = None if step.postcondition is None else step.postcondition(ctx)
     if violation is not None:
-        from ..validation.invariants import MetadataInvariantError
-
         raise MetadataInvariantError(
             "postprocess_step_postcondition",
             f"{violation}. Remedy: report this as a TorchLens bug.",

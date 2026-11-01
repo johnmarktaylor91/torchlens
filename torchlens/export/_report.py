@@ -45,6 +45,7 @@ from typing import Any
 from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
+from .._partial import PartialTrace
 from .._utils.display import atomic_write_text
 from ..errors._base import TorchLensWarning
 from ._common import _static_graph_data
@@ -120,8 +121,6 @@ class _ArrayPlan:
 
 def _is_partial(log: Any) -> bool:
     """Whether the subject is a failed-capture PartialTrace."""
-
-    from .._partial import PartialTrace
 
     return isinstance(log, PartialTrace)
 

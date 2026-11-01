@@ -528,7 +528,7 @@ def _record_site_pass_labels(site_target: Any) -> list[str] | None:
         site_target, "layer_label"
     ):
         return None
-    from .._data_classes.op import Op
+    from .._data_classes.op import Op  # in-function: op.py imports this package at load
 
     # ``Layer.ops`` is an accessor (iterable, not a builtin sequence); an ``Op`` is itself.
     ops = (site_target,) if isinstance(site_target, Op) else getattr(site_target, "ops", None)

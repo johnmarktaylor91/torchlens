@@ -100,7 +100,7 @@ def _output_parent_storage_intent(
         in_ram=streaming is None or streaming.path is None or streaming.retain_in_memory,
         on_disk=streaming is not None and streaming.path is not None,
     )
-    output_device = trace._options_output_device
+    output_device: str | None = trace._options_output_device
     if output_device == "same":
         output_device = None
     spec = CaptureSpec(
