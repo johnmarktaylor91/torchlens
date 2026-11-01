@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
-from types import MappingProxyType, SimpleNamespace
+from types import MappingProxyType
 from typing import Any, Literal, TypeAlias, cast
 
 import torch
@@ -20,8 +20,18 @@ from .._ir.selector_eval import (
     looks_like_finalized_label,
     normalize_selector_like,
 )
-from .._state import pause_logging
 from ..errors import TorchLensWarning
+from ._hooks_support import (
+    _display_label,
+    _existing_facet_write_claims,
+    _multi_call_addresses,
+    _needs_tensor_backward_adapter,
+    _selector_call_index,
+    _snapshot_layer_log,
+    _targets_accumulate_grad,
+    gradient_inner,
+    make_live_site_proxy,
+)
 from .errors import (
     HelperMountError,
     HookSignatureError,
@@ -64,29 +74,9 @@ _UNIVERSE_SIGNAL: dict[str, HookDirection] = {
 _NODE_SELECTOR_KINDS = frozenset(
     {"grad_fn", "grad_fn_label", "grad_kind", "backward_pass", "intervening", "without_op"}
 )
-#: Selector kind of the ``tl.grad(...)`` wrapper (SPEC section 0, THE_WRAPPER).
-_GRAD_SELECTOR_KIND = "grad"
 HookCallable: TypeAlias = Callable[..., Any]
 HookInput: TypeAlias = Callable[..., Any] | Edit
 _DEFAULT_HEAD_FACET_NAMES = ("q", "k", "v")
-
-_LAYER_LOG_CONTEXT_FIELDS = (
-    "layer_label",
-    # Pass-qualified spelling + pass ordinal: on a multi-pass
-    # (recurrence-grouped) layer the bare layer_label alone cannot tell a
-    # hook WHICH pass it is firing at.
-    "label",
-    "pass_index",
-    # L1 structural site key (where minted): the derived-seed law's logical
-    # firing coordinate prefers it over the display label (F02, edits memo D6).
-    "site_key",
-    "layer_type",
-    "shape",
-    "dtype",
-    "tensor_device",
-    "address",
-    "call_index",
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -335,49 +325,49 @@ def normalize_hook_plan(
                     live_target, allow_replay_only=allow_replay_only_site_targets
                 )
             _validate_helper_mount(branch_target, helper_spec, universe=universe)
-            signal = _UNIVERSE_SIGNAL[universe]
             entries.append(
                 NormalizedHookEntry(
                     site_target=branch_target,
                     normalized_callable=_normalize_branch_hook(hook_like, universe=universe),
                     helper_spec=helper_spec,
-                    metadata=MappingProxyType(
-                        {
-                            "attach_order": order,
-                            "composition": "left_to_right",
-                            "allow_shape_change": entry_force_shape_change,
-                            "signal": signal,
-                            "universe": universe,
-                            "timing": "post",
-                        }
+                    metadata=_plan_entry_metadata(
+                        order, allow_shape_change=entry_force_shape_change, universe=universe
                     ),
                 )
             )
     return entries
 
 
-def gradient_inner(site_target: Any) -> Any | None:
-    """Return the forward site inside a ``tl.grad(...)`` address, else ``None``.
-
-    Duck-typed on the selector kind so a saved ``TargetSpec`` of kind
-    ``"grad"`` (whose value is the inner frozen target) reads the same way as
-    a live ``GradSelector``.
+def _plan_entry_metadata(
+    order: int, *, allow_shape_change: bool, universe: str
+) -> MappingProxyType[str, Any]:
+    """Return the frozen metadata of one attach-hook plan entry.
 
     Parameters
     ----------
-    site_target:
-        Selector-like target.
+    order:
+        Zero-based attach order of the entry's ``(site, hook)`` pair.
+    allow_shape_change:
+        Whether the entry's helper requested ``allow_shape_change``.
+    universe:
+        Site universe of the entry's branch.
 
     Returns
     -------
-    Any | None
-        The inner forward selector, or ``None`` when ``site_target`` is not a
-        gradient address.
+    MappingProxyType[str, Any]
+        Read-only entry metadata.
     """
 
-    if getattr(site_target, "selector_kind", None) != _GRAD_SELECTOR_KIND:
-        return None
-    return getattr(site_target, "selector_value", None)
+    return MappingProxyType(
+        {
+            "attach_order": order,
+            "composition": "left_to_right",
+            "allow_shape_change": allow_shape_change,
+            "signal": _UNIVERSE_SIGNAL[universe],
+            "universe": universe,
+            "timing": "post",
+        }
+    )
 
 
 def gradient_inners(site_target: Any) -> tuple[Any, ...]:
@@ -650,35 +640,6 @@ def _normalize_branch_hook(hook_like: HookInput, *, universe: SiteUniverse) -> H
     return hook_callable
 
 
-def _needs_tensor_backward_adapter(
-    hook_callable: HookCallable,
-    helper_spec: Edit | None,
-) -> bool:
-    """Return whether a backward hook expects one tensor instead of grad tuples.
-
-    Parameters
-    ----------
-    hook_callable:
-        Normalized callable being mounted on the backward signal.
-    helper_spec:
-        Helper spec when the hook came from a built-in helper.
-
-    Returns
-    -------
-    bool
-        Whether the callable should be adapted to a ``GradFn`` tuple callback.
-    """
-
-    if helper_spec is not None and dict(helper_spec.metadata).get("mount_shape") == "tuple":
-        return False
-    try:
-        signature = inspect.signature(hook_callable)
-    except (TypeError, ValueError):
-        return True
-    tuple_callback_params = {"grad_output", "grad_fn_handle", "call_index", "run_ctx"}
-    return not bool(tuple_callback_params & set(signature.parameters))
-
-
 def _backward_context_op(grad_fn_handle: Any) -> Any:
     """Return the forward record a live backward hook context describes.
 
@@ -799,13 +760,11 @@ def normalize_hooks_from_spec(
     if spec is None:
         return []
 
+    replay_ok = not live_forward
     entries: list[NormalizedHookEntry] = []
     entries.extend(_normalize_value_specs(spec.target_value_specs))
     entries.extend(
-        _normalize_sticky_hook_specs(
-            spec.hook_specs,
-            allow_replay_only_site_targets=not live_forward,
-        )
+        _normalize_sticky_hook_specs(spec.hook_specs, allow_replay_only_site_targets=replay_ok)
     )
 
     if spec.targets:
@@ -813,11 +772,7 @@ def normalize_hooks_from_spec(
         if hook_like is not None:
             for target in spec.targets:
                 entries.extend(
-                    normalize_hook_plan(
-                        target,
-                        hook_like,
-                        allow_replay_only_site_targets=not live_forward,
-                    )
+                    normalize_hook_plan(target, hook_like, allow_replay_only_site_targets=replay_ok)
                 )
     if live_forward:
         # RERUN/backward preflight: sticky entries staged through the attach
@@ -975,15 +930,6 @@ def _warn_facet_fanout(log: Any, selector: FacetSelector, written: list[tuple[st
     )
 
 
-def _display_label(log: Any, home_label: str) -> str:
-    """Return the final layer label behind a raw home-op hook label, for messages."""
-
-    try:
-        return str(log[home_label].layer_label)
-    except (AttributeError, KeyError, TypeError, ValueError):
-        return home_label
-
-
 def _facet_owner_address(log: Any, selector: FacetSelector, home_label: str, facet: str) -> Any:
     """Return the innermost module address owning ``facet`` at ``home_label``, if any."""
 
@@ -1016,13 +962,12 @@ def _normalize_value_specs(value_specs: Sequence[TargetValueSpec]) -> list[Norma
 
     entries: list[NormalizedHookEntry] = []
     for order, value_spec in enumerate(value_specs):
-        value = value_spec.value
 
         def _set_value_hook(
             out: torch.Tensor,
             *,
             ctx: HookContext,
-            replacement: Any = value,
+            replacement: Any = value_spec.value,
         ) -> torch.Tensor:
             """Return a static or one-shot callable replacement.
 
@@ -1091,11 +1036,10 @@ def _normalize_sticky_hook_specs(
     for hook_spec in hook_specs:
         if hook_spec.metadata.get("facet_write"):
             # Facet-slice hooks fire through the scatter wrapper built at attach time
-            # (_facet_scatter_hook); it closes over the resolved FacetSpec and CANNOT
-            # be rebuilt from the raw helper. Rebuilding from the helper here (the
-            # generic path below) would silently apply the helper to the WHOLE home
-            # tensor -- e.g. tl.head(0, "q") + tl.zero_ablate() zeroing every head.
-            # Fail closed when the wrapper is absent (e.g. a spec loaded from disk).
+            # (_facet_scatter_hook), which closes over the resolved FacetSpec and CANNOT be
+            # rebuilt from the raw helper: the generic path below would silently apply the
+            # helper to the WHOLE home tensor (tl.head(0, "q") + tl.zero_ablate() zeroing
+            # every head). Fail closed when the wrapper is absent (e.g. a spec loaded from disk).
             stored_hook = hook_spec.hook
             if not getattr(stored_hook, "_tl_facet_scatter", False):
                 facet_name = hook_spec.metadata.get("facet_name", "<unknown>")
@@ -1319,29 +1263,6 @@ def live_backward_selector_matches(
     return bool(_resolve_unchecked((grad_fn_handle,), selector, strict=False))
 
 
-def _selector_call_index(selector_like: Any) -> int | None:
-    """Return an explicit one-based call-index selector, if supplied.
-
-    Parameters
-    ----------
-    selector_like:
-        Selector or target spec.
-
-    Returns
-    -------
-    int | None
-        Expected callback index, or ``None`` when unconstrained.
-    """
-
-    metadata = getattr(selector_like, "metadata", None)
-    if isinstance(metadata, Mapping) and isinstance(metadata.get("call_index"), int):
-        return int(metadata["call_index"])
-    value = getattr(selector_like, "selector_value", None)
-    if isinstance(value, Mapping) and isinstance(value.get("call_index"), int):
-        return int(value["call_index"])
-    return None
-
-
 def _live_backward_context_matches(
     selector: BaseSelector,
     *,
@@ -1411,12 +1332,14 @@ def _validate_helper_mount(
 
     if helper_spec is None or universe == "activation":
         return
-    if universe == "node" and dict(helper_spec.metadata).get("requires_grad_output"):
-        if _targets_accumulate_grad(site_target):
-            raise HelperMountError(
-                f"{helper_spec.name} requires grad_output and cannot mount on "
-                "AccumulateGrad prehooks."
-            )
+    if (
+        universe == "node"
+        and dict(helper_spec.metadata).get("requires_grad_output")
+        and _targets_accumulate_grad(site_target)
+    ):
+        raise HelperMountError(
+            f"{helper_spec.name} requires grad_output and cannot mount on AccumulateGrad prehooks."
+        )
     if helper_spec.signal != "forward":
         return
     raise InvalidArgumentError(
@@ -1429,27 +1352,6 @@ def _validate_helper_mount(
         verb=helper_spec.name,
         site=repr(site_target),
     )
-
-
-def _targets_accumulate_grad(site_target: Any) -> bool:
-    """Return whether a node selector target names ``AccumulateGrad``.
-
-    Parameters
-    ----------
-    site_target:
-        Selector-like target.
-
-    Returns
-    -------
-    bool
-        Whether the target is an AccumulateGrad selector.
-    """
-
-    value = getattr(site_target, "selector_value", None)
-    if isinstance(value, Mapping):
-        type_value = value.get("type")
-        return type_value is not None and "accumulategrad" in str(type_value).lower()
-    return "accumulategrad" in repr(site_target).lower()
 
 
 #: The one remedy text of ``edit_signal_mismatch`` (SPEC 2.2).
@@ -1585,23 +1487,6 @@ def _scoped_facet_view(record: Any, selector: FacetSelector) -> Any:
         return None
 
 
-def _multi_call_addresses(record: Any) -> tuple[str, ...] | None:
-    """Return the call-qualified addresses of a module record that ran more than once.
-
-    ``None`` for any other record. The test mirrors the module record's own
-    single-call guard, so a record whose ``facets`` would raise
-    ``module_call_ambiguous`` is never asked for its view.
-    """
-
-    num_calls = getattr(record, "num_calls", None)
-    if num_calls is None or hasattr(record, "call_label") or not hasattr(record, "calls"):
-        return None
-    if num_calls == 1 and len(getattr(record, "ops", ())) == 1:
-        return None
-    address = getattr(record, "address", "")
-    return tuple(f"{address}:{index}" for index in range(1, max(int(num_calls), 1) + 1))
-
-
 def _refuse_multi_call_module(
     selector: FacetSelector, address: str, call_addresses: tuple[str, ...]
 ) -> None:
@@ -1672,36 +1557,6 @@ def _facet_home_label(spec: Any) -> str:
     if label_value is None:
         raise SiteResolutionError("Facet selector resolved to a home without a layer label.")
     return str(label_value)
-
-
-def _existing_facet_write_claims(log: Any) -> list[tuple[str, torch.Tensor, str]]:
-    """Return existing facet write claims from a trace intervention spec.
-
-    Parameters
-    ----------
-    log:
-        Trace whose sticky hook specs should be inspected.
-
-    Returns
-    -------
-    list[tuple[str, torch.Tensor, str]]
-        Claimed ``(home_label, mask, facet_name)`` tuples.
-    """
-
-    spec = getattr(log, "_intervention_spec", None)
-    if spec is None:
-        return []
-    claims: list[tuple[str, torch.Tensor, str]] = []
-    for hook_spec in getattr(spec, "hook_specs", ()):
-        metadata = getattr(hook_spec, "metadata", {})
-        if not metadata.get("facet_write"):
-            continue
-        mask = metadata.get("facet_write_mask")
-        home_label = metadata.get("facet_home_label")
-        facet_name = metadata.get("facet_name", "<unknown>")
-        if isinstance(mask, torch.Tensor) and home_label is not None:
-            claims.append((str(home_label), mask, str(facet_name)))
-    return claims
 
 
 def _check_facet_write_conflicts(
@@ -1791,75 +1646,6 @@ def _facet_scatter_hook(
     # the whole home tensor, so replay must refuse instead of firing it.
     _hook._tl_facet_scatter = True  # type: ignore[attr-defined]
     return _hook
-
-
-def make_live_site_proxy(
-    *,
-    _layer_label_raw: str,
-    func_name: str,
-    layer_type: str,
-    tensor: torch.Tensor,
-    func_call_id: int,
-    container_path: tuple[Any, ...],
-    fields: Mapping[str, Any],
-) -> Any:
-    """Build a minimal Op-like object for live hook matching.
-
-    Parameters
-    ----------
-    _layer_label_raw:
-        Predicted raw label for the output tensor.
-    func_name:
-        Decorated function name.
-    layer_type:
-        Normalized layer type.
-    tensor:
-        Output tensor at the hook site.
-    func_call_id:
-        Function-call id allocated by the wrapper.
-    container_path:
-        Stable output path for multi-output containers.
-    fields:
-        Shared capture metadata from output logging.
-
-    Returns
-    -------
-    Any
-        Simple namespace with capture-time fields used by selectors and hooks.
-    """
-
-    # TorchLens-internal size read: paused so it is never mistaken for a user call.
-    with pause_logging():
-        memory = tensor.nelement() * tensor.element_size()
-    return SimpleNamespace(
-        label=_layer_label_raw,
-        raw_label=_layer_label_raw,
-        layer_label=_layer_label_raw,
-        _layer_label_raw=_layer_label_raw,
-        _label_raw=_layer_label_raw,
-        raw_index=fields.get("raw_index"),
-        layer_type=layer_type,
-        func_name=func_name,
-        func_call_id=func_call_id,
-        container_path=container_path,
-        shape=tuple(tensor.shape),
-        dtype=tensor.dtype,
-        tensor_device=tensor.device,
-        memory=memory,
-        module=fields.get("module"),
-        modules=fields.get("modules", []),
-        output_of_module_calls=fields.get("output_of_module_calls", []),
-        output_of_modules=fields.get("output_of_modules", []),
-        _tl_module_boundary=bool(fields.get("_tl_module_boundary", False)),
-        _tl_input_snapshot=bool(fields.get("_tl_input_snapshot", False)),
-        is_inplace=bool(fields.get("is_inplace", False)),
-        is_transform=bool(fields.get("is_transform", False)),
-        transform_kind=fields.get("transform_kind"),
-        transform_chain=tuple(fields.get("transform_chain", ())),
-        transform_config=dict(fields.get("transform_config", {})),
-        call_index=1,
-        lookup_keys=[],
-    )
 
 
 def _dispatch_hook_pairs(
@@ -2026,32 +1812,6 @@ def _validate_hook_signature(fn: Callable[..., Any], *, signal: HookDirection) -
         raise HookSignatureError("hook must accept required keyword-only argument 'ctx'")
     if ctx_param is not None and ctx_param.kind is not inspect.Parameter.KEYWORD_ONLY:
         raise HookSignatureError("'ctx' must be a keyword-only parameter")
-
-
-def _snapshot_layer_log(layer_log: Any | None) -> dict[str, Any]:
-    """Snapshot selected Op metadata.
-
-    Parameters
-    ----------
-    layer_log:
-        Op-like object or mapping.
-
-    Returns
-    -------
-    dict[str, Any]
-        Plain dictionary suitable for ``MappingProxyType``.
-    """
-
-    snapshot: dict[str, Any] = {}
-    if layer_log is None:
-        return dict.fromkeys(_LAYER_LOG_CONTEXT_FIELDS)
-    for field_name in _LAYER_LOG_CONTEXT_FIELDS:
-        if isinstance(layer_log, Mapping):
-            value = layer_log.get(field_name)
-        else:
-            value = getattr(layer_log, field_name, None)
-        snapshot[field_name] = value
-    return snapshot
 
 
 __all__ = [

@@ -1214,6 +1214,7 @@ torchlens/intervention/_directions.py::Direction.upload_to_neuronpedia	64
 torchlens/intervention/_directions.py::fit_direction	89
 torchlens/intervention/_facet_save.py::_facet_save_predicate	73
 torchlens/intervention/_gradient_contract.py::keep_grad	65
+torchlens/intervention/_hooks_support.py::make_live_site_proxy	67
 torchlens/intervention/_module_boundary.py::_apply_module_boundary_live_hooks	84
 torchlens/intervention/_patch_mapping.py::apply_position_map	72
 torchlens/intervention/_position_edits.py::positions	86
@@ -1246,7 +1247,6 @@ torchlens/intervention/hooks.py::_adapt_tensor_backward_hook	64
 torchlens/intervention/hooks.py::_normalize_sticky_hook_specs	75
 torchlens/intervention/hooks.py::_normalize_value_specs	63
 torchlens/intervention/hooks.py::expand_facet_hook_entries	76
-torchlens/intervention/hooks.py::make_live_site_proxy	67
 torchlens/intervention/hooks.py::normalize_hook_plan	72
 torchlens/intervention/injection.py	860
 torchlens/intervention/injection.py::injection_recorder._record_call	63

@@ -30,7 +30,6 @@ from .._deprecations import MISSING, MissingType
 from .._errors import CaptureNotActiveError, KeywordConflictError
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from .._utils._torch_compat import get_fsdp_wrapper_type
-from ..intervention.hooks import site_universe
 from ..intervention.predicates import InterventionPredicate
 from ..options import StorageOptions
 from ..types import _ActivationPostfunc, _GradientPostfunc
@@ -100,6 +99,7 @@ def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
         Emits at most one warning for each configured selector slot.
     """
 
+    from ..intervention.hooks import site_universe
     from ..intervention.selectors import BaseSelector
 
     save_selector = state.options.keep_op

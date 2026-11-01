@@ -22,7 +22,6 @@ from typing import Any
 from ... import _state
 from ..._ir.intervention import FireResult
 from ..._ir.predicate import RecordContext
-from ...intervention.hooks import split_site_branches
 from ...intervention.predicates import as_intervention_decision
 from ...intervention.selectors import BaseSelector
 from ...intervention.types import Edit, FireRecord, InterventionDecision, TargetSpec
@@ -94,6 +93,8 @@ class PaddleInterventionRuntime:
                 "paddle backend trace(halt=...) requires a callable predicate "
                 f"returning bool; got {type(halt).__name__!s}."
             )
+        from ...intervention.hooks import split_site_branches
+
         selector = getattr(intervene, "selector", None)
         if selector is not None and any(
             universe != "activation" for universe, _branch in split_site_branches(selector)

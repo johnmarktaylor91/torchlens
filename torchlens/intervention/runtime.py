@@ -18,6 +18,7 @@ from .._ir.intervention import FireResult
 from .._state import pause_logging
 from .._utils.arg_handling import copy_arg_tree
 from ..backends.torch._tl import copy_replacement_meta
+from ._hooks_support import gradient_inner
 from ._module_boundary import (
     _apply_module_boundary_live_hooks as _apply_module_boundary_live_hooks,
     _peek_module_intervention_parent_labels as _peek_module_intervention_parent_labels,
@@ -65,7 +66,6 @@ from .hooks import (
     HookContext,
     NormalizedHookEntry,
     _target_operands,
-    gradient_inner,
     live_backward_selector_matches,
     live_selector_matches_site,
     make_hook_context,

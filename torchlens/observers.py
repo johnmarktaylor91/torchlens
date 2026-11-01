@@ -170,40 +170,37 @@ class TapObserver:
         grad_output: tuple[torch.Tensor | None, ...] | None = None,
         grad_fn_handle: Any = None,
         call_index: int | None = None,
-        run_ctx: dict[str, Any] | None = None,
         ctx: Any = None,
+        **hook_kwargs: Any,
     ) -> torch.Tensor | None:
         """Record a backward gradient and leave autograd gradients unchanged.
 
-        Two mounts call this. A gradient site (``tl.grad(site)``) passes the
-        output gradient tensor and its hook context (``ctx``), recorded as
-        :meth:`__call__` records a backward fire. An autograd-node site passes
-        the node's ``grad_input`` tuple with its ``grad_output``.
+        A gradient site (``tl.grad(site)``) passes the output gradient and its
+        hook context (``ctx``), recorded as :meth:`__call__` records a backward
+        fire; an autograd-node site passes ``grad_input`` with ``grad_output``.
 
         Parameters
         ----------
         grad_input:
-            Output gradient tensor (gradient site) or the autograd
-            ``grad_input`` tuple (node site).
+            Output gradient (gradient site) or the autograd ``grad_input`` tuple (node site).
         grad_output:
             Autograd grad_output tuple at the grad_fn_handle hook, when available.
         grad_fn_handle:
             GradFn site whose hook fired.
         call_index:
             One-based backward call index.
-        run_ctx:
-            Shared hook run context. Accepted for hook API compatibility.
         ctx:
             Hook context of a gradient-site fire.
+        **hook_kwargs:
+            Shared hook run context (``run_ctx``); accepted for hook API compatibility.
 
         Returns
         -------
         torch.Tensor | None
-            The unchanged gradient for a gradient-site fire; ``None`` for a
-            node fire. Taps observe only.
+            The unchanged gradient for a gradient-site fire; ``None`` for a node fire.
         """
 
-        del run_ctx
+        del hook_kwargs
         if ctx is not None:
             return self(grad_input, ctx=ctx)
         grad_value, grad_kind = _first_tensor_grad(grad_output, "grad_output")
@@ -213,11 +210,10 @@ class TapObserver:
             return None
         with _state.pause_logging():
             value = grad_value.detach().clone()
-        span_names = _active_span_names("backward")
         self.records.append(
             TapRecord(
                 value=value,
-                span_names=span_names,
+                span_names=_active_span_names("backward"),
                 timestamp=time.monotonic(),
                 signal="backward",
                 grad_kind=grad_kind,
