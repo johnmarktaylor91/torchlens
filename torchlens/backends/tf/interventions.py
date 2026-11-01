@@ -38,6 +38,9 @@ from ...intervention.selectors import BaseSelector
 from ...intervention.types import Edit, InterventionDecision
 from ..registry import BackendUnsupportedError
 
+#: Refusal code for gradient-universe sites (registered in `_protocols.tf`).
+_TF_REFUSAL_BACKWARD = "backward_capture_unsupported"
+
 # Alias of the neutral authority table (the ``output`` drop is declared
 # there) -- never re-spell the kinds here.
 _TF_INTERVENTION_SELECTOR_KINDS = _STATIC_INTERVENTION_SELECTOR_KINDS
@@ -196,6 +199,7 @@ def normalize_tf_interventions(intervene: Any, tf: Any) -> TFInterventionPlan:
                 "composites; value-dependent callable conditions need predicate-time "
                 "semantics the tf preview does not implement."
             )
+        _reject_gradient_site(selector)
         reject_selector_outside_kinds(
             selector,
             allowed=_TF_INTERVENTION_SELECTOR_KINDS,
@@ -221,6 +225,20 @@ def normalize_tf_interventions(intervene: Any, tf: Any) -> TFInterventionPlan:
         op_sites=tuple(site for site in normalized if site.level == "op"),
         module_sites=tuple(site for site in normalized if site.level == "module"),
     )
+
+
+def _reject_gradient_site(selector: BaseSelector) -> None:
+    """Refuse a site outside the activation universe: the tf preview is forward-only."""
+
+    from ...intervention.hooks import split_site_branches
+
+    if any(universe != "activation" for universe, _branch in split_site_branches(selector)):
+        raise BackendUnsupportedError(
+            "tf backend interventions are forward-only; the site "
+            f"{selector!r} addresses a gradient, which needs true backward capture "
+            "that the tf preview does not declare. Use the PyTorch backend for gradient edits.",
+            code=_TF_REFUSAL_BACKWARD,
+        )
 
 
 def _selector_kinds(selector: Any) -> frozenset[str]:

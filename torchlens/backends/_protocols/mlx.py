@@ -12,6 +12,7 @@ MLX_REFUSAL_CODES: tuple[str, ...] = (
     "trace_option_unsupported",
     "explicit_seed_unsupported",
     "interventions_unsupported",
+    "backward_capture_unsupported",
     "runtime_missing",
     "runtime_version_unsupported",
     "foreign_tensor_input",
