@@ -6,9 +6,11 @@ Moved verbatim from ``torchlens._capture.trace`` by the capture seam.
 import contextlib
 import sys
 import time
+import warnings
 from collections.abc import Callable, Iterator
 from typing import TYPE_CHECKING, Any, cast
 
+from torchlens import _state
 from torchlens._capture import peak_memory
 from torchlens.backends.registry import BackendUnsupportedError
 
@@ -26,6 +28,7 @@ from .session import (
 from .stop import evaluate_halt_stop
 
 if TYPE_CHECKING:
+    from .._capture_state_helpers import CompiledCapturePrep
     from .._data_classes.trace import Trace
 from .._utils.display import _timed_phase
 
@@ -512,3 +515,59 @@ def _run_predicate_forward_with_root_frame(
                 state.append_context(exit_ctx)
             backend.pop_module_frame(trace, state.module_stack, root_frame)
     return outputs
+
+
+def _warn_unlogged_dynamo_region(
+    self: "Trace", compiled_prep: "CompiledCapturePrep | None"
+) -> None:
+    """Disclose compiled callables whose interiors the capture cannot log."""
+
+    sites = compiled_prep.sites if compiled_prep is not None else ()
+    # Under an active ``force_eager`` stance (torch >= 2.6) the inventoried
+    # compiled callables run their original eager Python and their interiors
+    # ARE logged; the ceiling below is the honest pre-2.6 fallback.
+    if not sites or (compiled_prep is not None and compiled_prep.force_eager_stance):
+        return
+    self._raw_dynamo_region_detected = True
+    self._raw_transform_escape_detected = True
+    _state._dynamo_warning_emitted = True
+    warnings.warn(
+        "TorchLens detected a torch.compile (Dynamo) region on the captured model "
+        f"at {', '.join(sites)}. Operations that run inside the "
+        "compiled region are not logged: on a cold compile the tensors there are "
+        "data-free FakeTensors, while a warm-cache execution can bypass Python "
+        "wrappers entirely. The returned Trace contains only operations that ran "
+        "OUTSIDE the compiled region. Use the eager callable during capture if you "
+        "need its interior logged (on torch >= 2.6, TorchLens instead runs compiled "
+        "callables eagerly via torch.compiler.set_stance and this gap does not "
+        "arise).",
+        UserWarning,
+        stacklevel=4,
+    )
+
+
+def _stamp_host_rng_verdict(self: "Trace", global_advanced: bool, channels: Any) -> None:
+    """Stamp the host-RNG witness verdict after the monitor tore down."""
+
+    if channels is not None:
+        # r65 CLUSTER Z stamping split: a torch RNG ``replayable_read`` (the
+        # ``initial_seed`` family, a host scalar fully determined by the
+        # capture seed) sets CONSUMED without poisoning the capture seed, so
+        # a run at the capture seed stays verified while any other/absent
+        # seed ceilings; ceiling ``channels`` alone decide UNREPLAYABLE.
+        self._runnable.host_rng_consumed = (
+            global_advanced or bool(channels.channels) or bool(channels.replayable_reads)
+        )
+        self._runnable.host_rng_unreplayable = bool(channels.channels)
+        self._runnable.host_rng_channels = tuple(sorted(channels.channels))
+        self._runnable.host_rng_replayable_reads = tuple(sorted(channels.replayable_reads))
+        self._runnable.rng_monitor_uncertain = bool(channels.uncertain)
+        # r39 CLASS A: name the offending threads / coverage failure so the
+        # INCOMPLETE ceiling's readiness diagnostic is actionable.
+        self._runnable.rng_monitor_uncertain_detail = tuple(channels.uncertain_detail)
+    else:
+        # Global engines are still bracketed (cheap); the channel verdict was
+        # never observed, so it must read as UNKNOWABLE, never as no-consumption.
+        self._runnable.host_rng_consumed = global_advanced
+        self._runnable.rng_monitor_uncertain = True
+        self._runnable.rng_monitor_uncertain_detail = ("monitor_not_armed",)

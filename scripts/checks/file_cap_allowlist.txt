@@ -63,10 +63,8 @@ torchlens/_capture/projectors.py	1018
 torchlens/_capture/projectors.py::RecordingProjector.project	87
 torchlens/_capture/projectors.py::RefreshProjector._check_buffer_sink_routing	117
 torchlens/_capture/projectors.py::RefreshProjector.project	89
-torchlens/_capture/run.py	997
-torchlens/_capture/run.py::run_and_log_inputs_through_model	857
-torchlens/_capture/run_entry.py	872
-torchlens/_capture/run_entry.py::_run_model_and_save_specified_outs	668
+torchlens/_capture/run.py	958
+torchlens/_capture/run_entry.py::_run_model_and_save_specified_outs	240
 torchlens/_capture/session.py	1284
 torchlens/_capture/session.py::CaptureSession._spill_activation_escrow_to_budget	77
 torchlens/_capture/session.py::CaptureSession.resolve_deferred_retention	204
