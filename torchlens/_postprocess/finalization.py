@@ -1687,6 +1687,11 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
             include_rng_states=self.save_rng_states,
             include_custom_attributes=getattr(writer, "include_custom_attributes", True),
             include_buffer_values=getattr(writer, "include_buffer_values", True),
+            # Scrub ids start past every id the capture streamed: a tensor field with
+            # no streamed blob (a synthetic output row, an orphan payload) otherwise
+            # takes an id the stream already wrote once an op streamed during capture
+            # was pruned, and its ref silently resolves to that op's payload.
+            blob_id_floor=writer.issued_blob_count(),
         )
         scrubbed_state, blob_specs = _reuse_streamed_blob_ids(
             self,

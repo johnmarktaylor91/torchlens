@@ -169,6 +169,7 @@ def scrub_for_save(
     backend_name: str | None = None,
     payload_materialization: bool = True,
     sparse_runnable: bool = False,
+    blob_id_floor: int = 0,
 ) -> tuple[dict[str, Any], list[BlobSpec], list[dict[str, str]]]:
     """Scrub a ``Trace`` into portable metadata plus tensor blob specs.
 
@@ -214,6 +215,8 @@ def scrub_for_save(
         Whether this backend can serialize materialized tensor payloads.
     sparse_runnable:
         Whether to apply the runnable sparse-core payload exclusion policy.
+    blob_id_floor:
+        Blob ids start at ``blob_id_floor + 1``; streaming passes its writer's issued count.
 
     Returns
     -------
@@ -238,7 +241,7 @@ def scrub_for_save(
     options.payload_codec = get_payload_codec(options.backend_name)
     memo: dict[int, Any] = {}
     blob_specs: list[BlobSpec] = []
-    blob_counter = [0]
+    blob_counter = [blob_id_floor]
 
     scrubbed_model = _scrub_value(trace, options, memo, blob_specs, blob_counter)
     if not isinstance(scrubbed_model, Trace):

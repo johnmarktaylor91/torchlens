@@ -739,6 +739,10 @@ _PROCESS_CACHES = frozenset(
         ("torchlens/stats/_tensor_stats.py", "_STATS_CACHE"),
         ("torchlens/_io/bundle.py", "_NESTED_BLOB_KINDS"),
         ("torchlens/_io/payload_codec.py", "_CODECS"),
+        # Frame-ownership verdict per code filename (is the file inside the
+        # package?): a pure derivation from the filename string, bounded by the
+        # distinct filenames loaded in the process, re-derivable at any time.
+        ("torchlens/_utils/_package_frames.py", "_VERDICTS"),
         ("torchlens/_io/rehydrate.py", "_REHYDRATE_KINDS"),
         ("torchlens/_io/runnable.py", "_DATACLASS_FIELD_NAMES"),
         ("torchlens/_io/runnable.py", "_SPARSE_CORE_NODE_KINDS"),
@@ -1010,6 +1014,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_io/_artifact_anchors.py", "__all__"),
         ("torchlens/_io/_canonical_pickle.py", "__all__"),
         ("torchlens/_io/_durability.py", "__all__"),
+        ("torchlens/_io/_inline_tensor.py", "__all__"),
         ("torchlens/_io/_portability_preflight.py", "__all__"),
         ("torchlens/_io/_safe_unpickle.py", "__all__"),
         ("torchlens/_io/_torch_symbols.py", "__all__"),
