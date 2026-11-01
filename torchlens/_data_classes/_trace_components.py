@@ -487,17 +487,21 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
     ),
     "_prehook_provenance_ledger": "torch: forward-pre-hook provenance ledger for one capture",
     "_fastlog_recording": "fastlog: live Recording handle bound to the trace for the capture",
-    # Capture FINALIZE hands the sealed fastlog run and the raw model outputs
-    # to recording/_recorder.py, which pops them from trace.__dict__ once the
-    # Recording is built; nothing else reads them and none is portable.
+    # Capture FINALIZE (``_capture/finalize/arms.py``) hands the sealed fastlog
+    # run and the raw model outputs to ``recording/_recorder.py``, which pops
+    # them from ``trace.__dict__`` while it builds the Recording; nothing else
+    # reads them, none survives the capture call and none is portable.
     "_fastlog_output_tensors": (
-        "capture finalize: raw model output tensors handed to the recorder, popped on read"
+        "capture finalize (arms.finalize_completed, recorder path): the raw model "
+        "output tensors for the Recording; recording/_recorder.py pops them on read"
     ),
     "_fastlog_output_tensor_addresses": (
-        "capture finalize: output tensor addresses handed to the recorder, popped on read"
+        "capture finalize (arms.finalize_completed, recorder path): the output tensor "
+        "addresses the Recording maps to op labels; recording/_recorder.py pops them on read"
     ),
     "_fastlog_captured_run_core": (
-        "capture finalize: sealed CaptureSession core handed to the recorder, popped on read"
+        "capture finalize (completed, halted and failed arms): the sealed CaptureSession "
+        "core the Recording wraps; recording/_recorder.py pops it on read"
     ),
     "_echo_session": (
         "snoop (lane F28): the read-only echo narration observer bound at "
