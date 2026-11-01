@@ -3243,3 +3243,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: c2bd98f79218e94cfe3cd94541ed26376559f84c (dirty)
 recorded: 2026-11-01T10:18:32.180829+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push lane intv-fix-replay: replay fixes for input leaves, loaded traces, random sources and typed downstream failures
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 66f2495d7759a878c2435be9f3a59a15e3f2fef7 (dirty)
+recorded: 2026-11-01T16:49:38.241022+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push lane intv-fix-replay: replay fixes for input leaves, loaded traces, random sources and typed downstream failures
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 66f2495d7759a878c2435be9f3a59a15e3f2fef7 (dirty)
+recorded: 2026-11-01T16:49:44.624642+00:00

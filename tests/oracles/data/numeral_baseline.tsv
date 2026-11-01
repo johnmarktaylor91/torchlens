@@ -1058,6 +1058,7 @@ docs-md	docs/maintainers/where.md	1226
 docs-md	docs/maintainers/where.md	123
 docs-md	docs/maintainers/where.md	1237
 docs-md	docs/maintainers/where.md	124
+docs-md	docs/maintainers/where.md	1240
 docs-md	docs/maintainers/where.md	125
 docs-md	docs/maintainers/where.md	1250
 docs-md	docs/maintainers/where.md	126
@@ -1169,6 +1170,7 @@ docs-md	docs/maintainers/where.md	180
 docs-md	docs/maintainers/where.md	1802
 docs-md	docs/maintainers/where.md	1805
 docs-md	docs/maintainers/where.md	181
+docs-md	docs/maintainers/where.md	1814
 docs-md	docs/maintainers/where.md	182
 docs-md	docs/maintainers/where.md	1825
 docs-md	docs/maintainers/where.md	183
@@ -1181,7 +1183,6 @@ docs-md	docs/maintainers/where.md	186
 docs-md	docs/maintainers/where.md	187
 docs-md	docs/maintainers/where.md	188
 docs-md	docs/maintainers/where.md	189
-docs-md	docs/maintainers/where.md	1890
 docs-md	docs/maintainers/where.md	1896
 docs-md	docs/maintainers/where.md	19
 docs-md	docs/maintainers/where.md	190
@@ -1243,8 +1244,8 @@ docs-md	docs/maintainers/where.md	221
 docs-md	docs/maintainers/where.md	2214
 docs-md	docs/maintainers/where.md	222
 docs-md	docs/maintainers/where.md	2235
-docs-md	docs/maintainers/where.md	22362
 docs-md	docs/maintainers/where.md	224
+docs-md	docs/maintainers/where.md	22401
 docs-md	docs/maintainers/where.md	2248
 docs-md	docs/maintainers/where.md	225
 docs-md	docs/maintainers/where.md	226
@@ -1397,10 +1398,10 @@ docs-md	docs/maintainers/where.md	349
 docs-md	docs/maintainers/where.md	35
 docs-md	docs/maintainers/where.md	350
 docs-md	docs/maintainers/where.md	351
-docs-md	docs/maintainers/where.md	35140
 docs-md	docs/maintainers/where.md	352
 docs-md	docs/maintainers/where.md	353
 docs-md	docs/maintainers/where.md	355
+docs-md	docs/maintainers/where.md	35552
 docs-md	docs/maintainers/where.md	356
 docs-md	docs/maintainers/where.md	357
 docs-md	docs/maintainers/where.md	358
@@ -1422,6 +1423,7 @@ docs-md	docs/maintainers/where.md	372
 docs-md	docs/maintainers/where.md	373
 docs-md	docs/maintainers/where.md	374
 docs-md	docs/maintainers/where.md	375
+docs-md	docs/maintainers/where.md	376
 docs-md	docs/maintainers/where.md	3769
 docs-md	docs/maintainers/where.md	378
 docs-md	docs/maintainers/where.md	37805
@@ -1633,7 +1635,7 @@ docs-md	docs/maintainers/where.md	611
 docs-md	docs/maintainers/where.md	612
 docs-md	docs/maintainers/where.md	613
 docs-md	docs/maintainers/where.md	614
-docs-md	docs/maintainers/where.md	617276
+docs-md	docs/maintainers/where.md	617696
 docs-md	docs/maintainers/where.md	62
 docs-md	docs/maintainers/where.md	620
 docs-md	docs/maintainers/where.md	621
@@ -1793,8 +1795,8 @@ docs-md	docs/maintainers/where.md	92
 docs-md	docs/maintainers/where.md	93
 docs-md	docs/maintainers/where.md	934
 docs-md	docs/maintainers/where.md	94
+docs-md	docs/maintainers/where.md	9405
 docs-md	docs/maintainers/where.md	942
-docs-md	docs/maintainers/where.md	9436
 docs-md	docs/maintainers/where.md	947
 docs-md	docs/maintainers/where.md	948
 docs-md	docs/maintainers/where.md	95
@@ -6838,6 +6840,7 @@ test-docstrings	tests/backends/test_tf_protocol_p2.py	11
 test-docstrings	tests/backends/test_tf_protocol_p2.py	32
 test-docstrings	tests/backends/test_tf_serialization.py	16
 test-docstrings	tests/behaviour/_fill_capture.py	3,000
+test-docstrings	tests/behaviour/_fill_intervention.py	1_1
 test-docstrings	tests/behaviour/cases.py	13
 test-docstrings	tests/bench/test_capture_bench.py	10
 test-docstrings	tests/bench/test_capture_bench.py	50
@@ -8524,6 +8527,7 @@ test-docstrings	tests/test_replay2_rf_walk_depth.py	600
 test-docstrings	tests/test_replay_corruption_battery.py	14
 test-docstrings	tests/test_replay_exact_parent_pass.py	10,
 test-docstrings	tests/test_replay_grad_fidelity.py	64
+test-docstrings	tests/test_replay_source_and_stochastic_origins.py	59
 test-docstrings	tests/test_replay_tolerance_dtype_tripwire.py	0.33
 test-docstrings	tests/test_replay_tolerance_dtype_tripwire.py	0.75
 test-docstrings	tests/test_replay_tolerance_dtype_tripwire.py	1.64
