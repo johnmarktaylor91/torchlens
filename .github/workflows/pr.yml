@@ -310,6 +310,13 @@ jobs:
         if: ${{ !cancelled() }}
         run: python scripts/check_ci_executed_tests.py --legs "${{ runner.temp }}/junit"
 
+      - name: Recompute and compare the shipped torch scorecard
+        # This row is torch's pinned environment (FrameworkRequirement.pinned),
+        # so the reference backend's shipped scorecard is checked here the way
+        # each backend-protocol leg checks its preview's.
+        if: matrix.scope == 'smoke'
+        run: python -m torchlens.conformance.scorecard --backend torch --check
+
 
   checks:
     name: Repository checks

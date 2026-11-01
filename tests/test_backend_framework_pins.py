@@ -256,6 +256,14 @@ def test_pr_backend_protocol_job_gates_floor_and_scorecard() -> None:
     assert all("steps.changes.outputs.run == 'true'" in str(step["if"]) for step in gated)
 
 
+def test_torch_scorecard_is_checked_in_its_pinned_smoke_row() -> None:
+    """Torch has no preview leg; its pinned smoke row checks the shipped torch scorecard."""
+
+    job = _workflow(_PR_WORKFLOW)["jobs"]["smoke"]
+    runs = [str(step.get("run", "")) for step in job["steps"]]
+    assert "python -m torchlens.conformance.scorecard --backend torch --check" in runs
+
+
 def test_nightly_runs_the_ecosystem_rosters() -> None:
     """The nightly preview matrix runs each backend's ecosystem roster with networked weights."""
 
