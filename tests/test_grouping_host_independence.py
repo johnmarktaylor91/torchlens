@@ -107,7 +107,7 @@ _SUBPROCESS_SOURCE = _MODEL_SOURCE + textwrap.dedent(
                     internal.append([op.label, str(location.file), location.func_name])
         print(json.dumps({
             "torchlens_file": tl.__file__,
-            "is_recurrent": bool(trace.is_recurrent),
+            "is_recurrent": bool(trace.graph.is_recurrent),
             "shape": sorted(seen.values()),
             "internal_context_frames": internal,
         }))
@@ -172,7 +172,7 @@ def test_no_torchlens_frame_in_any_code_context() -> None:
     # The two ``linear`` calls inside one attention (in-projection, out-projection)
     # are two places in torch's code: two layers, never passes of one.
     assert shape[("linear", 1)] >= 3, shape
-    assert not trace.is_recurrent
+    assert not trace.graph.is_recurrent
 
 
 @pytest.mark.heavy
@@ -210,4 +210,4 @@ def test_grouping_equal_when_torchlens_imported_through_dotted_path(tmp_path: Pa
         )
     assert there["internal_context_frames"] == []
     assert [tuple(item) for item in there["shape"]] == _layer_shape(here)
-    assert there["is_recurrent"] == here.is_recurrent
+    assert there["is_recurrent"] == here.graph.is_recurrent

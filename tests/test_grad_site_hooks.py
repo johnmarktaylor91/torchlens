@@ -174,7 +174,9 @@ def test_add_noise_and_steer_change_the_upstream_gradient_deterministically() ->
 def test_activation_only_edit_on_gradient_site_refuses_at_capture(edit_name: str) -> None:
     model, x = _double()
     mul = _label(tl.trace(model, x, capture=_CAPTURE), "mul")
-    edit = tl.mean_ablate() if edit_name == "mean_ablate" else tl.splice_module(nn.Identity())
+    edit = (
+        tl.mean_ablate(dim=None) if edit_name == "mean_ablate" else tl.splice_module(nn.Identity())
+    )
     with warnings.catch_warnings():
         warnings.simplefilter("error", UserWarning)
         with pytest.raises(InvalidArgumentError) as exc_info:

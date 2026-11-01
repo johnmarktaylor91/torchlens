@@ -296,13 +296,13 @@ def test_the_canonical_writer_frames_exactly_and_emits_no_extension_codes(
 def test_a_saved_bundle_metadata_has_exact_frames_and_no_extension_codes(
     tmp_path: Path,
 ) -> None:
-    """A real ``tl.save`` writes metadata the tightened loader reads back through ``tl.load``."""
+    """A real ``trace.save`` writes metadata the tightened loader reads back through ``tl.load``."""
 
     torch.manual_seed(0)
     model = nn.Sequential(nn.Linear(4, 6), nn.ReLU(), nn.Linear(6, 3))
     trace = tl.trace(model, torch.randn(2, 4))
     bundle_path = tmp_path / "bundle.tl"
-    tl.save(trace, bundle_path)
+    trace.save(bundle_path)
     data = (bundle_path / "metadata.pkl").read_bytes()
     assert not _EXT_OPCODES.intersection(name for name, _, _ in _opcodes(data))
     _assert_frames_exact(data)

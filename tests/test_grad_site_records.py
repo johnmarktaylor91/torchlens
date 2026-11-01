@@ -71,7 +71,7 @@ def test_edit_signal_replaces_kind_and_direction() -> None:
     model = nn.Linear(2, 2)
     donor = tl.trace(model, torch.randn(1, 2))
     for forward_only in (
-        tl.mean_ablate(),
+        tl.mean_ablate(dim=None),
         tl.splice_module(nn.Identity()),
         tl.patch_from(donor),
         helper_module.swap_with(donor[donor.layer_labels[1]]),

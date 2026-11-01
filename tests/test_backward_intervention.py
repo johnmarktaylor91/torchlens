@@ -991,7 +991,9 @@ def test_activation_only_edit_on_gradient_site_refuses_at_capture() -> None:
                 _IdentityReluModel(),
                 torch.ones(1, 3, requires_grad=True),
                 capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True),
-                intervene=tl.when(tl.grad(tl.func("relu")), tl.mean_ablate(torch.ones(3))),
+                intervene=tl.when(
+                    tl.grad(tl.func("relu")), tl.mean_ablate(torch.ones(3), dim=None)
+                ),
             )
     fields = getattr(excinfo.value, "fields", None) or {}
     assert fields.get("code", getattr(excinfo.value, "code", None)) == "edit_signal_mismatch"
