@@ -216,7 +216,11 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # _retain_layers_to_save_output_parents flag now reads it from the
     # session-only _rerun_save_request through the instance dict.
     "intervention": 40,
-    "_ir": 2,
+    # 2 -> 3 (aliased output slots, net-f26): _output_occurrences.py reads the
+    # runtime-only `_output_container_specs_by_raw_label` map the backend sets
+    # at capture end and the writer contract drops; absent on loaded traces,
+    # so the empty-dict default is the correct "no aliased slots" reading.
+    "_ir": 3,
     # 5 -> 8 (2026-08-16 l2/l3 merge-gate reconcile, 5f0a4f8d aten wave 0):
     # _primitive_profile.py reads the optional DROP-gated
     # `_primitive_op_profile` store (x2) and `_capture_events` stream; absent

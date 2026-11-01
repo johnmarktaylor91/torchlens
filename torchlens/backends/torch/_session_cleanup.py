@@ -67,7 +67,7 @@ def _clear_session_tensor_metadata(
     visit
         Optional action applied to each reachable non-Parameter tensor instead
         of the default ``clear_meta`` -- the pre-forward ownership snapshot
-        (:func:`_collect_model_owned_tensor_ids`) reuses this exact traversal
+        (:func:`_module_boundary_adoption._collect_model_owned_tensor_ids`) reuses this exact traversal
         so the "model-owned" surfaces of the snapshot and the session-end
         clear can never drift apart.
 

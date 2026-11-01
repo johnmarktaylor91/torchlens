@@ -372,6 +372,11 @@ _CAPABILITY_PROBE_STATE = frozenset(
         # first cleanup(); never varies afterwards.
         ("torchlens/_data_classes/cleanup.py", "_MALLOC_TRIM"),
         ("torchlens/_utils/_torch_compat.py", "HAS_C10D_ABORT_PG"),
+        # Module.__call__ dispatch-frame probe (fast-run forward wave): the code
+        # objects of the torch call-dispatch frames that reach forward, filled
+        # once by the import-time probe behind HAS_MODULE_CALL_DISPATCH_FRAME
+        # and cleared only when the probe reruns; never varies afterwards.
+        ("torchlens/_utils/_module_call_dispatch.py", "_DISPATCH_CODES"),
         # F27 Kineto/memory-profile capability flags: probed once at first
         # extraction (a live profiler session is required to observe an
         # event instance), never vary afterwards.
@@ -713,6 +718,11 @@ _PROCESS_CACHES = frozenset(
         # WeakKeyDictionary keyed by the code object, bounded by live code.
         ("torchlens/_utils/_call_site.py", "_CODE_TOKENS"),
         ("torchlens/_utils/_call_site.py", "_INSTRUCTION_MAPS"),
+        # Per-filename memo of the "is this frame TorchLens's own code" verdict
+        # (normalised-path prefix test). Keyed by the filename string, so it is
+        # bounded by the distinct source files a process loads; a verdict never
+        # changes for a filename, so it needs no epoch.
+        ("torchlens/_utils/_package_frames.py", "_VERDICTS"),
         # Post-T80 census sweep (F42 reconcile): bounded LRU stores merged
         # lanes added without heavy-census classification -- the projection
         # basis byte-budgeted digest store (+ its size counter) and the SRP

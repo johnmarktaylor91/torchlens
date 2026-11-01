@@ -111,6 +111,12 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "port-equivalence leg (F16): the slice-then-convert adapter comparison",
     ),
     "PIL": (TEST_EXTRA, "pillow (also a core torchlens dependency)"),
+    "build": (
+        OPTIONAL_PREVIEW,
+        "dev extra; the pr.yml packaging-install job installs build beside its "
+        "runner and executes tests/packaging_install/ (skips in a test-only env)",
+    ),
+    "yaml": (TEST_EXTRA, "PyYAML, declared in the [test] extra (workflow YAML parses)"),
     "_pytest.nodeid": (
         TEST_EXTRA,
         "pytest 9.2+ structured node ids (tests/test_xdist_groups.py); the pin allows"

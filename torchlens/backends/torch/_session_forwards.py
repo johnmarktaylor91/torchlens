@@ -15,13 +15,16 @@ import copy
 import functools
 import inspect
 import operator
+import sys
 from collections.abc import Callable
 from types import MethodType
 from typing import TYPE_CHECKING, Any
 
 from torch import nn
 
-from ._tl import is_forward_call_decorated, mark_forward_call_decorated
+from ... import _state
+from ..._utils._module_call_dispatch import forward_entered_through_module_call
+from ._tl import get_module_meta, is_forward_call_decorated, mark_forward_call_decorated
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -135,6 +138,8 @@ class _SessionForward:
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Run the module forward through the session wrapper."""
 
+        if _state._logging_enabled:
+            _note_direct_forward_call(self._module, sys._getframe(1))
         return self._delegate(*args, **kwargs)
 
     def __copy__(self) -> _SessionForward:
@@ -171,6 +176,25 @@ class _SessionForward:
         if self._prior is _NO_INSTANCE_FORWARD:
             return (getattr, (self._module, "forward"))
         return (operator.getitem, ((self._prior,), 0))
+
+
+def _note_direct_forward_call(module: nn.Module, caller: Any) -> None:
+    """Mark ``module`` when the active capture reached it by ``module.forward(x)``.
+
+    Such a call skips ``Module.__call__`` and so every torch hook; the capture
+    still records it (its ``forward`` is decorated), and the mark on the
+    module's metadata tells the fast live run which modules to route around
+    its hooks. The mark is kept across captures: routing a module the model
+    calls through ``__call__`` costs nothing, since the route passes such a
+    call straight through.
+    """
+
+    trace = _state._active_trace
+    if trace is None or forward_entered_through_module_call(caller):
+        return
+    meta = get_module_meta(module)
+    if meta is not None and id(module) in trace._module_capture_ws.mod_call_index:
+        meta.direct_forward_called = True
 
 
 def install_session_forward_wrappers(trace: Trace, model: nn.Module) -> None:
