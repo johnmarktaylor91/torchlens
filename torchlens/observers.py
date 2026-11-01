@@ -353,7 +353,11 @@ def _hook_layer_label(layer_log: Any) -> str | None:
     return str(label) if label is not None else None
 
 
-def tap(site: Any) -> TapObserver:
+def tap(
+    site: Any,
+    *,
+    signal: Literal["forward", "backward", "both"] = "both",
+) -> TapObserver:
     """Create a tap observer for a site.
 
     Parameters
@@ -362,6 +366,10 @@ def tap(site: Any) -> TapObserver:
         Selector-like site to observe. ``tl.grad(site)`` observes the gradient
         of the site's output on each backward pass; ``tl.grad(site) | site``
         observes both passes.
+    signal:
+        Pass filter on top of the site: ``"forward"`` records forward fires
+        only, ``"backward"`` backward fires only, ``"both"`` (default) every
+        pass the site fires on.
 
     Returns
     -------
@@ -369,7 +377,9 @@ def tap(site: Any) -> TapObserver:
         Callable observer with ``records`` and ``values()`` accessors.
     """
 
-    return TapObserver(site=site)
+    if signal not in {"forward", "backward", "both"}:
+        raise ValueError("signal must be 'forward', 'backward', or 'both'.")
+    return TapObserver(site=site, signal=signal)
 
 
 @contextmanager

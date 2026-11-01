@@ -25,11 +25,26 @@ def _ctx(signal: str, label: str = "relu_1_2", **kwargs: Any) -> Any:
     return SimpleNamespace(signal=signal, op={"layer_label": label}, kwargs=kwargs)
 
 
-def test_tap_has_no_pass_field_or_keyword() -> None:
+def test_tap_has_no_direction_and_fires_on_both_passes_by_default() -> None:
     tap = tl.observers.tap(tl.func("relu"))
     assert not hasattr(tap, "direction")
-    assert not hasattr(tap, "signal")
-    assert list(inspect.signature(tl.observers.tap).parameters) == ["site"]
+    assert tap.signal == "both"
+    assert list(inspect.signature(tl.observers.tap).parameters) == ["site", "signal"]
+
+
+def test_tap_signal_filters_the_pass_on_top_of_the_site() -> None:
+    value = torch.ones(2)
+    backward_only = tl.observers.tap(tl.func("relu"), signal="backward")
+    assert backward_only(value, ctx=_ctx("forward")) is value
+    assert backward_only.records == []
+    backward_only(2 * value, ctx=_ctx("backward", grad_kind="grad_output", call_index=0))
+    assert [record.signal for record in backward_only.records] == ["backward"]
+    forward_only = tl.observers.tap(tl.func("relu"), signal="forward")
+    forward_only(value, ctx=_ctx("forward"))
+    forward_only(2 * value, ctx=_ctx("backward", grad_kind="grad_output", call_index=0))
+    assert [record.signal for record in forward_only.records] == ["forward"]
+    with pytest.raises(ValueError, match="signal must be"):
+        tl.observers.tap(tl.func("relu"), signal="sideways")  # type: ignore[arg-type]
 
 
 def test_tap_records_the_pass_its_hook_context_names() -> None:
