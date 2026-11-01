@@ -466,7 +466,13 @@ def validate_tf_trace_status(trace: Any, *, validate_metadata: bool = True) -> V
     if not status.is_available:
         trace._validation_replay_status = status
         return status
-    if getattr(trace, "_loaded_from_bundle", False) and not getattr(trace, "_tf_op_captures", ()):
+    # Direct read of the load-provenance marker: present only on a loaded
+    # trace, so its absence IS the typed "live" reading (b5 R45-2 seam).
+    try:
+        loaded_from_bundle = bool(trace._loaded_from_bundle)
+    except AttributeError:
+        loaded_from_bundle = False
+    if loaded_from_bundle and not getattr(trace, "_tf_op_captures", ()):
         # Portable save strips the runtime callback captures; a loaded trace
         # has nothing to replay, which is "unavailable", never "failed".
         stripped = ValidationStatus.unavailable_loaded_runtime_stripped(
@@ -474,9 +480,7 @@ def validate_tf_trace_status(trace: Any, *, validate_metadata: bool = True) -> V
         )
         trace._validation_replay_status = stripped
         return stripped
-    source: ValidationReplaySource = (
-        "loaded" if getattr(trace, "_loaded_from_bundle", False) else "live"
-    )
+    source: ValidationReplaySource = "loaded" if loaded_from_bundle else "live"
     try:
         if validate_metadata:
             from ...validation.invariants import check_metadata_invariants

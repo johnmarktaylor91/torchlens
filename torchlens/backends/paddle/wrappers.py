@@ -443,7 +443,7 @@ class _PaddleWrapperRegistry:
             trace = _state._active_trace
             if trace is None:
                 return original(*args, **kwargs)
-            depth = int(getattr(trace, "_paddle_capture_depth", 0))
+            depth = int(trace._paddle_capture_depth)
             if action == "deny":
                 if depth == 0:
                     _raise_denied(op_name)
@@ -455,7 +455,7 @@ class _PaddleWrapperRegistry:
                 output = original(*args, **kwargs)
             finally:
                 trace._paddle_capture_depth = depth
-            module_stack = tuple(getattr(trace, "_paddle_module_stack", ()))
+            module_stack = tuple(trace._paddle_module_stack)
             emit = cast(Any, backend).emit_paddle_operation
             return emit(trace, op_name, original, args, kwargs, output, module_stack=module_stack)
 
@@ -489,7 +489,7 @@ def _conv_layer_wrapper(original: Any, op_name: str, backend: object) -> Any:
         trace = _state._active_trace if _state._logging_enabled else None
         if trace is None or _ACTIVE_TAP_OBSERVER is not None:
             return original(layer, *args, **kwargs)
-        depth = int(getattr(trace, "_paddle_capture_depth", 0))
+        depth = int(trace._paddle_capture_depth)
         x = conv_layer_input(args, kwargs)
         if depth > 0 or x is None:
             return original(layer, *args, **kwargs)
@@ -499,7 +499,7 @@ def _conv_layer_wrapper(original: Any, op_name: str, backend: object) -> Any:
         finally:
             trace._paddle_capture_depth = depth
         call_args, call_kwargs = conv_layer_call(layer, op_name, x)
-        module_stack = tuple(getattr(trace, "_paddle_module_stack", ()))
+        module_stack = tuple(trace._paddle_module_stack)
         emit = cast(Any, backend).emit_paddle_operation
         return emit(
             trace,

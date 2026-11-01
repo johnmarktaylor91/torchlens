@@ -714,7 +714,7 @@ class PaddleBackend:
             if grad_options.intermediate_grads
             else None
         )
-        previous_module_stack = list(getattr(trace, "_paddle_module_stack", ()))
+        previous_module_stack = list(trace._paddle_module_stack)
         previous_call_counts = dict(module_tree.call_counts) if module_tree is not None else None
         previous_forward_args = (
             dict(module_tree.forward_args_by_call) if module_tree is not None else None

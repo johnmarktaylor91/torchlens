@@ -1543,7 +1543,7 @@ class MLXBackend:
             raw_output=output,
             arg_copies=None,
             kwarg_copies=None,
-            module_stack=module_stack or tuple(getattr(trace, "_mlx_module_stack", ())),
+            module_stack=module_stack or tuple(trace._mlx_module_stack),
             is_bottom_level_func=True,
             func_call_id=func_call_id,
             expected_output_count=len(outputs),
@@ -1552,8 +1552,8 @@ class MLXBackend:
         # and payload capture, so the recorded op output IS the value flowing
         # into downstream ops; halt matches after the frontier op is captured
         # (save-then-halt ordering).
-        plan = getattr(trace, "_mlx_intervention_plan", None)
-        halt_selector = getattr(trace, "_mlx_halt_selector", None)
+        plan = trace._mlx_intervention_plan
+        halt_selector = trace._mlx_halt_selector
         fire_results_by_site: dict[int, tuple[FireResult, ...]] = {}
         intervention_slots: tuple[tuple[int, str], ...] = ()
         intervention_appliers: tuple[tuple[int, Any], ...] = ()
@@ -1874,8 +1874,8 @@ class MLXBackend:
         policy (it is never laundered into a constant).
         """
 
-        param_ids: frozenset[int] = getattr(trace, "_mlx_param_ids", frozenset())
-        external: dict[int, Any] = getattr(trace, "_mlx_external_arrays", {})
+        param_ids: frozenset[int] = trace._mlx_param_ids
+        external: dict[int, Any] = trace._mlx_external_arrays
         policy = self._capture_policy(trace)
         leaves: list[Any] = []
         for value in args:
@@ -1886,9 +1886,7 @@ class MLXBackend:
             if self.tensor_store.get_label(leaf) is not None or id(leaf) in param_ids:
                 continue
             if id(leaf) not in external:
-                trace._mlx_unwrapped_intermediates = (
-                    getattr(trace, "_mlx_unwrapped_intermediates", 0) + 1
-                )
+                trace._mlx_unwrapped_intermediates = trace._mlx_unwrapped_intermediates + 1
                 continue
             reserved = events.reserve_label_block("constant", 1)[0]
             self.tensor_store.set_label(leaf, reserved.label_raw)

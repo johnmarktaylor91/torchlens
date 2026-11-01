@@ -123,7 +123,7 @@ def constant_layer_labels(trace: Any) -> frozenset[str]:
 
     ops_by_label = _ops_by_label(trace)
     labels: set[str] = set()
-    for capture in tuple(getattr(trace, "_paddle_op_captures", ())):
+    for capture in tuple(trace._paddle_op_captures):
         if not (is_constant_capture(capture) or is_literal_producer_capture(capture)):
             continue
         op = ops_by_label.get(str(capture.label_raw))

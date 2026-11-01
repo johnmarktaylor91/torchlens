@@ -104,7 +104,12 @@ class TinygradProtocol(SpecBackedProtocol):
         result = super().validate(trace, ground_truth)
         if not isinstance(result, bool):
             return result
-        status = getattr(trace, "_validation_replay_status", None)
+        # Direct read of the stamped status: the attribute is absent when the
+        # backend never stored one, and absence is the typed refusal below.
+        try:
+            status = trace._validation_replay_status
+        except AttributeError:
+            status = None
         if status is None:
             raise BackendUnsupportedError(
                 "tinygrad validation produced a boolean without storing its replay status",
