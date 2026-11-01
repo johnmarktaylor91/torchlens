@@ -179,50 +179,50 @@ def distribution_children(value: Any) -> list[tuple[str, Any]]:
     return [(name, instance_dict[name]) for name in distribution_layout(value).fields]
 
 
-def _parse_aux_data(aux_data: Any) -> tuple[dict[str, Any], tuple[tuple[str, str], ...]]:
-    """Validate a recorded distribution ``aux_data`` and return its state and aliases.
+def _parse_aux_data(
+    aux_data: Any, fields: tuple[str, ...]
+) -> tuple[dict[str, Any], tuple[tuple[str, str], ...], str]:
+    """Parse a recorded distribution ``aux_data`` into its state, aliases and a problem.
 
     The spec is portable, attacker-influenceable data, so every name must be a
-    plain non-dunder string and every state value a portable literal.
+    plain non-dunder string, every state value a portable literal and every alias
+    target a recorded field. The problem is empty when the data is admissible.
     """
-
-    from .container import ContainerReconstructionError
 
     try:
         sections = dict(aux_data)
-        state_pairs = tuple(sections[_STATE_KEY])
-        alias_pairs = tuple(sections[_ALIASES_KEY])
-        state = dict(state_pairs)
-        aliases = tuple((alias, target) for alias, target in alias_pairs)
-    except (TypeError, ValueError, KeyError) as exc:
-        raise ContainerReconstructionError(
-            "Distribution ContainerSpec aux_data is malformed; the spec is corrupt."
-        ) from exc
-    names = [*state, *(alias for alias, _ in aliases), *(target for _, target in aliases)]
+        state = dict(tuple(sections[_STATE_KEY]))
+        aliases = tuple((alias, target) for alias, target in tuple(sections[_ALIASES_KEY]))
+    except (TypeError, ValueError, KeyError):
+        return {}, (), "its aux_data is malformed"
+    names = [*state, *(alias for alias, _ in aliases)]
     for name in names:
         if not isinstance(name, str) or (name.startswith("__") and name.endswith("__")):
-            raise ContainerReconstructionError(
-                f"Distribution ContainerSpec names an inadmissible attribute {name!r}."
-            )
+            return state, aliases, f"it names an inadmissible attribute {name!r}"
     for name, item in state.items():
         if type(item) not in _LITERAL_TYPES:
-            raise ContainerReconstructionError(
-                f"Distribution ContainerSpec state {name!r} is not a portable literal."
-            )
-    return state, aliases
+            return state, aliases, f"its state {name!r} is not a portable literal"
+    for alias, target in aliases:
+        if target not in fields:
+            return state, aliases, f"its alias {alias!r} names unrecorded field {target!r}"
+    return state, aliases, ""
 
 
 def rebuild_distribution(
-    container_type: type[Any], aux_data: Any, field_values: dict[str, Any]
+    container_type: type[Any] | None,
+    spec: Any,
+    field_values: dict[str, Any],
 ) -> Any:
     """Rebuild a distribution from its recorded fields without running ``__init__``.
 
     Parameters
     ----------
     container_type:
-        The resolved, admissible ``Distribution`` subclass.
-    aux_data:
-        The recorded literal state and aliases.
+        The resolved, admissible ``Distribution`` subclass, or ``None`` when the
+        recorded type is not loaded (there is no plain stand-in, so that refuses).
+    spec:
+        The distribution ``ContainerSpec`` (its fields, type reference and
+        ``aux_data``).
     field_values:
         Rebuilt children by attribute name.
 
@@ -230,16 +230,23 @@ def rebuild_distribution(
     -------
     Any
         A new instance whose instance dictionary equals the recorded one.
+
+    Raises
+    ------
+    ContainerReconstructionError
+        If the type is not loaded or the recorded data is not admissible.
     """
 
     from .container import ContainerReconstructionError, _inert_new
 
-    state, aliases = _parse_aux_data(aux_data)
-    for alias, target in aliases:
-        if target not in field_values:
-            raise ContainerReconstructionError(
-                f"Distribution ContainerSpec alias {alias!r} names unrecorded field {target!r}."
-            )
+    state, aliases, problem = _parse_aux_data(spec.aux_data, tuple(spec.fields))
+    if container_type is None:
+        problem = f"its type {spec.type_module}.{spec.type_qualname} is not loaded"
+    if problem or container_type is None:
+        raise ContainerReconstructionError(
+            f"Cannot rebuild the recorded distribution output: {problem}.",
+            code="container_spec_inadmissible",
+        )
     rebuilt = _inert_new(container_type)
     instance_dict = rebuilt.__dict__
     instance_dict.update(state)
@@ -258,15 +265,13 @@ def distribution_type_rebuild_is_lossy(container_type: type[Any], spec: Any) -> 
     """
 
     from .container import (
-        ContainerReconstructionError,
         _fields_are_inert_settable,
         _metaclass_defines_foreign_call,
         _type_has_safe_new,
     )
 
-    try:
-        state, aliases = _parse_aux_data(spec.aux_data)
-    except ContainerReconstructionError:
+    state, aliases, problem = _parse_aux_data(spec.aux_data, tuple(spec.fields))
+    if problem:
         return True
     names = (*spec.fields, *state, *(alias for alias, _ in aliases))
     return not (
@@ -282,14 +287,10 @@ def replace_distribution_field(value: Any, name: str, new_value: Any) -> Any:
 
     Aliases of the replaced tensor (``Categorical._param``) follow it, so the
     copy stays internally consistent. The original object is not mutated.
+    Callers pass a name from :func:`distribution_children`.
     """
 
     layout = distribution_layout(value)
-    if name not in layout.fields:
-        raise TypeError(
-            f"cannot assign into {type(value).__qualname__} at attribute {name!r}: "
-            "it is not a recorded distribution field"
-        )
     copied = copy.copy(value)
     copied.__dict__[name] = new_value
     for alias, target in layout.aliases:

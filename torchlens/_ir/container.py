@@ -446,7 +446,7 @@ def _rebuild_distribution_node(
 
     The type must resolve to a loaded, admissible ``Distribution`` subclass; an
     unresolvable type has no plain stand-in that would not change what the
-    caller receives, so it refuses rather than substituting one.
+    caller receives, so ``rebuild_distribution`` refuses rather than substituting one.
     """
 
     from .distribution_container import rebuild_distribution
@@ -455,12 +455,7 @@ def _rebuild_distribution_node(
         name: _rebuild_child_or_leaf(child_by_key, NamedField(name), leaf_iter)
         for name in spec.fields
     }
-    container_type = _resolve_container_type(spec)
-    if container_type is None:
-        raise ValueError(
-            f"Distribution type {spec.type_module}.{spec.type_qualname} is not loaded."
-        )
-    return rebuild_distribution(container_type, spec.aux_data, field_values)
+    return rebuild_distribution(_resolve_container_type(spec), spec, field_values)
 
 
 def _rebuild_dict_subtype(spec: ContainerSpec, items: dict[Any, Any]) -> Any:
