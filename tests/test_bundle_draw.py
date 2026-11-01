@@ -45,7 +45,6 @@ def _pair() -> tl.Bundle:
     return tl.Bundle({"clean": clean, "changed": changed}, baseline="clean")
 
 
-@pytest.mark.smoke
 def test_bundle_draw_returns_dot_for_the_union_graph(tmp_path: Path) -> None:
     if shutil.which("dot") is None:
         pytest.skip("graphviz dot not installed")
@@ -60,7 +59,6 @@ def test_bundle_draw_returns_dot_for_the_union_graph(tmp_path: Path) -> None:
     assert (tmp_path / "union.svg").exists()
 
 
-@pytest.mark.smoke
 def test_bundle_draw_diff_folds_show_diff(tmp_path: Path) -> None:
     if shutil.which("dot") is None:
         pytest.skip("graphviz dot not installed")
@@ -72,11 +70,10 @@ def test_bundle_draw_diff_folds_show_diff(tmp_path: Path) -> None:
     assert "clean vs changed" in dot
     assert (tmp_path / "d.svg").exists()
     with pytest.raises(FacadeTeachingError) as excinfo:
-        bundle.show_diff
+        _ = bundle.show_diff
     assert "draw(graph='diff'" in str(excinfo.value)
 
 
-@pytest.mark.smoke
 def test_former_helper_table_methods_are_real_methods() -> None:
     for name in _REAL_METHODS:
         assert inspect.isfunction(inspect.getattr_static(tl.Bundle, name)), name
@@ -90,7 +87,6 @@ def test_former_helper_table_methods_are_real_methods() -> None:
     assert bundle.downstream("clean") == ("changed",)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("name", ["delta_map", "norm_delta", "output_delta", "aligned_pairs"])
 def test_delta_family_is_private_behind_compare(name: str) -> None:
     bundle = _pair()

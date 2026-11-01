@@ -285,7 +285,7 @@ def test_map_reports_released_candidates_as_unmeasured() -> None:
     named = bundle.map(lambda member, name: name)
     assert named[retained] == retained and named[released] == "unmeasured"
     with pytest.raises(FacadeTeachingError) as excinfo:
-        bundle.measure_members
+        _ = bundle.measure_members
     assert excinfo.value.fields["attribute"] == "measure_members"
 
 

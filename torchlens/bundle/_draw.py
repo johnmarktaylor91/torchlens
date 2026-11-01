@@ -2,51 +2,30 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal, cast
-
-import torch
 
 from .._errors import InvalidArgumentError
 
 if TYPE_CHECKING:
-    from .._data_classes.trace import Trace
-    from .._literals import VisDirectionLiteral
     from . import Bundle
 
 BundleGraphLiteral = Literal["forward", "backward", "combined", "diff"]
 _PASS_SIGNALS = {"forward": "forward", "backward": "backward", "combined": "both"}
 
 
-def bundle_draw(
-    bundle: Bundle,
-    path: str | None,
-    *,
-    graph: BundleGraphLiteral,
-    nodes: Literal["ops", "members"],
-    rolled: bool,
-    direction: VisDirectionLiteral | None,
-    theme: str | None,
-    show_legend: bool | None,
-    file_format: str | None,
-    open_viewer: bool,
-    graph_overrides: dict[str, Any] | None,
-    node_overrides: dict[str, Any] | None,
-    edge_overrides: dict[tuple[str, str], Any] | None,
-    members: tuple[str | Trace, str | Trace] | None,
-    metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-    on: Literal["out", "grad"],
-) -> str:
+def bundle_draw(bundle: Bundle, path: str | None, **options: Any) -> str:
     """Render a bundle picture and return its DOT source (``Bundle.draw``).
 
-    ``graph="diff"`` draws two members side by side with their aligned
-    sites coloured by ``metric`` distance (the former ``show_diff``); every
-    other ``graph`` value draws the bundle's union graph, or with
-    ``nodes="members"`` the member relation graph.
+    ``options`` are ``Bundle.draw``'s keywords. ``graph="diff"`` draws two
+    members side by side with their aligned sites coloured by ``metric``
+    distance (the former ``show_diff``); every other ``graph`` value draws
+    the bundle's union graph, or with ``nodes="members"`` the member
+    relation graph.
     """
 
     from .._visualization._render_utils import _KNOWN_EXTS, collision_safe_outpath
 
+    graph = options["graph"]
     if graph not in ("diff", *_PASS_SIGNALS):
         raise InvalidArgumentError(
             f"graph must be 'forward', 'backward', 'combined' or 'diff'; received {graph!r}",
@@ -55,43 +34,58 @@ def bundle_draw(
             argument="graph",
         )
     default_format = "svg" if graph == "diff" else "pdf"
-    stem, fmt = _split_outpath(path, file_format, default_format, _KNOWN_EXTS)
+    stem, fmt = _split_outpath(path, options["file_format"], default_format, _KNOWN_EXTS)
     if stem is None:
         stem = collision_safe_outpath(
             "bundle_diff" if graph == "diff" else "bundle_modelgraph", fmt
         )
     if graph == "diff":
-        from .._visualization.bundle_diff import bundle_diff
+        return _draw_diff(bundle, stem, fmt, options)
+    return _draw_graph(bundle, stem, fmt, options)
 
-        left, right = members if members is not None else (None, None)
-        return bundle_diff(
-            bundle,
-            metric=metric,
-            left=left,
-            right=right,
-            on=on,
-            path=stem,
-            vis_save_only=not open_viewer,
-            file_format=fmt,
-            theme=theme if theme is not None else "paper",
-        )
+
+def _draw_diff(bundle: Bundle, stem: str, fmt: str, options: dict[str, Any]) -> str:
+    """The ``graph="diff"`` picture: ``bundle_diff`` over the two ``members``."""
+
+    from .._visualization.bundle_diff import bundle_diff
+
+    members = options["members"]
+    left, right = members if members is not None else (None, None)
+    theme = options["theme"]
+    return bundle_diff(
+        bundle,
+        metric=options["metric"],
+        left=left,
+        right=right,
+        on=options["on"],
+        path=stem,
+        vis_save_only=not options["open_viewer"],
+        file_format=fmt,
+        theme=theme if theme is not None else "paper",
+    )
+
+
+def _draw_graph(bundle: Bundle, stem: str, fmt: str, options: dict[str, Any]) -> str:
+    """The union (or member relation) graph through ``show_bundle_graph``."""
 
     from .._user_public_impls import show_bundle_graph
 
+    direction = options["direction"]
+    theme = options["theme"]
     dot = show_bundle_graph(
         bundle,
         path=stem,
-        vis_mode="rolled" if rolled else "unrolled",
-        signal=_PASS_SIGNALS[graph],
+        vis_mode="rolled" if options["rolled"] else "unrolled",
+        signal=_PASS_SIGNALS[options["graph"]],
         vis_direction=direction if direction is not None else "bottomup",
-        vis_graph_overrides=graph_overrides,
-        vis_node_overrides=node_overrides,
-        vis_edge_overrides=edge_overrides,
-        vis_save_only=not open_viewer,
+        vis_graph_overrides=options["graph_overrides"],
+        vis_node_overrides=options["node_overrides"],
+        vis_edge_overrides=options["edge_overrides"],
+        vis_save_only=not options["open_viewer"],
         file_format=fmt,
-        nodes=nodes,
+        nodes=options["nodes"],
         theme=theme if theme is not None else "torchlens",
-        show_legend=show_legend,
+        show_legend=options["show_legend"],
     )
     return cast("str", dot)
 
