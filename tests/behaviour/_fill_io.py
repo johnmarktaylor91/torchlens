@@ -476,14 +476,17 @@ def _expect_streamed_payloads(cell: Cell, trace: Any, plain: Any, got: Any, what
     narrows it, and a ``halt=`` partner's output op is the halt frontier.
     """
 
-    stochastic = _stochastic(cell, trace)
+    # The streamed capture is its own reference when the plain capture cannot be: a stochastic
+    # forward draws other numbers, and a partner that changes forward_match (intervene) changes
+    # the values downstream of its site.
+    own_reference = _stochastic(cell, trace) or cell.changes("forward_match")
     for op in trace.saved_ops:
         if _halted(cell) and _is_output(op):
             continue
         reference = plain[op.label].out
         if reference is None:
             continue
-        if stochastic:  # the streamed capture is its own reference for a stochastic forward
+        if own_reference:
             reference = trace[op.label].materialize_out()
         diff = _leaf_difference(reference, got[op.label].out)
         cell.expect(diff is None, f"{what}: payload of {op.label}: {diff}")
