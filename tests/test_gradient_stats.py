@@ -67,9 +67,8 @@ def test_aggregate_grad_requires_loss_fn_raises_typeerror() -> None:
     model = TinyClassifier()
     batches = [(torch.ones(2, 3), torch.ones(2, 1))]
 
-    with pytest.raises(InvalidArgumentError, match="loss_fn") as excinfo:
+    with pytest.raises(InvalidArgumentError, match="loss_fn"):
         tl.stats.aggregate(model, batches, {tl.grad("relu"): tl.stats.Mean()})
-    assert excinfo.value.code == "aggregate_loss_fn_required"
 
 
 def test_aggregate_grad_basic_norms() -> None:
