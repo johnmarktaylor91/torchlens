@@ -504,7 +504,7 @@ torchlens/_save_budget.py::SaveBudget._message	69
 torchlens/_save_budget.py::_retained_storage_identities	68
 torchlens/_save_budget.py::resolve_save_budget	83
 torchlens/_selection/align.py::_target_op_for_entry	68
-torchlens/_selection/compare.py	954
+torchlens/_selection/compare.py	953
 torchlens/_selection/compare.py::_pass_groups	64
 torchlens/_selection/compare.py::_resolve_pass_term	64
 torchlens/_selection/compare.py::_resolve_top_changed	67
