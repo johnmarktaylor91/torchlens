@@ -88,7 +88,7 @@ def test_row_inventory_intermediates_and_validation(family: str) -> None:
         ops = [op for op in trace.layer_list if str(op.func_name) == kind]
         wants = want if isinstance(want, list) else [want]
         assert len(ops) == len(wants), kind
-        for op, value in zip(ops, wants):
+        for op, value in zip(ops, wants, strict=True):
             np.testing.assert_allclose(op.out.detach().numpy(), value, rtol=1e-4, atol=1e-5)
     status = protocol.validate(trace, reference)
     assert isinstance(status, ValidationStatus)

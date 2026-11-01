@@ -63,7 +63,7 @@ def test_roster_row_inventory_intermediates_and_validation(family: str) -> None:
         ops = [op for op in trace.layer_list if op.func_name == kind]
         values = expected if isinstance(expected, list) else [expected]
         assert len(ops) == len(values), f"{family}:{kind}"
-        for index, (op, value) in enumerate(zip(ops, values)):
+        for index, (op, value) in enumerate(zip(ops, values, strict=True)):
             _assert_close(op.out, np.asarray(value, dtype=np.float32), f"{family}:{kind}[{index}]")
     if spec.has_constants:
         assert any(not list(op.parents) and op.func_name != "input" for op in trace.layer_list)
