@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-78 packages, 1154 modules, 602922 lines, 0 modules without a docstring.
+78 packages, 1154 modules, 602947 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 69 | 40870 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 69 | 40895 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1237 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -94,7 +94,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (69 modules, 40870 lines)
+TorchLens - extract outs and metadata from PyTorch models. (69 modules, 40895 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -164,7 +164,7 @@ TorchLens - extract outs and metadata from PyTorch models. (69 modules, 40870 li
 | `features` | The ONE named, recorded feature-matrix shaping operation (tvscope B7/). | 303 |
 | `fingerprint` | Provisional public structural-hash helpers. | 306 |
 | `inventory` | Site inventory: the audience's "what can I extract?" answer (tvscope B6). | 449 |
-| `observers` | User observer helpers for taps, scalar logs, and record spans. | 505 |
+| `observers` | User observer helpers for taps, scalar logs, and record spans. | 530 |
 | `options` | Grouped option dataclasses for public TorchLens APIs. | 1902 |
 | `types` | Public TorchLens type aliases and rarely used data classes. | 162 |
 
