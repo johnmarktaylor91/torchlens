@@ -111,11 +111,6 @@ class _SubstringLabels(nn.Module):
         return torch.cat([hidden, x], dim=0)
 
 
-def _no_pass(label: str) -> str:
-    head, sep, tail = label.rpartition(":")
-    return head if sep and tail.isdigit() else label
-
-
 def _trace(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     return tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
@@ -136,9 +131,7 @@ def _descendants(trace: tl.Trace, label: str) -> set[str]:
     while frontier:
         current = frontier.pop()
         for child in trace[current].children or ():
-            child_label = _no_pass(
-                child if isinstance(child, str) else getattr(child, "label", str(child))
-            )
+            child_label = child if isinstance(child, str) else getattr(child, "label", str(child))
             if child_label not in seen:
                 seen.add(child_label)
                 frontier.append(child_label)
@@ -151,11 +144,8 @@ def _compare_fork(model: nn.Module, x: torch.Tensor) -> tuple[tl.Trace, str, dic
     fork = trace.fork()
     fork.do(tl.label(label), tl.zero_ablate())
     pair = tl.Bundle({"base": trace, "edited": fork}, baseline="base")
-    rows = {
-        _no_pass(name): value
-        for name, value in pair.compare("base", "edited", metric="relative_l2")
-    }
-    return trace, _no_pass(label), rows
+    rows = dict(pair.compare("base", "edited", metric="relative_l2"))
+    return trace, label, rows
 
 
 # --- F5: a recurrent member is not a cyclic supergraph -------------------------
@@ -189,6 +179,23 @@ def test_recurrent_fork_compares_with_the_edited_site_first() -> None:
     cone = _descendants(trace, site)
     outside = {name: value for name, value in rows.items() if name != site and name not in cone}
     assert all(value == 0.0 for value in outside.values()), outside
+
+
+def test_recurrent_compare_gives_one_row_per_pass() -> None:
+    """Multi-pass ops get one ``compare`` row per pass, keyed ``layer_label:k``."""
+
+    torch.manual_seed(0)
+    trace, _site, rows = _compare_fork(_Recurrent(), torch.randn(2, 4))
+    tanh_ops = [op for op in trace.ops if op.func_name == "tanh"]
+    assert len(tanh_ops) == 3 and {op.num_passes for op in tanh_ops} == {3}
+    layer_label = str(tanh_ops[0].layer_label)
+    assert layer_label not in rows
+    assert {f"{layer_label}:{k}" for k in (1, 2, 3)} <= set(rows)
+    single = [op for op in trace.ops if op.num_passes == 1 and op.func_name == "sigmoid"]
+    assert single and str(single[0].layer_label) in rows
+    pair = tl.Bundle({"base": trace, "edited": trace.fork()}, baseline="base")
+    ranked = dict(pair.rank_changes(k=64))
+    assert {f"{layer_label}:{k}" for k in (1, 2, 3)} <= set(ranked)
 
 
 def test_contradictory_member_orders_refuse_typed() -> None:

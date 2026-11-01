@@ -1478,10 +1478,10 @@
   {
    "a": "index",
    "b": "rerun",
-   "status": "asymmetry",
-   "asymmetry": "A29",
-   "confidence": "medium",
-   "note": "Label addressing reads fine after a rerun, but a staged edit addressed by a finalized label cannot be applied on rerun (rerun_staged_label_unmatchable); predicate selectors can."
+   "status": "composes",
+   "evidence": "tests/test_rerun_push_head_ablation_parity.py::test_final_label_and_head_spellings_fire_and_plain_capture_is_unchanged",
+   "confidence": "high",
+   "note": "Label addressing reads fine after a rerun, and a staged edit addressed by a finalized exact label is translated to its raw capture label before the forward, so it fires on the rerun too (walk-2 interventions.1); substring and regex label selectors still refuse through the live matcher."
   },
   {
    "a": "index",
@@ -2079,17 +2079,6 @@
    ],
    "summary": "A bare label works on single-pass layers; on a multi-pass layer trace['label'] returns a Layer, op-level reads need a pass qualifier, and do and attach_hooks refuse the bare label (multipass_bare_label_ambiguous).",
    "evidence": "tests/test_replay_pass_qualified.py::test_bare_multipass_label_refuses_in_do_and_resolve_sites",
-   "recommendation": "document",
-   "ruling": "pending"
-  },
-  {
-   "id": "A29",
-   "pair": [
-    "index",
-    "rerun"
-   ],
-   "summary": "Finalized labels address ops for reads after a rerun, but a staged edit addressed by a postprocess label cannot be applied on rerun (rerun_staged_label_unmatchable) because live capture matches selectors before labels exist.",
-   "evidence": "docs/reference/error_refusal_contract.md",
    "recommendation": "document",
    "ruling": "pending"
   },

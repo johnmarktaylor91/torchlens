@@ -33,7 +33,7 @@ from ..intervention.errors import (
     BundleMemberError,
 )
 from ..intervention.types import Relationship
-from ._aligned_sites import aligned_site_labels, resolve_aligned_site
+from ._aligned_sites import aligned_site_labels, resolve_aligned_site, site_row_key
 from ._alternatives import (
     AlternativeCall as AlternativeCall,  # re-export: torchlens.bundle.AlternativeCall
     AlternativeReport as AlternativeReport,  # re-export: torchlens.bundle.AlternativeReport
@@ -1440,7 +1440,9 @@ class Bundle:
         Returns
         -------
         list[tuple[str, float]]
-            ``(site_label, score)`` rows sorted descending.
+            ``(site_label, score)`` rows sorted descending. A multi-pass op
+            scores one row per pass, keyed by its pass-qualified label
+            (``tanh_1_1:2``); a single-pass op keeps its bare layer label.
         """
 
         baseline_name = self._baseline_or_raise(baseline)
@@ -1467,7 +1469,8 @@ class Bundle:
             self._require_comparable("at", pairs=pairs)
         aligned = aligned_site_labels(self._ensure_supergraph(), baseline_name)
         for site in baseline_sites:
-            members = resolve_aligned_site(self._members, str(site.layer_label), aligned)
+            key = site_row_key(site)
+            members = resolve_aligned_site(self._members, key, aligned)
             if members is None:
                 continue
             outs = {
@@ -1482,10 +1485,9 @@ class Bundle:
             for name, out in outs.items():
                 if name == baseline_name or not isinstance(out, torch.Tensor):
                     continue
-                label = str(site.layer_label)
-                distances.append(_distance_value(base, out, metric, site=label))
+                distances.append(_distance_value(base, out, metric, site=key))
             if distances:
-                scored.append((str(site.layer_label), sum(distances) / len(distances)))
+                scored.append((key, sum(distances) / len(distances)))
         scored.sort(key=lambda row: row[1], reverse=True)
         return scored[:k]
 
@@ -1523,7 +1525,9 @@ class Bundle:
         -------
         list[tuple[str, float]]
             ``(site_label, distance)`` rows for sites both members have,
-            paired through the structural alignment (:attr:`supergraph`).
+            paired through the structural alignment (:attr:`supergraph`). A
+            multi-pass op gives one row per pass, keyed by its pass-qualified
+            label (``tanh_1_1:2``); a single-pass op keeps its bare layer label.
         """
 
         self._require_comparable("diff", pairs=[(a, b)])
@@ -1612,7 +1616,9 @@ class Bundle:
         -------
         list[tuple[str, float]]
             ``(site_label, distance)`` rows for sites both members have,
-            paired through the structural alignment (:attr:`supergraph`).
+            paired through the structural alignment (:attr:`supergraph`). A
+            multi-pass op gives one row per pass, keyed by its pass-qualified
+            label (``tanh_1_1:2``); a single-pass op keeps its bare layer label.
         """
 
         left_log = self._members[left_name]
@@ -1623,8 +1629,10 @@ class Bundle:
         rows: list[tuple[str, float]] = []
         aligned = aligned_site_labels(self._ensure_supergraph(), left_name)
         for left_site in left_log._layer_list:
-            label = str(left_site.layer_label)
-            right_label = aligned.get(label, {}).get(right_name, label)
+            layer_label = str(left_site.layer_label)
+            label = site_row_key(left_site)
+            suffix = label[len(layer_label) :]
+            right_label = aligned.get(layer_label, {}).get(right_name, layer_label) + suffix
             try:  # exact label: a bare string would be a substring selector
                 right_sites = _resolve_sites(right_log, _exact_label(right_label), max_fanout=1)
             except Exception:  # noqa: BLE001 - missing sites are not common sites

@@ -586,8 +586,9 @@ class TraceValidationMixin(_TraceMixinBase):
             Explicit stateful static-loop mode. The live provider runs native ``forward``
             with targeted module/function collection and a per-call path/shape guard. The
             loaded provider performs one ordinary verified run, then reuses staged state
-            and compiled argument binders. Unlike the default transactional provider, later
-            fast iterations reuse one result Trace in place. With ``until=`` a live fast
+            and compiled argument binders. Both keep the source Trace untouched and return
+            a result Trace; unlike the default transactional provider, later fast
+            iterations refresh that one result Trace. With ``until=`` a live fast
             run cuts the native forward right after that saved site.
         carry_state:
             PROVISIONAL spelling (documented-unstable). Default ``False``: the
@@ -939,7 +940,7 @@ class TraceValidationMixin(_TraceMixinBase):
 
                 with zero_fire_policy_scope(zero_fire_policy):
                     fast_result = run_fast_live_trace(self, run_inputs, seed=seed, until=until)
-                    refuse_unfired_fast_run(self)
+                    refuse_unfired_fast_run(fast_result.trace)
                 return fast_result
 
             return _apply_run_save_selection(

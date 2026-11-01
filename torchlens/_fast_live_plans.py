@@ -418,7 +418,8 @@ def _drop_uncollected_payloads(trace: Any, supported_labels: set[str]) -> None:
     Parameters
     ----------
     trace:
-        Source trace whose ops are updated in place.
+        Result trace whose ops are updated (the fast door's fork, or the
+        live trace itself on the legacy rerun door).
     supported_labels:
         Op labels the session's module and function plans collect, plus the
         model's boundary ops.
