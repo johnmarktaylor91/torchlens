@@ -638,7 +638,7 @@ def _next_opcode(ops: Any, enforcing_ceiling: bool) -> tuple[Any, Any, int]:
         raise StreamNeedsInterpreter(f"reader pass stopped: {exc}") from exc
 
 
-def scan_opcodes(data: bytes, max_opcodes: int | None) -> int:
+def scan_opcodes(data: bytes, max_opcodes: int | None, *, source_sized: bool = True) -> int:
     """Walk the opcodes once: refuse an absurd memo index and enforce the opcode ceiling.
 
     The C machine sizes its memo table from the largest PUT index the stream names (a
@@ -649,7 +649,10 @@ def scan_opcodes(data: bytes, max_opcodes: int | None) -> int:
     stream. The same pass refuses the extension-code opcodes (EXT1 / EXT2 / EXT4, a
     process-wide registry lookup no writer emits) and a FRAME that declares more bytes
     than remain (the C machine sizes its read buffer from that length), and counts
-    opcodes against ``max_opcodes`` when one is given.
+    opcodes against ``max_opcodes`` when one is given. ``source_sized`` is whether the
+    source the bytes came from could report its length: when it could not (a pipe, a
+    socket) every FRAME is refused, the decision the pure-Python machine makes at its
+    FRAME opcode, so both machines refuse the same streams.
     """
 
     count = 0
@@ -672,9 +675,10 @@ def scan_opcodes(data: bytes, max_opcodes: int | None) -> int:
             # Extension codes resolve through the process-wide ``copyreg`` registry and
             # cache process-wide; refused before either machine can look one up.
             raise _corrupt(_EXT_REFUSAL)
-        if name == "FRAME" and arg > end - pos - _FRAME_HEADER_LEN:
+        if name == "FRAME" and (not source_sized or arg > end - pos - _FRAME_HEADER_LEN):
             # The C machine grows its input buffer to the declared frame length before
-            # reading it; a declaration beyond the bytes that remain is refused first.
+            # reading it; a declaration beyond the bytes that remain is refused first,
+            # and a source that could not report its length refuses every frame.
             raise _corrupt(_FRAME_REFUSAL)
         if name == "STOP":
             if mid_stream_proto:

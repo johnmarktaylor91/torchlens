@@ -268,27 +268,31 @@ def test_an_exact_frame_still_loads() -> None:
 
 
 def test_a_stream_that_cannot_report_its_length_still_bounds_a_frame() -> None:
-    """A frame is bounded by the bytes actually present, with or without a seekable source.
+    """A framed stream from a source that cannot report its length is refused, on both machines.
 
-    The loader reads its source whole before any opcode runs, so an unseekable source (a
-    pipe, a socket) gives the same bound as a file: an over-declared frame refuses, an
-    exact one loads. The pure-Python machine, which reads per opcode, cannot bound a frame
-    without a length and refuses the framed stream outright.
+    The pure-Python machine reads per opcode and cannot bound a FRAME without a source
+    length, so it refuses the framed stream at its first FRAME. The C path reads the
+    source whole, yet makes the same decision (fail closed, the same typed refusal): a
+    stream's acceptance never depends on which machine ran it. An unframed stream from
+    the same source loads on both.
     """
 
     framed = pickle.dumps({"a": [1, 2, 3]}, protocol=4)
-    assert SafeBundleUnpickler(io.BufferedReader(_UnseekableStream(framed))).load() == {
-        "a": [1, 2, 3]
-    }
     over = _P4 + _frame(len(_BODY) + 1) + _BODY
-    with pytest.raises(pickle.UnpicklingError, match=_FRAME_REFUSAL):
-        SafeBundleUnpickler(io.BufferedReader(_UnseekableStream(over))).load()
-    with pytest.raises(pickle.UnpicklingError, match=_FRAME_REFUSAL):
-        _PurePythonBundleUnpickler(io.BufferedReader(_UnseekableStream(framed))).load()
     unframed = pickle.dumps({"a": [1, 2, 3]}, protocol=2)
-    assert SafeBundleUnpickler(io.BufferedReader(_UnseekableStream(unframed))).load() == {
-        "a": [1, 2, 3]
-    }
+    for machine in (SafeBundleUnpickler, _PurePythonBundleUnpickler):
+        for stream in (framed, over):
+            with pytest.raises(pickle.UnpicklingError, match=_FRAME_REFUSAL) as info:
+                machine(io.BufferedReader(_UnseekableStream(stream))).load()
+            assert type(info.value) is pickle.UnpicklingError
+        assert machine(io.BufferedReader(_UnseekableStream(unframed))).load() == {"a": [1, 2, 3]}
+    # The same framed bytes from a source that reports its length load on both.
+    for machine in (SafeBundleUnpickler, _PurePythonBundleUnpickler):
+        assert machine(io.BytesIO(framed)).load() == {"a": [1, 2, 3]}
+    # The fast path's interpreter fallback inherits the source's decision too.
+    fast = SafeBundleUnpickler(io.BufferedReader(_UnseekableStream(unframed)))
+    assert fast.load() == {"a": [1, 2, 3]}
+    assert fast._source_sized is False
 
 
 # --------------------------------------------------------------------------- #

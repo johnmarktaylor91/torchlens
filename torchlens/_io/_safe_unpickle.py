@@ -1816,6 +1816,8 @@ class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
         ----------
         file:
             Binary file object positioned at the start of a pickle stream; read in full.
+            A source that cannot report its length (a pipe, a socket) refuses every
+            FRAME, as the pure-Python machine does.
         trust_custom_callables:
             Whether to admit a foreign (non-torch/torchlens/numpy) callable by
             importing and resolving it. Mirrors the intervention-resolver contract:
@@ -1834,6 +1836,7 @@ class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
             the ceiling is unreachable); the memo-index check runs on every stream.
         """
 
+        self._source_sized = _stream_bytes_left(file) is not None
         data = file.read()
         self._data = bytes(data)
         super().__init__(io.BytesIO(self._data))
@@ -1887,7 +1890,9 @@ class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
 
         ceiling = self._max_opcodes if len(self._data) > self._count_opcodes_above else None
         try:
-            self.prescan_opcodes = scan_opcodes(self._data, ceiling)
+            self.prescan_opcodes = scan_opcodes(
+                self._data, ceiling, source_sized=self._source_sized
+            )
             plan = prescan_stream(
                 self._data,
                 resolve=self._resolve_global,
@@ -1907,6 +1912,7 @@ class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
             io.BytesIO(self._data),
             trust_custom_callables=self._trust_custom_callables,
             allowed_custom_callable_modules=self._allowed_custom_callable_modules,
+            source_sized=self._source_sized,
         )
         return interpreter.load()
 
@@ -1941,11 +1947,18 @@ class _PurePythonBundleUnpickler(_BundleAllowlistPolicy, pickle._Unpickler):
         *,
         trust_custom_callables: bool = False,
         allowed_custom_callable_modules: Collection[str] | None = None,
+        source_sized: bool = True,
     ) -> None:
-        """Initialize the interpreter with the same trust flags as the fast path."""
+        """Initialize the interpreter with the same trust flags as the fast path.
+
+        ``source_sized`` is ``False`` when the fast path hands over a stream it read from
+        a source that could not report its length: ``load_frame`` then refuses every
+        FRAME, as it does on such a source read directly.
+        """
 
         super().__init__(file)
         self._stream = file
+        self._source_sized = source_sized
         self._init_policy(trust_custom_callables, allowed_custom_callable_modules)
 
     def load(self) -> Any:
@@ -2040,11 +2053,12 @@ class _PurePythonBundleUnpickler(_BundleAllowlistPolicy, pickle._Unpickler):
 
         The base VM passes the declared size to ``file.read``, which a buffered file
         allocates up front. A stream that cannot report its length is refused. The C
-        path holds the whole stream in memory and bounds every FRAME in the reader pass.
+        path holds the whole stream in memory, bounds every FRAME in the reader pass and
+        refuses every FRAME of a source that could not report its length: one decision.
         """
 
         (frame_size,) = struct.unpack("<Q", self.read(8))  # type: ignore[attr-defined]
-        left = _stream_bytes_left(self._stream)
+        left = _stream_bytes_left(self._stream) if self._source_sized else None
         if left is None or frame_size > left:
             raise pickle.UnpicklingError(_CORRUPT_PREFIX + _FRAME_REFUSAL)
         self._unframer.load_frame(frame_size)  # type: ignore[attr-defined]
