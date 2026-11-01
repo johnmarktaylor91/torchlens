@@ -466,7 +466,7 @@ def resolve_function_registry_key(
                     # a genuinely torchlens-owned callable is auto-trusted ONLY if it
                     # is a vetted-inert first-party symbol (public facet recipe /
                     # transform / intervention helper). A PRIVATE torchlens util --
-                    # notably the ``torchlens._utils:_module_is_installed`` import
+                    # notably the ``torchlens.report._environment:_module_is_installed`` import
                     # gadget -- or any I/O / import / exec / spawn callable is refused
                     # rather than resolved to a live callable.
                     raise UntrustedCallableError(
