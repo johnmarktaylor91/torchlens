@@ -472,6 +472,26 @@ def _compose_message(
     return message
 
 
+def _amp_hint_for(transitions: Any) -> str | None:
+    """Return the GradScaler overflow hint when the first bad kind is ``inf``."""
+
+    # The GradScaler overflow signature is an INF-kind FIRST bad thing
+    # (downstream inf*0 legitimately cascades into nan, so later kinds
+    # cannot disqualify the disclosure). A hint, never a verdict.
+    first_bad_kind = next(
+        (
+            kind
+            for t in transitions
+            for kind in (t.arriving, t.emitted)
+            if kind not in ("none", "unchecked")
+        ),
+        None,
+    )
+    if first_bad_kind == "inf":
+        return amp_scaled_grads_hint(all_nonfinite=True)
+    return None
+
+
 def bisect_nan_backward(
     trace: Trace,
     *,
@@ -541,22 +561,7 @@ def bisect_nan_backward(
     else:
         verdict_scope = "clean_complete" if unchecked_calls == 0 else "clean_among_checked"
 
-    amp_hint: str | None = None
-    if found and grad_scale is None:
-        # The GradScaler overflow signature is an INF-kind FIRST bad thing
-        # (downstream inf*0 legitimately cascades into nan, so later kinds
-        # cannot disqualify the disclosure). A hint, never a verdict.
-        first_bad_kind = next(
-            (
-                kind
-                for t in transitions
-                for kind in (t.arriving, t.emitted)
-                if kind not in ("none", "unchecked")
-            ),
-            None,
-        )
-        if first_bad_kind == "inf":
-            amp_hint = amp_scaled_grads_hint(all_nonfinite=True)
+    amp_hint = _amp_hint_for(transitions) if found and grad_scale is None else None
 
     message = _compose_message(walk, verdict_scope=verdict_scope, bwd=bwd, amp_hint=amp_hint)
 

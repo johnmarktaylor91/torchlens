@@ -26,10 +26,10 @@ from .._capture.structure_only import (
 from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._io._json import loads_bounded
-from .._record_type import record_type
 from .._utils.display import atomic_write_text
 from ._common import _iter_layers, _scalarize_cell, _static_graph_data
 from ._graphs import netron
+from ._naming import _duration_us, _layer_display_name, _safe_id, _sanitize_flamegraph_frame
 from ._registry import (
     describe_target,
     list_targets,
@@ -850,43 +850,6 @@ def json(
     return destination
 
 
-def _duration_us(layer: Any) -> int:
-    """Return a positive microsecond duration for a layer.
-
-    Parameters
-    ----------
-    layer:
-        Layer entry.
-
-    Returns
-    -------
-    int
-        Duration in microseconds.
-    """
-
-    duration = float(getattr(layer, "func_duration", 0.0) or 0.0)
-    return max(1, int(duration * 1_000_000))
-
-
-def _layer_display_name(layer: Any) -> str:
-    """Return a human-readable layer name.
-
-    Parameters
-    ----------
-    layer:
-        Layer entry.
-
-    Returns
-    -------
-    str
-        Display name.
-    """
-
-    label = str(getattr(layer, "layer_label", ""))
-    func_name = str(getattr(layer, "func_name", "") or record_type(layer, ""))
-    return f"{label} ({func_name})" if func_name and func_name != label else label
-
-
 def _chrome_trace_events(log: Any) -> list[dict[str, Any]]:
     """Return Chrome trace events for a model log.
 
@@ -1054,23 +1017,6 @@ def _parquet_cell(value: Any) -> Any:
     return _scalarize_cell(value)
 
 
-def _sanitize_flamegraph_frame(frame: str) -> str:
-    """Return a folded-stack-safe frame name.
-
-    Parameters
-    ----------
-    frame:
-        Raw frame name.
-
-    Returns
-    -------
-    str
-        Sanitized frame name.
-    """
-
-    return frame.replace(";", "_").replace("\n", " ").strip() or "<unknown>"
-
-
 def _render_svg(data: dict[str, Any], *, editable: bool) -> str:
     """Render serialized graph data as SVG.
 
@@ -1121,23 +1067,6 @@ def _render_svg(data: dict[str, Any], *, editable: bool) -> str:
         + "".join(node_markup)
         + "</svg>"
     )
-
-
-def _safe_id(value: str) -> str:
-    """Return a CSS/SVG-safe identifier fragment.
-
-    Parameters
-    ----------
-    value:
-        Raw identifier.
-
-    Returns
-    -------
-    str
-        Sanitized identifier.
-    """
-
-    return "".join(char if char.isalnum() else "-" for char in value).strip("-")
 
 
 def safetensors(trace: Any, path: str | Path) -> Path:

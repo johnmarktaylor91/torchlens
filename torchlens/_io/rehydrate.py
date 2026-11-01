@@ -27,6 +27,7 @@ from .._data_classes._state_adapter import state_items
 from .._data_classes.trace import Trace
 from .._ir.workspaces import LEGACY_TRACE_BUILD_STATE_KEYS
 from . import ArtifactError, BlobRef, FieldPolicy, PayloadLoadHints, prerelease as _prerelease
+from ._rehydrate_lazy_names import _lazy_ref_field_name, _lazy_ref_kind, _normalize_map_location
 from ._small_raw import (
     _RAW_IMAGE_SENTINEL,
     _RAW_INPUT_IMAGE_BYTES_LIMIT,
@@ -201,6 +202,17 @@ def rehydrate_trace(
 
         refresh_saved_module_call_count(trace)
 
+    _stamp_serialized_tlspec_version(trace, manifest)
+
+    _bind_conditional_arms(trace)
+    _set_payload_load_status(trace, manifest_index, payload_statuses)
+    _restore_trace_state_order(trace, portable_key_order)
+    return trace
+
+
+def _stamp_serialized_tlspec_version(trace: Trace, manifest: Manifest | dict[str, Any]) -> None:
+    """Record the manifest's integer ``tlspec_version`` on the rehydrated trace."""
+
     serialized_tlspec_version = (
         manifest.tlspec_version
         if isinstance(manifest, Manifest)
@@ -210,11 +222,6 @@ def rehydrate_trace(
         serialized_tlspec_version, bool
     ):
         trace.tlspec_version = serialized_tlspec_version
-
-    _bind_conditional_arms(trace)
-    _set_payload_load_status(trace, manifest_index, payload_statuses)
-    _restore_trace_state_order(trace, portable_key_order)
-    return trace
 
 
 def _bind_conditional_arms(trace: Trace) -> None:
@@ -957,46 +964,6 @@ def _build_lazy_tensor_ref(
     )
 
 
-def _lazy_ref_field_name(field_name: str) -> str | None:
-    """Return the corresponding lazy-ref field for a direct blob field.
-
-    Parameters
-    ----------
-    field_name:
-        Direct blob field name on the owning data class.
-
-    Returns
-    -------
-    str | None
-        Matching lazy-ref field name, or ``None`` when not applicable.
-    """
-
-    if field_name == "out":
-        return "out_ref"
-    if field_name == "grad":
-        return "grad_ref"
-    return None
-
-
-def _lazy_ref_kind(blob_kind: str) -> Literal["out", "grad"]:
-    """Normalize a blob kind into a lazy direct-tensor kind.
-
-    Parameters
-    ----------
-    blob_kind:
-        Blob kind stored in the portable manifest.
-
-    Returns
-    -------
-    str
-        Direct tensor kind expected by ``LazyActivationRef``.
-    """
-
-    if blob_kind == "grad":
-        return "grad"
-    return "out"
-
-
 def _manifest_entry_for_blob_ref(
     blob_ref: BlobRef,
     manifest_index: Mapping[str, dict[str, Any] | TensorEntry],
@@ -1069,12 +1036,6 @@ def _dtype_from_manifest_string(dtype_name: str) -> torch.dtype:
     if not isinstance(dtype_obj, torch.dtype):
         raise ArtifactError(f"Unsupported dtype string in manifest: {dtype_name}.")
     return dtype_obj
-
-
-def _normalize_map_location(map_location: str | torch.device) -> str:
-    """Normalize ``map_location`` to the string form expected by safetensors."""
-
-    return str(map_location)
 
 
 def _load_safetensors_tensor(

@@ -491,10 +491,8 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
     # reached them, so a raw grad_fn memory address persisted verbatim into
     # ``.tlspec`` (process-dependent artifact bytes + a dangling address in a
     # portable file). Register + remap them through the same trace-local map.
-    backward_pass_logs = state.get("_backward_pass_logs")
-    pass_records = (
-        tuple(backward_pass_logs.values()) if isinstance(backward_pass_logs, dict) else ()
-    )
+    pass_logs = state.get("_backward_pass_logs")
+    pass_records = tuple(pass_logs.values()) if isinstance(pass_logs, dict) else ()
     for pass_record in pass_records:
         for root_id in getattr(pass_record, "root_grad_fn_ids", None) or ():
             register_grad_id(root_id)

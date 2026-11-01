@@ -769,6 +769,37 @@ def _normalize_conditional_arm_entry_edges(
     return normalized
 
 
+def _drop_runtime_only_caches(state: dict[str, Any]) -> None:
+    """Strip lazy accessor, geometry and render caches from pickle ``state`` in place."""
+
+    # Lazy per-instance accessor caches (FieldPolicy.DROP) rebuild on
+    # demand after restore; carrying them would make pickle bytes depend
+    # on which accessors were touched (access-is-pure contract).
+    state.pop("_op_accessor_cache", None)
+    state.pop("_layer_accessor_cache", None)
+    state.pop("_module_call_accessor", None)
+    # Lazy influence-geometry caches (FieldPolicy.DROP) hold
+    # mappingproxy-bearing solution objects after any receptive-field
+    # access, so carrying them made pickle.dumps/copy.deepcopy crash with
+    # "cannot pickle 'mappingproxy' object" while Trace.save succeeded on
+    # the same trace. They rebuild on first access after restore.
+    state.pop("_receptive_field_solution", None)
+    state.pop("_rf_directional_solutions", None)
+    # Render diagnostic from the last draw(): its EncodingChannelSpec can
+    # hold the RAW user callable a `color_by=lambda ...` passed in, so
+    # carrying it made pickle.dumps crash after an ordinary draw while
+    # Trace.save succeeded on the same trace (the R10-7 raw-callable class).
+    # Runtime-only either way; it rebuilds on the next draw.
+    state.pop("_last_encoding_state", None)
+    # The recorded save request can hold a raw user save callable.
+    state.pop("_rerun_save_request", None)
+    # Same runtime-only class: the last draw's layout-execution geometry
+    # record (vizmech D24) rebuilds on the next draw and never serializes.
+    state.pop("_last_render_geometry", None)
+    state.pop("_container_ordinals_by_output_op_label", None)
+    state.pop("_container_ordinals_by_input_func_call_id", None)
+
+
 @dataclass(init=False, repr=False, eq=False)
 class Trace(
     TraceStatsMixin,
@@ -1905,6 +1936,12 @@ class Trace(
         self._cost_saved_activation_memory: Bytes = Bytes(0)
         self._cost_saved_grad_memory: Bytes = Bytes(0)
 
+        self._init_param_time_and_backward_state()
+        _state.register_log(self)
+
+    def _init_param_time_and_backward_state(self) -> None:
+        """Initialise the param, module, timing and backward-record fields of a fresh Trace."""
+
         # Param info:
         self._param_logs: ParamAccessor = ParamAccessor({})
         self._num_param_tensors: int = 0
@@ -1957,7 +1994,6 @@ class Trace(
         self._cost_backward_peak_memory: Bytes | None = Bytes(0)  # CPU None: see the reason
         self._provenance_backward_memory_backend: str = "unknown"
         self.backward_peak_memory_reason: str | None = None
-        _state.register_log(self)
 
     # ********************************************
     # ************ Built-in Methods **************
@@ -2880,32 +2916,7 @@ class Trace(
         state["_out_identity_cache"] = {}
         state["_out_hash_cache"] = {}
         state["_code_context_cache"] = {}
-        # Lazy per-instance accessor caches (FieldPolicy.DROP) rebuild on
-        # demand after restore; carrying them would make pickle bytes depend
-        # on which accessors were touched (access-is-pure contract).
-        state.pop("_op_accessor_cache", None)
-        state.pop("_layer_accessor_cache", None)
-        state.pop("_module_call_accessor", None)
-        # Lazy influence-geometry caches (FieldPolicy.DROP) hold
-        # mappingproxy-bearing solution objects after any receptive-field
-        # access, so carrying them made pickle.dumps/copy.deepcopy crash with
-        # "cannot pickle 'mappingproxy' object" while Trace.save succeeded on
-        # the same trace. They rebuild on first access after restore.
-        state.pop("_receptive_field_solution", None)
-        state.pop("_rf_directional_solutions", None)
-        # Render diagnostic from the last draw(): its EncodingChannelSpec can
-        # hold the RAW user callable a `color_by=lambda ...` passed in, so
-        # carrying it made pickle.dumps crash after an ordinary draw while
-        # Trace.save succeeded on the same trace (the R10-7 raw-callable class).
-        # Runtime-only either way; it rebuilds on the next draw.
-        state.pop("_last_encoding_state", None)
-        # The recorded save request can hold a raw user save callable.
-        state.pop("_rerun_save_request", None)
-        # Same runtime-only class: the last draw's layout-execution geometry
-        # record (vizmech D24) rebuilds on the next draw and never serializes.
-        state.pop("_last_render_geometry", None)
-        state.pop("_container_ordinals_by_output_op_label", None)
-        state.pop("_container_ordinals_by_input_func_call_id", None)
+        _drop_runtime_only_caches(state)
         # B1-02: the semantic-output scratch never serializes. Plain pickle
         # legitimately carries most session-time DROP state (in-process
         # round-trips need `backward_ready`, `save_budget`, ...), but these

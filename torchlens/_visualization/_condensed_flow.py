@@ -213,12 +213,7 @@ def _compute_child_condensed_flow_graphs(
         )
         nodes = (*flow_children, *parent_ops)
         edges = _condensed_edges(
-            trace,
-            flow_children,
-            child_sets,
-            set(parent_ops),
-            owner_by_op,
-            revision,
+            trace, flow_children, child_sets, set(parent_ops), owner_by_op, revision
         )
         endpoint_counts = _child_external_endpoint_counts(edges, flow_children)
         interval_flags = _flow_interval_flags(trace, flow_children, child_sets, edges)

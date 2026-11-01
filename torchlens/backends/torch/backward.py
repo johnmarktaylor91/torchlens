@@ -1900,18 +1900,9 @@ def _make_grad_fn_hook(  # noqa: PLR0913 -- one keyword per carrier the ONE regi
         )
         events = _ensure_backward_event_stream(live_trace)
         event_timestamp = time.time()
-        pass_index = int(
-            getattr(
-                live_trace,
-                "_active_backward_pass_index",
-                (
-                    0
-                    if live_trace.__dict__.get("_tl_cleaned_up", False)
-                    else live_trace._num_backward_passes
-                )
-                + 1,
-            )
-        )
+        cleaned_up = live_trace.__dict__.get("_tl_cleaned_up", False)
+        default_pass = (0 if cleaned_up else live_trace._num_backward_passes) + 1
+        pass_index = int(getattr(live_trace, "_active_backward_pass_index", default_pass))
         _set_live_grad_fn_call_backward_pass_index(grad_fn_handle, call_index, pass_index)
         if is_accumulate_grad:
             fire_records = _pop_pending_accumulate_grad_records(

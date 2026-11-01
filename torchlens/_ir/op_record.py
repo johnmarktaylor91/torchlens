@@ -24,7 +24,7 @@ into the emit and ingest paths.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass, field, fields as dataclass_fields
+from dataclasses import dataclass, field, fields as dataclass_fields, replace as dataclass_replace
 from typing import Any
 
 from .events import ArgTemplateRef, FunctionCallRef, OutputRef, ParentEdge
@@ -327,10 +327,7 @@ class OpRecord:
     def pass_index(self) -> int:
         return self.core.pass_index
 
-    @property
-    def pass_number(self) -> int:
-        """Mirror of ``Op.pass_number`` (the IR core field is ``pass_index``)."""
-        return self.core.pass_index
+    pass_number = pass_index  # mirror of ``Op.pass_number`` (the IR core field is pass_index)
 
     @property
     def parents(self) -> tuple[ParentEdge, ...]:
@@ -685,8 +682,6 @@ def record_with_path_updates(record: OpRecord, items: Iterable[tuple[str, Any]])
     through it, and the legacy flat spelling below translates onto it.
     """
 
-    from dataclasses import replace as dataclass_replace
-
     core_updates: dict[str, Any] = {}
     facet_updates: dict[str, dict[str, Any]] = {}
     for path, value in items:
@@ -712,8 +707,6 @@ def apply_patch_items(event: Any, items: Iterable[tuple[str, Any]]) -> Any:
     compat ``OpEvent``s fold via the 1:1 ``PATH_TO_FLAT`` table. The table
     outlives P7 only as the preview-journal fold guard and dies in S15.
     """
-
-    from dataclasses import replace as dataclass_replace
 
     if isinstance(event, OpRecord):
         return record_with_path_updates(event, items)

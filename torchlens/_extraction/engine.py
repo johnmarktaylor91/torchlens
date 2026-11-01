@@ -43,6 +43,7 @@ from ..transforms import (
     TransformContext,
     TransformPipeline,
 )
+from ._engine_batching import _iter_item_batches, _move_envelope_to_device
 from .context import BatchContext, _run_post_store_hooks, validate_row_counts
 from .dtype_policy import cast_for_store
 from .envelope import (
@@ -220,93 +221,6 @@ def _pipeline_for(plan: _RunPlan, key: str) -> TransformPipeline | None:
     if key in plan.pipelines:
         return plan.pipelines[key]
     return plan.selector_pipeline
-
-
-def _move_nested_to_device(value: Any, device: torch.device | str | None) -> Any:
-    """Move tensors in a nested value to a device.
-
-    Parameters
-    ----------
-    value:
-        Tensor or nested Python container.
-    device:
-        Target device, or ``None`` to leave values unchanged.
-
-    Returns
-    -------
-    Any
-        Value with tensors moved to ``device``.
-    """
-
-    if device is None:
-        return value
-    if isinstance(value, torch.Tensor):
-        return value.to(device)
-    if isinstance(value, tuple):
-        return tuple(_move_nested_to_device(item, device) for item in value)
-    if isinstance(value, list):
-        return [_move_nested_to_device(item, device) for item in value]
-    if isinstance(value, dict):
-        return {key: _move_nested_to_device(item, device) for key, item in value.items()}
-    return value
-
-
-def _move_envelope_to_device(
-    envelope: BatchEnvelope, device: torch.device | str | None
-) -> BatchEnvelope:
-    """Move an envelope's payloads to a device (mask included).
-
-    Parameters
-    ----------
-    envelope:
-        Collated envelope.
-    device:
-        Target device, or ``None``.
-
-    Returns
-    -------
-    BatchEnvelope
-        The moved envelope.
-    """
-
-    if device is None:
-        return envelope
-    return dataclasses.replace(
-        envelope,
-        args=tuple(_move_nested_to_device(item, device) for item in envelope.args),
-        kwargs={key: _move_nested_to_device(item, device) for key, item in envelope.kwargs.items()},
-        mask=envelope.mask.to(device) if envelope.mask is not None else None,
-    )
-
-
-def _iter_item_batches(stimuli: Any, batch_size: int) -> Iterator[Any]:
-    """Yield raw per-batch material: tensor slices or item lists.
-
-    Parameters
-    ----------
-    stimuli:
-        Tensor with batch dimension or iterable stimulus set.
-    batch_size:
-        Number of items per batch.
-
-    Yields
-    ------
-    Any
-        A tensor slice, or a list of stimulus items.
-    """
-
-    if isinstance(stimuli, torch.Tensor):
-        for start in range(0, stimuli.shape[0], batch_size):
-            yield stimuli[start : start + batch_size]
-        return
-    batch: list[Any] = []
-    for item in stimuli:
-        batch.append(item)
-        if len(batch) == batch_size:
-            yield batch
-            batch = []
-    if batch:
-        yield batch
 
 
 def _collate_to_envelope(
@@ -1194,6 +1108,37 @@ def _validate_against_plan(
             )
 
 
+def _site_identity(
+    key: str,
+    layer_views: dict[str, Any] | None,
+    plan_sites: Mapping[str, tuple[str, Any]],
+) -> tuple[str, str | None, str | None]:
+    """Resolve one output key's layer label, site key and site-key-unavailable code."""
+
+    from .._data_classes._layer_sites import layer_site_key
+    from .._data_classes.layer import Layer
+    from ..errors._base import TorchLensError
+
+    if layer_views is not None and key in layer_views:
+        layer = layer_views[key]
+        label = str(layer.layer_label)
+        site_key: str | None
+        site_key_unavailable: str | None
+        try:
+            # A Layer view reads its single site key (typed refusal on
+            # spanning or keyless layers); an Op view carries its own key.
+            site_key = str(layer_site_key(layer) if isinstance(layer, Layer) else layer.site_key)
+            site_key_unavailable = None
+        except TorchLensError as exc:
+            site_key = None
+            code = exc.fields.get("code") if isinstance(exc.fields, dict) else None
+            site_key_unavailable = str(code or type(exc).__name__)
+    else:
+        label, site_key = plan_sites.get(key, (key, None))
+        site_key_unavailable = None if site_key is not None else "site_key_unavailable"
+    return label, site_key, site_key_unavailable
+
+
 def _layer_metadata(
     plan: _RunPlan,
     layer_views: dict[str, Any] | None,
@@ -1223,10 +1168,6 @@ def _layer_metadata(
         Site identity, axis semantics, dtype, layout, and device per key.
     """
 
-    from .._data_classes._layer_sites import layer_site_key
-    from .._data_classes.layer import Layer
-    from ..errors._base import TorchLensError
-
     trimmed: set[str] = run_state.get("trimmed_keys", set())
     selector_plan: SelectorPlan | None = run_state.get("selector_plan")
     plan_sites = (
@@ -1236,25 +1177,7 @@ def _layer_metadata(
     )
     metadata: dict[str, dict[str, Any]] = {}
     for key, captured in batch_outputs.items():
-        if layer_views is not None and key in layer_views:
-            layer = layer_views[key]
-            label = str(layer.layer_label)
-            site_key: str | None
-            site_key_unavailable: str | None
-            try:
-                # A Layer view reads its single site key (typed refusal on
-                # spanning or keyless layers); an Op view carries its own key.
-                site_key = str(
-                    layer_site_key(layer) if isinstance(layer, Layer) else layer.site_key
-                )
-                site_key_unavailable = None
-            except TorchLensError as exc:
-                site_key = None
-                code = exc.fields.get("code") if isinstance(exc.fields, dict) else None
-                site_key_unavailable = str(code or type(exc).__name__)
-        else:
-            label, site_key = plan_sites.get(key, (key, None))
-            site_key_unavailable = None if site_key is not None else "site_key_unavailable"
+        label, site_key, site_key_unavailable = _site_identity(key, layer_views, plan_sites)
         stored = processed[key]
         if isinstance(stored, RaggedBatch):
             stored_shape: list[Any] = [None] + list(stored.values.shape[1:])

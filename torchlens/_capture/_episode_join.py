@@ -746,15 +746,12 @@ def _graph_connected(trace: Any, address: str, from_call: int, to_call: int) -> 
     if not source_labels or not target:
         return None
 
-    # The walk is OP-level and pass-qualified throughout (the pass-blind
-    # Layer walk conflates recurrence passes: a bare multi-pass label's
-    # children span every pass). ModuleCall.ops/output_ops entries and
-    # Op.label are always pass-qualified; Op.children spell single-pass
+    # The walk is OP-level and pass-qualified throughout (a pass-blind Layer
+    # walk conflates recurrence passes). Op.children spell single-pass
     # neighbours bare, so each child resolves through the trace lookup and
     # is re-keyed by its own Op.label.
     def _resolve(label: str) -> Any | None:
         """Resolve a (possibly bare) label to its single Op, else ``None``."""
-
         try:
             record = trace[label]
         except (LookupError, AttributeError, TypeError, ValueError):

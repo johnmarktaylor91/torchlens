@@ -133,7 +133,6 @@ def _estimate_tokens(text: str) -> int:
     int
         Conservative whole-token estimate (always at least 1).
     """
-
     return max(1, (len(text) + 3) // 4)
 
 

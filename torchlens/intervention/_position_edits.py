@@ -100,6 +100,15 @@ def _row_mask(
     return selected
 
 
+def _edit_display_name(edit: Any) -> Any:
+    """Return an edit's declared ``name`` when it is a string, else its qualified name."""
+
+    declared_name = getattr(edit, "name", None)
+    if isinstance(declared_name, str):
+        return declared_name
+    return getattr(edit, "__qualname__", type(edit).__name__)
+
+
 def positions(
     edit: Any,
     positions: Any,
@@ -147,12 +156,7 @@ def positions(
             argument="axis",
         )
     inner = normalize_hook(edit)
-    declared_name = getattr(edit, "name", None)
-    inner_name = (
-        declared_name
-        if isinstance(declared_name, str)
-        else getattr(edit, "__qualname__", type(edit).__name__)
-    )
+    inner_name = _edit_display_name(edit)
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook restricting the inner edit to the positions."""

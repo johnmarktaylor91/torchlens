@@ -1555,10 +1555,8 @@ class _FastLiveSession:
         # Same rule as capture (_capture/trace.py): the transformed raw output
         # is stored when an output transform exists; the save scope is
         # otherwise untouched, so a sparse save stays sparse on a rerun.
-        output_transform = self.output_transform
-        self.trace.transformed_output = (
-            output_transform(output) if output_transform is not None else None
-        )
+        transform = self.output_transform
+        self.trace.transformed_output = transform(output) if transform is not None else None
 
 
 def run_fast_loaded_trace(trace: Any, inputs: Any, *, seed: int | None) -> RunResult:

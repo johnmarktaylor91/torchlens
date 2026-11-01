@@ -25,9 +25,7 @@ from .._utils.hashing import compute_graph_shape_hash
 from ..backends.torch.backward import _register_forward_grad_fn
 from ..options import ReplayOptions, merge_replay_options
 from ._helper_fingerprint import refuse_changed_staged_helpers
-from ._rerun_ledger import (
-    _build_ledger_record,
-)
+from ._rerun_ledger import _build_ledger_record
 from ._rerun_predicate import (
     plan_rerun_spec,
     refuse_unmatchable_staged_labels,

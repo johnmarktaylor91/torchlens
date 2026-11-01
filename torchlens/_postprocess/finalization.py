@@ -1476,10 +1476,7 @@ def _build_conditional_records(self: "Trace") -> None:
             layer.terminal_conditional_id is not None
             and layer.terminal_conditional_id in event_by_id
         ):
-            layer.terminal_bool_for = (
-                conditional_id_by_event_id[layer.terminal_conditional_id],
-                0,
-            )
+            layer.terminal_bool_for = (conditional_id_by_event_id[layer.terminal_conditional_id], 0)
         else:
             layer.terminal_bool_for = None
     bind_layer_conditional_roles(self, roles_by_label)

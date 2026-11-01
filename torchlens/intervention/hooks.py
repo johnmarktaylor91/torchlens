@@ -530,8 +530,7 @@ def _record_site_pass_labels(site_target: Any) -> list[str] | None:
         return None
     from .._data_classes.op import Op
 
-    # ``Layer.ops`` is an accessor (iterable, not a builtin sequence); an
-    # ``Op`` addresses itself.
+    # ``Layer.ops`` is an accessor (iterable, not a builtin sequence); an ``Op`` is itself.
     ops = (site_target,) if isinstance(site_target, Op) else getattr(site_target, "ops", None)
     if ops is None or isinstance(ops, (str, bytes)):
         return None
@@ -587,7 +586,6 @@ def _reject_live_incapable_selector(
         Whether the replay-capable ``site`` kind may pass (attach-door
         carve-out; the rerun preflight never sets it).
     """
-
     from .._ir.selector_eval import _UPFRONT_UNSUPPORTED_KINDS, _capability_error
 
     kind = str(selector.selector_kind)
@@ -653,7 +651,6 @@ def _backward_context_op(grad_fn_handle: Any) -> Any:
         The paired pass-level op, the GradFn's op, or ``grad_fn_handle`` itself
         when it carries no ``op``.
     """
-
     from .._ir.selector_eval import _grad_fn_forward_op
 
     if not hasattr(grad_fn_handle, "op"):
@@ -1188,7 +1185,6 @@ def live_selector_matches_site(selector_like: Any, site: Any) -> bool:
     SiteResolutionError
         If the selector kind is unsupported or a predicate fails.
     """
-
     from .._ir.selector_eval import (
         evaluate,
         live_label_error_message,
@@ -1217,7 +1213,6 @@ def _normalize_live_selector(selector_like: Any) -> BaseSelector:
     BaseSelector
         Normalized selector.
     """
-
     from .._ir.selector_eval import normalize_selector_like
 
     return normalize_selector_like(selector_like, lifecycle="live")

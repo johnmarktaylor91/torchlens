@@ -350,6 +350,31 @@ def _filtered_topk_rows(
     ]
 
 
+_TO_PANDAS_COLUMN_TYPES: dict[str, type] = {
+    "type_index": int,
+    "step_index": int,
+    "num_passes": int,
+    "pass_number": int,
+    "is_inplace": bool,
+    "is_input": bool,
+    "is_output": bool,
+    "is_buffer": bool,
+    "in_multi_output": bool,
+    "has_parents": bool,
+    "has_children": bool,
+    "has_siblings": bool,
+    "has_co_parents": bool,
+    "has_params": bool,
+    "num_params": int,
+    "param_memory": int,
+    "activation_memory": int,
+    "is_module_input": bool,
+    "is_module_output": bool,
+    "conditional_branch_depth": int,
+    "is_terminal_conditional_bool": bool,
+}
+
+
 class TraceExportMixin(_TraceMixinBase):
     """``Trace`` export surface: dataframe, dict, and tabular projections."""
 
@@ -478,30 +503,6 @@ class TraceExportMixin(_TraceMixinBase):
             )
         )
 
-        fields_to_change_type = {
-            "type_index": int,
-            "step_index": int,
-            "num_passes": int,
-            "pass_number": int,
-            "is_inplace": bool,
-            "is_input": bool,
-            "is_output": bool,
-            "is_buffer": bool,
-            "in_multi_output": bool,
-            "has_parents": bool,
-            "has_children": bool,
-            "has_siblings": bool,
-            "has_co_parents": bool,
-            "has_params": bool,
-            "num_params": int,
-            "param_memory": int,
-            "activation_memory": int,
-            "is_module_input": bool,
-            "is_module_output": bool,
-            "conditional_branch_depth": int,
-            "is_terminal_conditional_bool": bool,
-        }
-
         model_df_dictlist: list[dict[str, Any]] = []
         for layer_entry in self._layer_list:
             layer_dict: dict[str, Any] = {}
@@ -532,8 +533,8 @@ class TraceExportMixin(_TraceMixinBase):
             model_df_dictlist.append(layer_dict)
         model_df = pd.DataFrame(model_df_dictlist)
 
-        for column_name in fields_to_change_type:
-            model_df[column_name] = model_df[column_name].astype(fields_to_change_type[column_name])
+        for column_name, column_type in _TO_PANDAS_COLUMN_TYPES.items():
+            model_df[column_name] = model_df[column_name].astype(column_type)
         model_df["terminal_conditional_id"] = model_df["terminal_conditional_id"].astype("Int64")
 
         from .._capture_honesty import attach_dataframe_honesty

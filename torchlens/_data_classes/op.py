@@ -3865,7 +3865,16 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
                     kind="transformed_out",
                 )
 
-        # Tensor args and kwargs:
+        self._save_call_args(t_args, t_kwargs, save_args)
+
+    def _save_call_args(
+        self,
+        t_args: list[Any] | tuple[Any, ...],
+        t_kwargs: dict[str, Any],
+        save_args: bool,
+    ) -> None:
+        """Store copies of the call's tensor args and kwargs, or clear them."""
+
         if save_args:
             self.has_saved_args = True
             self._internal_set("saved_args", [copy_arg_tree(arg) for arg in t_args])

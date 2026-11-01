@@ -1664,7 +1664,6 @@ def _should_mark_arguments_on_edge(
     # Commutative ops: argument order doesn't matter, skip labels.
     if record_type(child_node) in COMMUTE_FUNCS:
         return False
-
     return _visible_parent_count(self, child_node, show_buffer_layers, rolled_maps) > 1
 
 

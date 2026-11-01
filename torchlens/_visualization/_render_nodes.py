@@ -637,9 +637,7 @@ def _build_layer_node(
     node_args = _node_spec_to_graphviz_args(spec)
     if node.is_input:
         raw_input_attrs = _render_raw_input(
-            self,
-            getattr(self, "input", None),
-            batch_render=getattr(self, "batch_render", "auto"),
+            self, getattr(self, "input", None), batch_render=getattr(self, "batch_render", "auto")
         )
         if raw_input_attrs is not None:
             node_args.update(raw_input_attrs)
@@ -1838,10 +1836,6 @@ def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
     Returns:
         node_bg_color: background color of the node
     """
-    from torchlens._data_classes.layer import Layer
-    from torchlens._data_classes.op import Op
-    from torchlens._visualization._render_common import BoundaryNode, FocusNode
-
     if node.is_input:
         bg_color = INPUT_COLOR
     elif node.is_output:
@@ -2026,12 +2020,10 @@ def compute_default_node_lines(
         # un-lookup-able label (linear_1_3:2 for what is really linear_1_1:2), so
         # users copying the displayed name got a "not found" ValueError.
         title = f"{layer_log.layer_label}:{layer_log.pass_number}"
-    elif record_type(layer_log) in ["input", "output", "buffer"]:
-        title = f"{record_type(layer_log)}_{layer_log.type_index}{call_label}"
+    elif (layer_type := record_type(layer_log)) in ["input", "output", "buffer"]:
+        title = f"{layer_type}_{layer_log.type_index}{call_label}"
     else:
-        title = (
-            f"{record_type(layer_log)}_{layer_log.type_index}_{layer_log.step_index}{call_label}"
-        )
+        title = f"{layer_type}_{layer_log.type_index}_{layer_log.step_index}{call_label}"
 
     lines: list[str] = []
     if layer_log.is_terminal_bool:

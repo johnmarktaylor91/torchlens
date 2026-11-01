@@ -921,9 +921,7 @@ def _commit_region_occurrence(
         site_label=child_op.layer_label,
         timing="post",
         signal="forward",
-        edit_name=(
-            edit.name if isinstance(edit, Edit) else getattr(edit, "__name__", "region_edit")
-        ),
+        edit_name=edit.name if isinstance(edit, Edit) else getattr(edit, "__name__", "region_edit"),
         replaced=False,
         edge_address=tuple(address),
     )

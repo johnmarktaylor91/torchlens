@@ -440,8 +440,7 @@ def transform_builder_decorator(
 
             trace = cast(Any, _state._active_trace)
             capture_start_time = time.time()
-            save_rng = trace._options_save_rng
-            rng_states = log_current_rng_states(torch_only=True) if save_rng else {}
+            rng_states = log_current_rng_states(torch_only=True) if trace._options_save_rng else {}
             autocast_state = log_current_autocast_state()
             func_call_id = _state.next_func_call_id()
             _warn_transform_boundary_collapse(transform_kind)
@@ -549,8 +548,7 @@ def direct_transform_decorator(
             inner_fn=user_fn,
         )
         capture_start_time = time.time()
-        save_rng = trace._options_save_rng
-        rng_states = log_current_rng_states(torch_only=True) if save_rng else {}
+        rng_states = log_current_rng_states(torch_only=True) if trace._options_save_rng else {}
         autocast_state = log_current_autocast_state()
         func_call_id = _state.next_func_call_id()
         _warn_transform_boundary_collapse(transform_kind)
@@ -1818,8 +1816,7 @@ def torch_func_decorator(
         # matching barcode => this is the bottom-level (leaf) function.
         func_call_barcode = make_random_barcode()
         trace._wrapper_runtime_ws.current_func_barcode = func_call_barcode
-        _save_rng = trace._options_save_rng
-        rng_states = log_current_rng_states(torch_only=True) if _save_rng else {}
+        rng_states = log_current_rng_states(torch_only=True) if trace._options_save_rng else {}
         autocast_state = log_current_autocast_state()
         func_call_id = _state.next_func_call_id()
         register_call_input_container_snapshots(

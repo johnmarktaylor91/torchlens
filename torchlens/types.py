@@ -15,15 +15,8 @@ import torch
 from ._capture.outcome import CaptureOutcome, CapturePhase, CaptureStatus, FailureOrigin
 from ._captured_run import TraceLike
 from ._data_classes._accessor_base import Accessor
-from ._data_classes._trace_groups import (
-    TraceAutograd,
-    TraceCost,
-    TraceGraph,
-    TraceHealth,
-    TraceOptions,
-    TraceProvenance,
-    TraceSource,
-)
+from ._data_classes._trace_groups import TraceAutograd, TraceCost, TraceGraph, TraceProvenance
+from ._data_classes._trace_groups_capture import TraceHealth, TraceOptions, TraceSource
 from ._data_classes.aten_op import AtenOp, OpRef
 from ._data_classes.attribute_write import AttributeWrite
 from ._data_classes.backward_pass import BackwardPass

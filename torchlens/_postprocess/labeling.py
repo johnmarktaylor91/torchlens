@@ -765,12 +765,11 @@ def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:
     """
 
     # Quick loop to count how many tensors are saved:
-    num_saved_ops = sum(
+    self._num_saved_ops = sum(
         1
         for layer_entry in self
         if not getattr(layer_entry, "is_orphan", False) and layer_entry.has_saved_activation
     )
-    self._num_saved_ops = num_saved_ops
 
     num_logged_tensors = sum(
         1 for layer_entry in self if not getattr(layer_entry, "is_orphan", False)
@@ -808,10 +807,7 @@ def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:
 
     self._layers_logged = True
 
-    if self._num_saved_ops == len(self._layer_list):
-        self._layers_saved = True
-    else:
-        self._layers_saved = False
+    self._layers_saved = self._num_saved_ops == len(self._layer_list)
 
 
 def _collect_parent_refs(value: Any) -> list[ParentRef]:

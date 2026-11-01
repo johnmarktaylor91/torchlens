@@ -10,6 +10,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, MutableMapping, Sequence
 from dataclasses import dataclass, fields, is_dataclass, replace
 from enum import Enum
+from functools import partial
 from hashlib import sha256
 from typing import Any, cast
 
@@ -1690,6 +1691,19 @@ def _build_call_arguments(
     parameter_candidates = list((op._param_logs if is_record else ()) or ())
     non_tensor_positional = iter(getattr(op, "non_tensor_pos_args", ()) or ())
     has_unmodelled_host_write = False
+    append_component = partial(
+        _append_argument_component,
+        op=op,
+        call_id=call_id,
+        registry_id=registry_id,
+        op_by_alias=op_by_alias,
+        slot_for_op=slot_for_op,
+        slot_drafts=slot_drafts,
+        parameter_candidates=parameter_candidates,
+        tensor_args=tensor_args,
+        literal_args=literal_args,
+        diagnostics=diagnostics,
+    )
 
     for index, component in enumerate(template.args):
         path: tuple[str | int, ...] = ("args", index)
@@ -1720,40 +1734,12 @@ def _build_call_arguments(
         override = None
         if not _component_contains_tensor(component):
             override = next(non_tensor_positional, _NO_OVERRIDE)
-        _append_argument_component(
-            component,
-            path=path,
-            literal_override=override,
-            op=op,
-            call_id=call_id,
-            registry_id=registry_id,
-            op_by_alias=op_by_alias,
-            slot_for_op=slot_for_op,
-            slot_drafts=slot_drafts,
-            parameter_candidates=parameter_candidates,
-            tensor_args=tensor_args,
-            literal_args=literal_args,
-            diagnostics=diagnostics,
-        )
+        append_component(component, path=path, literal_override=override)
     non_tensor_kwargs = getattr(op, "non_tensor_kwargs", {}) or {}
     for key, component in template.kwargs:
         path = ("kwargs", str(key))
         override = non_tensor_kwargs.get(key, _NO_OVERRIDE)
-        _append_argument_component(
-            component,
-            path=path,
-            literal_override=override,
-            op=op,
-            call_id=call_id,
-            registry_id=registry_id,
-            op_by_alias=op_by_alias,
-            slot_for_op=slot_for_op,
-            slot_drafts=slot_drafts,
-            parameter_candidates=parameter_candidates,
-            tensor_args=tensor_args,
-            literal_args=literal_args,
-            diagnostics=diagnostics,
-        )
+        append_component(component, path=path, literal_override=override)
     return tensor_args, literal_args, has_unmodelled_host_write
 
 

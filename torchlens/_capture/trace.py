@@ -50,6 +50,7 @@ from ..backends.registry import (
 )
 from ..recording._halt import StopSignal
 from . import peak_memory
+from ._trace_module_modes import _record_runnable_module_training_modes
 from .config import InternalCaptureConfig
 from .outcome import (
     CapturePhase,
@@ -581,6 +582,20 @@ def _run_predicate_forward_with_root_frame(
     return outputs
 
 
+def _resolve_refresh_layer_nums(self: "Trace", layer_nums_to_save: Any) -> tuple[int, ...] | None:
+    """Expand the refresh layer selection with each output layer and its parents."""
+
+    if layer_nums_to_save == "all":
+        return None
+    expanded_layer_nums = set(cast(list[int], layer_nums_to_save))
+    for output_label in self.output_layers:
+        output = self._layer_dict_all_keys[output_label]
+        expanded_layer_nums.update(
+            self._layer_dict_all_keys[parent].raw_index for parent in output.parents
+        )
+    return tuple(sorted(expanded_layer_nums))
+
+
 def save_new_outs(
     self: "Trace",
     model: object,
@@ -660,15 +675,7 @@ def save_new_outs(
     layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)
     grad_layer_nums_to_save = _get_op_nums_from_user_labels(self, grad_layers_to_save)
     refresh_seed = self._options_seed if seed is None else seed
-    resolved_layer_nums: tuple[int, ...] | None = None
-    if layer_nums_to_save != "all":
-        expanded_layer_nums = set(cast(list[int], layer_nums_to_save))
-        for output_label in self.output_layers:
-            output = self._layer_dict_all_keys[output_label]
-            expanded_layer_nums.update(
-                self._layer_dict_all_keys[parent].raw_index for parent in output.parents
-            )
-        resolved_layer_nums = tuple(sorted(expanded_layer_nums))
+    resolved_layer_nums = _resolve_refresh_layer_nums(self, layer_nums_to_save)
     refreshed = _run_model_and_save_specified_outs(
         model=cast(nn.Module, model),
         input_args=input_args,
@@ -1223,43 +1230,6 @@ def _record_runnable_input_tensor_sites(
         record_runnable_input_storage_sites(trace, tensor_leaves)
 
 
-def _record_runnable_module_training_modes(trace: "Trace", model: Any) -> None:
-    """Stash the capture-time per-module ``training`` mode for runnable honesty.
-
-    ``self.training`` is module state that is NOT part of the ``state_dict`` and is not a
-    model input, yet it steers mode-sensitive ops (BatchNorm running-stats vs batch-stats,
-    Dropout on/off). The runnable VERIFIED oracle is a *fresh instance in the captured mode*
-    on the given inputs, so the captured mode is DECLARED state the replay reproduces.
-    Recording it (per submodule -- submodules can differ) lets the producer declare the mode
-    as a witness fact; a mode-sensitive op replayed without a recorded mode fact is downgraded
-    to UNVERIFIABLE (fail closed). It runs for every capture (D18 widened the former
-    intervention-ready gate so the live refresh projector's mode-claim belt holds on the
-    default path; the widening is verdict-inert on the sparse side because the runnable
-    producer refuses non-intervention-ready captures outright), touches no tensors, and
-    stores an in-memory map consumed by the producer at save time and by the projector belt.
-
-    Parameters
-    ----------
-    trace:
-        Active trace.
-    model:
-        The prepared source model whose per-module ``training`` flags are recorded.
-    """
-
-    named_modules = getattr(model, "named_modules", None)
-    if not callable(named_modules):
-        return
-    modes: dict[str, bool] = {}
-    try:
-        for name, module in named_modules():
-            address = name or "self"
-            modes[address] = bool(getattr(module, "training", False))
-    except (AttributeError, TypeError):
-        return
-    if modes:
-        runnable_trace_state(trace).module_training_modes = modes
-
-
 #: Session-time semantic-output scratch (B1-02). Written at capture entry
 #: (``user_funcs.py``) and consumed ONLY by ``decode_outputs_for_trace`` on the
 #: normal forward-return arm. Both pin LIVE USER OBJECTS -- an HF
@@ -1524,6 +1494,47 @@ def _finalize_halted_trace(
     return frontier_output
 
 
+def _resolve_capture_layer_nums(
+    self: "Trace",
+    layers_to_save: str | list[str | int] | None,
+    grad_layers_to_save: str | list[str | int] | None,
+) -> None:
+    """Resolve the per-capture save and grad op-number selections onto ``self``."""
+
+    if self._options_mode == "predicate":
+        self._layer_nums_to_save = []
+        self._grad_op_nums_to_save = []
+    else:
+        if hasattr(self, "_deferred_retention_selector"):
+            self._layer_nums_to_save = []
+        elif hasattr(self, "_refresh_resolved_layer_nums_to_save"):
+            self._layer_nums_to_save = self.__dict__.pop("_refresh_resolved_layer_nums_to_save")
+        else:
+            self._layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)  # type: ignore[assignment]
+        if hasattr(self, "_deferred_gradient_selector"):
+            self._grad_op_nums_to_save = []
+        elif hasattr(self, "_refresh_resolved_grad_layer_nums_to_save"):
+            self._grad_op_nums_to_save = self.__dict__.pop(
+                "_refresh_resolved_grad_layer_nums_to_save"
+            )
+        else:
+            self._grad_op_nums_to_save = _get_op_nums_from_user_labels(self, grad_layers_to_save)
+
+    # Selective captures retain output-layer parents so output payloads remain
+    # available when the synthetic output node itself is requested (#46).
+    layer_nums_to_save = cast(Any, self._layer_nums_to_save)
+    if layer_nums_to_save != "all" and self._tracing_finished:
+        output_parent_nums = set()
+        for output_label in self.output_layers:
+            output_entry = self._layer_dict_all_keys[output_label]
+            for parent_label in output_entry.parents:
+                parent_entry = self._layer_dict_all_keys[parent_label]
+                output_parent_nums.add(parent_entry.raw_index)
+        if output_parent_nums:
+            combined = set(layer_nums_to_save) | output_parent_nums
+            self._layer_nums_to_save = sorted(combined)
+
+
 def run_and_log_inputs_through_model(
     self: "Trace",
     model: object,
@@ -1590,38 +1601,7 @@ def run_and_log_inputs_through_model(
 
         self._source_model_ref = make_weak_model_ref(model)  # type: ignore[arg-type]
 
-    if self._options_mode == "predicate":
-        self._layer_nums_to_save = []
-        self._grad_op_nums_to_save = []
-    else:
-        if hasattr(self, "_deferred_retention_selector"):
-            self._layer_nums_to_save = []
-        elif hasattr(self, "_refresh_resolved_layer_nums_to_save"):
-            self._layer_nums_to_save = self.__dict__.pop("_refresh_resolved_layer_nums_to_save")
-        else:
-            self._layer_nums_to_save = _get_op_nums_from_user_labels(self, layers_to_save)  # type: ignore[assignment]
-        if hasattr(self, "_deferred_gradient_selector"):
-            self._grad_op_nums_to_save = []
-        elif hasattr(self, "_refresh_resolved_grad_layer_nums_to_save"):
-            self._grad_op_nums_to_save = self.__dict__.pop(
-                "_refresh_resolved_grad_layer_nums_to_save"
-            )
-        else:
-            self._grad_op_nums_to_save = _get_op_nums_from_user_labels(self, grad_layers_to_save)
-
-    # Selective captures retain output-layer parents so output payloads remain
-    # available when the synthetic output node itself is requested (#46).
-    layer_nums_to_save = cast(Any, self._layer_nums_to_save)
-    if layer_nums_to_save != "all" and self._tracing_finished:
-        output_parent_nums = set()
-        for output_label in self.output_layers:
-            output_entry = self._layer_dict_all_keys[output_label]
-            for parent_label in output_entry.parents:
-                parent_entry = self._layer_dict_all_keys[parent_label]
-                output_parent_nums.add(parent_entry.raw_index)
-        if output_parent_nums:
-            combined = set(layer_nums_to_save) | output_parent_nums
-            self._layer_nums_to_save = sorted(combined)
+    _resolve_capture_layer_nums(self, layers_to_save, grad_layers_to_save)
 
     # Reserve the capture slot BEFORE any capture-global side effect (label
     # session swap in model prep, compiled-submodule swaps, the fastlog

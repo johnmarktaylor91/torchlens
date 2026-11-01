@@ -40,6 +40,7 @@ from typing import Any, Literal, NoReturn
 
 from .._errors import InvalidArgumentError, TorchLensWarning
 from ._bind_step import ACTIVE_BIND_SESSION, active_bind_decode_step
+from ._binding_calls import _alias_disclosure, _has_tensor, _is_in_place_call
 from ._helper_fingerprint import helper_versions
 from ._module_alias_guard import (
     bare_module_address,
@@ -550,26 +551,6 @@ class _BindDispatchMode:
         return _Mode()
 
 
-def _is_in_place_call(func_name: str, kwargs: dict[str, Any]) -> bool:
-    """Whether one intercepted torch call mutates its input storage in place."""
-
-    if kwargs.get("inplace") is True:
-        return True
-    return func_name.endswith("_") and not func_name.endswith("__")
-
-
-def _has_tensor(value: Any, tensor_type: type) -> bool:
-    """Cheap check that an output holds at least one top-level tensor."""
-
-    if isinstance(value, tensor_type):
-        return True
-    if isinstance(value, (list, tuple)):
-        return any(isinstance(item, tensor_type) for item in value)
-    if isinstance(value, dict):
-        return any(isinstance(item, tensor_type) for item in value.values())
-    return False
-
-
 _WRAP_UNIVERSE: frozenset[str] | None = None
 
 
@@ -591,6 +572,35 @@ def _wrap_name_universe() -> frozenset[str]:
     return _WRAP_UNIVERSE
 
 
+def _op_hook_context(
+    session: _BindSession,
+    plan: _RulePlan,
+    rule: Any,
+    raw_label: str,
+    layer_type: str,
+    func_name: str,
+    site_key: Any,
+) -> Any:
+    """Build the post-forward hook context for one matched op-level rule firing."""
+
+    from .hooks import make_hook_context
+
+    return make_hook_context(
+        name=plan.display_name,
+        timing="post",
+        signal="forward",
+        op={
+            "label": raw_label,
+            "layer_type": layer_type,
+            "func_name": func_name,
+            "site_key": site_key,
+            "pass_number": max(session.root_passes, 1),
+        },
+        state=session.rule_scratch[session.rule_ids[id(rule)]],
+        run_context=session.run_ctx,
+    )
+
+
 def _consider_op(
     session: _BindSession,
     plans: list[_RulePlan],
@@ -610,7 +620,6 @@ def _consider_op(
         _iter_loggable_live_outputs,
         _replace_output_tensors_by_path,
     )
-    from .hooks import make_hook_context
     from .runtime import _execute_hook
 
     layer_type, func_name, out_orig = call
@@ -677,20 +686,7 @@ def _consider_op(
             # rules apply at real module hooks); nothing to fire here.
             continue
         site_key = session.minter.key_for_context(ctx)
-        hook_ctx = make_hook_context(
-            name=plan.display_name,
-            timing="post",
-            signal="forward",
-            op={
-                "label": raw_label,
-                "layer_type": layer_type,
-                "func_name": func_name,
-                "site_key": site_key,
-                "pass_number": max(session.root_passes, 1),
-            },
-            state=session.rule_scratch[session.rule_ids[id(rule)]],
-            run_context=session.run_ctx,
-        )
+        hook_ctx = _op_hook_context(session, plan, rule, raw_label, layer_type, func_name, site_key)
         hooked = _execute_hook(plan.hook_callable, out, hook_ctx)
         session.record_fire(
             plan,
@@ -950,15 +946,6 @@ def _decode_step_admits(plan: _RulePlan) -> bool:
         return True
     step = active_bind_decode_step()
     return step is not None and all(step in selector.steps for selector in parts[1])
-
-
-def _alias_disclosure(aliases: dict[str, str]) -> dict[str, tuple[str, ...]]:
-    """Invert the alias map into canonical address -> alias spellings."""
-
-    disclosure: dict[str, list[str]] = {}
-    for alias, canonical in aliases.items():
-        disclosure.setdefault(canonical, []).append(alias)
-    return {canonical: tuple(names) for canonical, names in disclosure.items()}
 
 
 def _lower_rules(

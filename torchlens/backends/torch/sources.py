@@ -246,6 +246,53 @@ def _source_code_context_cache(self: "Trace") -> dict[Any, tuple[Any, ...]]:
     return code_context_cache
 
 
+def _echo_and_halt_on_source(
+    self: "Trace",
+    t: torch.Tensor,
+    source: str,
+    extra_addr: str | None,
+    tensor_label: str,
+    raw_index: int,
+    type_index: int,
+) -> None:
+    """Emit the echo line and evaluate the halt predicate for one exhaustive source tensor."""
+
+    options = getattr(self, "_predicate_save_options", None)
+    # Echo narrator slot (snoop D1, source seam, exhaustive tier): the halt
+    # path below already builds this context shape on demand; echo shares the
+    # build so the source line renders from the same record. Duck-typed
+    # session read: the hot path imports nothing.
+    echo_session = self.__dict__.get("_echo_session")
+    if echo_session is not None or (options is not None and options.halt is not None):
+        halt_ctx = _build_record_context(
+            kind="input" if source == "input" else "buffer",
+            op_log_or_op_data={
+                "label": tensor_label,
+                "raw_label": tensor_label,
+                "_label_raw": tensor_label,
+                "raw_index": raw_index,
+                "type": source,
+                "type_index": type_index,
+                "func_name": None,
+                "input_output_address": extra_addr,
+                "tensor": t,
+            },
+            module_stack=[],
+            history=(),
+            op_counts=self._raw_graph_ws.raw_layer_type_counter,
+            pass_index=1,
+            event_index=raw_index,
+            step_index=None,
+            time_since_pass_start=time.time() - self._provenance_start_time,
+            include_source_events=True,
+            sample_id=None,
+        )
+        if echo_session is not None:
+            _emit_source_echo(self, halt_ctx)
+        if options is not None and options.halt is not None:
+            _evaluate_halt(halt_ctx, options, frontier_output=t)
+
+
 def log_source_tensor_exhaustive(
     self: "Trace", t: torch.Tensor, source: str, extra_addr: str | None = None
 ) -> None:
@@ -516,37 +563,4 @@ def log_source_tensor_exhaustive(
     # Register backward hook for sidecar capture; payload retention is decided at fire time.
     _add_tensor_backward_hook(self, t, tensor_label)
 
-    options = getattr(self, "_predicate_save_options", None)
-    # Echo narrator slot (snoop D1, source seam, exhaustive tier): the halt
-    # path below already builds this context shape on demand; echo shares the
-    # build so the source line renders from the same record. Duck-typed
-    # session read: the hot path imports nothing.
-    echo_session = self.__dict__.get("_echo_session")
-    if echo_session is not None or (options is not None and options.halt is not None):
-        halt_ctx = _build_record_context(
-            kind="input" if source == "input" else "buffer",
-            op_log_or_op_data={
-                "label": tensor_label,
-                "raw_label": tensor_label,
-                "_label_raw": tensor_label,
-                "raw_index": raw_index,
-                "type": source,
-                "type_index": type_index,
-                "func_name": None,
-                "input_output_address": extra_addr,
-                "tensor": t,
-            },
-            module_stack=[],
-            history=(),
-            op_counts=self._raw_graph_ws.raw_layer_type_counter,
-            pass_index=1,
-            event_index=raw_index,
-            step_index=None,
-            time_since_pass_start=time.time() - self._provenance_start_time,
-            include_source_events=True,
-            sample_id=None,
-        )
-        if echo_session is not None:
-            _emit_source_echo(self, halt_ctx)
-        if options is not None and options.halt is not None:
-            _evaluate_halt(halt_ctx, options, frontier_output=t)
+    _echo_and_halt_on_source(self, t, source, extra_addr, tensor_label, raw_index, type_index)

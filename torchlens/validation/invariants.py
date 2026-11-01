@@ -35,8 +35,7 @@ import re
 # reference in this file: ``_rebind_function`` rebinds every split-child
 # function onto THIS module's globals, so the rebound bodies resolve these
 # names here at call time (deleting them raises NameError inside the checks
-# -- verified live). Per-line noqa keeps F401 armed for genuinely dead code
-# in the rest of the file (b9 R43-3; the former file-wide blanket is gone).
+# -- verified live). Per-line noqa keeps F401 armed for genuinely dead code.
 from collections import Counter, defaultdict  # noqa: F401 (rebound-child globals)
 from collections.abc import Callable, Iterable, Mapping  # noqa: F401 (rebound-child globals)
 from dataclasses import dataclass

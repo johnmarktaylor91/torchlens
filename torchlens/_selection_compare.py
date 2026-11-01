@@ -365,8 +365,7 @@ def _machinery_entry(entry: Site, source: str) -> Site:
 def _is_machinery_entry(trace: Any, entry: Site) -> bool:
     """Whether one subject entry is an engine-inserted machinery op (D-7)."""
 
-    op = _op_for_entry(trace, entry)
-    return record_type(op, None) in _MACHINERY_LAYER_TYPES
+    return record_type(_op_for_entry(trace, entry), None) in _MACHINERY_LAYER_TYPES
 
 
 def _compared_delta(delta: torch.Tensor, by: str, producer: str, site: Any) -> torch.Tensor:

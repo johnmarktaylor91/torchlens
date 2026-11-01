@@ -44,6 +44,8 @@ import re
 import string
 from typing import Any
 
+from .._record_type import record_type
+
 _BARCODE_ALPHABET = string.ascii_letters + string.digits
 
 # Dedicated, process-private RNG for internal tensor barcodes. Drawing from a
@@ -260,8 +262,6 @@ def compute_graph_shape_hash(
     # pass-qualified reference never matched) and collapsed all passes of a
     # recurrent layer onto one index, letting structurally different recurrent
     # graphs hash identically and defeating ``tl.fingerprint.assert_unchanged``.
-    from .._record_type import record_type
-
     order_by_label: dict[Any, int] = {}
     layer_by_label: dict[Any, Any] = {}
     kept_layers: list[Any] = []
@@ -337,8 +337,6 @@ def _replacement_layer_fold_target(
     single-parent ``interventionreplacement`` layer whose output keeps its
     parent's shape and dtype folds.
     """
-
-    from .._record_type import record_type
 
     if record_type(layer, None) != "interventionreplacement":
         return None

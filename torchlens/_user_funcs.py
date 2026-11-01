@@ -1404,10 +1404,7 @@ def _warn_zero_match_capture_selectors(
             from ._capture.trace import _get_op_nums_from_user_labels
 
             try:
-                matched: Any = _get_op_nums_from_user_labels(
-                    trace,
-                    layers_to_save_request,
-                )
+                matched: Any = _get_op_nums_from_user_labels(trace, layers_to_save_request)
             except InvalidArgumentError:
                 # The post-capture lookup is loud for unknown keys; here the
                 # capture already completed, so an unknown name IS the

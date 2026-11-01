@@ -440,9 +440,7 @@ class TFBackend:
         delattr(trace, "capture_events")
         self._attach_param_logs(trace, module_tree)
         self._finish_trace(
-            trace,
-            module_tree,
-            recurrence_detection=bool(trace._options_recurrence_detection),
+            trace, module_tree, recurrence_detection=bool(trace._options_recurrence_detection)
         )
         if grad_options is not None:
             from .derived_grads import GradOptions, attach_tf_derived_grads

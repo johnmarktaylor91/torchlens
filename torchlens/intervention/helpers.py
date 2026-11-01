@@ -168,7 +168,7 @@ def _source_mean_spec(
     # provably never reads the traced batch. An external source qualifies;
     # the self-mean reads every batch row and fails closed, and couples the
     # rows (D34), so a chunked capture refuses it at attach.
-    is_batch_independent = source is not None
+    batch_independent = source is not None
     return _helper_spec(
         "mean_ablate",
         args=(source,),
@@ -178,12 +178,9 @@ def _source_mean_spec(
         },
         factory=factory,
         signal="forward",
-        is_batch_independent=is_batch_independent,
+        is_batch_independent=batch_independent,
         is_compatible_with_append=not allow_shape_change,
-        metadata={
-            "stochastic": False,
-            **({} if is_batch_independent else {"batch_coherent": True}),
-        },
+        metadata={"stochastic": False, **({} if batch_independent else {"batch_coherent": True})},
     )
 
 

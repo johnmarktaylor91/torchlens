@@ -3900,8 +3900,6 @@ package-docstrings	torchlens/_data_classes/trace.py	14
 package-docstrings	torchlens/_data_classes/trace.py	16
 package-docstrings	torchlens/_data_classes/trace.py	3.2
 package-docstrings	torchlens/_data_classes/_trace_groups.py	1.7
-package-docstrings	torchlens/_data_classes/_trace_groups.py	11
-package-docstrings	torchlens/_data_classes/_trace_groups.py	12
 package-docstrings	torchlens/_data_classes/_trace_groups.py	2.5
 package-docstrings	torchlens/_data_classes/_trace_groups.py	3.6
 package-docstrings	torchlens/_data_substrate/artifact.py	00042.
@@ -4193,10 +4191,8 @@ package-docstrings	torchlens/_io/streaming.py	256
 package-docstrings	torchlens/_io/streaming.py	62
 package-docstrings	torchlens/_io/streaming_async.py	256
 package-docstrings	torchlens/_io/tlspec.py	12
-package-docstrings	torchlens/_io/tlspec.py	256
 package-docstrings	torchlens/_io/tlspec.py	4.4
 package-docstrings	torchlens/_io/tlspec.py	59
-package-docstrings	torchlens/_io/tlspec.py	8601
 package-docstrings	torchlens/_io/writer_contract.py	10
 package-docstrings	torchlens/_io/writer_contract.py	2.33.0
 package-docstrings	torchlens/_io/writer_contract.py	2.34.1
@@ -9827,3 +9823,7 @@ test-names	tests/workflow_gallery/test_proofnet_rg_vision.py	12_
 test-names	tests/workflow_gallery/test_proofnet_rg_vision.py	13_
 test-names	tests/workflow_gallery/test_proofnet_rg_vision.py	16_
 test-names	tests/workflow_gallery/test_proofnet_rg_vision.py	20_
+package-docstrings	torchlens/_data_classes/_trace_groups_capture.py	11
+package-docstrings	torchlens/_data_classes/_trace_groups_capture.py	12
+package-docstrings	torchlens/_io/_tlspec_json_helpers.py	256
+package-docstrings	torchlens/_io/_tlspec_json_helpers.py	8601

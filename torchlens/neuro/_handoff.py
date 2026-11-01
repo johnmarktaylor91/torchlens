@@ -400,8 +400,7 @@ def _source_kind(source: Any) -> str:
         return "trace"
     raise NeuroHandoffError(
         f"unsupported source type {type(source).__name__}: expected a "
-        "TorchLens Trace, a LoadedExtraction, or an extraction-directory "
-        "path.",
+        "TorchLens Trace, a LoadedExtraction, or an extraction-directory path.",
         code="neuro_source_invalid",
         remedy=(
             "capture with tl.trace(...) or extract to disk with "

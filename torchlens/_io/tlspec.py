@@ -6,10 +6,7 @@ import contextlib
 import json
 import os
 import shutil
-import sys
 import uuid
-from collections.abc import Iterable
-from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 from typing import Any, Literal
@@ -23,6 +20,13 @@ from .._errors import InvalidArgumentError
 from ..backends.registry import get_backend_spec
 from . import TLSPEC_VERSION, ArtifactError
 from ._durability import fsync_dir, fsync_tree
+from ._tlspec_json_helpers import (
+    _hash_named_tensor_meta,
+    _json_int_or_none,
+    _json_str_or_none,
+    _python_version,
+    _utc_timestamp,
+)
 from .manifest import Manifest, TensorEntry, sha256_of_file
 from .paths import reject_symlink_path
 
@@ -1022,24 +1026,6 @@ def _source_model(source: Any) -> torch.nn.Module | None:
     return model if isinstance(model, torch.nn.Module) else None
 
 
-def _hash_named_tensor_meta(named_tensors: Iterable[tuple[str, torch.Tensor]]) -> str:
-    """Hash ``(name, shape, dtype)`` metadata for named tensors.
-
-    Parameters
-    ----------
-    named_tensors:
-        Iterable of named tensor pairs.
-
-    Returns
-    -------
-    str
-        SHA-256 hex digest.
-    """
-
-    entries = [(name, tuple(tensor.shape), str(tensor.dtype)) for name, tensor in named_tensors]
-    return sha256(repr(entries).encode("utf-8")).hexdigest()
-
-
 def _extra_metadata_for_source(source: Any) -> dict[str, Any]:
     """Return JSON-safe extra metadata for a model-log-like source.
 
@@ -1065,70 +1051,6 @@ def _extra_metadata_for_source(source: Any) -> dict[str, Any]:
             source._provenance_input_signature_hash if is_live_trace(source) else None
         ),
     }
-
-
-def _json_str_or_none(value: Any) -> str | None:
-    """Return a string for JSON output, preserving ``None``.
-
-    Parameters
-    ----------
-    value:
-        Raw value.
-
-    Returns
-    -------
-    str | None
-        JSON-safe string or ``None``.
-    """
-
-    if value is None:
-        return None
-    return str(value)
-
-
-def _json_int_or_none(value: Any) -> int | None:
-    """Return an int for JSON output when possible.
-
-    Parameters
-    ----------
-    value:
-        Raw value.
-
-    Returns
-    -------
-    int | None
-        JSON-safe int or ``None``.
-    """
-
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return value
-    return None
-
-
-def _python_version() -> str:
-    """Return the runtime Python version string.
-
-    Returns
-    -------
-    str
-        ``major.minor.micro`` version string.
-    """
-
-    return f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
-
-
-def _utc_timestamp() -> str:
-    """Return a UTC ISO 8601 timestamp.
-
-    Returns
-    -------
-    str
-        UTC timestamp with ``Z`` suffix.
-    """
-
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 __all__ = [

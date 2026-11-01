@@ -64,10 +64,7 @@ class _CounterfactualStateGuard:
             (tensor, tensor.detach().clone()) for tensor in _stateful_tensors(model)
         ]
         self._grads: list[tuple[torch.Tensor, torch.Tensor | None]] = [
-            (
-                tensor,
-                None if tensor.grad is None else tensor.grad.detach().clone(),
-            )
+            (tensor, None if tensor.grad is None else tensor.grad.detach().clone())
             for tensor, _saved in self._tensors
         ]
         self._rng: dict[str, Any] = _snapshot_rng()

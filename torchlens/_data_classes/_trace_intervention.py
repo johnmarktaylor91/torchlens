@@ -93,9 +93,8 @@ def _prepare_do(
     """
 
     if type(hooks_or_site).__name__ == "_SiteTable":
-        # find_sites() output is a first-class address (leverage B3/NEW-4):
-        # the zero-match refusal recommends find_sites, so its result must
-        # be accepted here, lowered to the exact resolved site labels.
+        # find_sites() output is a first-class address (the zero-match refusal
+        # recommends it): lower it to the exact resolved site labels.
         from .._ir.selector_eval import normalize_selector_like
 
         hooks_or_site = normalize_selector_like(hooks_or_site, lifecycle="live")
@@ -1472,12 +1471,11 @@ class TraceInterventionMixin(_TraceMixinBase):
             for handle_id in attached:
                 self.clear_edits(handle=handle_id, confirm_mutation=True)
             raise
-        # These sticky hooks are the do() plan's edit-then-scatter residue of
-        # an edit applied NOW (the caller propagates and appends the audit
-        # record), not user-staged future-run material, so the run(inputs=...)
-        # staged-spec honesty gate must skip them: a value-edited fork gets the
-        # PendingValueEditsWarning disclosure at the run door, never a refusal
-        # (D1 2026-08-19).
+        # These sticky hooks are the do() plan's edit-then-scatter residue of an
+        # edit applied NOW (the caller propagates and appends the audit record),
+        # not user-staged future-run material, so the run(inputs=...) staged-spec
+        # honesty gate must skip them: a value-edited fork gets the
+        # PendingValueEditsWarning disclosure at the run door, never a refusal.
         attached_ids = set(attached)
         for hook_spec in self._ensure_intervention_spec().hook_specs:
             if hook_spec.handle in attached_ids:
@@ -1596,6 +1594,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         from ..intervention.audit import build_fire_record
         from ..intervention.hooks import make_hook_context
         from ..intervention.replay import _commit_replay_updates, _replay_site_key
+        from ..intervention.types import Edit
 
         pending_updates: dict[str, torch.Tensor] = {}
         pending_records: dict[str, list[Any]] = {}
@@ -1609,8 +1608,6 @@ class TraceInterventionMixin(_TraceMixinBase):
                     f"leaf site {op.label!r} has no saved tensor value to edit.",
                     site=op.label,
                 )
-            from ..intervention.types import Edit
-
             if isinstance(derived, Edit):
                 if derived.factory is None:
                     raise _apply_invalid(
@@ -1680,16 +1677,13 @@ class TraceInterventionMixin(_TraceMixinBase):
         from .._user_funcs import _fingerprint_model_weights, _qualname_for_model
         from ..intervention.errors import ModelMismatchError
 
-        # F41 (foldA D10/D11): the root entry-point fact joins this gate
-        # FAIL-CLOSED -- it is written unconditionally on every capture, so
-        # absence (a legacy artifact) refuses rather than silently skipping,
-        # and a non-module_call root refuses rather than re-running
-        # ``forward`` under a capture of a different entry point (supplying
-        # ``owner`` for a capture of ``owner.generate`` would pass the
-        # class+weights checks and run ``__call__`` under a report that can
-        # say verified -- the silent-wrongness door the ruling closes).
-        # Interim posture: bound-method captures refuse rerun/append; never
-        # widened past the ruling.
+        # The root entry-point fact joins this gate FAIL-CLOSED: it is written
+        # unconditionally on every capture, so absence (a legacy artifact)
+        # refuses, and a non-module_call root refuses rather than re-running
+        # ``forward`` under a capture of another entry point (``owner`` for a
+        # capture of ``owner.generate`` would pass the class+weights checks and
+        # run ``__call__`` under a report that can say verified). Bound-method
+        # captures refuse rerun/append; never widened past the ruling.
         root_fact = self._provenance_root_entry_point
         if root_fact is None:
             raise ModelMismatchError(

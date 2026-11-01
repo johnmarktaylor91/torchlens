@@ -253,10 +253,8 @@ def _finalize_census(state: _WitnessState) -> None:
     trace._health_num_accounted_witness_events = (
         int(trace.__dict__.get("_health_num_accounted_witness_events", 0)) + accounted_count
     )
-    trace._health_num_expected_opaque_witness_events = (
-        int(trace.__dict__.get("_health_num_expected_opaque_witness_events", 0))
-        + expected_opaque_count
-    )
+    prior = int(trace.__dict__.get("_health_num_expected_opaque_witness_events", 0))
+    trace._health_num_expected_opaque_witness_events = prior + expected_opaque_count
     trace._health_num_unaccounted_witness_events = int(
         trace.__dict__.get("_health_num_unaccounted_witness_events", 0)
     ) + len(diagnostics)

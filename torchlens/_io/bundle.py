@@ -2726,12 +2726,12 @@ def _scrub_trace_for_bundle(
     """
 
     backend_name = str(trace._provenance_backend if is_live_trace(trace) else "torch")
+    payload_materialization = get_backend_spec(backend_name).capabilities.payload_materialization
     transient_attrs = {}
     for attr_name in LOAD_PROVENANCE_TRANSIENT_ATTRS:
         if hasattr(trace, attr_name):
             transient_attrs[attr_name] = getattr(trace, attr_name)
             delattr(trace, attr_name)
-    backend_name = str(trace._provenance_backend if is_live_trace(trace) else "torch")
     try:
         return scrub_for_save(
             trace,
@@ -2744,9 +2744,7 @@ def _scrub_trace_for_bundle(
             include_buffer_values=include_buffer_values,
             sparse_runnable=sparse_runnable,
             backend_name=backend_name,
-            payload_materialization=get_backend_spec(
-                backend_name
-            ).capabilities.payload_materialization,
+            payload_materialization=payload_materialization,
         )
     finally:
         for attr_name, attr_value in transient_attrs.items():

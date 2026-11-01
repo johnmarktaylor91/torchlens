@@ -346,9 +346,7 @@ def _add_combined_correspondence_edges(
         forward_node_name = _forward_correspondence_node_name(grad_fn_handle.op)
         if forward_node_name is not None:
             graphviz_graph.edge(
-                forward_node_name,
-                _backward_dot_node_name(grad_fn_handle),
-                **edge_attrs,
+                forward_node_name, _backward_dot_node_name(grad_fn_handle), **edge_attrs
             )
 
 
@@ -1739,10 +1737,8 @@ def _get_arm_edge_entries(
     arm_entries: List[Tuple[int, str, Optional[Tuple[int, ...]]]] = []
     if vis_mode == "unrolled":
         edge_key = (parent_node.layer_label, child_node.layer_label)
-        for (
-            conditional_id,
-            branch_kind,
-        ), edge_list in trace._graph_conditional_arm_entry_edges.items():
+        arm_entry_edges = trace._graph_conditional_arm_entry_edges
+        for (conditional_id, branch_kind), edge_list in arm_entry_edges.items():
             if edge_key in edge_list:
                 arm_entries.append((conditional_id, branch_kind, None))
     elif vis_mode == "rolled":

@@ -34,6 +34,7 @@ MetadataTopLevelPredicate: TypeAlias = Callable[
 ]
 OpTopLevelPredicate: TypeAlias = Callable[[str], bool]
 TrainingModeResolver: TypeAlias = Callable[[dict[str, Any]], bool]
+_ParamSource: TypeAlias = Literal["native-module", "pytree-derived", "none"]
 
 
 def finalize_single_pass_trace(
@@ -165,8 +166,7 @@ def finalize_single_pass_trace(
     # recurrence-grouping path and keeps the request.)
     trace._options_recurrence_detection = assignments is not None
     trace._options_grouping_policy = build_grouping_policy_stamp(
-        ran_recurrence_grouping=assignments is not None,
-        requested=trace._options_grouping,
+        ran_recurrence_grouping=assignments is not None, requested=trace._options_grouping
     )
     if update_param_totals_from_layers:
         _update_param_totals_from_layers(trace)
@@ -1251,9 +1251,7 @@ def new_preview_function_trace(
     trace.name = name
     trace._provenance_backend = cast(BackendName, backend_name)
     trace._options_module_identity_mode = "function_root"
-    trace._provenance_param_source = cast(
-        "Literal['native-module', 'pytree-derived', 'none']", param_source
-    )
+    trace._provenance_param_source = cast(_ParamSource, param_source)
     trace.model_name = trace._source_class_name
     trace._source_class_qualname = getattr(model, "__qualname__", trace._source_class_name)
     # Root entry-point identity fact (C07X item (iv)): preview backends

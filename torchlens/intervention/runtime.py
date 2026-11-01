@@ -1424,10 +1424,9 @@ class _LiveSiteMinter:
             events = [records[label] for label in list(records)]
         journal = list(events)
         for record in journal[self._consumed :]:
+            modules = getattr(record, "modules", None) or ()
             cohort = self._cohort(
-                getattr(record, "modules", None) or (),
-                record_type(record, ""),
-                self._journal_output_slot(record),
+                modules, record_type(record, ""), self._journal_output_slot(record)
             )
             self._seen[cohort] = self._seen.get(cohort, 0) + 1
         self._consumed = len(journal)
@@ -1486,8 +1485,7 @@ def _stamp_live_site_identity(site: Any) -> None:
         from ..backends.torch._ops_capture_records import _snapshot_exhaustive_module_stack
 
         modules = _snapshot_exhaustive_module_stack(trace)
-    layer_type = record_type(site, "") or ""
-    site.site_key = minter.peek(modules, layer_type, minter.output_slot(site))
+    site.site_key = minter.peek(modules, record_type(site, "") or "", minter.output_slot(site))
     if getattr(site, "pass_number", None) is None:
         innermost = modules[-1] if modules else None
         pass_number = innermost[1] if isinstance(innermost, tuple) and len(innermost) == 2 else 1

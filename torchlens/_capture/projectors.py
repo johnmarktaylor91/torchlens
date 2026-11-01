@@ -739,8 +739,7 @@ class RefreshProjector:
             if record_type(target_layer) != record_type(refreshed_layer):
                 return (
                     f"layer_type changed for {target_layer._layer_label_raw!r}: "
-                    f"expected {record_type(target_layer)!r}, "
-                    f"got {record_type(refreshed_layer)!r}"
+                    f"expected {record_type(target_layer)!r}, got {record_type(refreshed_layer)!r}"
                 )
             expected_parents = tuple(target_layer.parents)
             actual_parents = tuple(refreshed_layer.parents)

@@ -286,11 +286,7 @@ def _probe_graphviz() -> _EnvironmentCheck:
         from ._subprocess import run_bounded_subprocess
 
         completed = run_bounded_subprocess(
-            ["dot", "-V"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=5,
+            ["dot", "-V"], check=False, capture_output=True, text=True, timeout=5
         )
     except (OSError, subprocess.SubprocessError) as exc:
         return _EnvironmentCheck(

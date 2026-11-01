@@ -315,9 +315,7 @@ def _check_module_layer_containment(ml: Trace) -> None:
     label_set = set(ml.op_labels)
     no_pass_set = set(ml.layer_labels)
     all_layer_label_set = label_set | no_pass_set
-    module_layer_label_sets = {
-        mod_log.address: set(mod_log.layer_labels) for mod_log in mod_accessor
-    }
+    module_layer_label_sets = {mod.address: set(mod.layer_labels) for mod in mod_accessor}
 
     for mod_log in mod_accessor:
         addr = mod_log.address
@@ -330,8 +328,7 @@ def _check_module_layer_containment(ml: Trace) -> None:
                     f"Module '{addr}' layers contains '{lbl}' not in trace._layer_logs",
                 )
 
-        # len(layer_labels) is the Module's layer count: it is honest only
-        # when no Layer is listed twice.
+        # len(layer_labels) is the Module's layer count: honest only when no Layer is listed twice.
         if len(mod_log.layer_labels) != len(set(mod_log.layer_labels)):
             raise MetadataInvariantError(
                 name,
@@ -351,14 +348,12 @@ def _check_module_layer_containment(ml: Trace) -> None:
                         f"'{lbl}' not in op_labels or layer_labels",
                     )
 
-            # len(ops) is the call's op count, honest only when no
-            # pass-qualified op is listed twice; num_layers counts the distinct
-            # Layers the ops resolve to through the trace (an unresolvable op
-            # is itself the problem). One raise site for the check.
+            # len(ops) is honest only when no pass-qualified op is listed twice; num_layers
+            # counts the distinct Layers the ops resolve to (an unresolvable op is itself
+            # the problem). One raise site for the check.
             qualified_ops = [lbl for lbl in mpl.ops if ":" in str(lbl)]
-            resolved = [
-                getattr(ml._layer_dict_all_keys.get(lbl), "layer_label", None) for lbl in mpl.ops
-            ]
+            by_label = ml._layer_dict_all_keys
+            resolved = [getattr(by_label.get(lbl), "layer_label", None) for lbl in mpl.ops]
             unresolved = [
                 lbl
                 for lbl, layer in zip(mpl.ops, resolved, strict=True)
@@ -384,9 +379,7 @@ def _check_module_layer_containment(ml: Trace) -> None:
             # input/output layers subset of ops (using both pass-qualified
             # and no-pass labels to handle recurrent models)
             for sub_attr in ("input_layers", "output_layers"):
-                sub_list = getattr(mpl, sub_attr)
-                sub_set = set(sub_list)
-                extra = sub_set - all_layer_label_set
+                extra = set(getattr(mpl, sub_attr)) - all_layer_label_set
                 if extra:
                     raise MetadataInvariantError(
                         name,

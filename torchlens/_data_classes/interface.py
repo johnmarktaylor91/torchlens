@@ -381,15 +381,7 @@ def _str_after_pass(self: "Trace") -> str:
 
     # Model tensors:
 
-    s += "\n\tTensor info:"
-    s += (
-        f"\n\t\t- {bound}{len(self)} total tensors ({self._cost_total_activation_memory}) "
-        f"computed in forward pass{' (lower bound: capture unverified)' if unverified else ''}."
-    )
-    s += f"\n\t\t- {len(self.saved_ops)} tensors ({self._cost_saved_activation_memory}) with saved outs."
-    nonfinite = self.first_nonfinite()
-    if not nonfinite.startswith("No non-finite"):
-        s += f"\n\t\t- NaN/Inf: {nonfinite}"
+    s += _tensor_info_section(self, bound, unverified)
 
     # Model parameters:
 
@@ -418,6 +410,21 @@ def _str_after_pass(self: "Trace") -> str:
     for row in _bounded_layer_roster(self):
         s += f"\n{row}"
 
+    return s
+
+
+def _tensor_info_section(self: "Trace", bound: str, unverified: bool) -> str:
+    """The summary's Tensor info block (lower-bound wording for an unverified capture)."""
+
+    s = "\n\tTensor info:"
+    s += (
+        f"\n\t\t- {bound}{len(self)} total tensors ({self._cost_total_activation_memory}) "
+        f"computed in forward pass{' (lower bound: capture unverified)' if unverified else ''}."
+    )
+    s += f"\n\t\t- {len(self.saved_ops)} tensors ({self._cost_saved_activation_memory}) with saved outs."
+    nonfinite = self.first_nonfinite()
+    if not nonfinite.startswith("No non-finite"):
+        s += f"\n\t\t- NaN/Inf: {nonfinite}"
     return s
 
 
