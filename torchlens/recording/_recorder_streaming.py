@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 
 from .._deprecations import MissingType
-from ..options import StorageOptions
+
+if TYPE_CHECKING:
+    from ..options import StorageOptions
 
 
 def _rank_prefixed_streaming_options(
@@ -36,7 +39,7 @@ def _rank_prefixed_streaming_options(
     # Rewrite ONLY bundle_path: rebuilding from defaults silently dropped the
     # R62 include_* opt-outs (and now the async-write routing) for rank-split
     # recordings.
-    return StorageOptions(
+    return type(streaming)(
         path=bundle_path.parent / f"rank_{rank:02d}" / bundle_path.name,
         retain_in_memory=streaming.retain_in_memory,
         on_save=streaming.on_save,

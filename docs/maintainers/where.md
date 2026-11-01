@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-81 packages, 1264 modules, 619408 lines, 0 modules without a docstring.
+81 packages, 1264 modules, 620085 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -21,7 +21,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10552 |
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 50 | 34744 |
-| `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 21 | 10279 |
+| `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 21 | 10953 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5849 |
 | `torchlens._notebook` | Extras-gated notebook namespace with no public objects yet. | 9 | 2412 |
 | `torchlens._observability` | Observability substrates. | 21 | 7920 |
@@ -83,7 +83,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 8 | 2474 |
 | `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 17 | 11320 |
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1389 |
-| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 17 | 5782 |
+| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 17 | 5785 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3712 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 30 | 13519 |
 | `torchlens.stats` | Streaming statistics for out aggregation (real subpackage; item 18). | 16 | 6303 |
@@ -417,15 +417,15 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 
 ### `torchlens._ir`
 
-Internal backend-neutral IR for TorchLens capture unification. (21 modules, 10279 lines)
+Internal backend-neutral IR for TorchLens capture unification. (21 modules, 10953 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Internal backend-neutral IR for TorchLens capture unification. | 104 |
 | `_container_type_probes` | Type-structural construction probes for output-container reconstruction. | 306 |
 | `_output_occurrences` | Output-path occurrences of captured tensors, built at capture and read at output-op build. | 110 |
-| `_selector_eval_helpers` | Pure candidate-string and grad-fn accessor helpers for selector evaluation. | 72 |
-| `_selector_labels` | Label-spelling and module-address helpers for selector evaluation. | 123 |
+| `_selector_nodes` | Leaf plan nodes for the compiled selector evaluator. | 460 |
+| `_selector_universe` | Per-lifecycle subject universes for the selector interpreter. | 461 |
 | `capture_events` | Mutable capture event accumulator for one forward pass. | 1226 |
 | `container` | Leaf dataclasses for TorchLens output container structure. | 1441 |
 | `container_registry` | Portable container registry records for capture-time boundary containers. | 956 |
@@ -438,7 +438,7 @@ Internal backend-neutral IR for TorchLens capture unification. (21 modules, 1027
 | `predicate` | Unified predicate context for capture filtering and selector adapters. | 293 |
 | `predicate_registry` | Frozen predicate runtime extension point (the seam contract). | 340 |
 | `refs` | Reference dataclasses for backend-neutral captured objects. | 154 |
-| `selector_eval` | The one selector interpreter for capture-time, post-hoc, and live matching. | 1749 |
+| `selector_eval` | The one selector interpreter for capture-time, post-hoc, and live matching. | 1697 |
 | `semantics` | Capture policy and backend semantics records. | 51 |
 | `summary_role` | The non-differentiable summary-transform role (explorer P1). | 239 |
 | `workspaces` | Named per-phase capture/postprocess workspaces. | 173 |
@@ -1691,7 +1691,7 @@ Built-in receptive-field rules and idempotent pack registration. (10 modules, 13
 
 ### `torchlens.recording`
 
-Lightweight predicate-recording namespace for TorchLens. (17 modules, 5782 lines)
+Lightweight predicate-recording namespace for TorchLens. (17 modules, 5785 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1701,7 +1701,7 @@ Lightweight predicate-recording namespace for TorchLens. (17 modules, 5782 lines
 | `_indexes` | Index file writers for fastlog directory bundles. | 81 |
 | `_record_one_shot` | One-shot public fastlog recording API. | 281 |
 | `_recorder` | Public Recorder context manager for fastlog sessions. | 867 |
-| `_recorder_streaming` | Rank-local streaming-option helper for the fastlog ''Recorder''. | 47 |
+| `_recorder_streaming` | Rank-local streaming-option helper for the fastlog ''Recorder''. | 50 |
 | `_storage_resolver` | Storage resolution for fastlog tensor payloads. | 410 |
 | `_validation` | Validation helpers for public fastlog APIs. | 100 |
 | `cleanup` | Cleanup helpers for partial fastlog bundles. | 61 |

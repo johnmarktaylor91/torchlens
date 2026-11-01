@@ -381,8 +381,9 @@ def test_twenty_four_site_union_walks_once_per_capture(monkeypatch: pytest.Monke
 
     with _walker_forced(monkeypatch), _call_counts(monkeypatch) as walker_counts:
         tl.record(model, x, save=UNIONS["twenty_four"]())
-    # The walker evaluates every union member for every non-matching event.
-    assert walker_counts["_evaluate_subject"] > _DEPTH * len(decisions) // 2, walker_counts
+    # The walker evaluates the union once per non-matching event; its members
+    # run inside the compiled plan, so the count scales with events, not depth.
+    assert walker_counts["_evaluate_subject"] > len(decisions) // 2, walker_counts
 
 
 def test_mixed_union_counts_equal_the_walker(monkeypatch: pytest.MonkeyPatch) -> None:

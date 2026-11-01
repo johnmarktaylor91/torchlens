@@ -43,18 +43,10 @@ of the package init avoids an import cycle with ``ir.container``.
 
 from __future__ import annotations
 
-import re
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from functools import partial
 from typing import Any, Literal, cast
 
-from .._data_classes._trace_missing_attrs import is_live_trace
-from .._record_type import record_type
-from .._selection.errors import (
-    LiveModeLabelError,
-    SelectorCapabilityError,
-    SelectorCompositionError,
-    SiteResolutionError,
-)
 from .._selection.selectors import (
     BaseSelector,
     CompositeSelector,
@@ -63,17 +55,44 @@ from .._selection.selectors import (
     PrecededBySelector,
 )
 from .._selection.target import FrozenTargetSpec, TargetSpec
-from ..backends._backend_names import TORCH_BACKEND_NAME
-from ._selector_eval_helpers import (
-    _grad_fn_call_values,
-    _grad_fn_type_matches,
-    _module_candidate_string,
+from ..intervention.errors import (
+    SelectorCapabilityError,
+    SelectorCompositionError,
+    SiteResolutionError,
 )
-from ._selector_labels import (
-    _STRING_LABEL_ATTRS,
+from ._selector_nodes import (
+    _compile_backward_pass_capture,
+    _compile_contains,
+    _compile_func,
+    _compile_func_transform,
+    _compile_grad_fn_backward_pass,
+    _compile_grad_fn_grad_kind,
+    _compile_grad_fn_label,
+    _compile_grad_fn_payload,
+    _compile_grad_fn_without_op,
+    _compile_grad_kind_capture,
+    _compile_label,
+    _compile_never,
+    _compile_regex,
+    _Compiler,
+    _match_predicate,
+    _Matcher,
+    _preceded_by_matches,
+)
+from ._selector_universe import (
     _is_module_scope_alias,
+    _layer_names,
+    _module_containment_candidates,
+    _module_output_candidates,
+    _output_matches,
+    _predicate_callable,
+    _shares_grad_fn_tensor,
+    _site_label_spellings,
     _string_labels,
-    module_address_matches,
+    live_label_error_message as live_label_error_message,
+    looks_like_finalized_label as looks_like_finalized_label,
+    module_address_matches as module_address_matches,
+    sanitize_transform_kind as sanitize_transform_kind,
 )
 from .container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
 
@@ -109,16 +128,6 @@ DIRECTION_AGNOSTIC_KINDS = frozenset(
 _CAPTURE_SILENT_FALSE_KINDS = frozenset(
     {"grad_fn", "grad_fn_handle", "intervening", "grad_fn_label"}
 )
-
-
-#: Substring/regex universes. Post-hoc search stays on the final label only:
-#: matching raw/short spellings would make ``contains("raw")`` match every op.
-_SUBSTRING_LABEL_ATTRS: dict[str, tuple[str, ...]] = {
-    **_STRING_LABEL_ATTRS,
-    "site": ("layer_label",),
-}
-
-_FINAL_LABEL_PATTERN = re.compile(r"(?:_\d+_\d+(?::\d+)?$|:\d+$)")
 
 
 # ---------------------------------------------------------------------------
@@ -260,21 +269,27 @@ def module_exit_bound_addresses(selector: Any) -> tuple[str, ...] | None:
                 stack.append((node, True))
                 stack.extend((child, False) for child in node.selectors)
                 continue
-            child_bounds = [bounds[id(child)] for child in node.selectors]
-            if node.operator == "and":
-                bound = next((found for found in child_bounds if found is not None), None)
-            elif any(found is None for found in child_bounds):
-                bound = None
-            else:
-                bound = tuple(
-                    dict.fromkeys(address for found in child_bounds for address in found or ())
-                )
+            bound = _composite_module_bound(
+                node.operator, [bounds[id(child)] for child in node.selectors]
+            )
         elif isinstance(node, BaseSelector) and node.selector_kind == "module":
             bound = (str(node.selector_value),)
         else:
             bound = None
         bounds[id(node)] = bound
     return bounds[id(selector)]
+
+
+def _composite_module_bound(
+    operator: str, child_bounds: list[tuple[str, ...] | None]
+) -> tuple[str, ...] | None:
+    """Combine the module bounds of a composite's children."""
+
+    if operator == "and":
+        return next((found for found in child_bounds if found is not None), None)
+    if any(found is None for found in child_bounds):
+        return None
+    return tuple(dict.fromkeys(address for found in child_bounds for address in found or ()))
 
 
 def contains_followed_by(selector: Any, *, unwrap: bool = False) -> bool:
@@ -356,15 +371,19 @@ def split_followed_by_conjunction(
     conjuncts = flatten_and_conjuncts(predicate.selectors)
     followed = [c for c in conjuncts if isinstance(c, FollowedBySelector)]
     others = [c for c in conjuncts if not isinstance(c, FollowedBySelector)]
-    if len(followed) != 1 or not others:
-        return None
-    if not all(isinstance(child, BaseSelector) for child in others):
-        return None
-    if any(contains_followed_by(child) for child in others):
+    if len(followed) != 1 or not _plain_selector_conjuncts(others):
         return None
     if len(others) == 1:
         return followed[0], cast(BaseSelector, others[0])
     return followed[0], CompositeSelector("and", tuple(others))
+
+
+def _plain_selector_conjuncts(conjuncts: Sequence[Any]) -> bool:
+    """Return whether ``conjuncts`` is a non-empty run of lookahead-free selectors."""
+
+    return bool(conjuncts) and all(
+        isinstance(child, BaseSelector) and not contains_followed_by(child) for child in conjuncts
+    )
 
 
 def first_selector_kind_outside(selector: Any, *, allowed: frozenset[str]) -> str | None:
@@ -397,150 +416,8 @@ def first_selector_kind_outside(selector: Any, *, allowed: frozenset[str]) -> st
 # ---------------------------------------------------------------------------
 
 
-def sanitize_transform_kind(kind: object) -> str:
-    """Return the transform-kind spelling used for labels.
-
-    Parameters
-    ----------
-    kind:
-        Transform kind or selector value.
-
-    Returns
-    -------
-    str
-        Lowercase spelling with underscores and dots removed.
-    """
-
-    return str(kind).lower().replace("_", "").replace(".", "")
-
-
-def output_path_matches(saved_path: tuple[Any, ...], requested_path: tuple[Any, ...]) -> bool:
-    """Return whether a captured typed path matches a user path.
-
-    Parameters
-    ----------
-    saved_path:
-        Captured typed output path.
-    requested_path:
-        User path using plain indices, keys, or field names.
-
-    Returns
-    -------
-    bool
-        Whether both paths address the same output leaf.
-    """
-
-    if len(saved_path) != len(requested_path):
-        return False
-    return all(
-        _output_path_component_matches(saved_component, requested_component)
-        for saved_component, requested_component in zip(saved_path, requested_path)
-    )
-
-
-def _output_path_component_matches(saved_component: Any, requested_component: Any) -> bool:
-    """Return whether one captured path component matches a user component.
-
-    Parameters
-    ----------
-    saved_component:
-        Captured typed path component.
-    requested_component:
-        User path component.
-
-    Returns
-    -------
-    bool
-        Whether both components address the same child.
-    """
-
-    if isinstance(saved_component, TupleIndex):
-        return saved_component.index == requested_component
-    if isinstance(saved_component, (DictKey, HFKey)):
-        return saved_component._key == requested_component
-    if isinstance(saved_component, (NamedField, DataclassField)):
-        return saved_component._name == requested_component
-    return saved_component == requested_component
-
-
-def looks_like_finalized_label(label_value: str) -> bool:
-    """Return whether a label literal looks postprocessed.
-
-    Parameters
-    ----------
-    label_value:
-        Label literal from ``tl.label`` / ``tl.label_contains`` / ``tl.label_matches``.
-
-    Returns
-    -------
-    bool
-        True for pass suffixes like ``:2`` or ``relu_4_27``-style names.
-    """
-
-    return bool(_FINAL_LABEL_PATTERN.search(label_value)) and not label_value.endswith("_raw")
-
-
-def live_label_error_message(label_value: str, selector_kind: str = "label") -> str:
-    """Build a copy-pasteable finalized-label diagnostic.
-
-    Parameters
-    ----------
-    label_value:
-        Finalized-looking label.
-    selector_kind:
-        Label-oriented selector kind for the message.
-
-    Returns
-    -------
-    str
-        User-facing error message.
-    """
-
-    return (
-        f"tl.{selector_kind}({label_value!r}) looks like a finalized postprocess label, but "
-        "live selectors run during capture before those labels exist. For post-capture "
-        f'selection on a saved trace use tl.where(lambda p: p.layer_label == "{label_value}") '
-        "with the push engine; a rerun or a live capture never matches it. For live hooks "
-        'and reruns, use a capture-time selector such as tl.func("relu") or '
-        'tl.module("encoder.layer.4").'
-    )
-
-
-def _raise_for_finalized_live_label(selector_kind: str, label_value: str) -> None:
-    """Reject finalized-looking label selectors during live capture.
-
-    Parameters
-    ----------
-    selector_kind:
-        Label-oriented selector kind.
-    label_value:
-        Selector literal or pattern.
-
-    Raises
-    ------
-    LiveModeLabelError
-        If the value names a label that exists only after postprocessing.
-    """
-
-    if looks_like_finalized_label(label_value):
-        raise LiveModeLabelError(live_label_error_message(label_value, selector_kind))
-
-
 def _capability_error(kind: str, lifecycle: str) -> SelectorCapabilityError:
-    """Build the typed refusal for an unsupported ``(kind, lifecycle)`` pair.
-
-    Parameters
-    ----------
-    kind:
-        Selector kind being refused.
-    lifecycle:
-        Lifecycle that cannot evaluate the kind.
-
-    Returns
-    -------
-    SelectorCapabilityError
-        Typed capability refusal with a task-appropriate remedy.
-    """
+    """Build the typed refusal for an unsupported ``(kind, lifecycle)`` pair."""
 
     where = _LIFECYCLE_DESC.get(lifecycle, lifecycle)
     if kind == "followed_by":
@@ -579,7 +456,7 @@ def _capability_error(kind: str, lifecycle: str) -> SelectorCapabilityError:
 
 
 #: Kinds refused UPFRONT per lifecycle. The site set must stay in lockstep
-#: with ``_evaluate_subject``'s site refusals (contract-tested); the live set
+#: with the site lane's compiled refusals (contract-tested); the live set
 #: names the kinds invalid in EVERY hook direction — backward-only kinds stay
 #: out because backward live hooks route them through the backward matcher.
 _UPFRONT_UNSUPPORTED_KINDS: dict[str, frozenset[str]] = {
@@ -621,316 +498,35 @@ def ensure_supported(selector: Any, *, lifecycle: Lifecycle) -> None:
             raise _capability_error(kind, lifecycle)
 
 
-# ---------------------------------------------------------------------------
-# Per-lifecycle subject universes
-# ---------------------------------------------------------------------------
+#: Attribute under which a selector carries its compiled plans (``{lane:
+#: matcher}``). Selectors are frozen dataclasses, so the slot is written with
+#: ``object.__setattr__``; a plan lives exactly as long as its selector and is
+#: compiled once per lane.
+_PLAN_SLOT = "_tl_plans"
+#: The backward lane: ``evaluate(..., lifecycle="site")`` on a ``GradFn`` site.
+_GRAD_FN_LANE = "grad_fn"
 
-
-#: Lookup-key types whose values never compare equal to a ``str`` target.
-_NEVER_EQUAL_TO_STR = frozenset({int, bool, float, type(None)})
-
-
-def _label_site_index(sites: Sequence[Any]) -> dict[str, tuple[Any, ...]] | None:
-    """Map each label spelling to the sites a ``label`` selector matches post hoc.
-
-    The universe is exactly the ``"label"`` branch of :func:`_evaluate_subject`
-    under the ``"site"`` lifecycle: the :data:`_STRING_LABEL_ATTRS` spellings
-    and the site's ``lookup_keys``. ``index.get(target, ())`` therefore equals
-    the sites, in order, for which ``evaluate(label(target), site,
-    lifecycle="site")`` is true.
-
-    Parameters
-    ----------
-    sites:
-        Forward site universe in execution order.
-
-    Returns
-    -------
-    dict[str, tuple[Any, ...]] | None
-        Matching sites per spelling, in ``sites`` order; ``None`` when a site
-        is a backward ``GradFn`` or carries a lookup key of another type than
-        ``str`` or the built-in scalars (positional ``int`` keys never equal a
-        string target), whose matching the index does not reproduce.
-    """
-
-    index: dict[str, list[Any]] = {}
-    for site in sites:
-        if _is_grad_fn(site):
-            return None
-        keys = dict.fromkeys(_string_labels(site, "site"))
-        for key in getattr(site, "lookup_keys", ()) or ():
-            if type(key) in _NEVER_EQUAL_TO_STR:
-                continue
-            if type(key) is not str:
-                return None
-            keys[key] = None
-        for key in keys:
-            index.setdefault(key, []).append(site)
-    return {key: tuple(matched) for key, matched in index.items()}
-
-
-def _maybe_guard_label(kind: str, value: str, subject: Any, lifecycle: str) -> None:
-    """Apply the finalized-label diagnostic where the lifecycle requires it.
-
-    Parameters
-    ----------
-    kind:
-        Label-oriented selector kind (``label`` / ``contains`` / ``regex``).
-    value:
-        Selector literal or pattern.
-    subject:
-        Candidate subject.
-    lifecycle:
-        Active lifecycle key.
-
-    Returns
-    -------
-    None
-        Finalized layer objects remain valid post-capture selector inputs.
-    """
-
-    if lifecycle == "live":
-        _raise_for_finalized_live_label(kind, value)
-        return
-    if lifecycle == "capture":
-        from .predicate import RecordContext
-
-        if isinstance(subject, RecordContext):
-            _raise_for_finalized_live_label(kind, value)
-
-
-def _module_output_candidates(subject: Any, lifecycle: str) -> tuple[Any, ...]:
-    """Return module-output-boundary candidates for ``tl.module``.
-
-    Parameters
-    ----------
-    subject:
-        Lifecycle subject.
-    lifecycle:
-        Active lifecycle key.
-
-    Returns
-    -------
-    tuple[Any, ...]
-        Module-pass candidates whose address may match.
-    """
-
-    module_outputs = tuple(getattr(subject, "output_of_module_calls", ()) or ())
-    if lifecycle == "capture" and not module_outputs:
-        # Capture subjects include backend ``OpEvent`` records, which carry the
-        # owning session as ``source_trace`` (they have no ``trace`` member).
-        source_trace: Any = getattr(subject, "source_trace", None)
-        if (
-            source_trace._provenance_backend if is_live_trace(source_trace) else TORCH_BACKEND_NAME
-        ) != TORCH_BACKEND_NAME:
-            module_candidate = getattr(subject, "module", None)
-            if module_candidate is not None:
-                module_outputs = (module_candidate,)
-    return module_outputs
-
-
-def module_union_matches(subject: Any, addresses: frozenset[str]) -> bool:
-    """Return whether a capture subject matches a union of ``tl.module`` addresses.
-
-    Gives the answer :func:`evaluate` gives on the capture lane for a selector
-    that :func:`module_union_addresses` maps to ``addresses``: ``tl.module``
-    there reads only the subject's module-output candidates, so a plain label
-    candidate matches by set membership of the label or its address part (the
-    string branch of :func:`module_address_matches`), and any other candidate
-    spelling is compared address by address.
-
-    Parameters
-    ----------
-    subject:
-        Capture-time record context.
-    addresses:
-        Module addresses, optionally pass-qualified (``"block:2"``).
-
-    Returns
-    -------
-    bool
-        Whether any module-output candidate of ``subject`` matches an address.
-    """
-
-    for candidate in _module_output_candidates(subject, "capture"):
-        if type(candidate) is str and not candidate.startswith("("):
-            if candidate in addresses or candidate.rsplit(":", 1)[0] in addresses:
-                return True
-        elif any(module_address_matches(candidate, address) for address in addresses):
-            return True
-    return False
-
-
-def _module_containment_candidates(subject: Any, lifecycle: str) -> tuple[Any, ...]:
-    """Return module-containment candidates for ``tl.in_module``.
-
-    Parameters
-    ----------
-    subject:
-        Lifecycle subject.
-    lifecycle:
-        Active lifecycle key.
-
-    Returns
-    -------
-    tuple[Any, ...]
-        Containment candidates: addresses, pass-qualified labels, or tuples.
-    """
-
-    if lifecycle == "capture":
-        return _capture_module_candidates(subject)
-    return tuple(getattr(subject, "output_of_module_calls", ()) or ()) + tuple(
-        getattr(subject, "modules", ()) or ()
-    )
-
-
-def _capture_module_candidates(ctx: Any) -> tuple[Any, ...]:
-    """Return module-address candidates visible on a capture context.
-
-    Parameters
-    ----------
-    ctx:
-        Capture-time context or layer-like object.
-
-    Returns
-    -------
-    tuple[Any, ...]
-        Module addresses and pass-qualified module labels.
-    """
-
-    candidates: list[str] = []
-    address = getattr(ctx, "address", None)
-    if address is not None:
-        candidates.append(str(address))
-    source_trace: Any = getattr(ctx, "source_trace", None)
-    if (
-        source_trace._options_module_identity_mode if is_live_trace(source_trace) else None
-    ) == "function_root":
-        candidates.append("self")
-        candidates.append("self:1")
-    for frame in getattr(ctx, "module_stack", ()):
-        frame_address = getattr(frame, "address", None)
-        if frame_address is None and isinstance(frame, dict):
-            frame_address = frame.get("address")
-        if frame_address is None:
-            continue
-        frame_pass = getattr(frame, "pass_number", None)
-        if frame_pass is None and isinstance(frame, dict):
-            frame_pass = frame.get("pass_number")
-        candidates.append(str(frame_address))
-        if frame_pass is not None:
-            candidates.append(f"{frame_address}:{frame_pass}")
-    modules = getattr(ctx, "modules", ())
-    module_ops = getattr(ctx, "output_of_module_calls", ())
-    candidates.extend(
-        _module_candidate_string(candidate) for candidate in tuple(modules) + tuple(module_ops)
-    )
-    return tuple(candidates)
-
-
-def _output_matches(subject: Any, value: Any, lifecycle: str) -> bool:
-    """Return whether a subject matches an output index or semantic role.
-
-    Parameters
-    ----------
-    subject:
-        Lifecycle subject.
-    value:
-        Output index or semantic role.
-    lifecycle:
-        Active lifecycle key.
-
-    Returns
-    -------
-    bool
-        Whether the subject is the requested output.
-    """
-
-    if lifecycle == "capture":
-        return getattr(subject, "output_index", None) == value
-    if isinstance(value, int):
-        return getattr(subject, "multi_output_index", None) == value
-    return getattr(subject, "multi_output_name", None) == str(value)
-
-
-def _input_path_subject_matches(
-    subject: Any, requested_path: tuple[Any, ...], lifecycle: str
-) -> bool:
-    """Return whether a subject consumes an input at ``requested_path``.
-
-    Parameters
-    ----------
-    subject:
-        Lifecycle subject.
-    requested_path:
-        User path using plain indices, keys, or field names.
-    lifecycle:
-        Active lifecycle key.
-
-    Returns
-    -------
-    bool
-        Whether any input-container leaf occurrence matches the path.
-    """
-
-    if lifecycle == "site":
-        from .container_registry import Role
-
-        trace = getattr(subject, "trace", None)
-        site_labels = {
-            label
-            for label in (
-                getattr(subject, "layer_label", None),
-                getattr(subject, "layer_label_raw", None),
-                getattr(subject, "_layer_label_raw", None),
-            )
-            if label is not None
-        }
-        for record in getattr(trace, "_containers", {}).values():
-            for snapshot in getattr(record, "snapshots", ()) or ():
-                if getattr(snapshot, "role", None) != Role.MODEL_INPUT:
-                    continue
-                for occurrence in getattr(snapshot, "leaf_occurrences", ()) or ():
-                    if occurrence.producer_op_label not in site_labels:
-                        continue
-                    if output_path_matches(tuple(occurrence.path), requested_path):
-                        return True
-    for container in getattr(subject, "input_containers", ()) or ():
-        for occurrence in getattr(container, "leaf_occurrences", ()) or ():
-            if output_path_matches(tuple(occurrence.path), requested_path):
-                return True
-    return False
-
-
-def _predicate_payload(value: Any) -> Any:
-    """Validate and unpack a predicate selector payload.
-
-    Parameters
-    ----------
-    value:
-        Stored predicate payload: a callable or ``(callable, name_hint)``.
-
-    Returns
-    -------
-    Any
-        The predicate callable.
-
-    Raises
-    ------
-    SiteResolutionError
-        If the predicate payload is malformed.
-    """
-
-    if isinstance(value, tuple) and len(value) == 2 and callable(value[0]):
-        return value[0]
-    if callable(value):
-        return value
-    raise SiteResolutionError("tl.where(...) requires a callable predicate.")
-
-
-# ---------------------------------------------------------------------------
-# The evaluator
-# ---------------------------------------------------------------------------
+#: Label-family kinds whose forward-lane plans carry the finalized-label guard.
+_LABEL_GUARDED_KINDS = frozenset({"label", "contains", "regex"})
+#: Lifecycle a lane's non-selector composite children are normalized under.
+_LANE_LIFECYCLE: dict[str, Lifecycle] = {
+    "capture": "capture",
+    "site": "site",
+    "live": "live",
+    _GRAD_FN_LANE: "site",
+}
+#: Backward-only kinds that silently never match a forward site post hoc.
+_SITE_SILENT_FALSE_KINDS = frozenset(
+    {
+        "grad_fn",
+        "grad_fn_handle",
+        "grad_fn_label",
+        "intervening",
+        "without_op",
+        "grad_kind",
+        "backward_pass",
+    }
+)
 
 
 def evaluate(selector: Any, subject: Any, *, lifecycle: Lifecycle) -> bool:
@@ -966,214 +562,342 @@ def evaluate(selector: Any, subject: Any, *, lifecycle: Lifecycle) -> bool:
     return _evaluate_subject(normalized, subject, lifecycle)
 
 
-def _is_grad_fn(subject: Any) -> bool:
-    """Return whether a site subject is a backward ``GradFn`` log.
-
-    Parameters
-    ----------
-    subject:
-        Candidate site.
-
-    Returns
-    -------
-    bool
-        Whether the subject is a GradFn.
-    """
-
-    from torchlens._data_classes.grad_fn import GradFn
-
-    return isinstance(subject, GradFn)
-
-
 def _evaluate_subject(selector: BaseSelector, subject: Any, lifecycle: str) -> bool:
-    """Evaluate one selector against one forward-flavored subject.
+    """Evaluate one selector against one forward-flavored subject."""
 
-    Parameters
-    ----------
-    selector:
-        Normalized selector.
-    subject:
-        Capture context, forward site, or live proxy.
-    lifecycle:
-        Active lifecycle key.
+    return _plan(selector, lifecycle)(subject)
 
-    Returns
-    -------
-    bool
-        Whether the selector matches.
+
+def _evaluate_grad_fn_site(selector: BaseSelector, site: Any) -> bool:
+    """Evaluate one selector against a backward ``GradFn`` site.
+
+    Node kinds match the GradFn itself. A bare forward kind never matches a
+    GradFn: the bridge from a forward site to the GradFn behind it lives only
+    in ``tl.grad(...)``, whose inner selector is evaluated against the paired
+    forward op (and synthetic boundary aliases sharing the autograd identity).
     """
+
+    return _plan(selector, _GRAD_FN_LANE)(site)
+
+
+def _plan(selector: BaseSelector, lane: str) -> _Matcher:
+    """Return the compiled plan for one selector on one lane, compiling once."""
+
+    plans: dict[str, _Matcher] | None = getattr(selector, _PLAN_SLOT, None)
+    if plans is None:
+        plans = {}
+        object.__setattr__(selector, _PLAN_SLOT, plans)
+    matcher = plans.get(lane)
+    if matcher is None:
+        matcher = plans[lane] = _compile(selector, lane)
+    return matcher
+
+
+def _compile(selector: BaseSelector, lane: str) -> _Matcher:
+    """Compile one selector node into its plan for one lane."""
 
     kind = str(selector.selector_kind)
-    value = selector.selector_value
-    if kind == "and" and isinstance(selector, CompositeSelector):
-        return all(
-            evaluate(child, subject, lifecycle=cast(Lifecycle, lifecycle))
-            for child in selector.selectors
-        )
-    if kind == "or" and isinstance(selector, CompositeSelector):
-        return any(
-            evaluate(child, subject, lifecycle=cast(Lifecycle, lifecycle))
-            for child in selector.selectors
-        )
-    if kind == "not" and isinstance(selector, NotSelector):
-        return not evaluate(selector.selector, subject, lifecycle=cast(Lifecycle, lifecycle))
-    if kind == "grad":
-        # A gradient address belongs to the forward op its inner names; which
-        # universe the match lands in is the site plan's decision.
-        return evaluate(selector.selector_value, subject, lifecycle=cast(Lifecycle, lifecycle))
-    if kind == "label":
-        _maybe_guard_label(kind, str(value), subject, lifecycle)
-        target = str(value)
-        if target in _string_labels(subject, lifecycle):
-            return True
-        if lifecycle == "site":
-            return target in (getattr(subject, "lookup_keys", ()) or ())
-        return False
-    if kind == "contains":
-        _maybe_guard_label(kind, str(value), subject, lifecycle)
-        if lifecycle == "live" and bool(getattr(subject, "_tl_module_boundary", False)):
-            return False
-        needle = str(value).lower()
-        labels = _string_labels(subject, lifecycle, _SUBSTRING_LABEL_ATTRS)
-        if lifecycle == "site" and ":" in needle:
-            # Bare final labels never contain ':', so a pass-qualified needle (the remedy the
-            # multipass_bare_label refusal teaches) can only address the pass-qualified op spelling;
-            # without it, string addressing of one pass of a multi-pass layer matches 0 sites.
-            pass_label = getattr(subject, "label", None)
-            if isinstance(pass_label, str) and pass_label not in labels:
-                labels = (*labels, pass_label)
-        return any(needle in label.lower() for label in labels)
-    if kind == "regex":
-        _maybe_guard_label(kind, str(value), subject, lifecycle)
-        pattern = str(value)
-        return any(
-            re.search(pattern, label) is not None
-            for label in _string_labels(subject, lifecycle, _SUBSTRING_LABEL_ATTRS)
-        )
-    if kind == "func":
-        if isinstance(value, dict):
-            name = value.get("name")
-            output_target = value.get("output")
-            if output_target is not None and not _output_matches(subject, output_target, lifecycle):
-                return False
-        else:
-            name = value
-        func_name = getattr(subject, "func_name", None)
-        if func_name is not None and str(name) == str(func_name):
-            return True
-        if lifecycle == "live" and bool(getattr(subject, "_tl_module_boundary", False)):
-            return False
-        layer_type = record_type(subject, None)
-        return layer_type is not None and str(name) == str(layer_type)
-    if kind == "func_transform":
-        if not bool(getattr(subject, "is_transform", False)):
-            return False
-        if value is None:
-            return True
-        transform_kind = getattr(subject, "transform_kind", None)
-        if transform_kind is None:
-            return False
-        return sanitize_transform_kind(transform_kind) == sanitize_transform_kind(value)
-    if kind in {"module", "in_module"} and _is_module_scope_alias(kind, subject, lifecycle):
-        return False
-    if kind == "module":
-        target = str(value)
-        return any(
-            module_address_matches(candidate, target)
-            for candidate in _module_output_candidates(subject, lifecycle)
-        )
-    if kind == "in_module":
-        target = str(value)
-        return any(
-            module_address_matches(candidate, target)
-            for candidate in _module_containment_candidates(subject, lifecycle)
-        )
-    if kind == "site":
-        # C03 structural-position selector (address law: valid in every
-        # lane). Post hoc it reads the persisted op.site_key; on the capture
-        # lane it reads the streaming live minter armed by the tl.trace
-        # entry; the live hook-proxy lane refuses upfront (mid-attach
-        # proxies carry no structural key -- see _UPFRONT_UNSUPPORTED_KINDS).
-        if lifecycle == "site":
-            return _site_key_matches(selector, getattr(subject, "site_key", None))
-        if lifecycle == "capture":
-            from torchlens.intervention.site_keys import active_live_minter
+    compiler = _LANE_COMPILERS.get(lane, {}).get(kind)
+    if compiler is None:
+        compiler = _LANE_FALLBACKS.get(lane, _compile_capability_refusal)
+    matcher = compiler(selector, lane)
+    if kind in _LABEL_GUARDED_KINDS and lane != _GRAD_FN_LANE:
+        matcher = _with_label_guard(kind, str(selector.selector_value), lane, matcher)
+    return matcher
 
-            minter = active_live_minter()
-            if minter is None:
-                raise SelectorCapabilityError(
-                    "tl.site(...) on the capture lane needs the live site-key "
-                    "minter, which tl.trace arms automatically when save=/"
-                    "intervene= contains a site selector. This capture surface "
-                    "did not arm it (tl.record and preview backends do not "
-                    "support live site keys yet). Address the finished trace "
-                    "post hoc (trace[selector] / do), or use tl.trace with "
-                    "the site selector in save=/intervene=."
-                )
-            return _site_key_matches(selector, minter.key_for_context(subject))
-        raise _capability_error(kind, lifecycle)
-    if kind == "output":
-        return _output_matches(subject, value, lifecycle)
-    if kind == "output_at":
-        return output_path_matches(
-            tuple(getattr(subject, "container_path", ()) or ()), tuple(value)
+
+def _child_plan(child: Any, lane: str) -> _Matcher:
+    """Return the plan for one composite child."""
+
+    if isinstance(child, BaseSelector):
+        return _plan(child, lane)
+    return partial(_match_lazy_child, child=child, lifecycle=_LANE_LIFECYCLE.get(lane, "site"))
+
+
+def _match_lazy_child(subject: Any, *, child: Any, lifecycle: Lifecycle) -> bool:
+    """Evaluate a non-selector composite child through :func:`evaluate`."""
+
+    return evaluate(child, subject, lifecycle=lifecycle)
+
+
+def _compile_and(selector: BaseSelector, lane: str) -> _Matcher:
+    """Compile an n-ary conjunction (short-circuits per subject)."""
+
+    if not isinstance(selector, CompositeSelector):
+        return _LANE_FALLBACKS.get(lane, _compile_capability_refusal)(selector, lane)
+    return partial(_match_all, matchers=tuple(_child_plan(c, lane) for c in selector.selectors))
+
+
+def _compile_or(selector: BaseSelector, lane: str) -> _Matcher:
+    """Compile an n-ary disjunction (short-circuits per subject)."""
+
+    if not isinstance(selector, CompositeSelector):
+        return _LANE_FALLBACKS.get(lane, _compile_capability_refusal)(selector, lane)
+    return partial(_match_any, matchers=tuple(_child_plan(c, lane) for c in selector.selectors))
+
+
+def _compile_not(selector: BaseSelector, lane: str) -> _Matcher:
+    """Compile a negation."""
+
+    if not isinstance(selector, NotSelector):
+        return _LANE_FALLBACKS.get(lane, _compile_capability_refusal)(selector, lane)
+    return partial(_match_not, matcher=_child_plan(selector.selector, lane))
+
+
+def _match_all(subject: Any, *, matchers: tuple[_Matcher, ...]) -> bool:
+    """Return whether every child plan matches ``subject`` (short-circuit)."""
+
+    return all(matcher(subject) for matcher in matchers)
+
+
+def _match_any(subject: Any, *, matchers: tuple[_Matcher, ...]) -> bool:
+    """Return whether any child plan matches ``subject`` (short-circuit)."""
+
+    return any(matcher(subject) for matcher in matchers)
+
+
+def _match_not(subject: Any, *, matcher: _Matcher) -> bool:
+    """Return the complement of one child plan on ``subject``."""
+
+    return not matcher(subject)
+
+
+def _compile_site(selector: BaseSelector, lane: str) -> _Matcher:
+    """Compile ``site`` (C03 structural position; address law: valid in every lane).
+
+    Post hoc it reads the persisted ``op.site_key``; on the capture lane it
+    reads the streaming live minter armed by the ``tl.trace`` entry; the live
+    hook-proxy lane refuses (mid-attach proxies carry no structural key, see
+    :data:`_UPFRONT_UNSUPPORTED_KINDS`).
+    """
+
+    if lane == "site":
+        return partial(_match_site_key, selector=selector)
+    if lane == "capture":
+        return partial(_match_site_capture, selector=selector)
+    return _compile_capability_refusal(selector, lane)
+
+
+def _match_site_key(subject: Any, *, selector: BaseSelector) -> bool:
+    """Match the persisted ``site_key`` of a finalized site."""
+
+    return _site_key_matches(selector, getattr(subject, "site_key", None))
+
+
+def _match_site_capture(subject: Any, *, selector: BaseSelector) -> bool:
+    """Match the live site key the armed minter renders for a capture context."""
+
+    from torchlens.intervention.site_keys import active_live_minter
+
+    minter = active_live_minter()
+    if minter is None:
+        raise SelectorCapabilityError(
+            "tl.site(...) on the capture lane needs the live site-key "
+            "minter, which tl.trace arms automatically when save=/"
+            "intervene= contains a site selector. This capture surface "
+            "did not arm it (tl.record and preview backends do not "
+            "support live site keys yet). Address the finished trace "
+            "post hoc (trace[selector] / do), or use tl.trace with "
+            "the site selector in save=/intervene=."
         )
-    if kind == "input_at":
-        if lifecycle == "live":
-            raise _capability_error(kind, lifecycle)
-        return _input_path_subject_matches(subject, tuple(value), lifecycle)
-    if kind == "predicate":
-        predicate = _predicate_payload(value)
-        if lifecycle == "live":
-            try:
-                return bool(predicate(subject))
-            except Exception as exc:
-                raise SiteResolutionError(
-                    "live predicate selector failed at "
-                    f"{getattr(subject, '_layer_label_raw', '<unknown>')}"
-                ) from exc
+    return _site_key_matches(selector, minter.key_for_context(subject))
+
+
+def _compile_input_at(selector: BaseSelector, lane: str) -> _Matcher:
+    """Compile ``input_at``: a model-input container path (never live)."""
+
+    if lane == "live":
+        return _compile_capability_refusal(selector, lane)
+    return partial(
+        _input_path_subject_matches,
+        requested_path=tuple(selector.selector_value),
+        lifecycle=lane,
+    )
+
+
+def _compile_predicate(selector: BaseSelector, lane: str) -> _Matcher:
+    """Compile ``predicate`` (``tl.where``)."""
+
+    predicate = _predicate_callable(selector.selector_value)
+    if predicate is None:
+        return _refuse_predicate_payload
+    if lane == "live":
+        return partial(_match_predicate_live, predicate=predicate)
+    return partial(_match_predicate, predicate=predicate)
+
+
+def _refuse_predicate_payload(subject: Any) -> bool:
+    """Refuse a predicate selector whose payload is not callable."""
+
+    raise SiteResolutionError("tl.where(...) requires a callable predicate.")
+
+
+def _match_predicate_live(subject: Any, *, predicate: Callable[[Any], Any]) -> bool:
+    """Return the predicate's truth on a live proxy, typed on failure."""
+
+    try:
         return bool(predicate(subject))
-    if kind == "episode_step":
-        return _episode_step_matches(value, subject, lifecycle)
-    if kind == "preceded_by":
-        if lifecycle != "capture" or not isinstance(selector, PrecededBySelector):
-            raise _capability_error(kind, lifecycle)
-        return _preceded_by_matches(selector, subject)
-    if kind == "followed_by":
-        if lifecycle != "capture":
-            raise _capability_error(kind, lifecycle)
-        raise SelectorCompositionError(
-            "tl.followed_by(...) only supports candidate & tl.followed_by(successor); "
-            "standalone, negated, or OR-composed followed_by selectors are unsupported."
-        )
-    if lifecycle == "capture":
-        if kind == "grad_kind":
-            return getattr(subject, "grad_kind", None) == value
-        if kind == "backward_pass":
-            ctx_pass = getattr(subject, "backward_pass_index", None)
-            if ctx_pass is None:
-                ctx_pass = getattr(subject, "pass_number", None)
-            return ctx_pass == value
-        if kind in _CAPTURE_SILENT_FALSE_KINDS:
-            return False
-        raise _capability_error(kind, lifecycle)
-    if lifecycle == "site":
-        if kind in {
-            "grad_fn",
-            "grad_fn_handle",
-            "grad_fn_label",
-            "intervening",
-            "without_op",
-            "grad_kind",
-            "backward_pass",
-        }:
-            return False
-        raise _capability_error(kind, lifecycle)
+    except Exception as exc:
+        raise SiteResolutionError(
+            f"live predicate selector failed at {getattr(subject, '_layer_label_raw', '<unknown>')}"
+        ) from exc
+
+
+def _compile_preceded_by(selector: BaseSelector, lane: str) -> _Matcher:
+    """Compile ``preceded_by``: capture-time lookback over retained predecessors."""
+
+    if lane != "capture" or not isinstance(selector, PrecededBySelector):
+        return _compile_capability_refusal(selector, lane)
+    return partial(_preceded_by_matches, inner=selector.inner)
+
+
+def _compile_followed_by(selector: BaseSelector, lane: str) -> _Matcher:
+    """Compile a standalone ``followed_by`` (always a typed refusal)."""
+
+    if lane != "capture":
+        return _compile_capability_refusal(selector, lane)
+    return _refuse_followed_by_composition
+
+
+def _refuse_followed_by_composition(subject: Any) -> bool:
+    """Refuse a ``followed_by`` reached outside ``candidate & tl.followed_by(...)``."""
+
+    raise SelectorCompositionError(
+        "tl.followed_by(...) only supports candidate & tl.followed_by(successor); "
+        "standalone, negated, or OR-composed followed_by selectors are unsupported."
+    )
+
+
+def _compile_capability_refusal(selector: BaseSelector, lane: str) -> _Matcher:
+    """Compile a ``(kind, lane)`` pair the lane cannot evaluate."""
+
+    return partial(_refuse_capability, kind=str(selector.selector_kind), lifecycle=lane)
+
+
+def _refuse_capability(subject: Any, *, kind: str, lifecycle: str) -> bool:
+    """Raise the typed refusal for an unsupported ``(kind, lifecycle)`` pair."""
+
     raise _capability_error(kind, lifecycle)
 
 
-def _episode_step_matches(value: Any, subject: Any, lifecycle: str) -> bool:
-    """Evaluate one episode-step selector (lane F42's step qualifier).
+def _compile_grad(selector: BaseSelector, lane: str) -> _Matcher:
+    """Compile ``grad`` on a forward lane: the forward op its inner names.
+
+    A gradient address belongs to the forward op its inner selector names;
+    which universe the match lands in is the site plan's decision.
+    """
+
+    return _child_plan(selector.selector_value, lane)
+
+
+def _compile_grad_fn_grad(selector: BaseSelector, lane: str) -> _Matcher:
+    """Compile ``grad`` on a GradFn: the one bridge to the paired forward op."""
+
+    return _compile_bridged(selector.selector_value)
+
+
+def _compile_bridged(inner: Any) -> _Matcher:
+    """Compile a ``tl.grad`` inner selector against the op behind a GradFn.
+
+    The one bridge from the forward universe to a backward ``GradFn`` site:
+    connectives recurse; every forward kind evaluates against the paired
+    pass-level op and the boundary aliases sharing its autograd identity.
+    """
+
+    selector = normalize_selector_like(inner, lifecycle="site")
+    kind = str(selector.selector_kind)
+    if kind in {"and", "or"} and isinstance(selector, CompositeSelector):
+        matchers = tuple(_compile_bridged(child) for child in selector.selectors)
+        return partial(_match_all if kind == "and" else _match_any, matchers=matchers)
+    if kind == "not" and isinstance(selector, NotSelector):
+        return partial(_match_not, matcher=_compile_bridged(selector.selector))
+    return partial(_match_grad_fn_bridge, forward=_plan(selector, "site"))
+
+
+def _with_label_guard(kind: str, value: str, lane: str, matcher: _Matcher) -> _Matcher:
+    """Wrap a label-family plan with the finalized-label diagnostic its lane applies."""
+
+    if lane == "site" or not looks_like_finalized_label(value):
+        return matcher
+    return partial(_match_guarded_label, kind=kind, value=value, lifecycle=lane, matcher=matcher)
+
+
+def _match_guarded_label(
+    subject: Any, *, kind: str, value: str, lifecycle: str, matcher: _Matcher
+) -> bool:
+    """Apply the finalized-label refusal for ``subject``, then the label plan."""
+
+    _maybe_guard_label(kind, value, subject, lifecycle)
+    return matcher(subject)
+
+
+def _compile_module(selector: BaseSelector, lane: str) -> _Matcher:
+    """Compile ``module``: ops a module call produces (its output boundary)."""
+
+    return partial(
+        _match_module,
+        kind="module",
+        target=str(selector.selector_value),
+        lifecycle=lane,
+        candidates=_module_output_candidates,
+    )
+
+
+def _compile_in_module(selector: BaseSelector, lane: str) -> _Matcher:
+    """Compile ``in_module``: ops a module call contains."""
+
+    return partial(
+        _match_module,
+        kind="in_module",
+        target=str(selector.selector_value),
+        lifecycle=lane,
+        candidates=_module_containment_candidates,
+    )
+
+
+def _match_module(
+    subject: Any,
+    *,
+    kind: str,
+    target: str,
+    lifecycle: str,
+    candidates: Callable[[Any, str], tuple[Any, ...]],
+) -> bool:
+    """Return whether a module candidate of the subject belongs to ``target``."""
+
+    if _is_module_scope_alias(kind, subject, lifecycle):
+        return False
+    return any(
+        module_address_matches(candidate, target) for candidate in candidates(subject, lifecycle)
+    )
+
+
+def _compile_output(selector: BaseSelector, lane: str) -> _Matcher:
+    """Compile ``output``: an output index or semantic role."""
+
+    return partial(_output_matches, value=selector.selector_value, lifecycle=lane)
+
+
+def _compile_output_at(selector: BaseSelector, lane: str) -> _Matcher:
+    """Compile ``output_at``: a typed output container path."""
+
+    return partial(_match_output_at, requested=tuple(selector.selector_value))
+
+
+def _match_output_at(subject: Any, *, requested: tuple[Any, ...]) -> bool:
+    """Return whether the subject's container path equals the requested path."""
+
+    return output_path_matches(tuple(getattr(subject, "container_path", ()) or ()), requested)
+
+
+def _compile_episode_step(selector: BaseSelector, lane: str) -> _Matcher:
+    """Compile ``episode_step`` (the ``at_step`` qualifier)."""
+
+    return partial(_episode_step_matches, value=selector.selector_value, lifecycle=lane)
+
+
+def _episode_step_matches(subject: Any, *, value: Any, lifecycle: str) -> bool:
+    """Evaluate one episode-step selector (the ``at_step`` qualifier).
 
     Capture/live lifecycles read the LIVE step position from the armed join
     session (the stepped-module boundary hooks); ops between steps carry no
@@ -1183,20 +907,6 @@ def _episode_step_matches(value: Any, subject: Any, lifecycle: str) -> bool:
     the fires-at-every-step wrongness the selector exists to close. The
     post-hoc site lifecycle reads the persisted ``Op.episode_step`` stamps
     (unstamped/plain products are door-guarded at resolution entry).
-
-    Parameters
-    ----------
-    value:
-        The selector's ordered step tuple.
-    subject:
-        Capture context, live proxy, or finalized site record.
-    lifecycle:
-        Active lifecycle key.
-
-    Returns
-    -------
-    bool
-        Whether the subject executes inside one of the named steps.
     """
 
     steps = tuple(value) if isinstance(value, (list, tuple)) else (value,)
@@ -1230,134 +940,184 @@ def _episode_step_matches(value: Any, subject: Any, lifecycle: str) -> bool:
     return stamp is not None and stamp in steps
 
 
-def _preceded_by_matches(selector: PrecededBySelector, ctx: Any) -> bool:
-    """Return whether a retained lookback predecessor matches ``selector.inner``.
+def _match_grad_fn_bridge(site: Any, *, forward: _Matcher) -> bool:
+    """Return whether the forward plan matches the GradFn's paired op or an alias."""
+
+    forward_op = _grad_fn_forward_op(site)
+    if forward_op is not None and forward(forward_op):
+        return True
+    return any(forward(alias) for alias in _grad_fn_boundary_aliases(site))
+
+
+def output_path_matches(saved_path: tuple[Any, ...], requested_path: tuple[Any, ...]) -> bool:
+    """Return whether a captured typed path matches a user path.
 
     Parameters
     ----------
-    selector:
-        Lookback predecessor selector.
-    ctx:
-        Capture-time context with ``recent_ops`` populated.
+    saved_path:
+        Captured typed output path.
+    requested_path:
+        User path using plain indices, keys, or field names.
 
     Returns
     -------
     bool
-        Whether a retained (parent) predecessor matches the inner predicate.
+        Whether both paths address the same output leaf.
     """
 
-    parent_labels = set(getattr(ctx, "parent_labels_raw", ()) or getattr(ctx, "parent_labels", ()))
-    recent_ops = tuple(getattr(ctx, "recent_ops", ()))
-    inner = selector.inner
-    if parent_labels:
-        return any(
-            (recent.raw_label or recent.label) in parent_labels and bool(inner(recent))  # type: ignore[operator]
-            for recent in recent_ops
-        )
-    return any(bool(inner(recent)) for recent in recent_ops)  # type: ignore[operator]
-
-
-# ---------------------------------------------------------------------------
-# GradFn (backward) site evaluation
-# ---------------------------------------------------------------------------
-
-
-def _evaluate_grad_fn_site(selector: BaseSelector, site: Any) -> bool:
-    """Evaluate one selector against one backward ``GradFn`` site.
-
-    Node kinds match the GradFn itself. A bare forward kind never matches a
-    GradFn: the bridge from a forward site to the GradFn behind it lives only
-    in ``tl.grad(...)``, whose inner selector is evaluated against the paired
-    forward op (and synthetic boundary aliases sharing the autograd identity).
-
-    Parameters
-    ----------
-    selector:
-        Normalized selector.
-    site:
-        GradFn site.
-
-    Returns
-    -------
-    bool
-        Whether the selector matches.
-    """
-
-    kind = str(selector.selector_kind)
-    if kind == "and" and isinstance(selector, CompositeSelector):
-        return all(evaluate(child, site, lifecycle="site") for child in selector.selectors)
-    if kind == "or" and isinstance(selector, CompositeSelector):
-        return any(evaluate(child, site, lifecycle="site") for child in selector.selectors)
-    if kind == "not" and isinstance(selector, NotSelector):
-        return not evaluate(selector.selector, site, lifecycle="site")
-    if kind == "grad":
-        return _evaluate_bridged(selector.selector_value, site)
-    if kind in DIRECTION_AGNOSTIC_KINDS:
+    if len(saved_path) != len(requested_path):
         return False
-    if kind in {"intervening", "without_op"}:
-        return not site.has_op
-    if kind == "grad_fn_label":
-        return site.label == str(selector.selector_value)
-    if kind == "grad_fn":
-        value = selector.selector_value
-        payload = value if isinstance(value, dict) else {}
-        grad_fn_type = payload.get("type")
-        label_pattern = payload.get("grad_fn_label_pattern")
-        is_custom = payload.get("is_custom")
-        if grad_fn_type is not None and not _grad_fn_type_matches(site, str(grad_fn_type)):
-            return False
-        if label_pattern is not None and str(label_pattern) not in site.label:
-            return False
-        return not (is_custom is not None and bool(site.is_custom) is not bool(is_custom))
-    if kind == "grad_kind":
-        grad_kind = str(selector.selector_value)
-        field_name = "grad_inputs" if grad_kind == "grad_input" else "grad_outputs"
-        return any(
-            getattr(call, field_name, None) is not None for call in _grad_fn_call_values(site)
-        )
-    if kind == "backward_pass":
-        pass_index = int(selector.selector_value)
-        return any(
-            getattr(call, "backward_pass_index", None) == pass_index
-            for call in _grad_fn_call_values(site)
-        )
+    return all(
+        _output_path_component_matches(saved_component, requested_component)
+        for saved_component, requested_component in zip(saved_path, requested_path)
+    )
+
+
+def _output_path_component_matches(saved_component: Any, requested_component: Any) -> bool:
+    """Return whether one captured path component matches a user component."""
+
+    if isinstance(saved_component, TupleIndex):
+        return saved_component.index == requested_component
+    if isinstance(saved_component, (DictKey, HFKey)):
+        return saved_component._key == requested_component
+    if isinstance(saved_component, (NamedField, DataclassField)):
+        return saved_component._name == requested_component
+    return saved_component == requested_component
+
+
+def _raise_for_finalized_live_label(selector_kind: str, label_value: str) -> None:
+    """Reject finalized-looking label selectors during live capture."""
+
+    if looks_like_finalized_label(label_value):
+        from ..intervention.errors import LiveModeLabelError
+
+        raise LiveModeLabelError(live_label_error_message(label_value, selector_kind))
+
+
+def _is_grad_fn(subject: Any) -> bool:
+    """Return whether a site subject is a backward ``GradFn`` log."""
+
+    from torchlens._data_classes.grad_fn import GradFn
+
+    return isinstance(subject, GradFn)
+
+
+#: Lookup-key types whose values never compare equal to a ``str`` target.
+_NEVER_EQUAL_TO_STR = frozenset({int, bool, float, type(None)})
+
+
+def _label_site_index(sites: Sequence[Any]) -> dict[str, tuple[Any, ...]] | None:
+    """Map each label spelling to the sites a ``label`` selector matches post hoc.
+
+    The universe is exactly the ``"label"`` plan node (:func:`_match_label` on the site lane)
+    under the ``"site"`` lifecycle: the :data:`_STRING_LABEL_ATTRS` spellings
+    and the site's ``lookup_keys``. ``index.get(target, ())`` therefore equals
+    the sites, in order, for which ``evaluate(label(target), site,
+    lifecycle="site")`` is true.
+    """
+
+    index: dict[str, list[Any]] = {}
+    for site in sites:
+        if _is_grad_fn(site):
+            return None
+        keys = dict.fromkeys(_string_labels(site, "site"))
+        for key in getattr(site, "lookup_keys", ()) or ():
+            if type(key) in _NEVER_EQUAL_TO_STR:
+                continue
+            if type(key) is not str:
+                return None
+            keys[key] = None
+        for key in keys:
+            index.setdefault(key, []).append(site)
+    return {key: tuple(matched) for key, matched in index.items()}
+
+
+def _maybe_guard_label(kind: str, value: str, subject: Any, lifecycle: str) -> None:
+    """Apply the finalized-label diagnostic where the lifecycle requires it."""
+
+    if lifecycle == "live":
+        _raise_for_finalized_live_label(kind, value)
+        return
+    if lifecycle == "capture":
+        from .predicate import RecordContext
+
+        if isinstance(subject, RecordContext):
+            _raise_for_finalized_live_label(kind, value)
+
+
+def module_union_matches(subject: Any, addresses: frozenset[str]) -> bool:
+    """Return whether a capture subject matches a union of ``tl.module`` addresses.
+
+    Gives the answer :func:`evaluate` gives on the capture lane for a selector
+    that :func:`module_union_addresses` maps to ``addresses``: ``tl.module``
+    there reads only the subject's module-output candidates, so a plain label
+    candidate matches by set membership of the label or its address part (the
+    string branch of :func:`module_address_matches`), and any other candidate
+    spelling is compared address by address.
+
+    Parameters
+    ----------
+    subject:
+        Capture-time record context.
+    addresses:
+        Module addresses, optionally pass-qualified (``"block:2"``).
+
+    Returns
+    -------
+    bool
+        Whether any module-output candidate of ``subject`` matches an address.
+    """
+
+    for candidate in _module_output_candidates(subject, "capture"):
+        if type(candidate) is str and not candidate.startswith("("):
+            if candidate in addresses or candidate.rsplit(":", 1)[0] in addresses:
+                return True
+        elif any(module_address_matches(candidate, address) for address in addresses):
+            return True
     return False
 
 
-def _evaluate_bridged(inner: Any, site: Any) -> bool:
-    """Evaluate a ``tl.grad`` inner selector against the op behind a GradFn.
+def _input_path_subject_matches(
+    subject: Any, requested_path: tuple[Any, ...], lifecycle: str
+) -> bool:
+    """Return whether a subject consumes an input at ``requested_path``."""
 
-    The one bridge from the forward universe to a backward ``GradFn`` site:
-    connectives recurse; every forward kind evaluates against the paired
-    pass-level op and the boundary aliases sharing its autograd identity.
-
-    Parameters
-    ----------
-    inner:
-        The gradient address's forward site (selector or bare label string).
-    site:
-        GradFn site.
-
-    Returns
-    -------
-    bool
-        Whether the GradFn carries the gradient of a matched op's output.
-    """
-
-    selector = normalize_selector_like(inner, lifecycle="site")
-    kind = str(selector.selector_kind)
-    if kind == "and" and isinstance(selector, CompositeSelector):
-        return all(_evaluate_bridged(child, site) for child in selector.selectors)
-    if kind == "or" and isinstance(selector, CompositeSelector):
-        return any(_evaluate_bridged(child, site) for child in selector.selectors)
-    if kind == "not" and isinstance(selector, NotSelector):
-        return not _evaluate_bridged(selector.selector, site)
-    forward_op = _grad_fn_forward_op(site)
-    if forward_op is not None and _evaluate_subject(selector, forward_op, "site"):
+    if lifecycle == "site" and _site_input_path_matches(subject, requested_path):
         return True
     return any(
-        _evaluate_subject(selector, alias, "site") for alias in _grad_fn_boundary_aliases(site)
+        _occurrence_path_matches(getattr(container, "leaf_occurrences", ()) or (), requested_path)
+        for container in getattr(subject, "input_containers", ()) or ()
     )
+
+
+def _site_input_path_matches(subject: Any, requested_path: tuple[Any, ...]) -> bool:
+    """Return whether a finalized site produced a model-input leaf at ``requested_path``."""
+
+    from .container_registry import Role
+
+    trace = getattr(subject, "trace", None)
+    site_labels = _site_label_spellings(subject)
+    for record in getattr(trace, "_containers", {}).values():
+        for snapshot in getattr(record, "snapshots", ()) or ():
+            if getattr(snapshot, "role", None) != Role.MODEL_INPUT:
+                continue
+            occurrences = getattr(snapshot, "leaf_occurrences", ()) or ()
+            if _occurrence_path_matches(occurrences, requested_path, site_labels):
+                return True
+    return False
+
+
+def _occurrence_path_matches(
+    occurrences: Any, requested_path: tuple[Any, ...], producer_labels: set[str] | None = None
+) -> bool:
+    """Return whether any leaf occurrence sits at ``requested_path``."""
+
+    for occurrence in occurrences:
+        if producer_labels is not None and occurrence.producer_op_label not in producer_labels:
+            continue
+        if output_path_matches(tuple(occurrence.path), requested_path):
+            return True
+    return False
 
 
 def _grad_fn_forward_op(site: Any) -> Any:
@@ -1368,16 +1128,6 @@ def _grad_fn_forward_op(site: Any) -> Any:
     by design. A GradFn belongs to exactly one pass, so the pass whose
     ``grad_fn_object_id`` is this GradFn's autograd identity is the subject
     every forward selector kind evaluates against.
-
-    Parameters
-    ----------
-    site:
-        GradFn site.
-
-    Returns
-    -------
-    Any
-        The paired pass-level op, or ``None`` when the GradFn has no op.
     """
 
     from torchlens._data_classes.grad_fn import _pass_op_for_grad_fn
@@ -1399,17 +1149,6 @@ def _grad_fn_boundary_aliases(site: Any) -> tuple[Any, ...]:
     tensor's gradient, so each one is a matching subject (a module whose
     output op is an eval-mode dropout matched no GradFn before, and its
     gradient edit was a silent no-op).
-
-    Parameters
-    ----------
-    site:
-        Candidate grad_fn_handle log.
-
-    Returns
-    -------
-    tuple[Any, ...]
-        Ops whose ``grad_fn_object_id`` equals the GradFn's object id,
-        excluding the already-paired op.
     """
 
     from torchlens._data_classes.grad_fn import _pass_op_for_grad_fn
@@ -1439,23 +1178,87 @@ def _grad_fn_boundary_aliases(site: Any) -> tuple[Any, ...]:
             continue
         if getattr(layer, "grad_fn_object_id", None) != site.grad_fn_object_id:
             continue
-        parents = {str(parent) for parent in getattr(layer, "parents", ()) or ()}
-        names = {str(getattr(layer, name, "")) for name in ("label", "layer_label")}
-        boundary = getattr(layer, "is_input", False) or getattr(layer, "is_output", False)
-        if not (boundary or parents & accepted or names & paired_parents):
-            continue
-        aliases.append(layer)
-        accepted.update(str(getattr(layer, name, "")) for name in ("label", "layer_label"))
+        if _shares_grad_fn_tensor(layer, accepted, paired_parents):
+            aliases.append(layer)
+            accepted.update(_layer_names(layer))
     return tuple(aliases)
 
 
+#: Kinds every forward lane compiles the same way (lane differences live in
+#: the compiled node's bound arguments, never in evaluation-time branching).
+_COMMON_COMPILERS: dict[str, _Compiler] = {
+    "and": _compile_and,
+    "or": _compile_or,
+    "not": _compile_not,
+    "label": _compile_label,
+    "contains": _compile_contains,
+    "regex": _compile_regex,
+    "func": _compile_func,
+    "func_transform": _compile_func_transform,
+    "module": _compile_module,
+    "in_module": _compile_in_module,
+    "site": _compile_site,
+    "output": _compile_output,
+    "output_at": _compile_output_at,
+    "input_at": _compile_input_at,
+    "predicate": _compile_predicate,
+    "episode_step": _compile_episode_step,
+    "preceded_by": _compile_preceded_by,
+    "followed_by": _compile_followed_by,
+    "grad": _compile_grad,
+}
+#: Per-lane compile tables: one node kind per selector form.
+_LANE_COMPILERS: dict[str, dict[str, _Compiler]] = {
+    "capture": {
+        **_COMMON_COMPILERS,
+        "grad_kind": _compile_grad_kind_capture,
+        "backward_pass": _compile_backward_pass_capture,
+        **dict.fromkeys(_CAPTURE_SILENT_FALSE_KINDS, _compile_never),
+    },
+    "site": {
+        **_COMMON_COMPILERS,
+        **dict.fromkeys(_SITE_SILENT_FALSE_KINDS, _compile_never),
+    },
+    "live": dict(_COMMON_COMPILERS),
+    _GRAD_FN_LANE: {
+        "and": _compile_and,
+        "or": _compile_or,
+        "not": _compile_not,
+        "grad": _compile_grad_fn_grad,
+        # A bare forward kind never reaches the backward universe.
+        **dict.fromkeys(DIRECTION_AGNOSTIC_KINDS, _compile_never),
+        "intervening": _compile_grad_fn_without_op,
+        "without_op": _compile_grad_fn_without_op,
+        "grad_fn_label": _compile_grad_fn_label,
+        "grad_fn": _compile_grad_fn_payload,
+        "grad_kind": _compile_grad_fn_grad_kind,
+        "backward_pass": _compile_grad_fn_backward_pass,
+    },
+}
+#: What a lane compiles for a kind its table does not list.
+_LANE_FALLBACKS: dict[str, _Compiler] = {
+    "capture": _compile_capability_refusal,
+    "site": _compile_capability_refusal,
+    "live": _compile_capability_refusal,
+    _GRAD_FN_LANE: _compile_never,
+}
+
 # ---------------------------------------------------------------------------
-# The one spec deserializer
+# The one spec deserializer: a builder per target-spec kind
 # ---------------------------------------------------------------------------
+
+#: One spec builder: ``(kind, value, metadata, lifecycle)`` to the selector, or
+#: ``None`` when the payload shape is not one the kind accepts (the caller
+#: raises the single unsupported-kind refusal).
+_SpecBuilder = Callable[[str, Any, dict[str, Any], str], "BaseSelector | None"]
 
 
 def selector_from_spec(
-    kind: str, value: Any, metadata: dict[str, Any] | None, *, lifecycle: Lifecycle = "site"
+    kind: str,
+    value: Any,
+    metadata: dict[str, Any] | None,
+    *,
+    lifecycle: Lifecycle = "site",
 ) -> BaseSelector:
     """Build a selector from a target-spec payload.
 
@@ -1485,6 +1288,16 @@ def selector_from_spec(
         If the payload shape is unsupported.
     """
 
+    builder = _spec_builders().get(kind)
+    selector = None if builder is None else builder(kind, value, metadata or {}, lifecycle)
+    if selector is None:
+        raise SiteResolutionError(f"Unsupported target spec selector kind {kind!r}.")
+    return selector
+
+
+def _spec_builders() -> dict[str, _SpecBuilder]:
+    """Return the kind-to-builder table (the selector factories import lazily)."""
+
     from .._selection.selectors import (
         FacetSelector,
         SiteSelector,
@@ -1509,115 +1322,240 @@ def selector_from_spec(
         without_op,
     )
 
-    metadata = metadata or {}
-    if kind == "label":
-        return label(str(value))
-    if kind == "grad_fn_label":
-        return grad_fn_label(str(value))
-    if kind == "func":
-        if isinstance(value, dict):
-            return func(str(value.get("name")), output=value.get("output"))
-        return func(str(value))
-    if kind == "func_transform":
-        return func_transform(None if value is None else str(value))
-    if kind == "module":
-        return module(str(value))
-    if kind == "output":
-        return model_output(value)
-    if kind == "output_at":
-        return output_at(value)
-    if kind == "input_at":
-        if lifecycle == "live":
-            raise _capability_error(kind, lifecycle)
-        if isinstance(value, Sequence) and not isinstance(value, str):
-            return model_input(*value)
-        return model_input(value)
-    if kind == "contains":
-        return label_contains(str(value))
-    if kind == "regex":
-        return label_matches(str(value))
-    if kind == "in_module":
-        selector = in_module(str(value))
-        if isinstance(selector, BaseSelector):
-            return selector
-    if kind == "facet":
-        if lifecycle == "live":
-            raise _capability_error(kind, lifecycle)
-        if isinstance(value, dict):
-            name = value.get("name")
-            head_index = value.get("head_index")
-            module_address = value.get("module_address")
-            if name is not None or head_index is not None:
-                return FacetSelector(
+    return {
+        "label": partial(_spec_from_string, factory=label),
+        "grad_fn_label": partial(_spec_from_string, factory=grad_fn_label),
+        "module": partial(_spec_from_string, factory=module),
+        "contains": partial(_spec_from_string, factory=label_contains),
+        "regex": partial(_spec_from_string, factory=label_matches),
+        "in_module": partial(_spec_from_string, factory=in_module),
+        "func": partial(_spec_func, factory=func),
+        "func_transform": partial(_spec_func_transform, factory=func_transform),
+        "output": partial(_spec_from_value, factory=model_output),
+        "output_at": partial(_spec_from_value, factory=output_at),
+        "input_at": partial(_spec_input_at, factory=model_input),
+        "facet": partial(_spec_facet, factory=FacetSelector),
+        "site": partial(_spec_site, factory=SiteSelector),
+        "predicate": partial(_spec_predicate, factory=where),
+        "grad_fn": partial(_spec_grad_fn, factory=grad_fn),
+        "intervening": partial(_spec_constant, factory=without_op),
+        "without_op": partial(_spec_constant, factory=without_op),
+        "grad_kind": partial(_spec_grad_kind, factory=(grad_input, grad_output)),
+        "backward_pass": partial(_spec_backward_pass, factory=in_backward_pass),
+        "episode_step": partial(_spec_episode_step, factory=at_step),
+        "grad": partial(_spec_grad, factory=grad),
+        "not": _spec_not,
+        "and": _spec_composite,
+        "or": _spec_composite,
+        "followed_by": _spec_lookaround,
+        "preceded_by": _spec_lookaround,
+    }
+
+
+def _spec_from_string(
+    kind: str, value: Any, metadata: dict[str, Any], lifecycle: str, *, factory: Any
+) -> BaseSelector | None:
+    """Build a selector whose payload is one string literal."""
+
+    selector = factory(str(value))
+    return selector if isinstance(selector, BaseSelector) else None
+
+
+def _spec_from_value(
+    kind: str, value: Any, metadata: dict[str, Any], lifecycle: str, *, factory: Any
+) -> BaseSelector:
+    """Build a selector from its payload as-is (``output``, ``output_at``)."""
+
+    return cast(BaseSelector, factory(value))
+
+
+def _spec_constant(
+    kind: str, value: Any, metadata: dict[str, Any], lifecycle: str, *, factory: Any
+) -> BaseSelector:
+    """Build a payload-free selector (``intervening`` / ``without_op``)."""
+
+    return cast(BaseSelector, factory())
+
+
+def _spec_func(
+    kind: str, value: Any, metadata: dict[str, Any], lifecycle: str, *, factory: Any
+) -> BaseSelector:
+    """Build ``func`` from a name or a ``{"name": ..., "output": ...}`` payload."""
+
+    if isinstance(value, dict):
+        return cast(BaseSelector, factory(str(value.get("name")), output=value.get("output")))
+    return cast(BaseSelector, factory(str(value)))
+
+
+def _spec_func_transform(
+    kind: str, value: Any, metadata: dict[str, Any], lifecycle: str, *, factory: Any
+) -> BaseSelector:
+    """Build ``func_transform`` from an optional transform kind."""
+
+    return cast(BaseSelector, factory(None if value is None else str(value)))
+
+
+def _spec_input_at(
+    kind: str, value: Any, metadata: dict[str, Any], lifecycle: str, *, factory: Any
+) -> BaseSelector:
+    """Build ``input_at`` (``tl.model_input``); the live lifecycle refuses it."""
+
+    if lifecycle == "live":
+        raise _capability_error(kind, lifecycle)
+    if isinstance(value, Sequence) and not isinstance(value, str):
+        return cast(BaseSelector, factory(*value))
+    return cast(BaseSelector, factory(value))
+
+
+def _spec_facet(
+    kind: str, value: Any, metadata: dict[str, Any], lifecycle: str, *, factory: Any
+) -> BaseSelector:
+    """Build ``facet`` from its name / head-index / module-address payload."""
+
+    if lifecycle == "live":
+        raise _capability_error(kind, lifecycle)
+    if isinstance(value, dict):
+        name = value.get("name")
+        head_index = value.get("head_index")
+        module_address = value.get("module_address")
+        if name is not None or head_index is not None:
+            return cast(
+                BaseSelector,
+                factory(
                     None if name is None else str(name),
                     head_index=None if head_index is None else int(head_index),
                     module_address=None if module_address is None else str(module_address),
-                )
-        raise SiteResolutionError(f"Unsupported facet selector payload {value!r}.")
-    if kind == "site":
-        payload = dict(value or {})
-        return SiteSelector(
+                ),
+            )
+    raise SiteResolutionError(f"Unsupported facet selector payload {value!r}.")
+
+
+def _spec_site(
+    kind: str, value: Any, metadata: dict[str, Any], lifecycle: str, *, factory: Any
+) -> BaseSelector:
+    """Build ``site`` from its structural-key payload mapping."""
+
+    payload = dict(value or {})
+    return cast(
+        BaseSelector,
+        factory(
             payload.get("key"),
             module_path=payload.get("module_path"),
             op_type=payload.get("op_type"),
             slot=payload.get("slot"),
             ordinal=payload.get("ordinal"),
-        )
-    if kind == "predicate" and callable(value):
-        return where(value, name_hint=metadata.get("name_hint"))
-    if kind == "grad_fn":
-        payload = dict(value or {})
-        return grad_fn(
+        ),
+    )
+
+
+def _spec_predicate(
+    kind: str, value: Any, metadata: dict[str, Any], lifecycle: str, *, factory: Any
+) -> BaseSelector | None:
+    """Build ``predicate`` (``tl.where``) from a callable payload."""
+
+    if not callable(value):
+        return None
+    return cast(BaseSelector, factory(value, name_hint=metadata.get("name_hint")))
+
+
+def _spec_grad_fn(
+    kind: str, value: Any, metadata: dict[str, Any], lifecycle: str, *, factory: Any
+) -> BaseSelector:
+    """Build ``grad_fn`` from its type / label-pattern / custom payload."""
+
+    payload = dict(value or {})
+    return cast(
+        BaseSelector,
+        factory(
             payload.get("type"),
             label=payload.get("grad_fn_label_pattern"),
             is_custom=payload.get("is_custom"),
-        )
-    if kind in {"intervening", "without_op"}:
-        return without_op()
-    if kind == "grad_kind":
-        return grad_input() if value == "grad_input" else grad_output()
-    if kind == "backward_pass":
-        if not isinstance(value, int):
-            raise SiteResolutionError("backward_pass target specs require an integer pass index.")
-        return in_backward_pass(value)
-    if kind == "episode_step":
-        if isinstance(value, Sequence) and not isinstance(value, str):
-            return at_step(*(int(step) for step in value))
+        ),
+    )
+
+
+def _spec_grad_kind(
+    kind: str, value: Any, metadata: dict[str, Any], lifecycle: str, *, factory: tuple[Any, Any]
+) -> BaseSelector:
+    """Build ``grad_kind`` from the ``(grad_input, grad_output)`` factory pair."""
+
+    grad_input, grad_output = factory
+    return cast(BaseSelector, grad_input() if value == "grad_input" else grad_output())
+
+
+def _spec_backward_pass(
+    kind: str, value: Any, metadata: dict[str, Any], lifecycle: str, *, factory: Any
+) -> BaseSelector:
+    """Build ``backward_pass`` from an integer pass index."""
+
+    if not isinstance(value, int):
+        raise SiteResolutionError("backward_pass target specs require an integer pass index.")
+    return cast(BaseSelector, factory(value))
+
+
+def _spec_episode_step(
+    kind: str, value: Any, metadata: dict[str, Any], lifecycle: str, *, factory: Any
+) -> BaseSelector:
+    """Build ``episode_step`` (``tl.at_step``) from a sequence of step indices."""
+
+    if isinstance(value, Sequence) and not isinstance(value, str):
+        return cast(BaseSelector, factory(*(int(step) for step in value)))
+    raise SiteResolutionError(
+        "episode_step target specs require a sequence of 0-based step indices.",
+        code="episode_step_selector_invalid",
+        remedy="rebuild the selector with at_step(<step indices>)",
+    )
+
+
+def _spec_grad(
+    kind: str, value: Any, metadata: dict[str, Any], lifecycle: str, *, factory: Any
+) -> BaseSelector:
+    """Build ``grad``: a bare label string stays verbatim, else the normalized inner."""
+
+    if not isinstance(value, str):
+        value = normalize_selector_like(value, lifecycle=cast(Lifecycle, lifecycle))
+    return cast(BaseSelector, factory(value))
+
+
+def _spec_not(kind: str, value: Any, metadata: dict[str, Any], lifecycle: str) -> BaseSelector:
+    """Build ``not`` by negating the normalized inner selector."""
+
+    return ~normalize_selector_like(value, lifecycle=cast(Lifecycle, lifecycle))
+
+
+def _spec_composite(
+    kind: str, value: Any, metadata: dict[str, Any], lifecycle: str
+) -> BaseSelector:
+    """Build an n-ary ``and`` / ``or`` from a sequence of nested selector specs."""
+
+    if not isinstance(value, Sequence) or isinstance(value, str):
+        raise SiteResolutionError(f"{kind!r} target specs require a sequence of nested selectors.")
+    children = tuple(
+        normalize_selector_like(child, lifecycle=cast(Lifecycle, lifecycle)) for child in value
+    )
+    return CompositeSelector(cast("Literal['and', 'or']", kind), cast(Any, children))
+
+
+def _spec_lookaround(
+    kind: str, value: Any, metadata: dict[str, Any], lifecycle: str
+) -> BaseSelector:
+    """Build ``followed_by`` / ``preceded_by`` (capture-time only) from an inner payload."""
+
+    if lifecycle != "capture":
+        raise _capability_error(kind, lifecycle)
+    inner = value
+    if isinstance(inner, str):
         raise SiteResolutionError(
-            "episode_step target specs require a sequence of 0-based step indices.",
-            code="episode_step_selector_invalid",
-            remedy="rebuild the selector with at_step(<step indices>)",
+            f"tl.{kind}(...) target spec carries an opaque audit payload {inner!r}; "
+            "an inner predicate saved by repr cannot be reconstructed. Rebuild the "
+            "selector in code, or re-save the spec with a structural selector inner "
+            "such as tl.func(...)."
         )
-    if kind == "grad":
-        if isinstance(value, str):
-            return grad(value)
-        return grad(normalize_selector_like(value, lifecycle=lifecycle))
-    if kind == "not":
-        return ~normalize_selector_like(value, lifecycle=lifecycle)
-    if kind in {"and", "or"}:
-        if not isinstance(value, Sequence) or isinstance(value, str):
-            raise SiteResolutionError(
-                f"{kind!r} target specs require a sequence of nested selectors."
-            )
-        children = tuple(normalize_selector_like(child, lifecycle=lifecycle) for child in value)
-        return CompositeSelector(cast("Literal['and', 'or']", kind), cast(Any, children))
-    if kind in {"followed_by", "preceded_by"}:
-        if lifecycle != "capture":
-            raise _capability_error(kind, lifecycle)
-        inner = value
-        if isinstance(inner, str):
-            raise SiteResolutionError(
-                f"tl.{kind}(...) target spec carries an opaque audit payload {inner!r}; "
-                "an inner predicate saved by repr cannot be reconstructed. Rebuild the "
-                "selector in code, or re-save the spec with a structural selector inner "
-                "such as tl.func(...)."
-            )
-        if not isinstance(inner, BaseSelector) and not callable(inner):
-            inner = normalize_selector_like(inner, lifecycle="capture")
-        if kind == "followed_by":
-            return FollowedBySelector(inner)
-        return PrecededBySelector(inner)
-    raise SiteResolutionError(f"Unsupported target spec selector kind {kind!r}.")
+    if not isinstance(inner, BaseSelector) and not callable(inner):
+        inner = normalize_selector_like(inner, lifecycle="capture")
+    if kind == "followed_by":
+        return FollowedBySelector(inner)
+    return PrecededBySelector(inner)
 
 
 def _site_key_matches(selector: Any, rendered_key: Any) -> bool:
@@ -1678,35 +1616,12 @@ def normalize_selector_like(selector_like: Any, *, lifecycle: Lifecycle) -> Base
 
     if isinstance(selector_like, BaseSelector):
         return selector_like
-    if isinstance(selector_like, TargetSpec):
-        return selector_from_spec(
-            selector_like.selector_kind,
-            selector_like.selector_value,
-            selector_like.metadata,
-            lifecycle=lifecycle,
-        )
-    if isinstance(selector_like, FrozenTargetSpec):
-        return selector_from_spec(
-            selector_like.selector_kind,
-            selector_like.selector_value,
-            dict(selector_like.metadata),
-            lifecycle=lifecycle,
-        )
-    if isinstance(selector_like, str):
-        from .._selection.selectors import label, label_contains
-
-        if lifecycle == "live":
-            return label(selector_like)
-        return label_contains(selector_like)
-    if type(selector_like).__name__ == "_SiteTable":
-        # find_sites() output is accepted directly (leverage B3/NEW-4): the
-        # zero-match refusal RECOMMENDS log.find_sites(...), so its result
-        # must be a valid address, not a dead end.
-        return _selector_from_site_table(selector_like)
-    if lifecycle == "capture" and callable(selector_like):
-        from .._selection.selectors import where
-
-        return where(selector_like)
+    spec_selector = _spec_selector_like(selector_like, lifecycle)
+    if spec_selector is not None:
+        return spec_selector
+    shorthand = _shorthand_selector_like(selector_like, lifecycle)
+    if shorthand is not None:
+        return shorthand
     # An ``Op``/``Layer`` RECORD is the most precise site spelling a user can
     # hold (AUD-CODE 4.10, W051-REPLAY out-of-fence item 1). Lower it to its
     # PASS-QUALIFIED ``Op.label`` selector(s) here, so the ``set()`` door,
@@ -1726,6 +1641,39 @@ def normalize_selector_like(selector_like: Any, *, lifecycle: Lifecycle) -> Base
     if lifecycle == "live":
         raise SiteResolutionError(f"Unsupported live hook selector {selector_like!r}.")
     raise SiteResolutionError(f"Unsupported site query {selector_like!r}.")
+
+
+def _spec_selector_like(selector_like: Any, lifecycle: Lifecycle) -> BaseSelector | None:
+    """Build the selector a target spec names, or ``None`` for any other input."""
+
+    if isinstance(selector_like, TargetSpec):
+        metadata: dict[str, Any] | None = selector_like.metadata
+    elif isinstance(selector_like, FrozenTargetSpec):
+        metadata = dict(selector_like.metadata)
+    else:
+        return None
+    return selector_from_spec(
+        selector_like.selector_kind, selector_like.selector_value, metadata, lifecycle=lifecycle
+    )
+
+
+def _shorthand_selector_like(selector_like: Any, lifecycle: Lifecycle) -> BaseSelector | None:
+    """Lower the lifecycle shorthands, or return ``None`` for any other input."""
+
+    if isinstance(selector_like, str):
+        from .._selection.selectors import label, label_contains
+
+        return label(selector_like) if lifecycle == "live" else label_contains(selector_like)
+    if type(selector_like).__name__ == "_SiteTable":
+        # find_sites() output is accepted directly (leverage B3/NEW-4): the
+        # zero-match refusal RECOMMENDS log.find_sites(...), so its result
+        # must be a valid address, not a dead end.
+        return _selector_from_site_table(selector_like)
+    if lifecycle == "capture" and callable(selector_like):
+        from .._selection.selectors import where
+
+        return where(selector_like)
+    return None
 
 
 __all__ = [
