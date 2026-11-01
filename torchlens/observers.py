@@ -170,8 +170,8 @@ class TapObserver:
         grad_output: tuple[torch.Tensor | None, ...] | None = None,
         grad_fn_handle: Any = None,
         call_index: int | None = None,
+        run_ctx: dict[str, Any] | None = None,
         ctx: Any = None,
-        **hook_kwargs: Any,
     ) -> torch.Tensor | None:
         """Record a backward gradient and leave autograd gradients unchanged.
 
@@ -189,10 +189,10 @@ class TapObserver:
             GradFn site whose hook fired.
         call_index:
             One-based backward call index.
+        run_ctx:
+            Shared hook run context. Accepted for hook API compatibility.
         ctx:
             Hook context of a gradient-site fire.
-        **hook_kwargs:
-            Shared hook run context (``run_ctx``); accepted for hook API compatibility.
 
         Returns
         -------
@@ -200,7 +200,7 @@ class TapObserver:
             The unchanged gradient for a gradient-site fire; ``None`` for a node fire.
         """
 
-        del hook_kwargs
+        del run_ctx
         if ctx is not None:
             return self(grad_input, ctx=ctx)
         grad_value, grad_kind = _first_tensor_grad(grad_output, "grad_output")
