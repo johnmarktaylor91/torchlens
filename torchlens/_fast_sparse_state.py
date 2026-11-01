@@ -9,11 +9,8 @@ module finds those calls from the frozen sparse descriptor alone.
 
 from __future__ import annotations
 
-import torch
-
 from ._runnable import RunnableCallDescriptor, SparseRunDescriptor, is_mode_sensitive_qualname
 from ._runnable_execution import _VIEW_OP_QUALNAMES, _decode_literal, _mutation_target_slot_id
-from ._utils._torch_compat import tensor_has_named_dims
 
 
 def _state_storage_closure(
@@ -155,17 +152,4 @@ def _state_mutating_call_ids(
             registry_qualnames.get(call.registry_id),
             state_storage_ids,
         )
-    )
-
-
-def _input_layout_ok(value: torch.Tensor) -> bool:
-    """Return whether an input is in the fast sparse executor's admitted domain."""
-
-    return (
-        type(value) in {torch.Tensor, torch.nn.Parameter}
-        and value.layout == torch.strided
-        and not value.is_nested
-        and not bool(getattr(value, "is_meta", False))
-        and not bool(getattr(value, "is_quantized", False))
-        and not tensor_has_named_dims(value)
     )

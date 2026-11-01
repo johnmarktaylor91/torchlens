@@ -199,7 +199,7 @@ torchlens/_extraction/trace_safetensors.py::write_trace_safetensors	90
 torchlens/_extraction/views.py::shuffled_batches	64
 torchlens/_extraction_provenance.py::coerce_input_preprocessing	129
 torchlens/_fast_live_plans.py::build_function_plans	66
-torchlens/_fast_run.py	1767
+torchlens/_fast_run.py	1768
 torchlens/_fast_run.py::_FastLiveSession.__init__	85
 torchlens/_fast_run.py::_FastLiveSession._finalize_run	61
 torchlens/_fast_run.py::_FastLiveSession._refresh_boundary_payloads	79

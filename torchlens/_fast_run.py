@@ -41,7 +41,7 @@ from ._fast_live_until import (
     resolve_fast_until,
     truncate_after,
 )
-from ._fast_sparse_state import _input_layout_ok, _state_mutating_call_ids
+from ._fast_sparse_state import _state_mutating_call_ids
 from ._ir.container import ContainerSpec, rebuild_container_from_spec
 from ._runnable import (
     DivergencePolicy,
@@ -106,6 +106,7 @@ from ._runnable_execution import (
     _write_argument,
     run_loaded_sparse_trace,
 )
+from ._runnable_input_metadata import _input_layout_ok
 from ._runnable_state import PreparedRunnableState, RunResourceCeiling, prepare_runnable_state
 from ._utils.arg_handling import normalize_input_args
 from ._utils.rng import restore_host_rng, set_random_seed, snapshot_host_rng
