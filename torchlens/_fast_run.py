@@ -152,6 +152,21 @@ def _is_opaque_output_root(output: Any) -> bool:
     )
 
 
+def _lossy_distribution_output_reason(output: Any) -> str:
+    """Return the lossy reason when the output holds a ``torch.distributions`` object
+    capture cannot record losslessly, else an empty string."""
+
+    from ._ir.distribution_container import DISTRIBUTION_STATE_UNRECORDABLE
+    from .backends.torch._ops_containers import _prove_runnable_output_lossless
+
+    if output is None or isinstance(output, torch.Tensor):
+        return ""
+    proved, reason = _prove_runnable_output_lossless(output)
+    if proved or not reason.startswith(DISTRIBUTION_STATE_UNRECORDABLE):
+        return ""
+    return reason
+
+
 def _was_called_directly(module: nn.Module) -> bool:
     """Return whether a capture marked ``module`` as entered by a direct call."""
 
@@ -1393,14 +1408,30 @@ class _FastLiveSession:
             tuple(getattr(self.trace._layer_dict_all_keys[label], "container_path", None) or ())
             for label in output_labels
         ]
+        lossy_reason = _lossy_distribution_output_reason(output)
+        if lossy_reason:
+            # A ``torch.distributions`` output whose instance state the container
+            # contract cannot record (a transform list, a parameter): capture
+            # flagged it lossy, so the fast run refuses it as it refuses an
+            # opaque root rather than accept a boundary it knows is incomplete.
+            failed = _contract_check(
+                "fast_live_model_output_opaque",
+                False,
+                RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
+                f"The model returns a {type(output).__qualname__} whose state capture "
+                f"cannot record losslessly ({lossy_reason}). The fast run cannot pair "
+                "a lossy output boundary; the full run records this output as the "
+                "capture did.",
+                affected_op_labels=output_labels,
+            )
+            self._poison_and_raise(failed)
         values, reason = _pair_output_leaves(output, captured_paths, len(output_labels))
         if values is None and _is_opaque_output_root(output):
-            # Capture walks an unsupported output container (a
-            # ``torch.distributions`` object, a plain class) by attribute
-            # search and records its tensors under one empty address, so the
-            # boundary keeps a single output op however many tensors the object
-            # holds. The live object has not changed; the fast run cannot pair
-            # its leaves with a collapsed boundary.
+            # Capture walks an unsupported output container (a plain class) by
+            # attribute search and records its tensors under one empty address,
+            # so the boundary keeps a single output op however many tensors the
+            # object holds. The live object has not changed; the fast run cannot
+            # pair its leaves with a collapsed boundary.
             failed = _contract_check(
                 "fast_live_model_output_opaque",
                 False,

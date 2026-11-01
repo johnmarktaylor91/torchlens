@@ -551,6 +551,18 @@ def _spec_node_reconstruction_lossy(spec: ContainerSpec) -> bool:
         return namedtuple_type_can_carry_instance_state(
             container_type
         ) or _reconstruction_would_substitute_plain(container_type, "namedtuple", spec.fields, spec)
+    # Local import: this body is rebound into ``_runnable_execution``'s globals.
+    from ._ir.distribution_container import (
+        DISTRIBUTION_CONTAINER_KIND,
+        distribution_type_rebuild_is_lossy,
+    )
+
+    if spec.kind == DISTRIBUTION_CONTAINER_KIND:
+        try:
+            container_type = resolve_container_type(spec)
+        except ContainerReconstructionError:
+            return True
+        return container_type is None or distribution_type_rebuild_is_lossy(container_type, spec)
     captured_names = spec.fields if spec.kind == "dataclass" else spec.keys
     try:
         container_type = resolve_container_type(spec)

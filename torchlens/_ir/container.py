@@ -25,6 +25,7 @@ from ._container_type_probes import (
     _type_has_instance_dict,
     _type_has_safe_new,
 )
+from .distribution_container import DISTRIBUTION_CONTAINER_KIND
 
 # Canonical ``defaultdict`` factory callables restorable on load WITHOUT importing
 # an arbitrary callable. Capture imports this SAME mapping; a factory outside the
@@ -142,6 +143,7 @@ class ContainerSpec:
         "literal",
         "opaque",
         "registered",
+        "distribution",
     ]
     length: int | None = None
     keys: tuple[Any, ...] = ()
@@ -187,7 +189,7 @@ def declared_leaf_slots(spec: ContainerSpec) -> int:
         components = [DictKey(key) for key in spec.keys]
     elif spec.kind == "hf_model_output":
         components = [HFKey(key) for key in spec.keys]
-    elif spec.kind == "namedtuple":
+    elif spec.kind in {"namedtuple", DISTRIBUTION_CONTAINER_KIND}:
         components = [NamedField(name) for name in spec.fields]
     elif spec.kind == "dataclass":
         components = [DataclassField(name) for name in spec.fields]
@@ -306,13 +308,13 @@ def _validate_container_spec(spec: ContainerSpec) -> None:
                     f"ContainerSpec kind {kind!r} child component {component!r} is not among "
                     "the declared keys."
                 )
-    elif kind in {"namedtuple", "dataclass"}:
+    elif kind in {"namedtuple", "dataclass", DISTRIBUTION_CONTAINER_KIND}:
         if length is not None and length != len(spec.fields):
             raise ContainerReconstructionError(
                 f"ContainerSpec kind {kind!r} length {length} disagrees with "
                 f"{len(spec.fields)} fields."
             )
-        field_component = NamedField if kind == "namedtuple" else DataclassField
+        field_component = DataclassField if kind == "dataclass" else NamedField
         for component in components:
             if not isinstance(component, field_component) or component._name not in spec.fields:
                 raise ContainerReconstructionError(
@@ -415,6 +417,8 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
         ):
             return _construct_model_output_without_init(container_type, key_values)
         return key_values
+    if spec.kind == DISTRIBUTION_CONTAINER_KIND:
+        return _rebuild_distribution_node(spec, child_by_key, leaf_iter)
     if spec.kind == "registered":
         values = [
             _rebuild_child_or_leaf(child_by_key, TupleIndex(index), leaf_iter)
@@ -433,6 +437,30 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
             )
         return registration.unflatten(spec.aux_data, values)
     raise ValueError(f"Unsupported ContainerSpec kind {spec.kind!r}.")
+
+
+def _rebuild_distribution_node(
+    spec: ContainerSpec, child_by_key: dict[OutputPathComponent, ContainerSpec], leaf_iter: Any
+) -> Any:
+    """Rebuild a ``torch.distributions`` node from its recorded fields (inert, exact).
+
+    The type must resolve to a loaded, admissible ``Distribution`` subclass; an
+    unresolvable type has no plain stand-in that would not change what the
+    caller receives, so it refuses rather than substituting one.
+    """
+
+    from .distribution_container import rebuild_distribution
+
+    field_values = {
+        name: _rebuild_child_or_leaf(child_by_key, NamedField(name), leaf_iter)
+        for name in spec.fields
+    }
+    container_type = _resolve_container_type(spec)
+    if container_type is None:
+        raise ValueError(
+            f"Distribution type {spec.type_module}.{spec.type_qualname} is not loaded."
+        )
+    return rebuild_distribution(container_type, spec.aux_data, field_values)
 
 
 def _rebuild_dict_subtype(spec: ContainerSpec, items: dict[Any, Any]) -> Any:
@@ -1084,6 +1112,10 @@ def _container_type_is_admissible(container_type: type[Any], spec: ContainerSpec
         return (spec.type_module, spec.type_qualname) in _ALLOWED_MAPPING_TYPE_REFS
     if kind == "registered":
         return get_registered_container(container_type) is not None
+    if kind == DISTRIBUTION_CONTAINER_KIND:
+        from .distribution_container import is_distribution_type
+
+        return is_distribution_type(container_type) and _type_has_safe_new(container_type)
     return False
 
 
@@ -1403,6 +1435,13 @@ CONTAINER_KIND_CAPABILITIES: dict[str, dict[str, str | bool]] = {
         "literal_support": True,
         "exact_type": True,
         "instance_state_rule": "declaration_required",
+        "addressable": True,
+    },
+    DISTRIBUTION_CONTAINER_KIND: {
+        "children": "fields",
+        "literal_support": True,
+        "exact_type": True,
+        "instance_state_rule": "type_recompute",
         "addressable": True,
     },
 }

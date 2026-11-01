@@ -148,6 +148,12 @@ def assign_into_container_by_path(
         copied_dict = dict(obj)
         copied_dict[key] = assign_into_container_by_path(copied_dict[key], rest, new_value)
         return copied_dict
+    from .._ir.distribution_container import is_distribution, replace_distribution_field
+
+    if is_distribution(obj) and isinstance(key, str):
+        return replace_distribution_field(
+            obj, key, assign_into_container_by_path(getattr(obj, key), rest, new_value)
+        )
     if _component_type_name(head) == "NamedField" or (
         _is_namedtuple_instance(obj) and isinstance(head, str)
     ):

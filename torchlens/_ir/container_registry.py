@@ -23,6 +23,12 @@ from .container import (
     TupleIndex,
     get_registered_container,
 )
+from .distribution_container import (
+    DISTRIBUTION_CONTAINER_KIND,
+    distribution_children,
+    distribution_layout,
+    is_distribution,
+)
 
 
 class Role(Enum):
@@ -718,6 +724,22 @@ def _build_container_spec_unguarded(
             child_specs=tuple(child_specs),
             aux_data=aux_data,
         )
+    if is_distribution(value):
+        layout = distribution_layout(value)
+        module, qualname = _container_type_ref(value)
+        if not _children_are_reconstructable(children, child_specs):
+            return ContainerSpec(kind="opaque", type_module=module, type_qualname=qualname)
+        return ContainerSpec(
+            kind=DISTRIBUTION_CONTAINER_KIND,
+            length=len(layout.fields),
+            fields=layout.fields,
+            type_module=module,
+            type_qualname=qualname,
+            child_specs=tuple(child_specs),
+            aux_data=layout.aux_data(),
+            lossy_reconstruction=bool(layout.lossy_reason)
+            or any(child.lossy_reconstruction for _component, child in child_specs),
+        )
     if _is_hf_model_output(value):
         keys = tuple(value.keys())
         module, qualname = _container_type_ref(value)
@@ -867,6 +889,10 @@ def _iter_container_children(value: Any) -> Iterator[tuple[OutputPathComponent, 
         children, _aux_data = registered.flatten(value)
         for index, child in enumerate(children):
             yield TupleIndex(index), child
+        return
+    if is_distribution(value):
+        for name, child in distribution_children(value):
+            yield NamedField(name), child
         return
     if _is_hf_model_output(value):
         for key in value.keys():

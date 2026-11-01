@@ -76,6 +76,20 @@ def _replace_output_value(
 
     if path in replacements:
         return replacements[path]
+    # Local import: this module's functions are rebound into ``ops``' globals.
+    from ..._ir.distribution_container import (
+        distribution_children,
+        is_distribution,
+        replace_distribution_field,
+    )
+
+    if is_distribution(value):
+        replaced = value
+        for name, item in distribution_children(value):
+            new_item = _replace_output_value(item, (*path, NamedField(name)), replacements)
+            if new_item is not item:
+                replaced = replace_distribution_field(replaced, name, new_item)
+        return replaced
     if _is_hf_model_output(value):
         key_values = {
             key: _replace_output_value(item, (*path, HFKey(key)), replacements)

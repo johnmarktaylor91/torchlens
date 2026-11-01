@@ -22,6 +22,12 @@ from ..._ir.container import (
     reconstruction_is_lossy,
 )
 from ..._ir.container_registry import OUTPUT_TREE_MAX_DEPTH
+from ..._ir.distribution_container import (
+    DISTRIBUTION_CONTAINER_KIND,
+    distribution_children,
+    distribution_layout,
+    is_distribution,
+)
 from ..._utils.introspection import (
     get_vars_of_type_from_obj,
 )
@@ -33,6 +39,7 @@ if TYPE_CHECKING:
 __all__ = (
     "_build_container_spec",
     "_build_container_spec_unguarded",
+    "_distribution_container_spec",
     "_known_output_container_children",
     "_walk_supported_output_container",
     "_prove_runnable_output_lossless",
@@ -111,6 +118,11 @@ def _build_container_spec_unguarded(
             child_specs=tuple(child_specs),
             aux_data=aux_data,
         )
+    distribution_spec = _distribution_container_spec(
+        value, _depth=_depth, _in_progress=_in_progress
+    )
+    if distribution_spec is not None:
+        return distribution_spec
     if _is_hf_model_output(value):
         keys = tuple(value.keys())
         reconstructable = True
@@ -276,6 +288,49 @@ def _build_container_spec_unguarded(
     return None
 
 
+def _distribution_container_spec(
+    value: Any,
+    *,
+    _depth: int,
+    _in_progress: set[int],
+) -> ContainerSpec | None:
+    """Build the spec for a ``torch.distributions`` output, or ``None`` for anything else.
+
+    Each recorded attribute is a ``NamedField`` child (a tensor leaf or a nested
+    distribution's spec); literal state and tensor aliases ride in ``aux_data``.
+    An attribute the contract cannot record flags the spec lossy; the attribute
+    paths stay addressable.
+    """
+
+    if not is_distribution(value):
+        return None
+    layout = distribution_layout(value)
+    instance_dict = vars(value)
+    child_specs: list[tuple[OutputPathComponent, ContainerSpec]] = []
+    lossy = bool(layout.lossy_reason)
+    for name in layout.fields:
+        child_spec = _try_build_container_spec(
+            instance_dict[name], _depth=_depth + 1, _in_progress=_in_progress
+        )
+        if child_spec is not None:
+            child_specs.append((NamedField(name), child_spec))
+            if child_spec.kind == "opaque":
+                module, qualname = _container_type_ref(value)
+                return ContainerSpec(kind="opaque", type_module=module, type_qualname=qualname)
+            lossy = lossy or child_spec.lossy_reconstruction
+    module, qualname = _container_type_ref(value)
+    return ContainerSpec(
+        kind=DISTRIBUTION_CONTAINER_KIND,
+        length=len(layout.fields),
+        fields=layout.fields,
+        type_module=module,
+        type_qualname=qualname,
+        child_specs=tuple(child_specs),
+        aux_data=layout.aux_data(),
+        lossy_reconstruction=lossy,
+    )
+
+
 def _known_output_container_children(
     out: Any,
 ) -> list[tuple[OutputPathComponent, Any]] | None:
@@ -291,6 +346,8 @@ def _known_output_container_children(
     if registered is not None:
         children, _aux_data = registered.flatten(out)
         return [(TupleIndex(index), item) for index, item in enumerate(children)]
+    if is_distribution(out):
+        return [(NamedField(name), child) for name, child in distribution_children(out)]
     if _is_hf_model_output(out):
         return [(HFKey(key), out[key]) for key in out.keys()]
     torch_fields = _torch_return_type_fields(out)
@@ -465,6 +522,18 @@ def _prove_runnable_output_lossless_unguarded(
         for item in children:
             proved, reason = _prove_runnable_output_lossless(
                 item, _depth=_depth + 1, _in_progress=_in_progress
+            )
+            if not proved:
+                return False, reason
+        return True, ""
+    if is_distribution(value):
+        layout = distribution_layout(value)
+        if layout.lossy_reason:
+            return False, layout.lossy_reason
+        instance_dict = vars(value)
+        for name in layout.fields:
+            proved, reason = _prove_runnable_output_lossless(
+                instance_dict[name], _depth=_depth + 1, _in_progress=_in_progress
             )
             if not proved:
                 return False, reason

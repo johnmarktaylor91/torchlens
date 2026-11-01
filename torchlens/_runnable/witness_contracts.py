@@ -91,6 +91,14 @@ def _tensor_leaf_paths(
         for index, child in enumerate(registered_children):
             paths.extend(_tensor_leaf_paths(child, (*path, index)))
         return tuple(paths)
+    # Local import: this function is rebound into _runnable_execution's globals.
+    from torchlens._ir.distribution_container import distribution_children, is_distribution
+
+    if is_distribution(value):
+        paths = []
+        for name, child in distribution_children(value):
+            paths.extend(_tensor_leaf_paths(child, (*path, name)))
+        return tuple(paths)
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         paths = []
         for field in dataclasses.fields(value):
@@ -263,6 +271,14 @@ def _container_leaf_paths(
         for index, child in enumerate(registered_children):
             paths.extend(_container_leaf_paths(child, (*path, index)))
         return tuple(paths)
+    # Local import: this function is rebound into _runnable_execution's globals.
+    from torchlens._ir.distribution_container import distribution_children, is_distribution
+
+    if is_distribution(value):
+        paths = []
+        for name, child in distribution_children(value):
+            paths.extend(_container_leaf_paths(child, (*path, name)))
+        return tuple(paths)
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         paths = []
         for field in dataclasses.fields(value):
@@ -318,6 +334,10 @@ def _container_kind(value: Any) -> str:
     # "dataclass" against its recorded "hf_model_output" witness, so every
     # honest identical run false-DIVERGED with OUTPUT_STRUCTURE_MISMATCH --
     # the same bug class as the r67 C2 registered-branch fix above).
+    from torchlens._ir.distribution_container import DISTRIBUTION_CONTAINER_KIND, is_distribution
+
+    if is_distribution(value):
+        return DISTRIBUTION_CONTAINER_KIND
     if _is_hf_model_output(value):
         return "hf_model_output"
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
