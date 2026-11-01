@@ -786,7 +786,13 @@ def normalize_hooks_from_spec(
         # before any forward runs -- a mid-forward capability error is a
         # late, ugly refusal.
         for entry in entries:
-            _validate_live_site_target(entry.site_target)
+            live_targets = (
+                gradient_inners(entry.site_target)
+                if entry.universe == "gradient"
+                else (entry.site_target,)
+            )
+            for live_target in live_targets:
+                _validate_live_site_target(live_target)
     return entries
 
 

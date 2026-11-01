@@ -85,7 +85,8 @@ def _backward_intervention_spec_from_predicate(
             if universe == "activation":
                 continue
             target = _target_spec_for(branch)
-            entries = normalize_hook_plan(target, decision.hook)
+            # Normalize the selector itself so refusals name the user's spelling.
+            entries = normalize_hook_plan(branch, decision.hook)
             if spec is None:
                 spec = InterventionSpec()
             spec.targets.append(target)
@@ -167,6 +168,7 @@ def _record_capture_intervention_event(trace: Trace, intervene_request: Any) -> 
     if intervene_request is None:
         return
     from .intervention.audit import (
+        EventStatus,
         record_intervention_event,
         rules_payload,
         site_keys_for_labels,
@@ -206,7 +208,7 @@ def _record_capture_intervention_event(trace: Trace, intervene_request: Any) -> 
         edit_names = (str(edit_name),)
         selection_repr = repr(getattr(intervene_request, "selector", intervene_request))
     armed_edits = _armed_branch_count(intervene_request)
-    status = "fired" if fire_count else ("armed" if armed_edits else "no_fire")
+    status: EventStatus = "fired" if fire_count else ("armed" if armed_edits else "no_fire")
     record_intervention_event(
         trace,
         lane="capture",
