@@ -16,6 +16,7 @@ from typing import Any
 import torch
 from torch import nn
 
+from .._user_funcs import trace
 from ..intervention.spec import is_gradient_site
 from ..options import CaptureOptions
 from ._aggregate import (
@@ -44,8 +45,6 @@ def _trace_entry() -> Callable[..., Any]:
     Real-home import (not the lazy root facade) for the same SCC/implicit-Any
     reason as the fastlog.record import in ``_aggregate``.
     """
-
-    from .._user_funcs import trace
 
     return trace
 
