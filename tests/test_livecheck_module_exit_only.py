@@ -404,7 +404,7 @@ _INPUT_SPLICE = SimpleNamespace(name="splice_module", metadata={"input_route": "
         pytest.param(_entry(tl.label("relu_1_3")), True, id="label_post_hook"),
         pytest.param(_entry(~tl.module("block1")), True, id="negated_module"),
         pytest.param(
-            _entry(tl.func("relu"), metadata={"direction": "backward"}),
+            _entry(tl.func("relu"), metadata={"signal": "backward"}),
             False,
             id="backward_entry",
         ),
