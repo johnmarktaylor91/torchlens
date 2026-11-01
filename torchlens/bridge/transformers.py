@@ -296,10 +296,8 @@ def trace_text(
         capture=kwargs.pop("capture", None),
         input_transform=transform,
     )
-    # The attached tokenizer is what makes the automatic ``hf_text`` output
-    # detector fire for this capture (torchlens/_autoroute/_builtin_output.py).
-    # Structure-only captures hold no output values to decode as text, so the
-    # tokenizer stays off the model and nothing decodes.
+    # The attached tokenizer fires the automatic ``hf_text`` output detector; a
+    # structure-only capture holds no outputs to decode, so it stays detached.
     had_tokenizer = hasattr(model, "_torchlens_output_tokenizer")
     previous_tokenizer = getattr(model, "_torchlens_output_tokenizer", None)
     if not structure_only:

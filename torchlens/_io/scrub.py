@@ -253,11 +253,7 @@ def scrub_for_save(
     module_accessor = getattr(trace, "_module_logs", None)
     if module_accessor is not None:
         scrubbed_state["_io_module_accessor_state"] = _scrub_value(
-            module_accessor,
-            options,
-            memo,
-            blob_specs,
-            blob_counter,
+            module_accessor, options, memo, blob_specs, blob_counter
         )
     else:
         scrubbed_state["_io_module_accessor_state"] = None
