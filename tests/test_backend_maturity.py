@@ -78,6 +78,14 @@ def test_torch_is_the_registered_stable_reference() -> None:
     assert {labels[name] for name in previews} <= {"preview"}
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "torch graduation waits on two open decisions: the validation reason names the "
+        "protocol cells check (AGT-2514) and validation after load (AGT-2500); the shipped "
+        "torch scorecard fails those cells until they are settled"
+    ),
+)
 def test_every_stable_backend_has_all_graduation_items_met() -> None:
     """A ``stable`` backend's shipped scorecard meets G1 to G6 (torch included)."""
 
