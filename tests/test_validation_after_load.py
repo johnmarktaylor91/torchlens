@@ -59,6 +59,17 @@ def test_loaded_replay_ready_bundle_validates(tmp_path: Path) -> None:
     assert all(op.func is not None for op in computational)
 
 
+def test_loaded_portable_bundle_refuses_by_name(tmp_path: Path) -> None:
+    """A ``portable`` save drops saved arguments; validation refuses, never a verdict."""
+
+    trace, _model, reference = _capture(save_args=True)
+    path = tmp_path / "trace.tlz"
+    trace.save(path)
+    loaded = tl.load(path)
+    with pytest.raises(ArtifactError, match="level='executable_with_callables'"):
+        loaded.validate_forward_pass(reference)
+
+
 def test_loaded_bundle_without_function_identities_still_refuses(tmp_path: Path) -> None:
     trace, _model, reference = _capture(save_args=False)
     path = tmp_path / "trace.tlz"

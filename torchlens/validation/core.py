@@ -689,6 +689,24 @@ def _raise_if_portable_bundle_log(self: Any) -> None:
             "drop them when functions cannot be represented. This bundle has unresolved "
             f"computational functions, e.g. {unresolved[:3]!r}."
         )
+    dropped_args = [
+        getattr(layer, "layer_label", "<unknown>")
+        for layer in getattr(self, "layer_list", [])
+        if getattr(layer, "func", None) is not None
+        and bool(getattr(layer, "has_saved_args", False))
+        and getattr(layer, "saved_args", None) is None
+    ]
+    if dropped_args:
+        from .._io import ArtifactError
+
+        # The capture saved these ops' arguments, but the bundle's save level
+        # kept no re-execution payloads ("portable" and "audit" drop them), so
+        # replay has nothing to re-execute from: refuse by name, never a verdict.
+        raise ArtifactError(
+            "validate_forward_pass replays each op from its saved arguments, which this "
+            "bundle's save level dropped; save with level='executable_with_callables' "
+            f"to validate after load. Ops without saved arguments, e.g. {dropped_args[:3]!r}."
+        )
 
 
 def _ground_truth_output_matches_saved(
