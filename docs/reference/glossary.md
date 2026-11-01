@@ -3420,6 +3420,7 @@ describe each surface in depth.
 ### Keywords
 | Spelling | Meaning |
 | --- | --- |
+| `extra_positional=` | Var-positional catch on `tl.trace` and `tl.record`: only the model and the inputs are positional; any further positional argument refuses typed `extra_positional_input_invalid` (`input_kwargs=` is keyword-only) |
 | `axis_roles=` | field and constructor keyword of `ReceptiveField` |
 | `bin_edges=` | field and constructor keyword of `HistogramPoint` |
 | `candidate_num_components=` | keyword of `tl.transforms.srp_fidelity_probe`: the candidate numbers of output components (projection widths k) to probe, one report row each |
