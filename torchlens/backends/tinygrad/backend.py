@@ -854,7 +854,7 @@ class TinygradBackend:
             event = self._append_event(
                 trace=trace,
                 kind="op",
-                layer_type=op_name.lower(),
+                layer_type=constant_func_name(constant_kind, op_name.lower()),
                 func_name=constant_func_name(
                     constant_kind, (observed_ops.get(id(uop)) or [op_name.lower()])[-1]
                 ),

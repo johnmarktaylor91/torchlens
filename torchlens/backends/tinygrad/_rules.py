@@ -34,7 +34,11 @@ __tl_layer__ = "L2"
 ConstantKind = Literal["closure", "literal"]
 
 #: The one place the closure-constant relabel is switched on. ``None`` keeps
-#: the observed tinygrad name (``buffer``); ``"constant"`` is SPEC 2 rule 1.
+#: the observed tinygrad name (``buffer``) for ``func_name`` and ``layer_type``
+#: (so labels stay ``buffer_<n>``); ``"constant"`` is SPEC 2 rule 1 and makes
+#: the shared constants rule (``backends/_constants.py``) see the op as a
+#: closure constant and label it ``constant_<n>``. Flip it together with the
+#: pinned tinygrad inventories in ``conformance/_preview_adapters.py``.
 CLOSURE_CONSTANT_FUNC_NAME: str | None = None
 
 #: Annotation key carrying the constant classification on a tinygrad op.
