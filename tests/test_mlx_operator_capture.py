@@ -358,15 +358,16 @@ def test_unwrapped_policy_rejects_unknown_values() -> None:
 
 # ------------------------------------------------------------- typed refusals
 def test_explicit_seed_refusal_is_coded() -> None:
-    """``random_seed=`` on the MLX preview carries code ``explicit_seed_unsupported``."""
+    """The backend's ``seed=`` refusal carries code ``explicit_seed_unsupported``.
+
+    The public spine refuses an explicit seed on previews before the backend
+    runs (its own gate, outside this packet); the backend entry is pinned here.
+    """
+
+    from torchlens.backends.mlx import MLXBackend
 
     with pytest.raises(BackendUnsupportedError) as info:
-        tl.trace(
-            lambda v: v + 1,
-            mx.array([1.0]),
-            backend="mlx",
-            capture=tl.options.CaptureOptions(seed=123),
-        )
+        MLXBackend().capture_trace(lambda v: v + 1, mx.array([1.0]), seed=123)
     assert _code(info.value) == "explicit_seed_unsupported"
     assert not is_mlx_wrapped()
 
