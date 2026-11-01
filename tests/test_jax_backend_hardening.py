@@ -1152,8 +1152,8 @@ def test_jax_module_predicate_selects_function_root() -> None:
     assert trace.validate_forward_pass([]) is True
 
 
-def test_jax_rejects_closed_over_array_params() -> None:
-    """Closed-over array parameters should be passed as explicit pytree leaves."""
+def test_jax_records_closed_over_array_params_as_constants() -> None:
+    """Closed-over arrays are ``constant`` ops with payloads, not a refusal."""
 
     hidden = jnp.ones((3, 2), dtype=jnp.float32)
 
@@ -1163,8 +1163,10 @@ def test_jax_rejects_closed_over_array_params() -> None:
         del params
         return x @ hidden
 
-    with pytest.raises(ValueError, match="closed-jaxpr constants.*explicit"):
-        tl.trace(cast(Any, uses_hidden), ({}, jnp.ones((2, 3))), backend="jax")
+    trace = tl.trace(cast(Any, uses_hidden), ({}, jnp.ones((2, 3))), backend="jax")
+    constants = [op for op in trace.layer_list if op.func_name == "constant"]
+    assert [tuple(op.out.shape) for op in constants] == [(3, 2)]
+    assert trace.validate_forward_pass([]) is True
 
 
 def test_jax_public_surface_matrix(tmp_path: Path) -> None:

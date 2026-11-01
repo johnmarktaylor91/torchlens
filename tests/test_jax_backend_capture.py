@@ -1811,8 +1811,8 @@ def test_jax_trace_while_max_unroll_region_fallback() -> None:
     assert trace.validate_forward_pass([]).state == "unverified"
 
 
-def test_jax_trace_rejects_hidden_consts() -> None:
-    """Hidden closure constants should be rejected as undeclared leaves."""
+def test_jax_trace_records_hidden_consts_as_constant_ops() -> None:
+    """Closure constants are recorded ``constant`` source ops (shared constants rule)."""
 
     hidden = jnp.ones((3, 3))
 
@@ -1822,9 +1822,14 @@ def test_jax_trace_rejects_hidden_consts() -> None:
         del params
         return x @ hidden
 
-    # Typed refusal (a ``ValueError`` subclass, so ``except ValueError`` still works).
-    with pytest.raises(BackendUnsupportedError, match="closed-jaxpr constants"):
-        _trace_jax(uses_hidden, ({}, jnp.ones((2, 3))))
+    trace = _trace_jax(uses_hidden, ({}, jnp.ones((2, 3))))
+    constants = [op for op in trace.layer_list if op.func_name == "constant"]
+    assert len(constants) == 1
+    assert constants[0].out is not None
+    assert tuple(constants[0].parents or ()) == ()
+    dot = next(op for op in trace.layer_list if op.func_name == "dot_general")
+    assert constants[0].layer_label in dot.parents or constants[0].label in dot.parents
+    assert trace.validate_forward_pass([]) is True
 
 
 def test_jax_capture_options_does_not_reject_the_whole_object() -> None:
