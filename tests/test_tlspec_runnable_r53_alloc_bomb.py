@@ -36,7 +36,6 @@ from torchlens._runnable import (
     AutocastDeviceContext,
     CallExecutionContext,
     ControlWitness,
-    FunctionRegistryKey,
     InputAttestationFingerprint,
     InputSlotBinding,
     ReadinessStatus,
@@ -51,6 +50,7 @@ from torchlens._runnable import (
 )
 from torchlens._runnable.state import _preflight_random_init_allocation
 from torchlens.errors import RunCapabilityUnavailableError
+from torchlens.intervention.types import FunctionRegistryKey
 
 
 class _Tiny(nn.Module):
