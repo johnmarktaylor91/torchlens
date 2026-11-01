@@ -333,7 +333,7 @@ _WARN_ONCE_STATE = frozenset(
         # BatchNorm train-mode running-stats disclosure fires once per process
         # (user_funcs warn-once flag, C02 lovely tranche).
         ("torchlens/_capture/prepare/door.py", "_BATCHNORM_TRAIN_STATS_WARNED"),
-        ("torchlens/_data_classes/op.py", "_WARNED_REFERENCE_SAVE_MODE"),
+        ("torchlens/_data_classes/_op_save.py", "_WARNED_REFERENCE_SAVE_MODE"),
         ("torchlens/distributed/_lifecycle.py", "_AUTO_ARM_DEGRADATION"),
         ("torchlens/recording/_storage_resolver.py", "_WARNED_REFERENCE_SAVE_MODE"),
         # Once-per-file source-drift disclosure for the C4 pinned-digest refusal

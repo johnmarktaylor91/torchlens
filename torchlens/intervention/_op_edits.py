@@ -1,5 +1,171 @@
-"""Op edit functions reached from the records through ``_data_classes._doors.intervention`` (record rebuild destination; empty until its bodies move in)."""
+"""Op-level intervention verbs: ``do``, ``set``, ``attach_hooks``, ``grad_for``, facets.
+
+Reached from ``Op`` through ``_data_classes._doors.intervention()``.
+"""
 
 from __future__ import annotations
 
-__all__: list[str] = []
+from typing import TYPE_CHECKING, Any
+
+import torch
+
+from .._errors import PayloadUnavailableError
+
+if TYPE_CHECKING:
+    from .._data_classes.op import Op
+    from .._data_classes.trace import Trace
+
+
+def derived_grad(op: Op) -> Any | None:
+    """Return this op's derived intermediate gradient payload, if available.
+
+    Returns
+    -------
+    Any | None
+        Backend-owned gradient payload from ``trace.autograd.intermediate_derived_grads``,
+        or ``None`` when this op has no exact intermediate-derived record.
+    """
+
+    trace = op._source_trace
+    records = getattr(getattr(trace, "autograd", None), "intermediate_derived_grads", None)
+    if records is None:
+        return None
+    if op.label not in records:
+        return None
+    record = records[op.label]
+    if record.provenance.get("status") != "exact":
+        return None
+    return record.grad
+
+
+def grad_for(op: Op, *, bwd: int) -> torch.Tensor:
+    """Return the saved gradient tensor for one backward pass.
+
+    Parameters
+    ----------
+    bwd:
+        One-based backward pass number.
+
+    Returns
+    -------
+    torch.Tensor
+        Saved raw gradient tensor for the requested pass.
+    """
+
+    record = op.grads.for_pass(bwd)
+    if record.grad is None:
+        raise PayloadUnavailableError(
+            f"op {op.label} has no saved gradient payload for backward pass {bwd}",
+            code="gradient_not_saved",
+            remedy="capture with gradient saving enabled for this op and pass",
+            label=str(op.label),
+            backward_pass=bwd,
+        )
+    return record.grad
+
+
+def do(
+    op: Op,
+    input_transform: Any,
+    *,
+    model: Any = None,
+    inputs: Any = None,
+    intervention: Any = None,
+) -> Trace:
+    """Apply an intervention to this op through the owning Trace.
+
+    Parameters
+    ----------
+    input_transform:
+        Transform or hook to apply to this operation's output.
+    model:
+        Model required when ``intervention.engine="rerun"``.
+    inputs:
+        Input required when ``intervention.engine="rerun"``.
+    intervention:
+        Grouped intervention options (``InterventionOptions``).
+
+    Returns
+    -------
+    Trace
+        Source Trace after applying the intervention.
+    """
+
+    return op._source_trace_or_error().do(
+        op.layer_label,
+        input_transform,
+        model=model,
+        inputs=inputs,
+        intervention=intervention,
+    )
+
+
+def set(
+    op: Op,
+    value: Any,
+    *,
+    strict: bool = False,
+    confirm_mutation: bool = False,
+) -> Trace:
+    """Set this op's out recipe through the owning Trace.
+
+    Parameters
+    ----------
+    value:
+        Static replacement value or one-shot callable.
+    strict:
+        Whether site resolution should reject non-portable selectors.
+    confirm_mutation:
+        Suppress root mutation warnings when intentionally mutating.
+
+    Returns
+    -------
+    Trace
+        Source Trace with a stale intervention recipe.
+    """
+
+    return op._source_trace_or_error().set(
+        op.layer_label,
+        value,
+        strict=strict,
+        confirm_mutation=confirm_mutation,
+    )
+
+
+def attach_hooks(
+    op: Op,
+    hook: Any = None,
+    *extra_hooks: Any,
+    strict: bool = False,
+    prepend: bool = False,
+    confirm_mutation: bool = False,
+) -> Any:
+    """Attach sticky hooks to this op through the owning Trace.
+
+    Parameters
+    ----------
+    hook:
+        Hook or helper to attach to this operation.
+    *extra_hooks:
+        Additional hooks to compose on this operation in left-to-right order.
+    strict:
+        Whether site resolution should reject non-portable selectors.
+    prepend:
+        Whether new sticky hooks should run before existing sticky hooks.
+    confirm_mutation:
+        Suppress root mutation warnings when intentionally mutating.
+
+    Returns
+    -------
+    Any
+        Trace or scoped removable hook handle, matching ``Trace.attach_hooks``.
+    """
+
+    return op._source_trace_or_error().attach_hooks(
+        op.layer_label,
+        hook,
+        *extra_hooks,
+        strict=strict,
+        prepend=prepend,
+        confirm_mutation=confirm_mutation,
+    )
