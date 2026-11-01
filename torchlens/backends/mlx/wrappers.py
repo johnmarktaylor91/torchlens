@@ -246,6 +246,53 @@ MLX_LAYER_CLASS_OPS: dict[str, str] = {
 }
 
 
+def _observe_wrapped_call(
+    observer: object,
+    original: Any,
+    op_name: str | None,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    module_tree: MLXModuleTree | None,
+    module_instances: dict[int, str] | None,
+) -> Any:
+    """Route one wrapped call through the active replay observer."""
+
+    # The replay observer mirrors capture's module frames, so it
+    # needs the same discovered-module address capture would push.
+    module_address = (
+        module_instances.get(id(args[0]))
+        if module_tree is not None and module_instances is not None and args
+        else None
+    )
+    observe_call = getattr(observer, "call")
+    return observe_call(original, op_name, args, kwargs, module_address=module_address)
+
+
+def _call_and_emit_guarded(
+    trace: Any,
+    backend: object,
+    op_name: str,
+    original: Any,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> Any:
+    """Run the original under the capture-depth guard and emit its op event."""
+
+    # The guard stays up through emit as well: intervention
+    # appliers and payload bookkeeping run array arithmetic that
+    # the wrapped operator dunders would otherwise log as ops.
+    trace._mlx_capture_depth = getattr(trace, "_mlx_capture_depth", 0) + 1
+    try:
+        output = original(*args, **kwargs)
+        module_stack = tuple(getattr(trace, "_mlx_module_stack", ()))
+        emit = getattr(backend, "emit_mlx_operation")
+        # emit returns the effective output: intervention-replaced
+        # leaves must be what the model consumes downstream.
+        return emit(trace, op_name, original, args, kwargs, output, module_stack=module_stack)
+    finally:
+        trace._mlx_capture_depth -= 1
+
+
 class _MLXWrapperRegistry:
     """Per-process MLX wrapper registry with clean backend rebinding."""
 
@@ -444,15 +491,9 @@ class _MLXWrapperRegistry:
 
             observer = _ACTIVE_TAP_OBSERVER
             if observer is not None:
-                # The replay observer mirrors capture's module frames, so it
-                # needs the same discovered-module address capture would push.
-                module_address = (
-                    module_instances.get(id(args[0]))
-                    if module_tree is not None and module_instances is not None and args
-                    else None
+                return _observe_wrapped_call(
+                    observer, original, op_name, args, kwargs, module_tree, module_instances
                 )
-                observe_call = getattr(observer, "call")
-                return observe_call(original, op_name, args, kwargs, module_address=module_address)
             if not _state._logging_enabled:
                 return original(*args, **kwargs)
             trace = _state._active_trace
@@ -465,21 +506,7 @@ class _MLXWrapperRegistry:
                     return original(*args, **kwargs)
                 if getattr(trace, "_mlx_capture_depth", 0) > 0:
                     return original(*args, **kwargs)
-                # The guard stays up through emit as well: intervention
-                # appliers and payload bookkeeping run array arithmetic that
-                # the wrapped operator dunders would otherwise log as ops.
-                trace._mlx_capture_depth = getattr(trace, "_mlx_capture_depth", 0) + 1
-                try:
-                    output = original(*args, **kwargs)
-                    module_stack = tuple(getattr(trace, "_mlx_module_stack", ()))
-                    emit = getattr(backend, "emit_mlx_operation")
-                    # emit returns the effective output: intervention-replaced
-                    # leaves must be what the model consumes downstream.
-                    return emit(
-                        trace, op_name, original, args, kwargs, output, module_stack=module_stack
-                    )
-                finally:
-                    trace._mlx_capture_depth -= 1
+                return _call_and_emit_guarded(trace, backend, op_name, original, args, kwargs)
             finally:
                 if frame is not None:
                     getattr(trace, "_mlx_module_stack").pop()

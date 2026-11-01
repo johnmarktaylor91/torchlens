@@ -44,66 +44,73 @@ def external_array_ids(model: object, is_tensor: Callable[[object], bool]) -> di
         keeps their identities valid for the capture's lifetime.
     """
 
-    found: dict[int, Any] = {}
-    visited_functions: set[int] = set()
-    visited_containers: set[int] = set()
+    walker = _ExternalArrayWalker(is_tensor)
+    walker.visit_callable(model, _MAX_FUNCTION_DEPTH)
+    return walker.found
 
-    def collect(value: Any, depth: int) -> None:
+
+class _ExternalArrayWalker:
+    """Mutually recursive array collection over values and callables, with visit sets."""
+
+    def __init__(self, is_tensor: Callable[[object], bool]) -> None:
+        self.is_tensor = is_tensor
+        self.found: dict[int, Any] = {}
+        self.visited_functions: set[int] = set()
+        self.visited_containers: set[int] = set()
+
+    def collect(self, value: Any, depth: int) -> None:
         """Record every MLX array reachable from ``value``, descending into containers."""
 
-        if is_tensor(value):
-            found[id(value)] = value
+        if self.is_tensor(value):
+            self.found[id(value)] = value
             return
         if isinstance(value, (list, tuple, set, frozenset)):
-            if id(value) in visited_containers or len(value) > _MAX_CONTAINER_ITEMS:
+            if id(value) in self.visited_containers or len(value) > _MAX_CONTAINER_ITEMS:
                 return
-            visited_containers.add(id(value))
+            self.visited_containers.add(id(value))
             for item in value:
-                collect(item, depth)
+                self.collect(item, depth)
             return
         if isinstance(value, dict):
-            if id(value) in visited_containers or len(value) > _MAX_CONTAINER_ITEMS:
+            if id(value) in self.visited_containers or len(value) > _MAX_CONTAINER_ITEMS:
                 return
-            visited_containers.add(id(value))
+            self.visited_containers.add(id(value))
             for item in value.values():
-                collect(item, depth)
+                self.collect(item, depth)
             return
         if depth > 0 and callable(value) and not isinstance(value, type):
-            visit_callable(value, depth - 1)
+            self.visit_callable(value, depth - 1)
 
-    def visit_callable(value: Any, depth: int) -> None:
+    def visit_callable(self, value: Any, depth: int) -> None:
         """Walk a callable's partial arguments, closure cells and defaults for arrays."""
 
-        if id(value) in visited_functions:
+        if id(value) in self.visited_functions:
             return
-        visited_functions.add(id(value))
+        self.visited_functions.add(id(value))
         if isinstance(value, functools.partial):
-            collect(value.args, depth)
-            collect(value.keywords, depth)
-            visit_callable(value.func, depth)
+            self.collect(value.args, depth)
+            self.collect(value.keywords, depth)
+            self.visit_callable(value.func, depth)
             return
         if inspect.ismethod(value):
-            collect(vars(value.__self__) if hasattr(value.__self__, "__dict__") else {}, depth)
-            visit_callable(value.__func__, depth)
+            self.collect(vars(value.__self__) if hasattr(value.__self__, "__dict__") else {}, depth)
+            self.visit_callable(value.__func__, depth)
             return
         if isinstance(value, types.FunctionType):
             for cell in value.__closure__ or ():
                 try:
-                    collect(cell.cell_contents, depth)
+                    self.collect(cell.cell_contents, depth)
                 except ValueError:  # empty cell
                     continue
-            _visit_code_names(value, depth, collect)
+            _visit_code_names(value, depth, self.collect)
             return
         # A callable object: its instance attributes and its class __call__.
         instance_dict = getattr(value, "__dict__", None)
         if isinstance(instance_dict, dict):
-            collect(instance_dict, depth)
+            self.collect(instance_dict, depth)
         call = inspect.getattr_static(type(value), "__call__", None)
         if isinstance(call, types.FunctionType):
-            visit_callable(call, depth)
-
-    visit_callable(model, _MAX_FUNCTION_DEPTH)
-    return found
+            self.visit_callable(call, depth)
 
 
 def _visit_code_names(

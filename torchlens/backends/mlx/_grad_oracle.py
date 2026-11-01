@@ -190,6 +190,41 @@ def _mlx_trace_intermediate_signatures(
     return grouped
 
 
+def _replacement_loss_fn(
+    backend: MLXBackend,
+    trace: Trace,
+    signature: _MLXIntermediateSignature,
+    value_args: tuple[Any, ...],
+    kwargs: Mapping[Any, Any],
+    value_fn: Callable[..., tuple[Any, Any]],
+) -> Callable[[Any], Any]:
+    """Build the scalar-loss function that replays with one boundary value replaced."""
+
+    def loss_from_replacement(replacement: Any) -> Any:
+        """Return scalar loss with one replay boundary replaced.
+
+        Parameters
+        ----------
+        replacement
+            Replacement boundary value.
+
+        Returns
+        -------
+        Any
+            Scalar MLX loss.
+        """
+
+        observer = _MLXBoundaryReplacementObserver(backend, trace, signature, replacement)
+        observer.label_call_inputs(_mlx_model_args_from_value_args(value_args, trace), kwargs)
+        with mlx_tap_observer(observer):
+            loss, _raw_output = value_fn(*value_args)
+        if not observer.replaced:
+            raise ValueError("MLX intermediate replacement oracle did not find the target.")
+        return loss
+
+    return loss_from_replacement
+
+
 def _mlx_intermediate_oracle_passes(
     *,
     backend: MLXBackend,
@@ -229,29 +264,9 @@ def _mlx_intermediate_oracle_passes(
     """
 
     mx = cast(Any, backend.mx)
-
-    def loss_from_replacement(replacement: Any) -> Any:
-        """Return scalar loss with one replay boundary replaced.
-
-        Parameters
-        ----------
-        replacement
-            Replacement boundary value.
-
-        Returns
-        -------
-        Any
-            Scalar MLX loss.
-        """
-
-        observer = _MLXBoundaryReplacementObserver(backend, trace, signature, replacement)
-        observer.label_call_inputs(_mlx_model_args_from_value_args(value_args, trace), kwargs)
-        with mlx_tap_observer(observer):
-            loss, _raw_output = value_fn(*value_args)
-        if not observer.replaced:
-            raise ValueError("MLX intermediate replacement oracle did not find the target.")
-        return loss
-
+    loss_from_replacement = _replacement_loss_fn(
+        backend, trace, signature, value_args, kwargs, value_fn
+    )
     try:
         reference_grad = mx.grad(loss_from_replacement)(value)
         mx.eval(reference_grad, producer_grad)
