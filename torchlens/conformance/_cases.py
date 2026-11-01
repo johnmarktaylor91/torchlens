@@ -274,7 +274,9 @@ def run_c1_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[CaseResu
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                _, trace, reference = _run_capture(adapter, model)
+                # ``net`` stays bound until the row's cells finish: replay
+                # validation rehydrates parameters from the live source model.
+                net, trace, reference = _run_capture(adapter, model)
         except Exception as exc:  # noqa: BLE001 - provider failures become red cells, never crashes
             results.append(_failed("c1_capture_completes", "C1", _failure_detail(exc), model))
             continue
@@ -304,7 +306,7 @@ def run_c1_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[CaseResu
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                _, repeat, _ = _run_capture(adapter, model)
+                repeat_net, repeat, _ = _run_capture(adapter, model)
             if len(repeat.layer_list) == len(trace.layer_list):
                 results.append(_passed("c1_deterministic_repeat", "C1", model))
             else:

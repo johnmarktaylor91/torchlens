@@ -209,6 +209,7 @@ def _g4(card: PreviewScorecard, repo_root: Path | None) -> GraduationItem:
     if not pinned:
         problems.append("no pinned version")
     workflows = _workflow_files(repo_root)
+    hits: list[str] = []
     if workflows is None:
         problems.append("repository files unavailable")
     elif pinned:
@@ -219,13 +220,9 @@ def _g4(card: PreviewScorecard, repo_root: Path | None) -> GraduationItem:
         ]
         if not hits:
             problems.append(f"no pull_request workflow installs {card.backend} at {pinned}")
-        else:
-            return GraduationItem(
-                "G4", True, f"{hits[0]} runs {card.backend} at {pinned} on pull_request"
-            )
     if problems:
         return GraduationItem("G4", False, "; ".join(problems))
-    return GraduationItem("G4", True, f"per-change CI at {pinned}")
+    return GraduationItem("G4", True, f"{hits[0]} runs {card.backend} at {pinned} on pull_request")
 
 
 def _workflow_files(repo_root: Path | None) -> list[Path] | None:

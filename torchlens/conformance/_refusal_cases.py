@@ -188,11 +188,21 @@ def _refusal_cell(
     from ..backends.registry import BackendUnsupportedError
 
     snapshot = getattr(adapter, "side_effect_snapshot", None)
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            prepared = _prepare_request(adapter, model, request)
+    except Exception as exc:  # noqa: BLE001 - a broken prerequisite is a red cell, not a crash
+        return _failed(
+            case_id, "C1", f"request prerequisites failed: {type(exc).__name__}: {str(exc)[:200]}"
+        )
+    # Building the model (and a prerequisite capture) may consume framework
+    # RNG; only the refusing call itself must leave the framework untouched.
     before = snapshot() if callable(snapshot) else None
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            _perform_request(adapter, protocol, model, request)
+            _issue_request(adapter, protocol, request, prepared)
     except BackendUnsupportedError as exc:
         code = refusal_code_of(exc)
         if code != expected_code:
@@ -209,36 +219,43 @@ def _refusal_cell(
     return _passed(case_id, "C1")
 
 
-def _perform_request(
-    adapter: Any, protocol: Any, model: RosterModel, request: CapabilityRequest
+def _prepare_request(
+    adapter: Any, model: RosterModel, request: CapabilityRequest
+) -> tuple[Any, ...]:
+    """Build the model and any prerequisite capture the request issues against."""
+
+    net, example = model.builder()
+    if request.kind in {"validate", "save"}:
+        return net, example, adapter.trace(net, example)
+    return net, example, None
+
+
+def _issue_request(
+    adapter: Any, protocol: Any, request: CapabilityRequest, prepared: tuple[Any, ...]
 ) -> None:
     """Issue one capability request through the public entry."""
 
-    import warnings
     from dataclasses import replace
 
     from ..options import CaptureOptions
 
-    net, example = model.builder()
+    net, example, trace = prepared
     value = request.value() if request.value is not None else None
     if request.kind == "trace_option":
         adapter.trace_with(net, example, **{str(request.option): value})
     elif request.kind == "capture_option":
-        capture = replace(CaptureOptions(), **{str(request.option): value})
+        override: dict[str, Any] = {str(request.option): value}
+        capture = replace(CaptureOptions(), **override)
         adapter.trace_with(net, example, capture=capture)
     elif request.kind == "record":
         import torchlens as tl
 
         tl.record(net, example, backend=protocol.name)
-    elif request.kind in {"validate", "save"}:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            trace = adapter.trace(net, example)
-        if request.kind == "validate":
-            protocol.validate(trace, _as_output_list(adapter.reference_output(net, example)))
-        else:
-            import tempfile
+    elif request.kind == "validate":
+        protocol.validate(trace, _as_output_list(adapter.reference_output(net, example)))
+    elif request.kind == "save":
+        import tempfile
 
-            adapter.save(trace, Path(tempfile.mkdtemp(prefix="tl_conf_save_")) / "refusal.tlspec")
+        adapter.save(trace, Path(tempfile.mkdtemp(prefix="tl_conf_save_")) / "refusal.tlspec")
     else:  # pragma: no cover - the kinds are the closed set above
         raise ValueError(f"unknown request kind {request.kind!r}")

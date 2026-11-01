@@ -132,7 +132,24 @@ def tampered_payload(value: Any) -> Any:
     return value + 1
 
 
-def names_reason_problems(status: Any, target: Any) -> tuple[str, ...]:
+def _consumer_keys(target: Any, trace: Any | None) -> set[str]:
+    """Every key the verdict may use for the tampered op's direct consumers.
+
+    Child lists name an op by one key (its layer label); a decision may use
+    another (its pass label), so each child resolves to the full key set of
+    the trace op it names, falling back to the raw child key.
+    """
+
+    children = {str(key) for key in (getattr(target, "children", None) or ())}
+    keys = set(children)
+    for op in getattr(trace, "layer_list", None) or ():
+        op_keys = _label_keys(op)
+        if op_keys & children:
+            keys |= op_keys
+    return keys
+
+
+def names_reason_problems(status: Any, target: Any, trace: Any | None = None) -> tuple[str, ...]:
     """Why a failed status does not name the tampered op (or its consumer) with a reason."""
 
     from ..backends._backend_protocol import VALIDATION_REASONS
@@ -142,7 +159,7 @@ def names_reason_problems(status: Any, target: Any) -> tuple[str, ...]:
         return (f"validate returned {type(status).__name__} ({status!r}), not a status object",)
     if state != "failed":
         return (f"tampered payload on {target.label} validated as {state!r}",)
-    accepted = _label_keys(target) | {str(key) for key in (target.children or ())}
+    accepted = _label_keys(target) | _consumer_keys(target, trace)
     decisions = list(getattr(status, "decisions", ()) or ())
     naming = [
         row

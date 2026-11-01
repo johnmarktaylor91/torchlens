@@ -635,7 +635,7 @@ def _names_reason_body(adapter: Any, protocol: Any, model: RosterModel) -> tuple
         warnings.simplefilter("ignore")
         target.out = tampered_payload(target.out)
     status = protocol.validate(trace, _as_output_list(reference))
-    return names_reason_problems(status, target)
+    return names_reason_problems(status, target, trace)
 
 
 def _rng_once_body(adapter: Any, model: RosterModel) -> tuple[str, ...]:
