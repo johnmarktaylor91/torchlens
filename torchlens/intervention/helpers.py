@@ -19,8 +19,11 @@ from ._helper_internals import (
     _make_generator,
     _mean_ablate_axes,
     _non_executable_builtin_placeholder,
+    _patch_source_identity,
     _resolve_swap_value,
     _source_tensor_or_out,
+    _splice_module_spec,
+    _swap_with_spec,
 )
 from .errors import (
     HookValueError,
@@ -776,17 +779,7 @@ def swap_with(
 
         return _hook
 
-    return _helper_spec(
-        "swap_with",
-        args=(other_label,),
-        kwargs={"allow_shape_change": allow_shape_change},
-        factory=factory,
-        # A fixed tensor donor is neutral; a site or trace donor reads
-        # recorded forward state.
-        signal=None if isinstance(other_label, torch.Tensor) else "forward",
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
-    )
+    return _swap_with_spec(other_label, factory, allow_shape_change=allow_shape_change)
 
 
 def splice_module(
@@ -864,19 +857,12 @@ def splice_module(
 
         return _hook
 
-    return _helper_spec(
-        "splice_module",
-        args=(module,),
-        kwargs={
-            "input_route": input_route,
-            "output_route": output_route,
-            "allow_shape_change": allow_shape_change,
-        },
-        factory=factory,
-        metadata={"input_route": input_route, "output_route": output_route},
-        signal="forward",
-        batch_independent=False,
-        compatible_with_append=False,
+    return _splice_module_spec(
+        module,
+        factory,
+        input_route=input_route,
+        output_route=output_route,
+        allow_shape_change=allow_shape_change,
     )
 
 
@@ -1072,6 +1058,19 @@ def builtin_helper_constructor(name: str) -> Callable[..., Edit] | None:
     return _builtin_constructors().get(name)
 
 
+def _builtin_constructor_lookup(name: str) -> tuple[dict[str, Callable[..., Edit]], str | None]:
+    """Return the builtin constructor table and ``name``'s rename target.
+
+    A removed gradient helper (or ``bwd_hook``) refuses here with its own
+    coded error before any lookup.
+    """
+
+    constructors = _builtin_constructors()
+    if name in _REMOVED_GRADIENT_HELPERS or name == "bwd_hook":
+        _refuse_removed_gradient_helper(name)
+    return constructors, _RENAMED_HELPER_NAMES.get(name)
+
+
 def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str, Any]) -> Edit:
     """Rebuild one builtin helper spec through its public constructor.
 
@@ -1103,10 +1102,7 @@ def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str
         renamed one (a clean break: a saved spec naming it no longer loads).
     """
 
-    constructors = _builtin_constructors()
-    if name in _REMOVED_GRADIENT_HELPERS or name == "bwd_hook":
-        _refuse_removed_gradient_helper(name)
-    renamed_to = _RENAMED_HELPER_NAMES.get(name)
+    constructors, renamed_to = _builtin_constructor_lookup(name)
     if name not in constructors and renamed_to is None:
         raise InvalidArgumentError(
             f"Builtin intervention helper {name!r} is unknown",
@@ -1414,16 +1410,7 @@ def patch_from(
         return plan_patch_helper(source)
 
     pairs = normalize_positions(positions)
-    identity = {
-        "source_trace_label": str(getattr(source, "trace_label", "") or ""),
-        "source_model_class": str(getattr(source, "model_class_qualname", "") or ""),
-        "source_object_id": str(id(source)),
-    }
-    if source_site is not None:
-        identity["source_site"] = repr(source_site)
-    if pairs is not None:
-        identity["positions"] = repr(pairs)
-        identity["position_axis"] = str(int(position_axis))
+    identity = _patch_source_identity(source, source_site, pairs, position_axis)
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook binding source values at fire time."""

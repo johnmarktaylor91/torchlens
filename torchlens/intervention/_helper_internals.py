@@ -14,6 +14,7 @@ from collections.abc import Callable, Mapping
 from typing import Any, Literal, cast
 
 import torch
+from torch import nn
 
 from .errors import AmbiguousAxisError, HookValueError, NonExecutableSpecError
 from .hooks import HookContext
@@ -402,3 +403,68 @@ def _live_capture_donor(source: Any, context: Mapping[str, Any]) -> tuple[Any, A
             return None, None
         return final_label, donor
     return None, None
+
+
+def _swap_with_spec(
+    other_label: Any,
+    factory: Callable[[], Callable[..., Any]],
+    *,
+    allow_shape_change: bool,
+) -> Edit:
+    """Build the ``swap_with`` helper spec around its runtime hook factory."""
+
+    return _helper_spec(
+        "swap_with",
+        args=(other_label,),
+        kwargs={"allow_shape_change": allow_shape_change},
+        factory=factory,
+        # A fixed tensor donor is neutral; a site or trace donor reads
+        # recorded forward state.
+        signal=None if isinstance(other_label, torch.Tensor) else "forward",
+        batch_independent=True,
+        compatible_with_append=not allow_shape_change,
+    )
+
+
+def _splice_module_spec(
+    module: nn.Module,
+    factory: Callable[[], Callable[..., Any]],
+    *,
+    input_route: str,
+    output_route: str,
+    allow_shape_change: bool,
+) -> Edit:
+    """Build the ``splice_module`` helper spec around its runtime hook factory."""
+
+    return _helper_spec(
+        "splice_module",
+        args=(module,),
+        kwargs={
+            "input_route": input_route,
+            "output_route": output_route,
+            "allow_shape_change": allow_shape_change,
+        },
+        factory=factory,
+        metadata={"input_route": input_route, "output_route": output_route},
+        signal="forward",
+        batch_independent=False,
+        compatible_with_append=False,
+    )
+
+
+def _patch_source_identity(
+    source: Any, source_site: Any, pairs: Any, position_axis: int
+) -> dict[str, str]:
+    """Return the persisted source-trace identity args of a ``patch_from`` spec."""
+
+    identity = {
+        "source_trace_label": str(getattr(source, "trace_label", "") or ""),
+        "source_model_class": str(getattr(source, "model_class_qualname", "") or ""),
+        "source_object_id": str(id(source)),
+    }
+    if source_site is not None:
+        identity["source_site"] = repr(source_site)
+    if pairs is not None:
+        identity["positions"] = repr(pairs)
+        identity["position_axis"] = str(int(position_axis))
+    return identity

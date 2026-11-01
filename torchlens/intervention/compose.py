@@ -117,6 +117,16 @@ def _validate_leaves(leaves: list[Edit]) -> None:
             )
 
 
+def _chain_portability(leaves: list[Edit]) -> HelperPortability:
+    """Return the weakest portability across the chained leaves."""
+
+    portability: HelperPortability = "builtin"
+    for leaf in leaves:
+        if _PORTABILITY_RANK[leaf.portability] > _PORTABILITY_RANK[portability]:
+            portability = leaf.portability
+    return portability
+
+
 def compose(*edits: Any) -> Edit:
     """Chain edits left-to-right into ONE composed edit at one site.
 
@@ -186,18 +196,13 @@ def compose(*edits: Any) -> Edit:
 
         return _hook
 
-    portability: HelperPortability = "builtin"
-    for leaf in leaves:
-        if _PORTABILITY_RANK[leaf.portability] > _PORTABILITY_RANK[portability]:
-            portability = leaf.portability
-
     from .helpers import _helper_spec
 
     return _helper_spec(
         "compose",
         args=tuple(leaves),
         factory=factory,
-        portability=portability,
+        portability=_chain_portability(leaves),
         # A chain that reads recorded forward state anywhere reads it as a whole.
         signal="forward" if any(leaf.signal == "forward" for leaf in leaves) else None,
         batch_independent=all(leaf.batch_independent for leaf in leaves),
