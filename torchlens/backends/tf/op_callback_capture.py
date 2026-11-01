@@ -784,7 +784,16 @@ class TFEagerCaptureSession:
         """
 
         label = self.events.reserve_label(kind)
-        tensor_ref = self._tensor_ref(tensor=tensor, label_raw=label.label_raw, save_payload=True)
+        # Constants rule item 5: a constant payload obeys ``save=`` like any
+        # saved activation; model inputs are always kept.
+        save_payload = kind != "constant" or self._should_save_payload(
+            self._record_context(
+                label=label, op_type_text=kind, output=tensor, output_index=0, parents=()
+            )
+        )
+        tensor_ref = self._tensor_ref(
+            tensor=tensor, label_raw=label.label_raw, save_payload=save_payload
+        )
         event = OpEvent(
             kind="source",
             label_raw=label.label_raw,
@@ -821,7 +830,7 @@ class TFEagerCaptureSession:
             output=OutputRef(
                 tensor=tensor_ref,
                 transformed_tensor=None,
-                has_saved_activation=True,
+                has_saved_activation=save_payload,
                 output_device="same",
                 activation_transform=None,
                 detach_saved_activations=False,
@@ -858,10 +867,10 @@ class TFEagerCaptureSession:
                 bytes_peak_at_call=None,
             ),
             policy=CapturePolicy(
-                save_payload=True,
+                save_payload=save_payload,
                 save_grad=False,
             ),
-            predicate_matched=True,
+            predicate_matched=save_payload,
             pass_index=1,
             grad_fn_class_qualname=None,
             grad_fn_handle=None,
