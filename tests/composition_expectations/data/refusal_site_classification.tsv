@@ -742,7 +742,6 @@ torchlens.intervention.compose:_validate_leaves:InvalidArgumentError::2	CONTRACT
 torchlens.intervention.compose:_validate_leaves:InvalidArgumentError::3	CONTRACTED	compose_leaf_invalid	F02 D20 factory-less (audit-only) leaf
 torchlens.intervention.compose:_validate_leaves:InvalidArgumentError::4	CONTRACTED	compose_unseeded_stochastic	F02 D21 unseeded stochastic leaf
 torchlens.intervention.compose:_validate_leaves:InvalidArgumentError::5	CONTRACTED	compose_shape_change_unsupported	F02 D21 shape-changing leaf refused in v1
-torchlens.intervention.compose:_validate_leaves:InvalidArgumentError::6	CONTRACTED	compose_kind_mismatch	F02 D20/D21 forward-only v1 chain
 torchlens.intervention.compose:compose.factory._hook:HookValueError::1	CONTRACTED	compose_leaf_failed	F02 D20 atomic leaf failure naming compose[i]
 torchlens.intervention.compose:compose.factory._hook:HookValueError::2	CONTRACTED	compose_leaf_failed	F02 D20 non-tensor leaf return naming compose[i]
 torchlens.intervention.masked_edit:_row_equivariance_facts:InvalidArgumentError::1	CONTRACTED	sampling_geometry_mismatch	F02 D23 batch axis out of range for the site mask
@@ -1475,7 +1474,6 @@ torchlens.intervention._subspace_projection:subspace_projection_of:InvalidArgume
 torchlens.intervention.helpers:patch_from:InvalidArgumentError::1	CONTRACTED	patch_positions_invalid	patch_from mapping, subspace edits and position edits: typed + code + remedy + contract-doc row, classified in its own change
 torchlens.intervention.param_substitution:buffer_operand_selection:SelectionError::1	CONTRACTED	param_substitution_occurrence_underivable	buffer operand derivation for a params() selection naming a registered buffer: typed + code + contract-doc row, classified in its own change
 torchlens.intervention.param_substitution:buffer_operand_selection:SelectionError::2	CONTRACTED	param_substitution_occurrence_underivable	buffer operand derivation for a params() selection naming a registered buffer: typed + code + contract-doc row, classified in its own change
-torchlens.intervention.rerun:_refuse_gradient_edit_rerun:LiveModeLabelError::1	CONTRACTED	rerun_gradient_edit_unsupported	gradient edit on a forward-only rerun refuses with its real cause: typed + code + remedy + contract-doc row, provoked in tests/test_interv_gpt2_grad_edits.py
 torchlens.bundle._fed_by:check_span_bounds:BundleRelationError::1	CONTRACTED	bundle_relation_span_out_of_bounds	harness bundles phase 1: fed_by span past a member's token stream; coded, remedy, contract-doc row
 torchlens.bundle._fed_by:settle_fed_by_params:BundleRelationError::1	CONTRACTED	bundle_relation_span_unverified	harness bundles phase 1: a claimed verified/matched fed_by row contradicted by its members; coded, remedy, contract-doc row
 torchlens.bundle._relation_carriage:_bundle_relate:BundleRelationError::1	CONTRACTED	bundle_relation_schema_invalid	harness bundles phase 1: keyword params passed with row objects; coded, remedy, contract-doc row

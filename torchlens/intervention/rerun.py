@@ -1746,8 +1746,6 @@ def _refuse_source_matched_zero_fire(
             continue
         if not matched:
             continue
-        if _is_gradient_edit(entry):
-            _refuse_gradient_edit_rerun(plan_id, matched)
         raise LiveModeLabelError(
             f"A staged edit ({plan_id}) matched {matched} site(s) {where} but fired at none "
             f"during the rerun's forward, and {why}, so the rerun would return an un-edited "
@@ -1762,34 +1760,6 @@ def _refuse_source_matched_zero_fire(
             unfired_plan_id=plan_id,
             source_site_count=matched,
         )
-
-
-def _refuse_gradient_edit_rerun(plan_id: str, matched: int) -> None:
-    """Refuse a rerun whose unfired staged edit is a gradient edit (its real cause).
-
-    Raises
-    ------
-    LiveModeLabelError
-        ``rerun_gradient_edit_unsupported``: a rerun replays the forward only.
-    """
-
-    raise LiveModeLabelError(
-        f"A staged gradient edit ({plan_id}) matched {matched} site(s) on this trace, "
-        "but a rerun replays the forward only, so a gradient edit can never fire "
-        "there. The rerun is refused and the trace is unchanged. Remedy: capture "
-        "with tl.options.CaptureOptions(backward_ready=True), attach the edit with "
-        "trace.attach_hooks(site, edit) or intervene=tl.when(site, edit), and run "
-        "trace.backward(loss)",
-        code="rerun_gradient_edit_unsupported",
-        unfired_plan_id=plan_id,
-        source_site_count=matched,
-    )
-
-
-def _is_gradient_edit(entry: Any) -> bool:
-    """Return whether one planned hook entry edits gradients."""
-
-    return entry.metadata.get("signal") == "backward"
 
 
 __all__ = ["run"]
