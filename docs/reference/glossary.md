@@ -825,6 +825,34 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `tl.Bundle({name: b[name] for name in names}).at(site)`, so one foreign member does not disable
   the view for the rest.
 
+**Bundle.draw** *(`nodes=` spelling documented-unstable)*
+: `bundle.draw(path=None, *, graph="forward", rolled=False, nodes="ops", direction=None,
+  theme="torchlens", show_legend=None, graph_overrides=None, node_overrides=None,
+  edge_overrides=None, file_format=None, open_viewer=False)` draws the merged bundle graph: the
+  shared model graph of every member, with a member list on each node and arrow that not every
+  member runs, and returns its Graphviz DOT source. The keywords are `Trace.draw`'s spellings: the
+  path comes first and its extension picks the format (`b.draw("diff.svg")` writes SVG; a path with
+  no extension writes `<path>.<file_format>`, `"pdf"` by default; a `file_format` that disagrees
+  with the extension refuses with `ValueError`); a bare `b.draw()` writes a collision-safe
+  `bundle_modelgraph.<format>` and prints its path; `graph=` takes `"forward"`, `"backward"` (each
+  member's captured grad_fn graph) or `"combined"`; `rolled=True` draws each repeated module once;
+  `direction=` is the layout direction; `open_viewer=True` opens the written picture.
+  `node_overrides=` (Bundle-only) keys Graphviz node attributes by op label (member name under
+  `nodes="members"`), `edge_overrides=` by `(source, target)`. `nodes="ops"` (default) draws the
+  ops; `nodes="members"` draws one node per member and one edge per relation row, from the
+  earlier member to the later one, labelled with the kind, the row's `label`, on `fed_by` its
+  basis and coverage, and on `selected_by` its `chosen` decision; solid edges carry token spans
+  TorchLens checked, every other row is dashed, and `graph` must stay `"forward"`. Replaces the
+  removed `show_bundle_graph` (no alias).
+
+**Bundle.show**
+: `bundle.show(kind=None, **kwargs)` shows the bundle. With no kind (or `kind="graph"`) it is
+  `bundle.draw(**kwargs)`, the merged graph of where the members differ. `kind="strip"` draws each
+  member's own graph with `Trace.draw(**kwargs)` and returns a dict of member name to DOT source
+  (a `path` gets `_<member>` appended per member; `vis_mode="none"` skips rendering);
+  `kind="repr"` and `kind="html"` return each member's `repr` / HTML text by member name. Any
+  other kind refuses with `ValueError`.
+
 **Bundle.compare**
 : `bundle.compare(a, b, *, metric="cosine", on="out")` returns the per-site differences between
   two members as `(site_label, distance)` rows over the sites both members share, paired through
@@ -1340,12 +1368,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : `tl.recording` is the sparse predicate-recording namespace behind `tl.record`;
   `tl.facets` is the semantic facet namespace (canonical home `torchlens._semantic`);
   `tl.export` holds static export helpers; `tl.Bundle(...)` / `tl.Bundle` build aligned
-  Trace collections and `torchlens._visualization.show_bundle_graph` renders a bundle's graph:
-  `nodes="ops"` (default) the union op graph, `nodes="members"` (spelling documented-unstable)
-  one node per member and one edge per relation row, from the earlier member to the later one,
-  labelled with the kind, the row's `label`, on `fed_by` its basis and coverage, and on
-  `selected_by` its `chosen` decision; solid edges carry token spans TorchLens checked, every other
-  row is dashed. `tl.load(path, lazy=True)` on a
+  Trace collections, and `Bundle.draw` (below) draws a bundle's merged graph. `tl.load(path, lazy=True)` on a
   saved bundle passes `lazy` (with `map_location` and `materialize_nested`) to every member.
 
 **Appliance door (`Trace.using`)** *(spelling documented-unstable)*
@@ -2299,8 +2322,8 @@ shim owed*
   keep their colours. The functional form with grouped options reads it from
   `VisualizationOptions.theme`.
 
-**theme / show_legend (show_bundle_graph kwargs)** — *unstable — no deprecation shim owed*
-: `torchlens._visualization.show_bundle_graph(bundle, theme="dark", show_legend=True)` draws the bundle picture like
+**theme / show_legend (Bundle.draw kwargs)** — *unstable — no deprecation shim owed*
+: `bundle.draw(path, theme="dark", show_legend=True)` draws the bundle picture like
   `Trace.draw`: the skin's page, ink and Helvetica face, `draw`'s node shapes and fills (oval for
   one function call, box for a leaf module, cylinder for a buffer; grey fill for weights), and with
   `show_legend=True` the key under the header. Member lists appear only on nodes and arrows that
