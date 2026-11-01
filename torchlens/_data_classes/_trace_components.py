@@ -135,6 +135,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "output_id2label": "capture_config",
     "output_num_classes": "capture_config",
     "_output_transform": "capture_config",
+    "_output_slot": "capture_config",
     "save_raw_output": "capture_config",
     "layer_visualizers": "capture_config",
     "save_visualizations": "capture_config",

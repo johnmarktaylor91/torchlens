@@ -557,6 +557,11 @@ class PaddleBackend:
                 halt_signal = exc
                 output = exc.frontier_output
             trace.forward_duration = Duration(time.time() - trace.capture_start_time)
+            from ..._capture.output_readback import returned, stopped
+
+            trace._output_slot = (
+                stopped(halt_signal.reason) if halt_signal is not None else returned(output)
+            )
             trace._paddle_capture_gap_markers.extend(
                 f"{PARAMETER_WRITE_MARKER}: {address}"
                 for address in self._param_write_guard.written_addresses(trace)

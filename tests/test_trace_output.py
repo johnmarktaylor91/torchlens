@@ -56,7 +56,7 @@ def test_output_refuses_after_stop_after() -> None:
     assert exc_info.value.fields["code"] == "output_capture_stopped"
 
 
-@pytest.mark.parametrize("level", ["analysis", "portable"])
+@pytest.mark.parametrize("level", ["audit", "portable"])
 def test_output_is_not_stored_with_saved_traces(tmp_path: Path, level: str) -> None:
     """Both bundle save levels omit the live return, preserving the source slot."""
 
@@ -115,6 +115,19 @@ def test_recording_conversion_has_no_live_trace_return() -> None:
 
     recording = tl.record(_ContainerOutput(), torch.ones(1, 3), save="all")
     trace = recording.to_trace()
+    with pytest.raises(PayloadUnavailableError) as exc_info:
+        _ = trace.output
+    assert exc_info.value.fields["code"] == "output_not_stored"
+
+
+def test_chunked_trace_does_not_expose_one_chunks_return() -> None:
+    """Merged chunks have no single exact forward return for the whole batch."""
+
+    trace = tl.trace(
+        _ContainerOutput(),
+        torch.ones(4, 3),
+        capture=tl.options.CaptureOptions(chunk_size=2),
+    )
     with pytest.raises(PayloadUnavailableError) as exc_info:
         _ = trace.output
     assert exc_info.value.fields["code"] == "output_not_stored"

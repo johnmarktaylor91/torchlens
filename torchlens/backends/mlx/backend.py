@@ -1298,6 +1298,11 @@ class MLXBackend:
                     stacklevel=2,
                 )
             trace.forward_duration = Duration(time.time() - trace.capture_start_time)
+            from ..._capture.output_readback import returned, stopped
+
+            trace._output_slot = (
+                stopped(halt_signal.reason) if halt_signal is not None else returned(output)
+            )
             if halt_signal is not None:
                 trace.raw_output = None
             else:
