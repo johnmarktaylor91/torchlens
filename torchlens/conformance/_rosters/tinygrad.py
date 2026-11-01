@@ -16,21 +16,15 @@ Two groups (SPEC 4.4):
   unsupported.
 - ``ecosystem``: two pinned pretrained families vendored from tinygrad's own
   ``examples/`` definitions (FORKS F-I, no new dependency). They run only
-  under ``TORCHLENS_CONFORMANCE_ECOSYSTEM=1``; otherwise their cells are
-  ``not_run`` with the reason in :data:`ECOSYSTEM_NOT_RUN_REASON`.
-
-Row fields beyond the base ``RosterModel`` (``expected_intermediates``,
-``has_constants``, ``random_init``, ``group``) are attached through
-:func:`_row`, which passes only the fields the dataclass declares, so the
-module works against the shared core before and after the suite packet adds
-them.
+  under ``TORCHLENS_CONFORMANCE_ECOSYSTEM=1``: :func:`runner_rows` leaves
+  them out otherwise, and their builders raise naming
+  :data:`ECOSYSTEM_NOT_RUN_REASON` if called anyway.
 """
 
 from __future__ import annotations
 
 import os
 from collections.abc import Callable, Mapping
-from dataclasses import fields
 from typing import Any
 
 import numpy as np
@@ -83,22 +77,19 @@ def _row(
     random_init: bool = False,
     checkpoint_evidence: str = "",
 ) -> RosterModel:
-    """Build a roster row, passing only the fields this ``RosterModel`` declares."""
+    """Build one roster row; ecosystem rows are the pretrained group."""
 
-    realism = "pretrained" if group == "ecosystem" else "config_built"
-    candidate: dict[str, Any] = {
-        "family": family,
-        "realism": realism,
-        "builder": builder,
-        "checkpoint_evidence": checkpoint_evidence,
-        "expected_op_kinds": expected_op_kinds,
-        "expected_intermediates": dict(expected_intermediates or {}),
-        "has_constants": has_constants,
-        "random_init": random_init,
-        "group": group,
-    }
-    declared = {field.name for field in fields(RosterModel)}
-    return RosterModel(**{key: value for key, value in candidate.items() if key in declared})
+    return RosterModel(
+        family=family,
+        realism="pretrained" if group == "ecosystem" else "config_built",
+        builder=builder,
+        checkpoint_evidence=checkpoint_evidence,
+        expected_op_kinds=expected_op_kinds,
+        expected_intermediates=dict(expected_intermediates or {}),
+        has_constants=has_constants,
+        random_init=random_init,
+        group=group,
+    )
 
 
 def _np_relu(value: np.ndarray) -> np.ndarray:
@@ -857,6 +848,13 @@ def ecosystem_rows() -> tuple[RosterModel, ...]:
             checkpoint_evidence="huggingface gpt2 (revision pinned in the ecosystem run)",
         ),
     )
+
+
+def runner_rows() -> tuple[RosterModel, ...]:
+    """The rows the conformance runner drives: ecosystem rows only under the flag."""
+
+    rows = config_built_rows() + random_init_rows()
+    return rows + ecosystem_rows() if ecosystem_enabled() else rows
 
 
 def all_rows() -> tuple[RosterModel, ...]:
