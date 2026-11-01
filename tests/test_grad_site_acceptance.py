@@ -356,6 +356,7 @@ def test_a27_unreached_gradient_settles_no_fire_without_a_zero_tensor() -> None:
     assert result[side].has_grad is False
 
 
+@pytest.mark.smoke
 def test_a27_pass_qualifier_settles_pass_filtered() -> None:
     """A27: tl.grad(s) & tl.in_backward_pass(2) on pass 1 settles no_fire, pass_filtered."""
 
@@ -369,7 +370,30 @@ def test_a27_pass_qualifier_settles_pass_filtered() -> None:
     assert len(first) == 1
     assert first[0]["status"] == "no_fire"
     assert first[0]["no_fire_reason"] == "pass_filtered"
+
+
+def test_pass_qualified_gradient_edit_fires_on_its_pass() -> None:
+    """tl.grad(s) & tl.in_backward_pass(2) skips pass 1 and fires on pass 2."""
+
+    model = _BranchMLP()
+    trace = _capture(model, _X)
+    relu = _label(trace, "relu")
+    result = trace.do(tl.grad(relu) & tl.in_backward_pass(2), tl.scale(0), model=model, x=_X)
+    loss = _loss(result)
+    result.backward(loss, retain_graph=True)
     result.backward(loss)
     second = _settle_rows(result)[-1]
     assert second["backward_pass_index"] == 2
     assert second["status"] == "fired"
+
+
+def test_rerun_result_counts_only_its_own_backward_passes() -> None:
+    """A rerun from a source that already ran a backward starts with no backward pass."""
+
+    model = _BranchMLP()
+    source = _capture(model, _X)
+    source.backward(_loss(source))
+    relu = _label(source, "relu")
+    result = source.do(tl.grad(relu), tl.scale(0.25), model=model, x=_X, loss=_loss)
+    assert result.num_backward_passes == 1
+    assert torch.allclose(result[relu].grad, 0.25 * source[relu].grad)
