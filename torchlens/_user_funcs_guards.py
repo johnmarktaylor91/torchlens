@@ -6,12 +6,11 @@ from typing import Any
 
 from torch import nn
 
-from torchlens.backends.registry import BackendUnsupportedError
-
 from ._deprecations import MISSING
 from ._errors import CaptureNotActiveError, InvalidArgumentError
 from ._utils._torch_compat import is_dynamo_compiled_callable
 from ._utils.env_flags import closed_bool_env
+from .backends._errors import BackendUnsupportedError
 
 #: Filtered trace options that are a capability flag's entry (SPEC 1.3: one code per
 #: cause): refusing one raises that flag's contracted code. Every other filtered option
