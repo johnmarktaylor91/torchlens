@@ -46,6 +46,14 @@ from ._boundary_rules import (
 )
 from ._enums import REDUCE_OP_KINDS, TENSORLESS_KINDS, MergedErrorCode
 from ._errors import MergeInputError
+from ._rules import (
+    SEQ_READ_FAILED_TOKEN,
+    CorrelationKey,
+    GroupRankPresence,
+    GroupSeqLatch,
+    correlation_key,
+    group_uid,
+)
 
 __all__ = [
     "BOUNDARY_SCHEMA",
@@ -144,6 +152,248 @@ def _validate_boundary(entry: dict[str, Any], index: int, source: str) -> None:
     check_lifetime_evidence(entry, where, source)
 
 
+def _distributed_record(trace: Any, source: str) -> dict[str, Any]:
+    """Return the trace's distributed record, refusing a trace that carries none.
+
+    Raises
+    ------
+    MergeInputError
+        ``merge_input_invalid`` when ``trace.annotations['distributed']`` is
+        absent, not a mapping, or has no boundaries.
+    """
+
+    record = getattr(trace, "annotations", {}).get("distributed")
+    if not isinstance(record, dict) or not record.get("boundaries"):
+        raise MergeInputError(
+            f"Merge input {source} carries no distributed boundary evidence "
+            "(trace.annotations['distributed'] is absent or empty). Only rank "
+            "captures taken under the distributed opt-in "
+            "(torchlens.distributed.arm() or SPMD lazy arming) can be merged.",
+            code=MergedErrorCode.MERGE_INPUT_INVALID,
+            reason="not_a_rank_capture",
+            remedy="capture each rank under torchlens.distributed.arm() and merge those",
+            source=source,
+        )
+    return record
+
+
+def _refuse_funcol_boundary(entry: dict[str, Any], index: int, source: str) -> None:
+    """Refuse a core carrying a functional-collective (funcol) boundary.
+
+    Merge-ranks C2 recording (fail-closed): funcol boundaries carry the
+    documented-unstable v0 payload, which the frozen C1 derivation cannot
+    join. Refusing the CORE typed is strictly honest; the shipped alternative
+    was merging with the funcol traffic invisibly absent. The merged-side
+    funcol join is C2 merged-side work behind its own ruling (L8 plan 3.2c).
+
+    Raises
+    ------
+    MergeInputError
+        ``merge_scope_unsupported`` for a ``functional_collective_boundary_v0`` entry.
+    """
+
+    if entry.get("schema") != "functional_collective_boundary_v0":
+        return
+    raise MergeInputError(
+        f"Merge input {source} records a functional-collective "
+        f"(funcol) boundary (index {index}, kind "
+        f"{entry.get('kind')!r}). C1 joins the frozen "
+        "collective_boundary_v1 payload only; funcol boundary joining "
+        "is rung-C2 merged-side scope and stays refused until its "
+        "capture-fidelity census and authorizing ruling land.",
+        code=MergedErrorCode.MERGE_SCOPE_UNSUPPORTED,
+        reason="functional_collective_boundary_unsupported",
+        source=source,
+        boundary_index=index,
+    )
+
+
+class _CoreCoherence:
+    """The per-core coherence rules every validated boundary must keep with its predecessors.
+
+    Each rule reads a group-level or core-level fact that the recorder writes
+    uniformly; a boundary that contradicts an earlier one of the same core is
+    tamper, never honest evidence. Applied in order after ``_validate_boundary``:
+    group-rank presence (identity), the group-seq latch (provenance), the
+    install epoch (provenance), then the rank-local correlation key (identity).
+    """
+
+    def __init__(self, install_epoch: Any, source: str) -> None:
+        self._install_epoch = install_epoch
+        self._source = source
+        self._group_rank_presence = GroupRankPresence()
+        self._seq_latch = GroupSeqLatch()
+        self._seen_keys: set[CorrelationKey] = set()
+
+    def check(self, entry: dict[str, Any], index: int) -> None:
+        """Apply every per-core rule to one validated boundary.
+
+        Raises
+        ------
+        MergeInputError
+            ``merged_schema_invalid`` for the first rule the boundary breaks.
+        """
+
+        self._check_group_rank_presence(entry, index)
+        self._check_group_seq_latch(entry, index)
+        self._check_install_epoch(entry, index)
+        self._check_unique_correlation_key(entry, index)
+
+    def _check_group_rank_presence(self, entry: dict[str, Any], index: int) -> None:
+        """Refuse a group whose boundaries mix ``my_group_rank`` presence and absence.
+
+        Presence is uniform per group within one rank core. Without this,
+        stripping ``my_group_rank`` from one boundary of a slice-witnessed join
+        silently deleted its value_divergence finding (R18-2; findings must
+        never disappear by record deletion).
+        """
+
+        uid = group_uid(entry["correlation"])
+        is_absent = entry["group"].get("my_group_rank") is None
+        if self._group_rank_presence.mixed(uid, is_absent):
+            raise _refuse(
+                f"boundary {index} of {self._source} mixes my_group_rank presence and "
+                f"absence within one group {uid}; group-rank readability is a "
+                "group-level fact, so selective absence is tamper",
+                source=self._source,
+            )
+
+    def _check_group_seq_latch(self, entry: dict[str, Any], index: int) -> None:
+        """Refuse a ``c10d_group_seq`` sequence that breaks the recorder's latch shape."""
+
+        disclosed = SEQ_READ_FAILED_TOKEN in entry["disclosures"]
+        defect = self._seq_latch.observe(entry["c10d_group_seq"], disclosed)
+        if defect is None:
+            return
+        where = f"boundary {index} of {self._source}"
+        detail = {
+            GroupSeqLatch.VALUE_AFTER_DROP: (
+                f"{where} carries a c10d_group_seq value after an earlier boundary "
+                "of this core recorded none; the probe never recovers within one capture"
+            ),
+            GroupSeqLatch.UNDISCLOSED_DROP: (
+                f"{where} drops c10d_group_seq without the c10d_group_seq_read_failed "
+                "disclosure while earlier boundaries of this core carry values; an "
+                "undisclosed drop is tamper, not honest probe absence"
+            ),
+            GroupSeqLatch.REPEATED_DISCLOSURE: (
+                f"{where} repeats the c10d_group_seq_read_failed disclosure after the "
+                "probe already latched off; the recorder discloses the failed read "
+                "exactly once"
+            ),
+        }[defect]
+        raise _refuse(detail, source=self._source)
+
+    def _check_install_epoch(self, entry: dict[str, Any], index: int) -> None:
+        """Refuse a boundary whose install epoch differs from the rank record's.
+
+        A rank has exactly ONE install epoch; a boundary claiming a different
+        one is a forged record trying to promote (or demote) its own lifetime
+        completeness independently of the rank's arming record.
+        """
+
+        claimed = entry["lifetime_evidence"]["install_epoch"]
+        if claimed != self._install_epoch:
+            raise _refuse(
+                f"boundary {index} of {self._source} claims install_epoch "
+                f"{claimed!r} but the rank record's install_epoch is "
+                f"{self._install_epoch!r}",
+                source=self._source,
+            )
+
+    def _check_unique_correlation_key(self, entry: dict[str, Any], index: int) -> None:
+        """Refuse a correlation key already seen in this rank core."""
+
+        key = correlation_key(entry["correlation"])
+        if key in self._seen_keys:
+            raise _refuse(
+                f"boundary {index} of {self._source} duplicates rank-local correlation key {key}",
+                source=self._source,
+            )
+        self._seen_keys.add(key)
+
+
+def _walk_boundaries(boundaries: Sequence[Any], install_epoch: Any, source: str) -> set[int]:
+    """Validate every boundary of one core in journal order; return the ranks it claims.
+
+    Raises
+    ------
+    MergeInputError
+        For the first malformed, out-of-scope or incoherent boundary.
+    """
+
+    ranks: set[int] = set()
+    coherence = _CoreCoherence(install_epoch, source)
+    for index, entry in enumerate(boundaries):
+        if not isinstance(entry, dict):
+            raise _refuse(f"boundary {index} of {source} is not a mapping", source=source)
+        _refuse_funcol_boundary(entry, index, source)
+        _validate_boundary(entry, index, source)
+        coherence.check(entry, index)
+        ranks.add(int(entry["group"]["my_global_rank"]))
+    return ranks
+
+
+def _single_rank(ranks: set[int], source: str) -> int:
+    """Return the one rank a core claims.
+
+    Raises
+    ------
+    MergeInputError
+        ``merge_input_invalid`` when the core's boundaries name several ranks.
+    """
+
+    if len(ranks) != 1:
+        raise MergeInputError(
+            f"Merge input {source} claims multiple global ranks {sorted(ranks)}; "
+            "a rank core is a single-rank capture.",
+            code=MergedErrorCode.MERGE_INPUT_INVALID,
+            reason="multiple_ranks_in_one_core",
+            remedy="re-capture the rank; one core must come from exactly one rank",
+            source=source,
+        )
+    return next(iter(ranks))
+
+
+def _parse_ledger(record: dict[str, Any], install_epoch: Any, source: str) -> GroupLifecycleLedger:
+    """Rebuild the core's group-lifecycle ledger and tie its events to the rank's epoch.
+
+    Raises
+    ------
+    MergeInputError
+        ``merged_schema_invalid`` when the ledger payload is absent, empty or
+        unparseable, or its events' install epochs disagree with the record's.
+    """
+
+    ledger_payload = record.get("group_lifecycle_ledger")
+    if not isinstance(ledger_payload, list) or not ledger_payload:
+        raise _refuse("group_lifecycle_ledger is absent or empty", source=source)
+    try:
+        ledger = GroupLifecycleLedger.from_payload(ledger_payload)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise _refuse(f"group_lifecycle_ledger does not parse ({exc})", source=source) from exc
+    # ``lineage_vectors()`` stamps each vector's install epoch from the EVENTS, while
+    # the audit's completeness reasoning also reads the record-level epoch. A rank
+    # has exactly one epoch, so a disagreement is a forged/corrupt sidecar trying to
+    # promote a ``seeded`` rank to a complete witness; refuse rather than let the two
+    # readings diverge.
+    event_epochs = {event.install_epoch for event in ledger.events}
+    if event_epochs != {install_epoch}:
+        raise _refuse(
+            f"group_lifecycle_ledger event install_epochs {sorted(event_epochs)} disagree "
+            f"with the record install_epoch {install_epoch!r}",
+            source=source,
+        )
+    return ledger
+
+
+def _shard_local_scope(trace: Any) -> bool:
+    """Return whether a live trace declares the rank-local shard distributed scope."""
+
+    scope = trace._provenance_distributed_scope if is_live_trace(trace) else None
+    return bool(scope == "rank_local_shard")
+
+
 def extract_rank_evidence(trace: Any, source: str) -> RankEvidence:
     """Extract and validate one rank core's merge evidence.
 
@@ -167,18 +417,7 @@ def extract_rank_evidence(trace: Any, source: str) -> RankEvidence:
         or its boundary records disagree about the rank's own identity.
     """
 
-    record = getattr(trace, "annotations", {}).get("distributed")
-    if not isinstance(record, dict) or not record.get("boundaries"):
-        raise MergeInputError(
-            f"Merge input {source} carries no distributed boundary evidence "
-            "(trace.annotations['distributed'] is absent or empty). Only rank "
-            "captures taken under the distributed opt-in "
-            "(torchlens.distributed.arm() or SPMD lazy arming) can be merged.",
-            code=MergedErrorCode.MERGE_INPUT_INVALID,
-            reason="not_a_rank_capture",
-            remedy="capture each rank under torchlens.distributed.arm() and merge those",
-            source=source,
-        )
+    record = _distributed_record(trace, source)
     boundaries = record["boundaries"]
     if not isinstance(boundaries, (list, tuple)):
         # W051-CAPT3 (IO remainder): the per-rank journal the merge JOINS is
@@ -198,140 +437,10 @@ def extract_rank_evidence(trace: Any, source: str) -> RankEvidence:
             f"install_epoch {install_epoch!r} outside the closed vocabulary",
             source=source,
         )
-    ranks: set[int] = set()
-    seen_correlation_keys: set[tuple[str, int, str, int]] = set()
-    group_rank_absence: dict[tuple[str, int], bool] = {}
-    seq_seen_value = False
-    seq_dropped = False
-    for index, entry in enumerate(boundaries):
-        if not isinstance(entry, dict):
-            raise _refuse(f"boundary {index} of {source} is not a mapping", source=source)
-        if entry.get("schema") == "functional_collective_boundary_v0":
-            # Merge-ranks C2 recording (fail-closed): funcol boundaries carry
-            # the documented-unstable v0 payload, which the frozen C1
-            # derivation cannot join. Refusing the CORE typed is strictly
-            # honest -- the shipped alternative was merging with the funcol
-            # traffic invisibly absent. The merged-side funcol join is C2
-            # merged-side work behind its own ruling (L8 plan 3.2c).
-            raise MergeInputError(
-                f"Merge input {source} records a functional-collective "
-                f"(funcol) boundary (index {index}, kind "
-                f"{entry.get('kind')!r}). C1 joins the frozen "
-                "collective_boundary_v1 payload only; funcol boundary joining "
-                "is rung-C2 merged-side scope and stays refused until its "
-                "capture-fidelity census and authorizing ruling land.",
-                code=MergedErrorCode.MERGE_SCOPE_UNSUPPORTED,
-                reason="functional_collective_boundary_unsupported",
-                source=source,
-                boundary_index=index,
-            )
-        _validate_boundary(entry, index, source)
-        # my_group_rank None-ness is UNIFORM per group within one rank core:
-        # the writer mints None only when ``dist.get_group_rank`` raises -- a
-        # group-level fact -- so mixed presence within one core+group is
-        # tamper. Without this, stripping my_group_rank from one boundary of a
-        # slice-witnessed join silently deleted its value_divergence finding
-        # (R18-2; findings must never disappear by record deletion).
-        correlation = entry["correlation"]
-        uid = (correlation["membership_digest"], correlation["lifetime_ordinal"])
-        group_rank_is_none = entry["group"].get("my_group_rank") is None
-        if uid in group_rank_absence and group_rank_absence[uid] != group_rank_is_none:
-            raise _refuse(
-                f"boundary {index} of {source} mixes my_group_rank presence and "
-                f"absence within one group {uid}; group-rank readability is a "
-                "group-level fact, so selective absence is tamper",
-                source=source,
-            )
-        group_rank_absence.setdefault(uid, group_rank_is_none)
-        # c10d_group_seq follows the recorder's process-global LATCH shape: a
-        # prefix of values, at most ONE disclosing read-failure boundary, then
-        # an all-null suffix. Selective nulling of a value (the cheap tamper
-        # that deleted a correlation_delta_mismatch finding) refuses here;
-        # uniformly-absent cores stay finding-free per the contract ("absence
-        # of the probe never demotes anything") -- an all-null rewrite is the
-        # documented coherent-reauthoring boundary, not an open residual.
-        seq_value = entry["c10d_group_seq"]
-        seq_disclosed = "c10d_group_seq_read_failed" in entry["disclosures"]
-        if seq_value is not None:
-            if seq_dropped:
-                raise _refuse(
-                    f"boundary {index} of {source} carries a c10d_group_seq value "
-                    "after an earlier boundary of this core recorded none; the "
-                    "probe never recovers within one capture",
-                    source=source,
-                )
-            seq_seen_value = True
-        elif not seq_dropped:
-            if seq_seen_value and not seq_disclosed:
-                raise _refuse(
-                    f"boundary {index} of {source} drops c10d_group_seq without "
-                    "the c10d_group_seq_read_failed disclosure while earlier "
-                    "boundaries of this core carry values; an undisclosed drop "
-                    "is tamper, not honest probe absence",
-                    source=source,
-                )
-            seq_dropped = True
-        elif seq_disclosed:
-            raise _refuse(
-                f"boundary {index} of {source} repeats the "
-                "c10d_group_seq_read_failed disclosure after the probe already "
-                "latched off; the recorder discloses the failed read exactly once",
-                source=source,
-            )
-        # A rank has exactly ONE install epoch; a boundary claiming a
-        # different one is a forged record trying to promote (or demote) its
-        # own lifetime completeness independently of the rank's arming record.
-        if entry["lifetime_evidence"]["install_epoch"] != install_epoch:
-            raise _refuse(
-                f"boundary {index} of {source} claims install_epoch "
-                f"{entry['lifetime_evidence']['install_epoch']!r} but the rank "
-                f"record's install_epoch is {install_epoch!r}",
-                source=source,
-            )
-        ranks.add(int(entry["group"]["my_global_rank"]))
-        correlation_key = (
-            correlation["membership_digest"],
-            correlation["lifetime_ordinal"],
-            correlation["channel"],
-            correlation["seq"],
-        )
-        if correlation_key in seen_correlation_keys:
-            raise _refuse(
-                f"boundary {index} of {source} duplicates rank-local correlation key "
-                f"{correlation_key}",
-                source=source,
-            )
-        seen_correlation_keys.add(correlation_key)
-    if len(ranks) != 1:
-        raise MergeInputError(
-            f"Merge input {source} claims multiple global ranks {sorted(ranks)}; "
-            "a rank core is a single-rank capture.",
-            code=MergedErrorCode.MERGE_INPUT_INVALID,
-            reason="multiple_ranks_in_one_core",
-            remedy="re-capture the rank; one core must come from exactly one rank",
-            source=source,
-        )
-    ledger_payload = record.get("group_lifecycle_ledger")
-    if not isinstance(ledger_payload, list) or not ledger_payload:
-        raise _refuse("group_lifecycle_ledger is absent or empty", source=source)
-    try:
-        ledger = GroupLifecycleLedger.from_payload(ledger_payload)
-    except (KeyError, TypeError, ValueError) as exc:
-        raise _refuse(f"group_lifecycle_ledger does not parse ({exc})", source=source) from exc
-    # ``lineage_vectors()`` stamps each vector's install epoch from the EVENTS, while
-    # the audit's completeness reasoning also reads the record-level epoch. A rank
-    # has exactly one epoch, so a disagreement is a forged/corrupt sidecar trying to
-    # promote a ``seeded`` rank to a complete witness; refuse rather than let the two
-    # readings diverge.
-    event_epochs = {event.install_epoch for event in ledger.events}
-    if event_epochs != {install_epoch}:
-        raise _refuse(
-            f"group_lifecycle_ledger event install_epochs {sorted(event_epochs)} disagree "
-            f"with the record install_epoch {install_epoch!r}",
-            source=source,
-        )
+    rank = _single_rank(_walk_boundaries(boundaries, install_epoch, source), source)
+    ledger = _parse_ledger(record, install_epoch, source)
     return RankEvidence(
-        rank=ranks.pop(),
+        rank=rank,
         boundaries=tuple(boundaries),
         ledger=ledger,
         install_epoch=str(install_epoch),
@@ -343,10 +452,7 @@ def extract_rank_evidence(trace: Any, source: str) -> RankEvidence:
         # anything other than the exact marker string reads False -- absence
         # of the marker never blocks, presence of ANY other value never
         # blocks; only the one documented value engages the scope guard.
-        shard_local=(
-            (trace._provenance_distributed_scope if is_live_trace(trace) else None)
-            == "rank_local_shard"
-        ),
+        shard_local=_shard_local_scope(trace),
     )
 
 

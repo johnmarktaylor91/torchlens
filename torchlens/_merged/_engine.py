@@ -46,9 +46,6 @@ from ._derive_steps import (
     value_divergence,
 )
 from ._enums import (
-    WITNESS_IDENTITY_KINDS,
-    WITNESS_NOT_APPLICABLE_KINDS,
-    WITNESS_VERDICT_BACKENDS,
     BoundaryConsistency,
     MergeAlignment,
     MergedErrorCode,
@@ -56,7 +53,15 @@ from ._enums import (
 )
 from ._errors import MergedFinding, MergeInputError
 from ._evidence import RankEvidence
-from ._relation_table import _relation_findings, _roles_of
+from ._relation_table import _relation_findings
+from ._rules import (
+    CONTRIBUTION_ROLES,
+    DESTINATION_ROLES,
+    WITNESS_DIGEST_FIELDS,
+    is_digest_sequence,
+    roles_of,
+)
+from ._witness import witness_consistency
 
 __all__ = [
     "JoinKey",
@@ -204,16 +209,15 @@ def _role_digests(entry: dict[str, Any]) -> tuple[tuple[str, ...] | None, tuple[
 
     witness = entry["witness"]
     values: list[tuple[str, ...] | None] = []
-    for digest_field in ("contribution_digests", "destination_digests"):
+    for digest_field in WITNESS_DIGEST_FIELDS:
         digests = witness.get(digest_field)
         if digests is None:
             values.append(None)
             continue
         # Belt for internal RankEvidence constructors that bypass the parse
-        # boundary: a bare string here would char-split through ``tuple(...)``
-        # and its characters would then be compared as digests, so two cores
-        # carrying the same garbage string fabricated an ATTESTED verdict.
-        if isinstance(digests, str) or not isinstance(digests, (list, tuple)):
+        # boundary (parse additionally requires a JSON list, non-empty for
+        # tensor-carrying kinds, of lowercase hex digests).
+        if not is_digest_sequence(digests):
             raise MergeInputError(
                 f"Boundary witness {digest_field} is not a list of digests "
                 f"(got {type(digests).__name__}).",
@@ -223,110 +227,80 @@ def _role_digests(entry: dict[str, Any]) -> tuple[tuple[str, ...] | None, tuple[
     return values[0], values[1]
 
 
-def _witness_consistency(
-    kind: str,
-    backend: str | None,
-    membership: tuple[int, ...],
-    presence: tuple[int, ...],
-    per_rank: Mapping[int, PerRankRef],
-) -> BoundaryConsistency:
-    """Totalized per-join witness derivation (v5 3.3; demote-only)."""
+class _JoinClasses:
+    """Union-find over boundary nodes ``(rank, index)`` and join classes ``("join", key)``."""
 
-    if kind in WITNESS_NOT_APPLICABLE_KINDS:
-        return BoundaryConsistency.NOT_APPLICABLE
-    if backend is None or backend not in WITNESS_VERDICT_BACKENDS:
-        return BoundaryConsistency.NOT_APPLICABLE
-    group_size = len(membership)
+    def __init__(self) -> None:
+        self._parent: dict[Any, Any] = {}
 
-    if kind in WITNESS_IDENTITY_KINDS:
-        # Every member rank ends holding identical bytes. The comparable
-        # digest is the rank's DESTINATION digest; a broadcast root has no
-        # destination role and its contribution bytes ARE the final bytes.
-        # A rank with destination roles but absent destination digests
-        # (witness level "none", async completion unobserved) contributes
-        # nothing -- its pre-collective contribution digest is never a
-        # substitute (that comparison could only fabricate a mismatch).
-        values: list[tuple[str, ...]] = []
-        for rank in presence:
-            ref = per_rank[rank]
-            if ref.n_destination_roles:
-                value = ref.destination_digests
-            else:
-                value = ref.contribution_digests
-            if value:
-                values.append(tuple(value))
-        if len(set(values)) > 1:
-            return BoundaryConsistency.MISMATCHED
-        if len(values) < group_size:
-            return BoundaryConsistency.NOT_PRESENT
-        return BoundaryConsistency.ATTESTED
+    def find(self, node: Any) -> Any:
+        """Return the representative of ``node``, with path compression."""
 
-    # Slice kinds: gather / scatter / all_to_all, group-rank indexed pairs.
-    pairs: list[tuple[str, str]] = []
-    incomplete = len(presence) < group_size
-    by_group_rank: dict[int, int] = {}
-    for rank in presence:
-        group_rank = per_rank[rank].group_rank
-        if group_rank is not None:
-            # Belt for internal RankEvidence constructors that bypass the
-            # parse boundary (matching the _role_digests belt above): a
-            # permuted/out-of-range group rank used to reach the group-rank
-            # list indexing below as a raw IndexError -- or silently rebind a
-            # slice pairing -- instead of the promised typed refusal. Parse
-            # already pins my_group_rank to the membership position (R18-2).
-            if (
-                isinstance(group_rank, bool)
-                or not isinstance(group_rank, int)
-                or not 0 <= group_rank < group_size
-            ):
-                raise MergeInputError(
-                    f"Boundary group rank {group_rank!r} for rank {rank} is "
-                    f"outside its recorded group of {group_size} member(s).",
-                    code=MergedErrorCode.MERGED_SCHEMA_INVALID,
-                )
-            by_group_rank[group_rank] = rank
-    if len(by_group_rank) < len(presence):
-        incomplete = True
-    if kind in ("gather", "scatter"):
-        # gather: root's destination list slice[i] == member i's contribution.
-        # scatter: member i's destination == root's contribution list slice[i].
-        root_list_attr = "destination_digests" if kind == "gather" else "contribution_digests"
-        leaf_attr = "contribution_digests" if kind == "gather" else "destination_digests"
-        n_list_attr = "n_destination_roles" if kind == "gather" else "n_contribution_roles"
-        roots = [r for r in presence if getattr(per_rank[r], n_list_attr) == group_size]
-        expected_pairs = group_size
-        if len(roots) != 1:
-            incomplete = True
-        else:
-            root_list = getattr(per_rank[roots[0]], root_list_attr)
-            if not root_list or len(root_list) != group_size:
-                incomplete = True
-            else:
-                for group_rank in sorted(by_group_rank):
-                    rank = by_group_rank[group_rank]
-                    leaf = getattr(per_rank[rank], leaf_attr)
-                    if not leaf:
-                        incomplete = True
-                        continue
-                    pairs.append((root_list[group_rank], leaf[0]))
-    else:  # all_to_all: rank j's destination[i] == rank i's contribution[j]
-        expected_pairs = group_size * group_size
-        for gr_j in sorted(by_group_rank):
-            dest_j = per_rank[by_group_rank[gr_j]].destination_digests
-            if not dest_j:
-                incomplete = True
+        parent = self._parent
+        root = node
+        while parent.get(root, root) != root:
+            root = parent[root]
+        while parent.get(node, node) != node:
+            parent[node], node = root, parent[node]
+        return root
+
+    def union(self, a: Any, b: Any) -> None:
+        """Merge the classes of ``a`` and ``b``."""
+
+        self._parent[self.find(a)] = self.find(b)
+
+
+OrderGraph = tuple[set[Any], dict[Any, set[Any]], dict[Any, int]]
+"""``(nodes, successors, indegree)`` of the joined order graph."""
+
+
+def _order_graph(
+    evidence: Mapping[int, RankEvidence],
+    joined_nodes: Mapping[tuple[int, int], JoinKey],
+) -> OrderGraph:
+    """Build the order graph: each rank's issue order over the join-identified nodes.
+
+    Every joined boundary collapses into its join class; consecutive
+    boundaries of one rank become one edge each (self-edges and repeated
+    edges dropped).
+    """
+
+    classes = _JoinClasses()
+    for (rank, index), key in joined_nodes.items():
+        classes.union((rank, index), ("join", key))
+    edges: dict[Any, set[Any]] = {}
+    indegree: dict[Any, int] = {}
+    nodes: set[Any] = set()
+    for rank in sorted(evidence):
+        boundary_nodes = [
+            classes.find((rank, index)) if (rank, index) in joined_nodes else (rank, index)
+            for index in range(len(evidence[rank].boundaries))
+        ]
+        nodes.update(boundary_nodes)
+        for left, right in zip(boundary_nodes, boundary_nodes[1:]):
+            if left == right:
                 continue
-            for gr_i in sorted(by_group_rank):
-                contrib_i = per_rank[by_group_rank[gr_i]].contribution_digests
-                if not contrib_i or gr_i >= len(dest_j) or gr_j >= len(contrib_i):
-                    incomplete = True
-                    continue
-                pairs.append((dest_j[gr_i], contrib_i[gr_j]))
-    if any(left != right for left, right in pairs):
-        return BoundaryConsistency.MISMATCHED
-    if incomplete or len(pairs) < expected_pairs:
-        return BoundaryConsistency.NOT_PRESENT
-    return BoundaryConsistency.ATTESTED
+            if right not in edges.setdefault(left, set()):
+                edges[left].add(right)
+                indegree[right] = indegree.get(right, 0) + 1
+    return nodes, edges, indegree
+
+
+def _has_cycle(graph: OrderGraph) -> bool:
+    """Return whether the order graph has a cycle (Kahn's algorithm)."""
+
+    nodes, edges, indegree = graph
+    remaining = dict(indegree)
+    queue = [node for node in nodes if remaining.get(node, 0) == 0]
+    visited = 0
+    while queue:
+        node = queue.pop()
+        visited += 1
+        for successor in edges.get(node, ()):
+            remaining[successor] -= 1
+            if remaining[successor] == 0:
+                queue.append(successor)
+    return visited != len(nodes)
 
 
 def _check_order(
@@ -335,63 +309,17 @@ def _check_order(
 ) -> MergedFinding | None:
     """Cycle check over rank-local order + join identifications (2.2)."""
 
-    parent: dict[Any, Any] = {}
-
-    def find(node: Any) -> Any:
-        """Union-find representative of ``node``, with path compression."""
-
-        root = node
-        while parent.get(root, root) != root:
-            root = parent[root]
-        while parent.get(node, node) != node:
-            parent[node], node = root, parent[node]
-        return root
-
-    def union(a: Any, b: Any) -> None:
-        """Merge the classes of ``a`` and ``b``."""
-
-        parent[find(a)] = find(b)
-
-    for (rank, index), key in joined_nodes.items():
-        union((rank, index), ("join", key))
-
-    edges: dict[Any, set[Any]] = {}
-    indegree: dict[Any, int] = {}
-    nodes: set[Any] = set()
-    for rank in sorted(evidence):
-        boundary_nodes = [
-            find((rank, index)) if (rank, index) in joined_nodes else (rank, index)
-            for index in range(len(evidence[rank].boundaries))
-        ]
-        for node in boundary_nodes:
-            nodes.add(node)
-        for left, right in zip(boundary_nodes, boundary_nodes[1:]):
-            if left == right:
-                continue
-            if right not in edges.setdefault(left, set()):
-                edges[left].add(right)
-                indegree[right] = indegree.get(right, 0) + 1
-                nodes.add(right)
-    queue = [node for node in nodes if indegree.get(node, 0) == 0]
-    visited = 0
-    while queue:
-        node = queue.pop()
-        visited += 1
-        for successor in edges.get(node, ()):
-            indegree[successor] -= 1
-            if indegree[successor] == 0:
-                queue.append(successor)
-    if visited != len(nodes):
-        return MergedFinding(
-            kind="order_contradiction",
-            detail=(
-                "the joined cross-rank order contradicts at least one rank's "
-                "local issue order (a cycle exists through the join graph); "
-                "the presented cores cannot describe one consistent execution."
-            ),
-            ranks=tuple(sorted(evidence)),
-        )
-    return None
+    if not _has_cycle(_order_graph(evidence, joined_nodes)):
+        return None
+    return MergedFinding(
+        kind="order_contradiction",
+        detail=(
+            "the joined cross-rank order contradicts at least one rank's "
+            "local issue order (a cycle exists through the join graph); "
+            "the presented cores cannot describe one consistent execution."
+        ),
+        ranks=tuple(sorted(evidence)),
+    )
 
 
 def _per_rank_refs(
@@ -430,10 +358,8 @@ def _per_rank_refs(
             op_labels_raw=tuple(entry["op_labels_raw"]),
             group_rank=entry["group"].get("my_group_rank"),
             witness_policy=entry["witness"]["policy_resolved"],
-            n_contribution_roles=len(
-                _roles_of(entry, ("contribution", "contribution_destination"))
-            ),
-            n_destination_roles=len(_roles_of(entry, ("destination", "contribution_destination"))),
+            n_contribution_roles=len(roles_of(entry, CONTRIBUTION_ROLES)),
+            n_destination_roles=len(roles_of(entry, DESTINATION_ROLES)),
             contribution_digests=contribution,
             destination_digests=destination,
             c10d_group_seq=entry.get("c10d_group_seq"),
@@ -563,7 +489,7 @@ def _join_key(
     kind = entries[presence[0]]["kind"]
     findings = _relation_findings(key, kind, membership, entries)
     findings.extend(_key_cross_checks(evidence, key, per_rank, group_seq_base, missing))
-    consistency = _witness_consistency(kind, backend, membership, presence, per_rank)
+    consistency = witness_consistency(kind, backend, membership, presence, per_rank)
     if consistency is BoundaryConsistency.MISMATCHED:
         findings.append(value_divergence(key, kind, presence))
     return JoinRecord(

@@ -5,6 +5,10 @@
 
 ### Behavior changes
 
+- **fastlog**: the `Recording.enrich` step `"param_addresses"` is gone. It never produced an
+  enrichment (capture records carry no `parent_param_addresses` field, so it always refused);
+  the accepted steps are `"module_path_strings"` and `"all-feasible"`, and any other name
+  refuses as an unknown step.
 - **output decode**: `CaptureOptions.output_style` is gone. Output decoding is not a capture
   option: every capture runs the automatic detector pass (Hugging Face `config.id2label`
   classifiers, verified ImageNet models, and text models traced through

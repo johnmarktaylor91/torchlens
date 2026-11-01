@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from ._record_type import record_type
+
 if TYPE_CHECKING:
     from ._runnable import RunnableCallDescriptor
 
@@ -41,7 +43,11 @@ def _until_execution_partition(
     for layer in trace._layer_list:
         raw_index = getattr(layer, "raw_index", None)
         raw_label = layer._layer_label_raw
-        if layer.layer_type == "output" or raw_index is None or int(raw_index) > stop_raw_index:
+        if (
+            record_type(layer, None) == "output"
+            or raw_index is None
+            or int(raw_index) > stop_raw_index
+        ):
             skipped.append(raw_label)
             continue
         executed.append(raw_label)
