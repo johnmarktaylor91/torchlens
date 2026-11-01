@@ -525,7 +525,6 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # (measured 2338). Re-keyed 2350 -> 2050 at the Bundle split: label
     # heuristics and member coercion moved to bundle/_labels.py and
     # bundle/_members.py, the helper table went (measured 2008).
-    "torchlens/bundle/__init__.py": 2050,
     # Re-keyed 2400 -> 2100 at the F16/T60 fix cycle (2026-08-29): the file
     # crossed its ceiling (2406), so OpAccessor/LayerAccessor split to
     # _layer_accessors.py (the _layer_spec.py precedent); layer.py re-exports
