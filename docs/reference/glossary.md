@@ -1459,7 +1459,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Container registration**
 : `tl.types.register_container` registers a custom container type (flatten/unflatten pair) for
   capture and reconstruction. `tl.types.Container` is the computed view over a captured Python
-  output container.
+  output container. The container surface is stable: `tl.types.Container`, `Op.container`,
+  `tl.input_at`, `tl.output_at`, `tl.types.register_container`, `Container.reconstruct`,
+  `Trace.reconstruct_output`, `show_containers` (including `"nodes"`) and the
+  `capture_container_structure` option (see [Containers](../containers.md)).
 
 **Capture-product bases**
 : `tl.types.TraceLike` is the shared base for uncooked and cooked capture projections.
