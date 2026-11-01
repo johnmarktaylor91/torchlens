@@ -352,7 +352,7 @@ def test_grad_fn_selector_grad_input_family(tiny: _Fixture) -> None:
         runner="loss.backward",
         opt_in="backward_ready",
         selector=tl.grad_fn(name=_LN_NODE),
-        helper=tl.clamp(0.0, 0.0),
+        helper=tl.clamp(low=0.0, high=0.0),
         want=tiny.oracle("grad_fn", _LN_NODE, _zero),
     )
 

@@ -68,7 +68,7 @@ def test_edit_text_rule() -> None:
     assert short_edit_text(Edit("swap_with", args=("relu_2_1",))) == "swap_with(relu_2_1)"
     assert short_edit_text(tl.replace_with(named_fn)) == "replace_with(named_fn)"
     assert short_edit_text(tl.replace_with(lambda: torch.zeros(1))) == "replace_with(fn)"
-    assert short_edit_text(tl.clip_norm(1.0)) == "clip_norm(1.0)"
+    assert short_edit_text(tl.clip_norm(0.5)) == "clip_norm(0.5)"
 
 
 def test_node_rows_cap_at_three_then_more() -> None:

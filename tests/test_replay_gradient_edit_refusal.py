@@ -42,7 +42,7 @@ _EDITS: dict[str, Callable[[], Any]] = {
     "scale": lambda: tl.scale(0.5),
     "clip_norm": lambda: tl.clip_norm(1.0),
     "add_noise": lambda: tl.add_noise(0.1, seed=0),
-    "clamp": lambda: tl.clamp(-1.0, 1.0),
+    "clamp": lambda: tl.clamp(low=-1.0, high=1.0),
     "callable": lambda: _zero,
 }
 

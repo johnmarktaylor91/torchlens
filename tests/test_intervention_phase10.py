@@ -436,7 +436,7 @@ def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(name="relu"), tl.clamp(0, 0), confirm_mutation=True)
+    log.attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0), confirm_mutation=True)
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_records.tlspec"
 
@@ -551,7 +551,7 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
         target_label="relu_back_1_1",
         call_label="relu_back_1_1:1",
         engine="live",
-        helper=tl.clamp(0, 0),
+        helper=tl.clamp(low=0, high=0),
         site_label="relu_back_1_1",
         timing="post",
         signal="backward",
@@ -567,7 +567,7 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
         target_label="relu_back_1_1",
         call_label="relu_back_1_1:1",
         engine="live",
-        helper=tl.clamp(0, 0),
+        helper=tl.clamp(low=0, high=0),
         site_label="relu_back_1_1",
         timing="post",
         signal="backward",
@@ -583,7 +583,7 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
         target_label="relu_back_1_1",
         call_label="relu_back_1_1:1",
         engine="live",
-        helper=tl.clamp(0, 0),
+        helper=tl.clamp(low=0, high=0),
         site_label="relu_back_1_1",
         timing="post",
         signal="backward",

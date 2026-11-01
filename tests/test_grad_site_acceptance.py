@@ -103,11 +103,13 @@ def _backward_fires(trace: tl.Trace) -> list[Any]:
 
 
 def _param_grads(model: nn.Module) -> dict[str, torch.Tensor]:
-    grads: dict[str, torch.Tensor] = {}
-    for name, param in model.named_parameters():
-        assert param.grad is not None, name
-        grads[name] = param.grad.detach().clone()
-    return grads
+    """Return every parameter gradient the loss reached (``fc_side`` is never reached)."""
+
+    return {
+        name: param.grad.detach().clone()
+        for name, param in model.named_parameters()
+        if param.grad is not None
+    }
 
 
 def _clear_param_grads(model: nn.Module) -> None:
@@ -139,7 +141,7 @@ def test_a9_edit_applies_to_the_output_gradient() -> None:
     y_site = _label(trace, "mul", "__mul__")
     h_site = _label(trace, "linear")
     result = trace.do(
-        tl.grad(y_site), tl.clamp(-0.5, 0.5), model=model, x=x, loss=lambda t: _loss(t)
+        tl.grad(y_site), tl.clamp(low=-0.5, high=0.5), model=model, x=x, loss=lambda t: _loss(t)
     )
     assert torch.allclose(result[h_site].grad, torch.ones_like(result[h_site].grad))
     fires = _backward_fires(result)
@@ -160,6 +162,7 @@ def test_a10_zero_gradient_disconnects_only_the_relu_path() -> None:
         assert torch.count_nonzero(grads[name]) == 0, name
     for name in _PARAMS_DOWNSTREAM:
         assert torch.allclose(grads[name], base_grads[name]), name
+    assert "fc_side.weight" not in grads
     # fc_in still learns through the fc_b path, so its gradient changes but survives.
     assert torch.count_nonzero(grads["fc_in.weight"]) > 0
     for label in (_label(baseline, "tanh"), relu, baseline.output_layers[0]):
@@ -288,8 +291,10 @@ def test_a23_raising_loss_writes_error_and_cleans_up() -> None:
     relu = _label(trace, "relu")
     recipe_before = trace.recipe
     boom = RuntimeError("loss exploded")
+    seen: list[tl.Trace] = []
 
     def bad_loss(result: tl.Trace) -> torch.Tensor:
+        seen.append(result)
         raise boom
 
     with pytest.raises(RuntimeError) as excinfo:
@@ -297,6 +302,9 @@ def test_a23_raising_loss_writes_error_and_cleans_up() -> None:
     assert excinfo.value is boom
     assert _events(trace)[-1]["status"] == "error"
     assert trace.recipe == recipe_before
+    (result,) = seen
+    assert result.armed_edits == ()
+    assert _events(result)[-1]["status"] == "error"
 
 
 @pytest.mark.smoke

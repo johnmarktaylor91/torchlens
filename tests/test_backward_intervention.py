@@ -223,7 +223,9 @@ def test_grad_fn_hook_returns_none_when_no_match() -> None:
     """Grad_fn hook returns None when active hooks do not match."""
 
     trace_stub, _grad_fn_log = _hook_trace()
-    _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(name="missing"), tl.clamp(0, 1))
+    _state._active_hook_plan = normalize_hook_plan(
+        tl.grad_fn(name="missing"), tl.clamp(low=0, high=1)
+    )
     hook = _make_grad_fn_hook(trace_stub, 1)
     assert hook((torch.ones(1),), (torch.ones(1),)) is None
 
@@ -232,7 +234,7 @@ def test_grad_fn_hook_returns_tuple_when_mutating() -> None:
     """Grad_fn hook returns a tuple when a matching helper mutates gradients."""
 
     trace_stub, _grad_fn_log = _hook_trace()
-    _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(name="relu"), tl.clamp(0, 0))
+    _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0))
     hook = _make_grad_fn_hook(trace_stub, 1)
     result = hook((torch.ones(1),), (torch.ones(1),))
     assert isinstance(result, tuple)
@@ -243,7 +245,7 @@ def test_grad_fn_hook_records_backward_fire() -> None:
     """A matching grad_fn hook attaches a backward fire record to its call."""
 
     trace_stub, grad_fn_handle = _hook_trace()
-    _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(name="relu"), tl.clamp(0, 0))
+    _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0))
     hook = _make_grad_fn_hook(trace_stub, 1)
 
     result = hook((torch.ones(1),), (torch.ones(1),))
@@ -341,7 +343,7 @@ def test_composite_backward_target_specs_match_live_hooks() -> None:
         trace_stub, grad_fn_handle = _hook_trace()
         trace_stub._active_backward_pass_index = 1  # type: ignore[attr-defined]
         grad_fn_handle.trace = trace_stub  # type: ignore[attr-defined]
-        _state._active_hook_plan = normalize_hook_plan(selector, tl.clamp(0, 0))
+        _state._active_hook_plan = normalize_hook_plan(selector, tl.clamp(low=0, high=0))
         hook = _make_grad_fn_hook(trace_stub, 1)
 
         result = hook((torch.ones(1),), (torch.ones(1),))
@@ -594,7 +596,7 @@ def test_grad_fn_hook_call_index_targeting() -> None:
         {"type": "relu"},
         metadata={"call_index": 2},
     )
-    _state._active_hook_plan = normalize_hook_plan(target, tl.clamp(0, 0))
+    _state._active_hook_plan = normalize_hook_plan(target, tl.clamp(low=0, high=0))
     hook = _make_grad_fn_hook(trace_stub, 1)
 
     first = hook((torch.ones(1),), (torch.ones(1),))
@@ -696,7 +698,7 @@ def test_accumulategrad_prehook_records_backward_fire() -> None:
     """AccumulateGrad prehook records are attached to the paired post-hook call."""
 
     trace_stub, grad_fn_handle = _hook_trace()
-    _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(name="relu"), tl.clamp(0, 0))
+    _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0))
     pre_hook = _make_grad_fn_prehook(trace_stub, 1)
     post_hook = _make_grad_fn_hook(trace_stub, 1, is_accumulate_grad=True)
 
@@ -749,7 +751,7 @@ def test_accumulategrad_pending_records_clear_between_passes() -> None:
     """Unpaired AccumulateGrad prehook records are cleared at pass teardown."""
 
     trace_stub, grad_fn_handle = _hook_trace()
-    _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(name="relu"), tl.clamp(0, 0))
+    _state._active_hook_plan = normalize_hook_plan(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0))
     pre_hook = _make_grad_fn_prehook(trace_stub, 1)
     post_hook = _make_grad_fn_hook(trace_stub, 1, is_accumulate_grad=True)
 
@@ -952,7 +954,9 @@ def test_gradient_action_family_changes_only_gradient_path(selector: Any) -> Non
 
     zeroed, zero_records = _run_identity_relu_intervention(selector, tl.zero_ablate())
     scaled_grad, scaled_records = _run_identity_relu_intervention(selector, tl.scale(2.0))
-    clamped_grad, clamped_records = _run_identity_relu_intervention(selector, tl.clamp(0, 0))
+    clamped_grad, clamped_records = _run_identity_relu_intervention(
+        selector, tl.clamp(low=0, high=0)
+    )
     clipped_grad, clipped_records = _run_identity_relu_intervention(selector, tl.clip_norm(0.1))
     noisy_grad, noisy_records = _run_identity_relu_intervention(selector, tl.add_noise(0.5, seed=7))
 
@@ -1097,7 +1101,9 @@ def test_add_noise_on_gradient_site_is_seeded_reproducible() -> None:
 def test_clamp_on_gradient_site_clamps_elementwise() -> None:
     """clamp on tl.grad(relu) clamps each element of the unit output gradient."""
 
-    grad, _records = _run_identity_relu_intervention(tl.grad(tl.func("relu")), tl.clamp(-0.5, 0.5))
+    grad, _records = _run_identity_relu_intervention(
+        tl.grad(tl.func("relu")), tl.clamp(low=-0.5, high=0.5)
+    )
     assert torch.equal(grad, torch.full_like(grad, 0.5))
 
 
