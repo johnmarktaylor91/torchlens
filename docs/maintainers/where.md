@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1340 modules, 625356 lines, 0 modules without a docstring.
+84 packages, 1341 modules, 625797 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 43 | 24743 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1482 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4546 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 77 | 38155 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 77 | 37074 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10552 |
@@ -77,7 +77,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 2 | 950 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 15 | 5828 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3005 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 68 | 31773 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 69 | 33295 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1857 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 790 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 328 |
@@ -277,7 +277,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (77 modules, 38155 lines)
+Core data structures for representing a logged forward pass. (77 modules, 37074 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -287,8 +287,8 @@ Core data structures for representing a logged forward pass. (77 modules, 38155 
 | `_call_tree` | ModuleCall tree display and call-scope resolution helpers. | 278 |
 | `_compaction` | Freeze-seam Op metadata compaction ( fold of the standalone pass). | 87 |
 | `_container_labels` | Pure value helpers for container views. | 78 |
-| `_doors` | Doors from the records to the packages above them (Rule F). | 116 |
-| `_fork_lineage` | Fork lineage: whether two traces are related through the fork parent chain. | 44 |
+| `_doors` | Doors from the records to the packages above them (Rule F). | 122 |
+| `_fork_lineage` | Fork lineage: the ''fork'' verb's record-side helpers and the parent-chain test. | 91 |
 | `_grad_fn_naming` | Label naming for autograd grad_fn nodes: normalized type names and label parts. | 62 |
 | `_labels` | The one label vocabulary: raw, pass-qualified op and pass-free layer labels. | 111 |
 | `_layer_accessors` | OpAccessor and LayerAccessor: dict-like lookup over ops and layers. | 365 |
@@ -321,8 +321,8 @@ Core data structures for representing a logged forward pass. (77 modules, 38155 
 | `_trace_grad_sites` | Gradient sites at the trace doors: the armed read side and the plan seam. | 334 |
 | `_trace_groups` | Concern-group views of a ''Trace'': ''trace.cost'', ''trace.graph'', ''trace.autograd'', ''trace.provenance''. | 734 |
 | `_trace_groups_capture` | Capture-side concern groups of a ''Trace'': ''trace.options'', ''trace.source'', ''trace.health''. | 424 |
-| `_trace_intervention` | Trace intervention mixin. | 1905 |
-| `_trace_intervention_records` | Envelope fields of one ''do'' intervention event. | 127 |
+| `_trace_intervention` | Trace intervention mixin: the thin shell of the intervention verbs. | 674 |
+| `_trace_intervention_records` | Intervention spec state and history records of a ''Trace'' (L1). | 224 |
 | `_trace_inventory` | Trace-level inventory builders: structural sites table and bill of materials. | 246 |
 | `_trace_missing_attrs` | The canonical refusal for an attribute a ''Trace'' does not have. | 122 |
 | `_trace_narrate` | Post-hoc narration mixin for ''Trace'' (snoop ). | 46 |
@@ -1577,7 +1577,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3005 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (68 modules, 31773 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (69 modules, 33295 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1617,9 +1617,10 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_subspace_edits` | k-dimensional subspace ablation and interchange edits (N-IV-6). | 264 |
 | `_subspace_projection` | Projection-valued subspace edits: ''do(subspace(...), edit)'' edits the component. | 529 |
 | `_subspace_spec` | Reload a saved ''subspace_edit'': the portable form of a projection-valued edit. | 277 |
-| `_trace_edits` | Trace edit functions reached from the records through ''_data_classes._doors.intervention'' (record rebuild destination; empty until its... | 5 |
-| `_trace_hooks` | Trace hook functions reached from the records through ''_data_classes._doors.intervention'' (record rebuild destination; empty until its... | 5 |
+| `_trace_edits` | Trace edit functions reached from the records through ''_data_classes._doors.intervention''. | 893 |
+| `_trace_hooks` | Trace hook functions reached from the records through ''_data_classes._doors.intervention''. | 134 |
 | `_trace_run` | Trace run and push functions reached from the records through ''_data_classes._doors.intervention'' (record rebuild destination; empty un... | 5 |
+| `_trace_selection_edits` | Selection-kind ''do'' bodies of ''Trace'' (record rebuild destination). | 505 |
 | `_zero_fire` | One zero-fire policy for every intervention door (spelling DOCUMENTED-UNSTABLE). | 228 |
 | `audit` | The ONE FireRecord builder and the InterventionEvent envelope. | 554 |
 | `binding` | ''spec.bind(model)'' -- the capture-free bound intervention executor. | 1576 |

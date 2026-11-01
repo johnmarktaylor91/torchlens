@@ -423,7 +423,7 @@ def graph_breaks(model: nn.Module, inputs: Any, **trace_kwargs: Any) -> GraphBre
         except _DynamoExplainOutputError as exc:
             raise GraphBreaksNormalizationError(str(exc)) from exc
 
-        from .. import trace as capture_trace
+        from .._user_funcs import trace as capture_trace
 
         eager_trace = capture_trace(model, inputs, **trace_kwargs)
         return GraphBreakReport(
