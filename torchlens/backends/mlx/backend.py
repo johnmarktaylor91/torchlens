@@ -1330,7 +1330,7 @@ class MLXBackend:
                     )
                 )
             if grad_options.intermediate_grads and tap_observer is not None:
-                from ..._data_classes._trace_stats import set_intermediate_derived_grads
+                from ..._data_classes.derived_grad import set_intermediate_derived_grads
 
                 set_intermediate_derived_grads(
                     trace,

@@ -30,7 +30,7 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `_accessor_base.py` | Shared ordered dict-like accessor base |
 | `_doors.py` | FACADE-role deferred doors from the records to the packages above them (Rule F); the only record-side module holding upward imports |
 | `_labels.py` | The one label vocabulary: raw, pass-qualified op and pass-free layer label conversions |
-| `_trace_views.py` | Trace group-view and field-derived accessor functions (record rebuild destination) |
+| `_trace_views.py` | Bodies of the `Trace` view properties (`ops`, `layers`, `module_calls`, saved/compute subsets, graph degrees, autograd accessors) as `f(trace)` functions |
 | `_trace_state_io.py` | Trace pickle state helpers off `__getstate__`/`__setstate__` (record rebuild destination) |
 | `_trace_rerun_state.py` | Trace rerun-state family (record rebuild destination) |
 | `_trace_annotations.py` | Trace annotation family (record rebuild destination) |
@@ -53,8 +53,8 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `_backend_capability_guards.py` | Backend capability guard helpers |
 | `_nonfinite.py` | Nonfinite scan/abort helpers |
 | `prehook.py` | Pre-hook effect records |
-| `_trace_profile.py` | Trace profiling and timing helpers |
-| `_trace_stats.py` | Trace aggregate stats and backward-pass projections |
+| `_trace_profile.py` | `ModelProfile` and the `model_profile(trace)` body behind `Trace.model_profile` |
+| `_trace_stats.py` | `TraceStatsMixin`: thin stats/view methods forwarding to `_trace_views`, `_call_tree`, `_trace_inventory`, `_trace_profile`, `_trace_stats_grad_fn_site` and the `_doors` destinations; backward-pass projection sync stays here |
 | `_trace_validation.py` | Trace validation and log-entry removal helpers |
 | `_trace_viz.py` | Trace visualization entrypoints |
 | `op.py` | `Op` two-word row facade (`_core`/`_row` over `_trace_core`), tensor save, per-pass fields |
@@ -62,13 +62,13 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `layer.py` | `Layer` aggregate, pass delegation, graph unions |
 | `buffer.py` | `Buffer` and `BufferAccessor` |
 | `module.py` | `ModuleCall`, `Module`, `ModuleAccessor` |
-| `_call_tree.py` | ModuleCall ASCII call-tree printer + call-scope op resolution/edge-count helpers (split from `module.py`) |
+| `_call_tree.py` | ModuleCall ASCII call-tree printer, call-scope op resolution/edge-count helpers, and the `root_call`/`walk_calls`/`show_call_tree` bodies behind the `Trace` methods |
 | `param.py` | `Param`, lazy grad access, `ParamAccessor` |
 | `backward_pass.py` | Per-invocation backward-pass records and accessor |
 | `grad_fn.py` | Backward graph `GradFn` and accessor |
 | `grad_fn_call.py` | Per-pass backward graph record |
 | `container.py` | Structured output/container specs and reconstruction helpers |
-| `derived_grad.py` | Derived-gradient payload records |
+| `derived_grad.py` | Derived-gradient payload records and `set_intermediate_derived_grads(trace, records)` (the backend installer) |
 | `field_policy.py` | Structural field policy table helpers |
 | `func_call_location.py` | Structured call stack frames and lazy source access |
 | `interface.py` | Imported `Trace` access/query custom_methods |
