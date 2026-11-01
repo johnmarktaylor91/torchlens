@@ -26,7 +26,11 @@ pytestmark = [
     ),
 ]
 
-_ROWS = {row.family: row for row in paddle_roster.roster() if row.realism == "pretrained"}
+_ROWS = {
+    row.family: row
+    for row in paddle_roster.roster(include_ecosystem=True)
+    if row.realism == "pretrained"
+}
 
 
 @pytest.mark.parametrize("family", sorted(_ROWS))

@@ -20,7 +20,7 @@ from torchlens.conformance._rosters import paddle as paddle_roster  # noqa: E402
 
 pytestmark = pytest.mark.backend_paddle
 
-_SPECS = {row.family: row for row in paddle_roster.roster()}
+_SPECS = {row.family: row for row in paddle_roster.roster(include_ecosystem=True)}
 _ROW_SPECS = {spec.family: spec for spec in paddle_roster.config_built_specs()}
 _CONFIG_BUILT = sorted(_ROW_SPECS)
 

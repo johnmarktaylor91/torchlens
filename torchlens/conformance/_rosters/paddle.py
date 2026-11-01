@@ -22,6 +22,7 @@ from typing import Any
 import numpy as np
 
 from .._adapters import RosterModel
+from . import ecosystem_enabled
 
 #: Roster groups (SPEC 4.4).
 GROUP_CONFIG_BUILT = "config_built"
@@ -521,8 +522,14 @@ def _ecosystem_rows() -> tuple[RosterModel, ...]:
     )
 
 
-def roster() -> tuple[RosterModel, ...]:
+def roster(include_ecosystem: bool | None = None) -> tuple[RosterModel, ...]:
     """Every Paddle roster row: ``config_built`` first, then ``ecosystem``.
+
+    Parameters
+    ----------
+    include_ecosystem:
+        Whether the ecosystem rows are included; ``None`` (the default)
+        includes them when ``TORCHLENS_CONFORMANCE_ECOSYSTEM=1``.
 
     Returns
     -------
@@ -530,4 +537,7 @@ def roster() -> tuple[RosterModel, ...]:
         Rows in a stable order.
     """
 
-    return _config_built_rows() + _ecosystem_rows()
+    if include_ecosystem is None:
+        include_ecosystem = ecosystem_enabled()
+    rows = _config_built_rows()
+    return rows + _ecosystem_rows() if include_ecosystem else rows
