@@ -393,7 +393,6 @@ torchlens/_observe/_timeline.py::memory_timeline_v2	65
 torchlens/_options_validation.py::_validate_capture_values	79
 torchlens/_postprocess/__init__.py::_drop_transient_capture_state	72
 torchlens/_postprocess/__init__.py::_postprocess_body	135
-torchlens/_postprocess/__init__.py::_warn_unattributed_tensor_args	72
 torchlens/_postprocess/_buffer_addresses.py::_buffer_addresses_by_label	119
 torchlens/_postprocess/_materialize.py	1768
 torchlens/_postprocess/_materialize.py::_apply_join_cells	219
@@ -445,6 +444,7 @@ torchlens/_postprocess/loop_grouping_adapter.py::_merge_iso_groups_to_layers	297
 torchlens/_postprocess/loop_grouping_adapter.py::_pf_entry_union_allowed	107
 torchlens/_postprocess/loop_grouping_adapter.py::_pf_partition_class	216
 torchlens/_postprocess/loop_grouping_adapter.py::_refine_iso_groups	93
+torchlens/_postprocess/source_provenance.py::_warn_unattributed_tensor_args	72
 torchlens/_quickstart/_ladder.py::_trace_via_ladder	65
 torchlens/_quickstart/_primitive.py::capture_concrete	82
 torchlens/_quickstart/_render.py::_render_finished_trace	74
