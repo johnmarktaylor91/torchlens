@@ -72,7 +72,6 @@ from ...backends.torch.bound_root import (
     TLBoundMethodRoot,
     is_bound_method_of_module,
 )
-from ...bridge import transformers as _hf_bridge
 from ...intervention.errors import ChunkedForwardConfigError
 from ...intervention.predicates import InterventionPredicate
 from ...intervention.selectors import BaseSelector
@@ -120,14 +119,6 @@ from .chunked import (
     plan_chunks,
 )
 from .dispatch import _reject_unsupported_torch_trace_option_values
-
-_can_resolve_hf_processor = _hf_bridge._can_resolve_hf_processor
-_can_resolve_hf_tokenizer = _hf_bridge._can_resolve_hf_tokenizer
-_has_attached_image_processor = _hf_bridge._has_attached_image_processor
-_is_hf_image_input = _hf_bridge._is_hf_image_input
-_is_hf_multimodal_input = _hf_bridge._is_hf_multimodal_input
-_is_hf_text_input = _hf_bridge._is_hf_text_input
-
 
 # list-A row 30 latch: once-per-process disclosure that train-mode tracing
 # advances norm running statistics. Process-global by design ("warn once");

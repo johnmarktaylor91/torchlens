@@ -50,6 +50,30 @@ MAPPING = {
     "visualization": "_visualization",
 }
 PRIVATE_ROOT_ROWS = ("captured_run", "user_funcs", "visualization")
+# Capture-seam split (round 2): bodies moved out of these modules into the capture stage
+# modules. Each old module stays a re-export shim, so no spelling needs rewriting; when a
+# merge conflicts on a moved body, apply the other side's edit at the new home listed here.
+CAPTURE_SEAM_MOVES = {
+    "_user_funcs": (
+        "_capture.prepare.cache",
+        "_capture.prepare.dispatch",
+        "_capture.prepare.door",
+        "_capture.prepare.resolve",
+        "_capture.run_entry",
+        "_capture.finalize.epilogue",
+    ),
+    "_capture.trace": (
+        "_capture.run",
+        "_capture._forward_helpers",
+        "_capture._input_records",
+        "_capture.finalize.settle",
+    ),
+    "_capture.config": ("_capture.stages",),
+    "_capture_intervention": ("_capture.prepare.resolve",),
+    "_chunking": ("_capture.prepare.chunked",),
+    "_chunked_capture_helpers": ("_capture.prepare.chunked",),
+    "backends.torch.backend": ("backends.torch._outputs", "backends.torch._failed_session"),
+}
 ROOTS = (
     "torchlens",
     "tests",

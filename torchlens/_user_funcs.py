@@ -65,12 +65,6 @@ from torchlens._capture.prepare.dispatch import (
 )
 from torchlens._capture.prepare.door import (
     _BATCHNORM_TRAIN_STATS_WARNED as _BATCHNORM_TRAIN_STATS_WARNED,
-    _can_resolve_hf_processor as _can_resolve_hf_processor,
-    _can_resolve_hf_tokenizer as _can_resolve_hf_tokenizer,
-    _has_attached_image_processor as _has_attached_image_processor,
-    _is_hf_image_input as _is_hf_image_input,
-    _is_hf_multimodal_input as _is_hf_multimodal_input,
-    _is_hf_text_input as _is_hf_text_input,
     _model_type_remedy as _model_type_remedy,
     _refuse_non_torch_episode as _refuse_non_torch_episode,
     _release_preparation_after_failed_capture as _release_preparation_after_failed_capture,
@@ -121,6 +115,7 @@ from .backends.registry import (
 from .backends.torch.bound_root import (
     _reject_non_module_ladder_root,
 )
+from .bridge import transformers as _hf_bridge
 from .intervention import model_door as _model_door
 from .intervention._zero_fire import zero_fire_policy_scope
 from .intervention.errors import ChunkedForwardConfigError
@@ -134,6 +129,13 @@ from .options import (
 )
 from .recording.options import HaltPredicateFn, PredicateFn
 from .types import _GradientPostfunc
+
+_can_resolve_hf_processor = _hf_bridge._can_resolve_hf_processor
+_can_resolve_hf_tokenizer = _hf_bridge._can_resolve_hf_tokenizer
+_has_attached_image_processor = _hf_bridge._has_attached_image_processor
+_is_hf_image_input = _hf_bridge._is_hf_image_input
+_is_hf_multimodal_input = _hf_bridge._is_hf_multimodal_input
+_is_hf_text_input = _hf_bridge._is_hf_text_input
 
 
 def clear_cache(cache_dir: str | Path | None = None) -> int:

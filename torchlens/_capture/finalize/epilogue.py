@@ -13,7 +13,6 @@ from ..._data_classes.trace import (
     Trace,
 )
 from ..._utils.display import ensure_trace_visualizer_dir
-from ...intervention.resolver import _resolve_sites
 
 if TYPE_CHECKING:
     from ..stages import CaptureRequest, ForwardResult
@@ -32,6 +31,9 @@ def _render_layer_visualizers(
     layer_visualizers:
         Mapping from TorchLens site selectors to visualizer callables.
     """
+
+    # Deferred: the site resolver sits above the FINALIZE layer.
+    from ...intervention.resolver import _resolve_sites
 
     output_dir = ensure_trace_visualizer_dir(trace)
     visualizer_dir = output_dir / "visualizers"

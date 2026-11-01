@@ -4,6 +4,7 @@ Moved verbatim from ``torchlens._user_funcs`` by the capture seam.
 """
 
 import copy
+import weakref
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
@@ -44,10 +45,6 @@ from .._save_budget import SaveBudgetExceededError, SaveBudgetOption
 from .._trace_state import TraceState
 from .._utils.introspection import _get_code_context
 from .._utils.tensor_utils import SaveMode
-from .._visualization.code_panel import (
-    capture_model_source_code,
-    make_weak_model_ref,
-)
 from ..backends.torch._tl import get_tensor_label
 from ..backends.torch.bound_root import (
     TLBoundMethodRoot,
@@ -859,3 +856,17 @@ def run_capture(request: CaptureRequest) -> ForwardResult:
         **dict(request.plan or {}),
     )
     return ForwardResult(trace=trace, request=request)
+
+
+def capture_model_source_code(model: nn.Module) -> dict[str, str]:
+    """Capture the code-panel source text (deferred: the code panel sits above this layer)."""
+    from .._visualization.code_panel import capture_model_source_code as _capture
+
+    return _capture(model)
+
+
+def make_weak_model_ref(model: nn.Module) -> "weakref.ReferenceType[nn.Module] | None":
+    """Weakly reference the model for the code panel (deferred like the function above)."""
+    from .._visualization.code_panel import make_weak_model_ref as _make_ref
+
+    return _make_ref(model)
