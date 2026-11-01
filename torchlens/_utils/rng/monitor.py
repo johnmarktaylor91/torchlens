@@ -1,34 +1,18 @@
-"""RNG and autocast state capture/restore for reproducible forward-pass replay.
+"""The host-nondeterminism monitor: the capture-window context manager.
 
-During the exhaustive logging pass, RNG states are captured *before* each
-logged operation so that the validation replay can restore the exact same
-random state and reproduce the operation's output.  This is critical for
-ops like ``dropout`` or ``torch.randn`` that consume RNG.
-
-**Ordering invariant**: RNG states must be captured *before*
-``active_logging()`` is entered, because entering the logging context
-itself may call decorated functions (e.g. tensor allocations for internal
-bookkeeping) that would advance the RNG.
-
-Three independent RNG engines are captured:
-  - Python's ``random`` module
-  - NumPy's ``np.random``
-  - PyTorch's CPU generator (``torch.random``)
-  - PyTorch's per-device CUDA generators, but ONLY when this process has
-    already initialized CUDA (see :func:`_snapshot_cuda_rng_states`).  A CPU
-    capture never force-initializes a visible device just to read a generator
-    it cannot have consumed.
-
-Autocast state (``torch.amp.autocast``) is captured similarly so that
-mixed-precision ops can be replayed under the same dtype context.
+Installs, from :data:`~torchlens._utils.rng.registry.HOST_NONDETERMINISM_REGISTRY`, the
+module and class patches, profile hooks, model generator digests and frame-reachable
+inventories that witness host entropy, clock and RNG-instance consumption during a
+capture, and settles them into a :class:`~torchlens._utils.rng.channels.HostRngMonitorResult`.
 """
+
+from __future__ import annotations
 
 import _random as _c_random_module
 import _thread as _c_thread_module
 import collections as _collections_module
 import contextvars as _contextvars_module
 import datetime as _datetime_module
-import dis as _dis_module
 import functools as _functools_module
 import gc as _gc_module
 import os as _os_module
@@ -37,11 +21,9 @@ import sys as _sys_module
 import threading as _threading_module
 import time as _time_module
 import uuid as _uuid_module
-import warnings as _warnings_module
 import weakref as _weakref_module
 from collections.abc import Callable, Collection, Iterator, Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass
 from types import (
     BuiltinFunctionType,
     CodeType,
@@ -49,2063 +31,59 @@ from types import (
     FunctionType,
     GetSetDescriptorType,
     MappingProxyType,
-    MemberDescriptorType,
     MethodType,
     MethodWrapperType,
     ModuleType,
     SimpleNamespace,
-    TracebackType,
 )
-from typing import Any, TypeVar, cast
+from typing import Any, cast
 
 import numpy as np
 import torch
+
+from . import channels, engine_state, inventory_types as _types
 
 try:  # ``resource`` is POSIX-only; feature-detected for the clock family.
     import resource as _resource_module
 except ImportError:  # pragma: no cover - non-POSIX platforms
     _resource_module = None  # type: ignore[assignment]
 
-# Foreign-thread pure-read channel routing: split to _rng_channels.py under the
-# R43 file-size ratchet. The monitor keeps thin builder delegates below.
-from . import _rng_channels
-from ._torch_compat import (
-    HAS_GENERATOR_CLONE_STATE,
-    HAS_GENERATOR_GRAPHSAFE_GET_STATE,
-    HAS_GENERATOR_GRAPHSAFE_SET_STATE,
-    HAS_GENERATOR_PHILOX_STATE,
-    autocast_get_dtype,
-    autocast_is_enabled,
-    torch_module_exists_without_importing,
+from .._torch_compat import (
     warm_lazy_torch_imports,
 )
-
-# Uninitialized-memory value-source family (r53 hon_2): split to _uninit_alloc.py
-# under the R43 file-size ratchet. Re-exported here because the historical import
-# surface for the closed table and its predicates is torchlens._utils.rng.
-from ._uninit_alloc import (  # noqa: F401
-    _SEEDED_RNG_NAMESPACES,
-    _UNINIT_ALLOC_FACTORY_TAILS,
-    _UNINIT_ALLOC_RESIZE_TAILS,
-    _UNINIT_ALLOC_SIZE_GATED_TAILS,
-    _UNINIT_RNG_FILL_TAILS,
-    _UNINIT_TOTAL_WRITER_TAILS,
-    deterministic_fill_governs,
-    qualname_is_uninit_growth_resize,
-    qualname_is_uninit_size_gated_alloc,
-    qualname_is_uninit_total_writer,
-    qualname_is_uninitialized_alloc,
-    uninit_new_call_is_size_form,
+from . import monitor_state
+from .call_sites import _call_site_time_arg_proof
+from .channels import HostRngMonitorResult
+from .inventory_types import (
+    _AMBIENT_BRIDGE_LEAF_TYPES,
+    _CUSTOM_HOLDER_SKIP_MODULES,
+    _INERT_PRIMITIVE_LEAF_TYPES,
+    _INVENTORY_LEAF_TYPES,
+    _LRU_CACHE_WRAPPER_TYPE,
+    _NUMERIC_PAYLOAD_LEAF_TYPES,
+    _NUMPY_RNG_INSTANCE_TYPES,
+    _PARTIAL_SLOT_DESCRIPTORS,
+    _STDLIB_CLASS_LEAF_MODULES,
+    _STDLIB_PATH_PREFIX,
+    _UNCERTAIN_DETAIL_CAP,
+    _WEAKREF_PROXY_TYPES,
+    _NotADigestableRng,
+    _numpy_rng_receiver,
+    _resolve_slot_member,
+    _rng_exempt_instances,
+    _torchlens_module_globals_ids,
+    _untrusted_rng_override,
 )
-from .hashing import seed_barcode_rng
-from .tensor_utils import _is_cuda_available, _is_cuda_initialized
-
-_AUTOCAST_DEVICES = ("cpu", "cuda")
-_T = TypeVar("_T")
-
-_NUMPY_RNG_INSTANCE_TYPES: tuple[type, ...] = (
-    np.random.Generator,
-    np.random.RandomState,
-    np.random.BitGenerator,
-    # grind-r5 b8 R57: SeedSequence is a spawnable entropy root whose
-    # ``spawn()`` advances only ``_n_children_spawned`` -- digestable hidden
-    # state, so it is a first-class monitored holder.
-    np.random.SeedSequence,
+from .monitor_state import _PATCH_STACKS, _PatchStackEntry, _skip_retired_hooks
+from .registry import (
+    _CLOCK_COUNTER_NAMES,
+    _CLOCK_IMPLICIT_NOW,
+    _DATETIME_CLOCK_READERS,
+    _GENERATOR_METHOD_ROWS_BY_NAME,
+    TORCH_RNG_SURFACE,
+    _resolve_default_generator_ids,
+    _torch_rng_holder_module,
 )
-"""Public NumPy RNG receiver types covered by the host-nondeterminism witness.
-
-``SeedSequence`` is a first-class member (r5 b8-fable R57): ``spawn()`` on a
-model-held sequence (or on a generator's underlying sequence) advances
-``n_children_spawned`` -- verdict-steering hidden state that keys every
-future child's stream -- without touching ``bit_generator.state``.
-"""
-
-_INERT_PROFILE_C_CALL_RECEIVER_TYPES: frozenset[type] = frozenset(
-    {ModuleType, dict, list, set, str}
-)
-"""Exact receiver types that cannot own any monitored host-nondeterminism channel."""
-
-
-def _numpy_rng_receiver(value: Any) -> Any | None:
-    """Return the NumPy RNG receiver bound to ``value``, when present.
-
-    Parameters
-    ----------
-    value:
-        Candidate bound callable.
-
-    Returns
-    -------
-    Any or None
-        The owning NumPy RNG instance, or ``None`` when ``value`` is not bound
-        to a public NumPy RNG type.
-    """
-
-    if not isinstance(value, (BuiltinFunctionType, MethodType)):
-        return None
-    receiver = value.__self__
-    return receiver if isinstance(receiver, _NUMPY_RNG_INSTANCE_TYPES) else None
-
-
-def _numpy_rng_methods_need_frame_digest() -> bool:
-    """Feature-detect NumPy RNG methods that do not emit profile ``c_call`` events.
-
-    NumPy 1.x binds its public RNG C methods as ``BuiltinFunctionType`` objects,
-    which the existing receiver-profile classifier observes directly. NumPy 2.x
-    binds Cython callables as Python ``MethodType`` objects; those calls do not
-    emit ``c_call`` events. Inspecting the public class surfaces avoids version
-    parsing and draw-method name enumeration.
-
-    Returns
-    -------
-    bool
-        Whether any public NumPy RNG receiver surface uses Python method binding.
-    """
-
-    probes = (
-        np.random.Generator(np.random.PCG64(0)),
-        np.random.RandomState(0),
-    )
-    for probe in probes:
-        for descriptor in vars(type(probe)).values():
-            descriptor_get = getattr(descriptor, "__get__", None)
-            if not callable(descriptor_get):
-                continue
-            try:
-                bound = descriptor_get(probe, type(probe))
-            except (AttributeError, TypeError, ValueError):
-                continue
-            if isinstance(bound, MethodType) and _numpy_rng_receiver(bound) is probe:
-                return True
-    return False
-
-
-_NUMPY_RNG_METHODS_NEED_FRAME_DIGEST = _numpy_rng_methods_need_frame_digest()
-"""Whether NumPy RNG draws need the profiled-frame state-digest fallback."""
-
-_NUMPY_FRAME_DIGEST_INTERNAL_PATH_PREFIXES = (
-    f"{_os_module.path.dirname(_os_module.path.dirname(__file__))}{_os_module.sep}",
-    f"{_os_module.path.dirname(np.__file__)}{_os_module.sep}",
-    f"{_os_module.path.dirname(torch.__file__)}{_os_module.sep}",
-)
-"""Package roots whose internal frames cannot originate user-owned NumPy RNG draws."""
-
-_STDLIB_PATH_PREFIX = f"{_os_module.path.dirname(_os_module.__file__)}{_os_module.sep}"
-"""Filesystem root of the running interpreter's standard library."""
-
-_DEEP_INVENTORY_NODE_CAP = 1_000_000
-"""Defensive per-window walk budget for the frame-reachable RNG inventory (B4).
-
-Matches :data:`_INVENTORY_NODE_CAP` semantics exactly: exhaustion flags
-``deep_inventory_budget_exhausted`` (INCOMPLETE, fail-closed), never a silent
-partial snapshot. Realistic captures walk at most a few thousand nodes (only
-roots the profiled code actually references are expanded); the cap only exists
-so a pathological object graph terminates.
-"""
-
-_INERT_PRIMITIVE_LEAF_TYPES: frozenset[type] = frozenset(
-    {str, bytes, bytearray, memoryview, bool, int, float, complex, type(None)}
-)
-"""Exact value types that can neither be nor inertly hold an RNG receiver."""
-
-_PARTIAL_SLOT_DESCRIPTORS: tuple[Any, ...] = tuple(
-    descriptor
-    for descriptor in (
-        vars(_functools_module.partial).get(name) for name in ("func", "args", "keywords")
-    )
-    if isinstance(descriptor, (MemberDescriptorType, GetSetDescriptorType))
-)
-"""Base ``functools.partial`` C slot descriptors for ``func``/``args``/``keywords`` (r38).
-
-``partial`` interiors are C slots invisible to ``__dict__`` reads; the frame-reachable
-inventory reads them through these BASE descriptors so a hostile subclass shadow never
-executes. The ``func`` edge recovers ``partial(gen.random)``-style receivers through the
-bound-callable extraction."""
-
-_WEAKREF_PROXY_TYPES: tuple[type, ...] = (
-    _weakref_module.ProxyType,
-    _weakref_module.CallableProxyType,
-)
-"""The two weakref PROXY C types (r39 -- executed false-VERIFIED V9a).
-
-A proxy is NOT a ``weakref.ref`` subclass and has NO inert dereference: CPython's proxy
-``tp_traverse`` does not yield the referent (``gc.get_referents(proxy)`` is empty --
-verified on py3.10), and EVERY other read, including ``isinstance`` (via ``__class__``)
-and attribute access, forwards through the referent's own attribute machinery, where a
-hostile ``__getattribute__`` could fire. Both walks therefore match on the EXACT
-``type(value)`` (which never forwards) and fail CLOSED."""
-
-_LRU_CACHE_WRAPPER_TYPE: type | None = getattr(_functools_module, "_lru_cache_wrapper", None)
-"""The C ``functools.lru_cache`` wrapper type (r39 -- executed false-VERIFIED V9b).
-
-A cache WARMED before the capture returns its cached generator with no Python frame (the
-wrapped function never runs), so the draw is witnessable only by digesting the cache
-contents, exposed inertly by ``tp_traverse``. ``None`` on a runtime whose ``lru_cache``
-is the pure-Python fallback -- there the wrapper is a plain ``FunctionType`` whose cache
-hits still enter a profiled Python frame, so the return-transfer digest covers it."""
-
-
-def aten_qualname_is_seeded_rng(namespace: str | None, qualname: str | None) -> bool:
-    """Return whether a captured callable maps to a seeded ATen RNG operator.
-
-    A "seeded" RNG operator is any ATen overload PyTorch itself tags with
-    ``torch.Tag.nondeterministic_seeded`` (``rand``/``randn``/``randint``/
-    ``bernoulli``/``multinomial``/``dropout`` families and their in-place
-    ``*_`` spellings). Feature-detecting the maintained tag -- rather than
-    hard-coding a name list -- keeps this robust across torch versions.
-
-    Parameters
-    ----------
-    namespace:
-        Captured callable namespace (e.g. ``"torch"``, ``"torch.Tensor"``).
-    qualname:
-        Captured callable qualified name (e.g. ``"rand"``, ``"Tensor.bernoulli_"``).
-
-    Returns
-    -------
-    bool
-        Whether any matching ATen overload carries ``nondeterministic_seeded``.
-    """
-
-    if namespace not in _SEEDED_RNG_NAMESPACES or not qualname:
-        return False
-    name = qualname.rsplit(".", 1)[-1]
-    candidate_names = (name, name[:-1]) if name.endswith("_") else (name,)
-    for candidate_name in candidate_names:
-        packet = getattr(torch.ops.aten, candidate_name, None)
-        overloads = getattr(packet, "overloads", None)
-        if not callable(overloads):
-            continue
-        for overload_name in overloads():
-            overload = getattr(packet, overload_name)
-            if torch.Tag.nondeterministic_seeded in getattr(overload, "tags", ()):
-                return True
-    return False
-
-
-def _seed_torch_engines(seed: int) -> None:
-    """Seed torch's CPU and accelerator generators, degrading on a broken stack.
-
-    ``torch.manual_seed`` seeds the accelerator engines (every visible CUDA
-    device, MPS, XPU) BEFORE the CPU default generator, so a CUDA runtime that
-    claims initialization but cannot serve its generators (first observed on
-    real H200 hardware as an ``IndexError`` from
-    ``torch.cuda.default_generators``) aborted a pure-CPU capture with the CPU
-    engine still unseeded.  A broken accelerator must degrade a capture, never
-    abort it (the :func:`_snapshot_cuda_rng_states` contract): the failure
-    falls back to seeding the CPU default generator directly, with a warning;
-    the later CUDA RNG snapshot surfaces and latches its own read failure.
-
-    Parameters
-    ----------
-    seed:
-        Seed value to set.
-    """
-    try:
-        torch.manual_seed(seed)
-    except Exception as exc:  # noqa: BLE001 - any broken-accelerator failure mode
-        torch.default_generator.manual_seed(seed)
-        _warnings_module.warn(
-            "Could not seed torch accelerator RNG engines "
-            f"({type(exc).__name__}: {exc}); the torch CPU generator was "
-            "seeded directly and the capture continues. Operations that "
-            "consume accelerator randomness cannot be reproduced exactly "
-            "for this capture.",
-            stacklevel=3,
-        )
-
-
-def set_random_seed(seed: int) -> None:
-    """Set the random seed for all RNG engines simultaneously.
-
-    Ensures deterministic behavior across Python, NumPy, and PyTorch
-    (CPU + all CUDA devices).
-
-    Parameters
-    ----------
-    seed:
-        Seed value to set.
-    """
-    # Every capture seeds at entry, so this is the per-capture seam that
-    # re-arms the CUDA RNG snapshot retry latch: a transient generator-read
-    # failure (busy device, momentary OOM) degrades only the capture that hit
-    # it instead of latching the whole process to "no CUDA RNG snapshots".
-    global _cuda_rng_unusable
-    _cuda_rng_unusable = False
-    # r65 CLUSTER Z: TorchLens-OWNED seeding is never model host nondeterminism.
-    # Normally this runs pre-forward (outside any monitor window), but the bracket
-    # keeps any in-window TorchLens-initiated reseed from marking the torch RNG
-    # mutation channels the r65 registry rows monitor.
-    with _suppress_active_monitor_marks():
-        random.seed(seed)
-        np.random.seed(seed)
-        _seed_torch_engines(seed)
-        # Keep torchlens's private barcode RNG in lockstep with the seed so a fixed
-        # capture seed yields reproducible tensor barcodes (a fork replay reuses the
-        # original seed; matching barcodes keep tensor/op/param cross-references
-        # consistent). The barcode RNG stays a separate stream, so this does not
-        # perturb the user's global ``random`` state that host-RNG honesty brackets.
-        seed_barcode_rng(seed)
-
-
-def execute_with_restored_rng_autocast(
-    func: Callable[..., _T],
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
-    *,
-    rng_states: dict[str, Any] | None,
-    autocast_state: dict[str, Any] | None,
-) -> _T:
-    """Execute a callable with saved RNG and autocast state in a tight scope.
-
-    Parameters
-    ----------
-    func:
-        Callable to execute.
-    args:
-        Positional arguments for ``func``.
-    kwargs:
-        Keyword arguments for ``func``.
-    rng_states:
-        RNG states captured before the original operation. ``None`` or an empty
-        dict leaves the current RNG state untouched until final restoration.
-    autocast_state:
-        Autocast state captured before the original operation.
-
-    Returns
-    -------
-    _T
-        Return value from ``func``.
-
-    Raises
-    ------
-    Exception
-        Re-raises any exception from ``func`` after restoring caller RNG state.
-    """
-
-    current_rng_states = log_current_rng_states()
-    # Apply the target RNG state INSIDE the try so the finally always restores
-    # the caller's state -- even if the restore itself partially applies and then
-    # raises (e.g. a malformed rng_states dict sets the Python/NumPy engines then
-    # KeyErrors on the torch key). Doing the set before the try left the caller's
-    # engines corrupted with no rollback.
-    try:
-        if rng_states:
-            set_rng_from_saved_states(rng_states)
-        with AutocastRestore(autocast_state or {}):
-            return func(*args, **kwargs)
-    finally:
-        set_rng_from_saved_states(current_rng_states)
-
-
-def snapshot_host_rng() -> tuple[Any, Any]:
-    """Snapshot the Python ``random`` and NumPy RNG states without advancing them.
-
-    Reading ``random.getstate()`` / ``np.random.get_state()`` is side-effect free,
-    so this can bracket a forward pass to detect whether user code consumed host
-    (non-torch) RNG -- the signal a sparse runnable path uses to stay honest about
-    Python/NumPy control-flow branches it cannot re-observe.
-
-    Returns
-    -------
-    tuple[Any, Any]
-        ``(python_random_state, numpy_random_state)`` snapshot pair.
-    """
-    return (random.getstate(), np.random.get_state())
-
-
-def host_rng_advanced(before: tuple[Any, Any], after: tuple[Any, Any]) -> bool:
-    """Return whether a host (Python/NumPy) RNG engine advanced between snapshots.
-
-    Parameters
-    ----------
-    before:
-        Snapshot from :func:`snapshot_host_rng` taken before the observed region.
-    after:
-        Snapshot from :func:`snapshot_host_rng` taken after the observed region.
-
-    Returns
-    -------
-    bool
-        ``True`` when either the Python ``random`` or NumPy engine state changed.
-    """
-    py_before, np_before = before
-    py_after, np_after = after
-    if py_before != py_after:
-        return True
-    return not _numpy_states_equal(np_before, np_after)
-
-
-def restore_host_rng(snapshot: tuple[Any, Any]) -> None:
-    """Restore Python ``random`` and NumPy engines from a :func:`snapshot_host_rng` pair."""
-    py_state, np_state = snapshot
-    random.setstate(py_state)
-    np.random.set_state(np_state)
-
-
-def _numpy_states_equal(a: Any, b: Any) -> bool:
-    """Compare two ``np.random.get_state()`` tuples (array-aware) for equality."""
-    try:
-        if a[0] != b[0] or not np.array_equal(a[1], b[1]):
-            return False
-        return tuple(a[2:]) == tuple(b[2:])
-    except (TypeError, IndexError, ValueError):
-        return a is b
-
-
-_cuda_rng_unusable: bool = False
-"""Capture-scoped retry latch: a CUDA RNG snapshot raised, stop retrying for now.
-
-Set only by :func:`_snapshot_cuda_rng_states`; RE-ARMED by
-:func:`set_random_seed` (which every capture runs at entry). The snapshot is
-called per logged op, so within one capture the first failure latches — the
-failure cost and the warning are paid once, not per op. But the failure itself
-can be TRANSIENT (a busy device, a momentary OOM, a fork-context error), so a
-process-lifetime latch silently downgraded EVERY later capture's replay
-fidelity because of one bad moment (grind p5, B2P3-16). Re-arming at capture
-entry bounds the damage to the capture that actually hit the failure.
-"""
-
-
-def _snapshot_cuda_rng_states() -> list[Any]:
-    """Return per-device CUDA RNG states, or ``[]`` when no CUDA state is live.
-
-    ``torch.cuda.get_rng_state_all()`` calls ``torch.cuda._lazy_init()`` and
-    reads a generator for EVERY visible device.  Calling it unconditionally
-    (the pre-fix behavior, gated only on ``torch.cuda.is_available()``) meant a
-    pure-CPU capture on a host with visible CUDA devices paid full CUDA
-    initialization -- and, on a host whose CUDA stack is visible but unusable
-    (stale driver, mismatched build, one bad device in a multi-GPU box), the
-    initialization raised and aborted the CPU capture outright.
-
-    Two guards, in order (both short-circuited while ``_cuda_rng_unusable`` is
-    latched; the latch is re-armed at every capture entry by
-    :func:`set_random_seed`, so a transient failure degrades only the capture
-    that hit it, never the whole process):
-
-    1. If this process has never initialized CUDA, no CUDA generator can have
-       produced a number that any captured op consumed, so there is no state to
-       snapshot -- and reading one would create the very CUDA context this
-       capture does not need.  Returning ``[]`` here is exactly equivalent for
-       replay purposes and never touches the driver.
-    2. If CUDA *is* initialized, snapshot every device exactly as before (byte
-       identical for real CUDA captures: a capture that touches CUDA has
-       initialized it by definition).  Should that read still fail, degrade to
-       ``[]`` with a warning instead of aborting the capture, and latch the
-       failure so the warning is not repeated per op.
-
-    Returns
-    -------
-    list[Any]
-        Opaque per-device CUDA RNG state objects, in device order; empty when
-        no live CUDA RNG state exists or it could not be read.
-    """
-    global _cuda_rng_unusable
-    if _cuda_rng_unusable:
-        return []
-    if not _is_cuda_initialized():
-        return []
-    # Defense in depth: an initialized CUDA runtime implies availability, unless the
-    # availability probe itself already failed earlier in this process.
-    if not _is_cuda_available():
-        return []
-    try:
-        return torch.cuda.get_rng_state_all()
-    except Exception as exc:  # noqa: BLE001 - any broken-CUDA failure mode
-        _cuda_rng_unusable = True
-        _warnings_module.warn(
-            "Could not read CUDA RNG state "
-            f"({type(exc).__name__}: {exc}); continuing without CUDA RNG "
-            "snapshots. Replay of operations that consume CUDA randomness "
-            "cannot be reproduced exactly for this capture.",
-            stacklevel=3,
-        )
-        return []
-
-
-def log_current_rng_states(torch_only: bool = False) -> dict[str, Any]:
-    """Snapshot the current state of all RNG engines.
-
-    The returned dict can be passed to :func:`set_rng_from_saved_states`
-    to restore the exact same RNG position later (e.g. during validation
-    replay).
-
-    Parameters
-    ----------
-    torch_only:
-        If True, only capture PyTorch RNG state (skip Python ``random`` and
-        NumPy). This is faster and sufficient for most torch operations
-        (dropout, randn, etc.).
-
-    Returns
-    -------
-    dict[str, Any]
-        Dict with keys ``"random"``, ``"np"``, ``"torch"``, and optionally
-        ``"torch_cuda_all"``, each holding the opaque state object for that
-        engine. ``"torch_cuda"`` is also populated for backward compatibility
-        with older single-device snapshots. The two CUDA keys are present only
-        when this process has live CUDA RNG state that could be read; a CPU-only
-        capture omits them rather than initializing CUDA (see
-        :func:`_snapshot_cuda_rng_states`).
-    """
-    # r65 CLUSTER Z: per-op state logging runs INSIDE the capture window; a
-    # TorchLens-initiated snapshot is never model host nondeterminism (the
-    # ``get_rng_state`` family carries no registry row TODAY -- this bracket keeps the
-    # invariant structural rather than dependent on that vocabulary staying read-free).
-    with _suppress_active_monitor_marks():
-        rng_dict: dict[str, Any] = {"torch": torch.random.get_rng_state()}
-        if not torch_only:
-            rng_dict["random"] = random.getstate()
-            rng_dict["np"] = np.random.get_state()
-        cuda_states = _snapshot_cuda_rng_states()
-        if cuda_states:
-            rng_dict["torch_cuda_all"] = cuda_states
-            rng_dict["torch_cuda"] = cuda_states[0]
-        return rng_dict
-
-
-def set_rng_from_saved_states(rng_states: dict[str, Any]) -> None:
-    """Restore RNG engines to a previously captured state.
-
-    Parameters
-    ----------
-    rng_states:
-        Dict produced by :func:`log_current_rng_states`. If empty (RNG capture
-        was disabled), this is a no-op.
-    """
-    if not rng_states:
-        return
-    # r65 CLUSTER Z: in-forward intervention replay restores engine state THROUGH the
-    # monitored ``set_rng_state`` mutation channels; a TorchLens-owned restore is never
-    # model host nondeterminism, so the whole restore brackets under the active
-    # monitor's mark suppression (the replayed USER op itself runs outside any bracket
-    # in ``execute_with_restored_rng_autocast``).
-    with _suppress_active_monitor_marks():
-        if "random" in rng_states:
-            random.setstate(rng_states["random"])
-        if "np" in rng_states:
-            np.random.set_state(rng_states["np"])
-        torch.random.set_rng_state(rng_states["torch"])
-        # ``_cuda_rng_unusable`` latches when a CUDA generator read already failed
-        # in this process; re-entering the CUDA RNG API to *write* it would raise
-        # from inside the ``finally`` restore of
-        # ``execute_with_restored_rng_autocast`` and mask the caller's real
-        # exception. The failure was already surfaced (warned) at snapshot time.
-        if _cuda_rng_unusable or not _is_cuda_available():
-            return
-        if "torch_cuda_all" in rng_states:
-            torch.cuda.set_rng_state_all(rng_states["torch_cuda_all"])
-        elif "torch_cuda" in rng_states:
-            torch.cuda.set_rng_state(rng_states["torch_cuda"], "cuda")
-
-
-def log_current_autocast_state() -> dict[str, dict[str, Any]]:
-    """Capture the current ``torch.amp.autocast`` enabled/dtype state.
-
-    Checked for each device in :data:`_AUTOCAST_DEVICES`.  If a device
-    doesn't support autocast queries, it is silently skipped.
-
-    Returns:
-        Dict mapping device name to ``{"enabled": bool, "dtype": torch.dtype}``.
-    """
-    state: dict[str, dict[str, Any]] = {}
-    # r35 corr2_8: record the grad/inference execution mode alongside autocast in the
-    # same per-op KEEP field, under a reserved non-device key. ``enabled`` stays False
-    # so every autocast consumer (AutocastRestore) skips it structurally.
-    state["__execution__"] = {
-        "enabled": False,
-        "dtype": None,
-        "grad_enabled": bool(torch.is_grad_enabled()),
-        "inference_mode": bool(torch.is_inference_mode_enabled()),
-    }
-    for device in _AUTOCAST_DEVICES:
-        try:
-            # Routed through the version-neutral shim so TorchLens runs on
-            # torch 2.1+ (the per-device ``device_type`` argument to these
-            # query helpers is torch 2.4+ only). On torch>=2.4 the shim calls
-            # ``torch.is_autocast_enabled``/``torch.get_autocast_dtype``
-            # directly (identical behavior); on torch 2.1-2.3 it routes to the
-            # legacy per-device helpers. See _utils/_torch_compat.py.
-            state[device] = {
-                "enabled": autocast_is_enabled(device),
-                "dtype": autocast_get_dtype(device),
-            }
-        except (RuntimeError, TypeError):
-            # Device doesn't support autocast queries (e.g. no CUDA).
-            pass
-    return state
-
-
-class AutocastRestore:
-    """Context manager that re-enters saved autocast contexts during replay.
-
-    Only devices that were *enabled* at capture time get an autocast
-    context opened.  Contexts are exited in reverse order on ``__exit__``.
-
-    Usage::
-
-        with AutocastRestore(saved_state):
-            result = func(*args, **kwargs)
-    """
-
-    __slots__ = ("_autocast_state", "_contexts")
-
-    def __init__(self, autocast_state: dict[str, dict[str, Any]]) -> None:
-        """Store serialized autocast state for later context restoration.
-
-        Parameters
-        ----------
-        autocast_state:
-            Mapping from device type to captured autocast enabled/dtype state.
-        """
-
-        self._autocast_state = autocast_state
-        self._contexts: list[Any] = []
-
-    def __enter__(self) -> "AutocastRestore":
-        """Enter captured autocast contexts, unwinding fully if any entry fails.
-
-        Python never calls ``__exit__`` when ``__enter__`` raises, so a multi-device
-        replay whose second device fails (an artifact-controlled ``dtype``, an
-        unsupported device) used to leave the FIRST device's autocast entered
-        thread-globally for the rest of the process -- every later user op silently
-        running under an autocast nobody asked for. The unwind arm is
-        ``BaseException``-wide because a Ctrl-C between two entries leaves exactly the
-        same unbalanced nesting.
-
-        Returns
-        -------
-        AutocastRestore
-            This context manager instance.
-        """
-
-        try:
-            self._enter_contexts()
-        except BaseException:
-            self._exit_contexts(None, None, None)
-            raise
-        return self
-
-    def _enter_contexts(self) -> None:
-        """Open one autocast context per captured device entry."""
-
-        for device, state in self._autocast_state.items():
-            if device.startswith("__"):
-                # Reserved non-device entries (e.g. ``__execution__`` grad/inference
-                # mode) are not autocast device records and open no context here.
-                continue
-            # Open an autocast context for EVERY captured device -- including
-            # devices that were DISABLED at capture time. Previously a saved
-            # ``enabled=False`` device opened NO context, so if the replay caller
-            # had live autocast enabled for that device the replayed op silently
-            # ran under the caller's autocast (wrong dtype / arithmetic, returned
-            # normally). Opening an explicit ``enabled=False`` context shields the
-            # replay against the caller's live state, reproducing the captured
-            # autocast posture exactly.
-            autocast = cast(Any, getattr(torch.amp, "autocast"))
-            ctx = autocast(device, dtype=state["dtype"], enabled=bool(state["enabled"]))
-            ctx.__enter__()
-            self._contexts.append(ctx)
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        """Exit restored autocast contexts in reverse nesting order.
-
-        Parameters
-        ----------
-        exc_type:
-            Exception type propagated by the managed block, if any.
-        exc_value:
-            Exception instance propagated by the managed block, if any.
-        traceback:
-            Traceback propagated by the managed block, if any.
-        """
-
-        self._exit_contexts(exc_type, exc_value, traceback)
-
-    def _exit_contexts(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_value: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        """Exit every opened context in reverse nesting order, guarding each one.
-
-        A raise from the innermost ``__exit__`` used to skip every OUTER context,
-        leaving ``autocast_increment_nesting`` permanently unbalanced for the thread.
-        Each exit is fenced independently (the same per-item pattern the monitor's
-        restore queue uses) and the list is cleared so a repeat exit is a no-op; the
-        FIRST failure is re-raised once every context has been given its chance.
-        """
-
-        contexts = self._contexts
-        self._contexts = []
-        first_error: BaseException | None = None
-        for ctx in reversed(contexts):
-            try:
-                ctx.__exit__(exc_type, exc_value, traceback)
-            except BaseException as error:  # noqa: PERF203 - per-item fence is the point
-                if first_error is None:
-                    first_error = error
-        if first_error is not None:
-            raise first_error
-
-
-# ======================================================================================
-# Host-nondeterminism channel monitor (r37 hon1_2; r39 CLASS A enumeration completeness).
-#
-# The global-engine snapshots above cover only the two REPLAYABLE engines (module
-# ``random``, legacy ``np.random``). Every OTHER host entropy / clock / RNG-instance
-# channel is monitored here over a data-driven FROZEN registry
-# (:data:`HOST_NONDETERMINISM_REGISTRY`). A positive touch permanently ceilings the
-# capture (``host_rng_consumed=True`` with NO identifiable seed -> every replay
-# UNVERIFIABLE + NOT_APPLICABLE). Monitor uncertainty -- install/chain/inventory/restore
-# failure, an observed-but-unclassified host event, or a live pre-existing non-owner
-# Python thread whose ephemeral draws are unwitnessable on <=3.11 -- is itself recorded
-# and downgrades capture completeness to INCOMPLETE; it NEVER reads as "no consumption".
-#
-# A negative witness (``host_rng_consumed=False``) is honest ONLY when every required
-# observer over the declared channel/thread surface installed, classified, stayed
-# installed, and restored exactly. This is the r39 enumeration-completeness invariant:
-# "one more RNG/clock name" is a failing registry meta-test, not a false VERIFIED.
-#
-# Residual tail (outside any Python-visible call surface, disclaimed in contract s11):
-# direct ``/dev/urandom`` file reads; ctypes / user C-extension entropy or clock reads;
-# legacy ``RandomState()`` C-level construction entropy (its DRAWS stay digest-witnessed).
-# ======================================================================================
-
-
-@dataclass(frozen=True)
-class HostNondeterminismRow:
-    """One declared host-nondeterminism channel in the frozen monitoring registry.
-
-    ``family`` groups the channel (``clock`` / ``entropy`` / ``construction`` /
-    ``rng_primitive`` / ``rng_instance`` / ``rng_global_state``); ``target`` is its identity;
-    ``strategy`` is HOW it is observed (see the coverage meta-test's allowlist);
-    ``thread_scope`` is WHERE a positive can be observed (``any`` -- thread-independent
-    module/class patch or process inventory; ``owner`` -- capture owner thread only;
-    ``hooked`` -- owner plus every thread started in-window and profile-hooked);
-    ``classification`` records the semantic role used by the arg/receiver classifiers.
-    """
-
-    family: str
-    target: str
-    strategy: str
-    thread_scope: str
-    classification: str
-
-
-# ---- Clock vocabulary (r39 R2/R2b) ----------------------------------------------------
-#
-# The current-clock readers below all read the CURRENT wall/monotonic clock; a positive
-# marks on ANY covered thread. Module-attr readers fire thread-independently; the
-# immutable ``datetime`` classmethods (which CANNOT be class-patched -- extension types)
-# are classified by c_call identity on the owner + hooked threads.
-
-_CLOCK_COUNTER_NAMES = (
-    "time",
-    "time_ns",
-    "monotonic",
-    "monotonic_ns",
-    "perf_counter",
-    "perf_counter_ns",
-    "process_time",
-    "process_time_ns",
-    "thread_time",
-    "thread_time_ns",
-    "clock_gettime",
-    "clock_gettime_ns",
-)
-"""``time.*`` readers that always read the current clock (no explicit-time argument)."""
-
-# Implicit-now converters: ``localtime()`` / ``strftime(fmt)`` etc. read the CURRENT
-# clock when their optional explicit-time argument is absent/None, but are pure
-# TRANSFORMS when given an explicit time. ``time_arg_index`` is the position of that
-# optional argument (``strftime`` takes ``(format, [t])`` -> index 1; the rest index 0).
-_CLOCK_IMPLICIT_NOW: tuple[tuple[str, int], ...] = (
-    ("localtime", 0),
-    ("gmtime", 0),
-    ("asctime", 0),
-    ("ctime", 0),
-    ("strftime", 1),
-)
-
-# Immutable ``datetime`` current-clock readers, classified by c_call identity
-# ``(receiver_type, method_name)`` because the receiver types are unpatchable C types.
-_DATETIME_CLOCK_READERS: tuple[tuple[Any, str], ...] = (
-    (_datetime_module.datetime, "now"),
-    (_datetime_module.datetime, "utcnow"),
-    (_datetime_module.datetime, "today"),
-    (_datetime_module.date, "today"),
-)
-
-
-# ---- Torch global-RNG API surface (r65 CLUSTER Z) --------------------------------------
-#
-# torch's OWN Python-level RNG APIs are host-nondeterminism channels too. The asymmetry
-# that decides every disposition below: sparse replay RE-EXECUTES the recorded tensor RNG
-# ops (dropout / randn_like / ...) under the run seed, but it NEVER re-executes HOST code
-# -- so an in-forward Python-level mutation of the global torch engine desyncs every
-# downstream DAG RNG op from BOTH the capture and the fresh-run oracle (a python/numpy
-# in-forward reseed, by contrast, is re-run by the conceptual oracle and stays honest
-# through the existing snapshot compare). Every public name of the torch / torch.random /
-# torch.cuda(.random) / torch.mps / torch.mtia / torch.xpu(.random) RNG surfaces carries
-# an EXPLICIT disposition in the frozen closed vocabulary below; the independent no-list
-# module-discovery meta-test (r67) makes a torch upgrade that grows this surface -- or
-# loads one more RNG-bearing module -- a FAILING test, never a silent false-VERIFIED
-# (the r39 "one more name" doctrine, now covering torch itself).
-
-TORCH_RNG_DISPOSITIONS: frozenset[str] = frozenset(
-    {"entropy", "mutation", "replayable_read", "structurally_covered", "op_captured"}
-)
-"""Closed disposition vocabulary for :data:`TORCH_RNG_SURFACE` rows.
-
-``entropy`` -- reads fresh OS entropy (and mutates engine state): permanent ceiling.
-``mutation`` -- in-forward host mutation of global engine state: permanent ceiling
-(replay re-executes DAG RNG ops but never host code, see the asymmetry note above).
-``replayable_read`` -- leaks a host scalar fully determined by the seeded default
-engine (``initial_seed``): consumed-flag only, so a run at the capture seed stays
-``verified`` and any other/absent seed ceilings (the python-``random`` analog).
-``structurally_covered`` -- no monitor row; honesty is carried by an existing net
-(each row's note names the covering mechanism and its pinned proof).
-``op_captured`` -- tensor RNG draw ops (``randn`` / ``dropout`` / ``normal_`` ...):
-captured DAG calls replayed seeded; never enumerated here (the capture spine owns them).
-"""
-
-
-@dataclass(frozen=True)
-class TorchRngSurfaceRow:
-    """One torch RNG API endpoint with its frozen honesty disposition (r65 CLUSTER Z).
-
-    ``target`` is the dotted module-attribute spelling (each re-export spelling gets its
-    own row so patch installation and the held-reference layer cover every alias);
-    ``disposition`` is a member of :data:`TORCH_RNG_DISPOSITIONS`; ``note`` carries the
-    covering-mechanism proof pointer for ``structurally_covered`` rows.
-    """
-
-    target: str
-    disposition: str
-    note: str
-
-
-# Per-module endpoint specs, feature-detected at build. ``get_rng_state`` family rows are
-# deliberately structurally_covered (NO monitor row): the returned state TENSOR is already
-# covered by the r39 tensor->host escape belt (branch-on-state-bytes ->
-# INCOMPLETE_SCALAR_ESCAPE, never VERIFIED; a store-only read stays VERIFIED), and a row
-# would over-ceiling ``torch.utils.checkpoint(preserve_rng_state=True)``, which
-# round-trips VERIFIED+ATTESTED today (r65 probe za4).
-_TORCH_RNG_CORE_SPEC: tuple[tuple[str, str, str], ...] = (
-    ("seed", "entropy", "draws OS entropy and reseeds the global engine"),
-    ("manual_seed", "mutation", "in-forward host mutation of the global engine"),
-    ("initial_seed", "replayable_read", "scalar read fully determined by the capture seed"),
-    ("set_rng_state", "mutation", "in-forward host mutation of the global engine"),
-    ("get_rng_state", "structurally_covered", "state-tensor return; r39 escape belt"),
-)
-_TORCH_RNG_DEVICE_SPEC: tuple[tuple[str, str, str], ...] = _TORCH_RNG_CORE_SPEC + (
-    ("seed_all", "entropy", "draws OS entropy and reseeds every device engine"),
-    ("manual_seed_all", "mutation", "in-forward host mutation of every device engine"),
-    ("set_rng_state_all", "mutation", "in-forward host mutation of every device engine"),
-    ("get_rng_state_all", "structurally_covered", "state-tensor return; r39 escape belt"),
-)
-_TORCH_ACCELERATOR_RNG_SPEC: tuple[tuple[str, str, str], ...] = (
-    ("initial_seed", "replayable_read", "scalar read fully determined by the capture seed"),
-    ("get_rng_state", "structurally_covered", "state-tensor return; r39 escape belt"),
-    ("get_rng_state_all", "structurally_covered", "state-tensor return; r39 escape belt"),
-)
-"""torch 2.14's generic accelerator-agnostic RNG surface (``torch.accelerator.random``).
-
-A DELIBERATELY SEPARATE object from :data:`_TORCH_RNG_DEVICE_SPEC`, even though every
-row's content is a subset of it: ``torch.accelerator`` is a cross-backend ROUTER (it
-defers to whichever concrete accelerator -- cuda/xpu/mtia -- is current) and holds no
-``default_generators`` list of its own, so it must NOT join
-:data:`_DEFAULT_GENERATOR_HOLDER_MODULES`'s identity-matched module set the way
-``torch.cuda``/``torch.xpu``/``torch.mtia`` do (``test_default_generator_resolver_covers_
-every_device_spec_module`` asserts that set is EXACTLY the device-spec holder modules).
-It also has no ``seed``/``manual_seed``/``set_rng_state``/``*_all`` setters at all, so
-reusing the full device spec here would also be a content mismatch, not just an identity
-one.
-"""
-_TORCH_RNG_MODULE_SPECS: tuple[tuple[str, tuple[tuple[str, str, str], ...]], ...] = (
-    ("torch", _TORCH_RNG_CORE_SPEC),
-    ("torch.random", _TORCH_RNG_CORE_SPEC),
-    ("torch.cuda", _TORCH_RNG_DEVICE_SPEC),
-    ("torch.cuda.random", _TORCH_RNG_DEVICE_SPEC),
-    ("torch.mps", _TORCH_RNG_CORE_SPEC),
-    # r67 C1 (hon1-F6): ``torch.mtia`` carries the full feature-detected device RNG
-    # spec -- on torch 2.8 only ``get_rng_state``/``set_rng_state`` resolve, and any
-    # torch upgrade that grows the mtia surface lights up through the same
-    # ``hasattr`` feature detection instead of a hand-list edit.
-    ("torch.mtia", _TORCH_RNG_DEVICE_SPEC),
-    ("torch.xpu", _TORCH_RNG_DEVICE_SPEC),
-    # r67 C1: ``torch.xpu.random`` re-exports the xpu RNG surface exactly like
-    # ``torch.cuda.random`` does for cuda; found by the independent no-list module
-    # discovery immunizer (the same shared-blind-spot class as mtia).
-    ("torch.xpu.random", _TORCH_RNG_DEVICE_SPEC),
-    # torch 2.14 adds ``torch.accelerator.random`` (generic accelerator-agnostic
-    # RNG surface, eagerly imported by ``torch.accelerator``, itself eagerly
-    # imported by ``torch/__init__.py``). Its own dedicated spec (not the
-    # shared device spec -- see that spec's docstring).
-    ("torch.accelerator.random", _TORCH_ACCELERATOR_RNG_SPEC),
-)
-# Non-function endpoints the enumeration meta-test still demands dispositions for.
-_TORCH_RNG_STRUCTURAL_EXTRAS: tuple[tuple[str, str], ...] = (
-    (
-        "torch.Generator",
-        "construction is deterministic (probed constant initial seed); EVERY receiver's "
-        "method c_calls dispatch through GENERATOR_METHOD_TABLE (r67 C1 all-receiver "
-        "closure), and instance draws feed ops only through the opaque generator= "
-        "kwarg, refused at save",
-    ),
-    (
-        "torch.random.Generator",
-        "same object as torch.Generator (construction deterministic; all-receiver "
-        "method classification)",
-    ),
-    (
-        "torch.default_generator",
-        "receiver_profile registry row: method c_calls on ANY torch.Generator receiver "
-        "dispatch through GENERATOR_METHOD_TABLE; process/device defaults select the "
-        "default-receiver column via dynamic identity membership",
-    ),
-    (
-        "torch.random.default_generator",
-        "same object as torch.default_generator (receiver-classified)",
-    ),
-    (
-        "torch.random.fork_rng",
-        "pure composition of get/set_rng_state + manual_seed: its in-forward RESTORE "
-        "transits the module-patched set_rng_state mutation rows (behaviorally pinned)",
-    ),
-    (
-        "torch.cuda.default_generators",
-        "device default generators; identity-joined into the default-receiver column "
-        "of GENERATOR_METHOD_TABLE dynamically (re-resolved on a routing-cache miss, "
-        "so a default populated mid-forward is still classified default)",
-    ),
-    (
-        "torch.xpu.default_generators",
-        "device default generators; identity-joined dynamically exactly like the cuda "
-        "entry (r67 C1 closes the r65 xpu identity-join gap)",
-    ),
-    (
-        "torch.mtia.default_generators",
-        "device default generators; identity-joined dynamically exactly like the cuda "
-        "entry (feature-detected: absent on torch builds without an mtia generator "
-        "surface)",
-    ),
-    (
-        "torch.utils.data.graph_settings.apply_random_seed",
-        "draws ONLY from the caller-provided generator through a captured tensor RNG "
-        "op (torch.empty(()).random_(generator=rng)) whose generator= kwarg is refused "
-        "at save; the .item() scalar transits the r39 tensor->host escape belt, and "
-        "datapipe set_seed() mutations are instance state, not global-engine state",
-    ),
-    (
-        "torch.utils.data.graph_settings.apply_shuffle_seed",
-        "deprecated alias delegating to apply_random_seed (same structural coverage)",
-    ),
-)
-# Structural extras whose MODULE is never eagerly imported by torch or torchlens
-# (unlike every _TORCH_RNG_STRUCTURAL_EXTRAS target above, all already sitting in
-# sys.modules by the time torch/torchlens finish their own imports): requiring
-# sys.modules presence here would make coverage depend on which OTHER test
-# happened to import the module first in the session. find_spec proves existence
-# without paying the module's own import cost (W21 cold-start guarantee).
-_TORCH_RNG_UNIMPORTED_MODULE_EXTRAS: tuple[tuple[str, str], ...] = (
-    (
-        "torch.distributed.tensor.parallel.api.TensorParallelRNGTracker",
-        "tensor-parallel distributed-training RNG tracker (torch 2.2 re-export of "
-        "torch.distributed._tensor.random.TensorParallelRNGTracker). NOT eagerly "
-        "imported by bare `import torch`/`import torchlens` -- it only lands in "
-        "sys.modules when some OTHER already-collected test imports "
-        "torch.distributed.tensor.parallel, so it belongs in this find_spec-checked "
-        "group, not the sys.modules-checked one above (the exact failure mode this "
-        "group exists to avoid). Construction only READS the device engine's state "
-        "(get_rng_state); its seeding/region methods compose "
-        "set_seed -> fork_rng -> device get/set_rng_state, transiting the same "
-        "module-patched mutation rows torch.random.fork_rng already covers above. "
-        "Active tensor_parallel usage is independently refused at capture entry by "
-        "DistributedCaptureUnsupportedError (the tensor_parallel finding) before this "
-        "tracker's state could ever reach a captured forward",
-    ),
-    (
-        "torch.distributed.tensor.parallel.api.is_rng_supported_mesh",
-        "pure capability predicate (torch 2.2): reads the device handle and returns "
-        "whether it exposes set_rng_state, at most warning on an unsupported device "
-        "mesh -- no entropy draw, no engine mutation, nothing that could desync a "
-        "replay",
-    ),
-    (
-        "torch.distributed.pipeline.sync.checkpoint.restore_rng_states",
-        "torch.distributed.pipeline was removed from torch (gone by the 2.3 era; only "
-        "the torch>=2.1 floor still carries it). Its checkpoint recomputation pairs "
-        "save_rng_states/restore_rng_states exactly like torchgpipe's upstream "
-        "implementation, whose restore calls torch.set_rng_state/torch.cuda.set_rng_state "
-        "on the saved snapshot -- its in-forward RESTORE transits the module-patched "
-        "set_rng_state/cuda.set_rng_state mutation rows, same composition as "
-        "torch.random.fork_rng above (behaviorally pinned)",
-    ),
-    (
-        "torch.distributed.pipeline.sync.checkpoint.save_rng_states",
-        "the SAVE half of the same torchgpipe-derived pair above: calls "
-        "torch.get_rng_state/torch.cuda.get_rng_state and returns the state "
-        "tensor(s) -- structurally covered the same way those module-patched "
-        "get_rng_state rows already are (r39 tensor->host escape belt)",
-    ),
-)
-
-
-def _torch_rng_holder_module(module_path: str) -> ModuleType | None:
-    """Resolve a torch RNG surface module WITHOUT importing anything new.
-
-    All candidate modules are imported by ``torch/__init__`` itself when present, so
-    ``sys.modules`` resolution is exact feature detection: an absent module (an old
-    torch without ``torch.xpu``) simply contributes no rows.
-    """
-
-    module = _sys_module.modules.get(module_path)
-    return module if isinstance(module, ModuleType) else None
-
-
-def _build_torch_rng_surface() -> tuple[TorchRngSurfaceRow, ...]:
-    """Assemble the frozen torch RNG API disposition table (feature-detected)."""
-
-    rows: list[TorchRngSurfaceRow] = []
-    for module_path, spec in _TORCH_RNG_MODULE_SPECS:
-        module = _torch_rng_holder_module(module_path)
-        if module is None:
-            continue
-        for name, disposition, note in spec:
-            if hasattr(module, name):
-                rows.append(TorchRngSurfaceRow(f"{module_path}.{name}", disposition, note))
-    for target, note in _TORCH_RNG_STRUCTURAL_EXTRAS:
-        module_path, _, name = target.rpartition(".")
-        module = _torch_rng_holder_module(module_path)
-        if module is not None and hasattr(module, name):
-            rows.append(TorchRngSurfaceRow(target, "structurally_covered", note))
-    for target, note in _TORCH_RNG_UNIMPORTED_MODULE_EXTRAS:
-        # Unlike _TORCH_RNG_STRUCTURAL_EXTRAS's targets (already imported by
-        # the time torch/torchlens finish their own imports), these modules
-        # are never eagerly imported by anything; sys.modules-gating them
-        # would make coverage depend on which OTHER test imported them first
-        # (W21). The spec walk proves existence without importing the module
-        # or a missing ancestor (find_spec would import the ancestor, and an
-        # ancestor guard would bring the order dependence back); the
-        # attribute itself is trusted present.
-        module_path, _, _name = target.rpartition(".")
-        if torch_module_exists_without_importing(module_path):
-            rows.append(TorchRngSurfaceRow(target, "structurally_covered", note))
-    return tuple(rows)
-
-
-TORCH_RNG_SURFACE: tuple[TorchRngSurfaceRow, ...] = _build_torch_rng_surface()
-"""Frozen disposition table for the torch Python-level RNG API surface (r65).
-
-Every ``entropy`` / ``mutation`` / ``replayable_read`` row here becomes a
-``module_patch`` row of :data:`HOST_NONDETERMINISM_REGISTRY` (same builder), so the
-monitor install, the held-reference layer, and the coverage meta-tests all derive from
-ONE table. ``structurally_covered`` rows carry their covering-mechanism proof in
-``note`` and deliberately install nothing.
-"""
-
-# ---- All-receiver Generator method table (r67 C1) --------------------------------------
-#
-# r65 classified Generator method c_calls by RECEIVER IDENTITY (process defaults only),
-# which let scalar-returning methods on user-constructed / held / RETURNED generators
-# escape unwitnessed (r66 free-F1 ``torch.Generator().seed()``, corr1-1
-# ``default.clone_state().initial_seed()``, hon1-F5 ``get_offset()``): the returned
-# Python int leaks OS entropy or engine/instance history into control flow with no
-# channel recorded -> false VERIFIED+ATTESTED. r67 replaces the default-only dict with
-# ONE authoritative method table dispatched for EVERY ``isinstance(receiver,
-# torch.Generator)`` c_call (subclasses included -- an inherited C method's c_call
-# receiver is the subclass instance). Each row is CLOSED UNDER ITS RETURN VALUE:
-#
-# * ``host_scalar`` returns carry a marking disposition in BOTH receiver columns
-#   (nothing downstream can see a bare Python int);
-# * ``state_tensor`` returns are structural ONLY because the r39 tensor->host
-#   escape belt covers the returned tensor's value use;
-# * ``generator`` / ``self_generator`` returns are structural ONLY because the
-#   returned Generator re-enters this same all-receiver classifier (closure) --
-#   its later scalar reads cannot escape;
-# * an UNKNOWN public method on ANY Generator receiver flags monitor uncertainty
-#   (INCOMPLETE), never a silent miss.
-#
-# The default identity set survives ONLY as a routing cache (which column applies),
-# re-resolved dynamically on a miss -- never an install-time honesty boundary.
-
-GENERATOR_METHOD_DISPOSITIONS: frozenset[str] = frozenset(
-    {"entropy", "mutation", "replayable_read", "instance_read"}
-)
-"""Closed disposition vocabulary for :data:`GENERATOR_METHOD_TABLE` columns.
-
-``entropy`` / ``mutation`` / ``replayable_read`` exactly as in
-:data:`TORCH_RNG_DISPOSITIONS`. ``instance_read`` -- a host scalar read of
-engine/instance HISTORY (``get_offset``; ``initial_seed`` on a non-default receiver):
-not reproduced by any run seed -> permanent ceiling. ``None`` in a column = inert or
-structurally covered there (the row's ``note`` names the covering mechanism).
-"""
-
-GENERATOR_RETURN_FAMILIES: frozenset[str] = frozenset(
-    {
-        "host_scalar",
-        "state_tensor",
-        "generator",
-        "self_generator",
-        "device_attr",
-        "state_tensor_tuple",
-    }
-)
-"""Closed return-family vocabulary for :data:`GENERATOR_METHOD_TABLE` rows.
-
-``host_scalar`` -- Python int; ``state_tensor`` -- ``torch.Tensor`` engine state;
-``generator`` -- a NEW ``torch.Generator``; ``self_generator`` -- returns the
-receiver (fluent setter); ``device_attr`` -- non-callable getset attribute;
-``state_tensor_tuple`` -- a fixed tuple of freshly-minted ``torch.Tensor``
-engine-state values (``philox_state``'s ``(seed, offset, intragraph_offset)``).
-"""
-
-
-@dataclass(frozen=True)
-class GeneratorMethodRow:
-    """One public ``torch.Generator`` method with its per-receiver-class dispositions.
-
-    ``default_disposition`` applies when the receiver is a proven process/device
-    default generator; ``nondefault_disposition`` applies to every other receiver
-    (user-constructed, model-held, cloned, subclass). ``note`` carries the covering-
-    mechanism proof for structural (``None``) columns; the return-closure meta-test
-    machine-checks that each row's dispositions are closed under ``return_family``.
-    """
-
-    method: str
-    return_family: str
-    default_disposition: str | None
-    nondefault_disposition: str | None
-    note: str
-
-
-_GENERATOR_METHOD_ROWS: tuple[GeneratorMethodRow, ...] = (
-    GeneratorMethodRow(
-        "seed",
-        "host_scalar",
-        "entropy",
-        "entropy",
-        "draws OS entropy in C++ (bypassing the patched os.urandom funnel) and returns "
-        "it as a Python int: the scalar return IS the entropy channel on EVERY "
-        "receiver (r66 free-F1)",
-    ),
-    GeneratorMethodRow(
-        "manual_seed",
-        "self_generator",
-        "mutation",
-        None,
-        "default: in-forward host mutation of a global engine. Non-default: instance "
-        "state only -- inert (the pinned private-manual_seed no-over-trigger); the "
-        "returned receiver re-enters this classifier",
-    ),
-    GeneratorMethodRow(
-        "set_state",
-        "self_generator",
-        "mutation",
-        None,
-        "default: in-forward host mutation of a global engine. Non-default: instance "
-        "state only -- inert; the returned receiver re-enters this classifier",
-    ),
-    GeneratorMethodRow(
-        "set_offset",
-        "self_generator",
-        "mutation",
-        None,
-        "default: in-forward host mutation of a global engine's philox offset. "
-        "Non-default: instance state only -- inert; the returned receiver re-enters "
-        "this classifier; capability-gated (raises on CPU)",
-    ),
-    GeneratorMethodRow(
-        "graphsafe_set_state",
-        "self_generator",
-        "mutation",
-        None,
-        "default: in-forward host mutation of a global engine. Non-default: instance "
-        "state only -- inert; the returned receiver re-enters this classifier; "
-        "capability-gated (raises on CPU)",
-    ),
-    GeneratorMethodRow(
-        "initial_seed",
-        "host_scalar",
-        "replayable_read",
-        "instance_read",
-        "default: scalar fully determined by the capture seed (consumed-flag only). "
-        "Non-default: instance/clone history is untracked -> ceiling (the accepted, "
-        "documented over-ceiling for a clone of a seeded default; r66 corr1-1)",
-    ),
-    GeneratorMethodRow(
-        "get_offset",
-        "host_scalar",
-        "instance_read",
-        "instance_read",
-        "philox consumption offset: a host int of engine HISTORY (advanced by every "
-        "prior draw, reset by manual_seed) -- no belt sees it, no run seed reproduces "
-        "it -> ceiling on every receiver; marks at c_call entry, so the CPU "
-        "capability-raise still marks fail-closed (r66 hon1-F5)",
-    ),
-    GeneratorMethodRow(
-        "philox_state",
-        "state_tensor_tuple",
-        "mutation",
-        "mutation",
-        "torch 2.14: reserves `increment` Philox outputs, ADVANCING the engine's "
-        "internal offset on every receiver (c10::GeneratorImpl::philox_state; only "
-        "Philox-based engines implement it, so CPU's default mt19937 generator "
-        "raises NotImplementedError -- capability-gated like get_offset/set_offset). "
-        "Marks mutation on BOTH columns (never structural): unlike get_state, this "
-        "call changes engine state as a side effect, so a non-default receiver's "
-        "mutation is still a real, honestly-marked consumption, not inert instance "
-        "state (r67 C1 honesty-first: unknown consumption must ceiling)",
-    ),
-    GeneratorMethodRow(
-        "get_state",
-        "state_tensor",
-        None,
-        None,
-        "structural: the returned state TENSOR rides the r39 tensor->host escape belt "
-        "(branch-on-state-bytes -> INCOMPLETE_SCALAR_ESCAPE); a row would over-ceiling "
-        "torch.utils.checkpoint(preserve_rng_state=True) (pinned za4)",
-    ),
-    GeneratorMethodRow(
-        "graphsafe_get_state",
-        "generator",
-        None,
-        None,
-        "structural closure: returns a Generator that re-enters this all-receiver "
-        "classifier -- its later scalar reads are classified by their own rows; "
-        "capability-gated (raises on CPU)",
-    ),
-    GeneratorMethodRow(
-        "clone_state",
-        "generator",
-        None,
-        None,
-        "structural closure: returns a NEW Generator that re-enters this all-receiver "
-        "classifier, so default.clone_state().initial_seed() lands on the non-default "
-        "instance_read ceiling (r66 corr1-1)",
-    ),
-    GeneratorMethodRow(
-        "device",
-        "device_attr",
-        None,
-        None,
-        "non-callable getset attribute (never emits a c_call); inert metadata",
-    ),
-)
-
-_OPTIONAL_GENERATOR_METHOD_CAPABILITIES: dict[str, bool] = {
-    "clone_state": HAS_GENERATOR_CLONE_STATE,
-    "graphsafe_get_state": HAS_GENERATOR_GRAPHSAFE_GET_STATE,
-    "graphsafe_set_state": HAS_GENERATOR_GRAPHSAFE_SET_STATE,
-    "philox_state": HAS_GENERATOR_PHILOX_STATE,
-}
-
-GENERATOR_METHOD_TABLE: tuple[GeneratorMethodRow, ...] = tuple(
-    row
-    for row in _GENERATOR_METHOD_ROWS
-    if _OPTIONAL_GENERATOR_METHOD_CAPABILITIES.get(row.method, True)
-)
-"""The live-surface all-receiver ``torch.Generator`` method table (r67 C1)."""
-
-_GENERATOR_METHOD_ROWS_BY_NAME: dict[str, GeneratorMethodRow] = {
-    row.method: row for row in GENERATOR_METHOD_TABLE
-}
-
-# Device modules whose ``default_generators`` tuples join the default-receiver column.
-# Resolved through ``sys.modules`` only (never an import) and via a plain module-attr
-# read (never device initialization); an uninitialized device contributes an empty
-# tuple and a torch build without the module contributes nothing.
-_DEFAULT_GENERATOR_HOLDER_MODULES: tuple[str, ...] = ("torch.cuda", "torch.xpu", "torch.mtia")
-
-
-def _resolve_default_generator_ids() -> frozenset[int]:
-    """Identity set of the CURRENTLY populated process/device default generators.
-
-    Called at monitor install (routing-cache seed) and again on any Generator-receiver
-    cache miss (r67 C1 dynamic membership): a device default generator populated
-    MID-FORWARD (lazy device init) still selects the default-receiver column, without
-    imports and without forcing device initialization.
-    """
-
-    ids: set[int] = set()
-    process_default = getattr(torch, "default_generator", None)
-    if process_default is not None:
-        ids.add(id(process_default))
-    for module_path in _DEFAULT_GENERATOR_HOLDER_MODULES:
-        holder = _torch_rng_holder_module(module_path)
-        if holder is None:
-            continue
-        for device_generator in tuple(getattr(holder, "default_generators", ()) or ()):
-            ids.add(id(device_generator))
-    return frozenset(ids)
-
-
-def _build_host_nondeterminism_registry() -> tuple[HostNondeterminismRow, ...]:
-    """Assemble the frozen channel registry the runtime classifiers are built from."""
-
-    rows: list[HostNondeterminismRow] = []
-    for name in _CLOCK_COUNTER_NAMES:
-        rows.append(
-            HostNondeterminismRow("clock", f"time.{name}", "module_patch", "any", "current_reader")
-        )
-    for name, _index in _CLOCK_IMPLICIT_NOW:
-        rows.append(
-            HostNondeterminismRow("clock", f"time.{name}", "module_patch", "any", "current_reader")
-        )
-    rows.append(HostNondeterminismRow("clock", "os.times", "module_patch", "any", "current_reader"))
-    rows.append(
-        HostNondeterminismRow(
-            "clock", "resource.getrusage", "module_patch", "any", "current_reader"
-        )
-    )
-    for receiver, method in _DATETIME_CLOCK_READERS:
-        target = f"datetime.{receiver.__name__}.{method}"
-        rows.append(
-            HostNondeterminismRow("clock", target, "c_call_identity", "hooked", "current_reader")
-        )
-    rows.append(HostNondeterminismRow("entropy", "os.urandom", "module_patch", "any", "funnel"))
-    rows.append(HostNondeterminismRow("entropy", "os.getrandom", "module_patch", "any", "funnel"))
-    rows.append(
-        HostNondeterminismRow("entropy", "random._urandom", "module_patch", "any", "funnel")
-    )
-    rows.append(
-        HostNondeterminismRow(
-            "construction", "numpy.random.default_rng", "module_patch", "any", "construction"
-        )
-    )
-    rows.append(
-        HostNondeterminismRow(
-            "construction",
-            "numpy.random.bit_generator.randbits",
-            "construction_entropy",
-            "any",
-            "construction",
-        )
-    )
-    for cls_name in ("random.Random", "random.SystemRandom", "_random.Random"):
-        for method in ("random", "getrandbits", "randbytes"):
-            rows.append(
-                HostNondeterminismRow(
-                    "rng_primitive", f"{cls_name}.{method}", "class_patch", "any", "primitive"
-                )
-            )
-    rows.append(
-        HostNondeterminismRow(
-            "rng_instance",
-            "numpy.random.Generator/RandomState/BitGenerator",
-            "receiver_profile",
-            "hooked",
-            "instance_draw",
-        )
-    )
-    rows.append(
-        HostNondeterminismRow(
-            "rng_instance", "_random.Random", "receiver_profile", "hooked", "instance_draw"
-        )
-    )
-    rows.append(
-        HostNondeterminismRow(
-            "rng_instance",
-            "numpy.random.Generator/RandomState/BitGenerator",
-            "state_inventory",
-            "any",
-            "instance_draw",
-        )
-    )
-    # r65 CLUSTER Z: torch's own Python-level RNG APIs, derived from the ONE frozen
-    # disposition table so the monitor install, the held-reference layer, and the
-    # coverage meta-tests can never drift apart. ``replayable_read`` rows mark the
-    # NON-ceiling ``replayable_reads`` result set (consumed-flag only; run at the
-    # capture seed stays verified); entropy/mutation rows ceiling permanently.
-    _torch_family_by_disposition = {
-        "entropy": "entropy",
-        "mutation": "rng_mutation",
-        "replayable_read": "rng_replayable_read",
-    }
-    for surface_row in TORCH_RNG_SURFACE:
-        family = _torch_family_by_disposition.get(surface_row.disposition)
-        if family is not None:
-            rows.append(
-                HostNondeterminismRow(
-                    family, surface_row.target, "module_patch", "any", surface_row.disposition
-                )
-            )
-    # r67 C1: ONE all-receiver row -- method c_calls on ANY ``torch.Generator``
-    # (process/device defaults, user-constructed, held, cloned, subclass) dispatch
-    # through GENERATOR_METHOD_TABLE; the default identity set is only the
-    # column-routing cache, re-resolved dynamically on a miss.
-    rows.append(
-        HostNondeterminismRow(
-            "rng_instance",
-            "torch.Generator",
-            "receiver_profile",
-            "hooked",
-            "generator_method",
-        )
-    )
-    # W051 (2.17): the Python / legacy-NumPy GLOBAL-engine state surface (consumed-only).
-    for family, target, strategy, scope, classification in _rng_channels.registry_rows():
-        rows.append(HostNondeterminismRow(family, target, strategy, scope, classification))
-    return tuple(rows)
-
-
-HOST_NONDETERMINISM_REGISTRY: tuple[HostNondeterminismRow, ...] = (
-    _build_host_nondeterminism_registry()
-)
-"""Frozen data-driven inventory of every monitored host-nondeterminism channel.
-
-The runtime classifiers are built FROM this registry; the coverage meta-test asserts
-every row has a valid strategy + thread policy and that no numpy draw-method NAME is
-enumerated anywhere (receiver typing + state digests cover new draw-method names). A
-future stdlib clock/RNG endpoint is a failing meta-test until it is given a registry row.
-
-r41 (hon1_1): every ``module_patch`` row (and the construction-entropy alias) carries a
-SECOND observation layer -- the ORIGINAL builtin's identity is registered at monitor
-install, before the module attribute is replaced, so a pre-window held reference
-(``from time import time`` / ``from os import urandom`` at the top of a model or helper
-module) is classified from the ``c_call`` profile event on the owner and every in-window
-hooked thread. The held-ref layer adds NO new rows and NO new strategy vocabulary; the
-r41 held-ref immunizer derives its obligations from ``strategy == "module_patch"``, so a
-future module-patch row without identity registration (or without a probe recipe) is a
-RED test, not a silent gap.
-"""
-
-
-class _NotADigestableRng(Exception):
-    """Internal sentinel: the value is not a digestable numpy/`random` generator."""
-
-
-_RNG_TRUSTED_DEFINER_TOPS: frozenset[str] = frozenset(
-    {"random", "_random", "numpy", "builtins", "torch"}
-)
-"""Top-level modules whose classes may define an RNG's witnessed draw/state surface.
-
-The monitor's three witnesses (base-class method patches, ``c_call`` receiver
-classification, C-state digests) all assume the draw/state methods are the
-LIBRARY'S. Library-shipped subclasses keep that true (``SystemRandom`` routes
-through the patched primitives; numpy's ``PCG64``/``MT19937``/... advance the
-digested C state), so any method first defined by a class from these modules is
-witnessable. A method first defined by a class from anywhere else is user code
-the witnesses cannot see.
-"""
-
-
-def _untrusted_rng_override(holder_type: type) -> str | None:
-    """Return the first draw/state method a USER class overrides, or ``None``.
-
-    Parameters
-    ----------
-    holder_type:
-        Concrete type of a digestable RNG holder (``random.Random`` or numpy
-        ``Generator``/``RandomState``/``BitGenerator`` lineage).
-
-    Returns
-    -------
-    str | None
-        Name of the first witnessed-surface method whose defining class is not
-        library code, or ``None`` when the whole surface is library-defined.
-        The surface is every non-dunder attribute of the recognized library
-        bases present in the MRO -- draw helpers included, because a helper
-        overridden in user code can draw without ever reaching the patched
-        primitives or advancing the digested C state.
-    """
-
-    if holder_type in (
-        random.Random,
-        random.SystemRandom,
-        np.random.Generator,
-        np.random.RandomState,
-        torch.Generator,
-    ):
-        return None
-    base_names: set[str] = set()
-    trusted_bases = (random.Random, np.random.Generator, np.random.RandomState)
-    for base in trusted_bases:
-        if issubclass(holder_type, base):
-            base_names.update(name for name in dir(base) if not name.startswith("_"))
-    if issubclass(holder_type, np.random.BitGenerator):
-        base_names.update(name for name in dir(np.random.BitGenerator) if not name.startswith("_"))
-    if issubclass(holder_type, torch.Generator):
-        # r7 b8-sol R57: torch.Generator is subclassable; a user override of
-        # its draw/state surface (get_state/manual_seed/seed/...) would
-        # shadow the C state the digest reads, exactly the numpy false-clean.
-        base_names.update(name for name in dir(torch.Generator) if not name.startswith("_"))
-    for name in sorted(base_names):
-        for cls in holder_type.__mro__:
-            if name in vars(cls):
-                if cls.__module__.split(".", 1)[0] not in _RNG_TRUSTED_DEFINER_TOPS:
-                    return name
-                break
-    return None
-
-
-_UNCERTAIN_DETAIL_CAP: int = 64
-"""Max DISTINCT ``uncertain_detail`` reasons retained per monitoring window.
-
-The boolean ``uncertain`` verdict is unconditional; the detail is a diagnostic.
-Past the cap one ``uncertain_detail_capped`` marker discloses the suppression.
-"""
-
-
-HostRngMonitorResult = _rng_channels.HostRngMonitorResult  # W051: lives beside its routing
-
-
-def _torchlens_module_globals_ids() -> frozenset[int]:
-    """Identity keys of every loaded torchlens module's globals dict.
-
-    TorchLens's own capture machinery reads clocks constantly (per-op timing); its
-    reads are excluded by EXACT module ownership -- the caller frame's globals dict
-    identity against this registry -- never by filename strings or frame ancestry.
-    A user callback's code keeps its own module globals even when invoked from a
-    TorchLens frame, so user reads are always detected.
-    """
-
-    ids = set()
-    for name, module in list(_sys_module.modules.items()):
-        if module is not None and (name == "torchlens" or name.startswith("torchlens.")):
-            module_dict = getattr(module, "__dict__", None)
-            if module_dict is not None:
-                ids.add(id(module_dict))
-    return frozenset(ids)
-
-
-def _rng_exempt_instances() -> tuple[Any, ...]:
-    """Replayable global singletons + TorchLens's private barcode RNG (identity-exempt).
-
-    These are the load-bearing no-over-trigger gate: the legacy ``mtrand._rand``
-    singleton and module ``random`` engine keep their SEEDED-reproduction semantics
-    (a seeded model stays VERIFIED), and TorchLens's own barcode RNG draws during the
-    forward must never ceiling the capture.
-    """
-
-    exempt: list[Any] = []
-    inst = getattr(random, "_inst", None)
-    if inst is not None:
-        exempt.append(inst)
-    np_singleton = getattr(getattr(np.random, "mtrand", None), "_rand", None)
-    if np_singleton is not None:
-        exempt.append(np_singleton)
-    # r7 b8-sol R57: torch.Generator holders are digestable now, so the
-    # REPLAYABLE global torch engine must be identity-exempt exactly like the
-    # random/numpy module singletons -- its state is seeded and snapshot-
-    # replayed by capture, and a seeded torch draw must never ceiling.
-    torch_singleton = getattr(torch, "default_generator", None)
-    if torch_singleton is not None:
-        exempt.append(torch_singleton)
-    try:
-        from .hashing import _BARCODE_RNG
-
-        exempt.append(_BARCODE_RNG)
-    except Exception:  # pragma: no cover - hashing is a first-party import
-        pass
-    # A numpy ``Generator``/``RandomState`` OWNS a distinct ``BitGenerator`` object that
-    # advances on every draw and is itself GC-visible. Exempt those underlying bit
-    # generators transitively so the process-wide inventory does not falsely ceiling a
-    # SEEDED replayable-singleton draw (the load-bearing over-trigger gate; a seeded
-    # ``np.random.random()`` model must stay VERIFIED).
-    for candidate in list(exempt):
-        bit_generator = None
-        if isinstance(candidate, np.random.Generator):
-            bit_generator = getattr(candidate, "bit_generator", None)
-        elif isinstance(candidate, np.random.RandomState):
-            bit_generator = getattr(candidate, "_bit_generator", None) or getattr(
-                candidate, "bit_generator", None
-            )
-        if bit_generator is not None:
-            exempt.append(bit_generator)
-    return tuple(exempt)
-
-
-_CUSTOM_HOLDER_SKIP_MODULES = frozenset(
-    {
-        # Stdlib runtime primitives + torch/numpy implementation objects the custom-holder
-        # generator sweep (r42 corr2_1) must NOT recurse into: threading/asyncio/file/
-        # socket handles and torch/numpy internals (a digestable RNG is snapshotted BEFORE this
-        # skip check; everything else in those namespaces is impl noise). Keyed on the top-level
-        # module of the value's TYPE. r45 hon1_1: ``collections`` and ``queue`` are REMOVED --
-        # ``deque`` / ``ChainMap`` / ``UserList`` / ``UserDict`` / ``Counter`` and the ``queue.*``
-        # containers are now reached structurally (the ``Mapping`` / non-leaf ``Collection`` descent
-        # and the queue-protocol snapshot) BEFORE this skip check ever runs, so their held
-        # generators are no longer silently missed.
-        "builtins",
-        "threading",
-        "asyncio",
-        "socket",
-        "io",
-        "_io",
-        "selectors",
-        "subprocess",
-        "multiprocessing",
-        "concurrent",
-        "ctypes",
-        "weakref",
-        "typing",
-        "functools",
-        "pathlib",
-        "logging",
-        "numpy",
-        "torch",
-    }
-)
-"""Top-level module names whose instances the custom-holder generator sweep skips (r42 corr2_1)."""
-
-_STDLIB_CLASS_LEAF_MODULES: frozenset[str] = frozenset(_sys_module.stdlib_module_names) - {
-    "__main__"
-}
-"""Stdlib top-level module names whose CLASSES the class-surface walk leafs (r56 amb_1).
-
-Structural (``sys.stdlib_module_names``), never a hand-maintained denylist -- closing the
-whole "stdlib class dict carries a process-global registry" family at once (``collections.abc``
-ABC ``_abc_impl`` caches were the proven member: r45 removed ``collections`` from the
-INSTANCE-side skip set so containers descend, which silently re-opened the CLASS-side walk of
-ABC dicts). Applies ONLY to :meth:`host_nondeterminism_monitor._is_trusted_leaf_class` -- the
-instance-side container/holder descent is untouched, so a ``deque`` / ``UserList`` /
-``UserDict`` subclass instance and its held generators stay fully reachable. ``__main__`` is
-carved out: model classes defined in scripts/notebooks keep r53 class-attribute coverage.
-"""
-
-_INVENTORY_LEAF_TYPES: tuple[type, ...] = (
-    str,
-    bytes,
-    bytearray,
-    memoryview,
-    np.ndarray,
-    np.generic,
-    torch.Tensor,
-    torch.nn.Module,
-    ModuleType,
-)
-"""Types the sweep's ``Collection`` branch never ELEMENT-ITERATES (r45 hon1_1).
-
-``str`` / ``bytes`` / ``bytearray`` / ``memoryview`` / ``np.ndarray`` / a bare ``torch.Tensor``
-satisfy ``collections.abc.Collection`` yet must NOT be descended element-wise: a string would
-explode into per-character strings (huge / cyclic node blow-up) and a tensor / ndarray holds no
-Python-level RNG among its ELEMENTS. r61 hon_1: this tuple now means exactly "do not iterate
-the buffer" -- it is NOT an instance-state wall. A tensor / ndarray-subclass node still walks
-its Python instance ``__dict__`` / ``__slots__`` through the gc fallback's numeric-payload
-branch (:data:`_NUMERIC_PAYLOAD_LEAF_TYPES`), so ``weight.rng = default_rng()`` is inventoried.
-``torch.nn.Module`` and ``ModuleType`` are likewise excluded from the
-``Collection`` descent branch (this entry is inert for ``nn.Module`` -- it is not a
-``collections.abc.Collection`` -- and documents intent). r51 hon1_1: an ``nn.Module`` is NO LONGER
-a hard inventory leaf; it is descended via ``_is_recursable_custom_holder`` (its own
-``__dict__`` / ``__slots__``), reaching a generator behind an UNREGISTERED submodule.
-"""
-
-
-def _derive_abc_impl_type() -> type | None:
-    """The C ``_abc._abc_data`` type carried by every ``ABCMeta`` class (r56 amb_1).
-
-    Derived from a live ABC rather than importing the private ``_abc`` module. ``None`` on
-    a runtime using the pure-Python ``_py_abc`` fallback (no CPython ``_abc_impl`` slot),
-    where this exclusion is inapplicable by construction.
-    """
-
-    probe = Collection.__dict__.get("_abc_impl")
-    if probe is not None and type(probe).__module__ == "_abc":
-        return type(probe)
-    return None
-
-
-_ABC_IMPL_TYPE: type | None = _derive_abc_impl_type()
-
-_AMBIENT_BRIDGE_LEAF_TYPES: tuple[type, ...] = (
-    ModuleType,
-    CodeType,
-    FrameType,
-) + ((_ABC_IMPL_TYPE,) if _ABC_IMPL_TYPE is not None else ())
-"""Types the authoritative ``gc.get_referents`` fallback SEVERS entirely (r55 C6, r61 split).
-
-r61 hon_1 split the former ``_GC_EXPANSION_LEAF_TYPES`` by the REASON each member was
-excluded. This tuple keeps exactly the members that BRIDGE the rooted walk into ambient
-process state -- severed to ``[]``, never partially walked:
-
-- ``ModuleType``: a module is a SHARED namespace; expanding it drops the rooted
-  walk into every imported framework's globals. A generator held in a shared
-  module global is the explicit documented residual (contract section 11).
-- ``CodeType``: code objects hold only compile-time constants (``co_consts``)
-  -- a live generator cannot exist there.
-- ``FrameType``: frames chain through ``f_back`` into the ENTIRE interpreter
-  call stack (TorchLens's own frames included) -- shared, unbounded state.
-- ``_abc._abc_data`` (r56 amb_1): every ``ABCMeta`` class's ``_abc_impl`` slot.
-  Its ``tp_traverse`` exposes the ABC registry/cache/NEGATIVE-cache weakref sets
-  -- PROCESS-GLOBAL bookkeeping accumulating a weakref to every type ever
-  ``isinstance``-checked against that ABC. Expanding one bridges the rooted walk
-  out of the model subgraph into the ambient object graph (every cached class's
-  dict, then its attribute webs), making sweep completeness ambient-state-
-  dependent: under a large ambient graph the walk digested foreign generators
-  and exhausted the node cap BEFORE the model's own generator (the r55 full-run
-  regression on ``test_r47_generator_container_subclass``). The caches hold only
-  weakrefs to TYPES plus registered classes, so a model-held generator can never
-  live inside one -- excluding them loses zero legitimate coverage.
-
-``types.TracebackType`` is deliberately in NEITHER r61 tuple (unchanged posture): a
-walked traceback contributes only ``tb_frame`` / ``tb_next``, the frame is severed at
-the referent filter, a traceback has no instance ``__dict__`` -- probed, no ambient
-escape either way.
-
-Deliberately NOT severed: ``torch.nn.Module`` (r51 hon1_1 -- an unregistered
-submodule must stay reachable), ``type`` objects (a referent class is enqueued
-and handled by the r53 class-surface branch with its trusted-leaf gate), and
-stdlib wrapper instances such as ``functools._lru_cache_wrapper`` (r54 corr_4:
-the ``__wrapped__`` edge must be walked; boundedness is owned by the node cap,
-inertness by ``tp_traverse`` itself).
-
-``BuiltinFunctionType`` was REMOVED in r57 C6 (r56 hon_1): its old
-justification ("a C function's only referents are its ``__self__`` module")
-is FALSE for a *bound* C method, whose ``__self__`` is the RECEIVER instance
--- ``gen.random.__self__`` IS the numpy ``Generator``, so blanket-
-leafing dropped a real inert edge ``gc.get_referents`` exposes (a model
-caching ``self.sample = self.rng.random`` read false VERIFIED).
-Bound C callables are now special-cased at the top of
-:meth:`host_nondeterminism_monitor._inert_gc_children`: exactly the
-``__self__`` receiver is enqueued, gated by the SAME shared-namespace /
-ambient-bridge walls as every other node, and the node never expands
-generically (a module-level C function -- module or absent ``__self__`` --
-contributes nothing).
-
-r57 C6 follow-up: ``FunctionType`` gets the matching callable-specific
-treatment in the same method -- authoritative traverse minus its
-``__globals__`` / ``__builtins__`` namespace edges dropped BY IDENTITY
-(registry-independent, so an ``exec``/``torch.fx``-generated function with a
-SYNTHETIC globals dict is walled too). After any capture, ``wrap_torch()``
-rebinds torch ops (``torch.relu`` / ``torch.zeros``) from builtins to
-``FunctionType`` wrappers, so without this branch a cached
-``self.act = torch.relu`` fell through to the generic fallback and enqueued
-function namespace/metadata edges -- the same ambient-escape class the r47/
-r56 walls close. Builtin-vs-wrapped op shape no longer changes the sweep.
-"""
-
-_NUMERIC_PAYLOAD_LEAF_TYPES: tuple[type, ...] = (np.ndarray, np.generic, torch.Tensor)
-"""Numeric-payload types: buffer never walked, instance STATE walked (r61 hon_1).
-
-These are NO LONGER hard expansion leaves. The r45/r55 posture blanket-leafed them
-("a tensor's traverse reaches autograd internals, and neither holds a Python-level
-RNG"), which silently dropped REAL inert instance state: arbitrary user attributes on
-a tensor / ``nn.Parameter`` / ndarray-subclass instance are valid CPython
-(``self.lin.weight.rng = default_rng()`` -- the r60 hon_1 false-VERIFIED repro).
-
-The r61 rule is per-EDGE, not per-type: the C numeric buffer / autograd / storage
-internals are never walked (``gc.get_referents`` is never called on these types), but
-the Python instance ``__dict__`` / ``__slots__`` surfaces ARE walked via
-:meth:`host_nondeterminism_monitor._custom_holder_children` -- the same inert
-protocol every other holder gets (slot member descriptors, never ``getattr``; zero
-user code) -- AND (r63) the node's class-surface edge is enqueued like every other
-holder branch's: ``type(value)`` flows through the trusted-leaf-gated class branch,
-so a class-attribute generator on a USER-defined Tensor / Parameter / ndarray
-subclass is inventoried while stock ``torch.Tensor`` / ``nn.Parameter`` /
-``np.ndarray`` / ``np.generic`` remain trusted leaves (no implementation-class
-expansion). ``np.generic`` scalars carry no instance surface and contribute only
-their (leafed) class.
-
-Distinct from :data:`_INVENTORY_LEAF_TYPES`, which means "do not element-iterate this
-buffer-like Collection" (a tensor still never explodes into per-element nodes) -- the
-two tuples diverge on purpose: element iteration and instance-state walking are
-different edges.
-"""
-
-
-def _resolve_slot_member(klass: type, slot_name: str) -> MemberDescriptorType | None:
-    """Return ``klass``'s slot member descriptor, resolving CPython name mangling (r61 corr_1).
-
-    A ``__slots__`` entry spelled ``"__rng"`` (two leading underscores, at most one
-    trailing) is stored in the class dict under its MANGLED key ``_Class__rng`` --
-    while ``__slots__`` itself still lists the RAW string. The former
-    ``klass.__dict__.get(slot)`` lookup therefore returned ``None`` for every private
-    slot and its held generator was silently unwitnessed (false VERIFIED).
-
-    Mangling rules pinned against CPython ground truth (6/6 probe cases): ``__rng`` ->
-    ``_Class__rng``; ``___x`` -> ``_Class___x``; a trailing-dunder name (``__d__``) is
-    NOT mangled; leading underscores are stripped from the class name (``_F`` ->
-    ``_F__rng``); an all-underscore class name mangles NOTHING; a single-underscore
-    name (``_x``) is not mangled. The DECLARING class from the MRO is the mangling
-    authority (each MRO level mangles against its own name).
-
-    r63 (r62 raw-shadow HIGH): the MANGLED private descriptor is preferred BEFORE any
-    raw class-dict key. Name mangling is a compile-time class-body transform, so a
-    post-hoc raw entry (``M.__rng = shadow`` via module-level ``setattr``) lands at the
-    UNMANGLED key while the real slot descriptor stays at ``_M__rng`` -- the former
-    raw-key-first lookup let that shadow win and silently dropped the slot-held
-    generator (false VERIFIED). Every candidate key is TYPECHECKED: only an inert
-    ``types.MemberDescriptorType`` (the C slot descriptor, whose ``__get__`` is pure C
-    field access and executes no Python) is ever returned -- never an arbitrary
-    class-dict value whose ``__get__`` could invoke user code (a property or hostile
-    descriptor planted at either key). Returns ``None`` when neither key holds a
-    member descriptor; the caller skips the slot (nothing executed, nothing read).
-    Slot STORAGE keys are mangled by ``type.__new__`` itself (probed), so compiled and
-    ``type()``-built classes agree on the mangled key; the raw-key fallback covers
-    exactly the shapes mangling leaves untouched (non-private names, trailing-dunder
-    names, and an all-underscore class name, where the descriptor lives at the raw key).
-    """
-
-    class_dict = klass.__dict__
-    candidate_keys: list[str] = []
-    if slot_name.startswith("__") and not slot_name.endswith("__"):
-        stripped = klass.__name__.lstrip("_")
-        if stripped:
-            candidate_keys.append("_" + stripped + slot_name)
-    candidate_keys.append(slot_name)
-    for key in candidate_keys:
-        member = class_dict.get(key)
-        if isinstance(member, MemberDescriptorType):
-            return member
-    return None
-
-
-_INVENTORY_NODE_CAP = 1_000_000
-"""Defensive node cap for the model-attribute generator sweep (r41 hon1_2).
-
-Realistic models sit 2-3 orders of magnitude below this (a 400-block toy holds ~7.7k
-module-dict values; the cap admits ~1M visited nodes in ~300 ms measured), so no
-realistic deterministic model can be ceilinged by it. Exhaustion NEVER truncates
-silently: it flags ``inventory_budget_exhausted`` monitor uncertainty, downgrading
-capture completeness to INCOMPLETE -- a truncated inventory never reads as
-no-consumption. Read at call time so the cap-exhaustion invariant is testable at any
-cap value.
-"""
-
-
-#: Opcodes that push exactly ONE value and therefore keep positional argument
-#: slots decodable by walking back from the ``CALL`` instruction. As plain
-#: ARGUMENT loads these all push a single value on every supported CPython
-#: (``LOAD_GLOBAL``'s extra-NULL form applies only to callable loads).
-_SINGLE_PUSH_LOAD_OPNAMES = frozenset(
-    {"LOAD_CONST", "LOAD_FAST", "LOAD_NAME", "LOAD_DEREF", "LOAD_GLOBAL"}
-)
-
-#: Call-sequence bookkeeping opcodes that carry no argument push of their own and can
-#: sit between the last argument-push instruction and the ``CALL``/``CALL_FUNCTION``/
-#: ``CALL_METHOD`` instruction, depending on interpreter. Python 3.11 alone splits the
-#: call into ``PRECALL`` (argument-count/shape dispatch) followed by ``CALL`` (the
-#: actual invocation); 3.10 has no such opcode (``CALL_FUNCTION``/``CALL_METHOD``
-#: follow the arguments directly) and 3.12+ folded ``PRECALL`` back into ``CALL``. A
-#: naive fixed-width slice ending at the ``CALL`` position silently swallows
-#: ``PRECALL`` as if it were the last argument instruction on 3.11, which starves the
-#: decode of its real last argument and misclassifies every held-alias call on that
-#: interpreter as "unknown" (grind-pyver R8). Walking backward and skipping opcodes in
-#: this set keeps the decode interpreter-shape-agnostic.
-_CALL_BOOKKEEPING_OPNAMES = frozenset({"PRECALL"})
-
-
-def _call_site_explicit_time_value(frame: Any, time_arg_index: int) -> bool:
-    """Return whether a held-alias ``c_call`` site passes an explicit non-None time.
-
-    Reads the caller frame's bytecode at ``f_lasti``. A plain ``CALL``
-    (py3.11+) / ``CALL_FUNCTION`` / ``CALL_METHOD`` (py3.10) oparg carries the
-    exact positional count; the instruction that pushed the time argument is
-    then decodable when every pushed argument is a simple single-push load,
-    and its RUNTIME VALUE is resolved from the frame (constants directly;
-    names from the frame's locals/globals, still bound at ``c_call`` time).
-
-    The previous argcount-only decode was VALUE-BLIND (r5 b8-fable R57): a
-    held alias called with an explicit ``None`` (``localtime(None)``, or the
-    common idiom ``def fmt(ts=None): return ctime(ts)``) decoded as
-    "explicit time" and read the current clock unmarked -- a false VERIFIED.
-    Resolving the value keeps a genuine held ``localtime(t)`` a pure
-    transform (no over-ceiling) while a ``None`` value, a star-call, a
-    non-simple argument expression, or any decode failure marks fail-closed
-    -- over-marking, never under-marking. The module-attr wrapper path is
-    unaffected: it sees the argument value directly and stays exact.
-
-    Parameters
-    ----------
-    frame:
-        Caller frame supplied by the ``c_call`` profile event.
-    time_arg_index:
-        Position of the explicit-time argument in the converter's signature.
-
-    Returns
-    -------
-    bool
-        ``True`` only when the time argument resolves to a non-``None``
-        value; ``False`` means the caller must mark.
-    """
-
-    # One decode authority: delegate to the three-way proof (the monitor
-    # flow additionally distinguishes ``"unknown"`` -- unresolvable value --
-    # as monitor uncertainty; this boolean conflates it with the mark-worthy
-    # outcomes, which is exactly the unit-pinned fail-closed contract).
-    argcount = _rng_channels.call_site_argcount(frame)
-    if argcount is None or argcount <= time_arg_index:
-        return False
-    return _call_site_time_arg_proof(frame, argcount, time_arg_index) == "transform"
-
-
-def _call_site_time_arg_proof(frame: Any, argcount: int, time_arg_index: int) -> str:
-    """Classify the explicit time argument at a held-ref converter call site.
-
-    The positional-count decode alone is VALUE-BLIND: ``localtime(None)`` (and
-    the common idiom ``def fmt(ts=None): return ctime(ts)``) passes the
-    explicit-time slot yet still reads the current clock, so counting
-    positionals let a held pre-window alias escape unmarked (grind-r5 b8
-    R57). The decode is VALUE-resolving (r5 b8-fable R57, unified with
-    :func:`_call_site_explicit_time_value` at fixwave-5 integration):
-    constants resolve directly and simple names resolve from the frame's
-    locals/globals, which are still bound at ``c_call`` time -- nothing can
-    rebind a simple name between its argument load and the call in the same
-    thread, so a resolved value IS the value the converter received.
-
-    Returns
-    -------
-    str
-        ``"transform"`` -- resolves to a provably non-``None`` value (pure
-        transform); ``"now_read"`` -- resolves to ``None``, literal or
-        through a bound name (implicit-now clock read); ``"unknown"`` --
-        unresolvable (attribute/expression argument, unbound name, or
-        undecodable site), which callers treat as monitor uncertainty (the
-        value is runtime-dependent, so neither a clock-draw claim nor a
-        clean pass is provable).
-    """
-
-    try:
-        lasti = frame.f_lasti
-        instructions = list(_dis_module.get_instructions(frame.f_code))
-        call_position = next(
-            (index for index, ins in enumerate(instructions) if ins.offset == lasti),
-            None,
-        )
-        if call_position is None:
-            return "unknown"
-        # Walk backward from the CALL instruction collecting exactly ``argcount``
-        # single-push argument loads, skipping any interposed call-bookkeeping
-        # opcode (``PRECALL`` on Python 3.11 -- see _CALL_BOOKKEEPING_OPNAMES).
-        # A fixed-width slice ending at ``call_position`` assumes the ``argcount``
-        # instructions immediately preceding CALL are all argument pushes, which
-        # is false on 3.11: ``PRECALL`` sits there instead of the real last
-        # argument instruction, starving the decode and misclassifying every
-        # held-alias call on that interpreter as "unknown" (grind-pyver R8).
-        cursor = call_position - 1
-        arg_instructions: list[Any] = []
-        while cursor >= 0 and len(arg_instructions) < argcount:
-            candidate = instructions[cursor]
-            if candidate.opname in _CALL_BOOKKEEPING_OPNAMES:
-                cursor -= 1
-                continue
-            arg_instructions.append(candidate)
-            cursor -= 1
-        if len(arg_instructions) != argcount:
-            return "unknown"
-        arg_instructions.reverse()
-        if any(ins.opname not in _SINGLE_PUSH_LOAD_OPNAMES for ins in arg_instructions):
-            return "unknown"
-        time_instruction = arg_instructions[time_arg_index]
-        if time_instruction.opname == "LOAD_CONST":
-            return "now_read" if time_instruction.argval is None else "transform"
-        name = time_instruction.argval
-        if time_instruction.opname in {"LOAD_FAST", "LOAD_DEREF"}:
-            frame_locals = frame.f_locals
-            if name in frame_locals:
-                return "now_read" if frame_locals[name] is None else "transform"
-            return "unknown"
-        # LOAD_GLOBAL / LOAD_NAME: module global (falls back through locals
-        # for class-body/exec frames first, mirroring name resolution).
-        for namespace in (frame.f_locals, frame.f_globals):
-            if name in namespace:
-                return "now_read" if namespace[name] is None else "transform"
-        return "unknown"
-    except Exception:
-        return "unknown"
-
-
-_ACTIVE_MONITOR: "host_nondeterminism_monitor | None" = None
-"""The capture-scoped monitor currently installed, or ``None`` (r41 hon2_1).
-
-Published as the LAST statement of ``__enter__`` and restored to the PREVIOUS occupant
-FIRST in the teardown, so readers never observe a partially-installed window and a
-nested window's exit cannot null the slot mid-outer-window. Captures do not nest
-(``active_logging`` rejects nested captures), so a single slot is sufficient.
-"""
-
-
-class _PatchStackEntry:
-    """One live monitor patch on ``(holder, name)``, spliceable out of order.
-
-    ``holder`` is retained STRONGLY so its ``id()`` cannot be reused by another object
-    while the entry is stacked (the stack is keyed by ``(id(holder), name)``).
-    """
-
-    __slots__ = ("holder", "name", "original", "wrapper")
-
-    def __init__(self, holder: Any, name: str, original: Any, wrapper: Any) -> None:
-        self.holder = holder
-        self.name = name
-        self.original = original
-        self.wrapper = wrapper
-
-
-_PATCH_STACKS: dict[tuple[int, str], list[_PatchStackEntry]] = {}
-"""Live monitor patches per ``(id(holder), name)``, innermost last.
-
-Restoration is SPLICE-aware. A monitor unwinding out of order (a non-LIFO overlap) used
-to hand the true original back and then have the outer window's restore write ITS
-snapshot -- which was the inner wrapper -- leaving ``time.time`` / ``os.urandom`` /
-``np.random.default_rng`` wrapped for the life of the process. Splicing instead rewrites
-the successor entry's recorded original, so whoever restores last always writes the
-genuine pre-monitor value.
-"""
-
-
-@contextmanager
-def _suppress_active_monitor_marks() -> Iterator[None]:
-    """Suppress channel marks for a TorchLens-OWNED RNG bookkeeping bracket (r65 Z).
-
-    TorchLens's own seed / snapshot / restore helpers legitimately touch the torch RNG
-    APIs that the r65 registry rows monitor -- per-op state logging and in-forward
-    intervention replay run INSIDE the capture window (``set_rng_from_saved_states``
-    calls the patched ``torch.random.set_rng_state``). A TorchLens-initiated
-    restore is NOT model host nondeterminism, so these helpers bracket themselves with
-    the active monitor's ``_mark``-choke-point suppression (surface-complete: wrapper
-    marks, held-code call marks, and default-generator receiver marks all funnel
-    through the same choke). USER code never executes inside these brackets -- the
-    replayed op itself runs OUTSIDE the bracket in
-    :func:`execute_with_restored_rng_autocast`. No active monitor -> no-op.
-    """
-
-    monitor = _ACTIVE_MONITOR
-    if monitor is None:
-        yield
-        return
-    with monitor._monitor_internal_probe():
-        yield
-
-
-def _skip_retired_hooks(candidate: Any, predecessor_attr: str) -> Any:
-    """Return the first chain link that is not a torn-down monitor's hook.
-
-    A non-LIFO overlap used to restore an already-retired window's hook into a
-    profile slot; the sys slot self-heals on its next event, but the
-    ``threading`` registration only seeds NEW threads, so a dead hook parked
-    there never fires again on the main thread and taxes (and misclassifies
-    into) every later capture. Walking each candidate's owning monitor lets the
-    restore skip straight to the newest LIVE link.
-    """
-
-    seen: set[int] = set()
-    while candidate is not None and id(candidate) not in seen:
-        seen.add(id(candidate))
-        owner = getattr(candidate, "_tl_owner", None)
-        if owner is None or not getattr(owner, "_hooks_retired", False):
-            break
-        # Key the predecessor off WHICH of the owner's two hooks this link IS,
-        # not off the slot being restored: a thread spawned during a previous
-        # window carries that window's THREADING hook even when the slot under
-        # restore is the sys slot, and following the slot's attr handed it the
-        # dead owner's sys predecessor instead of the threading chain
-        # (grind-r5 b8 R57).
-        if candidate is getattr(owner, "_threading_hook", None):
-            candidate = getattr(owner, "_previous_threading_profile", None)
-        elif candidate is getattr(owner, "_sys_hook", None):
-            candidate = getattr(owner, "_previous_sys_profile", None)
-        else:
-            candidate = getattr(owner, predecessor_attr, None)
-    return candidate
 
 
 class host_nondeterminism_monitor:
@@ -2255,7 +233,7 @@ class host_nondeterminism_monitor:
         self._default_generator_ids: frozenset[int] = frozenset()
         # r41 hon2_1: idents of threads hooked by the in-window threading profile
         # hook (registered race-free at thread bootstrap). Verdict-relevant again
-        # since the foreign-thread pure-read split: ``_rng_channels.mark_pure_read``
+        # since the foreign-thread pure-read split: ``channels.mark_pure_read``
         # consults it to keep in-window-started threads CEILING while ambient
         # pre-existing threads only disclose. Absence is fail-closed: a failed
         # profile install already flagged uncertainty, so an unregistered
@@ -2476,7 +454,7 @@ class host_nondeterminism_monitor:
     def _entropy_wrapper(self, original: Any, channel: str) -> Any:
         """Build a marking passthrough wrapper for one OS-entropy channel (thread-routed)."""
 
-        return _rng_channels.entropy_wrapper(self, original, channel)
+        return channels.entropy_wrapper(self, original, channel)
 
     def _raw_thread_spawn_wrapper(self, original: Any) -> Any:
         """Build a passthrough spawn wrapper that profile-hooks the NEW thread.
@@ -2517,7 +495,7 @@ class host_nondeterminism_monitor:
         supplied and non-``None`` the call reads no clock and is not marked.
         """
 
-        return _rng_channels.clock_wrapper(self, original, channel, time_arg_index)
+        return channels.clock_wrapper(self, original, channel, time_arg_index)
 
     def _instance_method_wrapper(self, original: Any, channel: str) -> Any:
         """Build a thread-routed marking passthrough for one RNG-instance draw method.
@@ -2533,7 +511,7 @@ class host_nondeterminism_monitor:
             """Mark the channel unless the receiver is an exempt (TorchLens-owned) instance."""
 
             if id(self_rng) not in exempt_ids:
-                _rng_channels.mark_thread_routed(self, channel)
+                channels.mark_thread_routed(self, channel)
             return original(self_rng, *args, **kwargs)
 
         return wrapper
@@ -2603,8 +581,8 @@ class host_nondeterminism_monitor:
         if mark is None:
             return
         channel, disposition = mark
-        if disposition == _rng_channels.OWNER_SYNC_DISPOSITION:
-            _rng_channels.note_owner_wait(self, channel, frame)
+        if disposition == channels.OWNER_SYNC_DISPOSITION:
+            channels.note_owner_wait(self, channel, frame)
             return
         self._mark_disposition(channel, disposition)
 
@@ -2719,7 +697,7 @@ class host_nondeterminism_monitor:
             try:
                 dtype = np.ndarray.dtype.__get__(value)
                 if dtype.hasobject and int(np.ndarray.size.__get__(value)) <= (
-                    _DEEP_INVENTORY_NODE_CAP
+                    _types._DEEP_INVENTORY_NODE_CAP
                 ):
                     return tuple(np.ndarray.flat.__get__(value))
             except Exception:
@@ -2801,7 +779,8 @@ class host_nondeterminism_monitor:
             return cached[1]
         filename = code.co_filename
         needs_snapshot = not any(
-            filename.startswith(prefix) for prefix in _NUMPY_FRAME_DIGEST_INTERNAL_PATH_PREFIXES
+            filename.startswith(prefix)
+            for prefix in _types._NUMPY_FRAME_DIGEST_INTERNAL_PATH_PREFIXES
         )
         self._numpy_frame_digest_scope_cache[cache_key] = (code, needs_snapshot)
         return needs_snapshot
@@ -2828,7 +807,7 @@ class host_nondeterminism_monitor:
             Python frame entering under the profile hook.
         """
 
-        if not _NUMPY_RNG_METHODS_NEED_FRAME_DIGEST:
+        if not _types._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST:
             return
         if not self._numpy_frame_needs_rng_snapshot(frame.f_code):
             return
@@ -2947,7 +926,7 @@ class host_nondeterminism_monitor:
             Value delivered to the caller.
         """
 
-        if not _NUMPY_RNG_METHODS_NEED_FRAME_DIGEST:
+        if not _types._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST:
             return
         caller = frame.f_back
         if caller is None or not self._numpy_frame_needs_rng_snapshot(caller.f_code):
@@ -3011,7 +990,7 @@ class host_nondeterminism_monitor:
                     # unknown opcode) marks fail-closed; a literal ``None`` marks; a
                     # computed argument flags uncertainty (runtime-dependent value:
                     # neither a clock-draw claim nor a clean pass is provable).
-                    argcount = _rng_channels.call_site_argcount(frame)
+                    argcount = channels.call_site_argcount(frame)
                     if argcount is None or argcount <= time_arg_index:
                         self._mark(held_channel)
                     else:
@@ -3029,9 +1008,9 @@ class host_nondeterminism_monitor:
         # module function also has a module receiver. After an identity miss, however,
         # these exact types cannot be a torch/NumPy/Python RNG or datetime class, so
         # bypassing the remaining receiver classifiers is behavior-preserving.
-        if type(receiver) in _INERT_PROFILE_C_CALL_RECEIVER_TYPES:
+        if type(receiver) in _types._INERT_PROFILE_C_CALL_RECEIVER_TYPES:
             return
-        if _rng_channels.classify_consumed_only_receiver(self, receiver, arg, frame):
+        if channels.classify_consumed_only_receiver(self, receiver, arg, frame):
             return
         # r67 C1: method c_calls on ANY ``torch.Generator`` receiver -- process/device
         # defaults, user-constructed, model-held, RETURNED clones, and subclasses (an
@@ -3174,7 +1153,7 @@ class host_nondeterminism_monitor:
                     receiver = getattr(arg, "__self__", None)
                     if id(arg) in self._held_ref_marks or (
                         receiver is not None
-                        and type(receiver) not in _INERT_PROFILE_C_CALL_RECEIVER_TYPES
+                        and type(receiver) not in _types._INERT_PROFILE_C_CALL_RECEIVER_TYPES
                     ):
                         self._classify_c_call(frame, arg)
                 elif event == "call":
@@ -3199,7 +1178,7 @@ class host_nondeterminism_monitor:
                     # Same cached scope test as the ``call`` branch, applied to the
                     # caller the value returns into: a cached implementation caller
                     # is exactly the helper's own early return.
-                    if _NUMPY_RNG_METHODS_NEED_FRAME_DIGEST:
+                    if _types._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST:
                         caller = frame.f_back
                         if caller is not None:
                             caller_scope = self._numpy_frame_digest_scope_cache.get(
@@ -3729,7 +1708,7 @@ class host_nondeterminism_monitor:
             while pending:
                 value = pending.pop()
                 visited_nodes += 1
-                if visited_nodes > _INVENTORY_NODE_CAP:
+                if visited_nodes > _types._INVENTORY_NODE_CAP:
                     self._flag_uncertain("inventory_budget_exhausted")
                     return snapshots
                 # r39 (frame-walk parity, executed false-VERIFIED V9a): a weakref
@@ -3837,7 +1816,7 @@ class host_nondeterminism_monitor:
                         except Exception:
                             self._flag_uncertain("inventory_state_read_failed")
                             continue
-                        if visited_nodes + size > _INVENTORY_NODE_CAP:
+                        if visited_nodes + size > _types._INVENTORY_NODE_CAP:
                             self._flag_uncertain("inventory_budget_exhausted")
                             return snapshots
                         try:
@@ -4143,7 +2122,7 @@ class host_nondeterminism_monitor:
             if not isinstance(filename, str) or filename.startswith(_STDLIB_PATH_PREFIX):
                 return None
         if isinstance(filename, str) and filename.startswith(
-            _NUMPY_FRAME_DIGEST_INTERNAL_PATH_PREFIXES
+            _types._NUMPY_FRAME_DIGEST_INTERNAL_PATH_PREFIXES
         ):
             return None
         return namespace
@@ -4264,7 +2243,7 @@ class host_nondeterminism_monitor:
                     continue
                 seen_ids.add(id(value))
                 visited_nodes += 1
-                if visited_nodes > _DEEP_INVENTORY_NODE_CAP:
+                if visited_nodes > _types._DEEP_INVENTORY_NODE_CAP:
                     self._deep_inventory_exhausted = True
                     self._flag_uncertain("deep_inventory_budget_exhausted")
                     return
@@ -4419,7 +2398,7 @@ class host_nondeterminism_monitor:
                         except Exception:
                             self._flag_uncertain("inventory_state_read_failed")
                             continue
-                        if visited_nodes + size > _DEEP_INVENTORY_NODE_CAP:
+                        if visited_nodes + size > _types._DEEP_INVENTORY_NODE_CAP:
                             self._deep_inventory_exhausted = True
                             self._flag_uncertain("deep_inventory_budget_exhausted")
                             return
@@ -4586,7 +2565,7 @@ class host_nondeterminism_monitor:
             ("prologue", self._install_prologue),
             ("rng_primitive", self._install_python_rng_primitives),
             ("global_engine_state", self._install_global_engine_state_surfaces),
-            ("owner_sync", lambda: _rng_channels.install_owner_sync_surfaces(self)),
+            ("owner_sync", lambda: channels.install_owner_sync_surfaces(self)),
             ("entropy", self._install_entropy_surfaces),
             ("construction", self._install_construction_surfaces),
             ("clock", self._install_clock_surfaces),
@@ -4596,7 +2575,6 @@ class host_nondeterminism_monitor:
         )
 
     def __enter__(self) -> HostRngMonitorResult:
-        global _ACTIVE_MONITOR
         if self._entered:
             # Re-arming the SAME instance would snapshot its own patches as the
             # "prior" state and hand a torn-down window's hook back to the process at
@@ -4604,7 +2582,7 @@ class host_nondeterminism_monitor:
             self._flag_uncertain("monitor_reentered")
             return self.result
         self._entered = True
-        if _ACTIVE_MONITOR is not None:
+        if monitor_state._ACTIVE_MONITOR is not None:
             # Overlapping windows are outside the single-threaded capture model: this
             # window's ``_patch_attr`` snapshots the OUTER window's wrappers as its
             # "originals", so a non-LIFO unwind cannot prove exact restoration. Degrade
@@ -4650,8 +2628,8 @@ class host_nondeterminism_monitor:
             raise
         # r41 hon2_1: publish the in-window registry LAST so the escape belt never
         # observes a partially-installed window (restored FIRST in the teardown).
-        self._previous_active_monitor = _ACTIVE_MONITOR
-        _ACTIVE_MONITOR = self
+        self._previous_active_monitor = monitor_state._ACTIVE_MONITOR
+        monitor_state._ACTIVE_MONITOR = self
         return self.result
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
@@ -4665,8 +2643,6 @@ class host_nondeterminism_monitor:
         debugger's -- profile hook and uninstall a live window's wrappers mid-forward,
         so every repeat is a no-op. Also called from ``__enter__``'s BaseException arm.
         """
-
-        global _ACTIVE_MONITOR
         if self._torn_down:
             return
         self._torn_down = True
@@ -4686,7 +2662,7 @@ class host_nondeterminism_monitor:
             # nested monitor's exit used to null the slot mid-outer-window, after which
             # TorchLens's own per-op RNG restores marked a false ``mutation`` channel and
             # every in-window thread reclassified as foreign.
-            if _ACTIVE_MONITOR is self or _ACTIVE_MONITOR is None:
+            if monitor_state._ACTIVE_MONITOR is self or monitor_state._ACTIVE_MONITOR is None:
                 # Skip torn-down ancestors: a non-LIFO overlap otherwise parks a
                 # dead monitor in the module slot and every later capture flags a
                 # phantom overlap (same dead-chain class as the profile slots).
@@ -4699,7 +2675,7 @@ class host_nondeterminism_monitor:
                 ):
                     seen.add(id(candidate))
                     candidate = candidate._previous_active_monitor
-                _ACTIVE_MONITOR = candidate
+                monitor_state._ACTIVE_MONITOR = candidate
             else:
                 self._flag_uncertain("active_monitor_replaced")
         except BaseException as exc:  # noqa: BLE001 -- drain first, re-raise after
@@ -4724,7 +2700,7 @@ class host_nondeterminism_monitor:
         self._restores.clear()
         try:
             self._compare_generator_inventories()
-            _rng_channels.settle_foreign_reads(self)
+            channels.settle_foreign_reads(self)
         except BaseException as exc:  # noqa: BLE001 -- unwind already complete
             self._flag_uncertain("teardown_interrupted")
             if deferred is None:
@@ -4799,9 +2775,9 @@ class host_nondeterminism_monitor:
 
         self._tl_globals_ids = _torchlens_module_globals_ids()
         self._exempt_ids = frozenset(id(item) for item in _rng_exempt_instances())
-        self._global_engine_prefixes = _rng_channels.global_engine_state_prefixes()
+        self._global_engine_prefixes = engine_state.global_engine_state_prefixes()
         # W051 (2.16): owner-thread sync primitives ride the held-code ``call`` layer.
-        self._held_code_marks.update(_rng_channels.owner_sync_code_marks())
+        self._held_code_marks.update(channels.owner_sync_code_marks())
 
     def _install_python_rng_primitives(self) -> None:
         """Patch the Python RNG class primitives (instances, subclasses, the bare C base)."""
@@ -4823,7 +2799,7 @@ class host_nondeterminism_monitor:
     def _install_global_engine_state_surfaces(self) -> None:
         """Patch the Python / legacy-NumPy global-engine STATE surface (W051 2.17)."""
 
-        _rng_channels.install_global_engine_state_surfaces(self)
+        engine_state.install_global_engine_state_surfaces(self)
 
     def _install_entropy_surfaces(self) -> None:
         """Patch the OS-entropy funnels (``os``/``random._urandom``) with held-ref registration."""

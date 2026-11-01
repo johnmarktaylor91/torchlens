@@ -335,7 +335,7 @@ def _operator_uninit_family_tail(func: Any) -> str | None:
     base name (``aten.empty_like`` -> ``empty_like``).
     """
 
-    from ..._utils.rng import _UNINIT_ALLOC_FACTORY_TAILS, _UNINIT_ALLOC_RESIZE_TAILS
+    from ..._utils._uninit_alloc import _UNINIT_ALLOC_FACTORY_TAILS, _UNINIT_ALLOC_RESIZE_TAILS
 
     base = _operator_base_name(func)
     if not base.startswith("aten."):
@@ -374,7 +374,7 @@ def _python_tensor_method_uninit_family_tail(
     never a silent gap slipping both the aten drift test and this surface.
     """
 
-    from ..._utils.rng import (
+    from ..._utils._uninit_alloc import (
         qualname_is_uninit_growth_resize,
         qualname_is_uninit_size_gated_alloc,
         qualname_is_uninitialized_alloc,
@@ -398,7 +398,7 @@ def _python_tensor_method_uninit_family_tail(
 def _operator_is_growth_resize(func: Any) -> bool:
     """Return whether a dispatcher overload is a resize spelling (grow-gated family)."""
 
-    from ..._utils.rng import _UNINIT_ALLOC_RESIZE_TAILS
+    from ..._utils._uninit_alloc import _UNINIT_ALLOC_RESIZE_TAILS
 
     base = _operator_base_name(func)
     return base.startswith("aten.") and base[len("aten.") :] in _UNINIT_ALLOC_RESIZE_TAILS
@@ -416,7 +416,7 @@ def _operator_total_writer_destination(
     in-place writers return ``None`` (taint propagates, fail closed).
     """
 
-    from ..._utils.rng import _UNINIT_RNG_FILL_TAILS, _UNINIT_TOTAL_WRITER_TAILS
+    from ..._utils._uninit_alloc import _UNINIT_RNG_FILL_TAILS, _UNINIT_TOTAL_WRITER_TAILS
 
     if kwargs:
         out = kwargs.get("out")
@@ -435,7 +435,7 @@ def _live_deterministic_fill_governs() -> bool:
     """Return whether the LIVE capture context proves deterministic uninit fill."""
 
     from ..._utils._torch_compat import read_fill_uninitialized_memory
-    from ..._utils.rng import deterministic_fill_governs
+    from ..._utils._uninit_alloc import deterministic_fill_governs
 
     deterministic = bool(torch.are_deterministic_algorithms_enabled())
     return deterministic_fill_governs(deterministic, read_fill_uninitialized_memory())

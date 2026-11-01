@@ -696,7 +696,7 @@ def _child_edge_totally_overwrites(self: "Trace", walked_label: str, child_label
     writers never stop the walk (fail closed).
     """
 
-    from .._utils.rng import qualname_is_uninit_total_writer
+    from .._utils._uninit_alloc import qualname_is_uninit_total_writer
 
     op = self._raw_graph_ws.raw_layer_dict.get(child_label)
     if op is None:
@@ -765,7 +765,7 @@ def _orphan_is_uninit_alloc_source(self: "Trace", op: Any) -> bool:
     capture-time ambient snapshot proves deterministic fill.
     """
 
-    from .._utils.rng import (
+    from .._utils._uninit_alloc import (
         deterministic_fill_governs,
         qualname_is_uninit_growth_resize,
         qualname_is_uninitialized_alloc,
