@@ -350,11 +350,7 @@ torchlens/_ir/op_record_scatter.py::scatter_record_to_cells	203
 torchlens/_ir/predicate_registry.py::_make_registered_wrapper	67
 torchlens/_ir/predicate_registry.py::coerce_predicate	61
 torchlens/_ir/predicate_registry.py::register_predicate	76
-torchlens/_ir/selector_eval.py	1875
-torchlens/_ir/selector_eval.py::_evaluate_grad_fn_site	62
-torchlens/_ir/selector_eval.py::_evaluate_subject	185
-torchlens/_ir/selector_eval.py::normalize_selector_like	74
-torchlens/_ir/selector_eval.py::selector_from_spec	165
+torchlens/_ir/selector_eval.py	1733
 torchlens/_kernel_telemetry.py::_payload_from_events	86
 torchlens/_merged/_artifact.py	1076
 torchlens/_merged/_artifact.py::_cached_join_refs	90
