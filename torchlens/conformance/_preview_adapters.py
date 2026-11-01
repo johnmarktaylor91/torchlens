@@ -470,7 +470,8 @@ def _roster_paddle() -> tuple[RosterModel, ...]:
     return _rows(
         build_fn,
         build_module,
-        fn_ops=("input", "matmul", "functional.relu"),
+        # ``weights`` is a closure tensor, recorded as a constant op (P0c's rule).
+        fn_ops=("input", "constant", "matmul", "functional.relu"),
         module_ops=("input", "functional.linear", "functional.relu", "functional.linear"),
     )
 
