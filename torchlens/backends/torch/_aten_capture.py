@@ -99,9 +99,9 @@ def _module_call_stack(trace: Any) -> tuple[tuple[str, int], ...]:
     rows: list[tuple[str, int]] = []
     for frame in frames:
         address = getattr(frame, "address", None)
-        pass_index = getattr(frame, "pass_index", None)
-        if isinstance(address, str) and isinstance(pass_index, int):
-            rows.append((address, pass_index))
+        pass_number = getattr(frame, "pass_number", None)
+        if isinstance(address, str) and isinstance(pass_number, int):
+            rows.append((address, pass_number))
     return tuple(rows)
 
 
@@ -347,7 +347,7 @@ def _execution_context(
         sdpa_policy=tuple(sdpa_policy),
         compile_stance="forced_eager",
         owner_thread_coverage=(threading.get_ident(),),
-        completeness_witness_mode=str(getattr(trace, "completeness_witness_mode", "off")),
+        completeness_witness_mode=str(trace.__dict__.get("_health_completeness_mode", "off")),
     )
 
 

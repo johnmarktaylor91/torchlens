@@ -37,7 +37,7 @@ def _trace() -> tl.Trace:
     return tl.trace(
         _Mlp().eval(),
         torch.randn(2, _D),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 

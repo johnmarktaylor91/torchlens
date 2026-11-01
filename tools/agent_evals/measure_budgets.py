@@ -73,7 +73,7 @@ def measure_entry(entry: Any, workdir: Path) -> dict[str, Any]:
     trace = tl.trace(model, inputs, save="all")
     path = workdir / f"{entry.id}.tlspec"
     trace.save(str(path))
-    record: dict[str, Any] = {"entry": entry.id, "num_ops": trace.num_ops}
+    record: dict[str, Any] = {"entry": entry.id, "num_ops": len(trace.ops)}
     manifest, _ = read_manifest(path)
     total_bytes, blob_count = declared_bytes_and_count(manifest)
     entries = manifest.get("body_index") if isinstance(manifest, dict) else None

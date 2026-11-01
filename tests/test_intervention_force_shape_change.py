@@ -115,7 +115,7 @@ def test_intervene_shape_change_applies() -> None:
     assert float(_output_out(log)) == pytest.approx(8.0)
     relu = _relu_layer(log)
     assert tuple(relu.out.shape) == (1, 8)
-    assert relu.intervention_replaced is True
+    assert relu.is_edited is True
 
 
 def test_hooks_kwarg_shape_change_applies() -> None:
@@ -143,7 +143,7 @@ def test_replay_hooks_shape_change_applies() -> None:
         model,
         x,
         save=lambda ctx: True,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     replayed = log.push(
         replay=tl.options.ReplayOptions(
@@ -163,7 +163,7 @@ def test_push_replay_options_shape_change_applies() -> None:
         model,
         x,
         save=lambda ctx: True,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     pushed = log.push(
         replay=ReplayOptions(
@@ -209,7 +209,7 @@ def test_default_false_still_raises_on_shape_change_replay() -> None:
         model,
         x,
         save=lambda ctx: True,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     with pytest.raises(HookValueError):
         log.push(

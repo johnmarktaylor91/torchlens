@@ -103,7 +103,7 @@ class _MLXIntermediateTapObserver:
             Finalized trace containing input operations.
         """
 
-        for op in trace.layer_list:
+        for op in trace._layer_list:
             if not op.is_input or op.out is None:
                 continue
             self.labels_by_id[id(op.out)] = str(op._label_raw)
@@ -546,7 +546,7 @@ def _max_mlx_input_raw_index(trace: Trace) -> int:
 
     indexes = [
         int(getattr(op, "step_index", 0) or 0)
-        for op in trace.layer_list
+        for op in trace._layer_list
         if getattr(op, "is_input", False)
     ]
     return max(indexes, default=0)

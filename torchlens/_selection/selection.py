@@ -222,8 +222,8 @@ def _graph_entry_order(trace: Any, entries: Iterable[Site]) -> tuple[Site, ...]:
         """Map each ``(layer_label, pass_index)`` address to its graph step."""
 
         return {
-            (op.layer_label, op.pass_index): step
-            for step, op in enumerate(getattr(trace, "layer_list", ()) or ())
+            (op.layer_label, op.pass_number): step
+            for step, op in enumerate(trace._layer_list or ())
         }
 
     order = fail_open(_execution_order, lambda _error: {})
@@ -250,7 +250,7 @@ def _entry_label(trace: Any, entry: Site) -> str:
     layer_label, pass_index = entry.key
     for op in _forward_ops(trace):
         if (getattr(op, "layer_label", None) or op.label) == layer_label and (
-            getattr(op, "pass_index", 1) or 1
+            getattr(op, "pass_number", 1) or 1
         ) == pass_index:
             return str(op.label)
     return f"{layer_label}:{pass_index}"
@@ -1042,7 +1042,7 @@ def _act_entry(op: Any, mask: _Mask, relation: str, source: str) -> Site:
     """Build one ACT site entry for a resolved op."""
 
     layer_label = getattr(op, "layer_label", None) or op.label
-    pass_index = getattr(op, "pass_index", 1) or 1
+    pass_index = getattr(op, "pass_number", 1) or 1
     return Site(
         kind="ACT",
         key=(layer_label, pass_index),
@@ -1187,7 +1187,7 @@ def _resolve_facet_term(node: _FacetTerm, trace: Any) -> Selection:
         )
     pass_index = getattr(spec, "pass_index", None)
     if pass_index is not None:
-        matches = tuple(op for op in matches if getattr(op, "pass_index", 1) == pass_index)
+        matches = tuple(op for op in matches if getattr(op, "pass_number", 1) == pass_index)
         if not matches:
             raise _unresolvable(
                 "site_not_in_trace",
@@ -1290,7 +1290,7 @@ def _resolve_unit_term(node: _UnitTerm, trace: Any) -> Selection:
         # A layer-wide spelling of a multi-pass layer names N distinct ops;
         # units() addresses ONE op's index space, so never guess a pass.
         layer_label = getattr(matches[0], "layer_label", None) or node.site
-        pass_indices = sorted(int(getattr(op, "pass_index", 1) or 1) for op in matches)
+        pass_indices = sorted(int(getattr(op, "pass_number", 1) or 1) for op in matches)
         raise _unresolvable(
             "multipass_bare_label",
             multipass_bare_label_message(layer_label, pass_indices),
@@ -1349,7 +1349,7 @@ def _resolve_whole_site_term(node: _WholeSiteTerm, trace: Any) -> Selection:
 
     matches = _find_act_ops(trace, node.site_label)
     if node.pass_index is not None:
-        matches = tuple(op for op in matches if getattr(op, "pass_index", 1) == node.pass_index)
+        matches = tuple(op for op in matches if getattr(op, "pass_number", 1) == node.pass_index)
     if not matches:
         raise _unresolvable(
             "site_not_in_trace",
@@ -1549,7 +1549,7 @@ def _selection_from_op(op: Any) -> Selector:
     """Lift one Op (whole-output, one pass)."""
 
     layer_label = getattr(op, "layer_label", None) or op.label
-    pass_index = getattr(op, "pass_index", 1) or 1
+    pass_index = getattr(op, "pass_number", 1) or 1
     return Selector(_WholeSiteTerm(site_label=layer_label, pass_index=pass_index), kind="ACT")
 
 
@@ -1624,12 +1624,12 @@ def edge_address_of(record: Any) -> tuple[Any, ...]:
 def _require_edge_provenance(trace: Any) -> None:
     """Refuse typed when edge provenance was not captured."""
 
-    if not bool(getattr(trace, "intervention_ready", False)):
+    if not bool(getattr(trace, "is_replayable", False)):
         raise SelectionError(
-            "edge provenance requires an intervention_ready capture "
+            "edge provenance requires an replayable capture "
             "(EdgeUseRecords exist only under it). Re-capture with "
             "tl.trace(model, x, capture=tl.options.CaptureOptions("
-            "intervention_ready=True)).",
+            "replayable=True)).",
             code="edge_provenance_unavailable",
         )
 

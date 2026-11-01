@@ -139,7 +139,7 @@ def test_projection_drops_value_info_for_drifting_group() -> None:
         _entry("grow_1_1", 2, (2, 16), parents=("grow_1_1:1",), num_passes=2),
         _entry("output_1", 1, (2, 16), is_output=True, parents=("grow_1_1:2",)),
     ]
-    log = SimpleNamespace(layer_list=entries, intervention_audit=[])
+    log = SimpleNamespace(_layer_list=entries, intervention_audit=[])
     projection = project_rolled(log, "meaningful")
     assert [node.name for node in projection.nodes] == ["grow_1_1"]
     assert projection.value_infos == [], "drifting group carries no type claim"

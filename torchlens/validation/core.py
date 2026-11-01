@@ -567,12 +567,10 @@ def _dispatch_op_count_matches_capture(self: "Trace") -> ValidationCheckResult:
 
     dispatch_count = getattr(self, "_validation_dispatch_op_count", None)
     if dispatch_count is None:
-        if int(getattr(self, "num_ops", 0)) > 0:
+        if int(self._num_ops) > 0:
             return ValidationCheckResult.unverified("dispatch_op_count_not_collected")
         return ValidationCheckResult.validated("no_dispatchable_ops")
-    captured_count = int(
-        getattr(self, "_validation_captured_dispatchable_op_count", getattr(self, "num_ops", 0))
-    )
+    captured_count = int(getattr(self, "_validation_captured_dispatchable_op_count", self._num_ops))
     # Dispatchable ops captured then intentionally orphan-pruned (dead computation) AND
     # ``.data``-accessor buffer-write view dispatches are accounted for on the captured side:
     # the honest invariant is ``dispatched == captured + orphan-pruned + buffer-writes``. A
@@ -595,7 +593,7 @@ def _dispatch_op_count_matches_capture(self: "Trace") -> ValidationCheckResult:
     # requires the witness to record every observed wrapped call, not only the
     # ones that owned a dispatch. ``unverified`` is the honest verdict the check
     # vocabulary already provides, and it never reads as a pass.
-    if dispatch_count == 0 and captured_count == 0 and int(getattr(self, "num_ops", 0)) > 0:
+    if dispatch_count == 0 and captured_count == 0 and int(self._num_ops) > 0:
         return ValidationCheckResult.unverified("dispatch_op_count_witness_empty")
     if dispatch_count == captured_count + pruned_count + buffer_write_count:
         return ValidationCheckResult.validated("dispatch_op_count_matched")
@@ -625,14 +623,14 @@ def _raise_if_portable_bundle_log(self: Any) -> None:
     # can resolve for the replay phase; whatever did not is refused by name here.
     unresolved = [
         getattr(layer, "layer_label", "<unknown>")
-        for layer in getattr(self, "layer_list", [])
+        for layer in self._layer_list
         if getattr(layer, "func", None) is None
         and getattr(layer, "func_name", "none") not in {"none", "input", "output", "buffer"}
         and not is_closure_constant_source(layer)
     ]
     dropped_args = [
         getattr(layer, "layer_label", "<unknown>")
-        for layer in getattr(self, "layer_list", [])
+        for layer in getattr(self, "_layer_list", [])
         if getattr(layer, "func", None) is not None
         and bool(getattr(layer, "has_saved_args", False))
         and getattr(layer, "saved_args", None) is None
@@ -902,7 +900,7 @@ def _validate_saved_outs_run(
 
     # Initial check: logged outputs must match a fresh forward pass. Halted traces
     # deliberately stop at an internal frontier, so no full-model output exists.
-    if not getattr(self, "halted", False):
+    if not getattr(self, "is_stopped", False):
         failed_status = _check_ground_truth_outputs(
             self, ground_truth_output_tensors, verbose, decision_recorder
         )
@@ -917,7 +915,7 @@ def _validate_saved_outs_run(
     # PASS-QUALIFIED grain. Counting bare layer labels let a phantom extra
     # pass of a legitimate multi-pass layer hide behind its reached siblings
     # whenever the metadata invariants were skipped.
-    expected_ops = {op.label for op in self.layer_list}
+    expected_ops = {op.label for op in self._layer_list}
     if len(validated_op_labels) < len(expected_ops):
         return _fail_bfs_incomplete(
             self, decision_recorder, validated_op_labels, expected_ops, verbose
@@ -1118,7 +1116,7 @@ def validate_parents_of_saved_layer(
         self,
         layer_to_validate_parents_for_label,
     )
-    validation_entry = self.layer_logs.get(
+    validation_entry = self._layer_logs.get(
         layer_to_validate_parents_for_label,
         layer_to_validate_parents_for,
     )
@@ -1319,7 +1317,7 @@ def validate_parents_of_saved_layer(
 def _is_intentional_intervention_replacement(layer: "Op") -> bool:
     """Return whether a layer's out was intentionally replaced by a hook.
 
-    Round-26 W3-2 hardening: the per-op ``intervention_replaced`` /
+    Round-26 W3-2 hardening: the per-op ``is_edited`` /
     ``is_internal_source`` attributes are written by the same capture machinery
     whose failure this exemption must not mask, so they are no longer trusted
     alone. The claim must be corroborated by the trace-level replacement-event
@@ -1338,14 +1336,10 @@ def _is_intentional_intervention_replacement(layer: "Op") -> bool:
         Whether validation should treat the op as an intervention boundary.
     """
 
-    if not (
-        getattr(layer, "intervention_replaced", False)
-        and not getattr(layer, "is_internal_source", False)
-    ):
+    if not (getattr(layer, "is_edited", False) and not getattr(layer, "is_internal_source", False)):
         return False
     has_own_live_replacement = any(
-        getattr(record, "replaced", False)
-        for record in (getattr(layer, "interventions", None) or ())
+        getattr(record, "replaced", False) for record in (getattr(layer, "edits", None) or ())
     ) or any(
         getattr(result, "replaced", False)
         for result in (getattr(layer, "fire_results", None) or ())
@@ -1420,14 +1414,14 @@ def _not_saved_by_user_justification(
         return None
     if bool(getattr(layer, "has_saved_activation", False)):
         return None
-    if bool(getattr(trace, "save_arg_values", False)):
+    if bool(trace._options_save_args):
         return None
     raw_label = getattr(layer, "_label_raw", None)
     if raw_label is None:
         return None
     decision_key = (
         str(raw_label),
-        int(getattr(layer, "pass_index", 0)),
+        int(getattr(layer, "pass_number", 0)),
         tuple(getattr(layer, "container_path", ())),
     )
     predicate_decision = predicate_decisions.get(decision_key)
@@ -1444,7 +1438,7 @@ def _not_saved_by_user_justification(
         f"(original_reason={original_reason}, op_label={label}, func_name={func_name}, "
         f"predicate_decision_key={decision_key!r}, predicate_save_out=False, "
         f"has_saved_activation=False, saved_args_present={saved_args_present}, "
-        f"save_arg_values={bool(getattr(trace, 'save_arg_values', False))}, "
+        f"save_arg_values={bool(trace._options_save_args)}, "
         f"default_op={default_op}, keep_op={keep_op_name})"
     )
 
@@ -1512,7 +1506,7 @@ def _resolve_output_entry_for_index(
         Concrete output op for this output occurrence.
     """
 
-    output_entry = self.layer_logs.get(output_layer_label)
+    output_entry = self._layer_logs.get(output_layer_label)
     if output_entry is None:
         return _op_for_validation_label(self, output_layer_label)
     ops = getattr(output_entry, "ops", None)
@@ -1540,9 +1534,9 @@ def _op_for_validation_label(self: "Trace", label: str) -> Op:
         Concrete operation resolved without using ``Trace.__getitem__``.
     """
 
-    if label in self.layer_dict_all_keys:
-        return cast(Op, self.layer_dict_all_keys[label])
-    layer_log = self.layer_logs[label]
+    if label in self._layer_dict_all_keys:
+        return cast(Op, self._layer_dict_all_keys[label])
+    layer_log = self._layer_logs[label]
     op_list = cast(list[Op], cast(Any, layer_log.ops)._list)
     if len(op_list) != 1:
         raise KeyError(f"Validation label {label!r} does not resolve to one concrete op.")
@@ -1655,7 +1649,7 @@ def _check_layer_arguments_logged_correctly(
     ValidationCheckResult
         Structured validation result for argument logging evidence.
     """
-    target_entry = self.layer_logs.get(
+    target_entry = self._layer_logs.get(
         target_layer_label,
         _op_for_validation_label(self, target_layer_label),
     )
@@ -2052,7 +2046,7 @@ def _matches_own_parameter(target_layer: Op, value: torch.Tensor) -> bool:
         True when the value matches one of the op's recorded parameters.
     """
 
-    for param_log in getattr(target_layer, "_param_logs", ()) or ():
+    for param_log in target_layer._param_logs or ():
         param_value = getattr(param_log, "value", None)
         if not isinstance(param_value, torch.Tensor):
             continue
@@ -2093,7 +2087,7 @@ def _orphan_candidate_index(self: "Trace") -> dict[tuple[Any, Any], list[Op]]:
     if cached is not None:
         return cast(dict[tuple[Any, Any], list[Op]], cached)
     index: dict[tuple[Any, Any], list[Op]] = {}
-    for candidate in self.layer_list:
+    for candidate in self._layer_list:
         if getattr(candidate, "is_output", False):
             # Output boundary ops duplicate their producer's value; the
             # producer itself is the meaningful candidate.
@@ -2160,7 +2154,7 @@ def _foreach_sibling_attributes_slot(
     if call_id is None:
         return False
     target_label = getattr(target_layer, "label", None) or target_layer.layer_label
-    for sibling in self.layer_list:
+    for sibling in self._layer_list:
         sibling_label = getattr(sibling, "label", None) or sibling.layer_label
         if sibling_label == target_label:
             continue
@@ -2520,13 +2514,13 @@ def _index_recomputed_output_component(output: Any, component: OutputPathCompone
     if isinstance(component, TupleIndex):
         return output[component.index]
     if isinstance(component, DictKey):
-        return output[component.key]
+        return output[component._key]
     if isinstance(component, NamedField):
-        return getattr(output, component.name)
+        return getattr(output, component._name)
     if isinstance(component, DataclassField):
-        return getattr(output, component.name)
+        return getattr(output, component._name)
     if isinstance(component, HFKey):
-        return output[component.key]
+        return output[component._key]
     if isinstance(component, int):
         return output[component]
     if isinstance(component, str):
@@ -4343,7 +4337,7 @@ def _restore_live_parameter_args_for_replay(input_args: dict[str, Any], layer: O
 
     if getattr(layer, "is_inplace", False):
         return
-    param_logs = tuple(getattr(layer, "_param_logs", ()) or ())
+    param_logs = tuple(layer._param_logs or ())
     if not param_logs:
         return
 

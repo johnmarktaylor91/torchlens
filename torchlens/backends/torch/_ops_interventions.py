@@ -165,11 +165,11 @@ def _apply_live_hooks_to_outputs_legacy(
     if (
         not _st._active_hook_plan
         and not predicate_intervene_active
-        or self.capture_mode not in {"exhaustive", "predicate"}
+        or self._options_mode not in {"exhaustive", "predicate"}
     ):
         return out_orig
     if (
-        self.capture_mode == "predicate"
+        self._options_mode == "predicate"
         and predicate_intervene_active
         and not _st._active_hook_plan
     ):
@@ -207,7 +207,7 @@ def _apply_live_hooks_to_outputs_legacy(
         site_fields["type_index"] = reserved.type_index
         site_fields["_label_raw"] = raw_label
         site_fields["_layer_label_raw"] = raw_label
-        site_fields["pass_index"] = 1
+        site_fields["pass_number"] = 1
         site_fields["step_index"] = None
         site_fields["container_path"] = container_path
         site_fields["is_inplace"] = record_is_inplace
@@ -310,12 +310,12 @@ def _apply_predicate_mode_interventions_to_outputs(
             pass_index=state.pass_index,
             event_index=state.event_index + output_ordinal,
             step_index=state.step_index + output_ordinal,
-            capture_start_time=trace.capture_start_time,
+            capture_start_time=trace._provenance_start_time,
             include_source_events=state.options.include_source_events,
             sample_id=state.sample_id,
             address=module_frame.address if module_frame else None,
             module_type=module_frame.module_type if module_frame else None,
-            module_pass_index=module_frame.pass_index if module_frame else None,
+            module_pass_number=module_frame.pass_number if module_frame else None,
             is_transform=func_name in TRANSFORM_FUNC_NAMES,
             transform_kind=func_name if func_name in TRANSFORM_FUNC_NAMES else None,
         )

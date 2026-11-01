@@ -14,6 +14,7 @@ from weakref import ref
 from .. import _state
 from .._data_classes._trace_grad_sites import gradient_rule_sites
 from .._ir.events import OpEvent
+from .._record_type import record_type
 from .._utils.tensor_utils import safe_copy
 from ._retention import _negative_selector_windows, _selector_needs_backward_context
 from .outcome import CaptureOutcome
@@ -609,7 +610,7 @@ class CaptureSession:
                     {
                         raw_index
                         for site in _resolve_unchecked(
-                            tuple(getattr(trace, "layer_list", ())),
+                            tuple(trace._layer_list),
                             activation_selector,
                             strict=False,
                         )
@@ -626,17 +627,12 @@ class CaptureSession:
             )
             if not exact_selector:
                 selected_nums.update(
-                    op.raw_index
-                    for op in trace.layer_list
-                    if getattr(op, "layer_type", None) == "output"
+                    op.raw_index for op in trace._layer_list if record_type(op, None) == "output"
                 )
-                for op in trace.layer_list:
-                    if (
-                        op.raw_index in selected_nums
-                        and getattr(op, "layer_type", None) == "output"
-                    ):
+                for op in trace._layer_list:
+                    if op.raw_index in selected_nums and record_type(op, None) == "output":
                         selected_nums.update(
-                            trace.layer_dict_all_keys[parent_label].raw_index
+                            trace._layer_dict_all_keys[parent_label].raw_index
                             for parent_label in op.parents
                         )
             else:
@@ -647,16 +643,16 @@ class CaptureSession:
                 # alias rides its producer's payload.
                 selected_nums.update(
                     op.raw_index
-                    for op in trace.layer_list
-                    if getattr(op, "layer_type", None) == "output"
+                    for op in trace._layer_list
+                    if record_type(op, None) == "output"
                     and any(
-                        trace.layer_dict_all_keys[parent_label].raw_index in requested_nums
+                        trace._layer_dict_all_keys[parent_label].raw_index in requested_nums
                         for parent_label in op.parents
                     )
                 )
             attached_escrow = self.plan.retention_profile.activation_attached
             detached_spills = 0
-            for op in trace.layer_list:
+            for op in trace._layer_list:
                 if op.raw_index not in selected_nums:
                     continue
                 payload = live_output_by_raw_index.get(op.raw_index)
@@ -665,19 +661,19 @@ class CaptureSession:
                     detached_spills += int(
                         attached_escrow
                         and payload_entry.tensor is None
-                        and not trace.backward_ready
+                        and not trace._options_backward_ready
                     )
                     payload = payload_entry.materialize()
-                if trace.backward_ready:
+                if trace._options_backward_ready:
                     payload = self.gradient_reference_escrow.get(op.raw_index, payload)
-                if payload is None and getattr(op, "layer_type", None) == "output":
+                if payload is None and record_type(op, None) == "output":
                     for parent_label in op.parents:
-                        parent = trace.layer_dict_all_keys[parent_label]
+                        parent = trace._layer_dict_all_keys[parent_label]
                         payload = live_output_by_raw_index.get(parent.raw_index)
                         parent_payload_entry = self.activation_escrow.get(parent.raw_index)
                         if payload is None and parent_payload_entry is not None:
                             payload = parent_payload_entry.materialize()
-                        if trace.backward_ready:
+                        if trace._options_backward_ready:
                             payload = self.gradient_reference_escrow.get(parent.raw_index, payload)
                         if payload is not None:
                             break
@@ -695,7 +691,7 @@ class CaptureSession:
                     (),
                     {},
                     False,
-                    getattr(trace, "activation_transform", None),
+                    trace._options_activation_transform,
                 )
             if detached_spills:
                 from .._utils.display import user_stacklevel
@@ -748,7 +744,7 @@ class CaptureSession:
                     {
                         raw_index
                         for site in _resolve_unchecked(
-                            tuple(getattr(trace, "layer_list", ())),
+                            tuple(trace._layer_list),
                             gradient_selector,
                             strict=False,
                         )
@@ -759,7 +755,7 @@ class CaptureSession:
             selected_grads = _get_op_nums_from_user_labels(trace, gradient_selector)
         trace._grad_op_nums_to_save = selected_grads
         hook_nums = (
-            {op.raw_index for op in trace.layer_list}
+            {op.raw_index for op in trace._layer_list}
             if selected_grads == "all"
             else set(selected_grads)
         )
@@ -768,14 +764,15 @@ class CaptureSession:
         # when save_grads selects other ops (placement is a superset; retention
         # stays exact through _grad_op_nums_to_save).
         hook_nums.update(_gradient_rule_raw_indices(trace))
-        for op in trace.layer_list:
-            if op.raw_index in hook_nums and getattr(op, "layer_type", None) == "output":
+        for op in trace._layer_list:
+            if op.raw_index in hook_nums and record_type(op, None) == "output":
                 hook_nums.update(
-                    trace.layer_dict_all_keys[parent_label].raw_index for parent_label in op.parents
+                    trace._layer_dict_all_keys[parent_label].raw_index
+                    for parent_label in op.parents
                 )
         trace._installing_deferred_gradient_hooks = True
         try:
-            for op in trace.layer_list:
+            for op in trace._layer_list:
                 if op.raw_index not in hook_nums:
                     continue
                 tensor = self.gradient_reference_escrow.get(op.raw_index)
@@ -828,7 +825,7 @@ class CaptureSession:
 
     def snapshot_recording_projection(
         self,
-        trace: object,
+        trace: Any,
         *,
         output_tensors: list[Any] | None = None,
         output_tensor_addresses: list[str] | None = None,
@@ -859,7 +856,9 @@ class CaptureSession:
             recording_state = object.__getattribute__(recording, "_recording_state")
             pass_index = getattr(recording_state, "pass_index", None)
             if pass_index is not None:
-                records = tuple(record for record in records if record.ctx.pass_index == pass_index)
+                records = tuple(
+                    record for record in records if record.ctx.pass_number == pass_index
+                )
         self.projection_facts.update(
             {
                 "capture_events": (
@@ -872,13 +871,13 @@ class CaptureSession:
                     getattr(getattr(tensor, "_tl", None), "label_raw", None)
                     for tensor in (output_tensors or ())
                 ),
-                "capture_start_time": getattr(trace, "capture_start_time", 0),
-                "setup_duration": getattr(trace, "setup_duration", 0),
-                "forward_duration": getattr(trace, "forward_duration", 0),
-                "forward_peak_memory": getattr(trace, "forward_peak_memory", None),
-                "forward_peak_memory_reason": getattr(trace, "forward_peak_memory_reason", None),
-                "forward_memory_backend": getattr(trace, "forward_memory_backend", None),
-                "random_seed": getattr(trace, "random_seed", None),
+                "capture_start_time": trace._provenance_start_time,
+                "setup_duration": trace._provenance_setup_duration,
+                "forward_duration": trace._cost_forward_duration,
+                "forward_peak_memory": trace._cost_forward_peak_memory,
+                "forward_peak_memory_reason": trace._cost_forward_peak_memory_reason,
+                "forward_memory_backend": trace._provenance_forward_memory_backend,
+                "random_seed": trace._options_seed,
                 "source_model_ref": getattr(trace, "_source_model_ref", None),
                 "layer_counter": getattr(getattr(trace, "_raw_graph_ws", None), "layer_counter", 0),
             }
@@ -981,7 +980,7 @@ class CaptureSession:
 
 
 def compile_legacy_capture_plan(
-    trace: object,
+    trace: Any,
     *,
     backend_name: str,
     layers_to_save: Any,
@@ -1012,7 +1011,7 @@ def compile_legacy_capture_plan(
         Immutable mirror of today's already-validated intent.
     """
 
-    capture_mode = str(getattr(trace, "capture_mode", "exhaustive"))
+    capture_mode = str(trace._options_mode)
     projection_target = "trace" if postprocess else "recording"
     # This is a compatibility-only demand declaration.  Existing producers
     # continue to choose their historical work; no extra metadata or payload
@@ -1024,7 +1023,7 @@ def compile_legacy_capture_plan(
     deferred_selector = getattr(trace, "_deferred_retention_selector", None)
     deferred_activation = bool(deferred_selector)
     deferred_gradients = bool(getattr(trace, "_deferred_gradient_selector", None))
-    graph_connected = bool(getattr(trace, "backward_ready", False))
+    graph_connected = bool(trace._options_backward_ready)
     from .._trace_selector_helpers import _selector_requires_unwindowed_escrow
 
     negative_windows = _negative_selector_windows(layers_to_save)
@@ -1070,7 +1069,7 @@ def compile_legacy_capture_plan(
         activation_attached=(
             deferred_activation
             and not graph_connected
-            and not bool(getattr(trace, "detach_saved_activations", True))
+            and not bool(trace._options_detach_saved_activations)
         ),
     )
     return CapturePlan.compile(
@@ -1085,12 +1084,12 @@ def compile_legacy_capture_plan(
             "lookback_payload_policy": getattr(trace, "_predicate_lookback_payload_policy", None),
         },
         backward={
-            "backward_ready": getattr(trace, "backward_ready", False),
+            "backward_ready": trace._options_backward_ready,
             "save_gradients": getattr(trace, "save_gradients", False),
         },
         execution_context={
             "random_seed": seed,
-            "inference_only": getattr(trace, "inference_only", False),
+            "inference_only": trace._options_inference_only,
         },
         stop_policy=getattr(trace, "_stop_directive", None),
         backend_name=backend_name,
@@ -1116,10 +1115,10 @@ def _live_output_by_raw_index(trace: Any, output_tensors: list[Any]) -> dict[int
 
     live_output_by_raw_index: dict[int, Any] = {}
     for output_label, output_tensor in zip(trace.output_layers, output_tensors, strict=True):
-        output_op = trace.layer_dict_all_keys[output_label]
+        output_op = trace._layer_dict_all_keys[output_label]
         live_output_by_raw_index[output_op.raw_index] = output_tensor
         for parent_label in output_op.parents:
-            parent = trace.layer_dict_all_keys[parent_label]
+            parent = trace._layer_dict_all_keys[parent_label]
             live_output_by_raw_index[parent.raw_index] = output_tensor
     return live_output_by_raw_index
 

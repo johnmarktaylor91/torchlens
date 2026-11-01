@@ -25,7 +25,7 @@ def _make_public_conditional_ids(condition_events: list[Any]) -> dict[int, str]:
     -------
     dict[int, str]
         Mapping from dense ``ConditionalEvent.id`` to the public conditional id
-        exposed through ``Trace.conditionals`` and role refs.
+        exposed through ``Trace.graph.conditionals`` and role refs.
     """
 
     id_counts: dict[str, int] = defaultdict(int)
@@ -82,10 +82,10 @@ def _resolve_conditional_bool_op(
         and len(witnessed_indices) == 1
         and 0 <= witnessed_indices[0] < len(bool_layers_raw)
     ):
-        raw_op = self.layer_dict_all_keys.get(bool_layers_raw[witnessed_indices[0]])
+        raw_op = self._layer_dict_all_keys.get(bool_layers_raw[witnessed_indices[0]])
         if raw_op is not None:
             return raw_op
-    return self.layer_dict_all_keys.get(terminal_bool)
+    return self._layer_dict_all_keys.get(terminal_bool)
 
 
 def _merge_conditional_role_labels(
@@ -133,20 +133,20 @@ def _find_conditional_evaluation_entry_edge(
         return None
 
     first_bool_label = bool_layers[0]
-    if first_bool_label not in self.layer_dict_all_keys:
+    if first_bool_label not in self._layer_dict_all_keys:
         return None
 
     visited_labels: set[str] = set()
-    parent_queue: deque[str] = deque(self.layer_dict_all_keys[first_bool_label].parents)
+    parent_queue: deque[str] = deque(self._layer_dict_all_keys[first_bool_label].parents)
     while parent_queue:
         parent_label = parent_queue.popleft()
         if parent_label in visited_labels:
             continue
         visited_labels.add(parent_label)
-        if parent_label not in self.layer_dict_all_keys:
+        if parent_label not in self._layer_dict_all_keys:
             continue
 
-        parent_layer = self.layer_dict_all_keys[parent_label]
+        parent_layer = self._layer_dict_all_keys[parent_label]
         if parent_label != first_bool_label and parent_layer.has_output_descendant:
             return (parent_label, first_bool_label)
         parent_queue.extend(parent_layer.parents)

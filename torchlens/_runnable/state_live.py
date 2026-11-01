@@ -25,6 +25,7 @@ from .._capture_attr_observer import (
     settle_module_attrs,
     snapshot_module_attrs,
 )
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._storage_bindings import rebind_if_moved, record_storage_binding
 from .state import (
     LiveDeclaredStateSnapshot,
@@ -83,18 +84,25 @@ def _unalias_trace_payloads(trace: Any, changed: list[torch.Tensor]) -> None:
     copy of its forward-time value first; the model keeps its buffer objects.
     """
 
-    if trace is None or not changed or getattr(trace, "save_mode", "copy") == "reference":
+    if (
+        trace is None
+        or not changed
+        or (trace._options_save_mode if is_live_trace(trace) else "copy") == "reference"
+    ):
         # A reference-mode capture asked for aliases: restoring the live buffer is
         # then a post-capture mutation its reference tripwire must still see.
         return
     from .._data_classes._state_adapter import state_items
 
+    if not is_live_trace(trace):
+        # A PartialTrace (failed capture) or husked trace holds no layer payloads.
+        return
     storages = {
         (tensor.device, tensor.untyped_storage().data_ptr())
         for tensor in changed
         if not tensor.is_meta
     }
-    for layer in getattr(trace, "layer_list", ()) or ():
+    for layer in trace._layer_list or ():
         fields = dict(state_items(layer))
         for field_name in ("out", "transformed_out"):
             value = fields.get(field_name)

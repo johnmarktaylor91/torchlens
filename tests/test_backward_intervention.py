@@ -75,9 +75,10 @@ class _IdentityReluModel(nn.Module):
 class _TraceStub:
     """Weakref-able trace stub for direct hook-factory tests."""
 
-    grad_fn_logs: dict[int, GradFn]
+    _grad_fn_logs: dict[int, GradFn]
     _grad_op_nums_to_save: str = "all"
     last_run: dict[str, Any] | None = None
+    _num_backward_passes: int = 0
     # A live trace always owns its capture event stream; hooks refuse typed
     # when it is absent, so the stub must model ownership explicitly.
     _capture_events: CaptureEvents = field(default_factory=CaptureEvents)
@@ -164,7 +165,7 @@ def test_accumulategrad_post_hook_logs_grad_fn_call() -> None:
 
     trace = _logged_backward_trace()
     accumulate_logs = [
-        gfl for gfl in trace.grad_fn_logs.values() if gfl.class_name == "AccumulateGrad"
+        gfl for gfl in trace._grad_fn_logs.values() if gfl.class_name == "AccumulateGrad"
     ]
     assert accumulate_logs
     assert all(gfl.num_calls >= 1 for gfl in accumulate_logs)
@@ -251,7 +252,7 @@ def test_grad_fn_hook_records_backward_fire() -> None:
     result = hook((torch.ones(1),), (torch.ones(1),))
 
     assert isinstance(result, tuple)
-    record = grad_fn_handle.calls[0].intervention_fire_ref
+    record = grad_fn_handle.calls[0].fire_record
     assert isinstance(record, FireRecord)
     assert record.signal == "backward"
     assert record.call_index == 1
@@ -290,7 +291,7 @@ def test_grad_fn_hook_inplace_mutation_records_replaced() -> None:
 
     hook((torch.ones(1),), (torch.ones(1),))
 
-    record = grad_fn_handle.calls[0].intervention_fire_ref
+    record = grad_fn_handle.calls[0].fire_record
     assert isinstance(record, FireRecord)
     assert record.replaced is True
 
@@ -326,7 +327,7 @@ def test_grad_fn_hook_data_alias_mutation_records_replaced() -> None:
 
     hook((torch.ones(1),), (torch.ones(1),))
 
-    record = grad_fn_handle.calls[0].intervention_fire_ref
+    record = grad_fn_handle.calls[0].fire_record
     assert isinstance(record, FireRecord)
     assert record.replaced is True
 
@@ -350,7 +351,7 @@ def test_composite_backward_target_specs_match_live_hooks() -> None:
 
         assert isinstance(result, tuple), repr(selector)
         assert torch.equal(result[0], torch.zeros(1))
-        assert isinstance(grad_fn_handle.calls[0].intervention_fire_ref, FireRecord)
+        assert isinstance(grad_fn_handle.calls[0].fire_record, FireRecord)
 
 
 def test_composite_grad_output_selector_matches_real_live_backward_hook() -> None:
@@ -495,7 +496,7 @@ def test_backward_none_return_helper_records_non_replacing_fire() -> None:
 
     assert result is None
     assert counter["fires"] == 1
-    record = grad_fn_handle.calls[0].intervention_fire_ref
+    record = grad_fn_handle.calls[0].fire_record
     assert isinstance(record, FireRecord)
     assert record.replaced is False
     assert spec.records == [record]
@@ -537,7 +538,7 @@ def test_backward_invalid_replacement_tuple_raises_before_recording_success() ->
     with pytest.raises(HookValueError, match="shape"):
         hook((torch.ones(1),), (torch.ones(1),))
 
-    assert grad_fn_handle.calls[0].intervention_fire_ref is None
+    assert grad_fn_handle.calls[0].fire_record is None
     assert spec.records == []
 
 
@@ -573,10 +574,10 @@ def test_backward_in_place_none_return_helper_records_gradient_effect() -> None:
     assert x.grad is not None
     assert torch.equal(x.grad, torch.zeros_like(x.grad))
     records = [
-        call.intervention_fire_ref
-        for grad_fn in trace.grad_fn_logs.values()
+        call.fire_record
+        for grad_fn in trace._grad_fn_logs.values()
         for call in grad_fn.calls._list
-        if call.intervention_fire_ref is not None
+        if call.fire_record is not None
     ]
     assert records
     assert isinstance(records[0], FireRecord)
@@ -604,8 +605,8 @@ def test_grad_fn_hook_call_index_targeting() -> None:
 
     assert first is None
     assert isinstance(second, tuple)
-    assert grad_fn_handle.calls[0].intervention_fire_ref is None
-    assert isinstance(grad_fn_handle.calls[1].intervention_fire_ref, FireRecord)
+    assert grad_fn_handle.calls[0].fire_record is None
+    assert isinstance(grad_fn_handle.calls[1].fire_record, FireRecord)
 
 
 def test_helper_requires_grad_output_at_accumulategrad_raises_helpermounterror() -> None:
@@ -706,7 +707,7 @@ def test_accumulategrad_prehook_records_backward_fire() -> None:
     post_hook((), (torch.ones(1),))
 
     assert isinstance(result, tuple)
-    record = grad_fn_handle.calls[0].intervention_fire_ref
+    record = grad_fn_handle.calls[0].fire_record
     assert isinstance(record, FireRecord)
     assert record.timing == "pre"
     assert record.signal == "backward"
@@ -741,7 +742,7 @@ def test_accumulategrad_none_return_prehook_records_backward_fire() -> None:
     assert pre_hook((torch.ones(1),)) is None
     post_hook((), (torch.ones(1),))
 
-    record = grad_fn_handle.calls[0].intervention_fire_ref
+    record = grad_fn_handle.calls[0].fire_record
     assert isinstance(record, FireRecord)
     assert record.timing == "pre"
     assert record.replaced is False
@@ -761,7 +762,7 @@ def test_accumulategrad_pending_records_clear_between_passes() -> None:
     post_hook((), (torch.ones(1),))
 
     assert not hasattr(trace_stub, "_tl_pending_accumulate_grad_fire_records")
-    assert grad_fn_handle.calls[0].intervention_fire_ref is None
+    assert grad_fn_handle.calls[0].fire_record is None
 
 
 def test_accumulategrad_post_hook_crashes_on_non_none_return() -> None:
@@ -901,12 +902,12 @@ def test_backward_intervention_replacement_registers_higher_order_terminal() -> 
     )
     trace.attach_hooks(tl.grad_fn(name="pow"), double_grad_input, confirm_mutation=True)
     trace.log_backward(trace[trace.output_layers[0]].out, retain_graph=True, create_graph=True)
-    pow_sites = [site for site in trace.grad_fn_logs.values() if site.type == "pow"]
+    pow_sites = [site for site in trace._grad_fn_logs.values() if site.type == "pow"]
 
     assert pow_sites
     assert any(
         site.creator_object_id == pow_sites[0].grad_fn_object_id
-        for site in trace.grad_fn_logs.values()
+        for site in trace._grad_fn_logs.values()
         if site is not pow_sites[0]
     )
 

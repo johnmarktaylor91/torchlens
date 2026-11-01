@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from ..distributed._ledger import GroupLifecycleLedger
 
 # The boundary vocabularies and parse rules live in ``_boundary_rules`` (the
@@ -231,10 +232,8 @@ def extract_rank_evidence(trace: Any, source: str) -> RankEvidence:
         # tamper. Without this, stripping my_group_rank from one boundary of a
         # slice-witnessed join silently deleted its value_divergence finding
         # (R18-2; findings must never disappear by record deletion).
-        uid = (
-            entry["correlation"]["membership_digest"],
-            entry["correlation"]["lifetime_ordinal"],
-        )
+        correlation = entry["correlation"]
+        uid = (correlation["membership_digest"], correlation["lifetime_ordinal"])
         group_rank_is_none = entry["group"].get("my_group_rank") is None
         if uid in group_rank_absence and group_rank_absence[uid] != group_rank_is_none:
             raise _refuse(
@@ -290,7 +289,6 @@ def extract_rank_evidence(trace: Any, source: str) -> RankEvidence:
                 source=source,
             )
         ranks.add(int(entry["group"]["my_global_rank"]))
-        correlation = entry["correlation"]
         correlation_key = (
             correlation["membership_digest"],
             correlation["lifetime_ordinal"],
@@ -345,7 +343,10 @@ def extract_rank_evidence(trace: Any, source: str) -> RankEvidence:
         # anything other than the exact marker string reads False -- absence
         # of the marker never blocks, presence of ANY other value never
         # blocks; only the one documented value engages the scope guard.
-        shard_local=(getattr(trace, "distributed_scope", None) == "rank_local_shard"),
+        shard_local=(
+            (trace._provenance_distributed_scope if is_live_trace(trace) else None)
+            == "rank_local_shard"
+        ),
     )
 
 

@@ -105,7 +105,7 @@ def mint_grad_input_use_map(trace: Any) -> GradInputUseMap:
     ----------
     trace:
         Live torch trace with edge provenance
-        (``intervention_ready``-gated ``trace.graph.edges``).
+        (``replayable``-gated ``trace.graph.edges``).
 
     Returns
     -------
@@ -127,7 +127,7 @@ def mint_grad_input_use_map(trace: Any) -> GradInputUseMap:
         raise ReadError(
             "Edge-use provenance is unavailable on this trace, so the "
             "grad-input correspondence map cannot be minted. Remedy: "
-            "capture with CaptureOptions(intervention_ready=True)",
+            "capture with CaptureOptions(replayable=True)",
             code="read_edge_provenance_unavailable",
         ) from exc
     # Forward consumptions by CONSUMING op label. Edge records spell labels
@@ -249,7 +249,7 @@ def backward_pass_origins(trace: Any) -> dict[int, PassOriginStamp]:
     """
 
     stamps = dict(_PASS_STAMPS.get(trace, {}))
-    recorded = int(getattr(trace, "num_backward_passes", 0) or 0)
+    recorded = int(trace._num_backward_passes or 0)
     for pass_index in range(1, recorded + 1):
         stamps.setdefault(pass_index, PassOriginStamp(origin="user"))
     return stamps

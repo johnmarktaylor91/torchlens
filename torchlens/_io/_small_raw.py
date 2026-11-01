@@ -47,15 +47,13 @@ def _small_raw_value(value: Any, *, field_name: str) -> Any:
 
     if value is None:
         return None
+    is_output = field_name == "transformed_output"
     if isinstance(value, str):
-        text_limit = _RAW_OUTPUT_TEXT_LIMIT if field_name == "raw_output" else _RAW_INPUT_TEXT_LIMIT
-        return value[:text_limit]
+        return value[: _RAW_OUTPUT_TEXT_LIMIT if is_output else _RAW_INPUT_TEXT_LIMIT]
     if isinstance(value, torch.Tensor):
         tensor_bytes = value.nelement() * value.element_size()
         tensor_limit = (
-            _RAW_OUTPUT_TENSOR_BYTES_LIMIT
-            if field_name == "raw_output"
-            else _RAW_INPUT_TENSOR_BYTES_LIMIT
+            _RAW_OUTPUT_TENSOR_BYTES_LIMIT if is_output else _RAW_INPUT_TENSOR_BYTES_LIMIT
         )
         if tensor_bytes <= tensor_limit:
             return value
@@ -63,7 +61,7 @@ def _small_raw_value(value: Any, *, field_name: str) -> Any:
             "Dropping %s tensor over small-policy cap: %s bytes", field_name, tensor_bytes
         )
         return None
-    if field_name == "raw_input":
+    if field_name == "input":
         small_image = _small_raw_image_value(value)
         if small_image is not None:
             return small_image

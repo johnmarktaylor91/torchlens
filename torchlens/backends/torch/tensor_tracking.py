@@ -654,7 +654,7 @@ def _forward_op_count_at_backward_trigger(trace: "Trace") -> int | None:
 
     step_indices = [
         int(step_index)
-        for layer in getattr(trace, "layer_list", ())
+        for layer in trace._layer_list
         if isinstance((step_index := getattr(layer, "step_index", None)), int) and step_index > 0
     ]
     if step_indices:
@@ -683,7 +683,7 @@ def _ensure_backward_pass_for_tensor_hook(trace: "Trace") -> int:
             _close_implicit_backward_pass_if_open(trace)
         else:
             return int(pass_index)
-    pass_index = int(getattr(trace, "num_backward_passes", 0)) + 1
+    pass_index = int(trace._num_backward_passes) + 1
     trace._active_backward_pass_index = pass_index
     trace._implicit_backward_pass_open = True
     if current_task_id is not None:
@@ -832,12 +832,12 @@ def _build_grad_payloads(
 
     if not _should_save_grad_payload(trace, layer_label):
         return None, None, False
-    if layer_label not in getattr(trace, "layer_dict_all_keys", {}):
+    if layer_label not in trace._layer_dict_all_keys:
         raw_payload, transformed_payload = _build_fastlog_grad_payloads(trace, grad)
         return raw_payload, transformed_payload, True
-    op = trace.layer_dict_all_keys[layer_label]
-    grad_transform = getattr(trace, "grad_transform", None)
-    save_raw_gradients = getattr(trace, "save_raw_gradients", True)
+    op = trace._layer_dict_all_keys[layer_label]
+    grad_transform = trace._options_grad_transform
+    save_raw_gradients = trace._options_save_raw_grads
     save_mode = _trace_grad_save_mode(trace)
     reservation = _admit_grad_payload_budget(trace, grad, layer_label, save_mode)
     raw_payload = (
@@ -878,7 +878,7 @@ def _should_save_grad_payload(trace: "Trace", layer_label: str) -> bool:
         return False
     if policy is True or policy == "all":
         return True
-    if layer_label not in getattr(trace, "layer_dict_all_keys", {}):
+    if layer_label not in trace._layer_dict_all_keys:
         param_log = _param_log_for_exact_address(trace, layer_label)
         if param_log is not None:
             # Parameter gradients honor selector/callable policies through a
@@ -902,7 +902,7 @@ def _should_save_grad_payload(trace: "Trace", layer_label: str) -> bool:
             )
             return _grad_payload_decision_saves_out(decision)
         return False
-    op = trace.layer_dict_all_keys[layer_label]
+    op = trace._layer_dict_all_keys[layer_label]
     if isinstance(policy, BaseSelector):
         decision = policy(_GradPayloadContext(op=op, pass_index=_current_backward_pass(trace)))
         return _grad_payload_decision_saves_out(decision)
@@ -923,8 +923,8 @@ def _build_fastlog_grad_payloads(
 ) -> tuple[torch.Tensor | None, Any | None]:
     """Return gradient payloads for predicate-mode recording contexts."""
 
-    grad_transform = getattr(trace, "grad_transform", None)
-    save_raw_gradients = getattr(trace, "save_raw_gradients", True)
+    grad_transform = trace._options_grad_transform
+    save_raw_gradients = trace._options_save_raw_grads
     save_mode = _trace_grad_save_mode(trace)
     reservation = _admit_grad_payload_budget(trace, grad, "<fastlog grad>", save_mode)
     raw_payload = (
@@ -993,7 +993,7 @@ def _trace_grad_save_mode(trace: "Trace") -> SaveMode:
     policy = _active_save_grads_policy(trace)
     if isinstance(policy, CaptureSpec):
         return policy.save_mode
-    return cast(SaveMode, getattr(trace, "save_mode", "copy"))
+    return cast(SaveMode, trace._options_save_mode)
 
 
 def _copy_grad_payload(grad: torch.Tensor, *, save_mode: SaveMode = "copy") -> torch.Tensor:
@@ -1052,8 +1052,8 @@ class _GradPayloadContext:
         self.op_label = op.label
         self.raw_label = getattr(op, "raw_tensor_label", None)
         self.func_name = op.func_name
-        self.layer_type = op.layer_type
-        self.type = op.layer_type
+        self.layer_type = op.type
+        self.type = op.type
         self.module_stack = tuple(getattr(op, "module_stack", ()) or ())
         self.modules = tuple(getattr(op, "modules", ()) or ())
         self.output_of_module_calls = tuple(getattr(op, "output_of_module_calls", ()) or ())
@@ -1075,7 +1075,7 @@ def _param_log_for_exact_address(trace: "Trace", address: str) -> Any | None:
     never accidentally resolve to a parameter.
     """
 
-    param_logs = getattr(trace, "param_logs", None)
+    param_logs = trace._param_logs
     if param_logs is None:
         return None
     exact = getattr(param_logs, "_dict", None)
@@ -1169,7 +1169,7 @@ def _active_save_grads_policy(trace: "Trace") -> Any:
 
     if hasattr(trace, "_active_save_grads_policy"):
         return getattr(trace, "_active_save_grads_policy")
-    return getattr(trace, "save_grads", None)
+    return None if trace.__dict__.get("_tl_cleaned_up", False) else trace._options_save_grads
 
 
 def _log_tensor_grad(
@@ -1198,10 +1198,10 @@ def _log_tensor_grad(
             selection, disarmed sidecar), the slot's payloads are built and
             charged per layer through the same chokepoint.
     """
-    self.has_gradients = True
+    self._autograd_has_grads = True
     if _label_raw not in self._raw_to_final_layer_labels:
         return
-    if not self.layer_dict_all_keys:
+    if not self._layer_dict_all_keys:
         # A fastlog/raw runtime trace never builds the legacy layer surface
         # (postprocess is skipped), so the layer-slot write is structurally
         # inapplicable there -- its gradients ride the backward event stream.
@@ -1211,16 +1211,16 @@ def _log_tensor_grad(
         # still raises below (mapping/dict divergence stays a tripwire).
         return
     tensor_label = self._raw_to_final_layer_labels[_label_raw]
-    layer_log_entry = self.layer_dict_all_keys[tensor_label]
+    layer_log_entry = self._layer_dict_all_keys[tensor_label]
     layers_to_update = [tensor_label]
     # Output layers are identity wrappers; propagate grad to them too.
     if layer_log_entry.is_output_parent:
         for child_layer in layer_log_entry.children:
-            if self.layer_dict_all_keys[child_layer].is_output:
+            if self._layer_dict_all_keys[child_layer].is_output:
                 layers_to_update.append(child_layer)
 
     for layer_label in layers_to_update:
-        layer = self.layer_dict_all_keys[layer_label]
+        layer = self._layer_dict_all_keys[layer_label]
         selection = getattr(self, "_grad_op_nums_to_save", "all")
         if selection != "all":
             if selection in [None, "none", []] or layer.raw_index not in selection:
@@ -1238,8 +1238,8 @@ def _log_tensor_grad(
             # Retention policy denies a payload for this label through the
             # charged chokepoint; keep the historical bare slot write.
             layer._log_tensor_grad(grad)
-        self.saved_gradient_memory += layer.gradient_memory
-        self.total_gradient_memory += layer.gradient_memory
+        self._cost_saved_grad_memory += layer.gradient_memory
+        self._cost_total_grad_memory += layer.gradient_memory
 
 
 def _locate_parent_tensors_in_args(

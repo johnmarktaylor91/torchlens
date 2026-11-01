@@ -88,7 +88,7 @@ def _intervene_probe() -> Any:
 CAPABILITY_REQUESTS: dict[str, CapabilityRequest] = {
     "backward_capture": CapabilityRequest("capture_option", "backward_ready", lambda: True),
     "fastlog": CapabilityRequest("record"),
-    "interventions": CapabilityRequest("trace_option", "intervene", _intervene_probe),
+    "can_intervene": CapabilityRequest("trace_option", "intervene", _intervene_probe),
     "rng_replay": CapabilityRequest("capture_option", "save_rng", lambda: True),
     "has_streaming": CapabilityRequest("trace_option", "streaming", _storage_probe),
     "structure_only_capture": CapabilityRequest("capture_option", "structure_only", lambda: True),

@@ -26,7 +26,7 @@ class _StructureOnlyEntryFacts:
     lookback_payload_policy: str
     raise_on_nan_value: bool
     track_nonfinite_value: bool
-    intervention_ready: bool
+    replayable: bool
     should_save_grads: bool
 
 
@@ -87,9 +87,9 @@ def _refuse_structure_only_conflicts(facts: _StructureOnlyEntryFacts) -> None:
             remedy=conflict_remedy,
             arguments=("structure_only", "track_nonfinite"),
         )
-    if facts.intervention_ready:
+    if facts.replayable:
         raise StructureOnlyOptionConflictError(
-            "structure_only=True cannot combine with intervention_ready=True: "
+            "structure_only=True cannot combine with replayable=True: "
             "runnable eligibility disables the plain escape belt and runnable "
             "save is refused wholesale under the structure-only contract, so "
             "the combination must be unreachable rather than quietly belt-less. "
@@ -98,11 +98,11 @@ def _refuse_structure_only_conflicts(facts: _StructureOnlyEntryFacts) -> None:
             "(state slots declared at capture, values bound at run time)",
             code="structure_only_option_conflict",
             remedy=(
-                "capture the real model with intervention_ready=True (without "
+                "capture the real model with replayable=True (without "
                 "structure_only) for a runnable artifact today, or drop "
-                "intervention_ready to keep the structure-only capture"
+                "replayable to keep the structure-only capture"
             ),
-            arguments=("structure_only", "intervention_ready"),
+            arguments=("structure_only", "replayable"),
         )
     if halt is not None:
         from .._ir.selector_eval import first_selector_kind_outside

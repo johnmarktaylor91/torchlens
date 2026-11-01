@@ -741,7 +741,7 @@ torchlens.intervention.population:population:InvalidArgumentError::2	CONTRACTED	
 torchlens.intervention.population:population:InvalidArgumentError::3	CONTRACTED	population_heterogeneous	F02 D2 one homogeneous member stack
 torchlens.intervention.population:population:InvalidArgumentError::4	CONTRACTED	population_source_invalid	F02 D2 unsupported source type
 torchlens.intervention.stochastic:_require_seed:InvalidArgumentError::1	CONTRACTED	sampling_seed_required	F02 D4 seed law: int or 'auto', None never reaches a hook
-torchlens.intervention.stochastic:_base_seed:InvalidArgumentError::1	CONTRACTED	sampling_trace_seed_unavailable	F02 D5 auto seed needs trace.random_seed in run_ctx
+torchlens.intervention.stochastic:_base_seed:InvalidArgumentError::1	CONTRACTED	sampling_trace_seed_unavailable	F02 D5 auto seed needs trace.options.seed in run_ctx
 torchlens.intervention.stochastic:_resolve_over_axes:InvalidArgumentError::1	CONTRACTED	axis_semantics_unknown	F02 D17/D25 named token without axis-role evidence
 torchlens.intervention.stochastic:_resolve_over_axes:InvalidArgumentError::2	CONTRACTED	intervention_over_invalid	F02 D17 closed over= vocabulary (existing code, new site)
 torchlens.intervention.stochastic:_normalize_over_axes:InvalidArgumentError::1	CONTRACTED	sampling_geometry_mismatch	F02 axis out of range for concrete rank
@@ -1013,7 +1013,7 @@ torchlens.report._summary_config:_resolve_buffers:InvalidArgumentError::1	CONTRA
 torchlens.report._summary_config:_refuse_unknown_options:InvalidArgumentError::1	CONTRACTED	summary_option_invalid	F08 unknown-option refusal: a removed legacy spelling names its successor, any other name gets the nearest grammar option; typed + contract row
 torchlens.report._stats_view:_refuse_column:InvalidArgumentError::1	CONTRACTED	summary_option_invalid	summary(view="stats") unknown-column refusal (round 2 doctor and stats merge); typed + code + remedy; summary_option_invalid contract row
 torchlens.report._summary_config:resolve_config:InvalidArgumentError::1	CONTRACTED	summary_option_conflict	F08 level='op' x depth= contradiction; typed + contract row
-torchlens._utils:_refuse_flop_count_options:InvalidArgumentError::1	CONTRACTED	flop_count_option_invalid	flop_count option gate: the removed count_fma_as_two spelling names flop_convention, unknown names and values outside fma2/fma1 refuse before capture; typed + contract row
+torchlens._utils._onramp:_refuse_flop_count_options:InvalidArgumentError::1	CONTRACTED	flop_count_option_invalid	flop_count option gate: the removed count_fma_as_two spelling names flop_convention, unknown names and values outside fma2/fma1 refuse before capture; typed + contract row
 torchlens._utils.facade:refuse_removed_member:FacadeTeachingError::1	CONTRACTED	facade_redirect	removed public class member (Trace.replay, Bundle.rerun, VisualizationOptions.mode, ...) names its replacement from the owning class's removed-member table; typed + contract row
 torchlens._data_classes._trace_viz:TraceVisualizationMixin.summary:CaptureNotActiveError::1	CONTRACTED	trace_not_finished	summary() during an active forward: the rebuilt summary has no partial form, so it refuses typed and names repr(trace) as the live view; typed + contract row
 torchlens.report._summary_report:SummaryReport._rebuilt_or_refuse:InvalidArgumentError::1	CONTRACTED	summary_result_legacy	F08 result API on legacy-preset reports teaches the rebuilt grammar; typed + contract row

@@ -46,14 +46,14 @@ def _x24() -> Any:
 def _ops(trace: Any, layer_type: str) -> list[Any]:
     """Ops of ``trace`` with the given layer type."""
 
-    return [op for op in trace.layer_list if op.layer_type == layer_type]
+    return [op for op in trace._layer_list if op.type == layer_type]
 
 
 def _parent_types(trace: Any, op: Any) -> list[str]:
     """Layer types of an op's parents."""
 
-    by_label = {other.layer_label: other for other in trace.layer_list}
-    return [by_label[str(parent)].layer_type for parent in op.parents if str(parent) in by_label]
+    by_label = {other.layer_label: other for other in trace._layer_list}
+    return [by_label[str(parent)].type for parent in op.parents if str(parent) in by_label]
 
 
 class _ConvNet(paddle.nn.Layer):
@@ -92,7 +92,7 @@ def test_conv_layers_are_layer_level_ops_with_parents(rank: int) -> None:
     assert _parent_types(trace, convs[0]) == ["input"]
     relu = _ops(trace, "functional.relu")[0]
     assert _parent_types(trace, relu) == [f"conv{rank}d"]
-    assert not [op for op in trace.layer_list if "_conv_nd" in op.layer_type]
+    assert not [op for op in trace._layer_list if "_conv_nd" in op.type]
     assert PaddleBackend().validate_trace(trace) is True
 
 
@@ -162,7 +162,7 @@ def test_closure_constants_are_recorded_and_validate(steps: int) -> None:
     payloads = sorted((op.out.numpy() for op in constants), key=lambda array: array.ndim)
     np.testing.assert_array_equal(payloads[0], _B4)
     np.testing.assert_array_equal(payloads[1], _W44)
-    matmul = next(op for op in trace.layer_list if op.layer_type == "matmul")
+    matmul = next(op for op in trace._layer_list if op.type == "matmul")
     assert "constant" in _parent_types(trace, matmul)
     status = _protocol().validate(trace, None)
     assert status.state == "passed", status.message

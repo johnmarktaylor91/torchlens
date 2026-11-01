@@ -281,7 +281,7 @@
       "input_to_modules": [
         "child:1"
       ],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -318,7 +318,7 @@
       "input_to_modules": [
         "child:1"
       ],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": true,
@@ -354,7 +354,7 @@
       "input_to_modules": [
         "child.proj:1"
       ],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -390,7 +390,7 @@
       "fx_call_index": 0,
       "fx_qualpath": "child.proj.linear",
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -433,7 +433,7 @@
       "fx_call_index": 0,
       "fx_qualpath": null,
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,

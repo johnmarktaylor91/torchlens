@@ -85,7 +85,7 @@ def test_row_inventory_intermediates_and_validation(family: str) -> None:
     trace, reference, protocol, _model = _capture_row(family)
     assert _captured_op_kinds(trace) == ROWS[family].expected_op_kinds
     for kind, want in (ROWS[family].expected_intermediates or {}).items():
-        ops = [op for op in trace.layer_list if str(op.func_name) == kind]
+        ops = [op for op in trace._layer_list if str(op.func_name) == kind]
         wants = want if isinstance(want, list) else [want]
         assert len(ops) == len(wants), kind
         for op, value in zip(ops, wants, strict=True):
@@ -96,7 +96,7 @@ def test_row_inventory_intermediates_and_validation(family: str) -> None:
 
 
 def _constant_ops(trace: Any) -> list[Any]:
-    return [op for op in trace.layer_list if str(op.func_name) == "constant"]
+    return [op for op in trace._layer_list if str(op.func_name) == "constant"]
 
 
 def test_closure_constant_is_a_constant_source_op_and_validates() -> None:
@@ -116,7 +116,7 @@ def test_closure_constant_is_a_constant_source_op_and_validates() -> None:
     assert constant.is_internal_source and not constant.is_buffer and not constant.is_input
     assert constant.layer_label.startswith("constant_")
     np.testing.assert_array_equal(constant.out.detach().numpy(), torch_roster.W44)
-    (matmul,) = [op for op in trace.layer_list if str(op.func_name) == "matmul"]
+    (matmul,) = [op for op in trace._layer_list if str(op.func_name) == "matmul"]
     assert constant.layer_label in {str(parent).split(":")[0] for parent in matmul.parents}
     assert not tuple(matmul.unattributed_tensor_args or ())
     status = protocol.validate(trace, reference)
@@ -164,7 +164,7 @@ def test_literal_producers_are_parentless_ops() -> None:
     ones_trace, _reference, _protocol, _model = _capture_row("reshape_transpose")
     closure_trace, _reference, _protocol, _model = _capture_row(CLOSURE_ROW)
     for trace, kind in ((ones_trace, "ones"), (closure_trace, "full")):
-        producers = [op for op in trace.layer_list if str(op.func_name) == kind]
+        producers = [op for op in trace._layer_list if str(op.func_name) == kind]
         assert len(producers) == 1 and not tuple(producers[0].parents or ())
 
 
@@ -177,7 +177,7 @@ def test_random_forward_capture_is_rng_neutral() -> None:
     before = torch.get_rng_state()
     trace = protocol.capture(model, example, None)
     assert torch.equal(torch.get_rng_state(), before)
-    assert isinstance(trace.random_seed, int)
+    assert isinstance(trace.options.seed, int)
 
 
 def test_capture_refuses_unknown_trace_keyword_before_running() -> None:
@@ -274,9 +274,9 @@ def test_after_load_cell_reloads_at_the_replay_level(tmp_path: Any) -> None:
     path = tmp_path / "c2.tlspec"
     adapter.save(trace, path)
     loaded = adapter.load(path)
-    assert all(op.saved_args is None for op in loaded.layer_list)
+    assert all(op.saved_args is None for op in loaded._layer_list)
     replay = load_for_replay(adapter, trace, path, loaded)
-    assert replay is not loaded and any(op.saved_args is not None for op in replay.layer_list)
+    assert replay is not loaded and any(op.saved_args is not None for op in replay._layer_list)
     status = protocol.validate(replay, reference)
     assert status.state == "passed", status.message
     assert load_for_replay(SimpleNamespace(), trace, path, loaded) is loaded

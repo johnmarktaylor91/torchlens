@@ -45,14 +45,14 @@ def _check_distance_invariants(ml: Trace) -> None:
     - input_ancestors subset of input_layers; output_descendants subset of
       output_layers.
     """
-    if not ml.mark_layer_depths:
+    if not ml._options_mark_layer_depths:
         return
 
     name = "distance_invariants"
     input_set = set(ml.input_layers)
     output_set = set(ml.output_layers)
 
-    for lpl in ml.layer_list:
+    for lpl in ml._layer_list:
         label = lpl.layer_label
 
         # min <= max for input distances
@@ -180,7 +180,7 @@ def _check_ancestry_closure(ml: Trace) -> None:
     input_set = set(ml.input_layers)
     orphan_labels = _retained_orphan_layer_labels(ml) | _retained_orphan_op_labels(ml)
 
-    entries = [lpl for lpl in ml.layer_list if lpl.layer_label not in orphan_labels]
+    entries = [lpl for lpl in ml._layer_list if lpl.layer_label not in orphan_labels]
     by_label: dict[str, Any] = {}
     for lpl in entries:
         by_label.setdefault(lpl.layer_label, lpl)
@@ -266,7 +266,7 @@ def _pass_qualified_label(lpl: Any) -> str | None:
     """Return ``layer_label:pass_index`` when both stored fields are present."""
 
     layer_label = getattr(lpl, "layer_label", None)
-    pass_index = getattr(lpl, "pass_index", None)
+    pass_index = getattr(lpl, "pass_number", None)
     if isinstance(layer_label, str) and isinstance(pass_index, int):
         return f"{layer_label}:{pass_index}"
     return None
@@ -455,7 +455,7 @@ def _check_graph_connectivity(ml: Trace) -> None:
     input_set = set(ml.input_layers)
     buffer_set = set(ml.buffer_layers)
 
-    for lpl in ml.layer_list:
+    for lpl in ml._layer_list:
         label = lpl.layer_label
 
         # Non-input, non-buffer, non-internally-initialized layers must have parents
@@ -628,7 +628,7 @@ def _check_module_containment_logic(ml: Trace) -> None:
     # Per-layer: modules path validity
     # Format after postprocessing: list of "addr:pass" strings, ordered from
     # outermost enclosing submodule to innermost. Does NOT include "self".
-    for lpl in ml.layer_list:
+    for lpl in ml._layer_list:
         nested = lpl.modules
         if not nested:
             continue
@@ -769,7 +769,7 @@ def _metadata_invariant_contracts_for_trace(
 
     from ..backends.registry import get_backend_spec
 
-    spec = get_backend_spec(getattr(trace, "backend", "torch"))
+    spec = get_backend_spec(trace._provenance_backend)
     torch_spec = get_backend_spec("torch")
     backend_family: Literal["torch", "non_torch"] = "torch" if spec is torch_spec else "non_torch"
     return _metadata_invariant_contracts_for_backend(backend_family, spec=spec)

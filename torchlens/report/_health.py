@@ -29,6 +29,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .._data_classes._trace_missing_attrs import is_live_trace
+
 #: Annotations key carrying the persisted record (field_intent.tsv row C02).
 HEALTH_FACTS_ANNOTATIONS_KEY = "health_facts"
 #: HealthFacts payload schema version.
@@ -120,7 +122,7 @@ def _alias_labels(trace: Any) -> set[str]:
     """Pass-qualified labels of alias rows (D19 exclusion set)."""
 
     labels: set[str] = set()
-    for op in getattr(trace, "layer_list", ()) or ():
+    for op in (trace._layer_list if is_live_trace(trace) else None) or ():
         if (
             getattr(op, "is_input", False)
             or getattr(op, "is_output", False)
@@ -225,7 +227,7 @@ def health_facts(trace: Any, *, allow_scan: bool = True) -> HealthFacts:
 
             unexamined = sum(
                 1
-                for op in getattr(trace, "layer_list", ()) or ()
+                for op in (trace._layer_list if is_live_trace(trace) else None) or ()
                 if getattr(op, "has_saved_activation", False)
             )
             return _not_checked("unscanned", capture_fingerprint(trace), unexamined=unexamined)

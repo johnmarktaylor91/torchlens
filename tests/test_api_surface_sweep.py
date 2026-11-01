@@ -42,7 +42,7 @@ def _relu_op(trace: tl.Trace) -> tl.Op:
         Captured ReLU operation.
     """
 
-    return next(op for op in trace.layer_list if op.layer_type == "relu")
+    return next(op for op in trace._layer_list if op.type == "relu")
 
 
 def test_sweep_returns_bundle_with_one_trace_per_value() -> None:
@@ -64,8 +64,8 @@ def test_sweep_applies_each_replacement_value() -> None:
     second = bundle["sweep_1"]
     torch.testing.assert_close(first.reconstruct_output(), torch.tensor([0.0, 0.0]))
     torch.testing.assert_close(second.reconstruct_output(), torch.tensor([3.0, 3.0]))
-    assert _relu_op(first).intervention_replaced
-    assert _relu_op(second).intervention_replaced
+    assert _relu_op(first).is_edited
+    assert _relu_op(second).is_edited
 
 
 def test_sweep_accepts_selector_and_custom_names() -> None:

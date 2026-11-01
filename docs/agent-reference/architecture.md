@@ -22,14 +22,13 @@ Key entry points:
   retained op carries the portable structural-position key `op.site_key`
   (`site_key_v1`, minted at grouping time on every backend,
   policy-independent, the cross-capture bridging relation);
-  `Layer.site_key` / `Layer.site_peers` / `Layer.shape_summary` are the
-  Layer surface (typed refusals `layer_site_ambiguous` /
-  `site_key_unavailable`); `grouping=` is the closed-vocabulary knob
+  `Layer.site_peers` / `Layer.shape_summary` are the Layer surface (typed
+  refusal `site_key_unavailable`; per-pass keys read as `layer.ops[k].site_key`); `grouping=` is the closed-vocabulary knob
   ("structural" default, which on torch is call-site grouping,
   `detector="callsite_v1"`, rule in `docs/guides/grouping.md`; others
   refuse typed pre-D1/S2) mirrored on
-  `trace.grouping`, with the load-validated `grouping_policy_v1` stamp on
-  `trace.grouping_policy` (C1-C8 coherence; degrade-settlement monotonic).
+  `trace.options.grouping`, with the load-validated `grouping_policy_v1` stamp on
+  `trace.options.grouping_policy` (C1-C8 coherence; degrade-settlement monotonic).
   Persisted rows are live as of the tlspec v8 bump (load-validated); join/fold
   machinery in `torchlens/_postprocess/_site_key.py` / `_site_join.py` /
   `_grouping_stamp.py`.
@@ -39,7 +38,7 @@ Key entry points:
   dtype facts, `torchlens.types.InputSpec` override) XOR zero-arg
   inference (the exact verified trace is consumed, never recaptured).
   Synthesized rungs persist `InputProvenance` inside the existing
-  `Trace.input_preprocessor` KEEP field; `decode_output`/`output_table`
+  `Trace.provenance.input_preprocessor` KEEP field; `decode_output`/`output_table`
   refuse `nongold_semantics_unavailable` on synthesized values; first raw
   read warns once (`nongold_raw_value_read`). `torchlens._user_funcs.render`
   is the one-call facade (metadata-only pinned eval/no-grad, state-hash
@@ -63,7 +62,7 @@ Key entry points:
   zero-input (reuses `guess_input_shape`'s verified trace, synthesis
   disclosed). Result API: `render`/`print`/`details`/`to_pandas`/
   `to_markdown`/`to_html` + scalar raw ints; survives model/Trace teardown;
-  `trace.provenance()` serves the relocated preamble byte-exact;
+  `trace.provenance.summary()` serves the relocated preamble byte-exact;
   `Trace._repr_html_` delegates to the summary HTML. Pins:
   `tools/derive_summary_pins.py`; ratio page:
   `docs/benchmarks/summary_performance.md`; docs: `docs/reference/summary.md`,
@@ -145,7 +144,7 @@ Key entry points:
   `docs/reference/structure_only_capabilities.md`); value-dependent
   branches refuse device-neutrally at the user's source line;
   `trace.discharge_against(real_trace)` corroborates/refutes hypotheses
-  behind a comparable-twins preflight; `Trace.structure_evidence` is the
+  behind a comparable-twins preflight; `Trace.graph.structure_evidence` is the
   persisted envelope; `tl.summary(meta_model, input_shape=...)` and
   `Trace.check_plan(plan)` are the facade + audit verbs. Doc:
   `docs/reference/weightsfree_capture.md`.
@@ -222,7 +221,7 @@ Key entry points:
   `multipass_bare_label` on `tl.units`); single-pass bare labels stay
   accepted and `log[label].__selection__()` is the all-passes spelling.
 - Edge substitution (L6 stage 3; DOCUMENTED-UNSTABLE): `trace.graph.edges` is the
-  dataflow edge family (EdgeUseRecords; requires an `intervention_ready`
+  dataflow edge family (EdgeUseRecords; requires an `replayable`
   capture, refusal `edge_provenance_unavailable`; canonical occurrence
   address `(child_func_call_id, arg_kind, arg_path)`).
   `fork.do(edge_selection, edit)` replaces the value CONSUMED on the edge on
@@ -333,7 +332,7 @@ Key entry points:
   funnel drops NodeSpec width/height on image nodes; `scale=` without `size_by` refuses
   `scale_requires_size_by`. Wave-1 rank channel `Trace.draw(stack_by=...)` (UNSTABLE,
   strictly opt-in): annotation -> `rank=same` groups (`newrank=true`); `True`/`"auto"` is
-  licensed by global pass_index monotonicity (else `stack_by_auto_underivable`), explicit
+  licensed by global pass_number monotonicity (else `stack_by_auto_underivable`), explicit
   field/callable bypasses with caption disclosure, rolled refuses
   `stack_by_requires_unrolled`, sibling ordering no-ops while stacking. Checked suppression
   (UNSTABLE `show_redundant_args`, DEFAULT-ON): labels omit constructor args PROVEN equal to
@@ -371,7 +370,7 @@ torch_trace = tl.trace(
     model,
     x,
     backend="torch",
-    capture=tl.options.CaptureOptions(intervention_ready=True),
+    capture=tl.options.CaptureOptions(replayable=True),
 )
 tf_trace = tl.trace(tf_model, tf_x, backend="tf")
 relu_trace = tl.trace(model, x, save=tl.func("relu"))
@@ -393,7 +392,7 @@ recording = tl.record(model, x, save=tl.func("relu"))
 trace_from_recording = recording.to_trace()
 # D18: eval-mode BatchNorm is runnable on the default live path (no value-changing
 # buffer writes); train-mode buffer writers refuse with the typed BufferSinkRoutingError
-# (code "buffer_sink_routing_mutable", provisional/documented-unstable).
+# (code "buffer_sink_routing_unsupported", provisional/documented-unstable).
 run_result = torch_trace.run(inputs=x, seed=42)
 runnable_path = "architecture.tlspec"
 torch_trace.save(runnable_path, level="runnable", include_weights=True)

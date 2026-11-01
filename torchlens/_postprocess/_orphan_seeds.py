@@ -37,7 +37,7 @@ def _orphan_flood_seeds(trace: Trace) -> list[str]:
         if getattr(raw_layer_dict[label], "buffer_write_kind", None) is not None
     ]
     node_stack = trace.input_layers + trace.output_layers + written_buffer_layers
-    if getattr(trace, "halted", False):
+    if trace.is_stopped:
         node_stack = node_stack + [
             label
             for label, entry in raw_layer_dict.items()

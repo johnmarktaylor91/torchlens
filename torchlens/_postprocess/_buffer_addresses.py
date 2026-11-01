@@ -16,8 +16,7 @@ import torch
 
 from torchlens._ir.events import OpEvent
 
-from .._utils import safe_copy
-from .._utils.tensor_utils import tensor_nanequal
+from .._utils.tensor_utils import safe_copy, tensor_nanequal
 
 
 def _buffer_addresses_by_label(

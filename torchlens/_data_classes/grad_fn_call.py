@@ -96,32 +96,32 @@ class GradFnCall:
         "call_index": FieldPolicy.KEEP,
         "ordinal": FieldPolicy.KEEP,
         "backward_pass_index": FieldPolicy.KEEP,
-        "label": FieldPolicy.KEEP,
+        "grad_fn_label": FieldPolicy.KEEP,
         "grad_inputs": FieldPolicy.BLOB_RECURSIVE,
         "grad_outputs": FieldPolicy.BLOB_RECURSIVE,
-        "intervention_fire_ref": FieldPolicy.KEEP,
+        "fire_record": FieldPolicy.KEEP,
         "timestamp": FieldPolicy.KEEP,
         "_time_started": FieldPolicy.KEEP,
         "_time_finished": FieldPolicy.KEEP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
     }
-    FIELD_POLICY = build_record_field_policy_table(
+    _FIELD_POLICY = build_record_field_policy_table(
         GRAD_FN_PASS_LOG_FIELD_ORDER,
         {
             **_PORTABLE_STATE_SPEC,
-            "call_label": _PORTABLE_STATE_SPEC["label"],
+            "label": _PORTABLE_STATE_SPEC["grad_fn_label"],
         },
         schema_key="grad_fn_call",
     )
-    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(_FIELD_POLICY)
 
     call_index: int
     ordinal: int | None = None
     backward_pass_index: int | None = None
-    label: str = ""
+    grad_fn_label: str = ""
     grad_inputs: Any = None
     grad_outputs: Any = None
-    intervention_fire_ref: object | None = None
+    fire_record: object | None = None
     timestamp: float | None = None
     _time_started: float | None = None
     _time_finished: float | None = None
@@ -165,12 +165,12 @@ class GradFnCall:
         read_tlspec_version(state, cls_name=type(self).__name__, cls=type(self))
         grad_fn_call_setstate_defaults: dict[str, Any] = {
             **_GRAD_FN_CALL_CONTAINER_DEFAULTS,
-            "label": "",
+            "grad_fn_label": "",
             "ordinal": state.get("call_index"),
             "backward_pass_index": None,
             "grad_inputs": None,
             "grad_outputs": None,
-            "intervention_fire_ref": None,
+            "fire_record": None,
             "timestamp": None,
             "_time_started": None,
             "_time_finished": None,
@@ -194,14 +194,14 @@ class GradFnCall:
             self.ordinal = self.call_index
 
     @property
-    def source_trace(self) -> Any:
+    def _source_trace(self) -> Any:
         """Return the owning Trace if it is still alive."""
 
         ref = self._source_trace_ref
         return None if ref is None else ref()
 
-    @source_trace.setter
-    def source_trace(self, value: Any) -> None:
+    @_source_trace.setter
+    def _source_trace(self, value: Any) -> None:
         """Set the owning Trace weakref."""
 
         self._source_trace_ref = weakref.ref(value) if value is not None else None
@@ -210,7 +210,7 @@ class GradFnCall:
     def trace(self) -> Any:
         """Alias for the owning Trace."""
 
-        return self.source_trace
+        return self._source_trace
 
     def __eq__(self, other: object) -> bool:
         """Typed, tensor-safe value equality (never a torch ``RuntimeError``).
@@ -231,7 +231,7 @@ class GradFnCall:
             self.call_index,
             self.ordinal,
             self.backward_pass_index,
-            self.label,
+            self.grad_fn_label,
             self.timestamp,
             self._time_started,
             self._time_finished,
@@ -239,7 +239,7 @@ class GradFnCall:
             other.call_index,
             other.ordinal,
             other.backward_pass_index,
-            other.label,
+            other.grad_fn_label,
             other.timestamp,
             other._time_started,
             other._time_finished,
@@ -248,13 +248,15 @@ class GradFnCall:
         return (
             _grad_fn_payload_equal(self.grad_inputs, other.grad_inputs)
             and _grad_fn_payload_equal(self.grad_outputs, other.grad_outputs)
-            and _grad_fn_payload_equal(self.intervention_fire_ref, other.intervention_fire_ref)
+            and _grad_fn_payload_equal(self.fire_record, other.fire_record)
         )
 
     def __hash__(self) -> int:
         """Hash on the immutable scalar identity fields (eq-consistent)."""
 
-        return hash((type(self).__name__, self.call_index, self.backward_pass_index, self.label))
+        return hash(
+            (type(self).__name__, self.call_index, self.backward_pass_index, self.grad_fn_label)
+        )
 
     @property
     def ordinal_index(self) -> int:
@@ -265,7 +267,7 @@ class GradFnCall:
         trace's projection returns ``-1`` like a trace-less call.
         """
 
-        trace = self.source_trace
+        trace = self._source_trace
         if trace is None:
             return -1
         revision = getattr(trace, "_backward_projection_revision", None)
@@ -282,7 +284,7 @@ class GradFnCall:
         return cached[1].get(id(self), -1)
 
     @property
-    def call_label(self) -> str:
+    def label(self) -> str:
         """Return the pass-qualified GradFnCall label.
 
         Returns
@@ -291,7 +293,11 @@ class GradFnCall:
             GradFn label with the 1-based call index suffix.
         """
 
-        return f"{self.label}:{self.call_index}" if self.label else str(self.call_index)
+        return (
+            f"{self.grad_fn_label}:{self.call_index}"
+            if self.grad_fn_label
+            else str(self.call_index)
+        )
 
     @property
     def is_saved(self) -> bool:
@@ -351,10 +357,10 @@ _GRAD_FN_CALL_STORED_FIELDS: tuple[str, ...] = (
     "call_index",
     "ordinal",
     "backward_pass_index",
-    "label",
+    "grad_fn_label",
     "grad_inputs",
     "grad_outputs",
-    "intervention_fire_ref",
+    "fire_record",
     "timestamp",
     "_time_started",
     "_time_finished",

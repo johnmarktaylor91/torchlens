@@ -47,6 +47,8 @@ import re
 from collections.abc import Iterator, Sequence
 from typing import Any, Literal, cast
 
+from .._data_classes._trace_missing_attrs import is_live_trace
+from .._record_type import record_type
 from .._selection.errors import (
     LiveModeLabelError,
     SelectorCapabilityError,
@@ -62,6 +64,11 @@ from .._selection.selectors import (
 )
 from .._selection.target import FrozenTargetSpec, TargetSpec
 from ..backends._backend_names import TORCH_BACKEND_NAME
+from ._selector_eval_helpers import (
+    _grad_fn_call_values,
+    _grad_fn_type_matches,
+    _module_candidate_string,
+)
 from ._selector_labels import (
     _STRING_LABEL_ATTRS,
     _is_module_scope_alias,
@@ -450,9 +457,9 @@ def _output_path_component_matches(saved_component: Any, requested_component: An
     if isinstance(saved_component, TupleIndex):
         return saved_component.index == requested_component
     if isinstance(saved_component, (DictKey, HFKey)):
-        return saved_component.key == requested_component
+        return saved_component._key == requested_component
     if isinstance(saved_component, (NamedField, DataclassField)):
-        return saved_component.name == requested_component
+        return saved_component._name == requested_component
     return saved_component == requested_component
 
 
@@ -712,8 +719,10 @@ def _module_output_candidates(subject: Any, lifecycle: str) -> tuple[Any, ...]:
     if lifecycle == "capture" and not module_outputs:
         # Capture subjects include backend ``OpEvent`` records, which carry the
         # owning session as ``source_trace`` (they have no ``trace`` member).
-        source_trace = getattr(subject, "source_trace", None)
-        if getattr(source_trace, "backend", TORCH_BACKEND_NAME) != TORCH_BACKEND_NAME:
+        source_trace: Any = getattr(subject, "source_trace", None)
+        if (
+            source_trace._provenance_backend if is_live_trace(source_trace) else TORCH_BACKEND_NAME
+        ) != TORCH_BACKEND_NAME:
             module_candidate = getattr(subject, "module", None)
             if module_candidate is not None:
                 module_outputs = (module_candidate,)
@@ -793,8 +802,10 @@ def _capture_module_candidates(ctx: Any) -> tuple[Any, ...]:
     address = getattr(ctx, "address", None)
     if address is not None:
         candidates.append(str(address))
-    source_trace = getattr(ctx, "source_trace", None)
-    if getattr(source_trace, "module_identity_mode", None) == "function_root":
+    source_trace: Any = getattr(ctx, "source_trace", None)
+    if (
+        source_trace._options_module_identity_mode if is_live_trace(source_trace) else None
+    ) == "function_root":
         candidates.append("self")
         candidates.append("self:1")
     for frame in getattr(ctx, "module_stack", ()):
@@ -803,9 +814,9 @@ def _capture_module_candidates(ctx: Any) -> tuple[Any, ...]:
             frame_address = frame.get("address")
         if frame_address is None:
             continue
-        frame_pass = getattr(frame, "pass_index", None)
+        frame_pass = getattr(frame, "pass_number", None)
         if frame_pass is None and isinstance(frame, dict):
-            frame_pass = frame.get("pass_index")
+            frame_pass = frame.get("pass_number")
         candidates.append(str(frame_address))
         if frame_pass is not None:
             candidates.append(f"{frame_address}:{frame_pass}")
@@ -815,27 +826,6 @@ def _capture_module_candidates(ctx: Any) -> tuple[Any, ...]:
         _module_candidate_string(candidate) for candidate in tuple(modules) + tuple(module_ops)
     )
     return tuple(candidates)
-
-
-def _module_candidate_string(candidate: Any) -> str:
-    """Return a selector-compatible module candidate string.
-
-    Parameters
-    ----------
-    candidate:
-        Module candidate from an op, module call, or capture context.
-
-    Returns
-    -------
-    str
-        Address or pass-qualified address for :func:`module_address_matches`.
-    """
-
-    if isinstance(candidate, tuple) and candidate and isinstance(candidate[0], str):
-        if len(candidate) > 1:
-            return f"{candidate[0]}:{candidate[1]}"
-        return candidate[0]
-    return str(candidate)
 
 
 def _output_matches(subject: Any, value: Any, lifecycle: str) -> bool:
@@ -1073,7 +1063,7 @@ def _evaluate_subject(selector: BaseSelector, subject: Any, lifecycle: str) -> b
             return True
         if lifecycle == "live" and bool(getattr(subject, "_tl_module_boundary", False)):
             return False
-        layer_type = getattr(subject, "layer_type", None)
+        layer_type = record_type(subject, None)
         return layer_type is not None and str(name) == str(layer_type)
     if kind == "func_transform":
         if not bool(getattr(subject, "is_transform", False)):
@@ -1162,7 +1152,7 @@ def _evaluate_subject(selector: BaseSelector, subject: Any, lifecycle: str) -> b
         if kind == "backward_pass":
             ctx_pass = getattr(subject, "backward_pass_index", None)
             if ctx_pass is None:
-                ctx_pass = getattr(subject, "pass_index", None)
+                ctx_pass = getattr(subject, "pass_number", None)
             return ctx_pass == value
         if kind in _CAPTURE_SILENT_FALSE_KINDS:
             return False
@@ -1444,7 +1434,7 @@ def _grad_fn_boundary_aliases(site: Any) -> tuple[Any, ...]:
         {str(parent) for parent in getattr(paired, "parents", ()) or ()} if pass_level else set()
     )
     aliases: list[Any] = []
-    for layer in getattr(trace, "layer_list", ()):
+    for layer in trace._layer_list:
         if getattr(layer, "layer_label", None) == paired_label:
             continue
         if getattr(layer, "grad_fn_object_id", None) != site.grad_fn_object_id:
@@ -1457,52 +1447,6 @@ def _grad_fn_boundary_aliases(site: Any) -> tuple[Any, ...]:
         aliases.append(layer)
         accepted.update(str(getattr(layer, name, "")) for name in ("label", "layer_label"))
     return tuple(aliases)
-
-
-def _grad_fn_type_matches(site: Any, requested: str) -> bool:
-    """Return whether a grad_fn_handle type matches user spelling flexibly.
-
-    Parameters
-    ----------
-    site:
-        Candidate grad_fn_handle log.
-    requested:
-        Requested type string.
-
-    Returns
-    -------
-    bool
-        Whether class name or normalized type matches.
-    """
-
-    lowered = requested.lower()
-    normalized = lowered.removesuffix("backward0").removesuffix("backward")
-    candidates = {
-        site.class_name.lower(),
-        site.type.lower(),
-        site.label.lower(),
-    }
-    return lowered in candidates or normalized in candidates
-
-
-def _grad_fn_call_values(site: Any) -> tuple[Any, ...]:
-    """Return GradFnCall values from dict or accessor-backed call storage.
-
-    Parameters
-    ----------
-    site:
-        Candidate grad_fn_handle log.
-
-    Returns
-    -------
-    tuple[Any, ...]
-        Recorded GradFnCall values.
-    """
-
-    calls = site.calls
-    if isinstance(calls, dict):
-        return tuple(calls.values())
-    return tuple(calls._list)
 
 
 # ---------------------------------------------------------------------------

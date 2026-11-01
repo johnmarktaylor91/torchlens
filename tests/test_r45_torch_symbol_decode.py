@@ -319,7 +319,7 @@ def test_r49_torch_lazy_import_belt_runnable_registry_key(hazard: str, tmp_path:
         m = nn.Linear(4, 4)
         log = tl.trace(
             m, torch.randn(2, 4),
-            capture=CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False),
+            capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
         )
         log.save({str(bundle)!r}, level="runnable")
         print("BUILT")
@@ -497,7 +497,7 @@ def test_tampered_run_slot_dtype_refuses_without_import(hazard: str, tmp_path: P
         m = nn.Linear(4, 4)
         log = tl.trace(
             m, torch.randn(2, 4),
-            capture=CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False),
+            capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
         )
         log.save({str(bundle)!r}, level="runnable")  # include_weights=False -> random init at run
         print("BUILT")

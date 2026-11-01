@@ -4298,7 +4298,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/_utils/__init__.py",
+  "file": "torchlens/_utils/_onramp.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -4306,7 +4306,7 @@
  {
   "ambiguous": false,
   "field": "layer_type",
-  "file": "torchlens/_utils/__init__.py",
+  "file": "torchlens/_utils/_onramp.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -4314,7 +4314,7 @@
  {
   "ambiguous": true,
   "field": "modules",
-  "file": "torchlens/_utils/__init__.py",
+  "file": "torchlens/_utils/_onramp.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false

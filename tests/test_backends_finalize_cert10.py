@@ -91,7 +91,7 @@ def test_mlx_finalize_flips_per_op_tracing_finished_and_types_param_memory() -> 
     x = mx.random.normal((2, 4))
     log = tl.trace(model, x, save=tl.func("__never_matches__"))
 
-    assert log.num_ops > 0
+    assert log._num_ops > 0
     sampled = 0
     for op_label in log.op_labels:
         op = log[op_label]
@@ -144,7 +144,7 @@ def test_tinygrad_finalize_flips_per_op_tracing_finished() -> None:
     x = TinygradTensor.randn(2, 4)
     log = tl.trace(_fn, x, backend="tinygrad", save=tl.func("__never_matches__"))
 
-    assert log.num_ops > 0
+    assert log._num_ops > 0
     for op_label in log.op_labels:
         op = log[op_label]
         assert op._tracing_finished is True, op_label
@@ -170,12 +170,12 @@ def test_finalize_single_pass_trace_sets_per_op_tracing_finished_backend_agnosti
     model = _MlxMlp()
     x = mx.random.normal((2, 4))
     seed_trace = tl.trace(model, x, save=tl.func("__never_matches__"))
-    assert seed_trace.num_ops >= 1
+    assert seed_trace._num_ops >= 1
 
     trace = Trace(model_class_name="MinimalModel")
     raw_ops = OrderedDict()
     for label in seed_trace.layer_labels:
-        op_log = seed_trace.layer_dict_main_keys[label]
+        op_log = seed_trace._layer_dict_main_keys[label]
         op_log._tracing_finished = False
         # Simulate the pre-fix backend hook state: a plain int, not Bytes.
         op_log.param_memory = int(op_log.param_memory)
@@ -195,7 +195,7 @@ def test_finalize_single_pass_trace_sets_per_op_tracing_finished_backend_agnosti
     )
 
     assert trace._tracing_finished is True
-    assert len(trace.layer_dict_main_keys) == len(raw_ops)
-    for label, op_log in trace.layer_dict_main_keys.items():
+    assert len(trace._layer_dict_main_keys) == len(raw_ops)
+    for label, op_log in trace._layer_dict_main_keys.items():
         assert op_log._tracing_finished is True, label
         assert type(op_log.param_memory) is Bytes, (label, type(op_log.param_memory))

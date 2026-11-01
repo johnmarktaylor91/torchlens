@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import ArgumentTypeError
 
 __tl_layer__ = "L7"
@@ -62,9 +63,7 @@ def _iter_layers(log: Any) -> list[Any]:
         Layer entries.
     """
 
-    return list(
-        getattr(log, "layer_list", None) or getattr(log, "layer_dict_main_keys", {}).values()
-    )
+    return list(log._layer_list or log._layer_dict_main_keys.values())
 
 
 def _repeated_layer_labels(entries: list[Any]) -> set[str]:
@@ -177,7 +176,7 @@ def _static_graph_data(log: Any) -> dict[str, Any]:
     width = max((int(node["x"]) for node in nodes), default=0) + 160
     height = max((int(node["y"]) for node in nodes), default=0) + 100
     return {
-        "title": getattr(log, "model_class_name", "TorchLens graph"),
+        "title": log._source_class_name if is_live_trace(log) else "TorchLens graph",
         "nodes": nodes,
         "edges": edges,
         "width": width,

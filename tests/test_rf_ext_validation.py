@@ -47,7 +47,7 @@ def _trace(model: nn.Module, inputs: object) -> object:
 def _op(trace: object, name: str) -> Op:
     """Return the last captured operation with a raw function name."""
 
-    matches = [item for item in trace.layer_list if item.func_name == name]
+    matches = [item for item in trace._layer_list if item.func_name == name]
     assert matches
     return matches[-1]
 
@@ -55,7 +55,7 @@ def _op(trace: object, name: str) -> Op:
 def _input_ops(trace: object) -> tuple[Op, ...]:
     """Return graph-native input operations in capture order."""
 
-    return tuple(item for item in trace.layer_list if item.is_input)
+    return tuple(item for item in trace._layer_list if item.is_input)
 
 
 class _Chain(nn.Module):

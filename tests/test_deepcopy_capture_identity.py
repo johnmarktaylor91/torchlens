@@ -77,13 +77,13 @@ def test_deepcopy_of_a_buffer_is_its_own_node_and_validates() -> None:
     x = torch.ones(4)
     trace = tl.trace(model, x)
     try:
-        (buffer_op,) = [op for op in trace.layer_list if op.is_buffer]
-        (mul_op,) = [op for op in trace.layer_list if op.func_name == "__mul__"]
+        (buffer_op,) = [op for op in trace._layer_list if op.is_buffer]
+        (mul_op,) = [op for op in trace._layer_list if op.func_name == "__mul__"]
         assert buffer_op.label not in mul_op.parents, mul_op.parents
         (copy_parent,) = [trace[label] for label in mul_op.parents if label != "input_1"]
         assert copy_parent.func_name == "__deepcopy__"
         assert [trace[label].is_buffer for label in copy_parent.parents] == [True]
-        assert trace.capture_verified is not False, trace.capture_verification_reason
+        assert trace.provenance.verified is not False, trace.provenance.verification_reason
     finally:
         trace.cleanup()
     assert tl.validate(_DeepcopyBuffer(), x, scope="forward") is True
@@ -101,10 +101,10 @@ def test_deepcopy_records_under_an_intervention_ready_capture() -> None:
     trace = tl.trace(
         _DeepcopyBuffer(),
         torch.ones(4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
-        (copy_op,) = [op for op in trace.layer_list if op.func_name == "__deepcopy__"]
+        (copy_op,) = [op for op in trace._layer_list if op.func_name == "__deepcopy__"]
         assert copy_op.parents
     finally:
         trace.cleanup()

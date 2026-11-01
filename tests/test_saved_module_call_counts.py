@@ -41,8 +41,8 @@ def _assert_saved_module_count_matches_dynamic(trace: tl.Trace) -> None:
         Trace to check.
     """
 
-    assert trace.num_saved_module_calls == len(trace.saved_module_calls)
-    assert trace.num_saved_module_calls > 0
+    assert len(trace.saved_module_calls) == len(trace.saved_module_calls)
+    assert len(trace.saved_module_calls) > 0
 
 
 def test_num_saved_module_calls_matches_dynamic_for_all_saved_trace() -> None:

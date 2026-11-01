@@ -120,7 +120,7 @@ def test_rank_layout_discloses_hook_nodes_it_does_not_draw(tmp_path: Path) -> No
     trace = tl.trace(
         TinyReluAdd(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         with pytest.warns(tl.errors.TraceMutationWarning):

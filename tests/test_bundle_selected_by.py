@@ -93,7 +93,7 @@ def test_round_trip_keeps_the_row(tmp_path: Path, model: _TinyLM) -> None:
     )
     bundle.save(tmp_path / "routed.tlspec")
     manifest = json.loads((tmp_path / "routed.tlspec" / "manifest.json").read_text())
-    assert manifest["tlspec_version"] == 10
+    assert manifest["tlspec_version"] == 11
     loaded = tl.load(tmp_path / "routed.tlspec")
     assert loaded.relations == bundle.relations
     assert loaded.upstream("writer") == ("router",)

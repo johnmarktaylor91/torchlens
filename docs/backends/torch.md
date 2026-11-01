@@ -22,7 +22,7 @@ model = nn.Sequential(nn.Linear(4, 3), nn.ReLU(), nn.Linear(3, 2)).eval()
 x = torch.randn(2, 4)
 
 trace = tl.trace(model, x)
-print([op.func_name for op in trace.layer_list])
+print([op.func_name for op in trace])
 assert tl.validate(model, x, scope="forward")
 
 protocol = get_backend_spec("torch").protocol()

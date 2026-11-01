@@ -117,7 +117,7 @@ class TraceSlice(_SelectionOperand):
     # Membership --------------------------------------------------------------
 
     @property
-    def source_trace(self) -> Any:
+    def _source_trace(self) -> Any:
         """Return the trace this slice views (the single truth; never copied)."""
 
         return self._trace
@@ -342,7 +342,7 @@ class TraceSlice(_SelectionOperand):
         sites = tuple(
             (
                 getattr(self._graph.ops[label], "layer_label", None) or label,
-                getattr(self._graph.ops[label], "pass_index", 1) or 1,
+                getattr(self._graph.ops[label], "pass_number", 1) or 1,
             )
             for label in self._labels
         )

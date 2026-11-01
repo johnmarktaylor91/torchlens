@@ -341,9 +341,9 @@ def _append_state_for_json(log: Any) -> dict[str, Any]:
         if isinstance(record, dict) and record.get("op") == "append"
     ]
     return {
-        "is_appended": bool(getattr(log, "is_appended", False)),
+        "is_appended": bool(log._provenance_is_appended),
         "append_sequence_id": int(getattr(log, "_append_sequence_id", 0)),
-        "append_history": list(getattr(log, "append_history", [])),
+        "append_history": list(log._append_history),
         "state_history": append_records,
     }
 
@@ -487,15 +487,13 @@ def _trace_fire_records(log: Any) -> list[FireRecord]:
     """
 
     records: list[FireRecord] = []
-    for layer in getattr(log, "layer_list", []) or []:
+    for layer in log._layer_list or []:
         records.extend(
-            record
-            for record in getattr(layer, "interventions", []) or []
-            if isinstance(record, FireRecord)
+            record for record in getattr(layer, "edits", []) or [] if isinstance(record, FireRecord)
         )
-    for grad_fn in getattr(log, "grad_fn_logs", {}).values():
+    for grad_fn in log._grad_fn_logs.values():
         for call in getattr(getattr(grad_fn, "calls", None), "_list", []):
-            records.extend(_flatten_fire_ref(getattr(call, "intervention_fire_ref", None)))
+            records.extend(_flatten_fire_ref(getattr(call, "fire_record", None)))
     return records
 
 
@@ -541,10 +539,10 @@ def _fire_record_key(record: FireRecord) -> tuple[Any, ...]:
         record.target_label,
         record.call_label,
         record.site_label,
-        record.helper_name,
-        _helper_identity(record.helper),
+        record.edit_name,
+        _helper_identity(record.edit),
         record.timing,
-        record.backward_pass_index,
+        record.backward_pass_number,
         record.call_index,
         record.grad_kind,
         record.tuple_index,
@@ -634,7 +632,7 @@ def _build_target_manifest(
                     "resolved_labels": [],
                     "resolved_status": status,
                     "resolution_error": str(exc),
-                    "graph_shape_hash": getattr(log, "graph_shape_hash", None),
+                    "graph_shape_hash": log._provenance_fingerprint,
                     "_address_normalized": _normalized_address(target),
                 }
             )
@@ -649,7 +647,7 @@ def _build_target_manifest(
                 # legacy captures) record None.
                 "resolved_site_keys": _site_keys_for_table(log, resolved),
                 "resolved_status": "resolved",
-                "graph_shape_hash": getattr(log, "graph_shape_hash", None),
+                "graph_shape_hash": log._provenance_fingerprint,
                 "_address_normalized": _normalized_address(target),
             }
         )
@@ -690,7 +688,7 @@ def _serialize_function_registry_keys(log: Any) -> list[dict[str, Any]]:
     """
 
     entries: list[dict[str, Any]] = []
-    for layer in getattr(log, "layer_list", []):
+    for layer in log._layer_list:
         key = _function_key_for_layer(layer)
         if key is None:
             continue

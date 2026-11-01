@@ -13,8 +13,10 @@ import torch
 from .. import _state
 from .._capture.arg_positions import _normalize_func_name
 from .._data_classes._site_key import call_instance_id, render_site_key, site_axis
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 from .._ir.intervention import FireResult
+from .._record_type import record_type
 from .._state import pause_logging
 from .._utils.arg_handling import copy_arg_tree
 from ..backends.torch._tl import copy_replacement_meta
@@ -215,7 +217,7 @@ def _execute_hook(
             InjectionAnchor(
                 host_label=str(site_get("label") or site_get("raw_label") or "unknown"),
                 host_site_key=site_get("site_key"),
-                host_pass=int(site_get("pass_index") or 1),
+                host_pass=int(site_get("pass_number") or 1),
                 spec_rule_id=rule_id,
                 firing_index=next_firing_index(injection_trace, rule_id),
             ),
@@ -1123,12 +1125,12 @@ def _gradient_fire_record(
         func_call_id=None,
         container_path=(),
         engine="live",
-        helper=entry.helper_spec,
+        edit=entry.helper_spec,
         site_label=site_label,
         timing="post",
         signal="backward",
-        helper_name=_hook_display_name(entry),
-        backward_pass_index=context.kwargs["backward_pass_index"],
+        edit_name=_hook_display_name(entry),
+        backward_pass_number=context.kwargs["backward_pass_index"],
         call_index=context.kwargs["call_index"],
         grad_kind="grad_output",
         tuple_index=context.kwargs["tuple_index"],
@@ -1159,7 +1161,7 @@ def _gradient_site_ops(trace: Any, op: Any) -> list[Any]:
     ops = [op]
     if not getattr(op, "is_output_parent", False):
         return ops
-    layer_dict = getattr(trace, "layer_dict_all_keys", None) or {}
+    layer_dict = trace._layer_dict_all_keys if is_live_trace(trace) else {}
     for child_label in getattr(op, "children", ()) or ():
         child = layer_dict.get(child_label)
         if child is not None and getattr(child, "is_output", False):
@@ -1422,10 +1424,9 @@ class _LiveSiteMinter:
             events = [records[label] for label in list(records)]
         journal = list(events)
         for record in journal[self._consumed :]:
+            modules = getattr(record, "modules", None) or ()
             cohort = self._cohort(
-                getattr(record, "modules", None) or (),
-                getattr(record, "layer_type", ""),
-                self._journal_output_slot(record),
+                modules, record_type(record, ""), self._journal_output_slot(record)
             )
             self._seen[cohort] = self._seen.get(cohort, 0) + 1
         self._consumed = len(journal)
@@ -1468,7 +1469,7 @@ def _stamp_live_site_identity(site: Any) -> None:
     if getattr(site, "site_key", None) or getattr(site, "_tl_module_boundary", False):
         return
     trace = _state._active_trace
-    if trace is None or getattr(trace, "capture_mode", None) != "exhaustive":
+    if trace is None or trace._options_mode != "exhaustive":
         return
     # The minter rides the session-only run context (last_run, FieldPolicy
     # DROP) rather than its own Trace attr: no schema/ownership row, and the
@@ -1484,12 +1485,11 @@ def _stamp_live_site_identity(site: Any) -> None:
         from ..backends.torch._ops_capture_records import _snapshot_exhaustive_module_stack
 
         modules = _snapshot_exhaustive_module_stack(trace)
-    layer_type = getattr(site, "layer_type", "") or ""
-    site.site_key = minter.peek(modules, layer_type, minter.output_slot(site))
-    if getattr(site, "pass_index", None) is None:
+    site.site_key = minter.peek(modules, record_type(site, "") or "", minter.output_slot(site))
+    if getattr(site, "pass_number", None) is None:
         innermost = modules[-1] if modules else None
-        pass_index = innermost[1] if isinstance(innermost, tuple) and len(innermost) == 2 else 1
-        site.pass_index = int(pass_index) if isinstance(pass_index, int) else 1
+        pass_number = innermost[1] if isinstance(innermost, tuple) and len(innermost) == 2 else 1
+        site.pass_number = int(pass_number) if isinstance(pass_number, int) else 1
 
 
 def _build_live_fire_record(
@@ -1530,11 +1530,11 @@ def _build_live_fire_record(
         func_call_id=site.func_call_id,
         container_path=container_path,
         engine="live",
-        helper=entry.helper_spec,
+        edit=entry.helper_spec,
         site_label=site._layer_label_raw,
         timing="post",
         signal="forward",
-        helper_name=_hook_display_name(entry),
+        edit_name=_hook_display_name(entry),
         run_ctx=run_ctx,
         previous_notes=previous_notes,
         replaced=replaced,
@@ -1590,12 +1590,12 @@ def _build_live_backward_fire_record(
         func_call_id=None,
         container_path=(),
         engine="live",
-        helper=entry.helper_spec,
+        edit=entry.helper_spec,
         site_label=label,
         timing=timing,  # type: ignore[arg-type]
         signal="backward",
-        helper_name=_hook_display_name(entry),
-        backward_pass_index=pass_index,
+        edit_name=_hook_display_name(entry),
+        backward_pass_number=pass_index,
         call_index=call_index,
         grad_kind=grad_kind,  # type: ignore[arg-type]
         tuple_index=tuple_index,

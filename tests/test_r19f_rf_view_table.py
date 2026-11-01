@@ -89,7 +89,7 @@ def test_table_accepts_input_ops_accessor_handle() -> None:
     pytest.importorskip("pandas")
     log = _trace()
     handle = log.input_ops[0]
-    canonical = next(op for op in log.layer_list if getattr(op, "is_input", False))
+    canonical = next(op for op in log._layer_list if getattr(op, "is_input", False))
     via_handle = log.receptive_fields(level="op", input_op=handle)
     via_canonical = log.receptive_fields(level="op", input_op=canonical)
     assert len(via_handle.frame) > 0

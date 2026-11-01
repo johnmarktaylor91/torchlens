@@ -29,6 +29,7 @@ from .._ir.workspaces import LEGACY_TRACE_BUILD_STATE_KEYS
 from .._utils._torch_symbols import torch_dtype_named
 from .._utils.hashing import sha256_file
 from . import ArtifactError, BlobRef, FieldPolicy, PayloadLoadHints, prerelease as _prerelease
+from ._rehydrate_lazy_names import _lazy_ref_field_name, _lazy_ref_kind, _normalize_map_location
 from ._small_raw import (
     _RAW_IMAGE_SENTINEL,
     _RAW_INPUT_IMAGE_BYTES_LIMIT,
@@ -113,8 +114,10 @@ def rehydrate_trace(
     # like the metadata unpickler arms it for nested records.
     with governed_artifact_load():
         trace.__setstate__(state_for_load)
-    trace.raw_input = _rehydrate_small_raw_images(getattr(trace, "raw_input", None))
-    trace.raw_output = _rehydrate_small_raw_images(getattr(trace, "raw_output", None))
+    trace.input = _rehydrate_small_raw_images(getattr(trace, "input", None))
+    trace.transformed_output = _rehydrate_small_raw_images(
+        getattr(trace, "transformed_output", None)
+    )
     _apply_manifest_backend(trace, manifest)
     _drop_capture_only_trace_fields(trace)
 
@@ -188,7 +191,7 @@ def rehydrate_trace(
     # flow). Building accessors first captured the still-unresolved BlobRef
     # permanently, so `Buffer.initial_value` returned a raw BlobRef forever
     # after a plain `tl.load()` instead of a torch.Tensor. Nothing
-    # rebuild_trace_accessors() reads (trace.layer_list, module_accessor_state)
+    # rebuild_trace_accessors() reads (trace._layer_list, module_accessor_state)
     # depends on _rehydrate_object() having run first, so this reorder is safe.
     if module_accessor_state is not None:
         rebuild_trace_accessors(
@@ -204,6 +207,17 @@ def rehydrate_trace(
 
         refresh_saved_module_call_count(trace)
 
+    _stamp_serialized_tlspec_version(trace, manifest)
+
+    _bind_conditional_arms(trace)
+    _set_payload_load_status(trace, manifest_index, payload_statuses)
+    _restore_trace_state_order(trace, portable_key_order)
+    return trace
+
+
+def _stamp_serialized_tlspec_version(trace: Trace, manifest: Manifest | dict[str, Any]) -> None:
+    """Record the manifest's integer ``tlspec_version`` on the rehydrated trace."""
+
     serialized_tlspec_version = (
         manifest.tlspec_version
         if isinstance(manifest, Manifest)
@@ -213,11 +227,6 @@ def rehydrate_trace(
         serialized_tlspec_version, bool
     ):
         trace.tlspec_version = serialized_tlspec_version
-
-    _bind_conditional_arms(trace)
-    _set_payload_load_status(trace, manifest_index, payload_statuses)
-    _restore_trace_state_order(trace, portable_key_order)
-    return trace
 
 
 def _bind_conditional_arms(trace: Trace) -> None:
@@ -231,7 +240,7 @@ def _bind_conditional_arms(trace: Trace) -> None:
 
     from .._data_classes.trace import ConditionalAccessor
 
-    accessor = getattr(trace, "conditionals", None)
+    accessor = trace._graph_conditionals
     if not isinstance(accessor, ConditionalAccessor):
         return
     for conditional in accessor.values():
@@ -352,7 +361,7 @@ def _apply_manifest_backend(trace: Trace, manifest: Manifest | dict[str, Any]) -
     else:
         backend_name = manifest.get("backend")
     if isinstance(backend_name, str) and backend_name:
-        setattr(trace, "backend", backend_name)
+        trace._provenance_backend = backend_name
 
 
 def _build_manifest_index(
@@ -960,46 +969,6 @@ def _build_lazy_tensor_ref(
     )
 
 
-def _lazy_ref_field_name(field_name: str) -> str | None:
-    """Return the corresponding lazy-ref field for a direct blob field.
-
-    Parameters
-    ----------
-    field_name:
-        Direct blob field name on the owning data class.
-
-    Returns
-    -------
-    str | None
-        Matching lazy-ref field name, or ``None`` when not applicable.
-    """
-
-    if field_name == "out":
-        return "out_ref"
-    if field_name == "grad":
-        return "grad_ref"
-    return None
-
-
-def _lazy_ref_kind(blob_kind: str) -> Literal["out", "grad"]:
-    """Normalize a blob kind into a lazy direct-tensor kind.
-
-    Parameters
-    ----------
-    blob_kind:
-        Blob kind stored in the portable manifest.
-
-    Returns
-    -------
-    str
-        Direct tensor kind expected by ``LazyActivationRef``.
-    """
-
-    if blob_kind == "grad":
-        return "grad"
-    return "out"
-
-
 def _manifest_entry_for_blob_ref(
     blob_ref: BlobRef,
     manifest_index: Mapping[str, dict[str, Any] | TensorEntry],
@@ -1072,12 +1041,6 @@ def _dtype_from_manifest_string(dtype_name: str) -> torch.dtype:
     if dtype_obj is None:
         raise ArtifactError(f"Unsupported dtype string in manifest: {dtype_name}.")
     return dtype_obj
-
-
-def _normalize_map_location(map_location: str | torch.device) -> str:
-    """Normalize ``map_location`` to the string form expected by safetensors."""
-
-    return str(map_location)
 
 
 def _load_safetensors_tensor(
@@ -1180,7 +1143,7 @@ def _has_pending_lazy_payload(trace: Trace) -> bool:
         Whether an out/grad lazy ref exists whose payload slot is empty.
     """
 
-    for op in getattr(trace, "layer_list", []) or []:
+    for op in trace._layer_list or []:
         slot = getattr(op, "_slot", None)
         if not callable(slot):
             continue
@@ -1536,7 +1499,7 @@ def _source_bundle_path_for_trace(trace: Trace) -> Path:
     if isinstance(bundle_path, Path):
         return bundle_path
 
-    for layer in getattr(trace, "layer_list", []):
+    for layer in trace._layer_list:
         out_ref = getattr(layer, "out_ref", None)
         if isinstance(out_ref, LazyActivationRef):
             return out_ref.source_bundle_path

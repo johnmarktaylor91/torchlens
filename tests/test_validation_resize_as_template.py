@@ -66,7 +66,7 @@ class _ResizeShrink(nn.Module):
 
 
 def _op(trace: Any, func_name: str) -> Any:
-    return next(op for op in trace.layer_list if op.func_name == func_name)
+    return next(op for op in trace._layer_list if op.func_name == func_name)
 
 
 @pytest.mark.parametrize("by_keyword", [False, True])

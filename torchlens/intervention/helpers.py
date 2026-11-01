@@ -76,8 +76,8 @@ def zero_ablate(*, allow_shape_change: bool = False) -> Edit:
         "zero_ablate",
         kwargs={"allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -94,9 +94,9 @@ def mean_ablate(
     source:
         What is averaged. ``None`` averages the site's own value at hook
         fire time (a value that couples every batch row, so the spec derives
-        ``batch_independent=False`` and the append gate refuses). A tensor or
+        ``is_batch_independent=False`` and the append gate refuses). A tensor or
         an Op-like object exposing ``out`` is averaged instead of the site,
-        and never reads the traced batch (``batch_independent=True``). A
+        and never reads the traced batch (``is_batch_independent=True``). A
         :class:`~torchlens.intervention.Population` averages its members
         elementwise first (a reduction, never a draw: no seed, prepared at
         construction), and ``dim`` then names the further site axes.
@@ -107,7 +107,7 @@ def mean_ablate(
         elementwise across-member mean and axes reduce that mean further. A
         semantic axis name refuses ``axis_semantics_unknown`` until axis-role
         evidence exists; any other spelling refuses ``intervention_over_invalid``
-        at construction (a typo can never flip ``batch_independent`` open).
+        at construction (a typo can never flip ``is_batch_independent`` open).
     allow_shape_change:
         Stored escape-hatch metadata for execution.
 
@@ -116,7 +116,7 @@ def mean_ablate(
     Edit
         Built-in forward helper spec (``opaque_audit`` when the source is a
         population, whose members are not portable) with a DERIVED
-        ``batch_independent`` flag: ``True`` iff the fill value provably never
+        ``is_batch_independent`` flag: ``True`` iff the fill value provably never
         reads the traced batch.
     """
 
@@ -178,8 +178,8 @@ def _source_mean_spec(
         },
         factory=factory,
         signal="forward",
-        batch_independent=batch_independent,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=batch_independent,
+        is_compatible_with_append=not allow_shape_change,
         metadata={"stochastic": False, **({} if batch_independent else {"batch_coherent": True})},
     )
 
@@ -244,8 +244,8 @@ def _population_mean_spec(
         },
         factory=factory,
         portability="opaque_audit",
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
         metadata={"stochastic": False},
     )
 
@@ -369,8 +369,8 @@ def scramble_elements(
         args=(source_value,),
         kwargs={"seed": seed, "allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=False,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=False,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -432,8 +432,8 @@ def steer(
             "allow_shape_change": allow_shape_change,
         },
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -474,8 +474,8 @@ def scale(factor: float, *, allow_shape_change: bool = False) -> Edit:
         args=(factor,),
         kwargs={"allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -525,8 +525,8 @@ def clamp(
         "clamp",
         kwargs={"low": low, "high": high, "allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -589,8 +589,8 @@ def add_noise(
         args=(std,),
         kwargs={"seed": seed, "allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -649,8 +649,8 @@ def project_onto(
         args=(direction,),
         kwargs={"dim": dim, "allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -706,8 +706,8 @@ def project_out(
         args=(direction,),
         kwargs={"dim": dim, "allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -909,8 +909,8 @@ def clip_norm(max_norm: float, norm_type: float = 2.0) -> Edit:
         args=(max_norm,),
         kwargs={"norm_type": norm_type},
         factory=factory,
-        batch_independent=False,
-        compatible_with_append=True,
+        is_batch_independent=False,
+        is_compatible_with_append=True,
     )
 
 
@@ -962,18 +962,18 @@ def helper_from_serialized(
             return import_resolver(import_path)()
 
         return Edit(
-            helper_name=str(data.get("name", "import_ref")),
+            name=str(data.get("name", "import_ref")),
             portability="import_ref",
             factory=factory,
             metadata=(("import_path", import_path),),
         )
     if portability == "opaque_audit":
         return Edit(
-            helper_name=data.get("name", "opaque_audit"),
+            name=data.get("name", "opaque_audit"),
             portability="opaque_audit",
             metadata=(("repr", data.get("repr", "")), ("executable", False)),
-            batch_independent=bool(data.get("batch_independent", False)),
-            compatible_with_append=bool(data.get("compatible_with_append", False)),
+            is_batch_independent=bool(data.get("is_batch_independent", False)),
+            is_compatible_with_append=bool(data.get("is_compatible_with_append", False)),
         )
 
     name = data["name"]
@@ -1294,7 +1294,7 @@ def _resolve_patch_donor_site(source: Any, layer_log: Any) -> tuple[Any, Any]:
     context = layer_log if layer_log else {}
     qualified = context.get("label")
     bare = context.get("layer_label")
-    pass_index = context.get("pass_index")
+    pass_index = context.get("pass_number")
 
     site_label: Any = None
     if isinstance(qualified, str) and ":" in qualified:
@@ -1306,7 +1306,7 @@ def _resolve_patch_donor_site(source: Any, layer_log: Any) -> tuple[Any, Any]:
 
     source_site = None
     if site_label is not None:
-        source_site = source.layer_dict_all_keys.get(site_label)
+        source_site = source._layer_dict_all_keys.get(site_label)
     if source_site is None:
         live_label, source_site = _live_capture_donor(source, context)
         if source_site is not None:
@@ -1452,5 +1452,5 @@ def patch_from(
         factory=factory,
         portability="opaque_audit",
         signal="forward",
-        batch_independent=True,
+        is_batch_independent=True,
     )

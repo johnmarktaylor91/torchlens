@@ -1,7 +1,7 @@
 """M1 keystone lockstep tests: one declared schema, byte-proven views.
 
 The FIELD_ORDER literals in ``constants.py`` remain the hand-written declared
-schema; ``FIELD_POLICY`` tables and the generated ``StorageBinding`` tables
+schema; ``_FIELD_POLICY`` tables and the generated ``StorageBinding`` tables
 must agree with them exactly, in both directions, for all 11 record classes
 (docs/reference/trace_core_design.md section 3.4).
 """
@@ -62,17 +62,17 @@ def test_field_order_view_equals_literal(schema_key: str) -> None:
     """Generated FIELD_ORDER view == the hand-written literal, exactly."""
 
     cls, literal = _SCHEMA[schema_key]
-    assert field_order_from_policy(cls.FIELD_POLICY) == list(literal)
+    assert field_order_from_policy(cls._FIELD_POLICY) == list(literal)
 
 
 @pytest.mark.parametrize("schema_key", sorted(_SCHEMA))
 def test_every_declared_field_has_exactly_one_binding(schema_key: str) -> None:
-    """Binding keys == FIELD_POLICY keys: no orphans, no gaps, all 11 classes."""
+    """Binding keys == _FIELD_POLICY keys: no orphans, no gaps, all 11 classes."""
 
     cls, _ = _SCHEMA[schema_key]
     bindings = STORAGE_BINDINGS[schema_key]
-    assert set(bindings) == set(cls.FIELD_POLICY)
-    for name, policy in cls.FIELD_POLICY.items():
+    assert set(bindings) == set(cls._FIELD_POLICY)
+    for name, policy in cls._FIELD_POLICY.items():
         assert policy.storage is bindings[name], name
 
 
@@ -83,7 +83,7 @@ def test_binding_axes_are_coherent(schema_key: str) -> None:
     from torchlens._io import FieldPolicy
 
     cls, _ = _SCHEMA[schema_key]
-    for name, policy in cls.FIELD_POLICY.items():
+    for name, policy in cls._FIELD_POLICY.items():
         binding = policy.storage
         if binding.kind is StorageKind.COMPUTED:
             resolved = next(

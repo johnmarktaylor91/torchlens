@@ -38,7 +38,7 @@ def _until_execution_partition(
     executed: list[str] = []
     skipped: list[str] = []
     stopped_at: str | None = None
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         raw_index = getattr(layer, "raw_index", None)
         raw_label = layer._layer_label_raw
         if layer.layer_type == "output" or raw_index is None or int(raw_index) > stop_raw_index:

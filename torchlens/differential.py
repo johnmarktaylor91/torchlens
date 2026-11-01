@@ -34,6 +34,7 @@ from typing import Any
 import torch
 
 from ._errors import InvalidArgumentError
+from ._record_type import record_type
 
 __all__ = ["DiffRow", "DiffReport", "diff"]
 
@@ -67,7 +68,7 @@ class DiffRow:
     status: str
     subject_label: str | None = None
     reference_label: str | None = None
-    pass_index: int | None = None
+    pass_number: int | None = None
     verdict: str | None = None
     max_abs_delta: float | None = None
     detail: str | None = None
@@ -113,7 +114,7 @@ def _ops_by_key(trace: Any, keys: dict[str, str]) -> dict[str, list[str]]:
 def _pass_of(trace: Any, label: str) -> int:
     """Return one op's 1-based pass index (single-pass ops read 1)."""
 
-    return int(getattr(trace.ops[label], "pass_index", 1) or 1)
+    return int(getattr(trace.ops[label], "pass_number", 1) or 1)
 
 
 @dataclass(frozen=True)
@@ -147,7 +148,7 @@ def _value_row(
             status=status,
             subject_label=subject_label,
             reference_label=reference_label,
-            pass_index=_pass_of(subject, subject_label),
+            pass_number=_pass_of(subject, subject_label),
             verdict=verdict,
             max_abs_delta=max_abs_delta,
             detail=detail,
@@ -190,13 +191,13 @@ def _joined_rows(
     subject = ctx.subject
     rows: list[DiffRow] = []
     for subject_label in subject_labels:
-        if getattr(subject.ops[subject_label], "layer_type", None) in _MACHINERY_LAYER_TYPES:
+        if record_type(subject.ops[subject_label], None) in _MACHINERY_LAYER_TYPES:
             rows.append(
                 DiffRow(
                     site_key=key,
                     status="excluded_machinery",
                     subject_label=subject_label,
-                    pass_index=_pass_of(subject, subject_label),
+                    pass_number=_pass_of(subject, subject_label),
                     verdict=row.verdict.value,
                     detail="engine-inserted op: typed structural addition, "
                     "excluded from model-effect rows (D-7)",
@@ -211,7 +212,7 @@ def _joined_rows(
                     site_key=key,
                     status="unresolved",
                     subject_label=subject_label,
-                    pass_index=_pass_of(subject, subject_label),
+                    pass_number=_pass_of(subject, subject_label),
                     verdict=row.verdict.value,
                     detail="occurrence coordinate absent on the reference",
                 )
@@ -284,15 +285,13 @@ def diff(subject: Any, reference: Any) -> DiffReport:
         reference_labels = reference_by_key.get(key, [])
         if not reference_labels:
             for label in subject_labels:
-                machinery = (
-                    getattr(subject.ops[label], "layer_type", None) in _MACHINERY_LAYER_TYPES
-                )
+                machinery = record_type(subject.ops[label], None) in _MACHINERY_LAYER_TYPES
                 rows.append(
                     DiffRow(
                         site_key=key,
                         status="excluded_machinery" if machinery else "added",
                         subject_label=label,
-                        pass_index=_pass_of(subject, label),
+                        pass_number=_pass_of(subject, label),
                         detail=(
                             "engine-inserted op: typed structural addition, "
                             "excluded from model-effect rows (D-7)"
@@ -308,7 +307,7 @@ def diff(subject: Any, reference: Any) -> DiffReport:
                     site_key=key,
                     status="removed",
                     reference_label=label,
-                    pass_index=_pass_of(reference, label),
+                    pass_number=_pass_of(reference, label),
                     detail="declared removal (reference only)",
                 )
                 for label in reference_labels
@@ -321,7 +320,7 @@ def diff(subject: Any, reference: Any) -> DiffReport:
                     site_key=key,
                     status="unresolved",
                     subject_label=label,
-                    pass_index=_pass_of(subject, label),
+                    pass_number=_pass_of(subject, label),
                     verdict=row.verdict.value,
                     detail="the guarded join refused this cohort",
                 )

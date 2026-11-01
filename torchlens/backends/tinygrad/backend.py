@@ -236,21 +236,21 @@ def _stamp_param_logs(trace: Trace, module_tree: TinygradModuleTree | None) -> N
     """Record the parameter accessor and counts; empty when no object module was traced."""
 
     if module_tree is not None:
-        trace.param_logs = ParamAccessor(tinygrad_param_logs(module_tree, trace))
-        trace.num_param_tensors = len(trace.param_logs)
-        trace.num_params = sum(param.num_params for param in trace.param_logs)
+        trace._param_logs = ParamAccessor(tinygrad_param_logs(module_tree, trace))
+        trace._num_param_tensors = len(trace._param_logs)
+        trace.num_params = sum(param.num_params for param in trace._param_logs)
         trace.num_params_trainable = sum(
-            param.num_params for param in trace.param_logs if param.is_trainable
+            param.num_params for param in trace._param_logs if param.is_trainable
         )
         trace.num_params_frozen = trace.num_params - trace.num_params_trainable
-        trace.param_source = "native-module"
+        trace._provenance_param_source = "native-module"
     else:
-        trace.param_logs = ParamAccessor({})
-        trace.num_param_tensors = 0
+        trace._param_logs = ParamAccessor({})
+        trace._num_param_tensors = 0
         trace.num_params = 0
         trace.num_params_trainable = 0
         trace.num_params_frozen = 0
-        trace.param_source = "none"
+        trace._provenance_param_source = "none"
 
 
 class TinygradBackend:
@@ -506,7 +506,7 @@ class TinygradBackend:
             save_transformed_output=cast(str | bool, save_raw_output),
         )
         trace.capture_events = CaptureEvents()
-        trace.capture_start_time = time.time()
+        trace._provenance_start_time = time.time()
         observed_ops: dict[int, list[str]] = {}
         observed_module_stacks: dict[int, tuple[TinygradModuleFrame, ...]] = {}
         input_identities = self._input_identities(args)
@@ -532,8 +532,8 @@ class TinygradBackend:
             raise BackendUnsupportedError(
                 "tinygrad backend preview requires at least one tinygrad Tensor output."
             )
-        trace.forward_duration = Duration(time.time() - trace.capture_start_time)
-        trace.raw_output = output_transform(output) if callable(output_transform) else None
+        trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
+        trace.transformed_output = output_transform(output) if callable(output_transform) else None
         uop_labels = self._emit_input_sources(trace, args)
         captures = self._emit_uop_graph(
             trace,
@@ -547,7 +547,7 @@ class TinygradBackend:
         _stamp_param_logs(trace, module_tree if use_object_module else None)
         materialize_from_events(trace, trace.capture_events)
         delattr(trace, "capture_events")
-        trace.num_layers_with_params = 0
+        trace._num_layers_with_params = 0
         self._finish_trace(trace, module_tree if use_object_module else None)
         trace.tinygrad_uop_captures = captures
         trace.tinygrad_payload_policy = PER_UOP_PAYLOAD_POLICY
@@ -824,7 +824,7 @@ class TinygradBackend:
                 continue
             op_name = _uop_name(uop)
             parents = tuple(
-                ParentEdge(parent_label_raw=label, arg_position=index, edge_use="arg")
+                ParentEdge(parent_label_raw=label, arg_position=index, _edge_use="arg")
                 for index, src in enumerate(getattr(uop, "src", ()) or ())
                 if (label := uop_labels.get(id(src))) is not None
             )
@@ -992,7 +992,7 @@ class TinygradBackend:
             parents=parents,
             parent_arg_positions=parent_arg_positions,
             _edge_uses=tuple(
-                (edge.parent_label_raw, edge.arg_position, edge.edge_use) for edge in parents
+                (edge.parent_label_raw, edge.arg_position, edge._edge_use) for edge in parents
             ),
             params=params,
             parent_params=(),
@@ -1032,7 +1032,7 @@ class TinygradBackend:
             is_scalar_bool=None,
             bool_value=None,
             intervention_fired=False,
-            intervention_replaced=False,
+            is_edited=False,
             fire_results=(),
             intervention_template_ref=None,
             record_context=self._record_context(reserved, output, func_name),
@@ -1096,7 +1096,7 @@ class TinygradBackend:
             kind="op",
             label=reserved.label,
             raw_label=reserved.label_raw,
-            pass_index=1,
+            pass_number=1,
             event_index=reserved.raw_index,
             step_index=None,
             layer_type=reserved.layer_type,
@@ -1105,7 +1105,7 @@ class TinygradBackend:
             func_name=func_name,
             address=None,
             module_type=None,
-            module_pass_index=None,
+            module_pass_number=None,
             module_stack=(),
             recent_events=(),
             recent_ops=(),
@@ -1223,7 +1223,7 @@ class TinygradBackend:
             enrich_layer=_enrich_tinygrad_layer,
             update_param_totals_from_layers=True,
             finish_before_module_logs=False,
-            recurrence_detection=bool(getattr(trace, "recurrence_detection", False)),
+            recurrence_detection=bool(trace._options_recurrence_detection),
         )
 
     def _attach_object_module_logs(self, trace: Trace, tree: TinygradModuleTree) -> None:
@@ -1278,13 +1278,13 @@ class TinygradBackend:
         Returns
         -------
         None
-            ``trace.derived_grads`` is populated with input leaf gradient records.
+            ``trace.autograd.derived_grads`` is populated with input leaf gradient records.
         """
 
         if getattr(trace, "tinygrad_payload_policy", None) != "dev_python_realized_copy":
             raise BackendUnsupportedError(
                 "tinygrad derived gradients require live DEV=PYTHON realized-copy payloads; "
-                "audit-only traces cannot expose trace.derived_grads."
+                "audit-only traces cannot expose trace.autograd.derived_grads."
             )
         input_argnums = _normalize_tinygrad_input_grad_argnums(
             grad_options.input_grad_argnums,
@@ -1323,7 +1323,7 @@ class TinygradBackend:
             if not _tinygrad_outputs_close(self, derived_output, captured_output):
                 raise ValueError(
                     "tinygrad derived gradient run raw output diverged from captured raw output; "
-                    "refusing to expose trace.derived_grads."
+                    "refusing to expose trace.autograd.derived_grads."
                 )
             cast(Any, loss).backward()
             records = _records_for_tinygrad_leaf_grads(
@@ -1339,7 +1339,7 @@ class TinygradBackend:
             )
         finally:
             _restore_tinygrad_grads(snapshots)
-        trace.derived_grads = DerivedGradAccessor(records)
+        trace._autograd_derived_grads = DerivedGradAccessor(records)
         mirror_param_derived_grads(trace, records)
 
     def _derive_intermediate_grads_no_realize(
@@ -1387,7 +1387,7 @@ class TinygradBackend:
                 "scalar unless the traced output is already scalar."
             )
         selected_ops = tuple(
-            op for op in trace.layer_list if op.has_saved_activation and not op.is_input
+            op for op in trace._layer_list if op.has_saved_activation and not op.is_input
         )
         trace_signatures = _tinygrad_trace_op_signatures(
             selected_ops,
@@ -1443,9 +1443,7 @@ class TinygradBackend:
                 "tinygrad validation requires live DEV=PYTHON realized-copy payloads; "
                 "audit-only traces cannot be replay validated."
             )
-        ops_by_raw_label = {
-            getattr(op, "_label_raw", ""): op for op in getattr(trace, "layer_list", ())
-        }
+        ops_by_raw_label = {getattr(op, "_label_raw", ""): op for op in trace._layer_list}
         hidden_outputs_by_label = dict(getattr(trace, "_selective_save_hidden_payloads", {}))
         for index, capture in enumerate(captures):
             failure = self._uop_capture_failure(

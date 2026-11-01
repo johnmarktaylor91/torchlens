@@ -41,15 +41,15 @@ class Edit:
     """Portable identity and hook factory for helper-built interventions."""
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
-        "helper_name": FieldPolicy.KEEP,
+        "name": FieldPolicy.KEEP,
         "args": FieldPolicy.KEEP,
         "kwargs": FieldPolicy.KEEP,
         "portability": FieldPolicy.KEEP,
         "factory": FieldPolicy.DROP,
         "metadata": FieldPolicy.KEEP,
         "signal": FieldPolicy.KEEP,
-        "batch_independent": FieldPolicy.KEEP,
-        "compatible_with_append": FieldPolicy.KEEP,
+        "is_batch_independent": FieldPolicy.KEEP,
+        "is_compatible_with_append": FieldPolicy.KEEP,
         # L6 Query-Selection recipe family: persists as of tlspec v8 as
         # BLOB_RECURSIVE (recipe ASTs may embed unit-term masks), with the
         # audit digest relation validated at load. NEVER smuggled through
@@ -57,7 +57,7 @@ class Edit:
         "selection_recipe": FieldPolicy.BLOB_RECURSIVE,
     }
 
-    helper_name: str
+    name: str
     args: tuple[Any, ...] = ()
     kwargs: tuple[tuple[str, Any], ...] = ()
     portability: HelperPortability = "builtin"
@@ -69,21 +69,9 @@ class Edit:
     #: activation or a gradient site); ``"forward"`` for an edit that reads
     #: recorded forward state and refuses on a gradient site.
     signal: Signal | None = None
-    batch_independent: bool = False
-    compatible_with_append: bool = False
+    is_batch_independent: bool = False
+    is_compatible_with_append: bool = False
     selection_recipe: Any = field(default=None, compare=False)
-
-    @property
-    def name(self) -> str:
-        """Return this helper's public name.
-
-        Returns
-        -------
-        str
-            Stable helper name.
-        """
-
-        return self.helper_name
 
     def __repr__(self) -> str:
         """Render the public spelling of this edit (``tl.Edit`` is its public name).
@@ -118,7 +106,7 @@ class Edit:
         """
 
         if self.factory is None:
-            raise TypeError(f"Edit {self.helper_name!r} has no hook factory")
+            raise TypeError(f"Edit {self.name!r} has no hook factory")
         return self.factory()
 
     def __getstate__(self) -> dict[str, Any]:
@@ -151,7 +139,7 @@ class Edit:
             from .helpers import rebuild_builtin_helper
 
             rebuilt = rebuild_builtin_helper(
-                state["helper_name"],
+                state["name"],
                 tuple(state.get("args", ())),
                 dict(state.get("kwargs", ())),
             )
@@ -311,15 +299,15 @@ class FireRecord:
         "func_call_id": FieldPolicy.KEEP,
         "container_path": FieldPolicy.KEEP,
         "engine": FieldPolicy.KEEP,
-        "helper": FieldPolicy.KEEP,
+        "edit": FieldPolicy.KEEP,
         "site_label": FieldPolicy.KEEP,
         "timing": FieldPolicy.KEEP,
         "signal": FieldPolicy.KEEP,
-        "helper_name": FieldPolicy.KEEP,
+        "edit_name": FieldPolicy.KEEP,
         "seed": FieldPolicy.KEEP,
         "determinism_note": FieldPolicy.KEEP,
         "timestamp": FieldPolicy.KEEP,
-        "backward_pass_index": FieldPolicy.KEEP,
+        "backward_pass_number": FieldPolicy.KEEP,
         "call_index": FieldPolicy.KEEP,
         "grad_kind": FieldPolicy.KEEP,
         "tuple_index": FieldPolicy.KEEP,
@@ -334,15 +322,15 @@ class FireRecord:
     func_call_id: int | None = None
     container_path: tuple[OutputPathComponent, ...] = ()
     engine: str | None = None
-    helper: Edit | None = None
+    edit: Edit | None = None
     site_label: str | None = None
     timing: Literal["pre", "post"] | None = None
     signal: Signal | None = None
-    helper_name: str | None = None
+    edit_name: str | None = None
     seed: int | None = None
     determinism_note: str | None = None
     timestamp: float | None = None
-    backward_pass_index: int | None = None
+    backward_pass_number: int | None = None
     call_index: int | None = None
     grad_kind: Literal["grad_input", "grad_output"] | None = None
     tuple_index: int | None = None
@@ -753,7 +741,7 @@ def _build_trace_fork_policy() -> dict[str, ForkFieldPolicy]:
         # MUTATION surface, so carrying the parent's blessed attestation by identity would let a
         # hand-edited fork save as a bit-identical attested COMPLETE. ``build_fork`` settles a
         # DERIVED outcome via ``capture.outcome.stamp_forked`` instead.
-        reconstruct={"parent_run", "_capture_outcome"},
+        reconstruct={"_parent_run", "_capture_outcome"},
     )
     # `_trace_core` (the columnar op row store) is not in MODEL_LOG_FIELD_ORDER (private runtime
     # storage, FieldPolicy.DROP). The generic field pass reconstructs (drops) it; the M11 COW fork

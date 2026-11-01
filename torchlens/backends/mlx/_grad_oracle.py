@@ -163,7 +163,7 @@ def _mlx_trace_intermediate_signatures(
         source_trace = op._source_trace_or_none()
         if source_trace is None:
             continue
-        for trace_op in getattr(source_trace, "layer_list", ()):
+        for trace_op in getattr(source_trace, "_layer_list", ()):
             label_raw = getattr(trace_op, "_label_raw", None)
             if not isinstance(label_raw, str):
                 continue
@@ -177,7 +177,7 @@ def _mlx_trace_intermediate_signatures(
     grouped: dict[_MLXIntermediateSignature, list[Any]] = defaultdict(list)
     for op in ops:
         signature = _MLXIntermediateSignature(
-            op_name=str(op.func_name or op.layer_type),
+            op_name=str(op.func_name or op.type),
             call_ordinal=int(op.func_call_id or 0),
             parent_labels=tuple(
                 final_to_raw.get(str(parent), str(parent)) for parent in getattr(op, "parents", ())
@@ -297,7 +297,10 @@ def _mlx_model_args_from_value_args(value_args: tuple[Any, ...], trace: Trace) -
         Positional model input arguments.
     """
 
-    if getattr(trace, "param_source", "none") == "native-module" and len(value_args) > 1:
+    if (
+        getattr(trace, "_provenance_param_source", "none") == "native-module"
+        and len(value_args) > 1
+    ):
         return value_args[1:]
     return value_args
 

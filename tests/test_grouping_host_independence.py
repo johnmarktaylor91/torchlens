@@ -97,7 +97,7 @@ _SUBPROCESS_SOURCE = _MODEL_SOURCE + textwrap.dedent(
         trace = tl.trace(model, x)
         seen = {}
         internal = []
-        for op in trace.layer_list:
+        for op in trace._layer_list:
             if op.is_input or op.is_output or op.is_buffer:
                 continue
             seen.setdefault(op.layer_label, (str(op.func_name), int(op.num_passes or 1)))
@@ -119,7 +119,7 @@ def _layer_shape(trace: Any) -> list[tuple[str, int]]:
     """Sorted (func_name, num_passes) per layer, inputs/outputs/buffers excluded."""
 
     seen: dict[str, tuple[str, int]] = {}
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if op.is_input or op.is_output or op.is_buffer:
             continue
         seen.setdefault(op.layer_label, (str(op.func_name), int(op.num_passes or 1)))

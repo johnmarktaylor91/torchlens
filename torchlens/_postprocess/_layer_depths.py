@@ -24,7 +24,7 @@ def _mark_layer_depths(self: Trace) -> None:
     min_distance_from_{input,output} and max_distance_from_{input,output} on
     every reachable node.
 
-    This step is CONDITIONAL on ``self.mark_layer_depths`` — it is
+    This step is CONDITIONAL on ``self._options_mark_layer_depths`` — it is
     skipped when the user doesn't need distance metadata.
     """
     _flood_graph_from_input_or_output_nodes(self, "input")

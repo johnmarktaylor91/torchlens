@@ -101,7 +101,7 @@ class _ProbeBox:
 class _FakeTrace:
     """Minimal weak-referenceable Trace stand-in for standalone walker runs."""
 
-    intervention_ready = True
+    is_replayable = True
 
 
 def _w1_leaves(root: Any) -> tuple[tuple[object, tuple[Any, ...], Any], ...]:
@@ -398,7 +398,7 @@ def _capture_runnable(model: nn.Module, box: _LayoutBox, path: Path) -> Any:
         model,
         box,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -621,20 +621,20 @@ def test_opaque_key_subtree_is_never_silently_witnessable(tmp_path: Path) -> Non
 
     # Prong A (r67 C2 disposition matrix): a consumed tensor under a non-grammar key
     # refuses TYPED at runnable save through the positive structure proof (the existing
-    # missing_input_container_contract) -- no artifact exists that could ever replay it
+    # input_container_contract_missing) -- no artifact exists that could ever replay it
     # as VERIFIED.
     trace = tl.trace(
         _EnumKeyedModel(),
         consumed,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
     )
     with pytest.raises(RunnablePreflightError) as excinfo:
         trace.save(tmp_path / "enum_key.tlspec", level="runnable", include_activations=True)
-    assert "missing_input_container_contract" in str(excinfo.value.fields.get("diagnostics"))
+    assert "input_container_contract_missing" in str(excinfo.value.fields.get("diagnostics"))
     assert "opaque_mapping_key" in str(excinfo.value.fields.get("diagnostics"))
 
     # Prong B (r67 C2): an opaque-keyed NON-tensor sibling refuses at save the SAME
@@ -646,11 +646,11 @@ def test_opaque_key_subtree_is_never_silently_witnessable(tmp_path: Path) -> Non
         _StrKeyedModel(),
         sibling,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
     )
     with pytest.raises(RunnablePreflightError) as excinfo:
         trace.save(tmp_path / "bytes_key.tlspec", level="runnable", include_activations=True)
-    assert "missing_input_container_contract" in str(excinfo.value.fields.get("diagnostics"))
+    assert "input_container_contract_missing" in str(excinfo.value.fields.get("diagnostics"))

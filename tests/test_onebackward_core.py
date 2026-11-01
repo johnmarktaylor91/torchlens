@@ -117,10 +117,10 @@ class TestSuppression:
 
         _, _, trace = _toy_trace()
         refs_before = len(trace.__dict__["_backward_gradfn_refs"])
-        passes_before = trace.num_backward_passes
+        passes_before = len(trace.autograd.backward_passes)
         for _ in range(4):
             ob.read(trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce="sum")
-        assert trace.num_backward_passes == passes_before
+        assert len(trace.autograd.backward_passes) == passes_before
         assert len(trace.__dict__["_backward_gradfn_refs"]) == refs_before
         index = ob.read_edge_index(trace)
         assert all(not edge.via_rejoin for edge in index.edges.values()), (
@@ -138,9 +138,9 @@ class TestSuppression:
             capture=tl.options.CaptureOptions(backward_ready=True),
             save_mode="reference",
         )
-        assert trace.num_backward_passes == 0
+        assert len(trace.autograd.backward_passes) == 0
         trace.log_backward(trace["output_1"].out.sum(), retain_graph=True)
-        assert trace.num_backward_passes == 1
+        assert len(trace.autograd.backward_passes) == 1
 
     @_requires_gradient_edge
     def test_user_installed_hooks_still_run(self) -> None:
@@ -316,7 +316,7 @@ class TestReadCore:
         for key, row in first.items():
             assert second[key].score == row.score
         trace.log_backward(trace["output_1"].out.sum(), retain_graph=True)
-        assert trace.num_backward_passes == 1
+        assert len(trace.autograd.backward_passes) == 1
 
     @_requires_gradient_edge
     def test_contamination_sweep(self) -> None:

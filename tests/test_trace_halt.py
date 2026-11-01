@@ -45,14 +45,14 @@ def test_trace_halt_op_returns_partial_trace_after_save_decision() -> None:
 
     trace = tl.trace(_ThreeStageModel(), torch.ones(1, 3), halt=_halt_on_relu)
 
-    assert trace.halted is True
-    assert trace.halt_frontier == trace.halt_reason
-    assert trace.halt_reason is not None
-    assert "relu" in trace.halt_reason
+    assert trace.is_stopped is True
+    assert trace.graph.stop_frontier == trace.stop_reason
+    assert trace.stop_reason is not None
+    assert "relu" in trace.stop_reason
     assert any(
-        layer.func_name == "relu" and layer.has_saved_activation for layer in trace.layer_list
+        layer.func_name == "relu" and layer.has_saved_activation for layer in trace._layer_list
     )
-    assert not any(layer.func_name == "sigmoid" for layer in trace.layer_list)
+    assert not any(layer.func_name == "sigmoid" for layer in trace._layer_list)
 
 
 def test_trace_halt_module_exit_stops_after_module_output() -> None:
@@ -64,10 +64,10 @@ def test_trace_halt_module_exit_stops_after_module_output() -> None:
         halt=_halt_on_linear_exit,
     )
 
-    assert trace.halted is True
-    assert trace.halt_reason == "linear:exit:1"
-    assert any(layer.func_name == "linear" for layer in trace.layer_list)
-    assert not any(layer.func_name == "relu" for layer in trace.layer_list)
+    assert trace.is_stopped is True
+    assert trace.stop_reason == "linear:exit:1"
+    assert any(layer.func_name == "linear" for layer in trace._layer_list)
+    assert not any(layer.func_name == "relu" for layer in trace._layer_list)
 
 
 def test_trace_halt_supports_selective_layers_to_save() -> None:
@@ -80,12 +80,12 @@ def test_trace_halt_supports_selective_layers_to_save() -> None:
         capture=tl.options.CaptureOptions(layers_to_save=["linear"]),
     )
 
-    assert trace.halted is True
+    assert trace.is_stopped is True
     assert any(
-        layer.func_name == "linear" and layer.has_saved_activation for layer in trace.layer_list
+        layer.func_name == "linear" and layer.has_saved_activation for layer in trace._layer_list
     )
-    assert any(layer.func_name == "relu" for layer in trace.layer_list)
-    assert not any(layer.func_name == "sigmoid" for layer in trace.layer_list)
+    assert any(layer.func_name == "relu" for layer in trace._layer_list)
+    assert not any(layer.func_name == "sigmoid" for layer in trace._layer_list)
 
 
 def test_halted_trace_validation_skips_full_model_output_only() -> None:
@@ -130,7 +130,7 @@ def test_trace_halt_keeps_values_awaiting_consumers() -> None:
     x = torch.ones(1, 3)
     plain = tl.trace(model, x)
     halted = tl.trace(model, x, halt=_halt_on_relu)
-    assert halted.halted is True
+    assert halted.is_stopped is True
     order = lambda trace: [  # noqa: E731
         op.func_name for op in sorted(trace.ops, key=lambda op: op.raw_index)
     ]
@@ -169,7 +169,7 @@ def test_halted_recording_to_trace_keeps_no_module_boundary_rows() -> None:
     x = torch.randn(2, 4)
     live = tl.trace(model, x, halt=_halt_on_relu)
     cooked = tl.record(model, x, save=tl.func("relu"), halt=_halt_on_relu, seed=3).to_trace()
-    assert live.halted is True and cooked.halted is True
+    assert live.is_stopped is True and cooked.is_stopped is True
     assert [op.func_name for op in cooked.ops] == ["linear", "linear", "relu"]
     assert [op.label for op in cooked.ops] == [op.label for op in live.ops]
-    assert cooked.halt_frontier == live.halt_frontier == "relu_1_3"
+    assert cooked.graph.stop_frontier == live.graph.stop_frontier == "relu_1_3"

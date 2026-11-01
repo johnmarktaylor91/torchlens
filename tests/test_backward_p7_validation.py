@@ -104,7 +104,7 @@ def test_backward_event_flow_invariants_trip_on_projection_mismatch() -> None:
 
     trace = _captured_backward_trace()
     try:
-        victim = next(layer for layer in trace.layer_list if getattr(layer, "_grad_records", ()))
+        victim = next(layer for layer in trace._layer_list if getattr(layer, "_grad_records", ()))
         victim._grad_records.clear()
 
         with pytest.raises(MetadataInvariantError, match="projected op gradient records"):

@@ -99,7 +99,7 @@ class TransformerBlock(nn.Module):
 def _sdpa_op(log: Any) -> Any:
     """Return the single SDPA op from a trace."""
 
-    return next(op for op in log.layer_list if "scaled_dot_product_attention" in str(op.func_name))
+    return next(op for op in log._layer_list if "scaled_dot_product_attention" in str(op.func_name))
 
 
 def _manual_pattern(op: Any) -> torch.Tensor:

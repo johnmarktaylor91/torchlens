@@ -28,6 +28,7 @@ from .._data_classes.cleanup import _project_conditional_child_views
 from .._data_classes.op import Op
 from .._errors import AmbiguousOpLookupError
 from .._quantities import Bytes
+from .._record_type import record_type
 from ..intervention.types import ParentRef
 
 if TYPE_CHECKING:
@@ -62,8 +63,8 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
     layer_type_counter: defaultdict[str, int] = defaultdict(lambda: 1)
     layer_total_counter = 1  # Sequential counter for non-input/buffer/output layers.
     for tensor_log_entry in self:
-        layer_type = tensor_log_entry.layer_type
-        pass_index = tensor_log_entry.pass_index
+        layer_type = record_type(tensor_log_entry)
+        pass_index = tensor_log_entry.pass_number
         if pass_index == 1:
             # First pass: assign new type_num and total_num.
             type_index = layer_type_counter[layer_type]
@@ -80,7 +81,7 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
             # Raw slot read: the public read is copy-on-read, and copying a
             # 512-element group list just to index its head is pure waste.
             first_pass_tensor = self[tensor_log_entry._slot("recurrent_ops")[0]]
-            layer_type = first_pass_tensor.layer_type
+            layer_type = record_type(first_pass_tensor)
             type_index = first_pass_tensor.type_index
             if layer_type in ["input", "buffer"]:
                 step_index = 0
@@ -96,8 +97,8 @@ def _map_raw_labels_to_final_labels(self: "Trace") -> None:
             tensor_log_entry.label = f"{layer_type}_{type_index}:{pass_index}"
             tensor_log_entry.layer_label = f"{layer_type}_{type_index}"
 
-        tensor_log_entry.label_short = f"{layer_type}_{type_index}:{pass_index}"
-        tensor_log_entry.layer_label_short = f"{layer_type}_{type_index}"
+        tensor_log_entry.short_label = f"{layer_type}_{type_index}:{pass_index}"
+        tensor_log_entry.short_layer_label = f"{layer_type}_{type_index}"
         final_lookup_label = (
             tensor_log_entry.layer_label
             if tensor_log_entry.num_passes == 1
@@ -157,13 +158,13 @@ def _log_final_info_for_layers(self: "Trace") -> None:
 
     for _t, layer_entry in enumerate(self):
         _normalize_io_role_flags(layer_entry)
-        if layer_entry.layer_type in ["input", "buffer"]:
+        if record_type(layer_entry) in ["input", "buffer"]:
             layer_entry.step_index = 0
-        elif layer_entry.layer_type == "output":
+        elif record_type(layer_entry) == "output":
             layer_entry.step_index = None  # fix later
         else:
             layer_entry.step_index = step_index
-            self.num_ops += 1
+            self._num_ops += 1
             step_index += 1
 
         # Replace any layer names with their final names:
@@ -181,18 +182,18 @@ def _log_final_info_for_layers(self: "Trace") -> None:
         # tensor (identity partition, A1): the producer owns those bytes, so
         # the alias row contributes nothing to the tracked total. Input rows
         # own exactly the external inputs' bytes and stay counted.
-        if layer_entry.layer_type != "output":
-            self.total_activation_memory += layer_entry.activation_memory
+        if record_type(layer_entry) != "output":
+            self._cost_total_activation_memory += layer_entry.activation_memory
 
         # Track layers that consume parameters (a per-LAYER fact, kept here):
         if layer_entry.layer_label not in unique_layers_seen and layer_entry.has_params:
-            self.num_layers_with_params += 1
+            self._num_layers_with_params += 1
 
         unique_layers_seen.add(layer_entry.layer_label)
 
         # Tally elapsed time:
 
-        self.func_calls_duration += layer_entry.func_duration
+        self._cost_func_calls_duration += layer_entry.func_duration
 
     _tally_params_by_identity(self, mbd)
     _compute_fx_qualpaths(self)
@@ -243,17 +244,17 @@ def _tally_params_by_identity(self: "Trace", mbd: dict[str, Any]) -> None:
     self.num_params = 0
     self.num_params_trainable = 0
     self.num_params_frozen = 0
-    self.num_param_tensors = 0
-    self.total_param_memory = Bytes(0)
-    for pl in self.param_logs:
+    self._num_param_tensors = 0
+    self._cost_total_param_memory = Bytes(0)
+    for pl in self._param_logs:
         count, memory = _effective_param_geometry(pl)
         self.num_params += count
         if pl.is_trainable:
             self.num_params_trainable += count
         else:
             self.num_params_frozen += count
-        self.num_param_tensors += 1
-        self.total_param_memory += memory
+        self._num_param_tensors += 1
+        self._cost_total_param_memory += memory
 
         containing_modules: set[str] = set()
         owner_addresses = set(getattr(pl, "all_module_addresses", None) or [])
@@ -279,7 +280,7 @@ def _normalize_io_role_flags(layer_entry: Op) -> None:
         layer_entry: Op whose role flags should be normalized.
     """
 
-    layer_type = layer_entry.layer_type
+    layer_type = layer_entry.type
     layer_entry.is_input = layer_type == "input"
     layer_entry.is_output = layer_type == "output"
     layer_entry.is_buffer = layer_type == "buffer"
@@ -322,7 +323,7 @@ def _compute_fx_qualpaths(self: "Trace") -> None:
     fx_call_counts: dict[str, int] = {}
     for layer_entry in self:
         module_calls = getattr(layer_entry, "modules", None) or []
-        op_type_segment = str(layer_entry.func_name or layer_entry.layer_type or "").lower()
+        op_type_segment = str(layer_entry.func_name or record_type(layer_entry) or "").lower()
         if not module_calls or not op_type_segment:
             layer_entry.fx_qualpath = None
             layer_entry.fx_call_index = 0
@@ -338,7 +339,7 @@ def _compute_fx_qualpaths(self: "Trace") -> None:
 def _finalize_output_compute_indexs(self: "Trace") -> None:
     """Assign step_index to output layers (deferred until total is known)."""
     for layer in self.output_layers:
-        self[layer].step_index = self.num_ops
+        self[layer].step_index = self._num_ops
 
 
 def _build_module_hierarchy_dicts(self: "Trace") -> None:
@@ -532,7 +533,7 @@ def _replace_layer_names_for_layer_entry(
 
     # Scalar label-bearing fields. ``buffer_source`` names the producer of a buffer's
     # current value and is a portable ``FieldPolicy.KEEP`` field read by the public
-    # ``Buffer.buffer_source`` accessor -- but it was absent from every rename list, so
+    # ``Buffer.writer_label`` accessor -- but it was absent from every rename list, so
     # it survived into FINISHED traces as a DANGLING RAW label (``add_1_4_raw`` while
     # the producer's final label is ``add_1_2``), handed users an unresolvable lookup
     # key, and persisted that dead label into ``.tlspec`` artifacts. The buffer-merge
@@ -602,10 +603,10 @@ def _replace_layer_names_for_layer_entry(
     kwargs_template = getattr(layer_entry, "kwargs_template", None)
     if kwargs_template is not None:
         set_entry_field("kwargs_template", _rename_template_parent_refs(kwargs_template, mapping))
-    interventions = getattr(layer_entry, "interventions", None)
+    interventions = getattr(layer_entry, "edits", None)
     if interventions:
         set_entry_field(
-            "interventions",
+            "edits",
             [_rename_label_dataclass(record, mapping) for record in interventions],
         )
 
@@ -764,21 +765,21 @@ def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:
     """
 
     # Quick loop to count how many tensors are saved:
-    for layer_entry in self:
-        if getattr(layer_entry, "is_orphan", False):
-            continue
-        if layer_entry.has_saved_activation:
-            self.num_saved_ops += 1
+    self._num_saved_ops = sum(
+        1
+        for layer_entry in self
+        if not getattr(layer_entry, "is_orphan", False) and layer_entry.has_saved_activation
+    )
 
     num_logged_tensors = sum(
         1 for layer_entry in self if not getattr(layer_entry, "is_orphan", False)
     )
 
-    self.layer_list = []
-    self.layer_dict_main_keys = {}
+    self._layer_list = []
+    self._layer_dict_main_keys = {}
     self.layer_labels = []
     self.op_labels = []
-    self.layer_num_calls = {}
+    self._layer_num_calls = {}
     layer_labels_seen: set[str] = set()
 
     i = 0
@@ -790,13 +791,13 @@ def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:
         _add_lookup_keys_for_layer_entry(self, layer_entry, i, num_logged_tensors)
 
         # Log all information:
-        self.layer_list.append(layer_entry)
-        self.layer_dict_main_keys[layer_entry.label] = layer_entry
+        self._layer_list.append(layer_entry)
+        self._layer_dict_main_keys[layer_entry.label] = layer_entry
         if layer_entry.layer_label not in layer_labels_seen:
             layer_labels_seen.add(layer_entry.layer_label)
             self.layer_labels.append(layer_entry.layer_label)
         self.op_labels.append(layer_entry.label)
-        self.layer_num_calls[layer_entry.layer_label] = layer_entry.num_passes
+        self._layer_num_calls[layer_entry.layer_label] = layer_entry.num_passes
         # F20 (brainpipe D-17): no per-layer byte increment here -- the
         # saved-summary refresh later in this same step writes the aggregate
         # from the ONE alias-aware byte model (retained_activation_bytes),
@@ -806,10 +807,7 @@ def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:
 
     self._layers_logged = True
 
-    if self.num_saved_ops == len(self.layer_list):
-        self._layers_saved = True
-    else:
-        self._layers_saved = False
+    self._layers_saved = self._num_saved_ops == len(self._layer_list)
 
 
 def _collect_parent_refs(value: Any) -> list[ParentRef]:
@@ -854,7 +852,7 @@ def _add_lookup_keys_for_layer_entry(
     """Build user-facing lookup keys for a Op and register them.
 
     Keys allow users to access layers via Trace[key]. Multiple key types:
-    - String labels: layer_label, layer_label_short, with/without pass suffix.
+    - String labels: layer_label, short_layer_label, with/without pass suffix.
     - Integer indices: positive (0-based) and negative (Python-style).
     - Module paths: module_pass labels for modules exited by this layer.
     - Addresses: address, input/output address.
@@ -872,18 +870,18 @@ def _add_lookup_keys_for_layer_entry(
         layer_entry._label_raw,
         layer_entry.raw_label,
         layer_entry.layer_label,
-        layer_entry.layer_label_short,
+        layer_entry.short_layer_label,
         layer_entry.label,
-        layer_entry.label_short,
+        layer_entry.short_label,
         tensor_index,
         tensor_index - num_tensors_to_keep,
     ]
     layer_entry.ordinal_index = tensor_index
     primary_label_keys = {
         layer_entry.layer_label,
-        layer_entry.layer_label_short,
+        layer_entry.short_layer_label,
         layer_entry.label,
-        layer_entry.label_short,
+        layer_entry.short_label,
     }
     exact_op_keys = {
         layer_entry._label_raw,
@@ -892,7 +890,7 @@ def _add_lookup_keys_for_layer_entry(
     }
 
     # Relabel the module ops if this pass built module metadata:
-    if self.capture_mode in {"exhaustive", "predicate"}:
+    if self._options_mode in {"exhaustive", "predicate"}:
         layer_entry.output_of_module_calls = [
             _module_call_label(module_call) for module_call in layer_entry.output_of_module_calls
         ]
@@ -926,13 +924,13 @@ def _add_lookup_keys_for_layer_entry(
         if self._module_capture_ws.module_build_data["module_num_calls"][module_name] == 1:
             module_keys.append(module_name)
         for module_key in module_keys:
-            if is_output_alias and module_key in self.layer_dict_all_keys:
+            if is_output_alias and module_key in self._layer_dict_all_keys:
                 continue
             lookup_keys_for_tensor.append(module_key)
 
     # Allow using buffer/input/output address as key, too:
     if layer_entry.is_buffer:
-        if self.buffer_num_calls.get(layer_entry.address, 1) == 1:
+        if self._buffer_num_calls.get(layer_entry.address, 1) == 1:
             lookup_keys_for_tensor.append(layer_entry.address)
         lookup_keys_for_tensor.append(f"{layer_entry.address}:{layer_entry.buffer_pass}")
     elif layer_entry.is_input or layer_entry.is_output:
@@ -948,10 +946,10 @@ def _add_lookup_keys_for_layer_entry(
     for lookup_key in lookup_keys_for_tensor:
         if lookup_key not in self._lookup_keys_to_layer_num_dict:
             self._lookup_keys_to_layer_num_dict[lookup_key] = layer_entry.raw_index
-            self.layer_dict_all_keys[lookup_key] = layer_entry
+            self._layer_dict_all_keys[lookup_key] = layer_entry
         elif self._lookup_keys_to_layer_num_dict[lookup_key] != layer_entry.raw_index:
             if lookup_key in exact_op_keys:
-                existing = self.layer_dict_all_keys[lookup_key]
+                existing = self._layer_dict_all_keys[lookup_key]
                 raise AmbiguousOpLookupError(
                     f"Exact Op lookup key {lookup_key!r} collides between "
                     f"{existing.label!r} and {layer_entry.label!r}."
@@ -964,7 +962,7 @@ def _add_lookup_keys_for_layer_entry(
                 raw_indices.append(layer_entry.raw_index)
             if lookup_key in primary_label_keys:
                 self._lookup_keys_to_layer_num_dict[lookup_key] = layer_entry.raw_index
-                self.layer_dict_all_keys[lookup_key] = layer_entry
+                self._layer_dict_all_keys[lookup_key] = layer_entry
         self._layer_num_to_lookup_keys_dict[layer_entry.raw_index].append(lookup_key)
 
 
@@ -1011,7 +1009,7 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
         setattr(self, field, final_labels)
 
     # Remap halt provenance from raw to final labels, exactly as the special
-    # layer lists above. `halt_reason`/`halt_frontier` are set to a raw op label
+    # layer lists above. `stop_reason`/`halt_frontier` are set to a raw op label
     # by BOTH the exhaustive `tl.trace(halt=...)` finalizer
     # (_capture/trace.py `_finalize_halted_trace`) and the cooked
     # `Recording.to_trace()` path (recording/types.py); leaving them raw meant the
@@ -1024,7 +1022,7 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
     # (present in `_raw_layer_dict`); synthetic halt reasons that are NOT op
     # labels ("linear:exit:1" module-exit reasons, "" empty, custom fastlog
     # strings) are left untouched.
-    for halt_field in ("halt_reason", "halt_frontier"):
+    for halt_field in ("stop_reason", "_graph_stop_frontier"):
         raw_halt_label = getattr(self, halt_field, None)
         if raw_halt_label is not None and raw_halt_label in self._raw_graph_ws.raw_layer_dict:
             setattr(self, halt_field, self._raw_graph_ws.raw_layer_dict[raw_halt_label].layer_label)
@@ -1051,20 +1049,20 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
     self.layers_with_params = new_param_tensors
 
     new_equiv_operations_tensors: dict[Any, set[str]] = {}
-    for key, equiv_values in self.op_equivalence_classes.items():
+    for key, equiv_values in self._graph_op_equivalence_classes.items():
         new_equiv_operations_tensors[key] = {
             self._raw_to_final_op_labels[tensor_label] for tensor_label in equiv_values
         }
-    self.op_equivalence_classes = new_equiv_operations_tensors
+    self._graph_op_equivalence_classes = new_equiv_operations_tensors
 
-    for t, (child, parent) in enumerate(self.conditional_branch_edges):
+    for t, (child, parent) in enumerate(self._graph_conditional_branch_edges):
         new_child, new_parent = (
             self._raw_to_final_parent_layer_labels[child],
             self._raw_to_final_parent_layer_labels[parent],
         )
-        self.conditional_branch_edges[t] = (new_child, new_parent)
+        self._graph_conditional_branch_edges[t] = (new_child, new_parent)
 
-    self.conditional_arm_entry_edges = {
+    self._graph_conditional_arm_entry_edges = {
         (cond_id, branch_kind): [
             (
                 self._raw_to_final_parent_layer_labels[parent],
@@ -1072,7 +1070,7 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
             )
             for parent, child in arm_edges
         ]
-        for (cond_id, branch_kind), arm_edges in self.conditional_arm_entry_edges.items()
+        for (cond_id, branch_kind), arm_edges in self._graph_conditional_arm_entry_edges.items()
     }
 
     conditional_edge_call_indices: dict[tuple[str, str, int, str], list[int]] = defaultdict(list)
@@ -1081,7 +1079,7 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
         child,
         cond_id,
         branch_kind,
-    ), call_indexs in self.conditional_edge_call_indices.items():
+    ), call_indexs in self._graph_conditional_edge_call_indices.items():
         edge_key = (
             self._raw_to_final_parent_layer_labels[parent],
             self._raw_to_final_parent_layer_labels[child],
@@ -1091,9 +1089,9 @@ def _rename_model_history_layer_names(self: "Trace") -> None:
         for call_index in call_indexs:
             if call_index not in conditional_edge_call_indices[edge_key]:
                 conditional_edge_call_indices[edge_key].append(call_index)
-    self.conditional_edge_call_indices = dict(conditional_edge_call_indices)
+    self._graph_conditional_edge_call_indices = dict(conditional_edge_call_indices)
 
-    for conditional_event in self.conditional_records:
+    for conditional_event in self._graph_conditional_records:
         conditional_event.bool_layers = [
             self._raw_to_final_parent_layer_labels[layer_label]
             for layer_label in conditional_event.bool_layers

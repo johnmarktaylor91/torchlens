@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._record_type import record_type
+
 __all__ = ["SCHEMA_ID", "memory_timeline_v2", "module_rollup"]
 
 SCHEMA_ID = "torchlens.memory_timeline.v2"
@@ -78,7 +80,7 @@ def _op_rows(trace: Any) -> list[Any]:
     """Return per-pass op records in execution order (multi-pass safe)."""
 
     ops: list[Any] = []
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         num_passes = int(getattr(layer, "num_passes", 1) or 1)
         if num_passes > 1:
             inner = getattr(layer, "ops", None)
@@ -354,7 +356,7 @@ def _forward_events(
     events: list[dict[str, Any]] = []
     max_forward_ordinal = 0
     for op in ops:
-        layer_type = str(getattr(op, "layer_type", "") or "")
+        layer_type = str(record_type(op, "") or "")
         if layer_type in ("output", "buffer"):
             continue
         ordinal = int(getattr(op, "step_index", 0) or 0)
@@ -431,7 +433,7 @@ def _gradient_events(trace: Any, start_ordinal: int) -> tuple[list[dict[str, Any
     events: list[dict[str, Any]] = []
     gradient_ordinal = start_ordinal
     for backward_pass in backward_passes:
-        pass_index = int(getattr(backward_pass, "pass_index", 0) or 0)
+        pass_index = int(getattr(backward_pass, "pass_number", 0) or 0)
         for op in getattr(trace, "saved_grad_ops", ()) or ():
             try:
                 grad = op.grad_for(bwd=pass_index)

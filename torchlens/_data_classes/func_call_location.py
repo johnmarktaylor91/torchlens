@@ -100,7 +100,7 @@ class FuncCallLocation:
         "_linecache_entry": FieldPolicy.DROP,
     }
 
-    FIELD_POLICY = build_record_field_policy_table(
+    _FIELD_POLICY = build_record_field_policy_table(
         FUNC_CALL_LOCATION_FIELD_ORDER,
         _PORTABLE_STATE_SPEC,
         schema_key="func_call_location",

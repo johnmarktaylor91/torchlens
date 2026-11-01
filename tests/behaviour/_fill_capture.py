@@ -178,7 +178,7 @@ def _expect_pass_census(cell: Cell, name: str, trace: Any) -> None:
     cell.expect(not missing, f"{name}: ops in no layer: {missing[:6]}")
     repeated = set()
     for layer in layers:
-        passes = [op.pass_index for op in layer.ops]
+        passes = [op.pass_number for op in layer.ops]
         want = list(range(1, layer.num_passes + 1))
         cell.expect(
             passes == want, f"{name}: layer {_layer_key(layer)} passes {passes[:8]} != {want[:8]}"
@@ -262,7 +262,9 @@ def _after_backward(cell: Cell) -> None:
         torch.manual_seed(SEED)
         frozen = tl.trace(cell.model, cell.fresh_inputs(), **cell.trace_kwargs)
         reference = _eager_reference(cell) and _plain_leaves(cell)
-    cell.expect(frozen.inference_only is True, "a capture under no_grad is not inference_only")
+    cell.expect(
+        frozen.options.inference_only is True, "a capture under no_grad is not inference_only"
+    )
     if reference and not cell.case.has("stochastic"):
         # Eager itself may take another kernel path under no_grad (fused attention), so the
         # inference-only capture is held to a no_grad plain forward, not to the grad capture.
@@ -378,7 +380,7 @@ def _after_index(cell: Cell) -> None:
     for layer in trace.layers:
         for k, op in enumerate(layer.ops, start=1):
             cell.expect(
-                op.pass_index == k, f"layer {_layer_key(layer)} pass {k} is {op.pass_index}"
+                op.pass_number == k, f"layer {_layer_key(layer)} pass {k} is {op.pass_number}"
             )
     _expect_stable_second_capture(cell)
 

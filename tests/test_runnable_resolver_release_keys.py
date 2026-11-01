@@ -97,7 +97,7 @@ def _capture(model: nn.Module, inputs: torch.Tensor) -> Any:
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -310,7 +310,10 @@ def test_identity_model_loaded_run_is_verified(tmp_path: Path) -> None:
     "key",
     (
         FunctionRegistryKey(
-            "custom", "identity", "function", import_path="torchlens._utils:identity"
+            "custom",
+            "identity",
+            "function",
+            import_path="torchlens._postprocess.graph_traversal:identity",
         ),
         FunctionRegistryKey(
             "custom",

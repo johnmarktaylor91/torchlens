@@ -78,7 +78,7 @@ def test_attach_refuses_an_opaque_callable() -> None:
 
 def test_explicit_transform_that_is_an_authority_stamps_its_own_record() -> None:
     trace = _trace_with(_V1.transforms())
-    record = trace.input_preprocessor
+    record = trace.provenance.input_preprocessor
     expected = tlp.resolve(_V1.transforms()).preprocessing
     assert record.source == "torchvision_preset" == expected.source
     assert record.config == expected.config
@@ -89,7 +89,7 @@ def test_unrecognized_transform_still_stamps_user_transform() -> None:
     def halve(image: torch.Tensor) -> torch.Tensor:
         return torch.nn.functional.interpolate(image, size=(224, 224)) / 2
 
-    record = _trace_with(halve).input_preprocessor
+    record = _trace_with(halve).provenance.input_preprocessor
     assert record.source == "user_transform"
     assert provenance.status_of(record) == provenance.STATUS_UNKNOWN
 

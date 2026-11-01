@@ -175,12 +175,12 @@ def test_star_engine_drain_and_sync_point_project_identical_records(monkeypatch)
         assert torch.equal(left_payload, synced_ops[key])
     drained_params = {
         address: record.grad
-        for address, record in drained.param_logs.items()
+        for address, record in drained._param_logs.items()
         if record.grad is not None
     }
     synced_params = {
         address: record.grad
-        for address, record in synced.param_logs.items()
+        for address, record in synced._param_logs.items()
         if record.grad is not None
     }
     assert drained_params.keys() == synced_params.keys()

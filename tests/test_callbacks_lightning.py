@@ -113,7 +113,7 @@ def test_maybe_profile_releases_activation_tensor_deterministically(tmp_path: Pa
     def _spying_trace(*args: Any, **kwargs: Any) -> Any:
         nonlocal tensor_ref
         log = orig_trace(*args, **kwargs)
-        for op in log.layer_list:
+        for op in log._layer_list:
             if getattr(op, "is_input", False):
                 # The input node's ``out`` is the caller's own input tensor
                 # (not a freshly computed activation) and may be kept alive

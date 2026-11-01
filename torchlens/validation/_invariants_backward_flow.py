@@ -219,13 +219,10 @@ def _check_backward_event_flow_invariants(trace: Trace, name: str) -> None:
     # pre-detach stream by design, so the stream is authoritative (and this
     # comparison exact) only for passes strictly above the base. With base 0
     # every record is in scope — the historical full comparison.
-    layer_labels = set(getattr(trace, "layer_dict_all_keys", {}))
-    projected_grad_records: Counter[tuple[str, int]] = Counter()
-    for layer in getattr(trace, "layer_list", []):
-        for record in getattr(layer, "_grad_records", ()):
-            if record.backward_pass_index <= pass_index_base:
-                continue
-            projected_grad_records[(layer.layer_label, record.backward_pass_index)] += 1
+    layer_labels = set(trace._layer_dict_all_keys)
+    projected_grad_records, projected_param_records, projected_calls = _projected_backward_records(
+        trace, pass_index_base
+    )
 
     event_grad_records: Counter[tuple[str, int]] = Counter()
     for op_grad_event in op_grad_events:
@@ -243,13 +240,7 @@ def _check_backward_event_flow_invariants(trace: Trace, name: str) -> None:
             "projected op gradient records do not match OpGradObserved events by multiplicity",
         )
 
-    param_addresses = set(getattr(trace, "param_logs", {}).keys())
-    projected_param_records: Counter[tuple[str, int]] = Counter()
-    for param_address, param_log in getattr(trace, "param_logs", {}).items():
-        for record in getattr(param_log, "_grad_records", ()):
-            if record.backward_pass_index <= pass_index_base:
-                continue
-            projected_param_records[(param_address, record.backward_pass_index)] += 1
+    param_addresses = set(trace._param_logs.keys())
     event_param_records: Counter[tuple[str, int]] = Counter()
     for param_grad_event in param_grad_events:
         if param_grad_event.param_address not in param_addresses:
@@ -266,14 +257,8 @@ def _check_backward_event_flow_invariants(trace: Trace, name: str) -> None:
             "by multiplicity",
         )
 
-    projected_calls: dict[tuple[int, int], int] = defaultdict(int)
-    for grad_fn_handle in getattr(trace, "grad_fn_logs", {}).values():
-        for call in grad_fn_handle.calls.values():
-            if call.backward_pass_index <= pass_index_base:
-                continue
-            projected_calls[(grad_fn_handle.grad_fn_object_id, call.backward_pass_index)] += 1
-    event_calls: dict[tuple[int, int], int] = defaultdict(int)
-    grad_fn_ids = set(getattr(trace, "grad_fn_logs", {}))
+    event_calls: dict[tuple[int, int | None], int] = defaultdict(int)
+    grad_fn_ids = set(trace._grad_fn_logs)
     for fired_event in fired_events:
         if fired_event.object_id not in grad_fn_ids:
             raise MetadataInvariantError(
@@ -282,9 +267,14 @@ def _check_backward_event_flow_invariants(trace: Trace, name: str) -> None:
             )
         event_calls[(fired_event.object_id, fired_event.pass_index)] += 1
     if projected_calls != event_calls:
+        unmatched = sorted(
+            (set(projected_calls) ^ set(event_calls)) or set(projected_calls),
+            key=lambda key: (key[0], -1 if key[1] is None else key[1]),
+        )
         raise MetadataInvariantError(
             name,
-            "projected grad_fn calls do not match GradFnFired events",
+            "projected grad_fn calls do not match GradFnFired events "
+            f"(unmatched (grad_fn id, pass index): {unmatched[:8]!r})",
         )
 
 
@@ -319,11 +309,43 @@ def _intervention_spec_is_armed(spec: object | None) -> bool:
     )
 
 
+def _projected_backward_records(
+    trace: Trace, pass_index_base: int
+) -> tuple[Counter[tuple[str, int]], Counter[tuple[str, int]], dict[tuple[int, int | None], int]]:
+    """Count the op, param and grad_fn records projected for passes above the base.
+
+    A projected grad_fn call with no ``backward_pass_index`` is never in a
+    fired event (events always carry an int pass index), so it stays in scope
+    under a ``None`` key and fails the caller's multiplicity comparison by itself.
+    """
+
+    projected_grad_records: Counter[tuple[str, int]] = Counter()
+    for layer in trace._layer_list:
+        for record in getattr(layer, "_grad_records", ()):
+            if record.backward_pass_index <= pass_index_base:
+                continue
+            projected_grad_records[(layer.layer_label, record.backward_pass_index)] += 1
+    projected_param_records: Counter[tuple[str, int]] = Counter()
+    for param_address, param_log in trace._param_logs.items():
+        for record in getattr(param_log, "_grad_records", ()):
+            if record.backward_pass_index <= pass_index_base:
+                continue
+            projected_param_records[(param_address, record.backward_pass_index)] += 1
+    projected_calls: dict[tuple[int, int | None], int] = defaultdict(int)
+    for grad_fn_handle in trace._grad_fn_logs.values():
+        for call in grad_fn_handle.calls.values():
+            call_pass_index = call.backward_pass_index
+            if call_pass_index is not None and call_pass_index <= pass_index_base:
+                continue
+            projected_calls[(grad_fn_handle.grad_fn_object_id, call_pass_index)] += 1
+    return projected_grad_records, projected_param_records, projected_calls
+
+
 def op_has_genuine_replacement_evidence(layer: Op, trace: Trace | None = None) -> bool:
     """Return whether trace-level evidence corroborates a replacement stamp.
 
     Every ``intervention_replacement`` exemption used to trust per-op
-    attributes (``func_name``/``intervention_replaced``/``is_internal_source``)
+    attributes (``func_name``/``is_edited``/``is_internal_source``)
     that the placeholder synthesizer ITSELF writes, so a placeholder minted or
     forged during PLAIN capture passed validation -- defeating the 2026-06-02
     lesson that a placeholder op appearing during plain capture must STILL
@@ -434,7 +456,7 @@ def op_has_genuine_replacement_evidence(layer: Op, trace: Trace | None = None) -
     # so a stale ``_tl_live_fire_results`` leak into a plain capture carries
     # records but no armed spec and stays refused.
     if _intervention_spec_is_armed(getattr(trace, "_intervention_spec", None)):
-        for record in getattr(layer, "interventions", ()) or ():
+        for record in getattr(layer, "edits", ()) or ():
             if getattr(record, "replaced", False):
                 return True
     # A live capture with NO corroborating replacement evidence: any op
@@ -489,7 +511,7 @@ def _is_func_call_id_exempt(layer: Op) -> bool:
     # (the user substituted an opaque tensor for a module's output, so there is
     # no torch function -- hence no ``func_call_id`` -- to validate). Mirror the
     # deliberately NARROW predicate the ``op_log_fields`` invariant already uses
-    # (func_name + intervention_replaced + NOT internal_source), AND require the
+    # (func_name + is_edited + NOT internal_source), AND require the
     # trace-level replacement-event ledger to corroborate it
     # (``op_has_genuine_replacement_evidence``): the per-op attributes alone are
     # written by the placeholder synthesizer itself, so trusting them let a
@@ -498,7 +520,7 @@ def _is_func_call_id_exempt(layer: Op) -> bool:
     # CLAUDE.md "Validation Integrity").
     if (
         getattr(layer, "func_name", "") == "intervention_replacement"
-        and getattr(layer, "intervention_replaced", False)
+        and getattr(layer, "is_edited", False)
         and not getattr(layer, "is_internal_source", False)
         and op_has_genuine_replacement_evidence(layer)
     ):

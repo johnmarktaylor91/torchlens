@@ -63,7 +63,7 @@ def load_imagenet1k_labels() -> list[str]:
 
 
 def decode_outputs_for_trace(trace: Trace, outputs: Any) -> None:
-    """Decode live model outputs into ``trace.decoded_output`` when safely resolved.
+    """Decode live model outputs into ``trace._decoded_output`` when safely resolved.
 
     This is the automatic, option-free pass that runs once at the end of every
     capture: the registered output detectors inspect the live output object
@@ -98,8 +98,8 @@ def decode_outputs_for_trace(trace: Trace, outputs: Any) -> None:
 
         from torchlens.errors import TorchLensWarning
 
-        trace.decoded_output = None
-        trace.output_postprocessor = None
+        trace._decoded_output = None
+        trace._provenance_output_postprocessor = None
         annotations = getattr(trace, "annotations", None)
         if isinstance(annotations, dict):
             annotations.setdefault("decode_skipped", []).append(
@@ -126,7 +126,7 @@ def _decode_outputs_for_trace_unguarded(trace: Trace, outputs: Any) -> None:
     logits_info = _select_logits(outputs, resolved, meta)
     if logits_info is None:
         if resolved.verified:
-            trace.output_postprocessor = replace(
+            trace._provenance_output_postprocessor = replace(
                 resolved,
                 ambiguous=True,
                 description=f"decode: undetected; {UNDETECTED_REMEDY}.",
@@ -137,8 +137,8 @@ def _decode_outputs_for_trace_unguarded(trace: Trace, outputs: Any) -> None:
     decoded = _decode_selected(logits, resolved, meta, top_n=_TOP_N_CAPTURED)
     if decoded is None:
         return
-    trace.decoded_output = decoded
-    trace.output_postprocessor = replace(
+    trace._decoded_output = decoded
+    trace._provenance_output_postprocessor = replace(
         resolved,
         selected_output_head=selected_head,
         top_n_captured=_TOP_N_CAPTURED,

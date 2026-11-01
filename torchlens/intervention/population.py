@@ -40,6 +40,7 @@ from typing import Any, Literal
 
 import torch
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 
 __all__ = [
@@ -114,7 +115,7 @@ def _iter_member_ops(member: Any) -> tuple[Any, ...]:
     insertion history).
     """
 
-    table = getattr(member, "layer_dict_all_keys", None) or {}
+    table = member._layer_dict_all_keys or {}
     by_label: dict[str, Any] = {}
     for value in table.values():
         label = getattr(value, "label", None)
@@ -124,14 +125,14 @@ def _iter_member_ops(member: Any) -> tuple[Any, ...]:
 
 
 #: Persisted capture facts entering the trace ADDRESS identity, in order.
-#: ``trace_label`` is deliberately ABSENT: it is a process-global registry
+#: ``name`` is deliberately ABSENT: it is a process-global registry
 #: ordinal (``twoblock_1``, ``twoblock_2``, ...), a transient of the session,
 #: not a fact of the capture.
 _TRACE_ADDRESS_FACTS = (
-    "model_class_qualname",
-    "random_seed",
+    "_source_class_qualname",
+    "_options_seed",
     "num_operations",
-    "input_signature_hash",
+    "_provenance_input_signature_hash",
 )
 
 
@@ -511,7 +512,7 @@ def _prepare_tensor_members(source: Any) -> tuple[torch.Tensor, ...] | None:
 def _looks_like_trace(value: Any) -> bool:
     """Whether a member is a captured-trace-like donor (duck-typed)."""
 
-    return hasattr(value, "layer_dict_all_keys") and hasattr(value, "ops")
+    return is_live_trace(value) and hasattr(value, "ops")
 
 
 def population(

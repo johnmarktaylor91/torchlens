@@ -33,7 +33,7 @@ model = SmallCNN()
 image = paddle.to_tensor(np.linspace(-1, 1, 36, dtype="float32").reshape(1, 1, 6, 6))
 
 trace = tl.trace(model, image, backend="paddle")
-print([op.layer_type for op in trace.layer_list])
+print([op.type for op in trace])
 # ['input', 'conv2d', 'functional.relu', 'functional.max_pool2d', 'flatten', 'functional.linear']
 
 assert tl.validate(model, image, scope="forward", backend="paddle") is True
@@ -58,7 +58,7 @@ def project(v):
 
 
 trace = tl.trace(project, paddle.ones([2, 4], dtype="float32"), backend="paddle")
-print([op.layer_type for op in trace.layer_list])
+print([op.type for op in trace])
 # ['input', 'constant', 'matmul', 'functional.relu']
 ```
 

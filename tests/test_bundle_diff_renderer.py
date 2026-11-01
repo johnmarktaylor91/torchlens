@@ -54,7 +54,7 @@ def _canonical_bundle() -> tl.Bundle:
     torch.manual_seed(0)
     model = torchvision_models.resnet18(weights=None).eval()
     x = torch.randn(1, 3, 224, 224)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     ablated_log = trace.fork("ablated")
     with pytest.warns(MultiMatchWarning):
         ablated_log.do(
@@ -232,9 +232,9 @@ def test_bundle_diff_uses_each_members_own_delta() -> None:
     left_layer = SimpleNamespace(layer_label="left_1", func_name="op", parents=[], shape=None)
     right_layer = SimpleNamespace(layer_label="right_1", func_name="op", parents=[], shape=None)
     bundle = {
-        "baseline": SimpleNamespace(layer_list=[]),
-        "left": SimpleNamespace(layer_list=[left_layer]),
-        "right": SimpleNamespace(layer_list=[right_layer]),
+        "baseline": SimpleNamespace(_layer_list=[]),
+        "left": SimpleNamespace(_layer_list=[left_layer]),
+        "right": SimpleNamespace(_layer_list=[right_layer]),
     }
 
     dot = _build_dot(

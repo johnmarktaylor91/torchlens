@@ -72,7 +72,7 @@ def test_distilgpt2_fresh_run_product_never_carries_foreign_ledger():
     )
     ledger = episode_ledger_for(trace)
     assert ledger is not None
-    assert trace.capture_kind == "episode"
+    assert trace.provenance.kind == "episode"
     assert len(ledger.rows) == N_STEPS
     assert all(row.status == "complete" for row in ledger.rows)
     assert all(row.step_output is not None for row in ledger.rows)
@@ -83,7 +83,7 @@ def test_distilgpt2_fresh_run_product_never_carries_foreign_ledger():
     # and a VERIFIED product with foreign step evidence is the exact
     # silent-wrongness class this lane exists to kill.
     assert episode_ledger_for(result.trace) is None
-    assert result.trace.capture_kind == "plain"
+    assert result.trace.provenance.kind == "plain"
     note = result.trace.annotations.get("episode")
     assert note is not None and note.get("quarantined") is True
     assert note.get("code") == "episode_evidence_dropped_fresh_execution"

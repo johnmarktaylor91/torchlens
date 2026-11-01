@@ -46,7 +46,7 @@ from torchlens.backends.torch.completeness_witness import (
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 def _trace(model: nn.Module, x) -> tl.Trace:
@@ -566,7 +566,7 @@ def test_r67_hostile_subclass_admission_refuses(surface: str, tmp_path: Path) ->
     # exact-type emit gate silently dropping every subclass op -- the very gap this NOTE
     # lamented). The admission boundary is now the SAVE preflight, which the docstring and
     # the sibling ``MutateThroughHandle`` test already treat as equally fail-closed: the
-    # hostile class object refuses TYPED (``unsupported_literal``: a ``torch._C._TensorMeta``
+    # hostile class object refuses TYPED (``literal_unsupported``: a ``torch._C._TensorMeta``
     # is outside the frozen non-tensor literal grammar), never blessed into an artifact.
     with pytest.raises(RunnablePreflightError, match="preflight failed"):
         trace = _trace(model, payload)

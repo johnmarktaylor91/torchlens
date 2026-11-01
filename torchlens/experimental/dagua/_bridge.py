@@ -12,6 +12,8 @@ from typing import Any
 
 import torch
 
+from ..._data_classes._trace_missing_attrs import is_live_trace
+from ..._record_type import record_type
 from ..._utils._multipass_access import get_multipass_attr
 from ..._utils.display import human_readable_size
 from ..._visualization.node_spec import (
@@ -26,7 +28,6 @@ MODELLOG_FIELD_USAGE: dict[str, str] = {
     "model_class_name": "Graph caption title.",
     "num_tensors": "Graph caption tensor count.",
     "total_activation_memory": "Graph caption out-memory summary.",
-    "num_param_tensors": "Caption metadata for model scale.",
     "num_params": "Graph caption parameter summary.",
     "num_params_trainable": "Graph caption trainable/frozen breakdown.",
     "num_params_frozen": "Graph caption trainable/frozen breakdown.",
@@ -35,9 +36,9 @@ MODELLOG_FIELD_USAGE: dict[str, str] = {
     "max_layer_op_count": "Reference-gallery and recurrent summaries.",
     "modules": "Module hierarchy, cluster labels, collapsed summaries.",
     "has_gradients": "Whether to add backward edges in unrolled mode.",
-    "layer_dict_main_keys": "Unrolled node inventory.",
-    "layer_logs": "Rolled node inventory.",
-    "layer_list": "Fallback node inventory and audit coverage.",
+    "_layer_dict_main_keys": "Unrolled node inventory.",
+    "_layer_logs": "Rolled node inventory.",
+    "_layer_list": "Fallback node inventory and audit coverage.",
     "_intervention_spec": "Intervention site and fire-record metadata overlay.",
     "_has_direct_writes": "Direct-write dirty flag surfaced in graph metadata when present.",
 }
@@ -74,7 +75,7 @@ ENTRY_FIELD_USAGE: dict[str, str] = {
     "is_module_output": "Rectangle/module-output shape override.",
     "is_atomic_module": "Rectangle/module-output shape override.",
     "has_grad": "Backward-edge inclusion in unrolled mode.",
-    "interventions": "Per-node intervention fire-record summary.",
+    "edits": "Per-node intervention fire-record summary.",
 }
 
 MODULE_FIELD_USAGE: dict[str, str] = {
@@ -179,7 +180,7 @@ def _unused_justification(name: str) -> str:
 def build_render_audit(trace: Any) -> TorchLensRenderAudit:
     """Return an explicit used/unused field audit for the bridge."""
     model_fields = _list_public_fields(trace)
-    entry_sample = trace.layer_list[0] if getattr(trace, "layer_list", None) else None
+    entry_sample = trace._layer_list[0] if trace._layer_list else None
     entry_fields = _list_public_fields(entry_sample) if entry_sample is not None else []
     module_values = list(trace.modules) if hasattr(trace, "modules") else []
     module_fields = _list_public_fields(module_values[0]) if module_values else []
@@ -214,18 +215,18 @@ def build_torchlens_caption(trace: Any) -> str:
     if num_params == 0:
         params_line = "0 params"
     elif frozen == 0:
-        params_line = f"{num_params:,} params (all trainable, {human_readable_size(getattr(trace, 'total_param_memory', 0) or 0)})"
+        params_line = f"{num_params:,} params (all trainable, {human_readable_size((trace._cost_total_param_memory if is_live_trace(trace) else 0) or 0)})"
     elif trainable == 0:
-        params_line = f"{num_params:,} params (all frozen, {human_readable_size(getattr(trace, 'total_param_memory', 0) or 0)})"
+        params_line = f"{num_params:,} params (all frozen, {human_readable_size((trace._cost_total_param_memory if is_live_trace(trace) else 0) or 0)})"
     else:
         params_line = (
             f"{num_params:,} params "
-            f"({trainable:,}/{num_params:,} trainable, {human_readable_size(getattr(trace, 'total_param_memory', 0) or 0)})"
+            f"({trainable:,}/{num_params:,} trainable, {human_readable_size((trace._cost_total_param_memory if is_live_trace(trace) else 0) or 0)})"
         )
     return (
-        f"{getattr(trace, 'model_class_name', 'TorchLens model')}\n"
+        f"{(trace._source_class_name if is_live_trace(trace) else 'TorchLens model')}\n"
         f"{len(trace)} tensors total "
-        f"({human_readable_size(getattr(trace, 'total_activation_memory', 0) or 0)})\n"
+        f"({human_readable_size((trace._cost_total_activation_memory if is_live_trace(trace) else 0) or 0)})\n"
         f"{params_line}"
     )
 
@@ -302,9 +303,9 @@ def _entries_for_mode(trace: Any, vis_mode: str) -> list[Any]:
     """
 
     if vis_mode == "unrolled":
-        return list(trace.layer_dict_main_keys.values())
+        return list(trace._layer_dict_main_keys.values())
     if vis_mode == "rolled":
-        return list(trace.layer_logs.values())
+        return list(trace._layer_logs.values())
     raise ValueError("vis_mode must be 'unrolled' or 'rolled'")
 
 
@@ -454,7 +455,7 @@ def _interventions_summary(entry: Any) -> str:
         are attached.
     """
 
-    records = list(getattr(entry, "interventions", ()) or ())
+    records = list(getattr(entry, "edits", ()) or ())
     if not records:
         return ""
     engines = sorted({str(getattr(record, "engine", "") or "unknown") for record in records})
@@ -556,9 +557,7 @@ def _argument_edge_label(child: Any, parent_label: str) -> str | None:
     """
 
     arg_locs = getattr(child, "parent_arg_positions", None) or {}
-    func_name = (
-        getattr(child, "func_name", None) or getattr(child, "layer_type", "") or ""
-    ).lower()
+    func_name = (getattr(child, "func_name", None) or record_type(child, "") or "").lower()
     if len(getattr(child, "parents", None) or []) <= 1:
         return None
     if func_name in COMMUTATIVE_FUNCS:
@@ -847,7 +846,7 @@ def trace_to_dagua_graph(
             g.edge_container_role.append(_container_semantic_attrs(child)["container_role"])
 
     if include_grad_edges is None:
-        include_grad_edges = bool(getattr(trace, "has_gradients", False))
+        include_grad_edges = bool(trace._autograd_has_grads if is_live_trace(trace) else False)
 
     if include_grad_edges and vis_mode == "unrolled":
         for child in entries:

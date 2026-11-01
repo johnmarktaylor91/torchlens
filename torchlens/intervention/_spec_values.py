@@ -311,16 +311,16 @@ def _serialize_output_path_component(
     if isinstance(value, DictKey):
         return {
             "__output_path_component__": "dict_key",
-            "key": _serialize_value(value.key, save_level, state),
+            "key": _serialize_value(value._key, save_level, state),
         }
     if isinstance(value, HFKey):
         return {
             "__output_path_component__": "hf_key",
-            "key": _serialize_value(value.key, save_level, state),
+            "key": _serialize_value(value._key, save_level, state),
         }
     if isinstance(value, NamedField):
-        return {"__output_path_component__": "named_field", "name": value.name}
-    return {"__output_path_component__": "dataclass_field", "name": value.name}
+        return {"__output_path_component__": "named_field", "name": value._name}
+    return {"__output_path_component__": "dataclass_field", "name": value._name}
 
 
 def _jsonish_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
@@ -404,8 +404,8 @@ def _serialize_helper(
             "portability": "opaque_audit",
             "name": helper.name,
             "repr": repr(helper),
-            "batch_independent": bool(helper.batch_independent),
-            "compatible_with_append": bool(helper.compatible_with_append),
+            "is_batch_independent": bool(helper.is_batch_independent),
+            "is_compatible_with_append": bool(helper.is_compatible_with_append),
         }
 
     return {
@@ -415,8 +415,8 @@ def _serialize_helper(
         "args": [_serialize_value(arg, save_level, state) for arg in helper.args],
         "kwargs": {key: _serialize_value(value, save_level, state) for key, value in helper.kwargs},
         "metadata": _jsonish_metadata(dict(helper.metadata)),
-        "batch_independent": bool(helper.batch_independent),
-        "compatible_with_append": bool(helper.compatible_with_append),
+        "is_batch_independent": bool(helper.is_batch_independent),
+        "is_compatible_with_append": bool(helper.is_compatible_with_append),
     }
 
 
@@ -568,14 +568,14 @@ def _deserialize_value(
                 allowed_custom_callable_modules=allowed_tuple,
             )
         return Edit(
-            helper_name="opaque_audit",
+            name="opaque_audit",
             portability="opaque_audit",
             metadata=(("repr", callable_payload.get("repr", "")), ("executable", False)),
         )
     if isinstance(value, dict) and "__opaque_audit__" in value:
         payload = value["__opaque_audit__"]
         return Edit(
-            helper_name=str(payload.get("type", "opaque_audit")),
+            name=str(payload.get("type", "opaque_audit")),
             portability="opaque_audit",
             metadata=(("repr", payload.get("repr", "")), ("executable", False)),
         )

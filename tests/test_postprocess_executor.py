@@ -240,7 +240,7 @@ def test_step19_and_gate_evict_streamed_outs_from_memory(tmp_path: Path) -> None
         storage=tl.to_disk(tmp_path / "step19.tlspec"),
     )
     try:
-        streamed = [op for op in trace.layer_list if getattr(op, "out_ref", None) is not None]
+        streamed = [op for op in trace._layer_list if getattr(op, "out_ref", None) is not None]
         assert streamed, "no op streamed an out_ref; the axis setup is not exercising step 19"
         assert all(op.out is None for op in streamed), (
             "a streamed op's out survived step 19's eviction"
@@ -291,13 +291,13 @@ def test_buffer_duplicate_axis_actually_merges(
         # only for a pass of a multi-pass one. Under call-site grouping the
         # buffer's versions are grouped by the place that wrote them
         # (docs/guides/grouping.md), so the survivor can be single-pass.
-        survivor = next(op for op in trace.layer_list if op._label_raw == survivor_label)
+        survivor = next(op for op in trace._layer_list if op._label_raw == survivor_label)
         survivor_final = survivor.layer_label if survivor.num_passes == 1 else survivor.label
         repointed = [
-            op for op in trace.layer_list if op.is_buffer and op.buffer_source == survivor_final
+            op for op in trace._layer_list if op.is_buffer and op.buffer_source == survivor_final
         ]
         assert repointed, "the scalar buffer_source repoint must have fired"
-        assert all(op.buffer_source not in (removed_label,) for op in trace.layer_list), (
+        assert all(op.buffer_source not in (removed_label,) for op in trace._layer_list), (
             "no surviving op may still reference the merged-away buffer"
         )
     finally:
@@ -334,11 +334,11 @@ def _clear_op_label_map(trace: Any) -> None:
 
 
 def _drop_first_lookup_keys(trace: Any) -> None:
-    trace.layer_list[0].lookup_keys = []
+    trace._layer_list[0].lookup_keys = []
 
 
 def _clear_layer_logs(trace: Any) -> None:
-    trace.layer_logs.clear()
+    trace._layer_logs.clear()
 
 
 def _null_module_logs(trace: Any) -> None:

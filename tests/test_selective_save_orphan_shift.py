@@ -54,7 +54,7 @@ class CleanModel(nn.Module):
 def _saved_labels(trace: tl.Trace) -> list[str]:
     """Return final labels of ops with saved activations."""
 
-    return [op.layer_label for op in trace.layer_list if op.has_saved_activation]
+    return [op.layer_label for op in trace._layer_list if op.has_saved_activation]
 
 
 @pytest.mark.parametrize("selector", [2, "relu_1_2"], ids=["int_ordinal", "exact_label"])
@@ -67,7 +67,7 @@ def test_layers_to_save_final_selectors_survive_orphan_shift(selector) -> None:
         x,
         capture=CaptureOptions(layers_to_save=[selector]),
     )
-    assert trace.layer_list[2].layer_label == "relu_1_2"
+    assert trace._layer_list[2].layer_label == "relu_1_2"
     saved = _saved_labels(trace)
     assert "relu_1_2" in saved, f"requested {selector!r} but saved only {saved}"
     torch.testing.assert_close(trace["relu_1_2"].out, torch.relu(x + 1.0))
@@ -190,7 +190,7 @@ def test_integer_save_grads_survives_orphan_shift(model_cls) -> None:
     )
     trace[trace.output_layers[0]].out.sum().backward()
     with_grads = [
-        op.layer_label for op in trace.layer_list if getattr(op, "grad", None) is not None
+        op.layer_label for op in trace._layer_list if getattr(op, "grad", None) is not None
     ]
     assert "relu_1_2" in with_grads, f"requested grads for ordinal 2 but got {with_grads}"
     # d/d(relu) of sum(2 * relu) is exactly 2 everywhere.

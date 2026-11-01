@@ -11,15 +11,6 @@ from typing import Any, Literal, TypeAlias, cast
 import torch
 
 from .._errors import InvalidArgumentError, PayloadUnavailableError
-from .._ir.selector_eval import (
-    _UPFRONT_UNSUPPORTED_KINDS,
-    _capability_error,
-    _grad_fn_forward_op,
-    evaluate,
-    live_label_error_message,
-    looks_like_finalized_label,
-    normalize_selector_like,
-)
 from .._selection.selectors import (
     BackwardPassSelector,
     BaseSelector,
@@ -503,7 +494,7 @@ def lower_record_site_target(site_target: Any) -> Any:
     """Lower an ``Op``/``Layer`` RECORD used as a hook site to an exact selector.
 
     A record is the most precise site spelling a user can hold (``do(
-    log["relu_1_2:2"].ops[0], edit)``), yet the post-hoc resolver only knew
+    log["relu_1_2:2"], edit)``), yet the post-hoc resolver only knew
     selector-likes and refused it ("Unsupported site query"), while the
     spec lowering would have dropped an ``Op`` to its BARE ``layer_label``
     -- the last pass of a multi-pass layer -- had it been accepted
@@ -537,12 +528,13 @@ def _record_site_pass_labels(site_target: Any) -> list[str] | None:
         site_target, "layer_label"
     ):
         return None
-    ops = getattr(site_target, "ops", None)
+    from .._data_classes.op import Op
+
+    # ``Layer.ops`` is an accessor (iterable, not a builtin sequence); an ``Op`` is itself.
+    ops = (site_target,) if isinstance(site_target, Op) else getattr(site_target, "ops", None)
     if ops is None or isinstance(ops, (str, bytes)):
         return None
     try:
-        # ``Layer.ops`` is an accessor (iterable, not a builtin sequence);
-        # ``Op.ops`` is the one-tuple of the record itself.
         op_records = list(ops)
     except TypeError:
         return None
@@ -594,6 +586,7 @@ def _reject_live_incapable_selector(
         Whether the replay-capable ``site`` kind may pass (attach-door
         carve-out; the rerun preflight never sets it).
     """
+    from .._ir.selector_eval import _UPFRONT_UNSUPPORTED_KINDS, _capability_error
 
     kind = str(selector.selector_kind)
     if kind in _UPFRONT_UNSUPPORTED_KINDS["live"] and not (allow_replay_only and kind == "site"):
@@ -658,6 +651,7 @@ def _backward_context_op(grad_fn_handle: Any) -> Any:
         The paired pass-level op, the GradFn's op, or ``grad_fn_handle`` itself
         when it carries no ``op``.
     """
+    from .._ir.selector_eval import _grad_fn_forward_op
 
     if not hasattr(grad_fn_handle, "op"):
         return grad_fn_handle
@@ -1191,6 +1185,11 @@ def live_selector_matches_site(selector_like: Any, site: Any) -> bool:
     SiteResolutionError
         If the selector kind is unsupported or a predicate fails.
     """
+    from .._ir.selector_eval import (
+        evaluate,
+        live_label_error_message,
+        looks_like_finalized_label,
+    )
 
     selector = _normalize_live_selector(selector_like)
     matched = evaluate(selector, site, lifecycle="live")
@@ -1214,6 +1213,7 @@ def _normalize_live_selector(selector_like: Any) -> BaseSelector:
     BaseSelector
         Normalized selector.
     """
+    from .._ir.selector_eval import normalize_selector_like
 
     return normalize_selector_like(selector_like, lifecycle="live")
 
@@ -1528,7 +1528,7 @@ def _iter_facet_records(log: Any) -> Iterator[Any]:
         yield from modules
     except TypeError:
         pass
-    yield from getattr(log, "layer_list", ())
+    yield from log._layer_list
 
 
 def _facet_home_label(spec: Any) -> str:

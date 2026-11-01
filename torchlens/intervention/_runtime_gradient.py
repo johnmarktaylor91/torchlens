@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .. import _state
+from .._data_classes._trace_missing_attrs import is_live_trace
 
 if TYPE_CHECKING:
     from .hooks import NormalizedHookEntry
@@ -208,7 +209,7 @@ def _live_run_ctx() -> dict[str, Any]:
     # Seed law D5 (F02): the capture's recorded seed rides the run context so
     # seed='auto' stochastic edits can canonicalize their base seed without
     # ever touching ambient RNG.
-    trace_seed = getattr(trace, "random_seed", None)
+    trace_seed = trace._options_seed if is_live_trace(trace) else None
     if trace_seed is not None:
         run_ctx.setdefault("trace_random_seed", trace_seed)
     return run_ctx

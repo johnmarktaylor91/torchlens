@@ -441,7 +441,7 @@ def test_traced_container_specs_preserve_literal_return_leaves() -> None:
     tuple_trace = tl.trace(
         TupleLiteralModel(),
         torch.tensor([-1.0, 2.0]),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     tuple_outputs = [tuple_trace.ops[label] for label in tuple_trace.output_layers]
     tuple_spec = next(
@@ -456,7 +456,7 @@ def test_traced_container_specs_preserve_literal_return_leaves() -> None:
     dict_trace = tl.trace(
         DictLiteralModel(),
         torch.tensor([-1.0, 2.0]),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     dict_outputs = [dict_trace.ops[label] for label in dict_trace.output_layers]
     dict_spec = next(

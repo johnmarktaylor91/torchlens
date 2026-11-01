@@ -312,7 +312,7 @@ def build_stats_table(
     rows: list[StatsTableRow] = []
     scanned_elements = 0
     skipped_by_budget = 0
-    for op in getattr(trace, "layer_list", ()) or ():
+    for op in trace._layer_list or ():
         if grain == "module" and not getattr(op, "is_module_output", False):
             continue
         label = str(getattr(op, "label", getattr(op, "layer_label", "?")))

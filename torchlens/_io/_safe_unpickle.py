@@ -33,7 +33,7 @@ Allowlist policy (fail-closed):
   that walks attributes off a torchlens module to reach ``os.system`` (real module
   ``posix``) is denied. Crucially, a pickle ``REDUCE`` INVOKES the admitted callable
   with attacker args, so the pre-r21 blanket "any torchlens-owned callable" policy
-  was a load-time RCE: it trusted the PRIVATE ``torchlens._utils._module_is_installed``
+  was a load-time RCE: it trusted the PRIVATE ``torchlens.report._environment._module_is_installed``
   (which ``importlib.import_module``s its argument). The narrowed gate is
   deterministic (public-name + side-effect-name guard, no live-registry lookup) and
   admits our vetted first-party code without admitting that gadget.
@@ -1428,7 +1428,7 @@ class SafeBundleUnpickler(pickle._Unpickler):
                 "with this release and save it again; or load the file with the "
                 "release that wrote it, replace the tensors in trace.annotations with "
                 "plain values (for example tensor.tolist()), set "
-                "trace.save_raw_input = False and trace.save_raw_output = False, and "
+                "trace._options_save_raw_input = False and trace._options_save_transformed_output = False, and "
                 "save: the re-saved file loads here. If no TorchLens release wrote "
                 "this file, it is corrupt."
             )

@@ -287,7 +287,7 @@ def _query_graph(trace: Any, solution: Any) -> tuple[tuple[Op, ...], dict[str, O
         cached = state.graphs.get(id(solution))
         if cached is not None and cached[0] is solution and cached[1] is trace:
             return cached[2], cached[3]
-    operations = tuple(item for item in trace.layer_list if item.label in solution.per_op)
+    operations = tuple(item for item in trace._layer_list if item.label in solution.per_op)
     by_reference = {
         reference: item
         for item in operations

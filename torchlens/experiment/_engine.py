@@ -372,7 +372,7 @@ def _capture_options_like(baseline: Trace) -> Any:
 
     from ..options import CaptureOptions
 
-    return CaptureOptions(intervention_ready=True)
+    return CaptureOptions(replayable=True)
 
 
 def _measure(metric: Callable[[Any], Any], member: Any, candidate_id: str) -> float:
@@ -711,7 +711,7 @@ def sweep_sites(
     Parameters
     ----------
     baseline:
-        The un-edited capture (``intervention_ready``); becomes the
+        The un-edited capture (``replayable``); becomes the
         ``"baseline"`` member and the comparison anchor.
     candidates:
         Ordered candidate plan: ``{candidate_id: site}`` or a sequence of

@@ -17,8 +17,13 @@ from ..errors._base import TorchLensError
 from ._container_type_probes import (
     _dataclass_defines_post_init,
     _dataclass_has_foreign_init,
+    _fields_are_inert_settable,
+    _inert_new,
     _is_generated_namedtuple_type,
     _metaclass_defines_foreign_call,
+    _name_is_data_descriptor,
+    _type_has_instance_dict,
+    _type_has_safe_new,
 )
 
 # Canonical ``defaultdict`` factory callables restorable on load WITHOUT importing
@@ -49,40 +54,60 @@ class TupleIndex:
     index: int
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, repr=False)
 class DictKey:
     """Key component for dict output paths."""
 
-    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"key": FieldPolicy.KEEP}
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"_key": FieldPolicy.KEEP}
 
-    key: Any
+    _key: Any
+
+    def __repr__(self) -> str:
+        """Keep the pre-v11 display spelling ``DictKey(key=...)``."""
+
+        return f"DictKey(key={self._key!r})"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, repr=False)
 class NamedField:
     """Field-name component for namedtuple output paths."""
 
-    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"name": FieldPolicy.KEEP}
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"_name": FieldPolicy.KEEP}
 
-    name: str
+    _name: str
+
+    def __repr__(self) -> str:
+        """Keep the pre-v11 display spelling ``NamedField(name=...)``."""
+
+        return f"NamedField(name={self._name!r})"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, repr=False)
 class DataclassField:
     """Field-name component for dataclass output paths."""
 
-    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"name": FieldPolicy.KEEP}
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"_name": FieldPolicy.KEEP}
 
-    name: str
+    _name: str
+
+    def __repr__(self) -> str:
+        """Keep the pre-v11 display spelling ``DataclassField(name=...)``."""
+
+        return f"DataclassField(name={self._name!r})"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, repr=False)
 class HFKey:
     """Key component for HuggingFace ``ModelOutput`` output paths."""
 
-    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"key": FieldPolicy.KEEP}
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {"_key": FieldPolicy.KEEP}
 
-    key: Any
+    _key: Any
+
+    def __repr__(self) -> str:
+        """Keep the pre-v11 display spelling ``HFKey(key=...)``."""
+
+        return f"HFKey(key={self._key!r})"
 
 
 OutputPathComponent: TypeAlias = (
@@ -276,7 +301,7 @@ def _validate_container_spec(spec: ContainerSpec) -> None:
             )
         key_component = DictKey if kind == "dict" else HFKey
         for component in components:
-            if not isinstance(component, key_component) or component.key not in spec.keys:
+            if not isinstance(component, key_component) or component._key not in spec.keys:
                 raise ContainerReconstructionError(
                     f"ContainerSpec kind {kind!r} child component {component!r} is not among "
                     "the declared keys."
@@ -289,7 +314,7 @@ def _validate_container_spec(spec: ContainerSpec) -> None:
             )
         field_component = NamedField if kind == "namedtuple" else DataclassField
         for component in components:
-            if not isinstance(component, field_component) or component.name not in spec.fields:
+            if not isinstance(component, field_component) or component._name not in spec.fields:
                 raise ContainerReconstructionError(
                     f"ContainerSpec kind {kind!r} child component {component!r} is not among "
                     "the declared fields."
@@ -449,147 +474,6 @@ def _rebuild_dict_subtype(spec: ContainerSpec, items: dict[Any, Any]) -> Any:
             raise ValueError(f"Unsafe defaultdict factory {factory_name!r} for reconstruction.")
         return container_type(factory, items)
     return container_type(items)
-
-
-# The ONLY ``__new__`` allocators that run no Python code at instance allocation:
-# ``object.__new__`` (plain dataclasses) and the builtin ``dict.__new__`` (shared by
-# ``OrderedDict``/``defaultdict`` and thus inherited by ``OrderedDict``-derived ModelOutput
-# classes). A type that OVERRIDES ``__new__`` matches neither of these identities and is
-# refused, so non-invoking reconstruction never executes an attacker-supplied allocator.
-_INERT_NEW_ALLOCATORS: tuple[Any, ...] = (object.__new__, dict.__new__)
-
-
-def _type_has_safe_new(container_type: type[Any]) -> bool:
-    """Return whether constructing ``container_type`` via ``__new__`` runs no attacker code.
-
-    Reconstructing a ``dataclass`` / ``hf_model_output`` output from an untrusted spec must
-    NEVER invoke arbitrary constructor code. We build the instance with ``cls.__new__(cls)``
-    and then set only the CAPTURED fields inertly (``object.__setattr__`` / the builtin dict
-    populator), so no attacker ``__init__`` / ``__post_init__`` runs. This guard makes sure
-    ``cls.__new__(cls)`` itself cannot run attacker code: a normal dataclass leaves ``__new__``
-    as ``object.__new__`` and an ``OrderedDict``-derived ModelOutput inherits the inert builtin
-    ``dict.__new__``, whereas a type that OVERRIDES ``__new__`` is exotic and is refused here
-    (the caller then falls back to the plain namespace / mapping shape rather than executing
-    that ``__new__``).
-
-    Parameters
-    ----------
-    container_type:
-        Already-resolved, admissible container class.
-
-    Returns
-    -------
-    bool
-        True when ``container_type.__new__`` is an inert builtin allocator.
-    """
-
-    return any(container_type.__new__ is inert_new for inert_new in _INERT_NEW_ALLOCATORS)
-
-
-def _inert_new(container_type: type[Any]) -> Any:
-    """Allocate an instance via the type's ``__new__`` WITHOUT running ``__init__``.
-
-    The caller has already verified (``_type_has_safe_new``) that ``container_type.__new__``
-    is an inert builtin allocator, so this executes no attacker code. We call it through
-    ``container_type.__new__`` rather than ``object.__new__(container_type)`` because
-    ``object.__new__`` refuses ``dict``/``OrderedDict`` subclasses ("not safe"), while the
-    inherited builtin ``__new__`` on the class allocates them correctly.
-
-    Parameters
-    ----------
-    container_type:
-        Admissible container class whose ``__new__`` was checked inert.
-
-    Returns
-    -------
-    Any
-        A freshly allocated, uninitialized instance of ``container_type``.
-    """
-
-    new = cast("Callable[[type[Any]], Any]", container_type.__new__)
-    return new(container_type)
-
-
-def _name_is_data_descriptor(container_type: type[Any], name: Any) -> bool:
-    """Return whether ``name`` resolves to a DATA descriptor in ``container_type``'s MRO.
-
-    A data descriptor (``property`` with a setter, or any class attribute whose type
-    defines ``__set__`` / ``__delete__``) HONORS ``__set__`` even through
-    ``object.__setattr__``. Populating such a name during reconstruction would fire
-    attacker-reachable descriptor code (the SEC1 surface) AND could not be set faithfully
-    (a plain ``obj.__dict__`` write is shadowed by the data descriptor on read). We resolve
-    from the FIRST MRO class that defines the name -- the one that wins attribute lookup.
-
-    Parameters
-    ----------
-    container_type:
-        Resolved container class.
-    name:
-        Captured field / key name to classify.
-
-    Returns
-    -------
-    bool
-        True when ``name`` is a class-defined data descriptor.
-    """
-
-    for klass in getattr(container_type, "__mro__", (container_type,)):
-        class_dict = getattr(klass, "__dict__", {})
-        if name in class_dict:
-            attribute = class_dict[name]
-            attribute_type = type(attribute)
-            return hasattr(attribute_type, "__set__") or hasattr(attribute_type, "__delete__")
-    return False
-
-
-def _type_has_instance_dict(container_type: type[Any]) -> bool:
-    """Return whether instances of ``container_type`` carry a per-instance ``__dict__``.
-
-    Non-invoking field population writes directly to ``obj.__dict__``; a ``__slots__`` type
-    with no instance ``__dict__`` cannot be populated inertly (a plain slot write would go
-    through the slot data descriptor). Such a type is refused so reconstruction stays inert.
-
-    Parameters
-    ----------
-    container_type:
-        Resolved container class.
-
-    Returns
-    -------
-    bool
-        True when instances expose a writable ``__dict__``.
-    """
-
-    return any(
-        "__dict__" in getattr(klass, "__dict__", {})
-        for klass in getattr(container_type, "__mro__", (container_type,))
-    )
-
-
-def _fields_are_inert_settable(container_type: type[Any], names: tuple[Any, ...]) -> bool:
-    """Return whether every captured field/key can be set on ``container_type`` inertly.
-
-    Inert population requires (1) a per-instance ``__dict__`` to write into and (2) no
-    captured name that resolves to a data descriptor (its ``__set__`` would fire attacker
-    code and the write would not be faithful). When either fails, reconstruction falls back
-    to the plain namespace / mapping shape rather than executing any descriptor code.
-
-    Parameters
-    ----------
-    container_type:
-        Resolved container class.
-    names:
-        Captured field / key names to populate.
-
-    Returns
-    -------
-    bool
-        True when all names can be populated via ``obj.__dict__`` without firing code.
-    """
-
-    if not _type_has_instance_dict(container_type):
-        return False
-    return not any(_name_is_data_descriptor(container_type, name) for name in names)
 
 
 def reconstruction_is_lossy(value: Any, captured_names: tuple[Any, ...]) -> bool:
@@ -1054,9 +938,9 @@ def _slot_path_text(path: tuple[OutputPathComponent, ...]) -> str:
         if isinstance(component, TupleIndex):
             parts.append(f"[{component.index}]")
         elif isinstance(component, (DictKey, HFKey)):
-            parts.append(f"[{component.key!r}]")
+            parts.append(f"[{component._key!r}]")
         elif isinstance(component, (NamedField, DataclassField)):
-            parts.append(f".{component.name}")
+            parts.append(f".{component._name}")
         else:
             parts.append(f"[{component!r}]")
     return "".join(parts)

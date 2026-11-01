@@ -181,7 +181,7 @@ def derive_name(log: Trace, *, name: str | None, index: int) -> str:
 
     if name is not None:
         return str(name)
-    log_name = getattr(log, "trace_label", None)
+    log_name = getattr(log, "name", None)
     if log_name:
         return str(log_name)
     return f"member_{index}"

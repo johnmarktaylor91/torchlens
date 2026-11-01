@@ -68,7 +68,7 @@ def test_bridge_utils_error_contracts(conv_log) -> None:
         bridge_utils.out_at(conv_log, SimpleNamespace(out="not a tensor", layer_label="fake_1_1"))
 
     with pytest.raises(ValueError, match="tensor input"):
-        bridge_utils.first_input_tensor(SimpleNamespace(layer_list=[]))
+        bridge_utils.first_input_tensor(SimpleNamespace(_layer_list=[]))
 
     layers = bridge_utils.tensor_layers(conv_log)
     assert layers

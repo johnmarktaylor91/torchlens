@@ -109,8 +109,8 @@ def test_multi_root_backward_walks_each_root_in_the_capture_it_reaches(entry: st
             else:
                 params = [*first.parameters(), *second.parameters()]
                 torch.autograd.grad([root1, root2], params)
-        assert set(trace1.grad_fn_logs) == graph1.keys()
-        assert set(trace2.grad_fn_logs) == graph2.keys()
+        assert set(trace1._grad_fn_logs) == graph1.keys()
+        assert set(trace2._grad_fn_logs) == graph2.keys()
         cases = ((trace1, root1, 2 * 5 * 4 * 3), (trace2, root2, 2 * 5 * 3 * 2))
         for trace, root, closed_form in cases:
             (record,) = trace.autograd.backward_passes
@@ -120,7 +120,7 @@ def test_multi_root_backward_walks_each_root_in_the_capture_it_reaches(entry: st
             assert attribution.unattributed_flops == 0
             (counted,) = [row for row in attribution.rows if row.flops]
             assert counted.flops == closed_form
-            assert counted.op_label in {str(op.layer_label) for op in trace.layer_list}
+            assert counted.op_label in {str(op.layer_label) for op in trace._layer_list}
             # The recorder never names a node its capture did not walk (no
             # unresolved primitive ownership survives).
             assert check_metadata_invariants(trace)
@@ -141,7 +141,7 @@ def test_one_capture_with_two_roots_walks_both() -> None:
         root1, root2 = y.sum(), (y * 2).sum()
         expected = _graph_nodes(root1) | _graph_nodes(root2)
         torch.autograd.backward([root1, root2])
-        assert set(trace.grad_fn_logs) == expected.keys()
+        assert set(trace._grad_fn_logs) == expected.keys()
         (record,) = trace.autograd.backward_passes
         assert list(record.root_grad_fn_ids) == [id(root1.grad_fn), id(root2.grad_fn)]
         assert len(record.root_meta) == 2
@@ -206,7 +206,7 @@ def _census_refs(
     refs = set()
     for op in record.aten_ops:
         ref = op.grad_fn_call_ref
-        grad_fn = None if ref is None else trace.grad_fn_logs.get(ref[0])
+        grad_fn = None if ref is None else trace._grad_fn_logs.get(ref[0])
         if grad_fn is not None and (grad_fn.has_op or not own_ops_only):
             refs.add((grad_fn.label, ref[1], ref[2]))
     return refs
@@ -219,7 +219,7 @@ def _unpack_refs(trace: Any, pass_index: int) -> set[tuple[str, int, int]]:
         for point in record["unpack_evidence"]:
             bracket = point["fire_bracket"]
             if point["pass_index"] == pass_index and bracket is not None:
-                refs.add((trace.grad_fn_logs[bracket[0]].label, bracket[1], bracket[2]))
+                refs.add((trace._grad_fn_logs[bracket[0]].label, bracket[1], bracket[2]))
     return refs
 
 

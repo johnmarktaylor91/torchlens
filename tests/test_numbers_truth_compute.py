@@ -227,7 +227,7 @@ def test_record_collapse_matches_stored_flops_everywhere() -> None:
     log = _capture(model, torch.randn(2, 3, 4, 4))
     try:
         checked = 0
-        for op in log.layer_list:
+        for op in log._layer_list:
             record = op.compute_record
             if record is None or record.fma_macs is None:
                 continue
@@ -257,7 +257,7 @@ def test_bert_base_exact_mac_decomposition() -> None:
     try:
         fused = [
             op
-            for op in log.layer_list
+            for op in log._layer_list
             if op.func_name in ("addmm", "linear") and op.macs_forward is not None
         ]
         assert len(fused) == 73

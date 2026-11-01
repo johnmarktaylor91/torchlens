@@ -26,6 +26,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from ._netron_records import NetronNode, NetronProjection
 
 __tl_layer__ = "L8"
@@ -173,7 +174,9 @@ def build_baseline_diff(
         "schema": BASELINE_SUMMARY_SCHEMA,
         "source": "torchlens.report.diff",
         "direction": "subject - reference",
-        "reference_model_class": str(getattr(reference, "model_class_name", "")),
+        "reference_model_class": str(
+            reference._source_class_name if is_live_trace(reference) else ""
+        ),
         "row_counts": dict(sorted(report.counts.items())),
         "nodes_with_diff_facts": len(node_facts),
         "removed_count": len(removed),

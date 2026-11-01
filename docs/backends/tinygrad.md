@@ -33,7 +33,7 @@ def mlp(x):
 x = Tensor([[-1.0, -0.5, 0.25, 1.0], [0.5, 1.5, -2.0, 0.75]])
 trace = tl.trace(mlp, x, backend="tinygrad")
 
-print(len(trace.layer_list), "ops recorded")
+print(len(trace), "ops recorded")
 print(trace.output_ops[0].out.numpy())          # equals mlp(x).numpy()
 assert trace.validate_forward_pass([mlp(x)]) is True
 ```

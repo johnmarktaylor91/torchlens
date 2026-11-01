@@ -80,7 +80,7 @@ def _log(model: nn.Module, x: torch.Tensor) -> tl.Trace:
         Captured model log.
     """
 
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
 def test_aligned_pairs_returns_best_match_sites_across_architectures() -> None:

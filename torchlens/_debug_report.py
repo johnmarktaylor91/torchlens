@@ -31,6 +31,8 @@ import enum
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from ._data_classes._trace_missing_attrs import is_live_trace
+
 __tl_layer__ = "L1"
 
 #: Nesting depth past which :meth:`Report.to_dict` summarizes values.
@@ -398,4 +400,4 @@ def table_report(
 def trace_subject(trace: Any) -> str:
     """Name a trace for a report subject (its model class)."""
 
-    return str(getattr(trace, "model_class_name", None) or type(trace).__name__)
+    return str((trace._source_class_name if is_live_trace(trace) else None) or type(trace).__name__)

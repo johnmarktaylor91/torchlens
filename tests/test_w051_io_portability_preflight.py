@@ -67,7 +67,7 @@ def test_user_object_in_op_annotation_refuses_naming_the_op(tmp_path: Path) -> N
     assert exc.fields["code"] == "annotation_value_unportable"
     # The op's annotations mirror onto its persisted Layer record too; the
     # located path names whichever persisted record fails first, by label.
-    assert exc.fields["field"].startswith("Trace.layer_")
+    assert exc.fields["field"].startswith("Trace._layer_")
     assert "linear_1_1" in exc.fields["field"]
     assert exc.fields["field"].endswith(".annotations['foo']")
 

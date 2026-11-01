@@ -3,7 +3,7 @@
 ``InputProvenance`` is the rich runtime view; it serializes INTO the shipped
 ``ResolvedPreprocessing`` field shape (source / identifier / verified /
 config / description) and rides the existing KEEP-registered
-``Trace.input_preprocessor`` slot on the ``Trace.save``/``tl.load`` bundle path,
+``Trace.provenance.input_preprocessor`` slot on the ``Trace.save``/``tl.load`` bundle path,
 so a synthesized trace can never masquerade as a real one after a handoff --
 with ZERO new persisted schema fields (the C07 census is closed; this lane
 mints none).
@@ -20,6 +20,7 @@ from typing import Any
 
 import torch
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.trace import ResolvedPreprocessing
 from ._plan import ORIGIN_BY_RUNG, RUNG_GOLD, InputPlan, tensor_leaves
 
@@ -307,4 +308,6 @@ def trace_input_provenance(trace: Any) -> InputProvenance | None:
         gold history).
     """
 
-    return provenance_from_record(getattr(trace, "input_preprocessor", None))
+    return provenance_from_record(
+        trace._provenance_input_preprocessor if is_live_trace(trace) else None
+    )

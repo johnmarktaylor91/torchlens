@@ -237,7 +237,7 @@ def _postprocess_body(
         f"Postprocessing {len(self._raw_graph_ws.raw_layer_labels_list):,} layers "
         f"({len(self.buffer_layers):,} buffers)...",
     )
-    _post_t0 = time.time() if getattr(self, "verbose", False) else 0
+    _post_t0 = time.time() if self._options_verbose else 0
 
     # Steps 1-20 run through the executor (_executor.py): each step body
     # resolves its callable through this module's namespace at call time.

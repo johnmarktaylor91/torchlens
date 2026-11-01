@@ -29,12 +29,13 @@ ratification.
 
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any, NamedTuple
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 from ._compute_truth import ComputeAggregation, compute_aggregation, row_mac_flops
+from ._cost_tree_helpers import _call_display, _label_spellings, _structure_digest
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -212,24 +213,6 @@ def _innermost_call(op_row_label: str, label_to_call: dict[str, str]) -> str | N
     return label_to_call.get(op_row_label)
 
 
-def _structure_digest(
-    row_id: str,
-    self_flops: int | None,
-    children: dict[str, list[str]],
-    digests: dict[str, str],
-    extra: str = "",
-) -> str:
-    """Bottom-up structural digest used by the strict fold signature.
-
-    Two sibling calls fold ONLY when their entire subtrees agree on
-    structure AND cost (byte-equal digests) -- the summary memo's strict
-    fold doctrine: ``(xN)`` must never hide a sibling that differs.
-    """
-
-    child_digests = ",".join(digests[child] for child in children.get(row_id, ()))
-    return hashlib.sha256(f"{self_flops}{extra}|{child_digests}".encode()).hexdigest()[:16]
-
-
 def build_cost_tree(
     trace: Trace,
     *,
@@ -312,8 +295,10 @@ class _TreeBuilder:
         self.max_depth = max_depth
         self.fold_repeats = fold_repeats
         self.partition_total = int(agg.partition_total)
-        self.calls = {str(call.call_label): call for call in trace.module_calls.values()}
-        self.model_root_name = str(getattr(trace, "model_class_name", None) or "model")
+        self.calls = {str(call.label): call for call in trace.module_calls.values()}
+        self.model_root_name = str(
+            (trace._source_class_name if is_live_trace(trace) else None) or "model"
+        )
         self.rows: list[CostTreeRow] = []
         self.hidden_flops = 0
         self._ownership()
@@ -328,11 +313,11 @@ class _TreeBuilder:
         op_owner: dict[str, str | None] = {}
         pass_by_label: dict[str, int] = {}
         self.owner_by_any_label: dict[str, str | None] = {}
-        for op in self.trace.layer_list:
+        for op in self.trace._layer_list:
             label = str(getattr(op, "label", None) or getattr(op, "layer_label", ""))
             stack = tuple(getattr(op, "module_call_stack", ()) or ())
             op_owner[label] = str(stack[-1]) if stack else None
-            pass_by_label[label] = int(getattr(op, "pass_index", 1) or 1)
+            pass_by_label[label] = int(getattr(op, "pass_number", 1) or 1)
             for spelling in _label_spellings(op):
                 self.owner_by_any_label.setdefault(spelling, op_owner[label])
         self.self_flops: dict[str | None, int] = {}
@@ -787,23 +772,6 @@ class _TreeBuilder:
             total_forward_mac_flops=sum(self.self_mac.values()),
             column_conventions=dict(COST_COLUMN_CONVENTIONS),
         )
-
-
-def _label_spellings(op: Any) -> tuple[str, ...]:
-    """The label spellings a GradFn's ``op_label`` may use for one op."""
-
-    spellings = []
-    for name in ("label", "layer_label", "layer_label_w_pass", "layer_label_no_pass"):
-        value = getattr(op, name, None)
-        if value:
-            spellings.append(str(value))
-    return tuple(spellings)
-
-
-def _call_display(call: Any) -> str:
-    """Display label for one module call (address:pass spelling kept)."""
-
-    return str(getattr(call, "call_label", "?"))
 
 
 def format_cost_tree(tree: CostTree) -> str:

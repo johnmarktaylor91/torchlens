@@ -73,7 +73,7 @@ def _undecorate_all_saved_tensors(self: "Trace") -> None:
     user are clean.
     """
     tensors_to_undecorate = []
-    for layer_entry in [*self.layer_list, *self.graph.orphans.values()]:
+    for layer_entry in [*self._layer_list, *self.graph.orphans.values()]:
         if layer_entry.has_saved_activation and layer_entry.out is not None:
             tensors_to_undecorate.append(layer_entry.out)
         if getattr(layer_entry, "transformed_out", None) is not None:
@@ -95,12 +95,10 @@ def _log_time_elapsed(self: "Trace") -> None:
     pass times from total elapsed time. Also computes torchlens_logging overhead
     as total time minus actual function call time.
     """
-    self.capture_end_time = time.time()
-    self.cleanup_duration = Duration(
-        self.capture_end_time
-        - self.capture_start_time
-        - self.setup_duration
-        - self.forward_duration
+    self._provenance_end_time = end_time = time.time()
+    elapsed = end_time - self._provenance_start_time
+    self._provenance_cleanup_duration = Duration(
+        elapsed - self._provenance_setup_duration - self._cost_forward_duration
     )
 
 
@@ -126,7 +124,7 @@ def _finalize_param_logs(self: "Trace") -> None:
     membership_by_param: dict[int, tuple[set[str], set[str], set[str]]] = {}
 
     # Build used_by_ops, used_by_layers, and co_parent_params from Op entries
-    for layer_entry in self.layer_list:
+    for layer_entry in self._layer_list:
         if not layer_entry._param_logs:
             continue
         addresses_in_op = [pl.address for pl in layer_entry._param_logs]
@@ -154,7 +152,7 @@ def _finalize_param_logs(self: "Trace") -> None:
                     co_parent_params.add(other_addr)
 
     # Populate num_calls: how many times this parameter was used in the forward pass
-    for pl in self.param_logs:
+    for pl in self._param_logs:
         pl.num_calls = len(pl.used_by_ops)
         pl.trace = self
 
@@ -165,7 +163,7 @@ def _finalize_param_logs(self: "Trace") -> None:
     if _core is not None:
         from .._trace_core.record_rows import adopt_records
 
-        adopt_records(_core, "param", self.param_logs)
+        adopt_records(_core, "param", self._param_logs)
 
     # Param grad metadata is populated lazily via backward hooks in _log_tensor_grad.
     # Param._param_ref is intentionally released later, after module finalization has
@@ -173,7 +171,7 @@ def _finalize_param_logs(self: "Trace") -> None:
     # _param_logs (GC-9) and func (GC-10) are still needed by validation.
 
     # Clear actual Parameter tensor references from Op entries to save memory.
-    for layer_entry in self.layer_list:
+    for layer_entry in self._layer_list:
         layer_entry.parent_params = []
 
 
@@ -190,14 +188,14 @@ def _build_root_module_log(
 
     module_metadata = cast(dict[str, dict[str, Any]], self._module_capture_ws.module_metadata)
     root_meta = module_metadata.get("self", {})
-    root_layers = list(self.layer_logs.keys())
+    root_layers = list(self._layer_logs.keys())
 
-    root_param_dict = {pl.address: pl for pl in self.param_logs}
+    root_param_dict = {pl.address: pl for pl in self._param_logs}
     root_params = ParamAccessor(root_param_dict)
-    root_num_params = sum(pl.num_params for pl in self.param_logs)
-    root_num_trainable = sum(pl.num_params for pl in self.param_logs if pl.is_trainable)
-    root_num_frozen = sum(pl.num_params for pl in self.param_logs if not pl.is_trainable)
-    root_fsize = Bytes(sum(int(pl.param_memory) for pl in self.param_logs))
+    root_num_params = sum(pl.num_params for pl in self._param_logs)
+    root_num_trainable = sum(pl.num_params for pl in self._param_logs if pl.is_trainable)
+    root_num_frozen = sum(pl.num_params for pl in self._param_logs if not pl.is_trainable)
+    root_fsize = Bytes(sum(int(pl.param_memory) for pl in self._param_logs))
     root_meta_children = root_meta.get("address_children")
     if root_meta_children is None:
         address_children = [m for m in mbd["top_level_modules"] if m != "self" and "." not in m]
@@ -211,7 +209,7 @@ def _build_root_module_log(
         all_addresses=root_meta.get("all_addresses", ["self"]),
         name="self",
         cls=root_meta.get("cls"),
-        class_name=root_meta.get("class_name", self.model_class_name),
+        class_name=root_meta.get("class_name", self._source_class_name),
         class_qualname=root_meta.get("class_qualname", ""),
         class_source_file=root_meta.get("class_source_file"),
         class_source_line=root_meta.get("class_source_line"),
@@ -261,8 +259,8 @@ def _build_root_module_log(
     root_pass = ModuleCall(
         address="self",
         call_index=1,
-        call_label="self:1",
-        ops=[op.label for op in self.layer_list],  # Op space, as on every other call
+        label="self:1",
+        ops=[op.label for op in self._layer_list],  # Op space, as on every other call
         input_layers=_layer_space_labels(self, self.input_layers),
         output_layers=_layer_space_labels(self, self.output_layers),
         output_ops=op_space_labels(self, self.output_layers),
@@ -276,11 +274,11 @@ def _build_root_module_log(
         call_children=_root_call_children(mbd),
         all_addresses=root_meta.get("all_addresses", ["self"]),
         cls=root_meta.get("cls"),
-        class_name=root_meta.get("class_name", self.model_class_name),
+        class_name=root_meta.get("class_name", self._source_class_name),
         class_qualname=root_meta.get("class_qualname", ""),
         ordinal_index=0,
-        forward_duration=float(self.forward_duration or 0.0),
-        code_context=list(getattr(self, "code_context", [])),
+        forward_duration=float(self._cost_forward_duration or 0.0),
+        code_context=list(self._source_frames),
         module_call_stack=[],
         _source_trace=self,
     )
@@ -461,7 +459,7 @@ def _layer_space_labels(self: "Trace", labels: list[str]) -> list[str]:
 
     layer_labels: list[str] = []
     for label in labels:
-        op = self.layer_dict_all_keys.get(label)
+        op = self._layer_dict_all_keys.get(label)
         resolved = getattr(op, "layer_label", None) if op is not None else None
         layer_labels.append(resolved if isinstance(resolved, str) else label)
     return layer_labels
@@ -484,7 +482,7 @@ def _first_output_structure(self: "Trace", output_layers: list[str]) -> Any | No
     """
 
     for layer_label in output_layers:
-        entry = self.layer_dict_all_keys.get(layer_label)
+        entry = self._layer_dict_all_keys.get(layer_label)
         if entry is not None and entry.container_spec is not None:
             return entry.container_spec
     return None
@@ -509,7 +507,7 @@ def _assign_output_roles(
         return
     for index, output in enumerate(output_entries):
         if output.multi_output_name is not None:
-            parent_layer = output.source_trace.layer_logs.get(output.layer_label)
+            parent_layer = output.source_trace._layer_logs.get(output.layer_label)
             if parent_layer is not None:
                 parent_layer.multi_output_name = output.multi_output_name
             continue
@@ -518,7 +516,7 @@ def _assign_output_roles(
             output.multi_output_index if output.multi_output_index is not None else index,
             hints=hints,
         )
-        parent_layer = output.source_trace.layer_logs.get(output.layer_label)
+        parent_layer = output.source_trace._layer_logs.get(output.layer_label)
         if parent_layer is not None:
             parent_layer.multi_output_name = output.multi_output_name
 
@@ -545,8 +543,8 @@ def _merge_layer_log_conditional_fields(
         layer_log.conditional_branch_stack_ops[stack_signature] = []
 
     signature_ops = layer_log.conditional_branch_stack_ops[stack_signature]
-    if pass_log.pass_index not in signature_ops:
-        signature_ops.append(pass_log.pass_index)
+    if pass_log.pass_number not in signature_ops:
+        signature_ops.append(pass_log.pass_number)
         signature_ops.sort()
 
     for conditional_id, branch_children in pass_log.conditional_arm_children.items():
@@ -621,15 +619,15 @@ def _rebuild_conditional_edge_call_indices(self: "Trace") -> None:
     self:
         Model log being finalized.
     """
-    if getattr(self, "conditional_edge_call_indices", None):
-        self.conditional_edge_call_indices = {
+    if self._graph_conditional_edge_call_indices:
+        self._graph_conditional_edge_call_indices = {
             edge_key: sorted(dict.fromkeys(call_indexs))
-            for edge_key, call_indexs in self.conditional_edge_call_indices.items()
+            for edge_key, call_indexs in self._graph_conditional_edge_call_indices.items()
         }
         return
 
     conditional_edge_call_indices: dict[tuple[str, str, int, str], list[int]] = defaultdict(list)
-    for (conditional_id, branch_kind), edge_list in self.conditional_arm_entry_edges.items():
+    for (conditional_id, branch_kind), edge_list in self._graph_conditional_arm_entry_edges.items():
         for parent_label, child_label in edge_list:
             parent_no_pass = _strip_pass_suffix(parent_label)
             child_no_pass = _strip_pass_suffix(child_label)
@@ -643,7 +641,7 @@ def _rebuild_conditional_edge_call_indices(self: "Trace") -> None:
             if child_call_index not in conditional_edge_call_indices[edge_key]:
                 conditional_edge_call_indices[edge_key].append(child_call_index)
 
-    self.conditional_edge_call_indices = {
+    self._graph_conditional_edge_call_indices = {
         edge_key: sorted(call_indexs)
         for edge_key, call_indexs in conditional_edge_call_indices.items()
     }
@@ -744,7 +742,7 @@ def _build_submodule_call_logs(
         module_call_log = ModuleCall(
             address=address,
             call_index=call_index,
-            call_label=call_label,
+            label=call_label,
             ops=pass_layers,
             input_layers=pass_input_layers,
             output_layers=pass_output_layers,
@@ -849,10 +847,10 @@ def _build_module_param_info(
         module_buffer_layers = [
             bl
             for bl in self.buffer_layers
-            if bl in self.layer_dict_all_keys
-            and hasattr(self.layer_dict_all_keys[bl], "address")
-            and self.layer_dict_all_keys[bl].address is not None
-            and self.layer_dict_all_keys[bl].address.rsplit(".", 1)[0] == address
+            if bl in self._layer_dict_all_keys
+            and hasattr(self._layer_dict_all_keys[bl], "address")
+            and self._layer_dict_all_keys[bl].address is not None
+            and self._layer_dict_all_keys[bl].address.rsplit(".", 1)[0] == address
         ]
 
     return ModuleParamInfo(
@@ -886,7 +884,7 @@ def _build_module_logs(self: "Trace") -> None:
 
     # Pre-compute param_logs grouped by module address
     self._param_logs_by_module = defaultdict(list)
-    for pl in self.param_logs:
+    for pl in self._param_logs:
         for module_address in pl.all_module_addresses:
             self._param_logs_by_module[module_address].append(pl)
 
@@ -909,8 +907,8 @@ def _build_module_logs(self: "Trace") -> None:
     # Pre-compute buffer layers grouped by parent module address (O6).
     _buffer_layers_by_module = defaultdict(list)
     for bl in self.buffer_layers:
-        if bl in self.layer_dict_all_keys:
-            bl_entry = self.layer_dict_all_keys[bl]
+        if bl in self._layer_dict_all_keys:
+            bl_entry = self._layer_dict_all_keys[bl]
             if hasattr(bl_entry, "address") and bl_entry.address is not None:
                 module_addr = bl_entry.address.rsplit(".", 1)[0]
                 _buffer_layers_by_module[module_addr].append(bl)
@@ -919,7 +917,7 @@ def _build_module_logs(self: "Trace") -> None:
     # tens of thousands of ModuleCalls; scanning every Op once per call is
     # quadratic and dominates validation postprocessing.
     _pass_input_layers_by_call: dict[str, list[str]] = defaultdict(list)
-    for te in self.layer_list:
+    for te in self._layer_list:
         # B3R7-R05-1: iterate the fed-call fact directly; the old
         # ``module_call_stack`` emptiness guard was an enter-lane proxy.
         for call_label in te.input_to_module_calls:
@@ -939,7 +937,7 @@ def _build_module_logs(self: "Trace") -> None:
         seen = set()
         layers = []
         for label in layers_raw:
-            entry = self.layer_dict_all_keys.get(label)
+            entry = self._layer_dict_all_keys.get(label)
             if entry is not None:
                 no_pass = entry.layer_label
                 if no_pass not in seen:
@@ -1056,7 +1054,7 @@ def _build_module_logs(self: "Trace") -> None:
 
     # GC-11: Clear forward_args/kwargs from ModuleCallLogs to release tensor references.
     # These can hold large tensors from the model's forward() call args.
-    keep_forward_args = getattr(self, "module_identity_mode", None) in {
+    keep_forward_args = self._options_module_identity_mode in {
         "pytree_module",
         "object_module",
     }
@@ -1227,7 +1225,7 @@ def _build_layer_logs(self: "Trace") -> None:
 
     layer_logs = OrderedDict()
 
-    for pass_log in self.layer_list:
+    for pass_log in self._layer_list:
         no_call_label = pass_log.layer_label
 
         if no_call_label not in layer_logs:
@@ -1259,7 +1257,7 @@ def _build_layer_logs(self: "Trace") -> None:
             if pass_log.is_atomic_module:
                 layer_log.is_atomic_module = True
 
-        layer_log.ops[pass_log.pass_index] = pass_log
+        layer_log.ops[pass_log.pass_number] = pass_log
         layer_log.call_labels.append(pass_log.label)
         _merge_layer_log_conditional_fields(layer_log, pass_log)
 
@@ -1268,7 +1266,7 @@ def _build_layer_logs(self: "Trace") -> None:
     for layer_log in layer_logs.values():
         for pass_log in layer_log.ops.values():
             linked_labels = []
-            for param_log in getattr(pass_log, "_param_logs", []):
+            for param_log in pass_log._param_logs:
                 # Tied/shared parameters expose every aliasing address through
                 # ``all_addresses`` (the primary is ``param_log.address`` == all_addresses[0]).
                 # Emit ``primary -> alias`` for each additional address that shares the
@@ -1303,8 +1301,8 @@ def _build_layer_logs(self: "Trace") -> None:
         _reconcile_multipass_layer_fields(layer_log)
         _rebuild_layer_log_conditional_views(layer_log)
 
-    self.total_autograd_memory = Bytes(autograd_memory) if has_autograd_saved_value else None
-    self.layer_logs = layer_logs
+    self._cost_total_autograd_memory = Bytes(autograd_memory) if has_autograd_saved_value else None
+    self._layer_logs = layer_logs
     _rebuild_conditional_edge_call_indices(self)
     _build_conditional_records(self)
 
@@ -1320,10 +1318,10 @@ def _build_conditional_records(self: "Trace") -> None:
     )
 
     conditionals: list[Conditional] = []
-    event_by_id = {event.id: event for event in self.conditional_records}
-    conditional_id_by_event_id = _make_public_conditional_ids(self.conditional_records)
+    event_by_id = {event.id: event for event in self._graph_conditional_records}
+    conditional_id_by_event_id = _make_public_conditional_ids(self._graph_conditional_records)
     role_labels_by_cond_arm: dict[tuple[str, int, str], list[str]] = defaultdict(list)
-    for event in self.conditional_records:
+    for event in self._graph_conditional_records:
         terminal_bool_label = event.bool_layers[0] if event.bool_layers else str(event.id)
         conditional_id = conditional_id_by_event_id[event.id]
         # Use AST-derived branch_ranges so every static arm is materialized,
@@ -1355,7 +1353,9 @@ def _build_conditional_records(self: "Trace") -> None:
         arms: list[ConditionalArm] = []
         for branch_kind in ordered_branch_kinds:
             kind = "elif" if branch_kind.startswith("elif_") else branch_kind
-            edge_list = list(self.conditional_arm_entry_edges.get((event.id, branch_kind), []))
+            edge_list = list(
+                self._graph_conditional_arm_entry_edges.get((event.id, branch_kind), [])
+            )
             execution_labels = list(dict.fromkeys(child for _parent, child in edge_list))
             if kind not in {"then", "elif"}:
                 evaluation_labels = []
@@ -1470,21 +1470,18 @@ def _build_conditional_records(self: "Trace") -> None:
                     roles_by_label.setdefault(label, []).append(
                         ConditionalRoleRef(conditional.id, arm_index, arm.kind, role)
                     )
-    for layer in self.layer_list:
+    for layer in self._layer_list:
         layer.in_conditionals = roles_by_label.get(layer.layer_label, [])
         if (
             layer.terminal_conditional_id is not None
             and layer.terminal_conditional_id in event_by_id
         ):
-            layer.terminal_bool_for = (
-                conditional_id_by_event_id[layer.terminal_conditional_id],
-                0,
-            )
+            layer.terminal_bool_for = (conditional_id_by_event_id[layer.terminal_conditional_id], 0)
         else:
             layer.terminal_bool_for = None
     bind_layer_conditional_roles(self, roles_by_label)
 
-    self.conditionals = ConditionalAccessor(conditionals)
+    self._graph_conditionals = ConditionalAccessor(conditionals)
 
 
 def _set_tracing_finished(self: "Trace") -> None:
@@ -1499,8 +1496,8 @@ def _set_tracing_finished(self: "Trace") -> None:
     This is intentional — it enables fast-path postprocessing to use
     fully-populated lookup dicts from the exhaustive pass.
     """
-    for layer_label in self.layer_dict_main_keys:
-        tensor = self.layer_dict_main_keys[layer_label]
+    for layer_label in self._layer_dict_main_keys:
+        tensor = self._layer_dict_main_keys[layer_label]
         tensor._tracing_finished = True
     self._tracing_finished = True
 
@@ -1601,8 +1598,8 @@ def _scrub_streamed_trace(
         self,
         include_outs=True,
         include_grads=_has_retained_gradient_payloads(self),
-        include_saved_args=self.save_arg_values,
-        include_rng_states=self.save_rng_states,
+        include_saved_args=self._options_save_args,
+        include_rng_states=self._options_save_rng,
         include_custom_attributes=getattr(writer, "include_custom_attributes", True),
         include_buffer_values=getattr(writer, "include_buffer_values", True),
         # Scrub ids start past every id the capture streamed: a tensor field with
@@ -1622,7 +1619,7 @@ def _evict_streamed_outs(self: "Trace") -> None:
         Model log whose streamed outs should be evicted.
     """
 
-    for layer_entry in self.layer_list:
+    for layer_entry in self._layer_list:
         if getattr(layer_entry, "out_ref", None) is not None:
             layer_entry._internal_set("out", None)
         if getattr(layer_entry, "_pending_transformed_out_blob_id", None) is not None:
@@ -1638,7 +1635,7 @@ def _evict_streamed_grads(self: "Trace") -> None:
         Model log whose streamed grads should be evicted.
     """
 
-    for layer_entry in self.layer_list:
+    for layer_entry in self._layer_list:
         if getattr(layer_entry, "grad_ref", None) is not None:
             layer_entry._internal_set("grad", None)
         if getattr(layer_entry, "_pending_transformed_grad_blob_id", None) is not None:
@@ -1671,23 +1668,23 @@ def _reuse_streamed_blob_ids(
         Patched scrubbed state and the filtered blob spec list.
     """
 
-    scrubbed_layers = scrubbed_state.get("layer_list")
+    scrubbed_layers = scrubbed_state.get("_layer_list")
     if not isinstance(scrubbed_layers, list):
         raise ArtifactError(
-            "Streaming finalize expected scrubbed_state['layer_list'] to be a list."
+            "Streaming finalize expected scrubbed_state['_layer_list'] to be a list."
         )
-    # The scrubbed layers are a 1:1 scrub of trace.layer_list. If they ever
+    # The scrubbed layers are a 1:1 scrub of trace._layer_list. If they ever
     # diverge, pairing them positionally would silently finalize only the
     # shorter prefix -- writing a bundle that looks complete but is missing
     # blobs for every layer past the truncation point.
-    if len(scrubbed_layers) != len(trace.layer_list):
+    if len(scrubbed_layers) != len(trace._layer_list):
         raise ArtifactError(
             "Streaming finalize expected one scrubbed layer per live layer, got "
-            f"{len(scrubbed_layers)} scrubbed vs {len(trace.layer_list)} live."
+            f"{len(scrubbed_layers)} scrubbed vs {len(trace._layer_list)} live."
         )
 
     skipped_blob_ids: set[str] = set()
-    for live_layer, scrubbed_layer in zip(trace.layer_list, scrubbed_layers, strict=True):
+    for live_layer, scrubbed_layer in zip(trace._layer_list, scrubbed_layers, strict=True):
         # One lazy full-schema snapshot per layer (r8 R29): the old loop
         # rebuilt the ~200-300-field portable state dict on EVERY field
         # iteration and BEFORE the pending short-circuit, so every layer of
@@ -1794,22 +1791,22 @@ def _attach_streamed_tensor_refs(
         Final bundle directory path after the temp-dir rename.
     """
 
-    scrubbed_layers = scrubbed_state.get("layer_list")
+    scrubbed_layers = scrubbed_state.get("_layer_list")
     if not isinstance(scrubbed_layers, list):
         raise ArtifactError(
-            "Streaming finalize expected scrubbed_state['layer_list'] to be a list."
+            "Streaming finalize expected scrubbed_state['_layer_list'] to be a list."
         )
-    # The scrubbed layers are a 1:1 scrub of trace.layer_list. If they ever
+    # The scrubbed layers are a 1:1 scrub of trace._layer_list. If they ever
     # diverge, pairing them positionally would silently finalize only the
     # shorter prefix -- writing a bundle that looks complete but is missing
     # blobs for every layer past the truncation point.
-    if len(scrubbed_layers) != len(trace.layer_list):
+    if len(scrubbed_layers) != len(trace._layer_list):
         raise ArtifactError(
             "Streaming finalize expected one scrubbed layer per live layer, got "
-            f"{len(scrubbed_layers)} scrubbed vs {len(trace.layer_list)} live."
+            f"{len(scrubbed_layers)} scrubbed vs {len(trace._layer_list)} live."
         )
 
-    for live_layer, scrubbed_layer in zip(trace.layer_list, scrubbed_layers, strict=True):
+    for live_layer, scrubbed_layer in zip(trace._layer_list, scrubbed_layers, strict=True):
         for tensor_field, ref_field, kind in (
             ("out", "out_ref", "out"),
             ("grad", "grad_ref", "grad"),

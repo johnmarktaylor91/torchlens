@@ -25,7 +25,7 @@ The r79 closure is two-layered:
    as belt-and-suspenders). A popped object can escape the tree, never the list.
 2. DEFENSE IN DEPTH (consumers): a non-empty prep address counts as provenance
    ONLY when it resolves in THIS capture's session -- the address maps in
-   ``trace.param_logs`` AND the recorded log's live object IS the value (exact
+   ``trace._param_logs`` AND the recorded log's live object IS the value (exact
    identity). ``_build_param_fields`` applies the same identity gate before
    resolving, closing the wrong-bind even if a stamp ever leaks again.
 
@@ -44,7 +44,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import PathFaithfulness
-from torchlens._utils import make_random_barcode
+from torchlens._utils.hashing import make_random_barcode
 from torchlens.backends.torch._tl import (
     get_buffer_address,
     get_param_meta,
@@ -54,7 +54,7 @@ from torchlens.backends.torch._tl import (
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:

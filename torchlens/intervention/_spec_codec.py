@@ -211,7 +211,7 @@ def _serialize_fire_record(
     # payload shallowly: the two structured fields are serialized below and
     # every other FireRecord field is a scalar/string.
     data = {field.name: getattr(record, field.name) for field in dataclass_fields(record)}
-    data["helper"] = _serialize_value(record.helper, save_level, state)
+    data["edit"] = _serialize_value(record.edit, save_level, state)
     data["container_path"] = _serialize_value(record.container_path, save_level, state)
     return data
 
@@ -393,7 +393,7 @@ def _deserialize_fire_record(
     """
 
     helper = _deserialize_value(
-        data.get("helper"),
+        data.get("edit"),
         tensors,
         trust_custom_callables=trust_custom_callables,
         allowed_custom_callable_modules=allowed_custom_callable_modules,
@@ -410,15 +410,15 @@ def _deserialize_fire_record(
         func_call_id=data.get("func_call_id"),
         container_path=tuple(container_path or ()),
         engine=data.get("engine"),
-        helper=helper if isinstance(helper, Edit) else None,
+        edit=helper if isinstance(helper, Edit) else None,
         site_label=data.get("site_label"),
         timing=data.get("timing"),
         signal=data.get("signal"),
-        helper_name=data.get("helper_name"),
+        edit_name=data.get("edit_name"),
         seed=data.get("seed"),
         determinism_note=data.get("determinism_note"),
         timestamp=data.get("timestamp"),
-        backward_pass_index=data.get("backward_pass_index"),
+        backward_pass_number=data.get("backward_pass_number"),
         call_index=data.get("call_index"),
         grad_kind=data.get("grad_kind"),
         tuple_index=data.get("tuple_index"),

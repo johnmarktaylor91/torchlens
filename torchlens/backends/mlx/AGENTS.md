@@ -11,7 +11,7 @@ It fills the backend protocol (`maturity="preview"`, no `capture_backend`); its
   intermediates (`_MLXIntermediateTapObserver`, `intermediate_derived_grads=True`).
 - Static-label `intervene=` AND `halt=` both ship; combining either with
   `grad_options=` refuses typed (derived-grad replay would misrepresent the
-  intervened forward). Halted traces set `halted` / `stop_reason` /
+  intervened forward). Halted traces set `is_stopped` / `stop_reason` /
   `halt_frontier`; a halt selector matching zero sites warns.
 - `mx.compile` / `mx.grad` / `mx.vmap` traced-transform entries refuse typed at
   capture entry (`_find_mlx_compiled_attributes`, `_mlx_traced_transform_type`);
@@ -51,7 +51,7 @@ It fills the backend protocol (`maturity="preview"`, no `capture_backend`); its
 
 ## Local Invariants
 - True backward capture is unsupported: MLX traces always report
-  `Trace.has_backward_pass = False`; RNG replay snapshots are `None`.
+  `Trace.autograd.has_backward_pass = False`; RNG replay snapshots are `None`.
 - fastlog, streaming, and rng_replay stay refused (registry flags); unsupported
   trace options refuse typed through `.._options` policies.
 - `capabilities.py` only re-exports registry truth; never hardcode flags here.

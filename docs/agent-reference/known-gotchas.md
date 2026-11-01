@@ -12,7 +12,7 @@
   `allowed_custom_callable_modules={"my_trusted_module"}` is narrower and remains restrictive even if
   the boolean is also true. TorchLens-owned `torchlens.*` custom callables and the fixed trusted
   namespaces resolve without an opt-in.
-- CPU peaks are opt-in: a default capture reads CPU `Trace.forward_peak_memory` and
+- CPU peaks are opt-in: a default capture reads CPU `Trace.cost.forward_peak_memory` and
   `backward_peak_memory` as `None`, with `forward_peak_memory_reason` / `backward_peak_memory_reason`
   naming `CaptureOptions(measure_host_peak_memory=True)`, and never writes the process high-water
   mark. Under the opt-in the CPU forward peak is the host resident high-water growth (`VmHWM` after
@@ -44,7 +44,7 @@
   byte-exact contribution/destination digests. Async completions record
   `completion_binding="unobserved"`; wildcard recv refuses typed; collective-crossing traces
   refuse runnable save and forward-replay validation
-  (`collective_boundary_runnable_unsupported`) while metadata invariants run in full. Arming
+  (`collective_boundary_unsupported`) while metadata invariants run in full. Arming
   relaxes no tier-(a) refusal (DTensor/TP/FSDP2/PP still refuse). Distributed rank processes
   (initialized process group, non-daemonic) are the sanctioned exception to the
   main-process-only capture guard.

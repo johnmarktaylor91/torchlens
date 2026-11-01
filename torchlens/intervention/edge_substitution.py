@@ -34,7 +34,7 @@ carries the per-edge intervened marker (FireRecord.edge_address); the
 producer view (what did the producer compute) stays ``parent.out``,
 untouched. Neither surface lies; the edge provenance record is the bridge.
 
-Node-level ``intervention_replaced`` is deliberately NOT set: edge
+Node-level ``is_edited`` is deliberately NOT set: edge
 substitution replaces no node's output (the child's output is DERIVED from
 the substituted input by re-execution), so the node-level corroboration key
 correctly never fires for edges.
@@ -49,6 +49,7 @@ import torch
 
 from torchlens._selection.errors import SelectionError
 
+from .._record_type import first_op
 from .._selection.selection import (
     Selection,
     _apply_invalid,
@@ -153,10 +154,10 @@ def _edit_hook(edit: Any, site_label: str) -> tuple[Any, Edit | None, str]:
         if edit.factory is None:
             raise _apply_invalid(
                 "not_maskable",
-                f"edit {edit.helper_name!r} has no runtime factory.",
+                f"edit {edit.name!r} has no runtime factory.",
                 site=site_label,
             )
-        return edit.factory(), edit, edit.helper_name
+        return edit.factory(), edit, edit.name
     if callable(edit):
         return edit, None, getattr(edit, "__name__", "hook")
     if not isinstance(edit, torch.Tensor):
@@ -177,7 +178,7 @@ def _edit_hook(edit: Any, site_label: str) -> tuple[Any, Edit | None, str]:
     spec = replace_with(edit)
     if spec.factory is None:
         raise RuntimeError("replace_with spec lost its factory")
-    return spec.factory(), spec, spec.helper_name
+    return spec.factory(), spec, spec.name
 
 
 def apply_edge_substitution_do(
@@ -196,7 +197,7 @@ def apply_edge_substitution_do(
     ------
     SelectionError
         ``edge_intervention_engine_unsupported`` off the replay engine;
-        ``edge_provenance_unavailable`` without an intervention_ready
+        ``edge_provenance_unavailable`` without an replayable
         capture; ``selection_apply_invalid`` for ineligible payloads.
     """
 
@@ -234,8 +235,8 @@ def apply_edge_substitution_do(
                     reason="site_not_in_trace",
                     site=repr(address),
                 )
-            child_op = trace.layer_dict_all_keys[record.child_label].ops[0]
-            parent_op = trace.layer_dict_all_keys[record.parent_label].ops[0]
+            child_op = first_op(trace._layer_dict_all_keys[record.child_label])
+            parent_op = first_op(trace._layer_dict_all_keys[record.parent_label])
             child_func_call_id, arg_kind, arg_path = address
             if len(arg_path) != 1:
                 raise _apply_invalid(
@@ -284,7 +285,7 @@ def apply_edge_substitution_do(
                 func_call_id=child_op.func_call_id,
                 container_path=tuple(child_op.container_path or ()),
                 engine="replay",
-                helper=(
+                edit=(
                     dataclasses.replace(
                         helper_spec,
                         selection_recipe={
@@ -298,7 +299,7 @@ def apply_edge_substitution_do(
                 site_label=child_op.layer_label,
                 timing="post",
                 signal="forward",
-                helper_name=helper_name,
+                edit_name=helper_name,
                 # Edge substitution replaces no node's OUTPUT: the child's
                 # output is derived by re-execution, so the node-level
                 # corroboration key must not fire.
@@ -386,7 +387,7 @@ def _recompute_path(
 
     replay_module = importlib.import_module("torchlens.intervention.replay")
     site_key = replay_module._replay_site_key
-    child_op = trace.layer_dict_all_keys[record.child_label].ops[0]
+    child_op = first_op(trace._layer_dict_all_keys[record.child_label])
     target_key = site_key(trace.ops[target_label])
     cone = replay_module.cone_of_effect(trace, [child_op])
     keys = [site_key(op) for op in cone]

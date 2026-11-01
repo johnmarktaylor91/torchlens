@@ -80,14 +80,14 @@ def _assert_refuses(path: Path, code: str, **fields: Any) -> ArtifactError:
 
 
 def test_untampered_source_loads(source_bundle: Path) -> None:
-    assert len(tl.load(source_bundle).layer_list) > 0
+    assert len(tl.load(source_bundle)._layer_list) > 0
 
 
 def test_dropped_op_row_refuses(source_bundle: Path, tmp_path: Path) -> None:
     # A popped output row leaves its parent's ``children`` dangling, so the
     # graph-structure validator (inside rehydrate) fires first; the row-count
     # anchor is the second net (pinned separately below).
-    path = _tampered(source_bundle, tmp_path / "drop.tlspec", lambda st: st["layer_list"].pop())
+    path = _tampered(source_bundle, tmp_path / "drop.tlspec", lambda st: st["_layer_list"].pop())
     _assert_refuses(path, "artifact_graph_structure_invalid", reason="dangling_relation")
 
 
@@ -121,7 +121,7 @@ def test_root_stamp_older_than_manifest_refuses_as_2x(source_bundle: Path, tmp_p
 
 def test_duplicate_label_refuses(source_bundle: Path, tmp_path: Path) -> None:
     def duplicate(state: dict[str, Any]) -> None:
-        ops = state["layer_list"]
+        ops = state["_layer_list"]
         ops[2].label = ops[1].label
 
     path = _tampered(source_bundle, tmp_path / "dup.tlspec", duplicate)
@@ -130,7 +130,7 @@ def test_duplicate_label_refuses(source_bundle: Path, tmp_path: Path) -> None:
 
 def test_dangling_parent_refuses(source_bundle: Path, tmp_path: Path) -> None:
     def dangle(state: dict[str, Any]) -> None:
-        state["layer_list"][2].parents = ["nonexistent_op_99"]
+        state["_layer_list"][2].parents = ["nonexistent_op_99"]
 
     path = _tampered(source_bundle, tmp_path / "dangle.tlspec", dangle)
     _assert_refuses(path, "artifact_graph_structure_invalid", reason="dangling_relation")
@@ -138,13 +138,13 @@ def test_dangling_parent_refuses(source_bundle: Path, tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     ("attr", "value"),
-    [("pass_index", -1), ("pass_index", 0), ("num_passes", 0), ("pass_index", "1")],
+    [("pass_number", -1), ("pass_number", 0), ("num_passes", 0), ("pass_number", "1")],
 )
 def test_pass_stamp_out_of_range_refuses(
     source_bundle: Path, tmp_path: Path, attr: str, value: Any
 ) -> None:
     def stamp(state: dict[str, Any]) -> None:
-        setattr(state["layer_list"][2], attr, value)
+        setattr(state["_layer_list"][2], attr, value)
 
     path = _tampered(source_bundle, tmp_path / f"{attr}_{value}.tlspec", stamp)
     _assert_refuses(path, "artifact_graph_structure_invalid", reason="pass_stamp_range")
@@ -155,7 +155,7 @@ def test_pass_stamp_out_of_range_refuses(
 
 def test_forged_edge_substitutions_refuse(source_bundle: Path, tmp_path: Path) -> None:
     def forge(state: dict[str, Any]) -> None:
-        op = state["layer_list"][2]
+        op = state["_layer_list"][2]
         op.edge_substitutions = {("positional", (0,)): {"forged": True}}
         op.edge_replacement_stamps = {("positional", (0,)): {"forged": True}}
 
@@ -165,7 +165,7 @@ def test_forged_edge_substitutions_refuse(source_bundle: Path, tmp_path: Path) -
 
 def test_edge_carrier_without_matching_stamps_refuses(source_bundle: Path, tmp_path: Path) -> None:
     def forge(state: dict[str, Any]) -> None:
-        state["layer_list"][2].edge_substitutions = {("positional", (0,)): {}}
+        state["_layer_list"][2].edge_substitutions = {("positional", (0,)): {}}
 
     path = _tampered(source_bundle, tmp_path / "edge2.tlspec", forge)
     _assert_refuses(path, "artifact_edge_substitutions_invalid")
@@ -176,7 +176,7 @@ def test_genuine_edge_intervention_round_trips(tmp_path: Path) -> None:
     trace = tl.trace(
         _Model(),
         torch.randn(1, 1, 12, 12),
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_args=True),
+        capture=tl.options.CaptureOptions(replayable=True, save_args=True),
     )
     edge = next(e for e in trace.graph.edges if e.parent_label == "relu_1_2")
     fork = trace.fork()
@@ -184,7 +184,7 @@ def test_genuine_edge_intervention_round_trips(tmp_path: Path) -> None:
     path = tmp_path / "genuine_edge.tlspec"
     fork.save(path)
     loaded = tl.load(path)
-    carriers = [op for op in loaded.layer_list if getattr(op, "edge_substitutions", None)]
+    carriers = [op for op in loaded._layer_list if getattr(op, "edge_substitutions", None)]
     assert carriers, "the genuine tier-(ii) carrier must persist and load"
 
 
@@ -203,23 +203,23 @@ def test_genuine_edge_intervention_round_trips(tmp_path: Path) -> None:
             'Trace.annotations["distributed"]',
         ),
         (
-            lambda st: st["layer_list"][2].annotations.__setitem__("collective", "junk"),
+            lambda st: st["_layer_list"][2].annotations.__setitem__("collective", "junk"),
             'Op.annotations["collective"]',
         ),
         (
-            lambda st: st["layer_list"][2].annotations.__setitem__("save_mode", "bogus"),
+            lambda st: st["_layer_list"][2].annotations.__setitem__("save_mode", "bogus"),
             'Op.annotations["save_mode"]',
         ),
         (
-            lambda st: st["layer_list"][2].annotations.__setitem__("saved_out_version", "x"),
+            lambda st: st["_layer_list"][2].annotations.__setitem__("saved_out_version", "x"),
             'Op.annotations["saved_out_version"]',
         ),
         (
-            lambda st: st["layer_list"][2].annotations.__setitem__("varying_across_passes", 12),
+            lambda st: st["_layer_list"][2].annotations.__setitem__("varying_across_passes", 12),
             'Op.annotations["varying_across_passes"]',
         ),
         (
-            lambda st: st["layer_list"][2].annotations.__setitem__("dedup_source_id", "abc"),
+            lambda st: st["_layer_list"][2].annotations.__setitem__("dedup_source_id", "abc"),
             'Op.annotations["dedup_source_id"]',
         ),
     ],
@@ -238,7 +238,7 @@ def test_owned_annotation_families_refuse_off_shape(
 ) -> None:
     def apply(state: dict[str, Any]) -> None:
         state.setdefault("annotations", {})
-        ops = state["layer_list"]
+        ops = state["_layer_list"]
         if getattr(ops[2], "annotations", None) is None:
             ops[2].annotations = {}
         mutate(state)
@@ -275,7 +275,7 @@ def _boundary_payload(schema: str) -> dict[str, Any]:
 def _with_boundary(payload: dict[str, Any]) -> Callable[[dict[str, Any]], None]:
     def apply(state: dict[str, Any]) -> None:
         state.setdefault("annotations", {})["distributed"] = {"boundaries": [dict(payload)]}
-        op = state["layer_list"][2]
+        op = state["_layer_list"][2]
         if getattr(op, "annotations", None) is None:
             op.annotations = {}
         op.annotations["collective"] = dict(payload)
@@ -294,7 +294,7 @@ def test_owned_boundary_families_round_trip(
     )
     loaded = tl.load(path)
     assert loaded.annotations["distributed"]["boundaries"][0]["schema"] == schema
-    assert loaded.layer_list[2].annotations["collective"]["schema"] == schema
+    assert loaded._layer_list[2].annotations["collective"]["schema"] == schema
 
 
 def _drop_event_model(payload: dict[str, Any]) -> None:
@@ -343,7 +343,7 @@ def test_malformed_boundary_payload_refuses(
         if where == "journal":
             state["annotations"]["distributed"]["boundaries"] = [bad]
         else:
-            state["layer_list"][2].annotations["collective"] = bad
+            state["_layer_list"][2].annotations["collective"] = bad
 
     path = _tampered(source_bundle, tmp_path / "bad_boundary.tlspec", apply)
     field = (
@@ -375,9 +375,11 @@ def test_absent_root_entry_point_refuses_from_v10(source_bundle: Path, tmp_path:
 
     from torchlens._io._forgery_identity_facts import _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC
 
-    assert _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC == tl._io.TLSPEC_VERSION == 10
+    assert _ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC == 10 <= tl._io.TLSPEC_VERSION
     path = _tampered(
-        source_bundle, tmp_path / "rep.tlspec", lambda st: st.__setitem__("root_entry_point", None)
+        source_bundle,
+        tmp_path / "rep.tlspec",
+        lambda st: st.__setitem__("_provenance_root_entry_point", None),
     )
     with pytest.raises(ArtifactError) as excinfo:
         tl.load(path)
@@ -395,7 +397,7 @@ def test_absent_root_entry_point_refuses_from_the_armed_stamp(
     monkeypatch.setattr(facts, "_ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC", tl._io.TLSPEC_VERSION)
     torch.manual_seed(0)
     trace = tl.trace(_Model(), torch.randn(1, 1, 12, 12))
-    trace.root_entry_point = None
+    trace._provenance_root_entry_point = None
     with governed_artifact_load(), pytest.raises(ArtifactError) as excinfo:
         facts._validate_root_entry_point(trace)
     assert excinfo.value.fields["code"] == "artifact_root_entry_point_invalid"
@@ -407,6 +409,6 @@ def test_absent_root_entry_point_refuses_from_the_armed_stamp(
 def test_plain_session_pickle_tolerates_absent_root_entry_point() -> None:
     torch.manual_seed(0)
     trace = tl.trace(_Model(), torch.randn(1, 1, 12, 12))
-    trace.root_entry_point = None
+    trace._provenance_root_entry_point = None
     restored = pickle.loads(pickle.dumps(trace))
-    assert restored.root_entry_point is None
+    assert restored.provenance.root_entry_point is None

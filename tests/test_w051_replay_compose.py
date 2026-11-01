@@ -41,7 +41,7 @@ def two():
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_args=True),
+        capture=tl.options.CaptureOptions(replayable=True, save_args=True),
     )
     try:
         yield model, x, trace
@@ -55,7 +55,7 @@ def _parts(model, x):
 
 
 def _add(trace):
-    return next(op for op in trace.layer_list if op.func_name == "add")
+    return next(op for op in trace._layer_list if op.func_name == "add")
 
 
 def _edge(trace, position):
@@ -80,7 +80,7 @@ def test_two_edge_edits_on_one_child_both_hold(two) -> None:
     fork.do(_edge(trace, 1).__selection__(), tl.zero_ablate())
     add = fork[_add(trace).label]
     assert bool((add.out == 0).all())
-    assert len(add.ops[0].edge_substitutions) == 2
+    assert len(add.edge_substitutions) == 2
     assert _validate(fork, torch.zeros(2, 4)) is True
 
 
@@ -118,9 +118,9 @@ def test_same_edge_edited_twice_composes_and_keeps_both_fires(two) -> None:
     edge = _edge(trace, 0)
     fork.do(edge.__selection__(), tl.scale(0.5))
     fork.do(edge.__selection__(), tl.scale(0.5))
-    add = fork[_add(trace).label].ops[0]
+    add = fork[_add(trace).label]
     assert torch.allclose(add.out, 0.25 * a + b, atol=ATOL)
-    fires = [r for r in add.interventions if r.edge_address is not None]
+    fires = [r for r in add.edits if r.edge_address is not None]
     assert len(fires) == 2
     store_value = add.edge_substitutions[(edge.arg_kind, edge.arg_path)]["value"]
     assert torch.allclose(store_value, 0.25 * a, atol=ATOL)
@@ -139,5 +139,5 @@ def test_chained_param_scaling_composes_and_never_writes_the_live_param(two) -> 
     assert torch.allclose(fork[_add(trace).label].out, expected_add, atol=ATOL)
     assert torch.equal(model.fc2.weight.detach(), live_before)
     consumer = fork["linear_2_3"].ops[0]
-    assert len([r for r in consumer.interventions if r.edge_address is not None]) == 2
+    assert len([r for r in consumer.edits if r.edge_address is not None]) == 2
     assert _validate(fork, 2.0 * expected_add) is True

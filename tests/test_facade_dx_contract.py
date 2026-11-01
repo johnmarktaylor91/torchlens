@@ -103,7 +103,7 @@ _CASES = (
 #: makes any other field vanish — or silently materializes one of these —
 #: must update this table consciously.
 _EXPECTED_ABSENT: dict[str, frozenset[str]] = {
-    "trace": frozenset({"input_structure", "_containers", "_buffer_persistence"}),
+    "trace": frozenset({"_provenance_input_structure", "_containers", "_buffer_persistence"}),
     "op": frozenset(),
     "layer": frozenset(),
     "module": frozenset(),

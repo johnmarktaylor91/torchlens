@@ -69,28 +69,28 @@ def test_non_ready_capture_matches_baseline_runtime_fields() -> None:
 
     log = tl.trace(_TinyShiftModel(), torch.randn(2, 3))
 
-    assert log.intervention_ready is False
+    assert log.is_replayable is False
     assert log.state is TraceState.PRISTINE
-    assert log.num_ops == 2
-    assert log.layer_list
-    assert log.layer_dict_main_keys
-    assert log.layer_dict_all_keys
+    assert log._num_ops == 2
+    assert log._layer_list
+    assert log._layer_dict_main_keys
+    assert log._layer_dict_all_keys
     assert log.layer_labels
     assert log.layer_labels
     assert log.op_labels
-    assert log.layer_num_calls
+    assert log._layer_num_calls
     assert log.input_layers == ["input_1"]
     assert log.output_layers == ["output_1"]
     assert log.saved_ops
-    assert all(layer.out is not None for layer in log.layer_list)
-    assert all(layer.args_template is None for layer in log.layer_list)
-    assert all(layer.kwargs_template is None for layer in log.layer_list)
-    edge_layers = [layer for layer in log.layer_list if layer._edge_uses]
+    assert all(layer.out is not None for layer in log._layer_list)
+    assert all(layer.args_template is None for layer in log._layer_list)
+    assert all(layer.kwargs_template is None for layer in log._layer_list)
+    edge_layers = [layer for layer in log._layer_list if layer._edge_uses]
     assert edge_layers
     for layer in edge_layers:
         assert {edge.parent_label for edge in layer._edge_uses} == set(layer.parents)
         assert {edge.edge_use for edge in layer._edge_uses} <= {"arg", "kwarg"}
-    assert all(layer.container_path == () for layer in log.layer_list)
+    assert all(layer.container_path == () for layer in log._layer_list)
 
 
 def test_intervention_ready_without_hooks_preserves_returned_values() -> None:
@@ -103,12 +103,12 @@ def test_intervention_ready_without_hooks_preserves_returned_values() -> None:
     baseline_log = tl.trace(
         baseline_model,
         x,
-        capture=CaptureOptions(intervention_ready=False),
+        capture=CaptureOptions(replayable=False),
     )
     ready_log = tl.trace(
         ready_model,
         x,
-        capture=CaptureOptions(intervention_ready=True),
+        capture=CaptureOptions(replayable=True),
     )
 
     assert stashed(baseline_log, "latest") is not None
@@ -130,7 +130,7 @@ def test_live_hook_exception_resets_runtime_state_and_allows_next_capture() -> N
             model,
             torch.randn(2, 3),
             capture=CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 hooks={tl.func("relu"): _bad_hook},
             ),
         )
@@ -141,9 +141,9 @@ def test_live_hook_exception_resets_runtime_state_and_allows_next_capture() -> N
 
     followup_log = tl.trace(model, torch.randn(2, 3))
 
-    assert followup_log.intervention_ready is False
+    assert followup_log.is_replayable is False
     assert followup_log.state is TraceState.PRISTINE
-    assert followup_log.layer_list
+    assert followup_log._layer_list
 
 
 def test_live_hook_exception_resets_reentrancy_depth() -> None:
@@ -154,7 +154,7 @@ def test_live_hook_exception_resets_reentrancy_depth() -> None:
             _TinyReluModel(),
             torch.randn(2, 3),
             capture=CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 hooks={tl.func("relu"): _bad_hook},
             ),
         )
