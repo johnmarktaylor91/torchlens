@@ -946,15 +946,13 @@ def _check_ground_truth_outputs(
         )
         if output_layer.out is None:
             return _fail_output_missing(
-                self, decision_recorder, i, output_layer_label, output_layer, verbose
+                self, decision_recorder, (i, output_layer_label, output_layer), verbose
             )
         if not _ground_truth_output_matches_saved(output_layer.out, ground_truth_output_tensors[i]):
             return _fail_ground_truth_mismatch(
                 self,
                 decision_recorder,
-                i,
-                output_layer_label,
-                output_layer,
+                (i, output_layer_label, output_layer),
                 ground_truth_output_tensors[i],
                 verbose,
             )

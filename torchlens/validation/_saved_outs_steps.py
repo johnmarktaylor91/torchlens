@@ -178,12 +178,14 @@ def _fail_output_count_mismatch(
 def _fail_output_missing(
     self: Trace,
     decision_recorder: ValidationDecisionRecorder,
-    i: int,
-    output_layer_label: str,
-    output_layer: Any,
+    output_entry: tuple[int, str, Any],
     verbose: bool,
 ) -> ValidationStatus:
-    """Record an output layer with no saved out and return the failed status."""
+    """Record an output layer with no saved out and return the failed status.
+
+    ``output_entry`` is the output's ``(index, layer label, layer)``.
+    """
+    i, output_layer_label, output_layer = output_entry
     if verbose:
         print(f"The {i}th output layer, {output_layer_label}, has no saved out.")
     record_validation_failure(
@@ -207,13 +209,15 @@ def _fail_output_missing(
 def _fail_ground_truth_mismatch(
     self: Trace,
     decision_recorder: ValidationDecisionRecorder,
-    i: int,
-    output_layer_label: str,
-    output_layer: Any,
+    output_entry: tuple[int, str, Any],
     ground_truth_output: torch.Tensor,
     verbose: bool,
 ) -> ValidationStatus:
-    """Record a logged output that differs from ground truth and return the failed status."""
+    """Record a logged output that differs from ground truth and return the failed status.
+
+    ``output_entry`` is the output's ``(index, layer label, layer)``.
+    """
+    i, output_layer_label, output_layer = output_entry
     if verbose:
         print(
             f"The {i}th output layer, {output_layer_label}, does not "
