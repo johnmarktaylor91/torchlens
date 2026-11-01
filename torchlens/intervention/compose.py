@@ -172,7 +172,7 @@ def compose(*edits: Any) -> Edit:
             for index, leaf_hook in enumerate(leaf_hooks):
                 # Thread the composed-leaf path for the derived-seed law (D6):
                 # two stochastic leaves inside one compose cannot collide.
-                ctx.ctx["compose_leaf_path"] = (index,)
+                ctx.state["compose_leaf_path"] = (index,)
                 try:
                     current = leaf_hook(current, ctx=ctx)
                 except Exception as exc:
@@ -196,7 +196,7 @@ def compose(*edits: Any) -> Edit:
                         leaf_index=index,
                         leaf_name=leaves[index].helper_name,
                     )
-            ctx.ctx.pop("compose_leaf_path", None)
+            ctx.state.pop("compose_leaf_path", None)
             return current
 
         return _hook

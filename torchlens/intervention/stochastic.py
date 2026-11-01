@@ -251,7 +251,7 @@ def _base_seed(
 
     if isinstance(seed, int):
         return seed
-    trace_seed = hook.run_ctx.get("trace_random_seed")
+    trace_seed = hook.run_state.get("trace_random_seed")
     if trace_seed is None:
         raise InvalidArgumentError(
             f"{verb} seed='auto' needs the capture's recorded trace.random_seed, "
@@ -285,7 +285,7 @@ def _firing_coordinate(hook: HookContext, share_draw: str) -> tuple[Any, ...]:
         return ()
     layer_log = hook.op or {}
     pass_index = layer_log.get("pass_index")
-    generation_step = hook.run_ctx.get("generation_step")
+    generation_step = hook.run_state.get("generation_step")
     if share_draw == "per_group":
         return (pass_index, generation_step)
     site = layer_log.get("site_key") or layer_log.get("label") or layer_log.get("layer_label")
@@ -318,7 +318,7 @@ def _derived_seed(  # noqa: PLR0913 -- the D6 formula's seven NAMED components A
 def _leaf_path(hook: HookContext) -> tuple[int, ...]:
     """Read the composed-leaf path threaded by ``tl.compose`` (D6/D20)."""
 
-    path = hook.ctx.get("compose_leaf_path", ())
+    path = hook.state.get("compose_leaf_path", ())
     return tuple(path) if isinstance(path, (tuple, list)) else ()
 
 
@@ -331,7 +331,7 @@ def _record_sampling(hook: HookContext, verb: str, record: dict[str, Any]) -> No
     persisted ``FireRecord.determinism_note`` -- no parallel audit path.
     """
 
-    hook.run_ctx.setdefault("sampling_records", []).append(dict(record))
+    hook.run_state.setdefault("sampling_records", []).append(dict(record))
     draw = record.get("donor_ids", record.get("permutation"))
     draw_repr = repr(list(draw)[:16]) if isinstance(draw, (list, tuple)) else repr(draw)
     note = (
@@ -342,8 +342,8 @@ def _record_sampling(hook: HookContext, verb: str, record: dict[str, Any]) -> No
         f"draw={draw_repr} draw_digest={record.get('realized_draw_digest')} "
         f"population={record.get('population_identity')}"
     )
-    hook.run_ctx.setdefault("ledger_notes", []).append(note)
-    state_history = hook.run_ctx.get("state_history")
+    hook.run_state.setdefault("ledger_notes", []).append(note)
+    state_history = hook.run_state.get("state_history")
     if isinstance(state_history, list):
         state_history.append(note)
 
@@ -828,7 +828,7 @@ def plan_patch_helper(plan: SamplingPlan) -> Edit:
                     "realized_draw_digest": _draw_digest([member_index]),
                     "replacement_mode": "whole_event",
                     "donor_grad": "detached",
-                    "recomputation": bool(hook.run_ctx.get("recomputation", False)),
+                    "recomputation": bool(hook.run_state.get("recomputation", False)),
                 },
             )
             # External donors are detached snapshots by design (D37): target
@@ -1013,7 +1013,7 @@ def permute_batch(*, seed: int | str, axis: int | None = None) -> Edit:
                 "realized_draw_digest": _draw_digest(indices),
                 "replacement_mode": "row_exchange",
                 "donor_grad": "graph_connected_permuted",
-                "recomputation": bool(hook.run_ctx.get("recomputation", False)),
+                "recomputation": bool(hook.run_state.get("recomputation", False)),
                 "axis": fire_axis,
                 "axis_proof": "explicit",
             }
@@ -1196,7 +1196,7 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
                     "realized_draw_digest": _draw_digest(donor_ids),
                     "replacement_mode": "per_row",
                     "donor_grad": "detached",
-                    "recomputation": bool(hook.run_ctx.get("recomputation", False)),
+                    "recomputation": bool(hook.run_state.get("recomputation", False)),
                     "axis": fire_axis,
                     "axis_proof": "explicit",
                 },
@@ -1274,7 +1274,7 @@ def mean_from(
                     "realized_draw_digest": None,
                     "replacement_mode": "evidence_mean",
                     "donor_grad": "detached",
-                    "recomputation": bool(hook.run_ctx.get("recomputation", False)),
+                    "recomputation": bool(hook.run_state.get("recomputation", False)),
                 },
             )
             return fill.detach().to(device=out.device, dtype=out.dtype).clone()
@@ -1526,7 +1526,7 @@ def set_direction_mean(
                     "realized_draw_digest": None,
                     "replacement_mode": "direction_mean",
                     "donor_grad": "orthogonal_component_only",
-                    "recomputation": bool(hook.run_ctx.get("recomputation", False)),
+                    "recomputation": bool(hook.run_state.get("recomputation", False)),
                     "mean_coefficient": site_coef,
                 },
             )
