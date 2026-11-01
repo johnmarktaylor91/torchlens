@@ -2725,6 +2725,7 @@ def _scrub_trace_for_bundle(
         Scrubbed metadata, blob specs, and unsupported tensor audit records.
     """
 
+    backend_name = str(trace._provenance_backend if is_live_trace(trace) else "torch")
     transient_attrs = {}
     for attr_name in LOAD_PROVENANCE_TRANSIENT_ATTRS:
         if hasattr(trace, attr_name):
@@ -3658,7 +3659,9 @@ def _validate_activation_transform_outputs(
         If a saved out is not a plain tensor.
     """
 
-    if not include_outs or not is_live_trace(trace) or trace._options_activation_transform is None:
+    if not include_outs or not is_live_trace(trace):
+        return
+    if trace._options_activation_transform is None:
         return
     for layer in trace._layer_list:
         if not getattr(layer, "has_saved_activation", False):

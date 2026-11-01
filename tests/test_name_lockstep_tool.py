@@ -247,6 +247,44 @@ def test_contextual_residue_skips_a_leaf_another_row_keeps(tmp_path: Path) -> No
     assert [f.place for f in findings if f.problem == "stale"] == []
 
 
+def test_removed_member_residue_skips_an_owner_that_still_reaches_the_leaf(
+    tmp_path: Path,
+) -> None:
+    """A member moved between mixins of ``Trace`` leaves ``Trace.leaf`` current.
+
+    Only the gone defining class's own spelling is stale.
+    """
+
+    corpus = _lockstep_repo(
+        tmp_path,
+        glossary="**Trace.provenance**\n: The view.\n",
+        example="trace.provenance\nVizMixin.provenance\n",
+    )
+    base = {
+        "member:m:VizMixin.provenance": _row(
+            "member:m:VizMixin.provenance",
+            "member",
+            "provenance",
+            "VizMixin.provenance",
+            "f-method",
+            owner_names=["Trace", "VizMixin"],
+        )
+    }
+    head = {
+        "member:m:StatsMixin.provenance": _row(
+            "member:m:StatsMixin.provenance",
+            "member",
+            "provenance",
+            "StatsMixin.provenance",
+            "f-property",
+            owner_names=["StatsMixin", "Trace"],
+        )
+    }
+    findings = check.check_lockstep(diff_inventories(base, head), corpus, head)
+    stale = [(f.row_id, f.location) for f in findings if f.problem == "stale"]
+    assert stale == [("member:m:VizMixin.provenance", "examples/demo.py:2")]
+
+
 def test_gate_items_carry_snippet_and_reference(tmp_path: Path) -> None:
     """Each new or renamed name gets a call site and the glossary meaning."""
 
