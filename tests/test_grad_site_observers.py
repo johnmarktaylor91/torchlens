@@ -104,7 +104,7 @@ def _relu_label(model: nn.Module) -> str:
 def test_tap_on_a_gradient_site_records_backward_fires() -> None:  # A29
     model = _Net()
     relu = _relu_label(model)
-    tap = tl.observers.tap(tl.grad(relu))
+    tap = tl.observers.tap(tl.grad(tl.func("relu")))
     trace = tl.trace(
         model,
         _X,
@@ -122,7 +122,7 @@ def test_tap_on_a_gradient_site_records_backward_fires() -> None:  # A29
 def test_tap_on_a_mixed_site_records_both_passes() -> None:  # A29
     model = _Net()
     relu = _relu_label(model)
-    tap = tl.observers.tap(tl.grad(relu) | relu)
+    tap = tl.observers.tap(tl.grad(tl.func("relu")) | tl.func("relu"))
     trace = tl.trace(
         model,
         _X,

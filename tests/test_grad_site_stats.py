@@ -107,11 +107,10 @@ def _loss(member: Any) -> torch.Tensor:
 @requires_grad_sites
 def test_sweep_gradient_site_with_loss_runs_every_backward() -> None:  # A32
     model = _Net()
-    relu = _relu_label(model)
     bundle = tl.sweep(
         model,
         _X,
-        site=tl.grad(relu),
+        site=tl.grad(tl.func("relu")),
         values=[tl.scale(0.0), tl.scale(0.5)],
         names=["zero", "half"],
         include_baseline=True,
@@ -135,7 +134,7 @@ def test_sweep_gradient_site_without_loss_stays_armed() -> None:  # A32
     bundle = tl.sweep(
         model,
         _X,
-        site=tl.grad(_relu_label(model)),
+        site=tl.grad(tl.func("relu")),
         values=[tl.scale(0.0)],
         names=["zero"],
         capture=tl.options.CaptureOptions(backward_ready=True),

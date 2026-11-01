@@ -377,6 +377,11 @@ def _loss(result: Any) -> torch.Tensor:
     return result[result.output_layers[0]].out.sum()
 
 
+#: A rerun matches sites during its forward, before final labels exist, so the
+#: live doors address the relu structurally; reads use the final label.
+_RELU = tl.func("relu")
+
+
 @requires_grad_sites
 def test_do_gradient_site_returns_an_armed_rerun() -> None:  # A19
     model = _BranchNet()
@@ -400,7 +405,7 @@ def test_do_gradient_site_returns_an_armed_rerun() -> None:  # A19
 def test_backward_settles_the_armed_row_per_pass() -> None:  # A20
     model = _BranchNet()
     source = _trace(model, backward_ready=True)
-    result = source.do(tl.grad(_relu_label(source)), tl.scale(0), model=model, x=_X)
+    result = source.do(tl.grad(_RELU), tl.scale(0), model=model, x=_X)
     (arming,) = _events(result, door="do", status="armed")
     loss = _loss(result)
     result.backward(loss, retain_graph=True)
@@ -422,7 +427,7 @@ def test_loss_runs_the_backward_inside_do() -> None:  # A21
     model = _BranchNet()
     source = _trace(model, backward_ready=True, save_grads="all")
     relu = _relu_label(source)
-    result = source.do(tl.grad(relu), tl.scale(0), model=model, x=_X, loss=_loss)
+    result = source.do(tl.grad(_RELU), tl.scale(0), model=model, x=_X, loss=_loss)
     assert result.num_backward_passes == 1
     assert _events(result, door="backward", status="fired")
     assert torch.count_nonzero(result[relu].grad) == 0
@@ -440,7 +445,7 @@ def test_failing_loss_writes_error_and_detaches_this_dos_hooks() -> None:  # A23
         raise RuntimeError("loss exploded")
 
     with pytest.raises(RuntimeError, match="loss exploded"):
-        source.do(tl.grad(_relu_label(source)), tl.scale(0), model=model, x=_X, loss=_bad_loss)
+        source.do(tl.grad(_RELU), tl.scale(0), model=model, x=_X, loss=_bad_loss)
     (result,) = seen
     assert result.armed_edits == ()
     assert _events(result, status="error")
@@ -454,7 +459,7 @@ def test_mixed_plan_edits_the_activation_then_the_gradient() -> None:  # A24
     relu = _relu_label(source)
     plain = source.fork()
     plain.backward(_loss(plain))
-    result = source.do(tl.grad(relu) | relu, tl.scale(0.5), model=model, x=_X, loss=_loss)
+    result = source.do(tl.grad(_RELU) | _RELU, tl.scale(0.5), model=model, x=_X, loss=_loss)
     assert torch.allclose(result[relu].out, 0.5 * source[relu].out)
     (arming,) = _events(result, door="do")
     assert arming["status"] == "fired"
@@ -468,7 +473,7 @@ def test_set_only_arms_in_place_and_fires_on_this_trace() -> None:  # A25
     trace = _trace(model, backward_ready=True)
     layers_before = trace.layer_list
     returned = trace.do(
-        tl.grad(_relu_label(trace)),
+        tl.grad(_RELU),
         tl.scale(0),
         intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
     )
@@ -484,11 +489,11 @@ def test_set_only_arms_in_place_and_fires_on_this_trace() -> None:  # A25
 def test_rerun_forces_backward_readiness_and_discloses_it() -> None:  # A26
     model = _BranchNet()
     unready = tl.trace(model, _X, capture=tl.options.CaptureOptions(intervention_ready=True))
-    result = unready.do(tl.grad(_relu_label(unready)), tl.scale(0), model=model, x=_X, loss=_loss)
+    result = unready.do(tl.grad(_RELU), tl.scale(0), model=model, x=_X, loss=_loss)
     assert result.last_run["backward_ready_forced"] is True
     assert _events(result, door="backward", status="fired")
     ready = _trace(model, backward_ready=True)
-    armed = ready.do(tl.grad(_relu_label(ready)), tl.scale(0), model=model, x=_X)
+    armed = ready.do(tl.grad(_RELU), tl.scale(0), model=model, x=_X)
     assert armed.last_run.get("backward_ready_forced", False) is False
 
 
@@ -497,16 +502,15 @@ def test_unreached_and_pass_filtered_gradient_sites_settle_no_fire() -> None:  #
     model = _BranchNet()
     source = _trace(model, backward_ready=True, save_grads="all")
     side = next(str(op.layer_label) for op in source.layer_list if op.func_name == "sigmoid")
-    result = source.do(tl.grad(side), tl.scale(0), model=model, x=_X)
+    result = source.do(tl.grad(tl.func("sigmoid")), tl.scale(0), model=model, x=_X)
     result.backward(result[result.output_layers[0]].out.sum())
     (row,) = _events(result, door="backward")
     assert row["status"] == "no_fire"
     assert row["no_fire_reason"] == "gradient_not_reached"
     assert not result[side].has_grad
 
-    relu = _relu_label(source)
     filtered = source.do(
-        tl.grad(relu) & tl.in_backward_pass(2), tl.scale(0), model=model, x=_X, loss=_loss
+        tl.grad(_RELU) & tl.in_backward_pass(2), tl.scale(0), model=model, x=_X, loss=_loss
     )
     (row,) = _events(filtered, door="backward")
     assert row["no_fire_reason"] == "pass_filtered"
@@ -516,7 +520,7 @@ def test_unreached_and_pass_filtered_gradient_sites_settle_no_fire() -> None:  #
 def test_saved_armed_result_keeps_its_armed_row(tmp_path: Any) -> None:  # A30
     model = _BranchNet()
     source = _trace(model, backward_ready=True)
-    result = source.do(tl.grad(_relu_label(source)), tl.scale(0), model=model, x=_X)
+    result = source.do(tl.grad(_RELU), tl.scale(0), model=model, x=_X)
     assert result.annotations["armed_gradient_edits"] == 1
     path = tmp_path / "armed"
     result.save(path)
@@ -532,7 +536,7 @@ def test_attach_hooks_on_a_gradient_site_registers_only() -> None:
     model = _BranchNet()
     trace = _trace(model, backward_ready=True)
     events_before = len(_events(trace))
-    handle = trace.attach_hooks(tl.grad(_relu_label(trace)), tl.scale(0), confirm_mutation=True)
+    handle = trace.attach_hooks(tl.grad(_RELU), tl.scale(0), confirm_mutation=True)
     assert len(_events(trace)) == events_before
     assert len(trace.armed_edits) == 1
     handle.remove()
