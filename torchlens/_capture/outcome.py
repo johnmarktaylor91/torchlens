@@ -191,6 +191,13 @@ def _qualified_type_name(exc: BaseException) -> str:
     return f"{module}.{qualname}"
 
 
+def _wrapped_cause(exc: BaseException) -> BaseException:
+    """The exception a :class:`TraceCaptureError` (the capture door's wrapper) chains, else ``exc``."""
+
+    cause = exc.__cause__
+    return cause if isinstance(exc, TraceCaptureError) and cause is not None else exc
+
+
 def classify_failure_origin(exc: BaseException) -> FailureOrigin:
     """Classify one terminal exception's origin (diagnostic only).
 
@@ -203,14 +210,9 @@ def classify_failure_origin(exc: BaseException) -> FailureOrigin:
     construction -- origin never steers a gate.
     """
 
+    exc = _wrapped_cause(exc)
     if isinstance(exc, (KeyboardInterrupt, SystemExit)):
         return FailureOrigin.INTERRUPT
-    if isinstance(exc, TraceCaptureError) and exc.__cause__ is not None:
-        # The capture door's wrapper: its origin is its cause's.
-        return classify_failure_origin(exc.__cause__)
-    if isinstance(exc, TraceCaptureError) and exc.__cause__ is not None:
-        # The capture door's wrapper: its origin is its cause's.
-        return classify_failure_origin(exc.__cause__)
     if isinstance(exc, StopSignalSwallowedError):
         return FailureOrigin.TORCHLENS
     # A user-supplied intervention payload failing validation is the USER's
