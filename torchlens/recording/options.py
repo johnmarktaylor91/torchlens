@@ -450,6 +450,55 @@ class RecordingSettings:
     or an object (predicates, transforms, ``CaptureSpec`` values, storage and
     narration options) is not stored with saved recordings and reads ``None``
     there.
+
+    Attributes
+    ----------
+    keep_op:
+        The save predicate deciding which op events keep a record (``save=``).
+    default_op:
+        Capture decision for op events the save predicate leaves undecided.
+    default_module:
+        Capture decision for module events the save predicate leaves undecided.
+    history_size:
+        How many recent event contexts a predicate could look back over.
+    include_source_events:
+        Whether input and buffer source events were offered to the predicates.
+    intervene:
+        The live intervention predicate applied during the forward.
+    max_predicate_failures:
+        How many predicate failures were kept before counting the rest.
+    on_predicate_error:
+        What a raising predicate did: ``auto``, ``accumulate`` or ``fail-fast``.
+    on_forward_error:
+        What a raising forward did: ``raise``, ``attach_partial`` or ``return_partial``.
+    default_grad:
+        Capture decision for gradient events no gradient predicate decided.
+    postprocess:
+        The post-capture finalization pass (``none`` by default).
+    lookback:
+        How many earlier events each record context carried.
+    lookback_payload_policy:
+        Which payload the lookback contexts carried.
+    seed:
+        The random seed set before the forward, if any.
+    activation_transform:
+        The function applied to each saved activation.
+    save_raw_activations:
+        Whether the untransformed activation was kept beside the transformed one.
+    save_grads:
+        Which gradients were saved: a predicate, a bool or a ``CaptureSpec``.
+    grad_transform:
+        The function applied to each saved gradient.
+    save_raw_grads:
+        Whether the untransformed gradient was kept beside the transformed one.
+    detach_saved_activations:
+        Whether saved activations were detached from the autograd graph.
+    stop_after:
+        The stop predicate from ``stop_after=``, if any.
+    storage:
+        The disk sink from ``storage=``, if any.
+    narrate:
+        The live narration options from ``narrate=``, if any.
     """
 
     keep_op: PredicateFn | None
