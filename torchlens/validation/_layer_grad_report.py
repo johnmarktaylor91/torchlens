@@ -90,6 +90,24 @@ class LayerGradReport:
         return self.overall_passed
 
 
+def _module_exit_leaf_counts(trace: Trace) -> dict[tuple[str, int], int]:
+    """Read module-exit evidence of the real output walk's tensor-leaf counts."""
+    # Exit-event proof source: the ModuleExitEvent leaf count is recorded from
+    # the real output walk at module exit, independent of whether labeling or
+    # boundary minting succeeded, so it can PROVE a no-tensor-output exclusion.
+    events = getattr(trace, "_capture_events", None)
+    if events is None:
+        events = getattr(trace, "capture_events", None)
+    exit_leaf_counts: dict[tuple[str, int], int] = {}
+    for exit_event in getattr(events, "module_exit_events", ()) or ():
+        exit_key = (
+            str(getattr(exit_event, "address", "")),
+            int(getattr(exit_event, "call_index", 0) or 0),
+        )
+        exit_leaf_counts[exit_key] = int(getattr(exit_event, "output_tensor_leaf_count", -1))
+    return exit_leaf_counts
+
+
 def _compare_module_output_grads(
     trace: Trace,
     stock_module_grads: Mapping[ModuleOutputGradKey, torch.Tensor],
@@ -137,19 +155,7 @@ def _compare_module_output_grads(
     candidate_grad_count = 0
     skipped_module_less_count = 0
 
-    # Exit-event proof source: the ModuleExitEvent leaf count is recorded from
-    # the real output walk at module exit, independent of whether labeling or
-    # boundary minting succeeded, so it can PROVE a no-tensor-output exclusion.
-    events = getattr(trace, "_capture_events", None)
-    if events is None:
-        events = getattr(trace, "capture_events", None)
-    exit_leaf_counts: dict[tuple[str, int], int] = {}
-    for exit_event in getattr(events, "module_exit_events", ()) or ():
-        exit_key = (
-            str(getattr(exit_event, "address", "")),
-            int(getattr(exit_event, "call_index", 0) or 0),
-        )
-        exit_leaf_counts[exit_key] = int(getattr(exit_event, "output_tensor_leaf_count", -1))
+    exit_leaf_counts = _module_exit_leaf_counts(trace)
     stock_observed_calls = {(addr, call_index) for addr, call_index, _ in stock_module_grads}
     stock_observed_calls.update(
         (addr, call_index) for addr, call_index, _ in stock_identity_addresses

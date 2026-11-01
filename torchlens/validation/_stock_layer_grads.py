@@ -11,6 +11,8 @@ import torch
 from torch import nn
 from torch.utils.hooks import RemovableHandle
 
+from .._utils.introspection import get_vars_of_type_from_obj
+
 _PASS_INDEX_PARSE_WARNED = False
 ModuleOutputGradKey = tuple[str, int, int]
 
@@ -242,8 +244,6 @@ def _tensor_leaves(obj: Any) -> list[torch.Tensor]:
     # (``_walk_output_tensors_with_paths``), so a module returning a
     # ``torch.distributions`` object or another plain object keys its tensor
     # leaves in the same order on both sides.
-    from ..utils.introspection import get_vars_of_type_from_obj
-
     return list(
         get_vars_of_type_from_obj(obj, which_type=torch.Tensor, subclass_exceptions=[nn.Parameter])
     )
