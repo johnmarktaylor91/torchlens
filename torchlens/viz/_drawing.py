@@ -51,8 +51,8 @@ class Drawing:
     policy:
         Resolved render policy: theme, collapse, module focus, depth.
     trace:
-        A retained trace when the caller asked to keep one; ``close()``
-        releases it.
+        A retained trace when the caller asked to keep one; leaving the
+        ``with`` block releases it.
     """
 
     dot: str
@@ -111,7 +111,7 @@ class Drawing:
             target = self.save(temp_name)
         _open_viewer(Path(target))
 
-    def close(self) -> None:
+    def _close(self) -> None:
         """Release the retained trace."""
 
         self.trace = None
@@ -124,7 +124,7 @@ class Drawing:
     def __exit__(self, *exc_info: Any) -> None:
         """Release the retained trace on context exit."""
 
-        self.close()
+        self._close()
 
     def __str__(self) -> str:
         """Return the detached source: DOT for graphs, HTML for animations."""
