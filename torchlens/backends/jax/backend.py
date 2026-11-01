@@ -78,6 +78,7 @@ from ...validation.status import (
     ValidationStatus,
     count_importer_region_annotations,
 )
+from .._constants import CONSTANT_PARENT_PAYLOAD_REASON, CONSTANT_PRODUCER_LEAF_REASON
 from .._options import (
     JAX_EXTRA_KWARG_POLICY,
     JAX_PREVIEW_TRACE_OPTION_POLICY,
@@ -3946,7 +3947,7 @@ def _record_jax_constant_leaves(trace: Trace, log: _JaxValidationLog) -> None:
             "constant",
             "replay",
             "exempted",
-            "constant_producer_leaf",
+            CONSTANT_PRODUCER_LEAF_REASON,
             "closure constant: its saved payload is the record",
         )
         _record_jax_decision(
@@ -3955,10 +3956,10 @@ def _record_jax_constant_leaves(trace: Trace, log: _JaxValidationLog) -> None:
             "constant",
             "perturbation",
             "exempted",
-            "constant_parent_payload",
+            CONSTANT_PARENT_PAYLOAD_REASON,
             "closure constant: no upstream op to perturb",
         )
-        for reason in ("constant_producer_leaf", "constant_parent_payload"):
+        for reason in (CONSTANT_PRODUCER_LEAF_REASON, CONSTANT_PARENT_PAYLOAD_REASON):
             log.exempted_reason_counts[reason] = log.exempted_reason_counts.get(reason, 0) + 1
 
 

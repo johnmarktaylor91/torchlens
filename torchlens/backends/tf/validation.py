@@ -11,6 +11,7 @@ import numpy as np
 
 from ... import _state
 from ...validation.status import ValidationReplaySource, ValidationStatus
+from .._constants import CONSTANT_PARENT_PAYLOAD_REASON, CONSTANT_PRODUCER_LEAF_REASON
 from .._validation_shared import float_replay_tolerances, ops_by_label as _ops_by_label
 from .op_callback_capture import TFOpCapture
 
@@ -91,8 +92,8 @@ _REASON_NO_FUNCTION = "no_replayable_function"
 _REASON_EFFECT = "effectful_region"
 _REASON_UNCLASSIFIED = "op_unclassified"
 _REASON_INCONSISTENT = "capture_inconsistent"
-_REASON_CONSTANT_LEAF = "constant_producer_leaf"
-_REASON_CONSTANT_PERTURB = "constant_parent_payload"
+_REASON_CONSTANT_LEAF = CONSTANT_PRODUCER_LEAF_REASON
+_REASON_CONSTANT_PERTURB = CONSTANT_PARENT_PAYLOAD_REASON
 _VALUE_OPS = _PURE_REPLAY_ALLOWLIST | frozenset(
     {
         "Elu",
