@@ -70,18 +70,15 @@ def _conv(x: np.ndarray, weight: np.ndarray, bias: np.ndarray, padding: int) -> 
 
     spatial = x.ndim - 2
     padded = np.pad(x, [(0, 0), (0, 0)] + [(padding, padding)] * spatial)
-    kernel = weight.shape[2:]
-    out_shape = tuple(padded.shape[2 + i] - kernel[i] + 1 for i in range(spatial))
-    out = np.zeros((x.shape[0], weight.shape[0], *out_shape), dtype=np.float64)
-    for raw_index in np.ndindex(*out_shape):
-        index: tuple[int, ...] = tuple(int(i) for i in raw_index)
-        window: tuple[slice, ...] = (slice(None), slice(None)) + tuple(
-            slice(i, i + int(k)) for i, k in zip(index, kernel)
-        )
-        patch = padded[window]
-        out[(slice(None), slice(None), *index)] = np.tensordot(
-            patch, weight, axes=(list(range(1, 2 + spatial)), list(range(1, 2 + spatial)))
-        )
+    windows = np.lib.stride_tricks.sliding_window_view(
+        padded, weight.shape[2:], axis=tuple(range(2, 2 + spatial))
+    )
+    positions, offsets = "pqr"[:spatial], "xyz"[:spatial]
+    out = np.einsum(
+        f"nc{positions}{offsets},oc{offsets}->no{positions}",
+        windows.astype(np.float64),
+        weight.astype(np.float64),
+    )
     return (out + bias.reshape((1, -1) + (1,) * spatial)).astype(np.float32)
 
 
