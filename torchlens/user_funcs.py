@@ -47,7 +47,7 @@ from ._capture_intervention import (
     _intervention_spec_from_hook_plan,
     _merge_intervention_spec_hooks,
     _record_capture_intervention_event,
-    activation_only_predicate,
+    activation_only_predicate as _activation_only_predicate,
     intervene_selector_fired_nowhere,
 )
 from ._capture_state_helpers import (
@@ -2051,7 +2051,7 @@ def _run_model_and_save_specified_outs(
                 keep_op=save_predicate,
                 # The live forward sees only activation branches; gradient and
                 # node branches armed as sticky backward hooks above.
-                intervene=activation_only_predicate(intervene_predicate),
+                intervene=_activation_only_predicate(intervene_predicate),
                 halt=halt_predicate,
                 default_op=default_op,
                 streaming=StorageOptions(
