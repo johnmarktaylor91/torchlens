@@ -97,7 +97,13 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # DROP-gated `_raw_call_fingerprint` witness; absent on a loaded trace,
     # so the None default is the correct "no sealed fingerprint" reading,
     # which keeps the exact-size input guard.
-    "<root>": 20,
+    # 20 -> 17 (runnable package move): the three transaction.py reads moved
+    # with the module from the package root into torchlens/_runnable/ and are
+    # ledgered under "_runnable" below; no site was added or removed.
+    "<root>": 17,
+    # 0 -> 3 (runnable package move): transaction.py reads the optional
+    # `_runnable` seam (x2) and `_source_model_ref` (x1), moved from <root>.
+    "_runnable": 3,
     # 24 -> 25 (2026-08-15 r3settle reconcile): bundle.py reads the optional
     # `_runnable` seam (absent on non-runnable traces; None default correct),
     # the same f2bc65a6 idiom already ledgered at <root>.
