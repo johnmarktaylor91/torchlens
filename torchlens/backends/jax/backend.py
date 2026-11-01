@@ -693,6 +693,7 @@ class JAXBackend:
 
                 check_metadata_invariants(trace)
             passed = self._validate_jax_equations(trace, log)
+            _record_jax_constant_leaves(trace, log)
             if passed and not self._validate_jax_regions(trace):
                 passed = False
                 _record_jax_decision(
@@ -765,6 +766,7 @@ class JAXBackend:
             unverified_reason_counts=(
                 {"effectful_region": unverified_node_count} if unverified_node_count else {}
             ),
+            exempted_reason_counts=dict(log.exempted_reason_counts) if log is not None else {},
             decisions=decisions,
         )
         first_failure = log.first_failure if log is not None else None
@@ -3894,6 +3896,7 @@ class _JaxValidationLog:
 
     decisions: list[dict[str, Any]] = field(default_factory=list)
     first_failure: tuple[str, str, str] | None = None
+    exempted_reason_counts: dict[str, int] = field(default_factory=dict)
 
 
 def _record_jax_decision(
@@ -3923,6 +3926,40 @@ def _record_jax_decision(
     log.decisions.append(record)
     if decision == "failed" and log.first_failure is None:
         log.first_failure = (op_label, func_name, reason)
+
+
+def _record_jax_constant_leaves(trace: Trace, log: _JaxValidationLog) -> None:
+    """Record the constants rule's named leaf decisions for ``constant`` source ops.
+
+    A closure constant has no equation to replay (its saved payload is the
+    record) and nothing upstream to perturb, so it is exempted under the two
+    reasons the constants rule names (item 3).
+    """
+
+    for op in trace.layer_list:
+        if str(getattr(op, "func_name", "")) != "constant":
+            continue
+        label = str(getattr(op, "label", ""))
+        _record_jax_decision(
+            log,
+            label,
+            "constant",
+            "replay",
+            "exempted",
+            "constant_producer_leaf",
+            "closure constant: its saved payload is the record",
+        )
+        _record_jax_decision(
+            log,
+            label,
+            "constant",
+            "perturbation",
+            "exempted",
+            "constant_parent_payload",
+            "closure constant: no upstream op to perturb",
+        )
+        for reason in ("constant_producer_leaf", "constant_parent_payload"):
+            log.exempted_reason_counts[reason] = log.exempted_reason_counts.get(reason, 0) + 1
 
 
 def _readable_closure_consts(closed_jaxpr: Any) -> tuple[Any, ...]:

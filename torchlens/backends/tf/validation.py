@@ -91,6 +91,8 @@ _REASON_NO_FUNCTION = "no_replayable_function"
 _REASON_EFFECT = "effectful_region"
 _REASON_UNCLASSIFIED = "op_unclassified"
 _REASON_INCONSISTENT = "capture_inconsistent"
+_REASON_CONSTANT_LEAF = "constant_producer_leaf"
+_REASON_CONSTANT_PERTURB = "constant_parent_payload"
 _VALUE_OPS = _PURE_REPLAY_ALLOWLIST | frozenset(
     {
         "Elu",
@@ -190,6 +192,7 @@ class TFValidationResult:
     effect_region_histogram: Counter[str]
     decisions: tuple[Mapping[str, Any], ...] = ()
     unverified_reason_counts: Mapping[str, int] = field(default_factory=dict)
+    exempted_reason_counts: Mapping[str, int] = field(default_factory=dict)
     first_failure: tuple[str, str, str] | None = None
 
 
@@ -224,6 +227,7 @@ def validate_tf_trace(trace: Any, *, validate_metadata: bool = True) -> Validati
         num_failed_ops=result.counts.failed_node_count,
         payload_load_status=getattr(trace, "payload_load_status", None),
         unverified_reason_counts=result.unverified_reason_counts,
+        exempted_reason_counts=result.exempted_reason_counts,
         decisions=result.decisions,
     )
     if status.state == "failed" and result.first_failure is not None:
@@ -294,6 +298,7 @@ def validate_tf_trace_detailed(trace: Any) -> TFValidationResult:
     effect_region_count = 0
     decisions_list: list[Mapping[str, Any]] = []
     unverified_reasons: Counter[str] = Counter()
+    exempted_reasons: Counter[str] = Counter()
     for label, op in ops_by_label.items():
         if label != getattr(op, "_label_raw", None):
             continue
@@ -301,6 +306,12 @@ def validate_tf_trace_detailed(trace: Any) -> TFValidationResult:
         op_type = str(getattr(op, "func_name", ""))
         op_label = str(getattr(op, "label", label))
         if op_class == "source":
+            if op_type == "constant":
+                # Constants rule item 3: a closure constant is a leaf whose
+                # saved payload is the record; nothing upstream to perturb.
+                decisions_list.extend(_constant_leaf_decisions(op_label))
+                exempted_reasons[_REASON_CONSTANT_LEAF] += 1
+                exempted_reasons[_REASON_CONSTANT_PERTURB] += 1
             continue
         if op_class != "value":
             if op_class in {"pure-resource-read", "effect-denied", "control-region"}:
@@ -345,6 +356,7 @@ def validate_tf_trace_detailed(trace: Any) -> TFValidationResult:
         effect_region_histogram=effect_region_histogram,
         decisions=decisions,
         unverified_reason_counts=dict(unverified_reasons),
+        exempted_reason_counts=dict(exempted_reasons),
         first_failure=_first_failure(decisions),
     )
 
@@ -361,6 +373,18 @@ def _decision(
         "decision": decision,
         "reason": reason,
     }
+
+
+def _constant_leaf_decisions(op_label: str) -> tuple[Mapping[str, Any], ...]:
+    """The two named leaf decisions of a ``constant`` source op (constants rule item 3)."""
+
+    replay = dict(_decision(op_label, "constant", "replay", "exempted", _REASON_CONSTANT_LEAF))
+    replay["justification"] = "closure constant: its saved payload is the record"
+    perturb = dict(
+        _decision(op_label, "constant", "perturbation", "exempted", _REASON_CONSTANT_PERTURB)
+    )
+    perturb["justification"] = "closure constant: no upstream op to perturb"
+    return (replay, perturb)
 
 
 def _structural_failure_decision(item: str, ops_by_label: Mapping[str, Any]) -> Mapping[str, Any]:

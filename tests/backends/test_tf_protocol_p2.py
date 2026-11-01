@@ -87,8 +87,27 @@ def test_tf_validate_returns_status_never_bool() -> None:
     assert isinstance(status, ValidationStatus)
     assert status.state == "passed", status.message
     assert status.decisions
-    assert all(record["decision"] == "validated" for record in status.decisions)
+    assert all(record["decision"] in {"validated", "exempted"} for record in status.decisions)
+    assert any(record["decision"] == "validated" for record in status.decisions)
     assert set(status.unverified_reason_counts) <= VALIDATION_REASONS
+    assert set(status.exempted_reason_counts) <= VALIDATION_REASONS
+
+
+def _assert_constant_leaf_decisions(status: ValidationStatus, constants: list[Any]) -> None:
+    """A9: the decisions name every constant op under the two leaf reasons."""
+
+    by_label = {
+        (record["op_label"], record["phase"]): record
+        for record in status.decisions
+        if record["func_name"] == "constant"
+    }
+    for op in constants:
+        replay = by_label[(op.label, "replay")]
+        perturb = by_label[(op.label, "perturbation")]
+        assert (replay["decision"], replay["reason"]) == ("exempted", "constant_producer_leaf")
+        assert (perturb["decision"], perturb["reason"]) == ("exempted", "constant_parent_payload")
+    assert status.exempted_reason_counts["constant_producer_leaf"] == len(constants)
+    assert status.exempted_reason_counts["constant_parent_payload"] == len(constants)
 
 
 def test_tf_closure_constant_is_a_constant_source_op_with_payload() -> None:
@@ -110,7 +129,9 @@ def test_tf_closure_constant_is_a_constant_source_op_with_payload() -> None:
     matmul = next(op for op in trace.layer_list if op.func_name == "MatMul")
     assert any(parent in {c.label, c.layer_label} for c in constants for parent in matmul.parents)
     np.testing.assert_array_equal(np.asarray(constants[0].out), np.full((4, 3), 0.5))
-    assert _protocol().validate(trace, None).state == "passed"
+    status = _protocol().validate(trace, None)
+    assert status.state == "passed", status.message
+    _assert_constant_leaf_decisions(status, constants)
 
 
 def test_tf_scalar_literal_stays_replayable_without_an_op() -> None:
