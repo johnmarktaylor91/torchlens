@@ -59,6 +59,7 @@ def _is_plain_nonnegative_int(value: Any) -> TypeGuard[int]:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
+_TORCH_BACKEND_NAME = "torch"
 _SCHEMA_REMEDY = "re-save the artifact with trace.save(); do not hand-edit manifest.json"
 
 
@@ -1094,3 +1095,18 @@ def _validate_unsupported_tensors(raw_value: Any) -> list[dict[str, str]]:
             validated_entry[key] = value
         validated.append(validated_entry)
     return validated
+
+
+def _manifest_uses_audit_only_payloads(manifest: Manifest | dict[str, Any]) -> bool:
+    """Return whether the manifest declares metadata-only payload loading."""
+
+    if isinstance(manifest, Manifest):
+        backend_name = getattr(manifest, "_tl_logical_backend", "torch")
+        materializes = getattr(manifest, "_tl_payload_materialization_supported", True)
+        return backend_name != _TORCH_BACKEND_NAME and not bool(materializes)
+    if manifest.get("backend", _TORCH_BACKEND_NAME) == _TORCH_BACKEND_NAME:
+        return False
+    payload_policy = manifest.get("payload_policy", {})
+    if not isinstance(payload_policy, dict):
+        return False
+    return not bool(payload_policy.get("materialization_supported", False))

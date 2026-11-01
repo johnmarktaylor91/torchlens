@@ -31,7 +31,12 @@ from .._utils.hashing import sha256_file
 from . import ArtifactError, BlobRef, FieldPolicy, PayloadLoadHints, prerelease as _prerelease
 from .accessor_rebuild import rebuild_trace_accessors
 from .lazy import LazyActivationRef, _file_identity
-from .manifest import Manifest, TensorEntry
+from .manifest import (
+    _TORCH_BACKEND_NAME,
+    Manifest,
+    TensorEntry,
+    _manifest_uses_audit_only_payloads,
+)
 from .paths import resolve_bundle_blob_path, resolve_bundle_blobs_dir
 from .payload_codec import materialize_transport_tensor
 from .scrub import (
@@ -51,7 +56,6 @@ _LEGACY_CAPTURE_TRACE_KEYS = {
     "_wrapper_runtime_ws",
     "_pending_live_fire_records",
 }
-_TORCH_BACKEND_NAME = "torch"
 _PORTABLE_WALK_MAX_DEPTH = 200
 _REHYDRATE_IN_PROGRESS = object()
 
@@ -1208,21 +1212,6 @@ def _payload_hints_are_explicit(
     sharding = getattr(jax_hint, "sharding", None)
     reconstruct = bool(getattr(jax_hint, "reconstruct_sharding", False))
     return sharding is not None or reconstruct
-
-
-def _manifest_uses_audit_only_payloads(manifest: Manifest | dict[str, Any]) -> bool:
-    """Return whether the manifest declares metadata-only payload loading."""
-
-    if isinstance(manifest, Manifest):
-        backend_name = getattr(manifest, "_tl_logical_backend", "torch")
-        materializes = getattr(manifest, "_tl_payload_materialization_supported", True)
-        return backend_name != _TORCH_BACKEND_NAME and not bool(materializes)
-    if manifest.get("backend", _TORCH_BACKEND_NAME) == _TORCH_BACKEND_NAME:
-        return False
-    payload_policy = manifest.get("payload_policy", {})
-    if not isinstance(payload_policy, dict):
-        return False
-    return not bool(payload_policy.get("materialization_supported", False))
 
 
 def _entry_logical_backend(entry: dict[str, Any] | TensorEntry) -> str:

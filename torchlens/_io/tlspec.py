@@ -6,7 +6,6 @@ import contextlib
 import json
 import os
 import shutil
-import sys
 import uuid
 from collections.abc import Iterable
 from datetime import datetime, timezone
@@ -23,7 +22,7 @@ from .._utils.hashing import sha256_file
 from ..backends.registry import get_backend_spec
 from . import TLSPEC_VERSION, ArtifactError
 from ._durability import fsync_dir, fsync_tree
-from .manifest import Manifest, TensorEntry
+from .manifest import Manifest, TensorEntry, _runtime_python_version
 from .paths import reject_symlink_path
 
 _PARTIAL_SENTINEL = "PARTIAL"
@@ -508,7 +507,7 @@ class _TlSpecWriter:
             "kind": kind,
             "created_at": getattr(source, "_source_bundle_created_at", None) or _utc_timestamp(),
             "torchlens_version": TORCHLENS_VERSION,
-            "python_version": _python_version(),
+            "python_version": _runtime_python_version(),
             "torch_version": torch.__version__,
             "schema_version": TLSPEC_SCHEMA_VERSION,
             "model_signature": model_signature,
@@ -1093,18 +1092,6 @@ def _json_int_or_none(value: Any) -> int | None:
     if isinstance(value, int):
         return value
     return None
-
-
-def _python_version() -> str:
-    """Return the runtime Python version string.
-
-    Returns
-    -------
-    str
-        ``major.minor.micro`` version string.
-    """
-
-    return f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
 
 
 def _utc_timestamp() -> str:
