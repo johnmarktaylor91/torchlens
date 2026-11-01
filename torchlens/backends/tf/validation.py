@@ -346,7 +346,7 @@ def _detailed_result(
     *,
     counts: TFValidationCounts,
     failures: list[str],
-    classes: Mapping[str, TFOpClass],
+    classes: dict[str, TFOpClass],
     histograms: tuple[Counter[str], Counter[str], Counter[str]],
     decisions_list: list[Mapping[str, Any]],
     unverified_reasons: Counter[str],
