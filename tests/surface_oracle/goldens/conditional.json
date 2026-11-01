@@ -4515,7 +4515,7 @@
      6
     ]
    },
-   "_capture_outcome": "<torchlens._capture.outcome.CaptureOutcome>",
+   "_capture_outcome": "<torchlens._capture._outcome_types.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
    "_cost_backward_durations": [],
@@ -5449,7 +5449,7 @@
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "options": "<torchlens._data_classes._trace_groups_capture.TraceOptions>",
-   "outcome": "<torchlens._capture.outcome.CaptureOutcome>",
+   "outcome": "<torchlens._capture._outcome_types.CaptureOutcome>",
    "output_id2label": null,
    "output_layers": [
     "output_1"
@@ -10011,7 +10011,7 @@
      6
     ]
    },
-   "_capture_outcome": "<torchlens._capture.outcome.CaptureOutcome>",
+   "_capture_outcome": "<torchlens._capture._outcome_types.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
    "_cost_backward_durations": [],
@@ -10941,7 +10941,7 @@
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "options": "<torchlens._data_classes._trace_groups_capture.TraceOptions>",
-   "outcome": "<torchlens._capture.outcome.CaptureOutcome>",
+   "outcome": "<torchlens._capture._outcome_types.CaptureOutcome>",
    "output_id2label": null,
    "output_layers": [
     "output_1"
@@ -15499,7 +15499,7 @@
      6
     ]
    },
-   "_capture_outcome": "<torchlens._capture.outcome.CaptureOutcome>",
+   "_capture_outcome": "<torchlens._capture._outcome_types.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
    "_cost_backward_durations": [],
@@ -16433,7 +16433,7 @@
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "options": "<torchlens._data_classes._trace_groups_capture.TraceOptions>",
-   "outcome": "<torchlens._capture.outcome.CaptureOutcome>",
+   "outcome": "<torchlens._capture._outcome_types.CaptureOutcome>",
    "output_id2label": null,
    "output_layers": [
     "output_1"
@@ -20989,7 +20989,7 @@
      6
     ]
    },
-   "_capture_outcome": "<torchlens._capture.outcome.CaptureOutcome>",
+   "_capture_outcome": "<torchlens._capture._outcome_types.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
    "_cost_backward_durations": [],
@@ -21923,7 +21923,7 @@
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "options": "<torchlens._data_classes._trace_groups_capture.TraceOptions>",
-   "outcome": "<torchlens._capture.outcome.CaptureOutcome>",
+   "outcome": "<torchlens._capture._outcome_types.CaptureOutcome>",
    "output_id2label": null,
    "output_layers": [
     "output_1"
@@ -26364,7 +26364,7 @@
      6
     ]
    },
-   "_capture_outcome": "<torchlens._capture.outcome.CaptureOutcome>",
+   "_capture_outcome": "<torchlens._capture._outcome_types.CaptureOutcome>",
    "_code_context_cache": "<skipped: internal cache keyed by runtime code-object ids>",
    "_containers": "<raises AttributeError>",
    "_cost_backward_durations": [],
@@ -27292,7 +27292,7 @@
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "options": "<torchlens._data_classes._trace_groups_capture.TraceOptions>",
-   "outcome": "<torchlens._capture.outcome.CaptureOutcome>",
+   "outcome": "<torchlens._capture._outcome_types.CaptureOutcome>",
    "output_id2label": null,
    "output_layers": [
     "output_1"

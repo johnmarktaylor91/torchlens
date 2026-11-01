@@ -99,6 +99,8 @@ def test_r35_no_float_torch_equal_in_runnable_modules() -> None:
         Path("_io/runnable.py"),
         Path("backends/torch/completeness_witness.py"),
         Path("backends/torch/backend.py"),
+        Path("backends/torch/_outputs.py"),
+        Path("backends/torch/_failed_session.py"),
         Path("backends/torch/ops.py"),
     )
     offenders: list[str] = []

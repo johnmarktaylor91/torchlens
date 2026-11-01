@@ -147,10 +147,12 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # DROP-gated `_raw_call_fingerprint` witness; absent on a loaded trace,
     # so the None default is the correct "no sealed fingerprint" reading,
     # which keeps the exact-size input guard.
-    # 20 -> 17 (runnable package move): the three transaction.py reads moved
-    # with the module from the package root into torchlens/_runnable/ and are
-    # ledgered under "_runnable" below; no site was added or removed.
-    "<root>": 17,
+    # 20 -> 11 (capture seam): nine sites moved verbatim from root modules into
+    # _capture (below, 21 -> 30); then 11 -> 8 (runnable package move): the three
+    # transaction.py reads moved with the module from the package root into
+    # torchlens/_runnable/ and are ledgered under "_runnable" below. No site was
+    # added or removed; the package-wide total is unchanged at 381.
+    "<root>": 8,
     # 0 -> 3 (runnable package move): transaction.py reads the optional
     # `_runnable` seam (x2) and `_source_model_ref` (x1), moved from <root>.
     "_runnable": 3,
@@ -229,7 +231,9 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # peak-memory sites converted to direct private reads guarded by
     # try/except AttributeError, net -2 after the new episode/peak-memory
     # additions.
-    "_capture": 21,
+    # 21 -> 30 (capture seam): the nine root-module sites above moved verbatim
+    # into the PREPARE/RUN/FINALIZE modules.
+    "_capture": 30,
     # 25 -> 27 (2026-08-14 fix-wave reconcile, 7f90a885 fix/walkers): the
     # linear ordinal_index cache keys its per-trace memo on the session-time
     # `_backward_projection_revision` counter in grad_fn_call.py (x2); absent

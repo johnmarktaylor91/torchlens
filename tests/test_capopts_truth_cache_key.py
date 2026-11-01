@@ -27,8 +27,9 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-import torchlens._user_funcs as user_funcs
-from torchlens._user_funcs import (
+import torchlens._capture.prepare.cache as prepare_cache
+import torchlens._capture.prepare.door as prepare_door
+from torchlens._capture.prepare.cache import (
     CAPTURE_CACHE_KEY_CURATED,
     CAPTURE_CACHE_KEY_NEUTRAL,
 )
@@ -88,7 +89,7 @@ def test_cache_key_curated_fields_have_hand_built_entries() -> None:
     leaves the key. This receipt scans the assembly source for the literal.
     """
 
-    source = inspect.getsource(user_funcs)
+    source = inspect.getsource(prepare_door)
     missing = [name for name in sorted(CAPTURE_CACHE_KEY_CURATED) if f'"{name}"' not in source]
     assert not missing, (
         f"curated fields with no hand-built cache-config entry: {missing}; "
@@ -185,7 +186,8 @@ def test_plant_neutralized_semantic_field_reopens_wrong_serve(
 
     planted = dict(CAPTURE_CACHE_KEY_NEUTRAL)
     planted["raise_on_nan"] = "PLANT: pretend this safety knob is session-neutral"
-    monkeypatch.setattr(user_funcs, "CAPTURE_CACHE_KEY_NEUTRAL", planted)
+    monkeypatch.setattr(prepare_door, "CAPTURE_CACHE_KEY_NEUTRAL", planted)
+    monkeypatch.setattr(prepare_cache, "CAPTURE_CACHE_KEY_NEUTRAL", planted)
     model = SmallNet()
     x = torch.randn(2, 4)
     _trace(model, x, str(tmp_path))

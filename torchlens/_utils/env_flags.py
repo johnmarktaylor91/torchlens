@@ -112,7 +112,7 @@ ENV_FLAG_REGISTRY: dict[str, EnvFlagSpec] = {
         EnvFlagSpec(
             name="TORCHLENS_AUTO",
             kind="bool",
-            reader="torchlens._user_funcs / torchlens.experimental",
+            reader="torchlens._capture.prepare.dispatch / torchlens.experimental",
             description=(
                 "Requests the unsupported implicit capture mode; TRUE refuses "
                 "capture entry with auto_environment_unsupported."

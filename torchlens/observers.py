@@ -494,7 +494,7 @@ _REDIRECTS: dict[str, str] = {
 #: Live names resolved on first access (``register_tensor_connection`` lives
 #: with the capture door).
 _LAZY_ATTRS: dict[str, tuple[str, str | None]] = {
-    "register_tensor_connection": ("torchlens._user_funcs", "register_tensor_connection"),
+    "register_tensor_connection": ("torchlens._capture.run_entry", "register_tensor_connection"),
 }
 
 
@@ -517,7 +517,7 @@ if not TYPE_CHECKING:
 
 
 if TYPE_CHECKING:
-    from ._user_funcs import register_tensor_connection as register_tensor_connection
+    from ._capture.run_entry import register_tensor_connection as register_tensor_connection
 
 __all__ = [
     "TapObserver",

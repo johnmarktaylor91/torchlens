@@ -28,7 +28,8 @@ from _fresh_plant import touch_fresh_plant
 from torch import nn
 
 import torchlens as tl
-from torchlens._capture import peak_memory, trace as capture_trace
+import torchlens._capture._forward_helpers as capture_forward_helpers
+from torchlens._capture import peak_memory
 from torchlens._capture.peak_memory import CPU_ZERO_PEAK_REASON
 from torchlens.options import CaptureOptions
 
@@ -153,7 +154,7 @@ def test_cpu_forward_python_peak_includes_a_freed_bytearray() -> None:
 
 def test_cpu_forward_zero_reads_none_with_the_reason(monkeypatch: pytest.MonkeyPatch) -> None:
     # An outside measurement of zero growth: every resident reading is the same.
-    monkeypatch.setattr(capture_trace, "process_rss_bytes", lambda: 1_000_000)
+    monkeypatch.setattr(capture_forward_helpers, "process_rss_bytes", lambda: 1_000_000)
     monkeypatch.setattr(peak_memory, "peak_rss_bytes", lambda: 1_000_000)
     torch.manual_seed(0)
     trace = tl.trace(nn.Linear(4, 2).eval(), torch.randn(2, 4), capture=HOST)

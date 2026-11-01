@@ -2,14 +2,13 @@
 
 from typing import Literal
 
-from .._errors import KeywordConflictError
+from .._errors import KeywordConflictError, SelectionError
 from .._selection.errors import (
     AmbiguousSiteError as AmbiguousSiteError,
     BindingPreflightError as BindingPreflightError,
     InterventionWarning as InterventionWarning,
     LiveModeLabelError as LiveModeLabelError,
     MultiMatchWarning as MultiMatchWarning,
-    SelectionError as SelectionError,
     SelectorCapabilityError as SelectorCapabilityError,
     SelectorCompositionError as SelectorCompositionError,
     SiteResolutionError as SiteResolutionError,

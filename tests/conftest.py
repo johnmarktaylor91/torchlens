@@ -72,7 +72,7 @@ _WARN_ONCE_SENTINELS: tuple[tuple[str, str, object], ...] = (
     # capture in the package, and reset per test here so a test that trips it
     # via a direct log_current_rng_states() call cannot degrade later tests.
     ("torchlens._utils.rng", "_cuda_rng_unusable", False),
-    ("torchlens._user_funcs", "_BATCHNORM_TRAIN_STATS_WARNED", False),
+    ("torchlens._capture.prepare.door", "_BATCHNORM_TRAIN_STATS_WARNED", False),
     ("torchlens._utils.introspection", "_col_offset_cache_warned", False),
     ("torchlens.validation._stock_layer_grads", "_PASS_INDEX_PARSE_WARNED", False),
     ("torchlens._visualization._render_common", "_SIBLING_ORDER_WARNING_EMITTED", False),

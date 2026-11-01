@@ -15,7 +15,7 @@ from torch import nn
 from torchlens._ir.capture_events import CaptureEvents
 
 from .. import _state
-from .._capture.config import InternalCaptureConfig
+from .._capture.finalize.settle import _extract_and_mark_outputs
 from .._capture.outcome import safe_exception_repr, safe_exception_str
 from .._capture.predicates import _save_selector_matches, validate_followed_by_capability
 from .._capture.projections import (
@@ -23,8 +23,8 @@ from .._capture.projections import (
     _empty_recording,
     active_recording_state,
 )
+from .._capture.stages import InternalCaptureConfig
 from .._capture.stop import StopDirective, stop_directive_for_trace
-from .._capture.trace import _extract_and_mark_outputs
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.trace import Trace
 from .._deprecations import MISSING, MissingType

@@ -1,11 +1,11 @@
 key
+torchlens/_capture/prepare/door.py::<assign> cache_config
 torchlens/_constants.py::_get_torch_overridable_functions
 torchlens/_io/runnable_load.py::_reverse_index
 torchlens/_runnable/state_context.py::_count_bounded_fake_tensor_mode_class
 torchlens/_runnable/state_context.py::_fake_tensor_mode_class
 torchlens/_state.py::call_token
 torchlens/_state.py::module_token
-torchlens/_user_funcs.py::<assign> cache_config
 torchlens/_utils/_callable_safety.py::_torch_overridable_callable_ids
 torchlens/_visualization/_fonts.py::_fontconfig_file_for
 torchlens/_visualization/_header_block.py::_private_swatch_dir

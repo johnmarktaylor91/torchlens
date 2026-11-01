@@ -81,6 +81,9 @@ from ._completeness_types import (
     _TensorOriginRegistry,
     _WitnessState,
 )
+from ._internal_read import (
+    _internal_read_state,  # noqa: F401  (one per-thread counter, re-exported)
+)
 from ._modes import _TorchLensDispatchMode
 from ._tl import (
     DescriptorCompatProperty,
@@ -1097,10 +1100,6 @@ _TORCHLENS_ROOT = _COMPLETENESS_WITNESS_FILE.parents[2]
 
 _MAX_ESCAPE_STACK_DEPTH = 60
 """Bounded stack walk when classifying an escape dispatch's origin."""
-
-
-_internal_read_state = threading.local()
-"""Per-thread depth counter for the explicit TorchLens internal-scalar-read marker."""
 
 
 _DISPATCH_TENSOR_ORIGINS: weakref.WeakKeyDictionary[Any, _TensorOriginRegistry] = (
