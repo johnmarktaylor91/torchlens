@@ -187,21 +187,20 @@ def test_plant_tables_partition_the_closed_plant_set() -> None:
 #: Torch-side gaps the suite reports today, pinned by exact cell id with the detail each
 #: carries (cross-packet requests in the lane's RESULT.md): the public entry refuses
 #: ``grad_options=`` with the generic ``backend_unsupported`` code instead of the flag's
-#: code; a failed replay status carries the generic message "Replay validation failed."
-#: instead of naming the offending op (and torch's ``arg_logging_mismatch`` reason is not
-#: yet in the closed reason list); a loaded portable bundle carries no callables so replay
-#: validation refuses it. A fix flips the pin, and the entry must then be removed; the
-#: cells stay strict.
+#: code; the tamper verdict names the consumer with torch's ``arg_logging_mismatch``, a
+#: reason the closed list does not spell yet (a spelling for JMT, never added here); a
+#: loaded portable bundle carries no callables so replay validation refuses it. A fix flips
+#: the pin, and the entry must then be removed; the cells stay strict.
 TORCH_KNOWN_GAPS: dict[str, str] = {
     "c1_refusal_intermediate_derived_grads": "backend_unsupported",
-    "c1_validation_names_reason": "message does not name",
-    "c2_validation_after_load": "ArtifactError",
+    "c1_validation_names_reason": "not in VALIDATION_REASONS",
+    "c2_validation_after_load": "portable bundles drop them",
 }
 #: The fake refuses its one False flag typed before capture; it validates through torch, so
-#: it inherits the naming gap and the bundle gap.
+#: it inherits the reason-spelling gap and the bundle gap.
 FAKE_KNOWN_GAPS: dict[str, str] = {
-    "c1_validation_names_reason": "message does not name",
-    "c2_validation_after_load": "ArtifactError",
+    "c1_validation_names_reason": "not in VALIDATION_REASONS",
+    "c2_validation_after_load": "portable bundles drop them",
 }
 
 
@@ -328,6 +327,42 @@ def test_validation_status_oracle_rejects_bare_values_and_foreign_reasons() -> N
     bad = validation_status_problems(_Status("passed", unverified={"made_up_reason": 1}))
     assert "made_up_reason" in bad[0]
     assert validation_status_problems(_Status("passed", unverified={"replay_mismatch": 2})) == ()
+
+
+@pytest.mark.smoke
+def test_failed_replay_status_names_the_first_failed_decision() -> None:
+    """The torch status message names the failed op and reason (the naming cell's source)."""
+
+    from torchlens.validation.status import ValidationStatus
+
+    rows = [
+        {"op_label": "relu_1_2:1", "decision": "validated", "reason": "replay_matched"},
+        {"op_label": "linear_1_1:1", "decision": "failed", "reason": "replay_mismatch"},
+        {"op_label": None, "decision": "failed", "reason": "bfs_incomplete"},
+    ]
+    status = ValidationStatus.from_replay_counts(
+        backend="torch",
+        source="live",
+        num_replayed_ops=1,
+        num_unverified_ops=0,
+        num_failed_ops=2,
+        decisions=rows,
+    )
+    assert status.state == "failed"
+    assert status.message == "Replay validation failed at linear_1_1:1 (replay_mismatch)."
+    anonymous = ValidationStatus.from_replay_counts(
+        backend="torch",
+        source="live",
+        num_replayed_ops=0,
+        num_unverified_ops=0,
+        num_failed_ops=1,
+        decisions=rows[2:],
+    )
+    assert anonymous.message == "Replay validation failed (bfs_incomplete)."
+    passed = ValidationStatus.from_replay_counts(
+        backend="torch", source="live", num_replayed_ops=1, num_unverified_ops=0
+    )
+    assert passed.message == "Replay validation passed."
 
 
 @pytest.mark.smoke
