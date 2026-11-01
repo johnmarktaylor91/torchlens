@@ -161,7 +161,7 @@ def test_saved_and_loaded_trace_keeps_frozen_parameter_fields(tmp_path: Path) ->
     restored = tl.load(bundle)
 
     for address in (*FROZEN, *TRAINABLE):
-        assert restored.params[address].is_trainable is trace.params[address].trainable
+        assert restored.params[address].is_trainable is trace.params[address].is_trainable
         assert restored.params[address].num_calls == 1
         original_readers = [op.label for op in _ops_reading(trace, address)]
         assert [op.label for op in _ops_reading(restored, address)] == original_readers
