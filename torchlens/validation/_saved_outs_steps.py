@@ -109,7 +109,7 @@ def _record_dispatch_census_decision(
             reason=dispatch_count_result.reason,
         )
     elif dispatch_count_result.decision == "unverified":
-        # Round-26 W3-4a: an UNVERIFIED census result used to be silently
+        # An UNVERIFIED census result used to be silently
         # DISCARDED, so nothing in the trace recorded that the completeness
         # backstop never ran. It is now recorded on the add-only diagnostics
         # side-channel so the fact is auditable per-trace. It deliberately

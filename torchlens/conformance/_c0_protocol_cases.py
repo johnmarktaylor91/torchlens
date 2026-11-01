@@ -1,4 +1,4 @@
-"""The protocol-level C0 conformance cells for one registered backend.
+"""The protocol-level tier-0 conformance cells for one registered backend.
 
 Extracted from ``_protocol_cases`` so that module stays under the file cap; the
 spellings stay importable from ``torchlens.conformance._protocol_cases``.
