@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 #: short-circuiting sibling surfaces exactly where it did before compilation.
 _Matcher = Callable[[Any], bool]
 
-_Compiler = Callable[[BaseSelector, str], _Matcher]
+_Compiler = Callable[["BaseSelector", str], _Matcher]
 
 
 def _compile_label(selector: BaseSelector, lane: str) -> _Matcher:
