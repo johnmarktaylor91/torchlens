@@ -547,6 +547,8 @@ def _recompute_decoded_output(trace: "Trace", top_n: int | None) -> Any | None:
 
     Parameters
     ----------
+    trace:
+        Finished trace whose retained output logits are decoded.
     top_n:
         Requested number of top rows per batch item.
 

@@ -57,7 +57,7 @@ def show(trace: Trace, kind: str | None = None, **kwargs: Any) -> str | None:
     return cast("str | None", trace.draw(**kwargs))
 
 
-def draw(
+def draw(  # noqa: PLR0913 - mirrors the ratified public grammar of Trace.draw
     trace: Trace,
     view: VisModeLiteral | MissingType = MISSING,
     depth: int | MissingType = MISSING,
@@ -243,7 +243,7 @@ def animate_ops(trace: Trace, site: Any) -> str:
     )
 
 
-def draw_backward(
+def draw_backward(  # noqa: PLR0913 - mirrors the ratified public grammar of Trace.draw_backward
     trace: Trace,
     path: str = "backward_modelgraph",
     vis_graph_overrides: dict[str, Any] | None = None,
@@ -286,7 +286,7 @@ def draw_backward(
     )
 
 
-def draw_combined(
+def draw_combined(  # noqa: PLR0913 - mirrors the ratified public grammar of Trace.draw_combined
     trace: Trace,
     path: str = "combined_modelgraph",
     vis_graph_overrides: dict[str, Any] | None = None,
@@ -365,7 +365,7 @@ def last_run_records(trace: Trace) -> tuple[FireRecord, ...]:
     return tuple(records)
 
 
-def render_dagua_graph(
+def render_dagua_graph(  # noqa: PLR0913 - mirrors the ratified public grammar of Trace.render_dagua_graph
     trace: Trace,
     vis_mode: str = "unrolled",
     vis_call_depth: int = 1000,
@@ -395,7 +395,7 @@ def render_dagua_graph(
     )
 
 
-def to_dagua_graph(
+def to_dagua_graph(  # noqa: PLR0913 - mirrors the ratified public grammar of Trace.to_dagua_graph
     trace: Trace,
     vis_mode: str = "unrolled",
     vis_call_depth: int = 1000,
