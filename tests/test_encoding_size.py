@@ -225,7 +225,7 @@ def test_scale_closed_vocabulary() -> None:
 
 def test_scale_without_size_by_refuses(mlp_log: tl.Trace, tmp_path: Path) -> None:
     with pytest.raises(Exception) as excinfo:
-        _draw(mlp_log, tmp_path, scale="sqrt")
+        _draw(mlp_log, tmp_path, size_scale="sqrt")
     assert excinfo.value.fields["code"] == "scale_requires_size_by"
 
 
@@ -483,7 +483,7 @@ def test_request_hash_ignores_size_fields() -> None:
     from torchlens._visualization.request import ResolvedRenderRequest
 
     base = ResolvedRenderRequest()
-    sized = ResolvedRenderRequest(size_by="dims", size_scale="linear", encoding=object())
+    sized = ResolvedRenderRequest(size_by="dims", scale="linear", encoding=object())
     assert hash(base) == hash(sized)
 
 

@@ -223,7 +223,7 @@ def test_show_model_graph_defaults_are_stable(
     assert captured_calls[-1]["save_grads"] is False
     assert captured_calls[-1]["recurrence_detection"] is True
     assert captured_calls[-1]["verbose"] is False
-    assert dummy_logs[-1].render_calls[-1]["vis_mode"] == "unrolled"
+    assert dummy_logs[-1].render_calls[-1]["rolled"] is False
     assert dummy_logs[-1].cleanup_calls == 1
 
 
@@ -242,7 +242,7 @@ def test_show_model_graph_accepts_explicit_opt_in_overrides(
     )
 
     assert captured_calls[-1]["recurrence_detection"] is False
-    assert dummy_logs[-1].render_calls[-1]["vis_mode"] == "rolled"
+    assert dummy_logs[-1].render_calls[-1]["rolled"] is True
     assert dummy_logs[-1].cleanup_calls == 1
 
 
