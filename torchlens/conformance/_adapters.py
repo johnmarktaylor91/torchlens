@@ -148,9 +148,9 @@ class TorchReferenceAdapter:
 
         import torch
 
-        from ..backends.torch._torch_ops_calls import _WRAPPED_FUNC_CODE
+        from ..backends.torch import _torch_ops_calls
 
-        return (torch.get_rng_state().numpy().tobytes(), len(_WRAPPED_FUNC_CODE))
+        return (torch.get_rng_state().numpy().tobytes(), len(_torch_ops_calls._WRAPPED_FUNC_CODE))
 
     #: Save level whose bundle keeps what torch replay validation re-executes
     #: from (saved arguments and RNG states); ``portable`` drops them by design.
