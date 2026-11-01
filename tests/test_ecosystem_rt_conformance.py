@@ -106,13 +106,16 @@ _PLANT_INTENDED_CELL = {
 
 
 def test_plant_table_covers_the_closed_set() -> None:
-    """The intended-cell table and FAKE_PLANTS are the same closed set."""
+    """This table plus the protocol-era table (``_protocol_cases``) is the closed set."""
 
-    assert set(_PLANT_INTENDED_CELL) == set(FAKE_PLANTS)
+    from torchlens.conformance._protocol_cases import PLANT_INTENDED_CELL
+
+    assert set(_PLANT_INTENDED_CELL).isdisjoint(PLANT_INTENDED_CELL)
+    assert set(_PLANT_INTENDED_CELL) | set(PLANT_INTENDED_CELL) == set(FAKE_PLANTS)
 
 
 @pytest.mark.smoke_cells("test_every_plant_turns_its_intended_cell_red[capability_undispatched]")
-@pytest.mark.parametrize("plant", FAKE_PLANTS)
+@pytest.mark.parametrize("plant", sorted(_PLANT_INTENDED_CELL))
 def test_every_plant_turns_its_intended_cell_red(plant: str, tmp_path: Path) -> None:
     """Each planted defect fails the exact cell it targets, nothing vacuous."""
 

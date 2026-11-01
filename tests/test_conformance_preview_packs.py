@@ -30,26 +30,40 @@ from torchlens.conformance import (
 )
 from torchlens.conformance._adapters import RosterModel, resolve_adapter
 from torchlens.conformance._cases import run_c1_cases
-from torchlens.conformance._scorecard import scorecard_from_report
+from torchlens.conformance._protocol_cases import (
+    c1_row_case_ids,
+    c1_tail_case_ids,
+    c2_row_case_ids,
+)
+from torchlens.conformance._scorecard import SCORECARD_VERSION, scorecard_from_report
 from torchlens.errors import ConfigurationError
 
-#: Cells a full run over a two-family roster defines: 3 C0, 2x3 + 1 C1, 2x3 C2.
+#: Cells a full run over a two-family protocol-free roster defines: 3 C0, 2x3 + 1 C1, 2x3 C2.
 _FULL_DENOMINATOR = 16
-#: The preview rosters also declare op inventories: one more C1 cell per family,
-#: and every registered backend defines the four protocol-level C0 cells.
+#: Every registered backend defines the four protocol-level C0 cells.
 _PROTOCOL_C0_CELLS = 4
 _PREVIEW_C0_CELLS = 3 + _PROTOCOL_C0_CELLS
-_PREVIEW_DENOMINATOR = _FULL_DENOMINATOR + 2 + _PROTOCOL_C0_CELLS
+#: Per preview roster row at C1: capture, inventory, parity, repeat, graph, shape, gap,
+#: validation passes, validation names reason; at C2 the v1 trio plus payload equality
+#: and validation after load. The refusal tail varies per backend (its False flags and
+#: the public options it does not implement), so the denominator is enumerated per backend.
+_PREVIEW_C1_ROW_CELLS = 9
+_PREVIEW_C2_ROW_CELLS = 5
+_PREVIEW_DENOMINATOR_FLOOR = (
+    _PREVIEW_C0_CELLS + 2 * _PREVIEW_C1_ROW_CELLS + 1 + 2 * _PREVIEW_C2_ROW_CELLS
+)
 
-#: SHA-256 of the complete canonical bytes of the golden scorecard below, and
-#: the digest the scorecard embeds (over its digest-free form). Both were
-#: derived from a hand-written payload serialized with ``json.dumps`` alone.
-_GOLDEN_BYTES_SHA256 = (
-    "81603e35bcc9118bb98db51753d9ad2b218e8ab1eac72684f70ba5782d169304"  # pragma: allowlist secret
-)
-_GOLDEN_EMBEDDED_SHA256 = (
-    "28cbbe86eed6e10b35251954e96371fe1706848fdab91c50bc5e70358ff38b92"  # pragma: allowlist secret
-)
+
+def _preview_denominator(backend: str) -> int:
+    """Every cell the suite defines for ``backend``'s own roster."""
+
+    adapter = resolve_adapter(backend)
+    roster = adapter.default_roster()
+    cells = _PREVIEW_C0_CELLS + len(c1_tail_case_ids(adapter))
+    cells += sum(len(c1_row_case_ids(adapter, row)) for row in roster)
+    cells += sum(len(c2_row_case_ids(adapter, row)) for row in roster)
+    assert cells >= _PREVIEW_DENOMINATOR_FLOOR
+    return cells
 
 
 def _golden_report() -> ConformanceReport:
@@ -105,16 +119,105 @@ def _golden_report() -> ConformanceReport:
     )
 
 
+def _golden_payload() -> dict[str, Any]:
+    """The golden scorecard's canonical payload, written by hand (no folding code involved)."""
+
+    def cell(tier: str, case_id: str, family: str, state: str, detail: str = "") -> dict[str, str]:
+        group = "config_built" if family else ""
+        return {
+            "tier": tier,
+            "case_id": case_id,
+            "family": family,
+            "state": state,
+            "detail": detail,
+            "group": group,
+        }
+
+    not_reached = "not reached: {} did not pass"
+    skipped = "framework_not_installed: TorchLens-[claim word] x"
+    return {
+        "scorecard_version": SCORECARD_VERSION,
+        "backend": "golden",
+        "framework_version": "1.2.3",
+        "suite_version": "torchlens.conformance.v1",
+        "torchlens_version": "0.0.0",
+        "cells": [
+            cell("C0", "c0_capability_flags_boolean", "", "passed"),
+            cell("C0", "c0_provider_identity", "", "passed"),
+            cell("C0", "c0_surface_complete", "", "passed"),
+            cell("C1", "c1_capture_completes", "fn", "passed"),
+            cell("C1", "c1_reference_parity", "fn", "passed"),
+            cell("C1", "c1_deterministic_repeat", "fn", "passed"),
+            cell(
+                "C1",
+                "c1_capture_completes",
+                "mod",
+                "unsupported",
+                "unsupported[backend_unsupported]: no module roots",
+            ),
+            cell(
+                "C1",
+                "c1_reference_parity",
+                "mod",
+                "not_run",
+                not_reached.format("c1_capture_completes"),
+            ),
+            cell(
+                "C1",
+                "c1_deterministic_repeat",
+                "mod",
+                "not_run",
+                not_reached.format("c1_capture_completes"),
+            ),
+            cell("C1", "c1_capabilities_consumed", "", "passed"),
+            cell("C2", "c2_roundtrip_completes", "fn", "passed"),
+            cell("C2", "c2_reload_is_distinct", "fn", "passed"),
+            cell(
+                "C2", "c2_structure_equal", "fn", "failed", "reloaded structure differs from live"
+            ),
+            cell("C2", "c2_roundtrip_completes", "mod", "not_run", skipped),
+            cell(
+                "C2",
+                "c2_reload_is_distinct",
+                "mod",
+                "not_run",
+                not_reached.format("c2_roundtrip_completes"),
+            ),
+            cell(
+                "C2",
+                "c2_structure_equal",
+                "mod",
+                "not_run",
+                not_reached.format("c2_roundtrip_completes"),
+            ),
+        ],
+        "counts": {"denominator": 16, "failed": 1, "not_run": 5, "passed": 9, "unsupported": 1},
+        "highest_tier": "C0",
+        "maturity": "",
+        "framework_requirement": {},
+        "capabilities": {},
+        "roster_groups": {"config_built": 2},
+        "graduation": [],
+    }
+
+
 def test_golden_scorecard_canonical_bytes() -> None:
     """The canonical bytes and the embedded digest match the independent derivation."""
+
+    import json
 
     roster = tuple(
         RosterModel(family, "config_built", lambda: (abs, -1.0)) for family in ("fn", "mod")
     )
     card = scorecard_from_report(_golden_report(), roster, framework_version="1.2.3")
     text = card.to_json()
-    assert hashlib.sha256(text.encode("utf-8")).hexdigest() == _GOLDEN_BYTES_SHA256
-    assert card.sha256 == _GOLDEN_EMBEDDED_SHA256
+    payload = _golden_payload()
+    digest_free = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    expected_digest = hashlib.sha256(digest_free.encode("utf-8")).hexdigest()
+    payload["sha256"] = expected_digest
+    expected_text = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    assert text == expected_text
+    assert card.sha256 == expected_digest
     assert card.counts == {
         "passed": 9,
         "failed": 1,
@@ -147,13 +250,14 @@ def test_absent_framework_skips_every_case_and_scores_not_run(
     model_rows = [row for row in report.results if row.tier != "C0"]
     assert model_rows and all(row.outcome == "skipped" for row in model_rows)
     assert all("install torchlens[paddle]" in row.detail for row in model_rows)
-    assert report.funnel["skipped"] == len(model_rows) == _PREVIEW_DENOMINATOR - _PREVIEW_C0_CELLS
+    denominator = _preview_denominator("paddle")
+    assert report.funnel["skipped"] == len(model_rows) == denominator - _PREVIEW_C0_CELLS
     assert report.earned_tier == "C0"
     assert "conformant" not in claim_string(report)
 
     card = preview_scorecard("paddle", workdir=tmp_path)
-    assert card.counts["not_run"] == _PREVIEW_DENOMINATOR - _PREVIEW_C0_CELLS
-    assert card.counts["denominator"] == _PREVIEW_DENOMINATOR
+    assert card.counts["not_run"] == denominator - _PREVIEW_C0_CELLS
+    assert card.counts["denominator"] == denominator
     assert card.highest_tier == "C0"
     assert "conformant" not in card.to_json().lower()
 
@@ -214,7 +318,7 @@ def _assert_full_ladder(card: PreviewScorecard, backend: str) -> None:
     assert card.framework_version
     failing = [cell for cell in card.cells if cell.state != "passed"]
     assert not failing, failing
-    assert card.counts["denominator"] == _PREVIEW_DENOMINATOR
+    assert card.counts["denominator"] == _preview_denominator(backend)
     assert card.highest_tier == "C2"
     assert "conformant" not in card.to_json().lower()
 
