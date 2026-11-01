@@ -406,13 +406,20 @@ def config_built_specs() -> tuple[PaddleRowSpec, ...]:
         Rows in a stable order.
     """
 
+    return tuple(PaddleRowSpec(*spec) for spec in _fn_specs() + _fn_planted_specs() + _mod_specs())
+
+
+_SpecTuple = tuple[str, Callable[[], tuple[Any, Any]], tuple[str, ...], dict[str, Any], bool]
+
+
+def _fn_specs() -> tuple[_SpecTuple, ...]:
+    """The function-built config_built rows, in roster order."""
+
     a = _X24 + 1.0
     mu = _X24.mean(-1, keepdims=True)
     normed = (_X24 - mu) / np.sqrt(_X24.var(-1, keepdims=True) + 1e-5)
     loop_kinds = ("matmul", "tensor.__add__", "functional.relu")
-    specs: tuple[
-        tuple[str, Callable[[], tuple[Any, Any]], tuple[str, ...], dict[str, Any], bool], ...
-    ] = (
+    return (
         (
             "fn_chain_branch",
             _fn_chain_branch,
@@ -451,6 +458,13 @@ def config_built_specs() -> tuple[PaddleRowSpec, ...]:
             {"functional.softmax": _softmax(normed).astype(np.float32)},
             False,
         ),
+    )
+
+
+def _fn_planted_specs() -> tuple[_SpecTuple, ...]:
+    """The function-built rows whose graphs plant constants, in roster order."""
+
+    return (
         (
             "fn_reshape_transpose",
             _fn_reshape_transpose,
@@ -465,6 +479,13 @@ def config_built_specs() -> tuple[PaddleRowSpec, ...]:
             {"matmul": _X24 @ _W44, "tensor.__mul__": (_X24 @ _W44) * 0.5},
             True,
         ),
+    )
+
+
+def _mod_specs() -> tuple[_SpecTuple, ...]:
+    """The module-built config_built rows, in roster order."""
+
+    return (
         (
             "mod_mlp",
             _mod_mlp,
@@ -521,7 +542,6 @@ def config_built_specs() -> tuple[PaddleRowSpec, ...]:
             False,
         ),
     )
-    return tuple(PaddleRowSpec(*spec) for spec in specs)
 
 
 def _config_built_rows() -> tuple[RosterModel, ...]:

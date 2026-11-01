@@ -197,6 +197,18 @@ def _roster_for(adapter: object, roster: tuple[RosterModel, ...] | None) -> tupl
     return default_roster()
 
 
+def _realism_by_family(results: list[CaseResult]) -> dict[str, list[str]]:
+    """Map each realism class to the ordered, de-duplicated families that reported it."""
+
+    realism: dict[str, list[str]] = {}
+    for row in results:
+        if row.realism:
+            realism.setdefault(row.realism, [])
+            if row.family not in realism[row.realism]:
+                realism[row.realism].append(row.family)
+    return realism
+
+
 def run_conformance(
     backend: str,
     *,
@@ -265,12 +277,7 @@ def run_conformance(
         else:
             results.extend(run_c2_cases(adapter, model_rows, workdir=Path(workdir)))
     earned, funnel = _adjudicate(results, tiers, executed_floor)
-    realism: dict[str, list[str]] = {}
-    for row in results:
-        if row.realism:
-            realism.setdefault(row.realism, [])
-            if row.family not in realism[row.realism]:
-                realism[row.realism].append(row.family)
+    realism = _realism_by_family(results)
     pretrained_families = len(realism.get("pretrained", []))
     claim_eligible = (
         earned != ""

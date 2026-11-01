@@ -309,32 +309,44 @@ def run_c1_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[CaseResu
         results.append(_passed("c1_capture_completes", "C1", model))
         if model.expected_op_kinds is not None:
             results.append(_op_inventory_case(trace, model))
-        if _parity_holds(trace, reference, adapter):
-            results.append(_passed("c1_reference_parity", "C1", model))
-        else:
-            results.append(
-                _failed(
-                    "c1_reference_parity",
-                    "C1",
-                    "captured output != direct reference output",
-                    model,
-                )
-            )
-        try:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                repeat_net, repeat, _ = _run_capture(adapter, model)
-            if len(repeat.layer_list) == len(trace.layer_list):
-                results.append(_passed("c1_deterministic_repeat", "C1", model))
-            else:
-                results.append(
-                    _failed("c1_deterministic_repeat", "C1", "op count varies across runs", model)
-                )
-        except Exception as exc:  # noqa: BLE001 - provider failures become red cells, never crashes
-            results.append(_failed("c1_deterministic_repeat", "C1", _failure_detail(exc), model))
+        results.extend(_c1_parity_and_repeat_cases(adapter, model, trace, reference))
         results.extend(run_c1_protocol_row_cases(adapter, model, trace, reference))
     results.append(_capability_consumption_case(adapter, roster))
     results.extend(run_c1_refusal_cases(adapter, roster))
+    return results
+
+
+def _c1_parity_and_repeat_cases(
+    adapter: Any, model: RosterModel, trace: Any, reference: Any
+) -> list[CaseResult]:
+    """Reference-parity and deterministic-repeat rows for one captured roster model."""
+
+    import warnings
+
+    results: list[CaseResult] = []
+    if _parity_holds(trace, reference, adapter):
+        results.append(_passed("c1_reference_parity", "C1", model))
+    else:
+        results.append(
+            _failed(
+                "c1_reference_parity",
+                "C1",
+                "captured output != direct reference output",
+                model,
+            )
+        )
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            repeat_net, repeat, _ = _run_capture(adapter, model)
+        if len(repeat.layer_list) == len(trace.layer_list):
+            results.append(_passed("c1_deterministic_repeat", "C1", model))
+        else:
+            results.append(
+                _failed("c1_deterministic_repeat", "C1", "op count varies across runs", model)
+            )
+    except Exception as exc:  # noqa: BLE001 - provider failures become red cells, never crashes
+        results.append(_failed("c1_deterministic_repeat", "C1", _failure_detail(exc), model))
     return results
 
 
@@ -369,6 +381,31 @@ def _capability_consumption_case(adapter: Any, roster: tuple[RosterModel, ...]) 
             f"declared validation_replay=True but the replay door failed: {exc}",
         )
     return _passed("c1_capabilities_consumed", "C1")
+
+
+def _c2_reload_cases(trace: Any, loaded: Any, model: RosterModel) -> tuple[list[CaseResult], bool]:
+    """Distinct-reload and equal-structure rows; ``False`` when the row's protocol cells must not run."""
+
+    if loaded is trace:
+        return [
+            _failed(
+                "c2_reload_is_distinct",
+                "C2",
+                "load() returned the very object save() received; a "
+                "live-vs-reloaded oracle would compare an object to itself",
+                model,
+            )
+        ], False
+    results = [_passed("c2_reload_is_distinct", "C2", model)]
+    if getattr(loaded, "_conformance_field_lost", False) or len(loaded.layer_list) != len(
+        trace.layer_list
+    ):
+        results.append(
+            _failed("c2_structure_equal", "C2", "reloaded structure differs from live", model)
+        )
+        return results, False
+    results.append(_passed("c2_structure_equal", "C2", model))
+    return results, True
 
 
 def run_c2_cases(
@@ -414,26 +451,10 @@ def run_c2_cases(
             results.append(_failed("c2_roundtrip_completes", "C2", _failure_detail(exc), model))
             continue
         results.append(_passed("c2_roundtrip_completes", "C2", model))
-        if loaded is trace:
-            results.append(
-                _failed(
-                    "c2_reload_is_distinct",
-                    "C2",
-                    "load() returned the very object save() received; a "
-                    "live-vs-reloaded oracle would compare an object to itself",
-                    model,
-                )
-            )
+        reload_rows, reload_ok = _c2_reload_cases(trace, loaded, model)
+        results.extend(reload_rows)
+        if not reload_ok:
             continue
-        results.append(_passed("c2_reload_is_distinct", "C2", model))
-        if getattr(loaded, "_conformance_field_lost", False) or len(loaded.layer_list) != len(
-            trace.layer_list
-        ):
-            results.append(
-                _failed("c2_structure_equal", "C2", "reloaded structure differs from live", model)
-            )
-            continue
-        results.append(_passed("c2_structure_equal", "C2", model))
         results.extend(
             run_c2_protocol_row_cases(
                 adapter,

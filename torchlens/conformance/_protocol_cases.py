@@ -593,7 +593,17 @@ def run_c1_protocol_row_cases(
                 lambda: intermediates_problems(trace, expected, host_copy),
             )
         )
-    results.append(
+    results.extend(_c1_validation_and_tail_cells(adapter, protocol, model, trace, reference))
+    return results
+
+
+def _c1_validation_and_tail_cells(
+    adapter: Any, protocol: Any, model: RosterModel, trace: Any, reference: Any
+) -> list[CaseResult]:
+    """The validation, constants and RNG cells that close a row's protocol C1 block."""
+
+    host_copy = protocol.host_copy
+    results = [
         _guarded(
             "c1_validation_passes",
             "C1",
@@ -601,16 +611,14 @@ def run_c1_protocol_row_cases(
             lambda: validation_status_problems(
                 protocol.validate(trace, _as_output_list(reference))
             ),
-        )
-    )
-    results.append(
+        ),
         _guarded(
             "c1_validation_names_reason",
             "C1",
             model,
             lambda: _names_reason_body(adapter, protocol, model),
-        )
-    )
+        ),
+    ]
     if model.has_constants:
         results.append(
             _guarded(

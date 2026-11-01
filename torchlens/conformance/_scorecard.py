@@ -489,21 +489,8 @@ def scorecard_from_report(
 
     resolved = _adapter_for(report, adapter)
     protocol = adapter_protocol(resolved) if resolved is not None else None
-    stopped_at: dict[tuple[str, str], str] = {}
-    for row in report.results:
-        if row.outcome != "passed":
-            stopped_at.setdefault((row.tier, row.family), row.case_id)
-    cells = tuple(
-        _cell_for(slot, report, stopped_at) for slot in _expected_slots(report, roster, resolved)
-    )
-    counts = {state: sum(1 for cell in cells if cell.state == state) for state in CELL_STATES}
-    counts["denominator"] = len(cells)
-    highest = ""
-    for tier in _TIERS:
-        tier_cells = [cell for cell in cells if cell.tier == tier]
-        if not tier_cells or any(cell.state != "passed" for cell in tier_cells):
-            break
-        highest = tier
+    cells = _report_cells(report, roster, resolved)
+    counts, highest = _cell_counts_and_highest_tier(cells)
     groups: dict[str, int] = {}
     for model in roster:
         groups[model.group] = groups.get(model.group, 0) + 1
@@ -522,15 +509,51 @@ def scorecard_from_report(
         roster_groups=groups,
     )
     if protocol is not None:
-        inputs = graduation or GraduationInputs()
-        torch_card = inputs.reference
-        if torch_card is None:
-            torch_card = reference_scorecard_for(report.backend, card)
-        card = replace(
-            card,
-            graduation=graduation_items(card, reference=torch_card, repo_root=inputs.repo_root),
-        )
+        card = _with_graduation(card, graduation)
     return _with_digest(card)
+
+
+def _report_cells(
+    report: ConformanceReport, roster: tuple[RosterModel, ...], resolved: Any | None
+) -> tuple[ScorecardCell, ...]:
+    """One cell per expected slot, each stopped at the row's first non-passing case."""
+
+    stopped_at: dict[tuple[str, str], str] = {}
+    for row in report.results:
+        if row.outcome != "passed":
+            stopped_at.setdefault((row.tier, row.family), row.case_id)
+    return tuple(
+        _cell_for(slot, report, stopped_at) for slot in _expected_slots(report, roster, resolved)
+    )
+
+
+def _cell_counts_and_highest_tier(cells: tuple[ScorecardCell, ...]) -> tuple[dict[str, int], str]:
+    """Per-state cell counts (plus the denominator) and the highest fully-passed tier."""
+
+    counts = {state: sum(1 for cell in cells if cell.state == state) for state in CELL_STATES}
+    counts["denominator"] = len(cells)
+    highest = ""
+    for tier in _TIERS:
+        tier_cells = [cell for cell in cells if cell.tier == tier]
+        if not tier_cells or any(cell.state != "passed" for cell in tier_cells):
+            break
+        highest = tier
+    return counts, highest
+
+
+def _with_graduation(
+    card: PreviewScorecard, graduation: GraduationInputs | None
+) -> PreviewScorecard:
+    """Attach the graduation items computed against the reference scorecard."""
+
+    inputs = graduation or GraduationInputs()
+    torch_card = inputs.reference
+    if torch_card is None:
+        torch_card = reference_scorecard_for(card.backend, card)
+    return replace(
+        card,
+        graduation=graduation_items(card, reference=torch_card, repo_root=inputs.repo_root),
+    )
 
 
 def _framework_version(backend: str) -> str:
