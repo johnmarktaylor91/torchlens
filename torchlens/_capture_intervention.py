@@ -105,6 +105,56 @@ def _backward_intervention_spec_from_predicate(
     return spec
 
 
+def activation_only_predicate(intervene_predicate: Any) -> Any:
+    """Return the view of a capture ``intervene=`` that the live forward evaluates.
+
+    The live forward predicate matches rules against forward ops. A gradient
+    address evaluates as its inner site there (the site plan, not the
+    evaluator, decides the universe), so a rule's ``tl.grad(...)`` or node
+    branch must not reach the forward predicate: it would edit the
+    activation. Those branches arm as sticky backward hooks instead
+    (:func:`_backward_intervention_spec_from_predicate`).
+
+    Parameters
+    ----------
+    intervene_predicate:
+        Predicate or ``Recipe`` supplied to ``trace(intervene=...)``.
+
+    Returns
+    -------
+    Any
+        The predicate unchanged when every rule is an activation rule; a
+        ``Recipe`` of the activation branches otherwise; ``None`` when no rule
+        has an activation branch.
+    """
+
+    if intervene_predicate is None:
+        return None
+    from .intervention.spec import Recipe, Rule
+
+    if not isinstance(intervene_predicate, Recipe):
+        selector = getattr(intervene_predicate, "selector", None)
+        if selector is not None and all(
+            universe != "activation" for universe, _branch in split_site_branches(selector)
+        ):
+            return None
+        return intervene_predicate
+    rules: list[Any] = []
+    changed = False
+    for rule in intervene_predicate.rules:
+        branches = split_site_branches(rule.target)
+        activation = [branch for universe, branch in branches if universe == "activation"]
+        if len(activation) == len(branches):
+            rules.append(rule)
+            continue
+        changed = True
+        if activation:
+            rules.append(Rule(activation[0], rule.edit))
+    if not changed:
+        return intervene_predicate
+    return Recipe(rules=tuple(rules)) if rules else None
+
+
 def _target_spec_for(selector: Any) -> TargetSpec:
     """Return the stored target spec of one branch selector.
 
