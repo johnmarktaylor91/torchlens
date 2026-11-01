@@ -11,8 +11,6 @@ from typing import Any
 
 import torch
 
-__all__ = ["iter_tensors", "tensor_payload_bytes"]
-
 
 def tensor_payload_bytes(tensor: torch.Tensor) -> bytes:
     """Return a tensor's raw contiguous payload bytes, for ANY dense dtype.

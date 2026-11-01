@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-77 packages, 1159 modules, 601878 lines, 0 modules without a docstring.
+77 packages, 1159 modules, 601876 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -34,7 +34,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2940 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2113 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 12 | 4092 |
-| `torchlens._utils` | Focused utility modules: RNG, tensor ops, argument handling, introspection, collections, hashing, display. | 30 | 22169 |
+| `torchlens._utils` | Focused utility modules: RNG, tensor ops, argument handling, introspection, collections, hashing, display. | 30 | 22167 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 64 | 42241 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1146 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 749 |
@@ -660,7 +660,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (12 modules, 
 
 ### `torchlens._utils`
 
-Focused utility modules: RNG, tensor ops, argument handling, introspection, collections, hashing, display. (30 modules, 22169 lines)
+Focused utility modules: RNG, tensor ops, argument handling, introspection, collections, hashing, display. (30 modules, 22167 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -692,7 +692,7 @@ Focused utility modules: RNG, tensor ops, argument handling, introspection, coll
 | `introspection` | Object introspection: recursive type search, nested attribute access, and call-stack filtering. | 1104 |
 | `lazy_state` | Shared detection and enumeration of un-materialized lazy module state. | 167 |
 | `rng` | RNG and autocast state capture/restore for reproducible forward-pass replay. | 5080 |
-| `tensor_leaves` | Tensor-leaf helpers: walk a nest for tensors and read a tensor's raw payload. | 101 |
+| `tensor_leaves` | Tensor-leaf helpers: walk a nest for tensors and read a tensor's raw payload. | 99 |
 | `tensor_utils` | Tensor utilities: NaN-aware comparison, memory calculation, safe_copy, safe device transfer. | 1958 |
 
 ### `torchlens._visualization`
