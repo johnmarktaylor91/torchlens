@@ -35,8 +35,11 @@ from torchlens.errors import ConfigurationError
 
 #: Cells a full run over a two-family roster defines: 3 C0, 2x3 + 1 C1, 2x3 C2.
 _FULL_DENOMINATOR = 16
-#: The preview rosters also declare op inventories: one more C1 cell per family.
-_PREVIEW_DENOMINATOR = _FULL_DENOMINATOR + 2
+#: The preview rosters also declare op inventories: one more C1 cell per family,
+#: and every registered backend defines the four protocol-level C0 cells.
+_PROTOCOL_C0_CELLS = 4
+_PREVIEW_C0_CELLS = 3 + _PROTOCOL_C0_CELLS
+_PREVIEW_DENOMINATOR = _FULL_DENOMINATOR + 2 + _PROTOCOL_C0_CELLS
 
 #: SHA-256 of the complete canonical bytes of the golden scorecard below, and
 #: the digest the scorecard embeds (over its digest-free form). Both were
@@ -144,12 +147,12 @@ def test_absent_framework_skips_every_case_and_scores_not_run(
     model_rows = [row for row in report.results if row.tier != "C0"]
     assert model_rows and all(row.outcome == "skipped" for row in model_rows)
     assert all("install torchlens[paddle]" in row.detail for row in model_rows)
-    assert report.funnel["skipped"] == len(model_rows) == _PREVIEW_DENOMINATOR - 3
+    assert report.funnel["skipped"] == len(model_rows) == _PREVIEW_DENOMINATOR - _PREVIEW_C0_CELLS
     assert report.earned_tier == "C0"
     assert "conformant" not in claim_string(report)
 
     card = preview_scorecard("paddle", workdir=tmp_path)
-    assert card.counts["not_run"] == _PREVIEW_DENOMINATOR - 3
+    assert card.counts["not_run"] == _PREVIEW_DENOMINATOR - _PREVIEW_C0_CELLS
     assert card.counts["denominator"] == _PREVIEW_DENOMINATOR
     assert card.highest_tier == "C0"
     assert "conformant" not in card.to_json().lower()

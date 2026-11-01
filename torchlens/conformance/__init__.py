@@ -36,21 +36,23 @@ from ..errors import ConfigurationError
 from ._adapters import RosterModel, default_roster, resolve_adapter
 from ._cases import CaseResult, run_c0_cases, run_c1_cases, run_c2_cases
 from ._preview_adapters import PREVIEW_BACKENDS
+from ._protocol_cases import C0_PROTOCOL_CASES, run_c0_protocol_cases
 from ._scorecard import PreviewScorecard, ScorecardCell, preview_scorecard
 
 __tl_layer__ = "L9"
 
 __all__ = [
-    "PREVIEW_BACKENDS",
+    "C0_PROTOCOL_CASES",
     "CaseResult",
+    "claim_string",
     "ConformanceReport",
+    "default_roster",
+    "PREVIEW_BACKENDS",
+    "preview_scorecard",
     "PreviewScorecard",
     "RosterModel",
-    "ScorecardCell",
-    "claim_string",
-    "default_roster",
-    "preview_scorecard",
     "run_conformance",
+    "ScorecardCell",
 ]
 
 SUITE_VERSION = "torchlens.conformance.v1"
@@ -250,6 +252,7 @@ def run_conformance(
     model_rows = _roster_for(adapter, roster)
     results: list[CaseResult] = []
     results.extend(run_c0_cases(adapter))
+    results.extend(run_c0_protocol_cases(str(getattr(adapter, "name", ""))))
     if "C1" in tiers:
         results.extend(run_c1_cases(adapter, model_rows))
     if "C2" in tiers:

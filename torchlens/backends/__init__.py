@@ -4,6 +4,12 @@ from __future__ import annotations
 
 # Import for backend registration side effects.
 from . import default_specs as _default_specs  # noqa: F401
+from ._backend_protocol import (
+    REFUSAL_CODES,
+    VALIDATION_REASONS,
+    BackendProtocol,
+    FrameworkRequirement,
+)
 from ._protocol import CaptureBackend
 from .registry import (
     TINYGRAD_BACKEND_NAME as TINYGRAD_BACKEND_NAME,
@@ -21,12 +27,16 @@ from .registry import (
 
 __all__ = [
     "BackendCapabilities",
+    "BackendProtocol",
     "BackendSpec",
     "CaptureBackend",
-    "spec",
-    "specs",
+    "FrameworkRequirement",
+    "REFUSAL_CODES",
     "register",
     "require_capability_implementation",
     "resolve",
+    "spec",
+    "specs",
     "unregister",
+    "VALIDATION_REASONS",
 ]
