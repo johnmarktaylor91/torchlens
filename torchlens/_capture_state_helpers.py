@@ -25,6 +25,8 @@ from torch import nn
 from . import _state
 from ._data_classes.trace import Trace
 from ._plain_attr_fidelity import (
+    _PLAIN_ATTR_IGNORED_NAMES,
+    _module_plain_attr_names,
     assert_copy_kept_instance_attrs,
     is_registered_tensor_alias,
     restore_simple_plain_attrs_on_copy,
@@ -90,7 +92,6 @@ unchanged while a class is alive; a class that has been collected can no longer
 be the subject of a duplicate warning, since any later model is by definition a
 different type.
 """
-_PLAIN_ATTR_IGNORED_NAMES = frozenset({"_parameters", "_buffers", "_modules"})
 _PLAIN_ATTR_MAX_CONTAINER_ITEMS = 128
 _PLAIN_ATTR_MAX_TENSOR_NUMEL = 4096
 _PLAIN_ATTR_MAX_DEPTH = 64
@@ -1121,24 +1122,6 @@ def _plain_attr_restore_value(snapshot: Any) -> Any:
     if type(snapshot) is dict:
         return {key: _plain_attr_restore_value(item) for key, item in snapshot.items()}
     return _snapshot_plain_attr_value(snapshot, "<snapshot>")
-
-
-def _module_plain_attr_names(module: nn.Module) -> set[str]:
-    """Return plain attribute names to snapshot for a module.
-
-    Parameters
-    ----------
-    module:
-        Module whose non-registered attributes should be inspected.
-
-    Returns
-    -------
-    set[str]
-        Attribute names excluding registered parameter, buffer, and child
-        module storage.
-    """
-
-    return set(module.__dict__) - _PLAIN_ATTR_IGNORED_NAMES
 
 
 class _ModuleTreePlainAttrSnapshot:
