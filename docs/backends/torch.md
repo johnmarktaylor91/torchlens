@@ -23,7 +23,7 @@ x = torch.randn(2, 4)
 
 trace = tl.trace(model, x)
 print([op.func_name for op in trace.layer_list])
-assert tl.validate(model, x)
+assert tl.validate(model, x, scope="forward")
 
 protocol = get_backend_spec("torch").protocol()
 print(protocol.name, protocol.maturity, protocol.materialization)

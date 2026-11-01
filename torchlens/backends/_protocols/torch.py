@@ -167,7 +167,7 @@ class TorchProtocol(SpecBackedProtocol):
 
 
 def _trace_keyword_names() -> frozenset[str]:
-    """Named ``tl.trace`` parameters other than the model and its inputs."""
+    """Named ``tl.trace`` parameters other than the model, its inputs and ``backend``."""
 
     import torchlens as tl
 
@@ -176,7 +176,7 @@ def _trace_keyword_names() -> frozenset[str]:
         parameter.name
         for parameter in parameters
         if parameter.kind is not inspect.Parameter.VAR_KEYWORD
-        and parameter.name not in {"model", "input_args", "input_kwargs"}
+        and parameter.name not in {"model", "input_args", "input_kwargs", "backend"}
     )
 
 
