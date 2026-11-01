@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import inspect
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +31,9 @@ __all__ = (
     "_is_mutating_operator",
     "_is_buffer_state_view_dispatch",
     "_dispatch_callsite",
+    "_first_scalar_escape_source",
+    "_external_warning_stacklevel",
+    "_iter_dispatch_tensors",
 )
 
 
@@ -436,6 +441,74 @@ def _dispatch_callsite() -> _DispatchCallsite:
         fallback.f_lineno,
         fallback.f_code.co_name,
     )
+
+
+def _first_scalar_escape_source() -> tuple[str | None, int | None]:
+    """Return the first non-TorchLens frame for a scalar escape call.
+
+    Returns
+    -------
+    tuple[str | None, int | None]
+        Source filename and line, or ``(None, None)`` if no user frame is visible.
+    """
+    frame = inspect.currentframe()
+    try:
+        frame = frame.f_back if frame is not None else None
+        while frame is not None:
+            filename = Path(frame.f_code.co_filename).resolve()
+            try:
+                filename.relative_to(_TORCHLENS_ROOT)
+            except ValueError:
+                return str(filename), frame.f_lineno
+            frame = frame.f_back
+    finally:
+        del frame
+    return None, None
+
+
+def _external_warning_stacklevel() -> int:
+    """Return a warning stack level that resolves outside the TorchLens package.
+
+    Returns
+    -------
+    int
+        Stack level suitable for :func:`warnings.warn`.
+    """
+    level = 1
+    frame = inspect.currentframe()
+    try:
+        frame = frame.f_back if frame is not None else None
+        while frame is not None:
+            try:
+                Path(frame.f_code.co_filename).resolve().relative_to(_TORCHLENS_ROOT)
+            except ValueError:
+                return level
+            level += 1
+            frame = frame.f_back
+    finally:
+        del frame
+    return level
+
+
+def _iter_dispatch_tensors(
+    args: tuple[Any, ...], kwargs: dict[str, Any] | None
+) -> Iterator[torch.Tensor]:
+    """Yield every ``torch.Tensor`` operand of a dispatch, flattening list/tuple containers.
+
+    Aten operands are tensors, scalars, or (for ``cat`` / ``stack`` / ``_foreach_*``) lists/tuples
+    of tensors; this walks those one-deep-or-more without importing a pytree so the per-consumption
+    watch can see every tensor an op reads.
+    """
+
+    stack: list[Any] = list(args)
+    if kwargs:
+        stack.extend(kwargs.values())
+    while stack:
+        item = stack.pop()
+        if isinstance(item, torch.Tensor):
+            yield item
+        elif isinstance(item, (list, tuple)):
+            stack.extend(item)
 
 
 # Late imports: the split modules of this package import one another (cycles), so each
