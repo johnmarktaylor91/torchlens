@@ -425,16 +425,6 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # (measured 2338). Re-keyed 2350 -> 2050 at the Bundle split: label
     # heuristics and member coercion moved to bundle/_labels.py and
     # bundle/_members.py, the helper table went (measured 2008).
-    # Re-keyed 2400 -> 2100 at the F16/T60 fix cycle (2026-08-29): the file
-    # crossed its ceiling (2406), so OpAccessor/LayerAccessor split to
-    # _layer_accessors.py (the _layer_spec.py precedent); layer.py re-exports
-    # both names. 2097 measured, next 50-line step.
-    # 2100 -> 2150 (2026-08-29 F10 re-reconcile): merge union -- the F16
-    # accessor-split base measured 2097 and the F10 lovely Layer card
-    # (__str__/__repr__/_detached_from_trace; the accessor delta re-landed
-    # in _layer_accessors.py) adds +36; the union measures 2133. Next
-    # 50-line step, conscious raise, not silent regrowth.
-    "torchlens/_data_classes/layer.py": 2150,
     # Re-keyed 2750 -> 2500 at the F03 T69 fix microlane (2026-08-29): the
     # module-level delta/compare helper seam (delta_map/norm_delta/
     # output_delta/compare/aligned_pairs/show_diff + shared metric

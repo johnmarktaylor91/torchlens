@@ -816,6 +816,30 @@
   "via_getattr": true
  },
  {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/_data_classes/_layer_views.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/_data_classes/_layer_views.py",
+  "has_default": false,
+  "sites": 4,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "source_trace",
+  "file": "torchlens/_data_classes/_layer_views.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/_data_classes/_lookup_keys.py",
@@ -1096,19 +1120,11 @@
   "via_getattr": false
  },
  {
-  "ambiguous": false,
-  "field": "parent_arg_positions",
-  "file": "torchlens/_data_classes/layer.py",
-  "has_default": false,
-  "sites": 2,
-  "via_getattr": false
- },
- {
   "ambiguous": true,
   "field": "parents",
   "file": "torchlens/_data_classes/layer.py",
   "has_default": false,
-  "sites": 5,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -1116,7 +1132,7 @@
   "field": "source_trace",
   "file": "torchlens/_data_classes/layer.py",
   "has_default": false,
-  "sites": 5,
+  "sites": 2,
   "via_getattr": false
  },
  {

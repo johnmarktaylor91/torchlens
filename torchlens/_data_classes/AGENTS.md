@@ -37,7 +37,7 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `_op_save.py` | Op tensor-save and payload functions (record rebuild destination) |
 | `_op_relations.py` | Op relation functions: parents, children, siblings, containment (record rebuild destination) |
 | `_op_cost.py` | Op cost functions: FLOPs, bytes, timing (record rebuild destination) |
-| `_layer_views.py` | Layer view functions: pass delegation and graph unions (record rebuild destination) |
+| `_layer_views.py` | Layer view functions: per-pass aggregation, graph unions, row export and mirror materialization moved off `Layer` |
 | `trace.py` | `Trace`, conditional event records, save/load/intervention/summary helpers |
 | `_trace_accessors.py` | Trace-level typed accessor construction |
 | `_trace_export.py` | Thin `Trace` export methods (`to_pandas`, `decode_output`, `output_table`, `to_agent_json`); bodies live in `export/_trace_tables.py` and `report/_agent_json.py` |
