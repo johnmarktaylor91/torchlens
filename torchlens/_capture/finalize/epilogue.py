@@ -305,7 +305,7 @@ def _store_capture_cache(trace: Trace, cache: dict[str, Any] | None) -> None:
 
 
 def attach_failed_episode_ledger(exc: BaseException, resolved: ResolvedEpisode) -> None:
-    """Best-effort ledger attach on the FAILED path (exc.partial_log).
+    """Best-effort ledger attach on the FAILED path (exc.partial_trace).
 
     Failures here only warn -- the user's exception is never masked.
 
@@ -320,7 +320,7 @@ def attach_failed_episode_ledger(exc: BaseException, resolved: ResolvedEpisode) 
     but nothing reads back into it.
     """
 
-    partial = getattr(exc, "partial_log", None)
+    partial = getattr(exc, "partial_trace", None)
     trace = getattr(partial, "trace", None)
     if trace is None:
         return

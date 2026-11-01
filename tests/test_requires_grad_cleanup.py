@@ -7,6 +7,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.errors import TraceCaptureError
 
 
 class UserBaseException(BaseException):
@@ -66,8 +67,13 @@ def test_failed_trace_restores_frozen_parameter_grad_flags(
     model = FrozenParameterFailureModel(failure_type)
     original_requires_grad = [parameter.requires_grad for parameter in model.parameters()]
 
-    with pytest.raises(failure_type, match="expected forward failure"):
+    # An ordinary forward exception escapes as the door's TraceCaptureError
+    # chained from it; BaseException interrupts are never wrapped.
+    expected = TraceCaptureError if issubclass(failure_type, Exception) else failure_type
+    with pytest.raises(expected, match="expected forward failure") as excinfo:
         tl.trace(model, torch.ones(1, 2))
+    if expected is TraceCaptureError:
+        assert type(excinfo.value.__cause__) is failure_type
 
     assert [parameter.requires_grad for parameter in model.parameters()] == original_requires_grad
 

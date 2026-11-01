@@ -1218,7 +1218,10 @@ def test_live_inexecutable_divergent_input_typed_and_rolls_back() -> None:
     assert exc.value.fields.get("path_faithfulness") is PathFaithfulness.DIVERGED
     check = exc.value.fields.get("contract_check")
     assert check is not None and check.name.startswith("input_shape:")
-    assert isinstance(exc.value.__cause__, RuntimeError)  # native torch error preserved
+    # The native torch error is preserved, chained under the capture's
+    # TraceCaptureError the divergence classification wraps.
+    assert isinstance(exc.value.__cause__, TraceCaptureError)
+    assert isinstance(exc.value.__cause__.__cause__, RuntimeError)
     rerun = trace.run(inputs=x)
     assert rerun.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert rerun.report.is_poisoned is False
@@ -1262,8 +1265,9 @@ def test_live_non_divergent_native_failure_reraises_raw() -> None:
     x = torch.zeros(2, 4)
     model = _ValueGate()
     trace = _capture(model, x)
-    with pytest.raises(ValueError, match="boom"):
+    with pytest.raises(TraceCaptureError, match="boom") as _tce_info:
         trace.run(inputs=torch.full((2, 4), 100.0))
+    assert isinstance(_tce_info.value.__cause__, ValueError)
 
 
 # ======================================================================================
@@ -1730,6 +1734,8 @@ def test_unregistered_submodule_undrawn_generator_stays_verified(tmp_path: Path)
 
 import functools  # noqa: E402
 import weakref  # noqa: E402
+
+from torchlens.errors import TraceCaptureError  # noqa: E402
 
 _R53_FIRED: list[str] = []
 """Side-effect ledger: ANY entry means the inventory executed user code (hard fail)."""

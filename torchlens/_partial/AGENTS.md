@@ -1,14 +1,15 @@
 # partial/ - Implementation Guide
 
-Failed-capture recovery (`tl._partial`). A capture that fails mid-forward
-raises with `exc.partial_log` attached; `from_failed_capture(exc)` wraps that
-state as a `PartialTrace` for post-mortem inspection. `__all__` is exactly
-`["PartialTrace", "from_failed_capture"]`.
+Failed-capture recovery (`tl._partial`). A capture whose forward raises
+raises `tl.errors.TraceCaptureError` (chained `from` the forward's exception);
+its `partial_trace` is a `PartialTrace` for post-mortem inspection. TorchLens's
+own errors propagate as themselves and carry `partial_trace` too. `__all__` is
+exactly `["PartialTrace"]`.
 
 ## Surface
 
-- `from_failed_capture(exception)` -> `PartialTrace` (also
-  `PartialTrace.from_trace(trace, exception)`).
+- `PartialTrace.from_trace(trace, exception)` builds the wrapper; the capture
+  door attaches it as the raised error's `partial_trace`.
 - `PartialTrace` is a THIN wrapper, not a `Trace` subclass: it holds the
   partially populated `trace`, the `original_exception`, and exposes
   `raw_layers` (tuple of raw `Op` records), `outcome` (the settled

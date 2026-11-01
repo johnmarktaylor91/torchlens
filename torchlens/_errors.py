@@ -553,6 +553,54 @@ class OutputAttributionError(CaptureError, RuntimeError):
     """
 
 
+class TraceCaptureError(CaptureError):
+    """Raised when the model's forward raises during a TorchLens capture.
+
+    Every capture door raises this one typed error when the code it runs
+    (the model's forward, a user hook, or a torch op the forward calls) raises
+    an exception that is not a TorchLens error. The original exception is
+    chained as ``__cause__`` (``raise TraceCaptureError(...) from exc``), so its
+    type, text and traceback stay intact and unmodified. TorchLens's own typed
+    errors keep propagating as themselves.
+
+    Attributes
+    ----------
+    partial_trace:
+        The :class:`~torchlens.types.PartialTrace` holding what was captured
+        before the failure, or ``None`` when it could not be built.
+    origin:
+        The :class:`~torchlens.types.FailureOrigin` the capture outcome
+        recorded: ``user_op`` when the model's own code raised, ``torchlens``
+        when the innermost attributable frame was TorchLens, else ``unknown``.
+    """
+
+    def __init__(
+        self,
+        message: str | None = None,
+        *,
+        partial_trace: Any = None,
+        origin: Any = None,
+        **payload: Any,
+    ) -> None:
+        """Initialize the failed-forward error.
+
+        Parameters
+        ----------
+        message:
+            Human-readable failure description.
+        partial_trace:
+            Partial capture recovered from the failed forward, if any.
+        origin:
+            Diagnostic failure origin from the capture outcome.
+        **payload:
+            Structured context retained on ``fields``.
+        """
+
+        super().__init__(message, **payload)
+        self.partial_trace = partial_trace
+        self.origin = origin
+
+
 class UserTransformError(CaptureError, RuntimeError):
     """Raised when activation_transform or grad_transform raises."""
 

@@ -629,7 +629,6 @@ _WEAK_SUBJECT_TABLES = frozenset(
         # Live telemetry relations are keyed by AtenOp facades and disappear
         # with those rows; they never retain a Trace or profiler session.
         ("torchlens/_kernel_telemetry.py", "_ATEN_KERNELS"),
-        ("torchlens/_partial/__init__.py", "_FAILED_CAPTURE_RESULTS"),
         ("torchlens/_visualization/auto_collapse.py", "_ANALYSIS_CACHE"),
         ("torchlens/_visualization/auto_collapse.py", "_OP_ADJACENCY_INDEX_CACHE"),
         ("torchlens/_visualization/code_panel.py", "_SOURCE_MEMO"),
@@ -812,7 +811,6 @@ _PROCESS_CACHES = frozenset(
         ("torchlens/_capture_state_helpers.py", "_MODULE_BASELINE_INSTANCE_ATTRS"),
         ("torchlens/_data_classes/op.py", "_RELATION_CELL_ENCODINGS"),
         ("torchlens/_data_classes/trace.py", "_MODEL_LOG_DEFAULT_FILL"),
-        ("torchlens/_partial/__init__.py", "_FAILED_CAPTURE_REGISTRY"),
         ("torchlens/_postprocess/ast_branches.py", "_file_cache"),
         ("torchlens/receptive_field/_engine.py", "_SCHEMA_OPERAND_SLOTS_CACHE"),
         # Bounded FIFO negative companion of the slots cache (grind-r3
@@ -959,7 +957,6 @@ _WEAKLY_HELD = frozenset(
         ("torchlens/_data_classes/grad_fn_call.py", "_ORDINAL_POSITIONS_CACHE"),
         ("torchlens/_data_classes/param.py", "_ORDINAL_INDEX_CACHE"),
         ("torchlens/_kernel_telemetry.py", "_ATEN_KERNELS"),
-        ("torchlens/_partial/__init__.py", "_FAILED_CAPTURE_RESULTS"),
         ("torchlens/_visualization/auto_collapse.py", "_ANALYSIS_CACHE"),
         ("torchlens/_visualization/auto_collapse.py", "_OP_ADJACENCY_INDEX_CACHE"),
         ("torchlens/_visualization/code_panel.py", "_SOURCE_MEMO"),

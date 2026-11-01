@@ -62,7 +62,7 @@ class CaptureAttemptFailedWarning(RuntimeWarning, TorchLensWarning):
     matching; also a ``TorchLensWarning`` so the documented root category
     covers it -- R64-1) lets the rescue driver DEFER the advisory while a rescue re-run
     is still possible: the warning tells the user diagnostics ride the
-    exception (``exc.partial_log``), which is only truthful when that
+    exception (``exc.partial_trace``), which is only truthful when that
     exception actually propagates. A successful rescue swallows the failure,
     so the deferred advisory is dropped; every path that re-raises flushes it
     first.
@@ -181,7 +181,7 @@ def _defer_capture_failed_warnings(
 ) -> Iterator[None]:
     """Hold back capture-attempt-failed advisories; forward everything else.
 
-    The advisory points the user at ``exc.partial_log`` — truthful only when
+    The advisory points the user at ``exc.partial_trace`` — truthful only when
     the exception propagates. While a rescue re-run may still swallow the
     failure, the advisory is parked in ``deferred``; the driver flushes it on
     every re-raising path and drops it when the rescue succeeds.
@@ -410,7 +410,7 @@ def _partial_buffer_write_labels(exc: BaseException) -> tuple[str, ...] | None:
     stamped = getattr(exc, "_torchlens_actual_buffer_writes", None)
     if stamped is not None:
         return tuple(str(address) for address in stamped)
-    partial = getattr(exc, "partial_log", None)
+    partial = getattr(exc, "partial_trace", None)
     trace = getattr(partial, "trace", None)
     if trace is None:
         return None
@@ -736,7 +736,7 @@ def capture_with_rescue(
                 UserWarning,
                 stacklevel=3,
             )
-            partial_trace = getattr(getattr(primary_error, "partial_log", None), "trace", None)
+            partial_trace = getattr(getattr(primary_error, "partial_trace", None), "trace", None)
             if partial_trace is not None:
                 try:
                     partial_trace._rescue_rerun = _disclosure(
@@ -810,7 +810,7 @@ def capture_with_rescue(
         _state.rewind_capture_attributes()
         # The rescue run's own capture-failed advisory is deferred too: its
         # exception never propagates (the primary's error or trace does), so
-        # an advisory pointing at ITS exc.partial_log would always be untrue.
+        # an advisory pointing at ITS exc.partial_trace would always be untrue.
         with (
             _suppress_repeated_warnings(emitted_warnings),
             _defer_capture_failed_warnings(rescue_deferred),
@@ -869,7 +869,9 @@ def capture_with_rescue(
             )
             if primary_error is not None:
                 _flush_deferred_warnings(primary_deferred)
-                partial_trace = getattr(getattr(primary_error, "partial_log", None), "trace", None)
+                partial_trace = getattr(
+                    getattr(primary_error, "partial_trace", None), "trace", None
+                )
                 if partial_trace is not None:
                     try:
                         partial_trace._rescue_rerun = _disclosure(

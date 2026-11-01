@@ -29,6 +29,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._capture.trace import _SEMANTIC_OUTPUT_TRANSIENT_FIELDS
 from torchlens._data_classes.field_policy import FieldPolicy
+from torchlens.errors import TraceCaptureError
 
 
 class _Tokenizer:
@@ -119,9 +120,14 @@ def test_failed_capture_drops_the_semantic_output_scratch() -> None:
 
     model = Boom().eval()
     model._torchlens_output_tokenizer = _Tokenizer()
-    with pytest.raises(RuntimeError) as excinfo:
-        tl.trace(model, torch.ones(1, 3))
-    partial = getattr(excinfo.value, "partial_log", None)
+    with pytest.raises(TraceCaptureError) as excinfo:
+        tl.trace(
+            model,
+            torch.ones(1, 3),
+            capture=tl.options.CaptureOptions(output_style="classification"),
+        )
+    assert isinstance(excinfo.value.__cause__, RuntimeError)
+    partial = getattr(excinfo.value, "partial_trace", None)
     if partial is None:
         pytest.skip("this capture path attaches no partial product")
     assert _leaked(partial) == []

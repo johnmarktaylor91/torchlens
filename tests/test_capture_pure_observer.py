@@ -40,7 +40,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._record_type import record_type
-from torchlens.errors import BufferSinkRoutingError
+from torchlens.errors import BufferSinkRoutingError, TraceCaptureError
 from torchlens.options import CaptureOptions
 from torchlens.types import AttributeWrite
 
@@ -269,8 +269,9 @@ def test_default_trace_restores_state_on_the_exception_path():
     model = _Boom().train()
     x = torch.randn(2, 3, 8, 8)
     before, rng_before = _observed_state(model), _rng_state()
-    with pytest.raises(RuntimeError, match="boom after the state writes"):
+    with pytest.raises(TraceCaptureError, match="boom after the state writes") as _tce_info:
         tl.trace(model, x)
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
     _assert_state_equal(before, _observed_state(model))
     _assert_rng_equal(rng_before, _rng_state())
 

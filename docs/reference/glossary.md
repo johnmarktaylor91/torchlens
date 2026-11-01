@@ -77,8 +77,9 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 
 **PartialTrace**
 : A recoverable prefix of a failed `tl.trace(...)` capture. A raised capture exception may expose
-  `exc.partial_log`; recover it with `tl._partial.from_failed_capture(exc)`. A partial trace is not
-  silently treated as complete.
+  `exc.partial_trace`: a forward that raises during capture raises `TraceCaptureError` carrying
+  it, and TorchLens's own errors carry it too. A partial trace is not silently treated as
+  complete.
 
 **Failed partial Recording**
 : A `Recording` with `status="partial_error"` and `is_failed=True`. Use
@@ -3816,6 +3817,7 @@ The sections above describe each surface in depth.
 | `tl.errors.ReplayValueMismatchError` | A recomputed selected activation differed from its archived bytes |
 | `tl.errors.SidecarError` | Raised for sidecar-family registration and payload refusals |
 | `tl.errors.TensorSubclassUnsupportedError` | A strict Tensor subclass could not be constructed while a mode was active here |
+| `tl.errors.TraceCaptureError` | Raised by every capture door when the forward raises a non-TorchLens exception; a `CaptureError` chained `from` the original (`exc.__cause__`, traceback intact, never mutated). `TraceCaptureError.partial_trace`: the `PartialTrace` captured before the failure (or `None`); `TraceCaptureError.origin`: the outcome's `FailureOrigin`. `fields` carries `cause_type`, `last_captured_op` and `num_captured_ops`. TorchLens's own errors propagate unwrapped and carry `partial_trace` too |
 | `tl.errors.TraceMutationWarning` | First root-log mutation; Trace mutators operate in place |
 | `tl.errors.TransformContractError` | Raised when a transform spec, chain, or plan violates its contract |
 | `tl.errors.UserTransformError` | Raised when activation_transform or grad_transform raises |

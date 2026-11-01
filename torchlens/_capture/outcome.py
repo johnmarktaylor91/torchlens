@@ -24,7 +24,7 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
-from .._errors import InvalidArgumentError
+from .._errors import InvalidArgumentError, TraceCaptureError
 from ..errors import CaptureError
 from ._outcome_payload import (
     _OUTCOME_PAYLOAD_KEYS,  # noqa: F401 -- test-visible re-export
@@ -194,7 +194,8 @@ def _qualified_type_name(exc: BaseException) -> str:
 def classify_failure_origin(exc: BaseException) -> FailureOrigin:
     """Classify one terminal exception's origin (diagnostic only).
 
-    Walks the traceback from the innermost frame outward. The innermost
+    A :class:`~torchlens.errors.TraceCaptureError` classifies as its
+    ``__cause__``. Walks the traceback from the innermost frame outward. The innermost
     attributable frame wins: user code -> USER_OP; a torchlens frame ->
     TORCHLENS, except the wrapper trampoline, the completeness-witness
     redispatch and the declined-protocol re-offer (each executing the user's op) -> USER_OP. Interrupts classify INTERRUPT; no traceback or nothing
@@ -204,6 +205,12 @@ def classify_failure_origin(exc: BaseException) -> FailureOrigin:
 
     if isinstance(exc, (KeyboardInterrupt, SystemExit)):
         return FailureOrigin.INTERRUPT
+    if isinstance(exc, TraceCaptureError) and exc.__cause__ is not None:
+        # The capture door's wrapper: its origin is its cause's.
+        return classify_failure_origin(exc.__cause__)
+    if isinstance(exc, TraceCaptureError) and exc.__cause__ is not None:
+        # The capture door's wrapper: its origin is its cause's.
+        return classify_failure_origin(exc.__cause__)
     if isinstance(exc, StopSignalSwallowedError):
         return FailureOrigin.TORCHLENS
     # A user-supplied intervention payload failing validation is the USER's

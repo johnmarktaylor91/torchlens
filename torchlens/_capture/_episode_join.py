@@ -16,7 +16,7 @@ BOTH fork arms are built):
   graph, audit, and per-segment replay remain usable.
 - FORK-4 arm (b) (``on_feed_break="refuse"``): the settlement write raises
   typed ``episode_feed_break_exogenous`` carrying the settled product on
-  ``exc.partial_log`` -- recoverable partial evidence, nothing discarded.
+  ``exc.partial_trace`` -- recoverable partial evidence, nothing discarded.
 - STRICT (``EpisodeOptions(feed="closed")``): for an undeclared crossing the
   capture HALTS at the next step entry -- the first point where the break is
   observable (one-step detection latency; a live check cannot see a break
@@ -1153,7 +1153,7 @@ def _validated_join_declaration(
             "closed vocabulary ['disclose', 'refuse']: 'disclose' (default) "
             "returns the one Trace with the break marked and episode-"
             "dependent claims refused across it; 'refuse' raises typed at "
-            "settlement with the settled product on exc.partial_log.",
+            "settlement with the settled product on exc.partial_trace.",
             code="episode_declaration_invalid",
         )
     try:

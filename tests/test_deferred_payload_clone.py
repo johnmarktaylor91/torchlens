@@ -27,6 +27,7 @@ from _forward_stash import stashed
 import torchlens as tl
 import torchlens.backends.torch.wrappers as _wrappers
 from torchlens._utils import tensor_utils as _tu
+from torchlens.errors import TraceCaptureError
 
 
 @contextlib.contextmanager
@@ -485,8 +486,9 @@ def test_custom_function_view_genuinely_modified_inplace_still_raises(use_tensor
         x = torch.randn(2, 4)
         with pytest.raises(RuntimeError, match="modified inplace"):
             model(x)
-        with pytest.raises(RuntimeError, match="modified inplace"):
+        with pytest.raises(TraceCaptureError, match="modified inplace") as _tce_info2:
             tl.trace(model, x)
+        assert isinstance(_tce_info2.value.__cause__, RuntimeError)
 
 
 def test_kill_switch_restores_eager_clones():

@@ -409,7 +409,7 @@ def test_train_bn_attribution_failure_never_double_mutates(raw_cos: Any) -> None
     ):
         tl.trace(model, torch.randn(4, 2), capture=CaptureOptions(carry_state=True))
     assert model.bn.num_batches_tracked.item() == 1, "the forward must not run twice"
-    partial = getattr(exc_info.value, "partial_log", None)
+    partial = getattr(exc_info.value, "partial_trace", None)
     partial_trace = getattr(partial, "trace", None)
     assert partial_trace is not None
     info = partial_trace._rescue_rerun
@@ -450,7 +450,7 @@ def test_successful_attribution_rescue_suppresses_failure_advisory(raw_cos: Any)
     """A rescued attribution failure emits NO capture-attempt-failed advisory.
 
     The advisory tells the user diagnostics ride the exception
-    (``exc.partial_log``) — untruthful when the rescue swallowed the failure
+    (``exc.partial_trace``) — untruthful when the rescue swallowed the failure
     and returned a trace. It is deferred while a rescue is possible and
     dropped on success; re-raising paths flush it (pinned by
     ``test_capture_failure_reporting``).

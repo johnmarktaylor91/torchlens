@@ -51,6 +51,7 @@ _LEGACY_EXCEPTION_PATHS = {
     "CaptureGapWarning": ("torchlens._errors", "CaptureGapWarning"),
     "ParamReleasedError": ("torchlens._errors", "ParamReleasedError"),
     "ShapeInferenceError": ("torchlens._errors", "ShapeInferenceError"),
+    "TraceCaptureError": ("torchlens._errors", "TraceCaptureError"),
     "UserTransformError": ("torchlens._errors", "UserTransformError"),
     "ArtifactError": ("torchlens._io", "ArtifactError"),
     "UnsupportedTensorVariantError": (
@@ -293,7 +294,6 @@ _LAZY_EXCEPTION_PATHS = {
         "UnsupportedRendererCapabilityError",
     ),
     "StopSignalSwallowedError": ("torchlens._capture._outcome_types", "StopSignalSwallowedError"),
-    "PartialCaptureLookupError": ("torchlens._partial", "PartialCaptureLookupError"),
     # Taxonomy closure: user-reachable typed refusals defined in subpackage
     # error modules, bound lazily so every user-facing class has one public
     # catch spelling. The defining module stays the import home.

@@ -52,7 +52,7 @@ from typing import Any, Final
 import torch
 
 from ... import _state
-from ..._utils._exception_notes import annotate_guarded
+from ..._utils._exception_notes import defer_failure_note
 from ..._utils._torch_symbols import torch_attr
 from ...errors._base import TorchLensError
 from ._completeness_cross_thread import _internal_read_active
@@ -566,7 +566,7 @@ def structure_only_forward_boundary(trace: Any) -> Iterator[None]:
         innermost_external = _is_external(innermost_path)
         user_raised = innermost_external and _raised_by_raise_statement(innermost)
         if user_raised:
-            annotate_guarded(exc, _USER_ANNOTATION)
+            defer_failure_note(trace, exc, _USER_ANNOTATION)
             raise
         externals = _external_frames(exc)
         # The INNERMOST external frame is the failing callsite (a traceback
@@ -670,5 +670,5 @@ def structure_only_forward_boundary(trace: Any) -> Iterator[None]:
                 ),
             ) from exc
         # Unclassifiable: propagate unchanged with the guarded annotation.
-        annotate_guarded(exc, _USER_ANNOTATION)
+        defer_failure_note(trace, exc, _USER_ANNOTATION)
         raise

@@ -19,6 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.errors import TraceCaptureError
 
 #: The pipeline in run order. Reordering steps is a reviewed semantic change.
 PIPELINE_ORDER = (
@@ -238,8 +239,9 @@ def test_executor_failing_step_propagates(monkeypatch: pytest.MonkeyPatch) -> No
         raise _StepBoom("step 9 exploded")
 
     monkeypatch.setattr(pp.labeling, "_log_final_info_for_layers", exploding_step9)
-    with pytest.raises(_StepBoom):
+    with pytest.raises(TraceCaptureError) as _tce_info:
         tl.trace(_TinyModel().eval(), torch.randn(2, 3))
+    assert isinstance(_tce_info.value.__cause__, _StepBoom)
 
 
 def test_phase_timing_bucket_names_default_capture() -> None:

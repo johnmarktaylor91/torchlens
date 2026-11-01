@@ -10,6 +10,7 @@ from example_models import TinyReluAdd as _TinyShiftModel
 import torchlens as tl
 from torchlens import _state
 from torchlens._trace_state import TraceState
+from torchlens.errors import TraceCaptureError
 from torchlens.options import CaptureOptions
 
 
@@ -125,7 +126,7 @@ def test_live_hook_exception_resets_runtime_state_and_allows_next_capture() -> N
 
     model = _TinyReluModel()
 
-    with pytest.raises(ValueError, match="boom"):
+    with pytest.raises(TraceCaptureError, match="boom") as _tce_info:
         tl.trace(
             model,
             torch.randn(2, 3),
@@ -134,6 +135,7 @@ def test_live_hook_exception_resets_runtime_state_and_allows_next_capture() -> N
                 hooks={tl.func("relu"): _bad_hook},
             ),
         )
+    assert isinstance(_tce_info.value.__cause__, ValueError)
 
     assert _state._logging_enabled is False
     assert _state._active_trace is None
@@ -149,7 +151,7 @@ def test_live_hook_exception_resets_runtime_state_and_allows_next_capture() -> N
 def test_live_hook_exception_resets_reentrancy_depth() -> None:
     """Hook-raised exceptions reset the hook reentrancy guard."""
 
-    with pytest.raises(ValueError, match="boom"):
+    with pytest.raises(TraceCaptureError, match="boom") as _tce_info2:
         tl.trace(
             _TinyReluModel(),
             torch.randn(2, 3),
@@ -158,5 +160,6 @@ def test_live_hook_exception_resets_reentrancy_depth() -> None:
                 hooks={tl.func("relu"): _bad_hook},
             ),
         )
+    assert isinstance(_tce_info2.value.__cause__, ValueError)
 
     assert _state._hook_reentrancy_depth == 0

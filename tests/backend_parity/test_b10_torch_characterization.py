@@ -14,6 +14,7 @@ from torch import nn
 import torchlens as tl
 import torchlens._state as torchlens_state
 from torchlens._data_classes.trace import Trace
+from torchlens.errors import TraceCaptureError
 from torchlens.intervention.types import DictKey, TupleIndex
 
 pytestmark = pytest.mark.backend_parity
@@ -217,8 +218,9 @@ def test_forward_exception_restores_capture_state() -> None:
     model = _RaisesMidForward()
     x = torch.ones(2, 2)
 
-    with pytest.raises(RuntimeError, match="boom during forward"):
+    with pytest.raises(TraceCaptureError, match="boom during forward") as _tce_info:
         tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
     assert torchlens_state._logging_enabled is False
     assert torchlens_state._active_trace is None

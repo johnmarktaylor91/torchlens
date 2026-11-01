@@ -844,10 +844,10 @@ class TorchBackend:
 
         A warnings-as-error filter raises the advisory AT THE WARN SITE;
         letting that escape the failed-capture cleanup would REPLACE the
-        user's real forward exception -- and with it the ``exc.partial_log``
+        error the capture door raises -- and with it the ``.partial_trace``
         recovery the advisory's own text advertises (b3-opus-R07-1). The
-        advisory degrades to an exception note instead; the user's exception
-        stays the one that propagates.
+        advisory degrades to a note on that error instead; it stays the one
+        that propagates.
         """
 
         try:

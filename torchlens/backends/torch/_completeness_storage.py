@@ -654,7 +654,10 @@ def capture_scalar_escape_warning(trace: Any) -> Iterator[None]:
             # Bare try/except, no helper: the advisory must never replace the
             # user's in-flight exception (the exact bug this arm exists to prevent).
             try:
-                _exception_notes.annotate_guarded(
+                # _exception_notes is bound in BOTH modules' globals, so it
+                # resolves under the rebind described in the NOTE above.
+                _exception_notes.defer_failure_note(
+                    state.trace,
                     inflight,
                     "TorchLens scalar-escape advisory suppressed (a warnings "
                     f"filter raised it): {state.count} tensor-to-Python scalar "

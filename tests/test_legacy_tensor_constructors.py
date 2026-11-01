@@ -19,6 +19,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 
 import torchlens as tl
+from torchlens.errors import TraceCaptureError
 
 DTYPE_CLASS_NAMES = (
     "FloatTensor",
@@ -311,8 +312,9 @@ def test_variable_on_non_tensor_raises_inside_capture() -> None:
             return x + Variable(3)
 
     expected_type, expected_message = _error_of(lambda: Variable(3))
-    with pytest.raises(expected_type, match="Variable data has to be a tensor"):
+    with pytest.raises(TraceCaptureError, match="Variable data has to be a tensor") as excinfo:
         tl.trace(BadVariable(), torch.randn(2, 4))
+    assert type(excinfo.value.__cause__) is expected_type
     assert "Variable data has to be a tensor" in expected_message
 
 

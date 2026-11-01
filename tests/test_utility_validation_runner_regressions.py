@@ -36,6 +36,7 @@ import torchlens as tl
 import torchlens._utils.hashing as tl_hashing
 from torchlens._data_classes.func_call_location import FuncCallLocation
 from torchlens._utils.hashing import compute_graph_shape_hash, make_short_barcode_from_input
+from torchlens.errors import TraceCaptureError
 from torchlens.validation import validate_forward_pass
 
 # ---------------------------------------------------------------------------
@@ -382,8 +383,17 @@ def test_validate_forward_pass_restores_buffer_bit_exact_on_exception(
     model = _BufferMutatingFailModel(fail_during=failure_site)
     pre_call_state = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
 
-    with pytest.raises(RuntimeError, match="intentional mid-pass failure"):
-        validate_forward_pass(model, torch.ones(2), seed=1)
+    # The ground-truth forward runs outside any capture, so the model's own
+    # exception propagates; the traced run is a capture, so it raises
+    # TraceCaptureError chained from it.
+    if failure_site == "ground_truth":
+        with pytest.raises(RuntimeError, match="intentional mid-pass failure") as excinfo:
+            validate_forward_pass(model, torch.ones(2), seed=1)
+        assert not isinstance(excinfo.value, TraceCaptureError)
+    else:
+        with pytest.raises(TraceCaptureError, match="intentional mid-pass failure") as excinfo:
+            validate_forward_pass(model, torch.ones(2), seed=1)
+        assert isinstance(excinfo.value.__cause__, RuntimeError)
 
     assert model.num_calls == expected_original_calls
     post_call_state = model.state_dict()
