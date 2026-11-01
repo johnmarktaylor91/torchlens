@@ -700,6 +700,51 @@ def reject_extra_trace_kwargs(
     )
 
 
+def _reject_truthy_trace_options(
+    options: dict[str, Any],
+    policy: PreviewTraceOptionPolicy,
+    spec: BackendSpec | None,
+) -> None:
+    """Refuse every truthy option the policy rejects, typed by its capability gate."""
+
+    for option_name, message in (policy.rejected_truthy_messages or {}).items():
+        if options.get(option_name):
+            if spec is not None:
+                gate = TRACE_OPTION_CAPABILITY_GATES.get(option_name)
+                if gate is not None and getattr(spec.capabilities, gate):
+                    require_capability_implementation(spec, gate)
+                    raise _undispatched_capability_error(spec, gate, option_name)
+            raise BackendUnsupportedError(
+                message,
+                code=_option_refusal_code(option_name),
+                backend=policy.backend_name,
+                option=option_name,
+            )
+
+
+def _reject_save_trace_options(options: dict[str, Any], policy: PreviewTraceOptionPolicy) -> None:
+    """Refuse raw-activation and save-window settings the policy does not support."""
+
+    if policy.save_raw_activations_false_message is not None and not options.get(
+        "save_raw_activations"
+    ):
+        raise BackendUnsupportedError(
+            policy.save_raw_activations_false_message,
+            code=_option_refusal_code("save_raw_activations"),
+            backend=policy.backend_name,
+            option="save_raw_activations",
+        )
+    if policy.save_window_message is not None and (
+        options.get("lookback") != 0 or options.get("lookback_payload_policy") != "metadata_only"
+    ):
+        raise BackendUnsupportedError(
+            policy.save_window_message,
+            code=_option_refusal_code("lookback"),
+            backend=policy.backend_name,
+            option="lookback",
+        )
+
+
 def reject_unsupported_trace_options(
     options: dict[str, Any],
     policy: PreviewTraceOptionPolicy,
@@ -742,36 +787,7 @@ def reject_unsupported_trace_options(
             backend=policy.backend_name,
             option="layers_to_save",
         )
-    for option_name, message in (policy.rejected_truthy_messages or {}).items():
-        if options.get(option_name):
-            if spec is not None:
-                gate = TRACE_OPTION_CAPABILITY_GATES.get(option_name)
-                if gate is not None and getattr(spec.capabilities, gate):
-                    require_capability_implementation(spec, gate)
-                    raise _undispatched_capability_error(spec, gate, option_name)
-            raise BackendUnsupportedError(
-                message,
-                code=_option_refusal_code(option_name),
-                backend=policy.backend_name,
-                option=option_name,
-            )
+    _reject_truthy_trace_options(options, policy, spec)
     if policy.output_device_message is not None and options.get("output_device") != "same":
         raise _output_device_refusal(policy)
-    if policy.save_raw_activations_false_message is not None and not options.get(
-        "save_raw_activations"
-    ):
-        raise BackendUnsupportedError(
-            policy.save_raw_activations_false_message,
-            code=_option_refusal_code("save_raw_activations"),
-            backend=policy.backend_name,
-            option="save_raw_activations",
-        )
-    if policy.save_window_message is not None and (
-        options.get("lookback") != 0 or options.get("lookback_payload_policy") != "metadata_only"
-    ):
-        raise BackendUnsupportedError(
-            policy.save_window_message,
-            code=_option_refusal_code("lookback"),
-            backend=policy.backend_name,
-            option="lookback",
-        )
+    _reject_save_trace_options(options, policy)
