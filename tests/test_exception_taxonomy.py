@@ -1575,6 +1575,26 @@ def test_input_kwargs_type_invalid_provoked() -> None:
     assert excinfo.value.fields["code"] == "input_kwargs_type_invalid"
 
 
+def test_halt_predicate_type_invalid_provoked() -> None:
+    """A non-callable halt slot refuses typed at the torch backend capture entry.
+
+    ``tl.trace`` compiles ``stop_after=`` into the halt slot itself (an
+    unsupported type there refuses ``stop_after_type_invalid``), so the only
+    live door to this check is the backend spec's flat capture entry.
+    """
+
+    import torch
+
+    from torchlens._errors import ArgumentTypeError
+    from torchlens.backends import spec as backend_spec
+
+    model = torch.nn.Identity()
+    with pytest.raises(ArgumentTypeError) as excinfo:
+        backend_spec("torch").capture_trace(model, torch.ones(2), halt=123)
+    assert excinfo.value.fields["code"] == "halt_predicate_type_invalid"
+    assert excinfo.value.fields["argument"] == "halt"
+
+
 def test_layers_to_save_type_invalid_provoked() -> None:
     """A Tensor in the deprecated positional layers_to_save slot refuses typed.
 
