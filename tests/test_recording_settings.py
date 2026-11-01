@@ -60,7 +60,7 @@ def test_options_reads_back_every_door_as_live_values() -> None:
 def test_options_record_is_frozen_and_has_no_public_constructor() -> None:
     """The record cannot be mutated or built by keyword; neither can a Recording."""
 
-    recording = tl.record(_Tiny(), torch.ones(1, 3), save="all")
+    recording = tl.record(_Tiny(), torch.ones(1, 3), save=tl.func("relu"))
     with pytest.raises(dataclasses.FrozenInstanceError):
         recording.options.history_size = 3  # type: ignore[misc]
     with pytest.raises(TypeError):
@@ -72,7 +72,7 @@ def test_options_record_is_frozen_and_has_no_public_constructor() -> None:
 def test_removed_repr_accessors_are_gone() -> None:
     """The string-only ``*_repr`` accessors left with no alias."""
 
-    recording = tl.record(_Tiny(), torch.ones(1, 3), save="all")
+    recording = tl.record(_Tiny(), torch.ones(1, 3), save=tl.func("relu"))
     for name in (
         "keep_op_repr",
         "save_grads_repr",

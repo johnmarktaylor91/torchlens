@@ -46,16 +46,18 @@ def test_output_is_the_exact_returned_object() -> None:
 def test_record_returns_one_object() -> None:
     """``tl.record`` returns the Recording alone; ``return_output=`` is gone."""
 
-    recording = tl.record(_DictOut(), torch.ones(1, 3), save="all")
+    recording = tl.record(_DictOut(), torch.ones(1, 3), save=tl.func("relu"))
     assert isinstance(recording, tl.Recording)
     with pytest.raises(TypeError):
-        tl.record(_DictOut(), torch.ones(1, 3), save="all", return_output=True)  # type: ignore[call-arg]
+        tl.record(_DictOut(), torch.ones(1, 3), save=tl.func("relu"), return_output=True)  # type: ignore[call-arg]
 
 
 def test_output_refuses_after_stop_after() -> None:
     """A capture that stop_after= ended has no output: typed refusal, never None."""
 
-    recording = tl.record(_DictOut(), torch.ones(1, 3), save="all", stop_after=tl.func("linear"))
+    recording = tl.record(
+        _DictOut(), torch.ones(1, 3), save=lambda ctx: True, stop_after=tl.func("linear")
+    )
     with pytest.raises(PayloadUnavailableError) as exc_info:
         _ = recording.output
     assert _code(exc_info) == "output_capture_stopped"
@@ -68,7 +70,7 @@ def test_output_is_not_stored_with_saved_recordings(tmp_path: Path) -> None:
     live = tl.record(
         _DictOut(),
         torch.ones(1, 3),
-        save="all",
+        save=lambda ctx: True,
         storage=tl.options.StorageOptions(path=bundle, retain_in_memory=True),
     )
     assert isinstance(live.output, dict)
