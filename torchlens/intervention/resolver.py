@@ -1552,7 +1552,7 @@ def pass_filter_accepts(pass_filter: Any, pass_index: int) -> bool:
     raise SiteResolutionError(f"{selector!r} is not a backward pass qualifier.")
 
 
-def _misplaced_qualifier(selector: Any) -> Exception:
+def _misplaced_qualifier(selector: Any, *, code: str) -> Exception:
     """Build the refusal for a pass qualifier nested inside a gradient expression."""
 
     from .errors import SelectorCompositionError
@@ -1561,7 +1561,7 @@ def _misplaced_qualifier(selector: Any) -> Exception:
         f"{selector!r} nests a backward pass qualifier inside a gradient expression "
         "(under ~ or within a nested group); a pass qualifier filters a whole gradient "
         "branch.",
-        code="selector_signal_mismatch",
+        code=code,
         remedy="join the qualifier at the top of the branch: tl.grad(s) & tl.in_backward_pass(2)",
     )
 
@@ -1618,7 +1618,7 @@ def _unwrap_gradient(selector: Any) -> Any:
         )
     if isinstance(selector, NotSelector):
         return NotSelector(_unwrap_gradient(selector.selector))
-    raise _misplaced_qualifier(selector)
+    raise _misplaced_qualifier(selector, code="selector_signal_mismatch")
 
 
 def _branch_for(operand: Any) -> SelectorBranch:
@@ -1698,7 +1698,7 @@ def split_site_branches(query: Any) -> tuple[SelectorBranch, ...]:
 def _refuse_strict_bare_strings(selector: Any) -> None:
     """Refuse bare label strings anywhere in a strict-mode selector tree."""
 
-    if any(isinstance(node, str) for node in walk_selector(selector)):
+    if isinstance(selector, str) or any(isinstance(node, str) for node in walk_selector(selector)):
         raise SiteResolutionError(
             "Bare strings are non-portable in strict mode; use tl.label(...), "
             "tl.func(...), or another typed selector."
@@ -1758,10 +1758,7 @@ def resolve_site_plan(
     """
 
     if strict and isinstance(selector, str):
-        raise SiteResolutionError(
-            "Bare strings are non-portable in strict mode; use tl.label(...), "
-            "tl.func(...), or another typed selector."
-        )
+        _refuse_strict_bare_strings(selector)
     normalized = _normalize_query(selector)
     if isinstance(normalized, FacetSelector):
         facets = _resolve_facet_sites(trace, normalized, normalized)

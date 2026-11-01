@@ -1411,7 +1411,7 @@ class GradSelector(BaseSelector):
             Always, coded ``grad_selection_unsupported``.
         """
 
-        raise _grad_selection_refusal(self)
+        raise _grad_selection_refusal(self, code="grad_selection_unsupported")
 
     def to_target_spec(self) -> TargetSpec:
         """Convert the gradient address to a target spec.
@@ -1797,7 +1797,7 @@ _NODE_KINDS = frozenset({"grad_fn", "grad_fn_label", "grad_kind", "intervening",
 _QUALIFIER_KINDS = frozenset({"backward_pass"})
 
 
-def _grad_refusal(problem: str, code: str, remedy: str) -> Exception:
+def _grad_refusal(problem: str, *, code: str, remedy: str) -> Exception:
     """Build one coded ``tl.grad`` construction refusal."""
 
     from .errors import SelectorCompositionError
@@ -1805,7 +1805,7 @@ def _grad_refusal(problem: str, code: str, remedy: str) -> Exception:
     return SelectorCompositionError(problem, code=code, remedy=remedy)
 
 
-def _grad_selection_refusal(value: Any) -> Exception:
+def _grad_selection_refusal(value: Any, *, code: str) -> Exception:
     """Build the refusal for a gradient address over (or lifted into) a Selection."""
 
     if isinstance(value, BaseSelector):
@@ -1820,8 +1820,8 @@ def _grad_selection_refusal(value: Any) -> Exception:
         )
     return _grad_refusal(
         problem,
-        "grad_selection_unsupported",
-        "use tl.grad(selector) with a site selector such as tl.label, tl.func or tl.module",
+        code=code,
+        remedy="use tl.grad(selector) with a site selector such as tl.label, tl.func or tl.module",
     )
 
 
@@ -1845,28 +1845,28 @@ def _check_grad_inner_tree(inner: str | BaseSelector) -> None:
     if "grad" in kinds:
         raise _grad_refusal(
             f"tl.grad({inner!r}) wraps a gradient address in another one.",
-            "grad_selector_nested",
-            "tl.grad wraps a forward site once; write tl.grad(x)",
+            code="grad_selector_nested",
+            remedy="tl.grad wraps a forward site once; write tl.grad(x)",
         )
     if "facet" in kinds:
         raise _grad_refusal(
             f"tl.grad({inner!r}) addresses a facet or head; gradient facets are not "
             "addressable this release.",
-            "grad_facet_unsupported",
-            "edit tl.grad(site) and mask inside a callable",
+            code="grad_facet_unsupported",
+            remedy="edit tl.grad(site) and mask inside a callable",
         )
     if any(kind in _QUALIFIER_KINDS for kind in kinds):
         raise _grad_refusal(
             f"tl.grad({inner!r}) wraps a backward pass qualifier, which filters gradient "
             "fires and is not part of the forward site.",
-            "grad_selector_inner_not_forward",
-            "put the pass qualifier outside: tl.grad(s) & tl.in_backward_pass(2)",
+            code="grad_selector_inner_not_forward",
+            remedy="put the pass qualifier outside: tl.grad(s) & tl.in_backward_pass(2)",
         )
     if any(kind in _NODE_KINDS for kind in kinds):
         raise _grad_refusal(
             f"tl.grad({inner!r}) wraps an autograd-node selector; tl.grad wraps a forward site.",
-            "grad_selector_inner_not_forward",
-            "the autograd-node selectors already address gradients at node granularity; "
+            code="grad_selector_inner_not_forward",
+            remedy="the autograd-node selectors already address gradients at node granularity; "
             "use them unwrapped",
         )
 
@@ -1899,17 +1899,17 @@ def _normalize_grad_inner(site: Any) -> str | BaseSelector:
     if isinstance(lowered, BaseSelector):
         return lowered
     if hasattr(site, "__selection__"):
-        raise _grad_selection_refusal(site)
+        raise _grad_selection_refusal(site, code="grad_selection_unsupported")
     if isinstance(site, (list, tuple, set, frozenset, dict)) or hasattr(site, "keys"):
         raise _grad_refusal(
             f"tl.grad received a {type(site).__name__}; it addresses one site.",
-            "grad_selector_inner_invalid",
-            "pass one site; batch shapes go to the door",
+            code="grad_selector_inner_invalid",
+            remedy="pass one site; batch shapes go to the door",
         )
     raise _grad_refusal(
         f"tl.grad received {type(site).__name__} {site!r}, which is not a site.",
-        "grad_selector_inner_invalid",
-        "pass a label string, a site selector (tl.label, tl.func, tl.module, ...), "
+        code="grad_selector_inner_invalid",
+        remedy="pass a label string, a site selector (tl.label, tl.func, tl.module, ...), "
         "an Op or Layer record, or a SiteTable",
     )
 
@@ -1945,8 +1945,8 @@ def grad(site: Any, /) -> GradSelector:
     if isinstance(site, GradSelector):
         raise _grad_refusal(
             f"tl.grad({site!r}) wraps a gradient address in another one.",
-            "grad_selector_nested",
-            "tl.grad wraps a forward site once; write tl.grad(x)",
+            code="grad_selector_nested",
+            remedy="tl.grad wraps a forward site once; write tl.grad(x)",
         )
     inner = _normalize_grad_inner(site)
     _check_grad_inner_tree(inner)

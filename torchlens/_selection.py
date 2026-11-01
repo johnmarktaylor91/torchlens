@@ -1187,7 +1187,7 @@ def _resolve_selector_term(node: _SelectorTerm, trace: Any) -> Selection:
         if branch.universe == "gradient":
             from .intervention.selectors import _grad_selection_refusal
 
-            raise _grad_selection_refusal(node.selector)
+            raise _grad_selection_refusal(node.selector, code="grad_selection_unsupported")
         branch_selector = _normalize_query(branch.selector)
         matched.extend(_resolve_branch_sites(trace, branch_selector, branch.universe, strict=False))
     entries = [
@@ -1611,7 +1611,7 @@ def _selection_from_selector(selector: Any) -> Selector:
         from .intervention.selectors import _grad_selection_refusal
 
         # Gradient selections are not addressable this release (SPEC 1.3).
-        raise _grad_selection_refusal(selector)
+        raise _grad_selection_refusal(selector, code="grad_selection_unsupported")
     signal = "backward" if any(branch.universe == "node" for branch in branches) else "forward"
     return Selector(_SelectorTerm(selector=selector), kind="ACT", signal=signal)
 
