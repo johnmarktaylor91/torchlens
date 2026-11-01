@@ -260,39 +260,15 @@ def validate_tf_trace_detailed(trace: Any) -> TFValidationResult:
         Detailed validation outcome.
     """
 
-    failures: list[str] = []
-    classes: dict[str, TFOpClass] = {}
     replayed_histogram: Counter[str] = Counter()
     pure_unverified_histogram: Counter[str] = Counter()
     effect_region_histogram: Counter[str] = Counter()
 
     ops_by_label = _ops_by_label(trace)
     captures_by_label = _captures_by_label(trace)
-    init_labels = set(getattr(trace, "_tf_init_op_labels", ()))
-    _validate_classification(
-        ops_by_label=ops_by_label,
-        init_labels=init_labels,
-        classes=classes,
-        failures=failures,
-    )
-    _validate_self_consistency(
-        trace=trace,
-        ops_by_label=ops_by_label,
-        captures_by_label=captures_by_label,
-        failures=failures,
-    )
+    failures, classes = _structural_failures(trace, ops_by_label, captures_by_label)
     if failures:
-        decisions = tuple(_structural_failure_decision(item, ops_by_label) for item in failures)
-        return TFValidationResult(
-            counts=TFValidationCounts(failed_node_count=len(failures)),
-            failures=tuple(failures),
-            classes=classes,
-            replayed_histogram=replayed_histogram,
-            pure_unverified_histogram=pure_unverified_histogram,
-            effect_region_histogram=effect_region_histogram,
-            decisions=decisions,
-            first_failure=_first_failure(decisions),
-        )
+        return _structural_failure_result(failures, classes, ops_by_label)
 
     replayed_count = 0
     pure_unverified_count = 0
@@ -358,6 +334,54 @@ def validate_tf_trace_detailed(trace: Any) -> TFValidationResult:
         decisions=decisions,
         unverified_reason_counts=dict(unverified_reasons),
         exempted_reason_counts=dict(exempted_reasons),
+        first_failure=_first_failure(decisions),
+    )
+
+
+def _structural_failures(
+    trace: Any, ops_by_label: Mapping[str, Any], captures_by_label: Mapping[str, Any]
+) -> tuple[list[str], dict[str, TFOpClass]]:
+    """Classify every op and check the capture's self-consistency.
+
+    Returns
+    -------
+    tuple[list[str], dict[str, TFOpClass]]
+        The structural failure strings (empty when the capture is sound) and
+        the op class by raw label.
+    """
+
+    failures: list[str] = []
+    classes: dict[str, TFOpClass] = {}
+    init_labels = set(getattr(trace, "_tf_init_op_labels", ()))
+    _validate_classification(
+        ops_by_label=ops_by_label,
+        init_labels=init_labels,
+        classes=classes,
+        failures=failures,
+    )
+    _validate_self_consistency(
+        trace=trace,
+        ops_by_label=ops_by_label,
+        captures_by_label=captures_by_label,
+        failures=failures,
+    )
+    return failures, classes
+
+
+def _structural_failure_result(
+    failures: list[str], classes: dict[str, TFOpClass], ops_by_label: Mapping[str, Any]
+) -> TFValidationResult:
+    """The result of a capture whose structure failed before any replay ran."""
+
+    decisions = tuple(_structural_failure_decision(item, ops_by_label) for item in failures)
+    return TFValidationResult(
+        counts=TFValidationCounts(failed_node_count=len(failures)),
+        failures=tuple(failures),
+        classes=classes,
+        replayed_histogram=Counter(),
+        pure_unverified_histogram=Counter(),
+        effect_region_histogram=Counter(),
+        decisions=decisions,
         first_failure=_first_failure(decisions),
     )
 
