@@ -15,7 +15,6 @@ import io
 import json
 import os
 import pickle
-import pickletools
 import platform
 import shutil
 import subprocess
@@ -54,6 +53,7 @@ from . import (
 from ._artifact_anchors import check_manifest_metadata_anchors, persisted_anchor_facts
 from ._canonical_pickle import dump_canonical_metadata
 from ._durability import fsync_dir, fsync_tree
+from ._pickle_prescan import OpcodeCeilingExceeded
 from ._portability_preflight import preflight_metadata_portability
 from ._pre3_module_paths import modellog_216_error
 from ._root_manifest import NOT_ROUTED, load_by_root_manifest
@@ -121,8 +121,8 @@ LOAD_PROVENANCE_TRANSIENT_ATTRS: tuple[str, ...] = (
 # bound allocation -- a pickle of tiny values expands its byte size into RSS
 # BEFORE any structural check can refuse it. This is the same lesson the JSON
 # boundary's ``_MAX_JSON_NODES`` prescan already encodes, carried to the sibling
-# pickle boundary. The prescan walks the opcode stream (pickletools.genops, no
-# object allocation) with an early stop, so its own worst case is bounded CPU,
+# pickle boundary. The unpickler's pre-scan counts opcodes as it walks the stream
+# (no object allocation) with an early stop, so its own worst case is bounded CPU,
 # never unbounded memory.
 #
 # CALIBRATION (r6 R60-F1 recalibration): the original 64M value was derived
@@ -136,9 +136,6 @@ LOAD_PROVENANCE_TRANSIENT_ATTRS: tuple[str, ...] = (
 # count would be a multi-hundred-MB pickle, an order of magnitude beyond the
 # largest real traces (tensor payloads live in separate safetensors blobs).
 _MAX_METADATA_PKL_OPCODES = 24_000_000
-# Prescan only files large enough to matter: below this, worst-case expansion is
-# a few hundred MiB and the prescan would tax every real load for nothing.
-_METADATA_PKL_PRESCAN_BYTES = 8 * 1024**2
 # Belt bound on the persisted PARTIAL failure-reason sentinel (B8-12).
 _MAX_PARTIAL_REASON_CHARS = 200
 _BLOB_TENSOR_KEY = "data"
@@ -163,6 +160,7 @@ class _RenameAwareUnpickler(SafeBundleUnpickler):
         *,
         trust_custom_callables: bool = False,
         allowed_custom_callable_modules: Collection[str] | None = None,
+        max_opcodes: int | None = None,
     ) -> None:
         """Initialize the restricted unpickler.
 
@@ -174,12 +172,15 @@ class _RenameAwareUnpickler(SafeBundleUnpickler):
             Whether to import+resolve foreign custom callables (default deny).
         allowed_custom_callable_modules:
             Optional narrow allowlist of foreign modules whose callables may load.
+        max_opcodes:
+            Opcode-count ceiling enforced by the pre-scan (``None`` leaves it off).
         """
 
         super().__init__(
             file,
             trust_custom_callables=trust_custom_callables,
             allowed_custom_callable_modules=allowed_custom_callable_modules,
+            max_opcodes=max_opcodes,
         )
 
     def load(self) -> Any:
@@ -1523,12 +1524,11 @@ def _load_trace_payload(
                     f"the {_MAX_METADATA_PKL_BYTES}-byte ceiling; refusing to load a "
                     "structurally implausible artifact."
                 )
-            if metadata_size > _METADATA_PKL_PRESCAN_BYTES:
-                _prescan_metadata_pickle_opcodes(handle, metadata_path)
             scrubbed_state = _RenameAwareUnpickler(
                 handle,
                 trust_custom_callables=trust_custom_callables,
                 allowed_custom_callable_modules=allowed_custom_callable_modules,
+                max_opcodes=_MAX_METADATA_PKL_OPCODES,
             ).load()
         if not isinstance(scrubbed_state, dict):
             # R65/F10: without this guard a corrupt/hostile payload escapes
@@ -1545,6 +1545,8 @@ def _load_trace_payload(
         persisted_rows = persisted_anchor_facts(scrubbed_state)
     except ArtifactError:
         raise
+    except OpcodeCeilingExceeded:
+        raise _opcode_ceiling_error(metadata_path) from None
     except (pickle.UnpicklingError, EOFError) as exc:
         hint = ""
         if python_major_mismatch:
@@ -4041,51 +4043,21 @@ def _eager_verify_blob_payloads(
             )
 
 
-def _prescan_metadata_pickle_opcodes(handle: Any, metadata_path: Path) -> None:
-    """Refuse a metadata pickle whose opcode count exceeds the allocation ceiling.
+def _opcode_ceiling_error(metadata_path: Path) -> ArtifactError:
+    """Return the refusal for a metadata pickle above the opcode allocation ceiling.
 
     The byte ceiling alone does not bound allocation (R60/F6): a pickle packed
-    with tiny values expands ~5x its byte size into RSS before any structural
-    check can refuse it. Walking the opcode stream with ``pickletools.genops``
-    allocates no payload objects, so the count is established BEFORE the
-    unpickler materializes anything -- the pickle twin of the JSON boundary's
-    ``_MAX_JSON_NODES`` prescan. The handle is rewound for the real unpickle.
-
-    Parameters
-    ----------
-    handle:
-        Open binary handle positioned at the start of the pickle stream.
-    metadata_path:
-        Path named in refusals.
-
-    Raises
-    ------
-    ArtifactError
-        If the opcode count exceeds the ceiling or the stream does not parse.
+    with tiny values expands many times its byte size into RSS before any
+    structural check can refuse it. The unpickler's pre-scan counts opcodes
+    before anything is built; this names the refusal on the artifact channel.
     """
 
-    opcode_count = 0
-    try:
-        for _opcode, _arg, _pos in pickletools.genops(handle):
-            opcode_count += 1
-            if opcode_count > _MAX_METADATA_PKL_OPCODES:
-                raise ArtifactError(
-                    f"Bundle metadata {metadata_path} exceeds the "
-                    f"{_MAX_METADATA_PKL_OPCODES}-opcode allocation ceiling; refusing "
-                    "to load a structurally implausible artifact.",
-                    code="metadata_object_count_exceeded",
-                )
-    except ArtifactError:
-        raise
-    except Exception as exc:
-        # A stream genops cannot parse is a stream the unpickler cannot parse:
-        # refuse it on the same integrity channel the unpickler uses.
-        raise ArtifactError(
-            f"Failed to load bundle metadata from {metadata_path}.",
-            code="bundle_metadata_integrity_refused",
-        ) from exc
-    finally:
-        handle.seek(0)
+    return ArtifactError(
+        f"Bundle metadata {metadata_path} exceeds the "
+        f"{_MAX_METADATA_PKL_OPCODES}-opcode allocation ceiling; refusing "
+        "to load a structurally implausible artifact.",
+        code="metadata_object_count_exceeded",
+    )
 
 
 def _python_major_mismatch(manifest: Manifest) -> bool:

@@ -89,31 +89,20 @@ RESOLVABLE at ``find_class`` (legit metadata references ``torch.Tensor`` /
 module_type values -- resolving a global only references it), but their BARE
 CONSTRUCTION from pickle-supplied args is DENIED. Two layers enforce it:
 (1) torch STORAGE constructors are denied by IDENTITY at ``find_class``
-(``_is_torch_storage_type`` -- including ``torch.storage.{Typed,Untyped}Storage``,
-which torch's OWN baseline hands back as the real, constructable classes, and every
-legacy ``torch.<dtype>Storage``). Constructing a storage allocates raw memory
-(``UntypedStorage(N)`` -> a multi-GiB alloc DoS), and current ``.tlspec`` metadata
-never needs one -- tensor payloads travel as ``BlobRef``s. A legacy embedded storage
-routes through the wrapped ``("torch.storage", "_load_from_bytes")`` path (a separate
-nested ``weights_only`` VM). (2) ``SafeBundleUnpickler`` is a pure-Python
-``pickle._Unpickler`` whose rebuilt opcode ``dispatch`` gates BUILD / REDUCE / NEWOBJ /
-NEWOBJ_EX to baseline discipline: a BUILD may not apply a ``__setstate__`` /
-storage-rebind to a torch Tensor / Storage / Parameter (the ``find_class``-invisible
-``Tensor.__setstate__`` / ``set_`` uninitialized-heap-tensor vector), and a
-REDUCE/NEWOBJ/NEWOBJ_EX may not CONSTRUCT any attacker-sized ALLOCATION type
-(``_is_alloc_constructor_type``: a torch storage, a ``torch.Tensor`` subclass or legacy
-``torch.<dtype>Tensor``, or a ``numpy.ndarray`` subclass) even if that type reached the
-stack by some means other than ``find_class`` -- ``torch.Tensor(N)`` /
-``torch.FloatTensor(N)`` / ``numpy.ndarray((N,))`` each allocate an attacker-sized,
-uninitialized-heap buffer at plain ``tl.load()`` time (r63 closes the r49 storage-only
-gap). This is enforced by ``tests/test_r49_unpickler_weights_only_baseline.py`` and
-``tests/test_r63_construct_deny.py``; the anti-drift invariant is that the set of
-admitted ``(module, name)`` for which this unpickler CONSTRUCTS (does NOT refuse on a
-REDUCE/NEWOBJ belt) a storage / tensor / ndarray object is EMPTY -- a
-CONSTRUCTOR-SEMANTICS assertion, NOT a string-subset of ``_get_allowed_globals()``
-(which is too weak, since the baseline set itself lists the two real storage classes and
-the tensor classes by name; those TYPES resolve inertly here, and only their
-construction is denied).
+(``_is_torch_storage_type``); a legacy embedded storage routes through the wrapped
+``("torch.storage", "_load_from_bytes")`` path (a separate nested ``weights_only`` VM).
+(2) the opcode-level belt: a BUILD may not apply a ``__setstate__`` / storage-rebind to a
+torch Tensor / Storage / Parameter, and a REDUCE / NEWOBJ / NEWOBJ_EX / INST / OBJ may
+not CONSTRUCT (or mediate) an attacker-sized ALLOCATION type
+(``_is_alloc_constructor_type`` / ``_alloc_refusal_reason``). The belt runs on a static
+pre-scan of the opcode stream plus call-time guards around every callable a REDUCE
+invokes (:mod:`torchlens._io._pickle_prescan`), so the load itself runs on the C
+``pickle.Unpickler``; a stream the pre-scan cannot classify runs through the per-opcode
+pure-Python ``_PurePythonBundleUnpickler`` with the same belt. Enforced by
+``tests/test_r49_unpickler_weights_only_baseline.py`` and ``tests/test_r63_construct_deny.py``;
+the anti-drift invariant is that the set of admitted ``(module, name)`` for which this
+unpickler CONSTRUCTS a storage / tensor / ndarray object is EMPTY -- a
+CONSTRUCTOR-SEMANTICS assertion, NOT a string-subset of ``_get_allowed_globals()``.
 """
 
 from __future__ import annotations
@@ -121,7 +110,7 @@ from __future__ import annotations
 import io
 import pickle
 import warnings
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from types import ModuleType
 from typing import Any, BinaryIO
@@ -134,6 +123,13 @@ from .._utils._callable_safety import (
     _DENIED_MODULES as _CALLABLE_DENIED_MODULES,
     _STDLIB_AND_BUILTIN_TOP_LEVEL as _CALLABLE_STDLIB_AND_BUILTIN_TOP_LEVEL,
     is_denied_stdlib_or_builtin_module,
+)
+from ._pickle_prescan import (
+    GuardedCallable,
+    PrescanPlan,
+    StreamNeedsInterpreter,
+    count_opcodes,
+    prescan_stream,
 )
 from ._pre3_module_paths import refuse_pre_3_module_path
 from .format_errors import ArtifactTooOldError
@@ -1311,11 +1307,7 @@ def _freeze_embedded_storage(loaded: Any) -> Any:
         ) from exc
 
 
-# Base pure-Python opcode handlers, captured from the dispatch table. typeshed does
-# NOT expose ``load_build`` / ``load_reduce`` / ``load_newobj`` / ``load_newobj_ex`` as
-# named methods on ``pickle._Unpickler``, so the Layer-2 overrides delegate to these
-# captured unbound functions (each called with ``self``) rather than
-# ``pickle._Unpickler.load_build(self)`` (which mypy cannot resolve).
+# Base pure-Python opcode handlers (typeshed does not name them on ``pickle._Unpickler``).
 _BASE_LOAD_BUILD = pickle._Unpickler.dispatch[pickle.BUILD[0]]
 _BASE_LOAD_REDUCE = pickle._Unpickler.dispatch[pickle.REDUCE[0]]
 _BASE_LOAD_NEWOBJ = pickle._Unpickler.dispatch[pickle.NEWOBJ[0]]
@@ -1325,23 +1317,13 @@ _BASE_LOAD_NEWOBJ_EX = pickle._Unpickler.dispatch[pickle.NEWOBJ_EX[0]]
 def _exception_arose_outside_vm(exc: BaseException) -> bool:
     """Return whether any traceback frame of ``exc`` lies outside the unpickle VM.
 
-    LOCUS discriminator for the ``SafeBundleUnpickler.load()`` boundary (r51
-    secA_1, narrowed): a VM-internal corruption failure -- stack underflow
-    (``IndexError``), truncated fixed-width read (``struct.error``), missing memo
-    key (``KeyError``), bad utf-8 (``UnicodeDecodeError``), truncation
-    (``EOFError``) -- is raised either by pure-Python VM code in stdlib
-    ``pickle.py`` / this module, or by a C call (``struct.unpack`` / ``str``
-    decode / dict lookup) that adds NO Python frame; its traceback never leaves
-    the two VM files. An APPLICATION/reconstruction failure -- a REDUCE
-    callable's body, a ``__setstate__``, a ``find_class`` module import
-    (importlib frames), the ``_RenameAwareUnpickler`` subclass (a bundle.py
-    frame) -- necessarily executes at least one Python frame outside them.
-    Classifying by WHERE the exception arose is version-robust where enumerating
-    exception TYPES is fragile: both file names are derived from live code
-    objects, so the comparison matches the code that actually runs under any
-    install layout, and if a future Python relocated VM internals the secA
-    corruption-corpus tests fail LOUD (a raw builtin escapes) rather than
-    silently misclassifying.
+    LOCUS discriminator for the load boundary: a VM-internal corruption failure (stack
+    underflow, truncated read, missing memo key, bad utf-8, truncation) is raised by VM
+    code in stdlib ``pickle.py``, the pre-scan module or this module, or by a C call that
+    adds NO Python frame; its traceback never leaves those files. An APPLICATION /
+    reconstruction failure (a REDUCE callable's body, a ``__setstate__``, a ``find_class``
+    module import) necessarily executes at least one Python frame outside them. The file
+    names come from live code objects, so the test matches the code that actually runs.
     """
 
     tb = exc.__traceback__
@@ -1356,7 +1338,9 @@ _VM_INTERNAL_CODE_FILES: frozenset[str] = frozenset(
     {
         # The stdlib pure-Python VM (pickle.py), via the executing code object.
         pickle._Unpickler.load.__code__.co_filename,
-        # This module: the Layer-1/Layer-2 overrides and the load() boundary.
+        # The static pre-scan and the call-time guards.
+        prescan_stream.__code__.co_filename,
+        # This module: the policy, the belt and the load boundaries.
         _exception_arose_outside_vm.__code__.co_filename,
     }
 )
@@ -1365,71 +1349,124 @@ _VM_INTERNAL_CODE_FILES: frozenset[str] = frozenset(
 class _DenyMissingDispatch(dict):
     """Opcode dispatch table that raises ``UnpicklingError`` on an unknown opcode.
 
-    The C ``pickle.Unpickler`` raises ``pickle.UnpicklingError`` ("invalid load key")
-    on a corrupt / truncated / unknown opcode; the pure-Python ``pickle._Unpickler``
-    instead raises a bare ``KeyError`` from its ``dispatch[key]`` lookup. Migrating the
-    base class to pure-Python (r49, secA_1) must NOT change that observable failure mode
-    -- callers (e.g. ``bundle.py::_load_trace_payload``) catch ``pickle.UnpicklingError``
-    to translate a corrupt ``metadata.pkl`` into a clean ``ArtifactError``. A missing
-    opcode here therefore surfaces as ``UnpicklingError``, matching the C VM.
-
-    This hook covers ONLY the unknown-opcode facet. The OTHER corrupt-input facets the
-    pure-Python VM leaks -- a stack underflow on a valid opcode (``IndexError``), a
-    truncated fixed-width read (``struct.error``), a missing memo key (``KeyError``), a
-    bad ``SHORT_BINUNICODE`` (``UnicodeDecodeError``), etc. -- are normalized to
-    ``UnpicklingError`` by the ``SafeBundleUnpickler.load()`` boundary (r51, secA_1),
-    which wraps the VM run and normalizes failures whose traceback stays INSIDE the VM
-    (locus-classified); application/reconstruction failures keep their identity.
+    The C ``pickle.Unpickler`` raises ``pickle.UnpicklingError`` ("invalid load key") on
+    an unknown opcode; the pure-Python ``pickle._Unpickler`` raises a bare ``KeyError``
+    from its ``dispatch[key]`` lookup. The interpreter keeps the C failure mode; the other
+    corrupt-input facets are normalized by the load boundary (``_boundary``).
     """
 
     def __missing__(self, key: int) -> None:
         raise pickle.UnpicklingError(f"invalid load key, {chr(key)!r}.")
 
 
-class SafeBundleUnpickler(pickle._Unpickler):
-    """Default-deny unpickler for untrusted TorchLens bundle ``metadata.pkl``.
+# --- Belt refusal text (one source of truth for the pre-scan, the guards and the ------
+# --- pure-Python handlers) -------------------------------------------------------------
+
+_ALLOC_TYPE_TAIL: dict[str, str] = {
+    "REDUCE": (
+        " (constructing it from pickle-supplied args allocates attacker-sized, "
+        "uninitialized-heap memory -- an out-of-memory DoS and the source of an "
+        "uninitialized-heap tensor; .tlspec payloads travel as BlobRefs and reconstruct "
+        "through the wrapped _rebuild/_frombuffer helpers, which are functions, not types)."
+    ),
+    "NEWOBJ": ".",
+    "NEWOBJ_EX": ".",
+    "INST/OBJ": (
+        " (constructing it from pickle-supplied args allocates attacker-sized, "
+        "uninitialized-heap memory -- an out-of-memory DoS and the source of an "
+        "uninitialized-heap tensor. .tlspec metadata is protocol >= 2 and never emits the "
+        "legacy INST/OBJ opcodes; payloads travel as BlobRefs)."
+    ),
+}
+_MEDIATED_TAIL: dict[str, str] = {
+    "REDUCE": (
+        ". The allocation-constructor belt inspects the TYPE being constructed, so an "
+        "admitted callable that constructs on its behalf must be refused here; .tlspec "
+        "payloads travel as BlobRefs."
+    ),
+    "NEWOBJ": ".",
+    "NEWOBJ_EX": ".",
+    "INST/OBJ": (
+        ". The legacy INST/OBJ construction opcodes route through the same allocation "
+        "belt as REDUCE/NEWOBJ; .tlspec payloads travel as BlobRefs."
+    ),
+}
+
+
+def _construction_refusal(opcode: str, func: Any, args: Any, kwargs: Any = None) -> str | None:
+    """Return why ``opcode`` may not construct ``func(*args, **kwargs)``, or ``None``.
+
+    The allocation belt for every constructing opcode (REDUCE, NEWOBJ, NEWOBJ_EX, INST,
+    OBJ): first the mediated-allocation class (``_alloc_refusal_reason``), then the
+    allocation-constructor type class (``_is_alloc_constructor_type``). The pre-scan
+    calls it with literal arguments, the call-time guard with the real ones, and the
+    pure-Python handlers from their opcode methods, so the three paths cannot drift.
+    """
+
+    label = "INST/OBJ" if opcode in ("INST", "OBJ") else opcode
+    mediated = _alloc_refusal_reason(func, args, kwargs)
+    if mediated is not None:
+        return (
+            f"Blocked mediated allocation via {label} during bundle metadata unpickle: "
+            f"{mediated}{_MEDIATED_TAIL[label]}"
+        )
+    if _is_alloc_constructor_type(func):
+        return (
+            "Blocked allocation-constructor (torch storage/tensor or numpy ndarray) via "
+            f"{label} during bundle metadata unpickle: {getattr(func, '__module__', '')}."
+            f"{getattr(func, '__qualname__', func)!r}{_ALLOC_TYPE_TAIL[label]}"
+        )
+    return None
+
+
+def _build_refusal_text(module: str, qualname: str) -> str:
+    return (
+        f"Blocked BUILD applied to a torch {module}.{qualname} during bundle metadata "
+        "unpickle: a pickle BUILD invokes __setstate__ / storage rebind (Tensor.set_) on "
+        "the target, which can rebind it onto an uninitialized or oversized storage. "
+        ".tlspec metadata never BUILDs a torch tensor/storage/parameter (payloads are "
+        "BlobRefs)."
+    )
+
+
+def _build_refusal(inst: Any) -> str | None:
+    """Return the BUILD refusal for a torch tensor / storage target, else ``None``."""
+
+    if isinstance(inst, torch.Tensor) or _is_torch_storage_instance(inst):
+        return _build_refusal_text(type(inst).__module__, type(inst).__qualname__)
+    return None
+
+
+def _build_type_refusal(cls: type) -> str | None:
+    """Return the BUILD refusal when instances of ``cls`` are torch tensors / storages."""
+
+    try:
+        is_tensor = issubclass(cls, torch.Tensor)
+    except TypeError:  # pragma: no cover - defensive; odd metaclasses
+        is_tensor = False
+    if is_tensor or _is_torch_storage_type(cls):
+        return _build_refusal_text(cls.__module__, cls.__qualname__)
+    return None
+
+
+class _BundleAllowlistPolicy:
+    """The ``find_class`` policy shared by the C-backed and pure-Python unpicklers.
 
     Refuses every global that only torchlens 2.x wrote with the one 2.x error, then
     gates every resolved global through the module allowlist. Anything outside the
     allowlist raises :class:`pickle.UnpicklingError` without importing or calling
-    attacker-chosen code.
-
-    Base class (r49, secA_1): this is the PURE-PYTHON ``pickle._Unpickler``, NOT the C
-    ``pickle.Unpickler``. The C VM runs REDUCE/BUILD entirely in C -- a subclass method
-    override of ``load_build`` is *bypassed* -- so opcode-level policy (Layer 2 below)
-    is impossible on the C base. The pure-Python VM dispatches each opcode through a
-    CLASS-LEVEL ``dispatch`` dict of unbound functions bound at class-body time; merely
-    ``def load_build`` on the subclass is INERT (the dict still points at the base
-    function). We therefore REBUILD ``dispatch`` in the class body (see the block after
-    ``find_class``) so the overrides are actually invoked. The one-time pure-Python cost
-    at ``tl.load()`` (tens of ms on a realistic ``metadata.pkl``) is never a hot path.
+    attacker-chosen code. ``_resolve_global`` is the policy; each concrete class wires
+    it to the ``find_class`` hook of its base machine.
     """
 
-    def __init__(
+    _trust_custom_callables: bool
+    _allowed_custom_callable_modules: frozenset[str] | None
+
+    def _init_policy(
         self,
-        file: BinaryIO,
-        *,
-        trust_custom_callables: bool = False,
-        allowed_custom_callable_modules: Collection[str] | None = None,
+        trust_custom_callables: bool,
+        allowed_custom_callable_modules: Collection[str] | None,
     ) -> None:
-        """Initialize the restricted unpickler.
-
-        Parameters
-        ----------
-        file:
-            Binary file object positioned at the start of a pickle stream.
-        trust_custom_callables:
-            Whether to admit a foreign (non-torch/torchlens/numpy) callable by
-            importing and resolving it. Mirrors the intervention-resolver contract:
-            ``False`` (default) denies unless the callable is already registered in
-            the live facet registry (a positive allowlist against trusted live
-            state that never triggers a fresh import).
-        allowed_custom_callable_modules:
-            Optional narrow allowlist of foreign module names whose callables may be
-            imported and resolved even when ``trust_custom_callables`` is ``False``.
-        """
-
-        super().__init__(file)
         self._trust_custom_callables = trust_custom_callables
         self._allowed_custom_callable_modules = (
             frozenset(allowed_custom_callable_modules)
@@ -1437,53 +1474,30 @@ class SafeBundleUnpickler(pickle._Unpickler):
             else None
         )
 
-    def load(self) -> Any:
-        """Run the pure-Python VM, normalizing ONLY VM-internal corruption failures.
+    def _boundary(self, run: Callable[[], Any]) -> Any:
+        """Run ``run`` normalizing ONLY VM-internal corruption failures.
 
-        The C ``pickle.Unpickler`` contract this preserves has TWO halves:
-        (1) every corrupt / truncated / malformed STREAM failure surfaces as
-        ``pickle.UnpicklingError`` -- which the load sites
-        (``bundle.py::_load_trace_payload`` / ``_load_unified_bundle``) translate
-        into a clean :class:`~torchlens._io._errors.ArtifactError`; and (2) an
-        exception raised by APPLICATION code the stream invokes (a REDUCE
-        callable, ``__setstate__``, a ``find_class`` module import) propagates RAW
-        with its identity intact -- the C VM never relabeled those, and the load
-        sites enumerate that family (``TypeError`` / ``ValueError`` /
-        ``ImportError`` / ...) to attach the original exception as the DIRECT
-        ``__cause__`` of ``ArtifactError`` (the legacy-bundle live-resource
-        contract).
-
-        The pure-Python base VM leaks half (1) as raw builtins (``IndexError`` /
-        ``struct.error`` / ``KeyError`` / ``UnicodeDecodeError`` / ``EOFError``);
-        ``_DenyMissingDispatch`` restores only the unknown-opcode facet. This
-        boundary restores the WHOLE family, classified by LOCUS
-        (``_exception_arose_outside_vm``), never by exception type: only a failure
-        whose traceback stays inside the VM itself is stream corruption; a failure
-        that executed application frames keeps its identity and direct cause.
-
-        Nothing legitimate is masked: a valid stream returns normally, every
-        deliberate refusal surface in this unpickler already raises ONLY
-        ``pickle.UnpicklingError`` (which passes through unchanged), and
-        ``except Exception`` (not ``BaseException``) preserves
-        ``KeyboardInterrupt`` / ``SystemExit`` / ``GeneratorExit``. Residual,
-        stated honestly: an interpreter-raised CALL-SITE failure on an admitted
-        reconstructor (arity mismatch, or a C-implemented callable raising with
-        no Python frame) executed ZERO application code, shows only VM frames,
-        and is normalized as corrupt -- semantically true (the stream is
-        inconsistent with the admitted callable) and unreachable for the
-        live-resource contract, which by definition executes application code.
+        The contract has TWO halves: (1) every corrupt / truncated / malformed STREAM
+        failure surfaces as ``pickle.UnpicklingError`` (which the load sites translate
+        into a clean :class:`~torchlens._io._errors.ArtifactError`); and (2) an
+        exception raised by APPLICATION code the stream invokes (a REDUCE callable, a
+        ``__setstate__``, a ``find_class`` module import) propagates RAW with its
+        identity intact, so the load sites keep the original exception as the DIRECT
+        ``__cause__`` of ``ArtifactError``. Classification is by LOCUS
+        (``_exception_arose_outside_vm``), never by exception type: a failure whose
+        traceback stays inside the unpickler modules is stream corruption; one that
+        executed application frames keeps its identity. Every deliberate refusal
+        already raises ``pickle.UnpicklingError`` and passes through unchanged, and
+        ``except Exception`` preserves ``KeyboardInterrupt`` / ``SystemExit``.
         """
 
         try:
-            return super().load()
+            return run()
         except (pickle.UnpicklingError, ArtifactTooOldError):
             # The earlier-major refusal is a typed load verdict, not corruption.
             raise
         except Exception as exc:  # noqa: BLE001 -- locus-classified; see docstring
             if _exception_arose_outside_vm(exc):
-                # Application/reconstruction failure on a well-formed stream: NOT
-                # corruption; never labeled so. Propagate raw so load sites keep
-                # the original type as the DIRECT __cause__ of ArtifactError.
                 raise
             raise pickle.UnpicklingError(
                 f"corrupt or malformed pickle stream: {type(exc).__name__}: {exc}"
@@ -1507,7 +1521,7 @@ class SafeBundleUnpickler(pickle._Unpickler):
             return module in self._allowed_custom_callable_modules
         return self._trust_custom_callables
 
-    def find_class(self, module: str, name: str) -> Any:  # noqa: C901 -- explicit policy
+    def _resolve_global(self, module: str, name: str) -> Any:  # noqa: C901 -- explicit policy
         """Resolve a pickled global only if it is on the metadata allowlist.
 
         Parameters
@@ -1888,205 +1902,233 @@ class SafeBundleUnpickler(pickle._Unpickler):
         #    to CALL it (facet computation, or a ``__reduce__`` gadget) fails closed.
         return _DeferredForeignCallable(module, name)
 
-    # --- Layer 2: opcode-level policy (r49, secA_1) -------------------------------
+
+class SafeBundleUnpickler(_BundleAllowlistPolicy, pickle.Unpickler):
+    """Default-deny unpickler for untrusted TorchLens bundle ``metadata.pkl``.
+
+    The stream is read once and pre-scanned symbolically
+    (:mod:`torchlens._io._pickle_prescan`: allowlist resolution of every global, the
+    allocation belt for every statically known construction, the BUILD-target
+    classification, stream corruption and the opcode ceiling), then loaded by the C
+    ``pickle.Unpickler``. Its ``find_class`` hands back each pre-resolved global, wrapped
+    in a :class:`~torchlens._io._pickle_prescan.GuardedCallable` when a REDUCE will call it so the belt runs on the
+    real arguments at call time. A stream shape the pre-scan cannot classify runs
+    through :class:`_PurePythonBundleUnpickler` instead, which enforces the same checks
+    per opcode; no TorchLens writer produces such a stream. After ``load()``,
+    ``load_path`` is ``"c"`` or ``"pure_python"`` and ``prescan_opcodes`` the opcode
+    count the pre-scan walked (``0`` when the interpreter ran).
+    """
+
+    def __init__(
+        self,
+        file: BinaryIO,
+        *,
+        trust_custom_callables: bool = False,
+        allowed_custom_callable_modules: Collection[str] | None = None,
+        max_opcodes: int | None = None,
+    ) -> None:
+        """Initialize the restricted unpickler.
+
+        Parameters
+        ----------
+        file:
+            Binary file object positioned at the start of a pickle stream; read in full.
+        trust_custom_callables:
+            Whether to admit a foreign (non-torch/torchlens/numpy) callable by
+            importing and resolving it. Mirrors the intervention-resolver contract:
+            ``False`` (default) denies unless the callable is already registered in
+            the live facet registry (a positive allowlist against trusted live
+            state that never triggers a fresh import).
+        allowed_custom_callable_modules:
+            Optional narrow allowlist of foreign module names whose callables may be
+            imported and resolved even when ``trust_custom_callables`` is ``False``.
+        max_opcodes:
+            Opcode-count ceiling; a longer stream refuses with
+            :class:`~torchlens._io._pickle_prescan.OpcodeCeilingExceeded` before any
+            object is built.
+        """
+
+        data = file.read()
+        self._data = bytes(data)
+        super().__init__(io.BytesIO(self._data))
+        self._init_policy(trust_custom_callables, allowed_custom_callable_modules)
+        self._max_opcodes = max_opcodes
+        self._plan: PrescanPlan | None = None
+        self.load_path: str | None = None
+        self.prescan_opcodes = 0
+        self.fallback_reason: str | None = None
+
+    def find_class(self, module: str, name: str) -> Any:
+        """Return the pre-resolved global for the C machine, guarded when a REDUCE calls it.
+
+        Outside a ``load()`` (a direct probe) this is the bare policy. Inside one, every
+        global the stream names was already resolved by the pre-scan through the same
+        policy; a name the pre-scan did not see is a stream that changed under the
+        loader and is refused.
+        """
+
+        plan = self._plan
+        if plan is None:
+            return self._resolve_global(module, name)
+        pair = (module, name)
+        plan.global_lookups += 1
+        try:
+            obj = plan.resolved[pair]
+        except KeyError:
+            raise pickle.UnpicklingError(
+                "corrupt or malformed pickle stream: the stream named a global the "
+                "pre-scan did not see."
+            ) from None
+        if pair in plan.wrap_pairs:
+            return GuardedCallable(obj, plan, pair=pair)
+        return obj
+
+    def _prescan(self) -> PrescanPlan | None:
+        """Return the pre-scan plan, or ``None`` when the interpreter must run instead."""
+
+        try:
+            plan = prescan_stream(
+                self._data,
+                resolve=self._resolve_global,
+                construction_refusal=_construction_refusal,
+                build_refusal=_build_refusal,
+                build_type_refusal=_build_type_refusal,
+                max_opcodes=self._max_opcodes,
+            )
+        except StreamNeedsInterpreter as why:
+            self.fallback_reason = str(why)
+            return None
+        self.prescan_opcodes = plan.opcode_count
+        return plan
+
+    def _interpret(self) -> Any:
+        """Run the stream through the pure-Python machine (the exact per-opcode checks)."""
+
+        if self._max_opcodes is not None:
+            count_opcodes(self._data, self._max_opcodes)
+        interpreter = _PurePythonBundleUnpickler(
+            io.BytesIO(self._data),
+            trust_custom_callables=self._trust_custom_callables,
+            allowed_custom_callable_modules=self._allowed_custom_callable_modules,
+        )
+        return interpreter.load()
+
+    def load(self) -> Any:
+        """Pre-scan the stream, then load it with the C machine (or the interpreter)."""
+
+        plan = self._boundary(self._prescan)
+        if plan is None:
+            self.load_path = "pure_python"
+            return self._interpret()
+        self._plan = plan
+        self.load_path = "c"
+        try:
+            return self._boundary(super().load)
+        finally:
+            self._plan = None
+
+
+class _PurePythonBundleUnpickler(_BundleAllowlistPolicy, pickle._Unpickler):
+    """The per-opcode form of the same policy, on the pure-Python ``pickle._Unpickler``.
+
+    Runs the streams the pre-scan cannot classify statically. The pure-Python VM
+    dispatches each opcode through a CLASS-LEVEL ``dispatch`` dict of unbound functions
+    bound at class-body time; merely ``def load_build`` on the subclass is INERT (the
+    dict still points at the base function). The class body therefore REBUILDS
+    ``dispatch`` so the overrides are actually invoked.
+    """
+
+    def __init__(
+        self,
+        file: BinaryIO,
+        *,
+        trust_custom_callables: bool = False,
+        allowed_custom_callable_modules: Collection[str] | None = None,
+    ) -> None:
+        """Initialize the interpreter with the same trust flags as the fast path."""
+
+        super().__init__(file)
+        self._init_policy(trust_custom_callables, allowed_custom_callable_modules)
+
+    def load(self) -> Any:
+        """Run the pure-Python VM inside the corruption-normalizing boundary."""
+
+        return self._boundary(super().load)
+
+    def find_class(self, module: str, name: str) -> Any:
+        """Resolve a global through the shared allowlist policy."""
+
+        return self._resolve_global(module, name)
+
+    # --- Layer 2: opcode-level policy --------------------------------------------------
     #
     # ``find_class`` gates which globals resolve, but several opcodes act on objects
-    # ALREADY on the stack, INVISIBLE to ``find_class``:
-    #   * BUILD applies a ``__setstate__`` / ``__dict__`` update to ``stack[-1]``. On a
-    #     torch Tensor / Storage / Parameter this reaches ``Tensor.__setstate__`` /
-    #     ``set_`` and can rebind the target onto an uninitialized or oversized storage
-    #     (an uninitialized-heap tensor) -- a storage rebind that never passed through
-    #     ``find_class``.
-    #   * REDUCE / NEWOBJ / NEWOBJ_EX CALL / ``__new__`` a callable or class on the
-    #     stack. That object normally arrives via ``find_class`` (Layer 1 already denies
-    #     storage ctors there), but a defense-in-depth belt refuses constructing any
-    #     attacker-sized ALLOCATION type -- a torch storage (r49), a ``torch.Tensor``
-    #     subclass or legacy ``torch.<dtype>Tensor``, or a ``numpy.ndarray`` subclass
-    #     (r63) -- even if that type reached the stack by some other route (a prior
-    #     REDUCE result, a memoized object, a resolved inert type reference, ...).
-    #     ``torch.Tensor(N)`` / ``torch.FloatTensor(N)`` / ``numpy.ndarray((N,))`` each
-    #     allocate an attacker-sized, uninitialized-heap buffer (``_is_alloc_constructor_type``).
-    #   * MEDIATED allocation (r6). The belt above keys on the TYPE being constructed, so
-    #     it is BLIND to an admitted callable that constructs on that type's behalf: at
-    #     REDUCE time the stack holds ``numpy._core.multiarray._reconstruct`` (an
-    #     allowlisted plain FUNCTION), not ``numpy.ndarray``, so an 88-byte pickle
-    #     allocated a 2,000,000-element uninitialized array end-to-end through
-    #     ``tl.load()``. ``_alloc_refusal_reason`` closes that indirection CLASS -- numpy
-    #     ``_reconstruct``, torch tensor factories reached as REDUCE targets via
-    #     ``_safe_getattr`` (``torch.empty(N)``), tensor-constructor METHOD DESCRIPTORS off
-    #     ``TensorBase`` applied to a tensor rebuilt from an embedded blob
-    #     (``new_empty``: 1.7 KiB -> 16 MB uninitialized, and invisible to a
-    #     ``__module__``-only ownership test), ``bytes``/``bytearray`` handed an integer
-    #     SIZE, and an ARGUMENT-BEARING ``nn.Module`` construction (whose ``__init__``
-    #     allocates attacker-sized parameters). The module rule is arg-aware ON PURPOSE:
-    #     a real artifact NEWOBJ-constructs a zero-argument ``nn.Identity()``.
-    #   * INST / OBJ (SEC-H1) are the LEGACY protocol-0/1 constructing opcodes. Unlike
-    #     REDUCE/NEWOBJ they CALL ``klass(*args)`` through the shared ``_instantiate``
-    #     primitive rather than an inline dispatch handler, so they bypassed the four
-    #     dispatch overrides entirely: a ~30-byte ``INST numpy.ndarray`` / ``OBJ
-    #     numpy.ndarray`` / ``INST torch.FloatTensor`` stream allocated an attacker-sized
-    #     uninitialized buffer BEFORE any structural check. The ``_instantiate`` override
-    #     below runs the SAME belt (``_alloc_refusal_reason`` + ``_is_alloc_constructor_type``)
-    #     and, because ``load_inst`` / ``load_obj`` reach it via ``self._instantiate``
-    #     (normal MRO), it closes BOTH opcodes in one place -- CONSTRUCTION-scoped, not
-    #     opcode-scoped. With it the FULL constructing-opcode set (REDUCE, NEWOBJ,
-    #     NEWOBJ_EX, INST, OBJ) is belt-gated and BUILD is state-gated; no construction
-    #     opcode reaches an unbounded allocation.
-    # Legit ``.tlspec`` metadata never BUILDs a torch tensor/storage/parameter, never
-    # bare-constructs a storage/tensor/ndarray in the outer stream (payloads travel as
-    # BlobRefs and reconstruct through the wrapped ``_rebuild_*`` helpers), and -- written
-    # at pickle protocol >= 2 -- never emits the legacy INST/OBJ opcodes at all, so these
-    # gates refuse nothing legit.
+    # ALREADY on the stack, INVISIBLE to ``find_class``: BUILD applies a
+    # ``__setstate__`` / ``__dict__`` update to ``stack[-1]`` (on a torch Tensor /
+    # Storage / Parameter this reaches ``Tensor.__setstate__`` / ``set_`` and can rebind
+    # the target onto an uninitialized or oversized storage), and REDUCE / NEWOBJ /
+    # NEWOBJ_EX / INST / OBJ CALL or ``__new__`` a callable or class on the stack, which
+    # may construct an attacker-sized ALLOCATION type or mediate one through an admitted
+    # callable. The belt text and decisions live in ``_construction_refusal`` and
+    # ``_build_refusal``, shared with the pre-scan and the call-time guards.
 
     def load_build(self) -> None:
         """Refuse a BUILD (``__setstate__`` / storage-rebind) on a torch tensor/storage."""
 
         # Base ``load_build`` is ``state = stack.pop(); inst = stack[-1]`` -- so before
         # it runs, the target instance is ``stack[-2]`` (``state`` is ``stack[-1]``).
-        inst = self.stack[-2]  # type: ignore[attr-defined]
-        if isinstance(inst, torch.Tensor) or _is_torch_storage_instance(inst):
-            raise pickle.UnpicklingError(
-                "Blocked BUILD applied to a torch "
-                f"{type(inst).__module__}.{type(inst).__qualname__} during bundle "
-                "metadata unpickle: a pickle BUILD invokes __setstate__ / storage "
-                "rebind (Tensor.set_) on the target, which can rebind it onto an "
-                "uninitialized or oversized storage. .tlspec metadata never BUILDs a "
-                "torch tensor/storage/parameter (payloads are BlobRefs)."
-            )
+        reason = _build_refusal(self.stack[-2])  # type: ignore[attr-defined]
+        if reason is not None:
+            raise pickle.UnpicklingError(reason)
         return _BASE_LOAD_BUILD(self)  # type: ignore[arg-type]
 
     def load_reduce(self) -> None:
         """Refuse a REDUCE that constructs -- or MEDIATES -- an attacker-sized allocation."""
 
-        # Base ``load_reduce`` is ``args = stack.pop(); func = stack[-1]; ...`` -- so
-        # before it runs, ``func`` is ``stack[-2]`` (``args`` is ``stack[-1]``).
-        func = self.stack[-2]  # type: ignore[attr-defined]
-        mediated = _alloc_refusal_reason(func, self.stack[-1])  # type: ignore[attr-defined]
-        if mediated is not None:
-            raise pickle.UnpicklingError(
-                "Blocked mediated allocation via REDUCE during bundle metadata "
-                f"unpickle: {mediated}. The allocation-constructor belt inspects the TYPE "
-                "being constructed, so an admitted callable that constructs on its behalf "
-                "must be refused here; .tlspec payloads travel as BlobRefs."
-            )
-        if _is_alloc_constructor_type(func):
-            raise pickle.UnpicklingError(
-                "Blocked allocation-constructor (torch storage/tensor or numpy ndarray) "
-                "via REDUCE during bundle metadata unpickle: "
-                f"{getattr(func, '__module__', '')}."
-                f"{getattr(func, '__qualname__', func)!r} (constructing it from "
-                "pickle-supplied args allocates attacker-sized, uninitialized-heap "
-                "memory -- an out-of-memory DoS and the source of an uninitialized-heap "
-                "tensor; .tlspec payloads travel as BlobRefs and reconstruct through the "
-                "wrapped _rebuild/_frombuffer helpers, which are functions, not types)."
-            )
+        # Base ``load_reduce`` is ``args = stack.pop(); func = stack[-1]`` -- so before
+        # it runs, ``func`` is ``stack[-2]`` (``args`` is ``stack[-1]``).
+        reason = _construction_refusal("REDUCE", self.stack[-2], self.stack[-1])  # type: ignore[attr-defined]
+        if reason is not None:
+            raise pickle.UnpicklingError(reason)
         return _BASE_LOAD_REDUCE(self)  # type: ignore[arg-type]
 
     def load_newobj(self) -> None:
         """Refuse a NEWOBJ (``cls.__new__``) that would allocate a storage/tensor/ndarray."""
 
-        # Base ``load_newobj`` is ``args = stack.pop(); cls = stack.pop(); ...`` -- so
-        # ``cls`` is ``stack[-2]`` (``args`` is ``stack[-1]``).
-        cls = self.stack[-2]  # type: ignore[attr-defined]
-        mediated = _alloc_refusal_reason(cls, self.stack[-1])  # type: ignore[attr-defined]
-        if mediated is not None:
-            raise pickle.UnpicklingError(
-                f"Blocked mediated allocation via NEWOBJ during bundle metadata unpickle: {mediated}."
-            )
-        if _is_alloc_constructor_type(cls):
-            raise pickle.UnpicklingError(
-                "Blocked allocation-constructor (torch storage/tensor or numpy ndarray) "
-                "via NEWOBJ during bundle metadata unpickle: "
-                f"{getattr(cls, '__module__', '')}."
-                f"{getattr(cls, '__qualname__', cls)!r}."
-            )
+        reason = _construction_refusal("NEWOBJ", self.stack[-2], self.stack[-1])  # type: ignore[attr-defined]
+        if reason is not None:
+            raise pickle.UnpicklingError(reason)
         return _BASE_LOAD_NEWOBJ(self)  # type: ignore[arg-type]
 
     def load_newobj_ex(self) -> None:
         """Refuse a NEWOBJ_EX (``cls.__new__``) that would allocate a storage/tensor/ndarray."""
 
-        # Base ``load_newobj_ex`` is ``kwargs = stack.pop(); args = stack.pop();
-        # cls = stack.pop()`` -- so ``cls`` is ``stack[-3]``.
-        cls = self.stack[-3]  # type: ignore[attr-defined]
-        mediated = _alloc_refusal_reason(
-            cls,
+        reason = _construction_refusal(
+            "NEWOBJ_EX",
+            self.stack[-3],  # type: ignore[attr-defined]
             self.stack[-2],  # type: ignore[attr-defined]
             self.stack[-1],  # type: ignore[attr-defined]
         )
-        if mediated is not None:
-            raise pickle.UnpicklingError(
-                "Blocked mediated allocation via NEWOBJ_EX during bundle metadata "
-                f"unpickle: {mediated}."
-            )
-        if _is_alloc_constructor_type(cls):
-            raise pickle.UnpicklingError(
-                "Blocked allocation-constructor (torch storage/tensor or numpy ndarray) "
-                "via NEWOBJ_EX during bundle metadata unpickle: "
-                f"{getattr(cls, '__module__', '')}."
-                f"{getattr(cls, '__qualname__', cls)!r}."
-            )
+        if reason is not None:
+            raise pickle.UnpicklingError(reason)
         return _BASE_LOAD_NEWOBJ_EX(self)  # type: ignore[arg-type]
 
     def _instantiate(self, klass: Any, args: Any) -> None:
         """Refuse an INST / OBJ construction that would allocate attacker-sized memory.
 
-        CLOSES THE LAST CONSTRUCTION OPCODES (SEC-H1). The dispatch overrides above cover
-        only REDUCE / NEWOBJ / NEWOBJ_EX, but the pure-Python VM has TWO more constructing
-        opcodes -- the legacy protocol-0/1 ``INST`` (``b'i'``, ``load_inst``) and ``OBJ``
-        (``b'o'``, ``load_obj``) -- and BOTH funnel through this single ``_instantiate``
-        primitive, which calls ``klass(*args)`` directly. Because ``load_inst`` /
-        ``load_obj`` invoke ``self._instantiate(...)`` (normal MRO, not the dispatch
-        table), overriding this ONE method here makes the allocation check fire regardless
-        of which of those opcodes reached construction -- CONSTRUCTION-scoped, not
-        opcode-scoped, so a future opcode routed through the shared primitive is covered
-        for free. Without it a ~30-byte ``metadata.pkl`` using INST/OBJ constructs
-        ``numpy.ndarray(N)`` / ``torch.FloatTensor(N)`` -- an attacker-sized, uninitialized
-        heap buffer (OOM DoS + uninitialized-heap read on a public object) -- at plain
-        ``tl.load()`` time, sidestepping the belt the four dispatch overrides enforce.
-
-        The refusal reuses the EXACT belt helpers the REDUCE / NEWOBJ overrides use
-        (``_alloc_refusal_reason`` + ``_is_alloc_constructor_type``) -- ONE source of
-        truth, so the INST/OBJ path can never drift from the rest of the belt. Legit
-        ``.tlspec`` metadata is written with pickle protocol >= 2 (``DEFAULT_PROTOCOL``
-        >= 4), which NEVER emits INST/OBJ (they are protocol-0/1 opcodes), and never
-        bare-constructs a storage/tensor/ndarray in the outer stream anyway (payloads are
-        BlobRefs), so this refuses nothing a real bundle does; a benign small object still
-        instantiates unchanged.
+        ``load_inst`` / ``load_obj`` both funnel through this primitive (normal MRO, not
+        the dispatch table), so one override gates both legacy construction opcodes.
+        They hand ``args`` as a LIST (from ``pop_mark()``); the belt gates on a TUPLE,
+        so normalize first so a security belt never silently no-ops on a container-type
+        mismatch.
         """
 
-        # ``load_inst`` / ``load_obj`` hand ``args`` as a LIST (from ``pop_mark()``); the
-        # belt helpers gate on a TUPLE (``_requests_integer_sized_buffer`` /
-        # ``_alloc_refusal_reason`` test ``isinstance(args, tuple)``). Normalize so a
-        # security belt never silently no-ops on a container-type mismatch. A non-list/
-        # non-tuple ``args`` is passed through verbatim for the helpers to reject/ignore.
         arg_tuple = tuple(args) if isinstance(args, (list, tuple)) else args
-        mediated = _alloc_refusal_reason(klass, arg_tuple)
-        if mediated is not None:
-            raise pickle.UnpicklingError(
-                "Blocked mediated allocation via INST/OBJ during bundle metadata "
-                f"unpickle: {mediated}. The legacy INST/OBJ construction opcodes route "
-                "through the same allocation belt as REDUCE/NEWOBJ; .tlspec payloads "
-                "travel as BlobRefs."
-            )
-        if _is_alloc_constructor_type(klass):
-            raise pickle.UnpicklingError(
-                "Blocked allocation-constructor (torch storage/tensor or numpy ndarray) "
-                "via INST/OBJ during bundle metadata unpickle: "
-                f"{getattr(klass, '__module__', '')}."
-                f"{getattr(klass, '__qualname__', klass)!r} (constructing it from "
-                "pickle-supplied args allocates attacker-sized, uninitialized-heap "
-                "memory -- an out-of-memory DoS and the source of an uninitialized-heap "
-                "tensor. .tlspec metadata is protocol >= 2 and never emits the legacy "
-                "INST/OBJ opcodes; payloads travel as BlobRefs)."
-            )
+        reason = _construction_refusal("INST", klass, arg_tuple)
+        if reason is not None:
+            raise pickle.UnpicklingError(reason)
         return super()._instantiate(klass, args)  # type: ignore[misc]
 
-    # REBUILD the pure-Python opcode dispatch table so the overrides above are actually
-    # invoked (proven: ``def load_build`` alone is INERT -- ``pickle._Unpickler.load``
-    # reads ``self.dispatch``, a class-level dict of unbound base functions bound at
-    # class-body time; the subclass method is not consulted unless the dict is
-    # repointed). This is the single load-bearing detail of the C->pure-Python
-    # migration. ``_RenameAwareUnpickler`` inherits this ``dispatch`` unchanged.
     dispatch = _DenyMissingDispatch(pickle._Unpickler.dispatch)
     dispatch[pickle.BUILD[0]] = load_build
     dispatch[pickle.REDUCE[0]] = load_reduce

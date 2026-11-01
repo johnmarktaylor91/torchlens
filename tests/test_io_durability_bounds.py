@@ -400,7 +400,6 @@ def test_metadata_pkl_opcode_ceiling_refuses_object_bomb(tmp_path: Path, monkeyp
 
     spec = _save(tmp_path)
     (spec / "metadata.pkl").write_bytes(pickle.dumps([0] * 100_000))
-    monkeypatch.setattr(bundle_mod, "_METADATA_PKL_PRESCAN_BYTES", 0)
     monkeypatch.setattr(bundle_mod, "_MAX_METADATA_PKL_OPCODES", 1_000)
     with pytest.raises(ArtifactError, match="opcode allocation ceiling") as excinfo:
         tl.load(str(spec))

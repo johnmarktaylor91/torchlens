@@ -47,6 +47,7 @@ from torchlens._io._safe_unpickle import (
     SafeBundleUnpickler,
     _is_alloc_constructor_type,
     _is_torch_storage_type,
+    _PurePythonBundleUnpickler,
 )
 from torchlens.options import CaptureOptions
 
@@ -166,17 +167,17 @@ def test_white_box_belts_refuse_tensor_and_ndarray() -> None:
     """The three belts refuse a Tensor/ndarray type placed directly on the stack."""
 
     for target in (torch.Tensor, torch.FloatTensor, np.ndarray):
-        u = SafeBundleUnpickler(io.BytesIO(b""))
+        u = _PurePythonBundleUnpickler(io.BytesIO(b""))
         u.stack = [target, (5,)]  # type: ignore[attr-defined]
         with pytest.raises(pickle.UnpicklingError, match="via REDUCE"):
             u.load_reduce()
 
-        u = SafeBundleUnpickler(io.BytesIO(b""))
+        u = _PurePythonBundleUnpickler(io.BytesIO(b""))
         u.stack = [target, (5,)]  # type: ignore[attr-defined]
         with pytest.raises(pickle.UnpicklingError, match="via NEWOBJ"):
             u.load_newobj()
 
-        u = SafeBundleUnpickler(io.BytesIO(b""))
+        u = _PurePythonBundleUnpickler(io.BytesIO(b""))
         u.stack = [target, (5,), {}]  # type: ignore[attr-defined]
         with pytest.raises(pickle.UnpicklingError, match="via NEWOBJ_EX"):
             u.load_newobj_ex()
@@ -218,7 +219,7 @@ def test_legit_reconstructors_are_not_alloc_types_and_reduce_is_allowed() -> Non
     # A REDUCE whose func is the (function) reconstructor is NOT refused by the belt --
     # the alloc-guard fires on TYPES only. White-box: push func + args and run the belt;
     # the belt must never raise ITS alloc refusal (a downstream ctor error is fine).
-    u = SafeBundleUnpickler(io.BytesIO(b""))
+    u = _PurePythonBundleUnpickler(io.BytesIO(b""))
     u.stack = [rebuild, ()]  # type: ignore[attr-defined]
     try:
         u.load_reduce()
@@ -236,7 +237,7 @@ def test_legit_reconstructors_are_not_alloc_types_and_reduce_is_allowed() -> Non
 def _reduce_belt_admits_construction(resolved: object) -> bool:
     """Return whether the REDUCE belt would let ``resolved`` be CONSTRUCTED (not refused)."""
 
-    u = SafeBundleUnpickler(io.BytesIO(b""))
+    u = _PurePythonBundleUnpickler(io.BytesIO(b""))
     u.stack = [resolved, ()]  # type: ignore[attr-defined]
     try:
         u.load_reduce()
