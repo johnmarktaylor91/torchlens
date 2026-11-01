@@ -122,7 +122,6 @@ construction is denied).
 
 from __future__ import annotations
 
-import io
 import pickle
 import struct
 from collections.abc import Collection
@@ -139,6 +138,7 @@ from .._utils._callable_safety import (
     _STDLIB_AND_BUILTIN_TOP_LEVEL as _CALLABLE_STDLIB_AND_BUILTIN_TOP_LEVEL,
     is_denied_stdlib_or_builtin_module,
 )
+from ._durability import _stream_bytes_left
 from ._inline_tensor import INLINE_TENSOR_GLOBAL, rebuild_inline_tensor
 from ._pre3_module_paths import refuse_pre_3_module_path
 from .format_errors import ArtifactTooOldError
@@ -1195,20 +1195,6 @@ _VM_INTERNAL_CODE_FILES: frozenset[str] = frozenset(
 )
 
 
-def _stream_bytes_left(stream: Any) -> int | None:
-    """Return the bytes after ``stream``'s position, or ``None`` when it cannot tell."""
-
-    try:
-        if not stream.seekable():
-            return None
-        position = stream.tell()
-        end = stream.seek(0, io.SEEK_END)
-        stream.seek(position)
-    except (AttributeError, OSError, ValueError):
-        return None
-    return int(end - position)
-
-
 class _DenyMissingDispatch(dict):
     """Opcode dispatch table that raises ``UnpicklingError`` on an unknown opcode.
 
@@ -1408,38 +1394,8 @@ class SafeBundleUnpickler(pickle._Unpickler):
         if (module, name) in _SAFE_EXPLICIT_GLOBALS:
             return super().find_class(module, name)
 
-        # Pure torch tensor reconstruction helpers. ``_rebuild_*`` functions only
-        # reassemble tensors from already-resolved (allowlisted) components; any
-        # class they receive as an argument was itself gated through find_class.
-        #
-        # HARDENING (r28, A-R28-1 CRITICAL default-victim RCE): the prior fast-path
-        # returned ``super().find_class`` for ANY ``name`` starting with ``_rebuild``
-        # with NO further gate. Under pickle protocol >= 4 the pickled ``name`` is
-        # attribute-walked, so a DOTTED name such as
-        # ``_rebuild_tensor_v2.__globals__.get`` walks OFF the reconstructor function
-        # into ``torch._utils`` module globals and returns a REDUCE-invocable bound
-        # ``dict.get`` -> ``_import_dotted_name`` -> ``os.system`` -- a load-time RCE
-        # (fires at metadata unpickle, no ``.run()`` needed). This is the SAME
-        # dotted-walk escape class the r27 torch-type / preview branches close; the
-        # ``_rebuild`` branch was MISSED. Legit ``_rebuild_*`` reconstructor names NEVER
-        # contain a dot, so (a) refuse any DOTTED ``name`` BEFORE resolving (never
-        # trigger the walk), and (b) after resolving, positively require a torch-owned,
-        # non-type CALLABLE (the reconstructors are functions of ``torch._utils``).
         if module == "torch._utils" and name.startswith("_rebuild"):
-            if "." in name:
-                raise pickle.UnpicklingError(
-                    "Blocked dotted torch._utils._rebuild name during bundle metadata "
-                    f"unpickle: {module}.{name} (a dotted name attribute-walks off the "
-                    "reconstructor into module globals; legit _rebuild_* names have no dot)."
-                )
-            obj = super().find_class(module, name)
-            if not (callable(obj) and _is_torch_owned(obj) and not isinstance(obj, type)):
-                raise pickle.UnpicklingError(
-                    "Blocked non-torch-owned / non-callable torch._utils._rebuild "
-                    f"resolution during bundle metadata unpickle: {module}.{name} "
-                    f"(resolved to {str(getattr(obj, '__module__', '') or '')!r})."
-                )
-            return obj
+            return self._find_torch_rebuild(module, name)
 
         # torch package: admit value instances (dtype / layout / memory_format /
         # ``torch.Size`` etc.) and a resolved DATA ``type`` (tensor / Module /
@@ -1754,6 +1710,41 @@ class SafeBundleUnpickler(pickle._Unpickler):
         #    reference is preserved so the trace loads structurally, and any attempt
         #    to CALL it (facet computation, or a ``__reduce__`` gadget) fails closed.
         return _DeferredForeignCallable(module, name)
+
+    def _find_torch_rebuild(self, module: str, name: str) -> Any:
+        """Resolve a ``torch._utils._rebuild*`` reconstructor for ``find_class``."""
+
+        # Pure torch tensor reconstruction helpers. ``_rebuild_*`` functions only
+        # reassemble tensors from already-resolved (allowlisted) components; any
+        # class they receive as an argument was itself gated through find_class.
+        #
+        # HARDENING (r28, A-R28-1 CRITICAL default-victim RCE): the prior fast-path
+        # returned ``super().find_class`` for ANY ``name`` starting with ``_rebuild``
+        # with NO further gate. Under pickle protocol >= 4 the pickled ``name`` is
+        # attribute-walked, so a DOTTED name such as
+        # ``_rebuild_tensor_v2.__globals__.get`` walks OFF the reconstructor function
+        # into ``torch._utils`` module globals and returns a REDUCE-invocable bound
+        # ``dict.get`` -> ``_import_dotted_name`` -> ``os.system`` -- a load-time RCE
+        # (fires at metadata unpickle, no ``.run()`` needed). This is the SAME
+        # dotted-walk escape class the r27 torch-type / preview branches close; the
+        # ``_rebuild`` branch was MISSED. Legit ``_rebuild_*`` reconstructor names NEVER
+        # contain a dot, so (a) refuse any DOTTED ``name`` BEFORE resolving (never
+        # trigger the walk), and (b) after resolving, positively require a torch-owned,
+        # non-type CALLABLE (the reconstructors are functions of ``torch._utils``).
+        if "." in name:
+            raise pickle.UnpicklingError(
+                "Blocked dotted torch._utils._rebuild name during bundle metadata "
+                f"unpickle: {module}.{name} (a dotted name attribute-walks off the "
+                "reconstructor into module globals; legit _rebuild_* names have no dot)."
+            )
+        obj = super().find_class(module, name)
+        if not (callable(obj) and _is_torch_owned(obj) and not isinstance(obj, type)):
+            raise pickle.UnpicklingError(
+                "Blocked non-torch-owned / non-callable torch._utils._rebuild "
+                f"resolution during bundle metadata unpickle: {module}.{name} "
+                f"(resolved to {str(getattr(obj, '__module__', '') or '')!r})."
+            )
+        return obj
 
     # --- Layer 2: opcode-level policy (r49, secA_1) -------------------------------
     #

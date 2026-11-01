@@ -17,8 +17,10 @@ available guarantee.
 
 from __future__ import annotations
 
+import io
 import os
 from pathlib import Path
+from typing import Any
 
 __all__ = ["fsync_file", "fsync_dir", "fsync_tree"]
 
@@ -113,3 +115,17 @@ def fsync_tree(root: Path) -> None:
                 continue
             fsync_file(file_path)
         fsync_dir(directory)
+
+
+def _stream_bytes_left(stream: Any) -> int | None:
+    """Return the bytes after ``stream``'s position, or ``None`` when it cannot tell."""
+
+    try:
+        if not stream.seekable():
+            return None
+        position = stream.tell()
+        end = stream.seek(0, io.SEEK_END)
+        stream.seek(position)
+    except (AttributeError, OSError, ValueError):
+        return None
+    return int(end - position)
