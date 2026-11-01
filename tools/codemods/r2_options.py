@@ -483,8 +483,16 @@ def _extract_capture_selection(
     """Move removed CaptureOptions fields, reporting every ambiguous migration."""
 
     parents = {id(child): node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+    aliases = {
+        alias.asname
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        for alias in node.names
+        if alias.name == "CaptureOptions" and alias.asname
+    }
     for ctor in (node for node in ast.walk(tree) if isinstance(node, ast.Call)):
-        if not _ctor_name(ctor.func, "CaptureOptions"):
+        imported_alias = isinstance(ctor.func, ast.Name) and ctor.func.id in aliases
+        if not imported_alias and not _ctor_name(ctor.func, "CaptureOptions"):
             continue
         selection = next((kw for kw in ctor.keywords if kw.arg == "layers_to_save"), None)
         preview = next((kw for kw in ctor.keywords if kw.arg == "save_preview"), None)

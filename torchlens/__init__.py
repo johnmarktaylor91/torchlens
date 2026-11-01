@@ -616,9 +616,9 @@ def _extract_layers_with_trace(
         model,
         x,
         capture=_LazyCaptureOptions(
-            layers_to_save=list(layer_plan.values()),
             detach_saved_activations=detach_saved_activations,
         ),
+        save=list(layer_plan.values()),
     )
     outputs: dict[str, _torch.Tensor] = {}
     views: dict[str, _Any] = {}

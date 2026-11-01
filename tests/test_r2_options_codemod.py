@@ -62,3 +62,11 @@ def test_ambiguous_migrations_require_review(source: str) -> None:
     rewritten, reports = _rewrite(source)
     assert reports and all("REVIEW" in report for report in reports)
     assert rewritten == source
+
+
+def test_imported_constructor_alias_migrates() -> None:
+    source = 'from torchlens.options import CaptureOptions as Cap\ntl.trace(model, x, capture=Cap(layers_to_save=["relu"]))'
+    rewritten, reports = _rewrite(source)
+    assert not reports
+    assert 'save=["relu"]' in rewritten
+    assert "capture=" not in rewritten

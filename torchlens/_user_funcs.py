@@ -3250,7 +3250,7 @@ def _trace_torch_model(
     normalized_chunk_size = normalize_chunk_size(chunk_size_value)
     if chunk_paths_value is not None and normalized_chunk_size is None:
         raise ChunkedForwardConfigError("chunk_paths requires chunk_size.")
-    layers_to_save = capture_options._layers_to_save
+    layers_to_save = cast("str | list[int | str] | None", capture_options._layers_to_save)
     save_raw_input_policy = capture_options.save_raw_input
     batch_render_policy = capture_options.batch_render
     output_transform_value = capture_options.output_transform
