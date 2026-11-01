@@ -1728,7 +1728,14 @@ backends guide (`docs/backends.md`) carries the maturity table and links one pag
   `ValidationStatus.decisions[*]["reason"]` and the status reason counts: `replay_mismatch`,
   `parent_payload_missing`, `no_replayable_function`, `constant_producer_leaf`,
   `constant_parent_payload`, `user_intervention_replacement`, `effectful_region`,
-  `perturbation_insensitive`, `dtype_tolerance_exceeded`. `constant_producer_leaf`: replay reads a
+  `perturbation_insensitive`, `dtype_tolerance_exceeded`, `op_unclassified`,
+  `capture_inconsistent`. `op_unclassified`: an op the checker cannot classify (outside every
+  classification table, or an initializer that contaminated the forward), recorded as a failed
+  `metadata`-phase decision on that op. `capture_inconsistent`: capture records that disagree with
+  each other (a callback self-consistency failure, an equation or op count mismatch, a replay kind
+  that differs from the captured kind, a region boundary check), recorded as a failed
+  `metadata`-phase decision on the op or, for a trace-wide disagreement, on `"<trace>"`.
+  `constant_producer_leaf`: replay reads a
   constant's saved payload because there is no function to re-execute it from (counted as
   exempted; a parentless op that does have a replayable function is still replayed and a mismatch
   still fails). `constant_parent_payload`: perturbation skips a constant parent, and the consumer
