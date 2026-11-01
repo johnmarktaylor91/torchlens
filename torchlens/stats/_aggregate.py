@@ -496,7 +496,7 @@ def _model_state_allows_compiled_plan(model: nn.Module) -> bool:
         return False
 
 
-def aggregate(
+def aggregate(  # noqa: PLR0913 -- the ruled cache pair joins loss_fn= (base suppression kept)
     model: nn.Module,
     dataloader: Iterable[Any],
     metrics: Mapping[Any, StreamingStat],
