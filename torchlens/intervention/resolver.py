@@ -1272,6 +1272,10 @@ def find_sites(
         )
 
     selector = _normalize_query(query)
+    if isinstance(selector, FacetSelector):
+        # Facets resolve through the write doors and resolve_sites only; the
+        # post-hoc search refuses them with the capability message.
+        ensure_supported(selector, lifecycle="site")
     plan = resolve_site_plan(log, selector, strict=strict, require_match=False)
     matched = tuple(site for branch in plan for site in branch.sites)
     if len(matched) > max_fanout:
@@ -1767,10 +1771,10 @@ def resolve_site_plan(
     _guard_episode_step_query(trace, normalized)
     refuse_trace_alias_spellings(trace, normalized)
     resolved: list[SiteBranch] = []
-    for branch in split_site_branches(normalized):
-        branch_selector = _normalize_query(branch.selector)
-        sites = _resolve_branch_sites(trace, branch_selector, branch.universe, strict=strict)
-        resolved.append(SiteBranch(branch.universe, sites, branch.pass_filter, branch_selector))
+    for planned in split_site_branches(normalized):
+        branch_selector = _normalize_query(planned.selector)
+        sites = _resolve_branch_sites(trace, branch_selector, planned.universe, strict=strict)
+        resolved.append(SiteBranch(planned.universe, sites, planned.pass_filter, branch_selector))
     if require_match:
         if not any(branch.sites for branch in resolved):
             raise SiteResolutionError(

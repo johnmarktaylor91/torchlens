@@ -1138,10 +1138,10 @@ def _evaluate_subject(selector: BaseSelector, subject: Any, lifecycle: str) -> b
         )
     if kind == "not" and isinstance(selector, NotSelector):
         return not evaluate(selector.selector, subject, lifecycle=cast(Lifecycle, lifecycle))
-    if kind == "grad" and isinstance(selector, GradSelector):
+    if kind == "grad":
         # A gradient address belongs to the forward op its inner names; which
         # universe the match lands in is the site plan's decision.
-        return evaluate(selector.inner, subject, lifecycle=cast(Lifecycle, lifecycle))
+        return evaluate(selector.selector_value, subject, lifecycle=cast(Lifecycle, lifecycle))
 
     if kind == "label":
         _maybe_guard_label(kind, str(value), subject, lifecycle)
@@ -1414,8 +1414,8 @@ def _evaluate_grad_fn_site(selector: BaseSelector, site: Any) -> bool:
         return any(evaluate(child, site, lifecycle="site") for child in selector.selectors)
     if kind == "not" and isinstance(selector, NotSelector):
         return not evaluate(selector.selector, site, lifecycle="site")
-    if kind == "grad" and isinstance(selector, GradSelector):
-        return _evaluate_bridged(selector.inner, site)
+    if kind == "grad":
+        return _evaluate_bridged(selector.selector_value, site)
     if kind in DIRECTION_AGNOSTIC_KINDS:
         return False
     if kind in {"intervening", "without_op"}:

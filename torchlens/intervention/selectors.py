@@ -106,7 +106,7 @@ class BaseSelector:
         if not isinstance(other, str):
             return NotImplemented
         _check_composition(other, self)
-        return CompositeSelector("and", _flatten_same_operator("and", other, self))
+        return CompositeSelector("and", _flatten_same_operator("and", cast(Any, other), self))
 
     def __or__(self, other: SelectorLike) -> CompositeSelector:
         """Return a selector that matches the union of two selectors.
@@ -164,15 +164,16 @@ class BaseSelector:
                 "OR-composed followed_by selectors cannot be evaluated safely."
             )
         _check_composition(other, self, operator="or")
-        return CompositeSelector("or", _flatten_same_operator("or", other, self))
+        return CompositeSelector("or", _flatten_same_operator("or", cast(Any, other), self))
 
-    def __invert__(self) -> NotSelector:
+    def __invert__(self) -> BaseSelector:
         """Return a selector that matches the complement of this selector.
 
         Returns
         -------
-        NotSelector
-            Negated selector.
+        BaseSelector
+            Negated selector (``tl.grad`` keeps the complement inside its
+            universe and returns a gradient address).
         """
 
         from .._ir.selector_eval import contains_followed_by
@@ -2153,7 +2154,11 @@ def classify_selector_universe(sel: Any) -> SelectorUniverse | None:
         operator, children = connective
         if operator == "not":
             return classify_selector_universe(children[0])
-        universes = [classify_selector_universe(child) for child in children]
+        # A plain loop keeps one interpreter frame per nesting level, so deep
+        # deserialized trees classify as deep as they evaluate.
+        universes: list[SelectorUniverse | None] = []
+        for child in children:
+            universes.append(classify_selector_universe(child))
         if operator == "and":
             if not children:
                 return None
