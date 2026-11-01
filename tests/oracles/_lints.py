@@ -28,6 +28,7 @@ mechanics (D25) and each ships a plant. The five:
 from __future__ import annotations
 
 import ast
+import importlib
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -37,8 +38,18 @@ from ._censuses import DATA_DIR, OPTIONS_CLASS_NAMES, REPO_ROOT
 #: Entry-signature spellings whose cache-key coverage rides another name.
 CACHE_KEY_ALIASES = {"save": "save_predicate"}
 
-_DEFAULT_CLAIM_RE = re.compile(r"``([^`]+)``\s*\((?:the\s+)?default\)?")
+_DEFAULT_CLAIM_RE = re.compile(
+    r"``([^`]+)``(?:\s*\((?:the\s+)?default\)?|,\s*used when not passed)"
+)
 _PARAM_HEADER_RE = re.compile(r"^(\w+)\s*:")
+#: A bold section that names its parameter, e.g. ``**Layer selection** (``save=``, ...)``.
+_SECTION_PARAM_RE = re.compile(r"\(``(\w+)=``")
+#: Stored-convention authorities (D20) for door parameters whose signature default
+#: is the MISSING sentinel and whose constant lives outside CaptureOptions' fields.
+_STORED_CONVENTION_AUTHORITIES: dict[str, tuple[str, tuple[str, ...]]] = {
+    "save": ("torchlens.options", ("CaptureOptions", "_layers_to_save")),
+    "on_zero_fire": ("torchlens.intervention._zero_fire", ("DEFAULT_ZERO_FIRE_POLICY",)),
+}
 _BEFORE_NAME_RE = re.compile(r"(^before_|_before$|^before$)")
 
 
@@ -204,6 +215,12 @@ def _authority_default(param_name: str) -> tuple[bool, object]:
     for field in dataclasses.fields(options_module.CaptureOptions):
         if field.name == param_name and field.default is not dataclasses.MISSING:
             return True, field.default
+    if param_name in _STORED_CONVENTION_AUTHORITIES:
+        module_name, attribute_path = _STORED_CONVENTION_AUTHORITIES[param_name]
+        value: object = importlib.import_module(module_name)
+        for attribute in attribute_path:
+            value = getattr(value, attribute)
+        return True, value
     return False, None
 
 
@@ -229,6 +246,9 @@ def default_truth_findings() -> tuple[DefaultClaim, ...]:
         header = _PARAM_HEADER_RE.match(line.strip())
         if header and header.group(1) in parameters and not line.startswith(" " * 8):
             current_param = header.group(1)
+        section = _SECTION_PARAM_RE.search(line)
+        if section and section.group(1) in parameters:
+            current_param = section.group(1)
         for match in _DEFAULT_CLAIM_RE.finditer(line):
             if not current_param:
                 continue
