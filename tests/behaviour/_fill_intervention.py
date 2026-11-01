@@ -275,7 +275,15 @@ def _fire_facts(op: Any) -> list[tuple[Any, ...]]:
 
 
 def _rule_facts(recipe: Any) -> list[tuple[str, Any]]:
-    return [(repr(rule.target), rule.edit) for rule in getattr(recipe, "rules", ())]
+    """Return the comparable content of a frozen recipe: its targets, helper and fire count."""
+
+    if recipe is None:
+        return []
+    helper = getattr(getattr(recipe, "helper", None), "helper_name", None)
+    targets = [repr(target) for target in getattr(recipe, "targets", ())]
+    return [(target, helper) for target in targets] + [
+        ("records", len(getattr(recipe, "records", ())))
+    ]
 
 
 def _after_intervene(cell: Cell) -> None:
@@ -366,13 +374,10 @@ def _halve_on_fork(cell: Cell, trace: Any, what: str, label: str | None = None) 
 
 
 def _after_fork_do(cell: Cell) -> None:
-    """A fork edit halves the site, stays inside its cone, marks the op, and works on a loaded trace."""
+    """A fork edit halves the site, stays inside its cone and marks the op (loaded leg: edit_chain)."""
 
     trace = cell.require_trace()
-    label = _interior_site(cell, trace)
-    _halve_on_fork(cell, trace, "live", label)
-    if cell.loaded is not None:
-        _halve_on_fork(cell, cell.loaded, "loaded", label)
+    _halve_on_fork(cell, trace, "live", _interior_site(cell, trace))
 
 
 # --- claimed rows: bundle -----------------------------------------------------
@@ -653,11 +658,10 @@ def _after_edit_chain(cell: Cell) -> None:
     seeds = [getattr(record, "seed", None) for record in noisy_a[label].interventions or ()]
     cell.expect(3 in seeds, f"the add_noise fire record at {label} does not carry seed 3: {seeds}")
     leaf = _leaf_site(trace)
-    if leaf is None:
-        return
-    _halve_on_fork(cell, trace, "leaf site", leaf)
+    if leaf is not None:
+        _halve_on_fork(cell, trace, "leaf site", leaf)
     if cell.loaded is not None:
-        _halve_on_fork(cell, cell.loaded, "loaded leaf site", leaf)
+        _halve_on_fork(cell, cell.loaded, "loaded trace", label)
 
 
 # --- registry extension -------------------------------------------------------
