@@ -18,7 +18,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-import torchlens._capture.prepare.door as prepare_door
+import torchlens._capture.run_entry as run_entry
 
 # No import-order protection is needed here anymore: the historical
 # standalone-collection cycle between torchlens and _user_public_impls was
@@ -3077,7 +3077,7 @@ def test_validate_forward_pass_deepcopy_fallback_tripwire_still_fails(
     """Fallback plain-attr restore does not hide genuine logged-output breaks."""
 
     original_deepcopy = copy.deepcopy
-    original_run = prepare_door._run_model_and_save_specified_outs
+    original_run = run_entry._run_model_and_save_specified_outs
 
     def fail_module_deepcopy(
         value: object,
@@ -3115,7 +3115,7 @@ def test_validate_forward_pass_deepcopy_fallback_tripwire_still_fails(
             return x + float(self.step)
 
     monkeypatch.setattr(copy, "deepcopy", fail_module_deepcopy)
-    monkeypatch.setattr(prepare_door, "_run_model_and_save_specified_outs", corrupt_logged_output)
+    monkeypatch.setattr(run_entry, "_run_model_and_save_specified_outs", corrupt_logged_output)
     monkeypatch.setattr(user_funcs, "_run_model_and_save_specified_outs", corrupt_logged_output)
 
     with pytest.warns(RuntimeWarning, match="could not deepcopy the model"):

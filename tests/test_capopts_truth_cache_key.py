@@ -29,7 +29,7 @@ import torch.nn as nn
 import torchlens as tl
 import torchlens._capture.prepare.cache as prepare_cache
 import torchlens._capture.prepare.door as prepare_door
-from torchlens._user_funcs import (
+from torchlens._capture.prepare.cache import (
     CAPTURE_CACHE_KEY_CURATED,
     CAPTURE_CACHE_KEY_NEUTRAL,
 )

@@ -12,7 +12,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _user_funcs as user_funcs, _visualization
-from torchlens._capture.prepare import door as prepare_door
+from torchlens._capture import run_entry
 from torchlens.options import CaptureOptions, SaveOptions, StorageOptions, VisualizationOptions
 
 _VISUALIZATION_CASES = [
@@ -155,7 +155,7 @@ def stubbed_runner(monkeypatch: pytest.MonkeyPatch) -> tuple[dict[str, Any], _Du
         fake_run_model_and_save_specified_outs,
     )
     monkeypatch.setattr(
-        prepare_door,
+        run_entry,
         "_run_model_and_save_specified_outs",
         fake_run_model_and_save_specified_outs,
     )

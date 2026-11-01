@@ -24,7 +24,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._user_funcs import _unwrap_data_parallel
+from torchlens._capture_state_helpers import _unwrap_data_parallel
 from torchlens.options import CaptureOptions
 
 

@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens._capture.prepare.door as prepare_door
+import torchlens._capture.run_entry as run_entry
 import torchlens._user_funcs as user_funcs
 from torchlens import _visualization
 from torchlens.options import VisualizationOptions
@@ -131,7 +131,7 @@ def stubbed_runner(
     captured_calls: list[dict[str, Any]] = []
     dummy_logs: list[_DummyLog] = []
 
-    def _fake_runner(**kwargs: Any) -> _DummyLog:
+    def _fake_runner(*args: Any, **kwargs: Any) -> _DummyLog:
         """Capture runner kwargs and return a fresh dummy log.
 
         Parameters
@@ -145,6 +145,7 @@ def stubbed_runner(
             Stand-in log instance for the wrapper under test.
         """
 
+        del args
         captured_calls.append(kwargs)
         dummy_log = _DummyLog()
         dummy_log.output_device = kwargs.get("output_device", "same")
@@ -152,7 +153,7 @@ def stubbed_runner(
         dummy_logs.append(dummy_log)
         return dummy_log
 
-    monkeypatch.setattr(prepare_door, "_run_model_and_save_specified_outs", _fake_runner)
+    monkeypatch.setattr(run_entry, "_run_model_and_save_specified_outs", _fake_runner)
 
     monkeypatch.setattr(user_funcs, "_run_model_and_save_specified_outs", _fake_runner)
     return captured_calls, dummy_logs
