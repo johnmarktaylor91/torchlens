@@ -57,7 +57,7 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `prehook.py` | Pre-hook effect records |
 | `_trace_profile.py` | `ModelProfile` and the `model_profile(trace)` body behind `Trace.model_profile` |
 | `_trace_stats.py` | `TraceStatsMixin`: thin stats/view methods forwarding to `_trace_views`, `_call_tree`, `_trace_inventory`, `_trace_profile`, `_trace_stats_grad_fn_site` and the `_doors` destinations; backward-pass projection sync stays here |
-| `_trace_validation.py` | Trace validation and log-entry removal helpers |
+| `_trace_validation.py` | Trace validation, run and backward mixin: thin methods over the record-rebuild destinations, plus the log-entry removal helpers |
 | `_trace_viz.py` | Thin `Trace` visualization and summary methods; bodies live in `_visualization/_trace_draw.py` and `report/_trace_summary.py` |
 | `op.py` | `Op` two-word row facade (`_core`/`_row` over `_trace_core`), tensor save, per-pass fields |
 | `_op_transforms.py` | User-transform apply + train-mode/streaming output validation helpers (split from `op.py`; `op.py` re-exposes them) |
