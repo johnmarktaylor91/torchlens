@@ -101,10 +101,10 @@ def _unfold_record_options(
                 argument="capture",
             )
     for name in _RECORDING_DOOR_FIELDS:
-        explicit = recording is not None and recording._is_field_explicit(name)  # noqa: SLF001
+        explicit = isinstance(recording, RecordingOptions) and recording._is_field_explicit(name)  # noqa: SLF001
         flat[name] = getattr(recording, name) if explicit else MISSING
     for name in _CAPTURE_DOOR_FIELDS:
-        explicit = capture is not None and capture._is_field_explicit(name)  # noqa: SLF001
+        explicit = isinstance(capture, CaptureOptions) and capture._is_field_explicit(name)  # noqa: SLF001
         flat[name] = getattr(capture, name) if explicit else MISSING
     flat["backward_ready"] = bool(capture.backward_ready) if capture is not None else False
     # The door's former flat defaults, resolved here so the generation path

@@ -2722,7 +2722,7 @@ def trace(
         # "strict_shapes" waits on its own reviewed design and "fold_sites" on
         # an affirmative D1 ruling (the flip PR) / the episode capture kind.
         public_trace_kwargs.pop("grouping")
-        if capture is not None and capture._is_field_explicit("grouping"):
+        if isinstance(capture, CaptureOptions) and capture._is_field_explicit("grouping"):
             from ._postprocess._grouping_stamp import validate_grouping_knob
 
             validate_grouping_knob(capture.grouping)
@@ -2751,7 +2751,10 @@ def trace(
         if (
             backend is None
             and chunk_size in (MISSING, None)
-            and (capture is None or not capture._is_field_explicit("input_transform"))
+            and not (
+                isinstance(capture, CaptureOptions)
+                and capture._is_field_explicit("input_transform")
+            )
         ):
             from . import _autoroute as autoroute
 
@@ -2858,11 +2861,16 @@ def _warn_once_nonfinite_detected(trace: Trace) -> None:
 
 
 def _unfold_door_capture_fields(capture: CaptureOptions | None) -> dict[str, Any]:
-    """Return the former door keywords as flat values read from ``capture=``."""
+    """Return the former door keywords as flat values read from ``capture=``.
+
+    Only a ``CaptureOptions`` is probed: another options object passed as
+    ``capture=`` (for example a ``ReplayOptions``) contributes no field here and
+    reaches the door's typed refusal unchanged.
+    """
 
     unfolded: dict[str, Any] = {}
     for field_name, flat_default in _DOOR_CAPTURE_FLAT_DEFAULTS.items():
-        if capture is not None and capture._is_field_explicit(field_name):
+        if isinstance(capture, CaptureOptions) and capture._is_field_explicit(field_name):
             unfolded[field_name] = getattr(capture, field_name)
         else:
             unfolded[field_name] = flat_default
