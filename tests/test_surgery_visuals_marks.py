@@ -363,7 +363,7 @@ def test_highlight_interventions_census_travels_with_figure(chain_capture, tmp_p
     _model, _x, log = chain_capture
     fork = _edited_fork(log)
     outpath = str(tmp_path / "surgery_fig")
-    fork.draw(outpath, highlight="interventions", file_format="svg", vis_save_only=True)
+    fork.draw(path=outpath, highlight="interventions", file_format="svg", vis_save_only=True)
     figure = tmp_path / "surgery_fig.svg"
     sidecar = tmp_path / "surgery_fig.census.txt"
     assert figure.exists()
@@ -385,15 +385,30 @@ def test_bare_highlight_draw_writes_census_beside_written_file(
 ) -> None:
     """A bare draw picks a collision-safe name; each census lands beside its figure."""
 
+    import inspect
+
+    from torchlens._data_classes._trace_viz import TraceVisualizationMixin
+
     _model, _x, log = chain_capture
     fork = _edited_fork(log)
+    # The autouse conftest fixture gives draw() a tmp_path default path; put the
+    # shipped default (None: a bare draw picks a collision-safe name) back here.
+    draw = TraceVisualizationMixin.draw
+    positional = [
+        name
+        for name, parameter in inspect.signature(draw).parameters.items()
+        if parameter.kind is parameter.POSITIONAL_OR_KEYWORD
+    ]
+    defaults = list(draw.__defaults__ or ())
+    defaults[positional.index("path") - (len(positional) - len(defaults))] = None
+    monkeypatch.setattr(draw, "__defaults__", tuple(defaults))
     monkeypatch.chdir(tmp_path)
     fork.draw(highlight="interventions", file_format="svg", vis_save_only=True)
     fork.draw(highlight="interventions", file_format="svg", vis_save_only=True)
     figures = sorted(path.name for path in tmp_path.glob("*.svg"))
     censuses = sorted(path.name for path in tmp_path.glob("*.census.txt"))
-    assert len(figures) == 2, figures
-    assert censuses == sorted(name[: -len(".svg")] + ".census.txt" for name in figures)
+    assert figures == ["modelgraph-2.svg", "modelgraph.svg"], figures
+    assert censuses == ["modelgraph-2.census.txt", "modelgraph.census.txt"], censuses
     for census in censuses:
         assert _REPLAY_WORDING in (tmp_path / census).read_text()
 
@@ -404,7 +419,7 @@ def test_unknown_highlight_refuses_naming_allowed_values(chain_capture, tmp_path
     _model, _x, log = chain_capture
     for bad in ("intervention", "surgery", True):
         with pytest.raises(InvalidArgumentError) as excinfo:
-            log.draw(str(tmp_path / "never"), highlight=bad, vis_save_only=True)
+            log.draw(path=str(tmp_path / "never"), highlight=bad, vis_save_only=True)
         assert excinfo.value.fields["code"] == "draw_highlight_invalid"
         assert excinfo.value.fields["argument"] == "highlight"
         assert "'interventions'" in str(excinfo.value)
@@ -416,7 +431,7 @@ def test_highlight_interventions_refuses_without_audit_evidence(chain_capture, t
 
     _model, _x, log = chain_capture
     with pytest.raises(InvalidArgumentError) as excinfo:
-        log.draw(str(tmp_path / "never"), highlight="interventions", vis_save_only=True)
+        log.draw(path=str(tmp_path / "never"), highlight="interventions", vis_save_only=True)
     assert excinfo.value.fields["code"] == "surgery_evidence_missing"
     assert list(tmp_path.iterdir()) == []
 
