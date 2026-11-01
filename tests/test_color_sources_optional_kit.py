@@ -5,8 +5,6 @@ from __future__ import annotations
 import importlib
 import sys
 
-import pytest
-
 from torchlens._visualization._color_sources import _is_attribution_source
 
 
@@ -30,5 +28,5 @@ def test_missing_attribution_graph_kit_is_not_an_attribution_source(monkeypatch)
 def test_present_attribution_graph_kit_still_rejects_opaque_sources() -> None:
     """The same opaque value is not a source when the kit imports."""
 
-    pytest.importorskip("torchlens.attribution.graph")
+    importlib.import_module("torchlens.attribution.graph")
     assert _is_attribution_source(_Opaque()) is False
