@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-81 packages, 1264 modules, 620089 lines, 0 modules without a docstring.
+81 packages, 1264 modules, 620293 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -20,7 +20,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10552 |
-| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 50 | 34744 |
+| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 50 | 34743 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 21 | 10953 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5849 |
 | `torchlens._notebook` | Extras-gated notebook namespace with no public objects yet. | 9 | 2412 |
@@ -59,7 +59,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 90 | 50838 |
 | `torchlens.bridge` | External-tool bridge namespace. | 25 | 8013 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2700 |
-| `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 20 | 7787 |
+| `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 20 | 7884 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
 | `torchlens.checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 11 | 3824 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.x. | 5 | 2017 |
@@ -76,7 +76,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3005 |
 | `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 62 | 31245 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1857 |
-| `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 682 |
+| `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 790 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 328 |
 | `torchlens.mechinterp` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 26 | 8476 |
 | `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 6 | 3841 |
@@ -360,7 +360,7 @@ Extraction v2 runtime (extract memo items 4-19). (19 modules, 10552 lines)
 
 ### `torchlens._io`
 
-Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (50 modules, 34744 lines)
+Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (50 modules, 34743 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -409,7 +409,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 | `sidecar` | Namespaced typed SIDECAR families: out-of-tree persistence at L1. | 387 |
 | `state_contract` | The persisted-state contract service (ecosystem MEMO 3.3, megaplan P05). | 398 |
 | `state_keys` | Narrow class-method shadow filter for portable ''__setstate__'' loads. | 307 |
-| `streaming` | Streaming bundle writer used during forward-pass out capture. | 999 |
+| `streaming` | Streaming bundle writer used during forward-pass out capture. | 998 |
 | `streaming_async` | Bounded single-worker write pipeline behind the async streaming bundle writer. | 229 |
 | `tensor_policy` | Compatibility checks for tensors saved into portable bundles. | 163 |
 | `tlspec` | Unified ''.tlspec'' manifest writer helpers. | 1044 |
@@ -1257,17 +1257,17 @@ LIT (Google PAIR Language Interpretability Tool) bridge. (6 modules, 2700 lines)
 
 ### `torchlens.bundle`
 
-Single Bundle type for intervention-ready TorchLens model logs. (20 modules, 7787 lines)
+Single Bundle type for intervention-ready TorchLens model logs. (20 modules, 7884 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Single Bundle type for intervention-ready TorchLens model logs. | 2012 |
-| `_aligned_sites` | Cross-member site pairing for Bundle site reads. | 82 |
+| `__init__` | Single Bundle type for intervention-ready TorchLens model logs. | 2000 |
+| `_aligned_sites` | Cross-member site pairing for Bundle site reads. | 85 |
 | `_alternatives` | ''Bundle.add_alternative'': merge a steered re-run of the user's harness. | 357 |
 | `_bytes` | Bundle-level retained-bytes aggregation + retention preflight ( item 5c). | 120 |
 | `_compare_gate` | The Bundle comparison gate: two predicates, operand-scoped, topology-aware. | 382 |
 | `_comparisons` | Named per-node comparison fields stored on a bundle's supergraph. | 140 |
-| `_deltas` | Member-pairwise delta and comparison helpers for :class:'Bundle'. | 432 |
+| `_deltas` | Member-pairwise delta and comparison helpers for :class:'Bundle'. | 538 |
 | `_draw` | The one ''Bundle.draw'' door: the bundle graph and the member diff picture. | 103 |
 | `_fed_by` | The ''fed_by'' relation kind: content provenance between two traced calls. | 531 |
 | `_labels` | Label-shape heuristics behind ''Bundle.at(label)''. | 190 |
@@ -1572,12 +1572,12 @@ Aligned Super views for TorchLens intervention bundles. (5 modules, 1857 lines)
 
 ### `torchlens.intervention._topology`
 
-Topology comparison and supergraph construction for intervention bundles. (2 modules, 682 lines)
+Topology comparison and supergraph construction for intervention bundles. (2 modules, 790 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Topology comparison and supergraph construction for intervention bundles. | 19 |
-| `topology` | Topology comparison + supergraph construction for multi-trace bundles. | 663 |
+| `topology` | Topology comparison + supergraph construction for multi-trace bundles. | 771 |
 
 ### `torchlens.io`
 

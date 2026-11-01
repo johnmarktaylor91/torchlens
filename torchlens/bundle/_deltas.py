@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import torch
 
+from .._errors import InvalidArgumentError
 from ..intervention._metrics import is_scalar_like, relative_l1, resolve_metric
 from ..intervention.errors import BundleMemberError
 
@@ -61,12 +62,91 @@ def _tensor_field(layer: Any, field: Literal["out", "grad"]) -> torch.Tensor | N
     return value if isinstance(value, torch.Tensor) else None
 
 
+def _same_payload(reference: torch.Tensor, candidate: torch.Tensor) -> bool:
+    """Return whether two tensors hold the same shape, dtype and values.
+
+    NaN-aware: NaN entries count as equal when they sit at the same positions,
+    so a payload compared with itself is always the same payload.
+
+    Parameters
+    ----------
+    reference:
+        Reference tensor.
+    candidate:
+        Compared tensor.
+
+    Returns
+    -------
+    bool
+        ``True`` when the payloads are identical.
+    """
+
+    if reference.shape != candidate.shape or reference.dtype != candidate.dtype:
+        return False
+    if reference.device != candidate.device:
+        candidate = candidate.to(reference.device)
+    if not (reference.is_floating_point() or reference.is_complex()):
+        return bool(torch.equal(reference, candidate))
+    reference_nan = torch.isnan(reference)
+    if not torch.equal(reference_nan, torch.isnan(candidate)):
+        return False
+    finite_mask = ~reference_nan
+    return bool(torch.equal(reference[finite_mask], candidate[finite_mask]))
+
+
+def _finite_operands(
+    reference: torch.Tensor, candidate: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Drop the non-finite positions two operands agree on.
+
+    An additive attention mask puts ``-inf`` at the same positions of both
+    operands; a registered metric subtracts or normalises them and reads
+    ``nan`` even when every finite entry differs. When the non-finite entries
+    sit at the same positions with the same values (NaN-aware) the metric is
+    taken over the finite positions; otherwise the operands pass unchanged.
+
+    Parameters
+    ----------
+    reference:
+        Reference tensor.
+    candidate:
+        Compared tensor, same shape and dtype.
+
+    Returns
+    -------
+    tuple[torch.Tensor, torch.Tensor]
+        The operands, flattened to their shared finite positions when the
+        non-finite entries agree.
+    """
+
+    if not (reference.is_floating_point() or reference.is_complex()):
+        return reference, candidate
+    finite = torch.isfinite(reference)
+    if bool(finite.all()):
+        return reference, candidate
+    if reference.device != candidate.device:
+        candidate = candidate.to(reference.device)
+    if not torch.equal(finite, torch.isfinite(candidate)):
+        return reference, candidate
+    if not _same_payload(reference[~finite], candidate[~finite]):
+        return reference, candidate
+    return reference[finite], candidate[finite]
+
+
 def _distance_value(
     reference: torch.Tensor,
     candidate: torch.Tensor,
     metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+    *,
+    site: str | None = None,
 ) -> float:
     """Return a Python float distance between two tensors.
+
+    Under a registered metric, identical payloads read ``0.0`` without
+    evaluating it and non-finite entries the operands agree on (an additive
+    ``-inf`` attention mask) are left out (see :func:`_finite_operands`); a
+    user callable is evaluated as given. Operands of different shapes refuse
+    (typed) instead of being compared flattened or failing inside torch.
 
     Parameters
     ----------
@@ -76,19 +156,42 @@ def _distance_value(
         Compared tensor.
     metric:
         Metric name or callable.
+    site:
+        Site label named by the shape refusal, when known.
 
     Returns
     -------
     float
         Scalar distance.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``code="metric_shape_mismatch"`` on different shapes (a 0-d and a
+        1-element tensor still compare as scalars).
     """
 
     metric_fn = resolve_metric(metric)
-    value = (
-        relative_l1(reference, candidate)
-        if is_scalar_like(reference) and is_scalar_like(candidate)
-        else metric_fn(reference, candidate)
-    )
+    scalar_pair = is_scalar_like(reference) and is_scalar_like(candidate)
+    if not scalar_pair and reference.shape != candidate.shape:
+        metric_name = getattr(metric_fn, "__name__", None) or _metric_label(metric)
+        raise InvalidArgumentError(
+            f"Bundle comparison at site {site!r} under {metric_name} received shapes "
+            f"{tuple(reference.shape)} and {tuple(candidate.shape)}",
+            code="metric_shape_mismatch",
+            remedy=(
+                "compare members whose aligned sites hold the same shape; a "
+                "shape-changing edit has no element-wise distance at that site"
+            ),
+            site=site,
+            reference_shape=tuple(reference.shape),
+            candidate_shape=tuple(candidate.shape),
+        )
+    if isinstance(metric, str):
+        if _same_payload(reference, candidate):
+            return 0.0
+        reference, candidate = _finite_operands(reference, candidate)
+    value = relative_l1(reference, candidate) if scalar_pair else metric_fn(reference, candidate)
     return float(value.detach().item())
 
 
@@ -215,6 +318,7 @@ def _delta_map_values(
                     reference,
                     candidate,
                     metric,
+                    site=graph_node_label,
                 )
             )
         if values:
@@ -341,7 +445,9 @@ def _output_delta_values(
                 continue
             label = str(getattr(target_layer, "layer_label", f"output_{output_index}"))
             output_values[label] = (
-                0.0 if member_name == target_name else _distance_value(reference, candidate, metric)
+                0.0
+                if member_name == target_name
+                else _distance_value(reference, candidate, metric, site=label)
             )
         result[member_name] = output_values
     return result

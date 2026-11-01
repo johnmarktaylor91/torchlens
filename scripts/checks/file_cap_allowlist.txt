@@ -309,7 +309,7 @@ torchlens/_io/scrub.py::_scrub_nondeterministic_identities	219
 torchlens/_io/scrub.py::scrub_for_save	110
 torchlens/_io/sidecar.py::register_sidecar_family	97
 torchlens/_io/state_contract.py::inspect_state_contract	108
-torchlens/_io/streaming.py	999
+torchlens/_io/streaming.py	998
 torchlens/_io/streaming.py::BundleStreamWriter.__init__	84
 torchlens/_io/streaming.py::BundleStreamWriter._validate_blob_submission	62
 torchlens/_io/streaming.py::BundleStreamWriter.publish_staged	78
@@ -498,7 +498,6 @@ torchlens/_selection/do_plan.py::_build_selection_do_plan	91
 torchlens/_selection/resolver.py	1121
 torchlens/_selection/selection.py	1731
 torchlens/_selection/selection.py::_resolve_facet_term	64
-torchlens/_selection/selection.py::_resolve_unit_term	66
 torchlens/_selection/selectors.py	1713
 torchlens/_selection/selectors.py::SiteSelector.__init__	77
 torchlens/_selection/subspace.py::subspace	92
@@ -1081,8 +1080,8 @@ torchlens/bridge/shap.py::explain	68
 torchlens/bridge/transformers.py	804
 torchlens/bridge/transformers.py::_resolve_image_preprocessing	62
 torchlens/bridge/transformers.py::trace_text	67
-torchlens/bundle/__init__.py	2012
-torchlens/bundle/__init__.py::Bundle.rank_changes	83
+torchlens/bundle/__init__.py	2000
+torchlens/bundle/__init__.py::Bundle.rank_changes	78
 torchlens/bundle/_alternatives.py::_bundle_add_alternative	63
 torchlens/bundle/_compare_gate.py::require_comparable	143
 torchlens/bundle/_lineage.py::validate_member_construction	77
@@ -1198,7 +1197,7 @@ torchlens/intervention/_subspace_edits.py::subspace_ablate	90
 torchlens/intervention/_subspace_spec.py::rebuild_subspace_edit	71
 torchlens/intervention/_super/_base.py::_TensorBearing._require_immutable_param_evidence	64
 torchlens/intervention/_topology/topology.py::_find_alignment	70
-torchlens/intervention/_topology/topology.py::build_supergraph	127
+torchlens/intervention/_topology/topology.py::build_supergraph	108
 torchlens/intervention/audit.py::build_fire_record	71
 torchlens/intervention/audit.py::record_intervention_event	152
 torchlens/intervention/binding.py	1576

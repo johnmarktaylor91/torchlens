@@ -103,3 +103,11 @@ def test_bundle_draw_refuses_an_unknown_graph_kind() -> None:
         _pair().draw(graph="sideways")
     assert caught.value.code == "bundle_draw_graph_invalid"
     assert caught.value.fields.get("argument") == "graph"
+
+
+def test_bundle_draw_refuses_an_unknown_graph_typed() -> None:
+    """``graph=`` outside forward/backward/combined/diff refuses before any rendering."""
+    bundle = _pair()
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        bundle.draw(graph="sideways", open_viewer=False)
+    assert excinfo.value.fields["code"] == "bundle_draw_graph_invalid"
