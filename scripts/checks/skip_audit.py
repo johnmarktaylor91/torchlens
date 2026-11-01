@@ -116,7 +116,6 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "pytest 9.2+ structured node ids (tests/test_xdist_groups.py); the pin allows"
         " pytest 8, but CI resolves 9.2+, and the restamp plugin is not needed on 8",
     ),
-    "brainscore_core": (OPTIONAL_PREVIEW, "neuro extra (brain-score dist)"),
     "brainscore_core.metrics": (
         OPTIONAL_PREVIEW,
         "brainscore extra; the real Score object whose raw and ceiling attrs "
@@ -193,7 +192,6 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
     "jax.lax": (OPTIONAL_PREVIEW, "jax extra"),
     "jax.numpy": (OPTIONAL_PREVIEW, "jax extra"),
     "jax.random": (OPTIONAL_PREVIEW, "jax extra"),
-    "jupyter_client": (OPTIONAL_PREVIEW, "notebook extra"),
     "jsonschema": (
         UNAVAILABLE_OK,
         "dev-tooling dependency (pre-commit config validation); the agent schema "
@@ -370,6 +368,7 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
 DYNAMIC_IMPORTORSKIP_SITES = frozenset(
     {
         "test_backend_registry.py",  # importorskips the registry's own dependency map
+        "test_subfolder_imports.py",  # importorskips each subfolder's declared optional deps
     }
 )
 

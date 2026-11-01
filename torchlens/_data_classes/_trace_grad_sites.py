@@ -456,7 +456,7 @@ def _lower_label_leaves(trace: Trace, site: Any) -> Any:
     if (isinstance(site, str) or kind == "label") and isinstance(value, str):
         if looks_like_finalized_label(value):
             fanout = len(trace.layer_list) + 1
-            ops = trace.resolve_sites(value, max_fanout=fanout)
+            ops = trace._resolve_sites(value, max_fanout=fanout)
             raw = [getattr(op, "_layer_label_raw", None) for op in ops]
             names = [name for name in raw if isinstance(name, str)]
             if names and len(names) == len(raw):

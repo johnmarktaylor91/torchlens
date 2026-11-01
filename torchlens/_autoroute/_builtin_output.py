@@ -9,11 +9,8 @@ from typing import Any, NoReturn
 import torch
 
 from torchlens._autoroute._decode_spellings import (
-    HEAD_AMBIGUOUS_CODE,
     HEAD_KW,
-    HEAD_UNKNOWN_CODE,
     STYLE_KW,
-    STYLE_UNKNOWN_CODE,
     TOKENIZER_KW,
     UNDETECTED_REMEDY,
 )
@@ -209,7 +206,7 @@ def decode_trace_output(
         raise InvalidArgumentError(
             f"{HEAD_KW}={head!r} is not an output head of this trace; "
             f"available heads: {heads_text}",
-            code=HEAD_UNKNOWN_CODE,
+            code="decode_head_unknown",
             remedy=f"pass one of the available heads as {HEAD_KW}=",
             argument=HEAD_KW,
             available_heads=list(heads),
@@ -225,7 +222,7 @@ def decode_trace_output(
         raise InvalidArgumentError(
             f"several output heads qualify for {STYLE_KW}={resolved.style!r} and none was "
             f"named; available heads: {heads_text}",
-            code=HEAD_AMBIGUOUS_CODE,
+            code="decode_head_ambiguous",
             remedy=f"pass {HEAD_KW}= naming one of the available heads",
             argument=HEAD_KW,
             available_heads=list(heads),
@@ -237,7 +234,7 @@ def decode_trace_output(
             raise InvalidArgumentError(
                 f"{STYLE_KW}='hf_text' needs a tokenizer with a decode method and rank-2 or "
                 "rank-3 logits",
-                code=STYLE_UNKNOWN_CODE,
+                code="decode_style_unknown",
                 remedy=f"pass {TOKENIZER_KW}= the model's tokenizer",
                 argument=TOKENIZER_KW,
             )
@@ -433,7 +430,7 @@ def refuse_unknown_decode_style(style: Any) -> NoReturn:
         raise DecodeStyleUnknownError(
             "no output detector resolved a decode style from the retained outputs. "
             f"Built-in styles: {', '.join(BUILTIN_OUTPUT_STYLES)}.",
-            code=STYLE_UNKNOWN_CODE,
+            code="decode_style_unknown",
             remedy=f"pass {STYLE_KW}= a built-in style or a registered custom style",
             argument=STYLE_KW,
         )
@@ -442,7 +439,7 @@ def refuse_unknown_decode_style(style: Any) -> NoReturn:
     raise DecodeStyleUnknownError(
         f"unknown {STYLE_KW}={style!r}{hint}; no built-in or registered custom output "
         f"detector resolved it. Built-in styles: {', '.join(BUILTIN_OUTPUT_STYLES)}.",
-        code=STYLE_UNKNOWN_CODE,
+        code="decode_style_unknown",
         remedy=(
             "pass a built-in style, or register a custom detector that resolves it "
             "with tl._autoroute.output.register(...)"

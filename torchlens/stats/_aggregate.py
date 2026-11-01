@@ -675,7 +675,7 @@ def _site_value(log: Any, name: str, site: Any) -> Any:
         return _metric_value_from_log(log, name)
     gradient = is_gradient_site(site)
     target = getattr(site, "inner", site) if gradient else site
-    matches = log.resolve_sites(target, max_fanout=max(1, len(log.layer_list)))
+    matches = log._resolve_sites(target, max_fanout=max(1, len(log.layer_list)))
     if not matches:
         raise KeyError(f"No site matched metric {name!r}.")
     _warn_on_ambiguous_metric_match(name, list(matches))

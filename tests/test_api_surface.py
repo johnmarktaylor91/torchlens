@@ -184,7 +184,7 @@ def test_all_matches_frozen_target_ledger() -> None:
     The decided-surface rename moves `AmbiguousOpLookupError` and
     `ReentrantTraceError` to `tl.errors`, and the visuals-and-kits rename moves
     `aggregate` to `tl.stats.aggregate`. With every area's renames, moves and
-    removals merged, the total is 87. The gradient-sites change adds `grad`
+    removals merged, the total is 83. The gradient-sites change adds `grad`
     and `clip_norm` and removes `zero_grad`, `scale_grad`, `clamp_grad`,
     `add_grad_noise`, `clip_grad` and `hook_grad` = 83.
     Paper-era compatibility shims remain available through ``__getattr__`` but

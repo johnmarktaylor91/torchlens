@@ -32,11 +32,6 @@ from torchlens.intervention.types import TargetSpec
 
 _X = torch.randn(3, 4, generator=torch.Generator().manual_seed(7))
 
-requires_grad_sites = pytest.mark.skipif(
-    not hasattr(tl, "grad"),
-    reason="needs tl.grad and the output-gradient mount; runs on the integrated branch",
-)
-
 
 class _BranchNet(nn.Module):
     """``fc2(relu(fc1(x)))`` plus a side branch the loss never uses."""
@@ -395,7 +390,6 @@ def _loss(result: Any) -> torch.Tensor:
 _RELU = tl.func("relu")
 
 
-@requires_grad_sites
 def test_do_gradient_site_returns_an_armed_rerun() -> None:  # A19
     model = _BranchNet()
     source = _trace(model, backward_ready=True)
@@ -414,7 +408,6 @@ def test_do_gradient_site_returns_an_armed_rerun() -> None:  # A19
     assert repr(source.recipe) == recipe_before
 
 
-@requires_grad_sites
 def test_backward_settles_the_armed_row_per_pass() -> None:  # A20
     model = _BranchNet()
     source = _trace(model, backward_ready=True)
@@ -435,7 +428,6 @@ def test_backward_settles_the_armed_row_per_pass() -> None:  # A20
     assert rows[0] == snapshot
 
 
-@requires_grad_sites
 def test_loss_runs_the_backward_inside_do() -> None:  # A21
     model = _BranchNet()
     source = _trace(model, backward_ready=True, save_grads="all")
@@ -447,7 +439,6 @@ def test_loss_runs_the_backward_inside_do() -> None:  # A21
     assert result.intervention_audit[-1]["status"] == "fired"
 
 
-@requires_grad_sites
 def test_failing_loss_writes_error_and_detaches_this_dos_hooks() -> None:  # A23
     model = _BranchNet()
     source = _trace(model, backward_ready=True)
@@ -465,7 +456,6 @@ def test_failing_loss_writes_error_and_detaches_this_dos_hooks() -> None:  # A23
     assert _events(source, status="error")
 
 
-@requires_grad_sites
 def test_mixed_plan_edits_the_activation_then_the_gradient() -> None:  # A24
     model = _BranchNet()
     source = _trace(model, backward_ready=True, save_grads="all")
@@ -480,7 +470,6 @@ def test_mixed_plan_edits_the_activation_then_the_gradient() -> None:  # A24
     assert _events(result, door="backward", status="fired")
 
 
-@requires_grad_sites
 def test_set_only_arms_in_place_and_fires_on_this_trace() -> None:  # A25
     model = _BranchNet()
     trace = _trace(model, backward_ready=True)
@@ -498,7 +487,6 @@ def test_set_only_arms_in_place_and_fires_on_this_trace() -> None:  # A25
     assert _events(trace, door="backward", status="fired")
 
 
-@requires_grad_sites
 def test_rerun_forces_backward_readiness_and_discloses_it() -> None:  # A26
     model = _BranchNet()
     unready = tl.trace(model, _X, capture=tl.options.CaptureOptions(intervention_ready=True))
@@ -510,7 +498,6 @@ def test_rerun_forces_backward_readiness_and_discloses_it() -> None:  # A26
     assert armed.last_run.get("backward_ready_forced", False) is False
 
 
-@requires_grad_sites
 def test_unreached_and_pass_filtered_gradient_sites_settle_no_fire() -> None:  # A27
     model = _BranchNet()
     source = _trace(model, backward_ready=True, save_grads="all")
@@ -529,7 +516,6 @@ def test_unreached_and_pass_filtered_gradient_sites_settle_no_fire() -> None:  #
     assert row["no_fire_reason"] == "pass_filtered"
 
 
-@requires_grad_sites
 def test_saved_armed_result_keeps_its_armed_row(tmp_path: Any) -> None:  # A30
     model = _BranchNet()
     source = _trace(model, backward_ready=True)
@@ -544,7 +530,6 @@ def test_saved_armed_result_keeps_its_armed_row(tmp_path: Any) -> None:  # A30
         loaded.backward(torch.tensor(1.0, requires_grad=True) * 2)
 
 
-@requires_grad_sites
 def test_attach_hooks_on_a_gradient_site_registers_only() -> None:
     model = _BranchNet()
     trace = _trace(model, backward_ready=True)
@@ -556,7 +541,6 @@ def test_attach_hooks_on_a_gradient_site_registers_only() -> None:
     assert trace.armed_edits == ()
 
 
-@requires_grad_sites
 def test_saved_recipe_round_trips_the_grad_target() -> None:  # A31
     rule = tl.when(tl.grad("relu_1_2"), tl.scale(0)).rules[0]
     assert rule.signal == "backward"

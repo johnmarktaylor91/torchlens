@@ -20,11 +20,6 @@ from torch import nn
 import torchlens as tl
 from torchlens.intervention.types import TargetSpec
 
-requires_grad_sites = pytest.mark.skipif(
-    not hasattr(tl, "grad"),
-    reason="needs tl.grad and the output-gradient mount; runs on the integrated branch",
-)
-
 
 def _ctx(signal: str, label: str = "relu_1_2", **kwargs: Any) -> Any:
     return SimpleNamespace(signal=signal, op={"layer_label": label}, kwargs=kwargs)
@@ -100,7 +95,6 @@ def _relu_label(model: nn.Module) -> str:
     return next(str(op.layer_label) for op in trace.layer_list if op.func_name == "relu")
 
 
-@requires_grad_sites
 def test_tap_on_a_gradient_site_records_backward_fires() -> None:  # A29
     model = _Net()
     relu = _relu_label(model)
@@ -118,7 +112,6 @@ def test_tap_on_a_gradient_site_records_backward_fires() -> None:  # A29
     assert record.backward_call_index is not None
 
 
-@requires_grad_sites
 def test_tap_on_a_mixed_site_records_both_passes() -> None:  # A29
     model = _Net()
     relu = _relu_label(model)

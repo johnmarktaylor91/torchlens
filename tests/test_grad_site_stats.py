@@ -20,11 +20,6 @@ from torch import nn
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 
-requires_grad_sites = pytest.mark.skipif(
-    not hasattr(tl, "grad"),
-    reason="needs tl.grad and the output-gradient mount; runs on the integrated branch",
-)
-
 
 class _Net(nn.Module):
     def __init__(self) -> None:
@@ -104,7 +99,6 @@ def _loss(member: Any) -> torch.Tensor:
     return member[member.output_layers[0]].out.sum()
 
 
-@requires_grad_sites
 def test_sweep_gradient_site_with_loss_runs_every_backward() -> None:  # A32
     model = _Net()
     bundle = tl.sweep(
@@ -128,7 +122,6 @@ def test_sweep_gradient_site_with_loss_runs_every_backward() -> None:  # A32
     assert torch.allclose(members["half"][fc1].grad, 0.5 * base)
 
 
-@requires_grad_sites
 def test_sweep_gradient_site_without_loss_stays_armed() -> None:  # A32
     model = _Net()
     bundle = tl.sweep(
@@ -147,7 +140,6 @@ def test_sweep_gradient_site_without_loss_stays_armed() -> None:  # A32
     assert envelopes[-1]["status"] == "armed"
 
 
-@requires_grad_sites
 def test_aggregate_measures_activation_and_gradient_of_one_site() -> None:  # A32
     model = _Net()
     relu = _relu_label(model)

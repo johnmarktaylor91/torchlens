@@ -1,6 +1,6 @@
 ## Known Gotchas
 
-- Frame filters identify TorchLens's own frames through `torchlens.utils._package_frames.is_torchlens_code`
+- Frame filters identify TorchLens's own frames through `torchlens._utils._package_frames.is_torchlens_code`
   (a memoised normalised-filename comparison), never a raw `co_filename` prefix test. The import
   system spells a filename the way it joined it: a `sys.path` entry of `.` (for example
   `PYTHONPATH=.`) leaves `/./` in every TorchLens filename, and a raw prefix test then kept hundreds

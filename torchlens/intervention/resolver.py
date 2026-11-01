@@ -1746,7 +1746,7 @@ def resolve_site_plan(
         Whether to reject non-portable query forms.
     require_match:
         Whether a plan matching no site at all refuses (the door rule; the
-        zero-match refusal recommends ``find_sites``) and a bare multi-pass
+        zero-match refusal recommends ``trace[selector]``) and a bare multi-pass
         label refuses as at the activation door. ``find_sites`` passes False.
 
     Returns

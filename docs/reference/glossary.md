@@ -1177,9 +1177,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : A tensor edit is a function of one tensor and the site decides which tensor, so the neutral
   edits apply to activation and gradient sites alike: `tl.scale`, `tl.zero_ablate`, `tl.clamp`,
   `tl.add_noise`, `torchlens.intervention.scramble_elements`, `tl.steer`, `tl.project_onto`,
-  `tl.project_out`, `tl.replace_with`, `tl.swap_with` with a fixed tensor donor, `tl.clip_norm`,
+  `tl.project_out`, `tl.replace_with`, `swap_with` with a fixed tensor donor, `tl.clip_norm`,
   and any callable `fn(tensor, *, ctx)`; their `Edit.signal` is `None`. Edits that read recorded
-  forward state (`tl.patch_from`, `tl.mean_ablate`, `tl.splice_module`, `tl.swap_with` with a
+  forward state (`tl.patch_from`, `tl.mean_ablate`, `tl.splice_module`, `swap_with` with a
   site or trace donor; `Edit.signal == "forward"`) refuse on a gradient site with
   `edit_signal_mismatch` at attach time, before any mutation. There are no gradient-only helpers:
   `trace.do(tl.grad("relu_3"), tl.zero_ablate(), model=model, inputs=x)` zeroes a gradient.

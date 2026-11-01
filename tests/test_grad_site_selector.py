@@ -73,7 +73,6 @@ def _code(exc: pytest.ExceptionInfo[BaseException]) -> str:
     return str(fields.get("code"))
 
 
-@pytest.mark.smoke
 def test_grad_selector_identity_hash_and_repr() -> None:
     """A1: tl.grad is a hashable, value-equal GradSelector with a constructor repr."""
 
@@ -130,10 +129,10 @@ def test_grad_unmatched_inner_refuses_like_the_activation_door() -> None:
 
     trace = _trace()
     with pytest.raises(tl.errors.SiteResolutionError, match="matched 0 sites") as bare:
-        trace.resolve_sites(tl.label("no_such_op"))
+        trace._resolve_sites(tl.label("no_such_op"))
     with pytest.raises(tl.errors.SiteResolutionError, match="matched 0 sites") as grad:
-        trace.resolve_sites(tl.grad(tl.label("no_such_op")))
-    assert "find_sites" in str(bare.value) and "find_sites" in str(grad.value)
+        trace._resolve_sites(tl.grad(tl.label("no_such_op")))
+    assert "trace[selector]" in str(bare.value) and "trace[selector]" in str(grad.value)
 
 
 @pytest.mark.smoke_cells("test_grad_construction_refusals[nested]")
@@ -351,7 +350,7 @@ def test_bare_label_never_resolves_in_the_backward_universe() -> None:
     plan = resolve_site_plan(trace, first_relu)
     assert [branch.universe for branch in plan] == ["activation"]
     assert all(type(site).__name__ != "GradFn" for site in plan[0].sites)
-    table = trace.resolve_sites(tl.label(first_relu))
+    table = trace._resolve_sites(tl.label(first_relu))
     assert [site.label for site in table] == [trace[first_relu].label]
 
     grad_fns = trace.find_sites(tl.grad_fn(label="relu"), max_fanout=100)
