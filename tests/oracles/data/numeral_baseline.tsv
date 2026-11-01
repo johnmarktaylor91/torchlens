@@ -6639,7 +6639,6 @@ package-docstrings	torchlens/validation/_invariants_connectivity.py	12
 package-docstrings	torchlens/validation/_invariants_connectivity.py	121,
 package-docstrings	torchlens/validation/_invariants_connectivity.py	16,
 package-docstrings	torchlens/validation/_invariants_connectivity.py	18,
-package-docstrings	torchlens/validation/_invariants_connectivity.py	31
 package-docstrings	torchlens/validation/_invariants_equivalence.py	18,
 package-docstrings	torchlens/validation/_invariants_equivalence.py	19,
 package-docstrings	torchlens/validation/_invariants_equivalence.py	25,
@@ -6651,6 +6650,7 @@ package-docstrings	torchlens/validation/_invariants_equivalence.py	50
 package-docstrings	torchlens/validation/_invariants_equivalence.py	50,
 package-docstrings	torchlens/validation/_invariants_equivalence.py	51
 package-docstrings	torchlens/validation/_invariants_equivalence.py	59
+package-docstrings	torchlens/validation/_invariants_parentless.py	31
 package-docstrings	torchlens/validation/_invariants_payloads.py	75
 package-docstrings	torchlens/validation/_invariants_topology.py	20
 package-docstrings	torchlens/validation/_invariants_topology.py	26
