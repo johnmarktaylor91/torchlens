@@ -3778,18 +3778,42 @@
  {
   "ambiguous": false,
   "field": "_edge_uses",
-  "file": "torchlens/backends/jax/backend.py",
-  "has_default": false,
+  "file": "torchlens/backends/jax/_trace_graph_helpers.py",
+  "has_default": true,
   "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/backends/jax/_trace_graph_helpers.py",
+  "has_default": false,
+  "sites": 2,
   "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/backends/jax/_trace_graph_helpers.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/backends/jax/_trace_graph_helpers.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
  },
  {
   "ambiguous": false,
   "field": "_edge_uses",
   "file": "torchlens/backends/jax/backend.py",
-  "has_default": true,
+  "has_default": false,
   "sites": 1,
-  "via_getattr": true
+  "via_getattr": false
  },
  {
   "ambiguous": false,
@@ -3804,7 +3828,7 @@
   "field": "kind",
   "file": "torchlens/backends/jax/backend.py",
   "has_default": false,
-  "sites": 9,
+  "sites": 7,
   "via_getattr": false
  },
  {
@@ -3864,28 +3888,12 @@
   "via_getattr": false
  },
  {
-  "ambiguous": false,
-  "field": "parent_arg_positions",
-  "file": "torchlens/backends/jax/backend.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
   "ambiguous": true,
   "field": "parents",
   "file": "torchlens/backends/jax/backend.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/backends/jax/backend.py",
-  "has_default": true,
-  "sites": 2,
-  "via_getattr": true
  },
  {
   "ambiguous": false,
@@ -3938,9 +3946,57 @@
  {
   "ambiguous": false,
   "field": "func_call_id",
+  "file": "torchlens/backends/mlx/_grad_oracle.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "layer_type",
+  "file": "torchlens/backends/mlx/_grad_oracle.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/backends/mlx/_grad_oracle.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/backends/mlx/_grad_oracle.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "func_call_id",
+  "file": "torchlens/backends/mlx/_tap_observers.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "step_index",
+  "file": "torchlens/backends/mlx/_tap_observers.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "func_call_id",
   "file": "torchlens/backends/mlx/backend.py",
   "has_default": false,
-  "sites": 6,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -3948,7 +4004,7 @@
   "field": "label_raw",
   "file": "torchlens/backends/mlx/backend.py",
   "has_default": false,
-  "sites": 12,
+  "sites": 11,
   "via_getattr": false
  },
  {
@@ -3956,7 +4012,7 @@
   "field": "layer_type",
   "file": "torchlens/backends/mlx/backend.py",
   "has_default": false,
-  "sites": 5,
+  "sites": 4,
   "via_getattr": false
  },
  {
@@ -3969,27 +4025,11 @@
  },
  {
   "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/backends/mlx/backend.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": true,
   "field": "params",
   "file": "torchlens/backends/mlx/backend.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/backends/mlx/backend.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
  },
  {
   "ambiguous": false,
@@ -3998,14 +4038,6 @@
   "has_default": false,
   "sites": 6,
   "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "step_index",
-  "file": "torchlens/backends/mlx/backend.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
  },
  {
   "ambiguous": false,
@@ -4137,14 +4169,6 @@
  },
  {
   "ambiguous": true,
-  "field": "params",
-  "file": "torchlens/backends/paddle/backend.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
   "field": "parents",
   "file": "torchlens/backends/paddle/backend.py",
   "has_default": true,
@@ -4189,6 +4213,14 @@
   "file": "torchlens/backends/paddle/constants_rule.py",
   "has_default": false,
   "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/backends/paddle/derived_grads.py",
+  "has_default": false,
+  "sites": 1,
   "via_getattr": false
  },
  {
