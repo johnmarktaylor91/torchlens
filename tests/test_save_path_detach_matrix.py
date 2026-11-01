@@ -144,7 +144,7 @@ def _inputs(seed: int) -> torch.Tensor:
 
 
 _SAVES: dict[str, Callable[[], Any]] = {
-    "save_all": lambda: None,
+    "save_all": lambda: "all",
     "module": lambda: tl.module("layer1") | tl.module(_SITE),
     "in_module": lambda: tl.in_module("layer1") | tl.in_module(_SITE),
 }
