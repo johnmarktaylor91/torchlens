@@ -223,7 +223,7 @@ SUITE = [
     # at its size ceiling; they stay in the arming suite they were scored in.
     "tests/test_validation_perturbation_units.py",
     # Step-18 (streamed-bundle finalization) killers: the executor family's
-    # first sample campaign proved _should_run_step_18 forced-False survived
+    # first sample campaign proved _should_run_finalize_streamed_bundle forced-False survived
     # every file below (r7 R74; no suite file streamed to disk). Removing
     # this file resurrects a PROVEN survivor.
     "tests/test_streaming_finalization_arming.py",
@@ -251,16 +251,16 @@ SUITE = [
     "tests/test_oracle_independence.py",
     # r7 R74 (opus, PROVEN suite-composition artifacts): 2 of 4 sampled
     # executor survivors were killed by tests OUTSIDE this suite --
-    # _run_step_16_5 (graph_shape_hash) by six surface-oracle byte params,
-    # _run_step_20 (_release_param_refs) by the outcome-characterization
+    # _run_hash_graph_shape (graph_shape_hash) by six surface-oracle byte params,
+    # _run_release_param_refs (_release_param_refs) by the outcome-characterization
     # planted-propagation test. The weekly executor leg was structurally red
     # on non-defects; score the real killers instead of writing duplicates.
     "tests/surface_oracle/test_surface_oracle.py",
     "tests/test_capture_outcome_characterization.py",
     # W2 executor killers (lane L3 triage step 21, 2026-10-01): the bucket-name
     # golden pins every _vtimed-wrapped step's timing bucket on a default
-    # capture, so a whole-function return-None disarm of _run_step_11_5,
-    # _run_step_11_75, _run_step_12, or _run_step_16_5 drops its bucket from
+    # capture, so a whole-function return-None disarm of _run_populate_source_var_names,
+    # _run_resolve_deferred_retention, _run_undecorate_saved_tensors, or _run_hash_graph_shape drops its bucket from
     # the set and fails the exact-equality assert. Step 17.5 is deliberately
     # unwrapped by _vtimed (and declares no op-store writes), so its own
     # direct killer is test_step17_5_adopts_container_records_before_the_
@@ -269,8 +269,8 @@ SUITE = [
     # axis either way), so their killer asserts the eviction effect directly
     # on a streaming capture.
     "tests/test_postprocess_executor.py::test_phase_timing_bucket_names_default_capture",
-    "tests/test_postprocess_executor.py::test_step17_5_adopts_container_records_before_the_registry_clears",
-    "tests/test_postprocess_executor.py::test_step19_and_gate_evict_streamed_outs_from_memory",
+    "tests/test_postprocess_executor.py::test_adopt_containers_step_adopts_records_before_the_registry_clears",
+    "tests/test_postprocess_executor.py::test_evict_streamed_outs_step_and_gate_evict_from_memory",
     # W3 exempt killers (X02, X07): direct negative-case calls already proved
     # the data parent/destination must stay strictly perturbed; they lived
     # outside this suite. X05/X06 killers are in test_bug_fixes_phase14.py.
@@ -544,13 +544,13 @@ def derive_executor_mutants(sandbox: Path) -> dict[str, tuple[str, str, str]]:
     """One skip mutant per postprocess-executor step and gate predicate.
 
     r7 R74 (sol b9 HIGH): the census never targeted
-    ``postprocess/_executor.py`` -- 25 ``_run_step_*`` bodies plus the
-    conditional ``_should_run_step_*`` predicates had NO mutation verdict,
-    even though R74 explicitly scopes ``postprocess/``. DERIVED from the
-    module's defs (like the registry family), so a new step enrolls itself:
-    a ``_run_step_*`` neuters to ``return None`` (the step silently skips)
-    and a ``_should_run_step_*`` to ``return False`` (the gate never fires).
-    Import/collection errors stay ERROR verdicts, never kills.
+    ``postprocess/_executor.py`` -- the 25 ``_run_<step name>`` bodies plus
+    the conditional ``_should_run_<step name>`` predicates had NO mutation
+    verdict, even though R74 explicitly scopes ``postprocess/``. DERIVED from
+    the module's defs (like the registry family), so a new step enrolls
+    itself: a ``_run_*`` body neuters to ``return None`` (the step silently
+    skips) and a ``_should_run_*`` predicate to ``return False`` (the gate
+    never fires). Import/collection errors stay ERROR verdicts, never kills.
     """
 
     rel = "torchlens/_postprocess/_executor.py"
@@ -559,10 +559,10 @@ def derive_executor_mutants(sandbox: Path) -> dict[str, tuple[str, str, str]]:
     for node in tree.body:
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        if node.name.startswith("_run_step_"):
-            mutants[f"executor#{node.name}"] = (rel, node.name, "None")
-        elif node.name.startswith("_should_run_step_"):
+        if node.name.startswith("_should_run_"):
             mutants[f"executor#{node.name}"] = (rel, node.name, "False")
+        elif node.name.startswith("_run_") and node.name != "_run_pipeline":
+            mutants[f"executor#{node.name}"] = (rel, node.name, "None")
     if len(mutants) < 20:
         raise SystemExit(
             f"executor derivation found only {len(mutants)} step functions in "
