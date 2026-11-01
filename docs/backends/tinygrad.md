@@ -55,9 +55,14 @@ with a `code` from the shared registry before any framework side effect:
 from torchlens.errors import BackendUnsupportedError
 
 try:
-    tl.trace(mlp, x, backend="tinygrad", random_seed=0)
+    tl.trace(
+        mlp,
+        x,
+        backend="tinygrad",
+        capture=tl.options.CaptureOptions(module_identity_mode="nope"),
+    )
 except BackendUnsupportedError as error:
-    print(error.code)        # "explicit_seed_unsupported"
+    print(error.code)        # "module_identity_mode_unsupported"
 ```
 
 Capture realizes the forward once: after the forward returns, every recorded value and
