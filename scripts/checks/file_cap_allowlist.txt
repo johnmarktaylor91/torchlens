@@ -318,7 +318,6 @@ torchlens/_io/scrub.py::_rebuild_tuple_value	67
 torchlens/_io/scrub.py::_scrub_field	62
 torchlens/_io/scrub.py::_scrub_nondeterministic_identities	220
 torchlens/_io/scrub.py::_scrub_value	400
-torchlens/_io/scrub.py::_small_raw_value	63
 torchlens/_io/scrub.py::scrub_for_save	111
 torchlens/_io/sidecar.py::register_sidecar_family	97
 torchlens/_io/state_contract.py::inspect_state_contract	108

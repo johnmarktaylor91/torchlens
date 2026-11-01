@@ -4070,6 +4070,7 @@ package-docstrings	torchlens/_io/_safe_unpickle.py	88
 package-docstrings	torchlens/_io/_save_gates.py	3.2
 package-docstrings	torchlens/_io/_save_gates.py	4.3
 package-docstrings	torchlens/_io/_save_gates.py	43
+package-docstrings	torchlens/_io/_small_raw.py	256
 package-docstrings	torchlens/_io/_torch_symbols.py	42
 package-docstrings	torchlens/_io/_torch_symbols.py	45
 package-docstrings	torchlens/_io/_torch_symbols.py	47
@@ -4166,7 +4167,6 @@ package-docstrings	torchlens/_io/scrub.py	10
 package-docstrings	torchlens/_io/scrub.py	1041
 package-docstrings	torchlens/_io/scrub.py	2026
 package-docstrings	torchlens/_io/scrub.py	21
-package-docstrings	torchlens/_io/scrub.py	256
 package-docstrings	torchlens/_io/scrub.py	68
 package-docstrings	torchlens/_io/scrub.py	69
 package-docstrings	torchlens/_io/sidecar.py	14
@@ -4421,6 +4421,7 @@ package-docstrings	torchlens/_postprocess/__init__.py	20
 package-docstrings	torchlens/_postprocess/__init__.py	20,
 package-docstrings	torchlens/_postprocess/__init__.py	256
 package-docstrings	torchlens/_postprocess/_buffer_addresses.py	83
+package-docstrings	torchlens/_postprocess/_conditional_records.py	24
 package-docstrings	torchlens/_postprocess/_executor.py	10
 package-docstrings	torchlens/_postprocess/_executor.py	11
 package-docstrings	torchlens/_postprocess/_executor.py	11,
@@ -4478,7 +4479,6 @@ package-docstrings	torchlens/_postprocess/finalization.py	18,
 package-docstrings	torchlens/_postprocess/finalization.py	19
 package-docstrings	torchlens/_postprocess/finalization.py	20
 package-docstrings	torchlens/_postprocess/finalization.py	21.
-package-docstrings	torchlens/_postprocess/finalization.py	24
 package-docstrings	torchlens/_postprocess/finalization.py	52
 package-docstrings	torchlens/_postprocess/finalization.py	64
 package-docstrings	torchlens/_postprocess/finalization.py	78
