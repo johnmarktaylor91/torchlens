@@ -78,6 +78,8 @@ torchlens/_data_classes/_lookup_keys.py::_give_user_feedback_about_lookup_key	80
 torchlens/_data_classes/_nonfinite.py	885
 torchlens/_data_classes/_op_dedup.py::_dedup_cached_identity_out	66
 torchlens/_data_classes/_op_dedup.py::_dedup_saved_activation_out	109
+torchlens/_data_classes/_op_save.py::_log_tensor_grad	104
+torchlens/_data_classes/_op_save.py::save_activation	171
 torchlens/_data_classes/_op_transforms.py::validate_train_mode_transform_output	65
 torchlens/_data_classes/_schema_bindings.py	1029
 torchlens/_data_classes/_trace_export.py::TraceExportMixin.decode_output	65
@@ -129,11 +131,9 @@ torchlens/_data_classes/module.py	2723
 torchlens/_data_classes/module.py::Module.__init__	210
 torchlens/_data_classes/module.py::ModuleCall.__init__	129
 torchlens/_data_classes/module.py::ModuleCall.__setstate__	61
-torchlens/_data_classes/op.py	4699
+torchlens/_data_classes/op.py	3635
 torchlens/_data_classes/op.py::Op.__getattribute__	96
 torchlens/_data_classes/op.py::Op.__init__	96
-torchlens/_data_classes/op.py::Op._log_tensor_grad	104
-torchlens/_data_classes/op.py::Op.save_activation	173
 torchlens/_data_classes/op.py::_pool_container_cells	88
 torchlens/_data_classes/op.py::_pool_container_members	74
 torchlens/_data_classes/param.py	1083
