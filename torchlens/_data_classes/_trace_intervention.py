@@ -52,6 +52,35 @@ __all__ = [
 _ARMING_GROUP_KEY = "arming_group"
 #: HookSpec metadata naming the ``do`` arming row (``None`` for attach_hooks).
 _ARMING_EVENT_KEY = "arming_event_id"
+#: Arming group of the sticky backward hooks a capture-time ``intervene=``
+#: staged (marked ``created_by`` by the capture door); their arming row is the
+#: capture's own envelope (``door="trace"``).
+_CAPTURE_ARMING_GROUP = "capture"
+_CAPTURE_HOOK_MARK = "intervene_backward_selector"
+
+
+def _arming_group(hook_spec: Any) -> str | None:
+    """Return the arming group of one sticky hook, or ``None`` for a forward hook."""
+
+    group = hook_spec.metadata.get(_ARMING_GROUP_KEY)
+    if group is not None:
+        return str(group)
+    if hook_spec.metadata.get("created_by") == _CAPTURE_HOOK_MARK:
+        return _CAPTURE_ARMING_GROUP
+    return None
+
+
+def _arming_event_id(trace: Any, hook_spec: Any) -> str | None:
+    """Return the arming row id of one gradient rule (the capture envelope for capture rules)."""
+
+    event_id = hook_spec.metadata.get(_ARMING_EVENT_KEY)
+    if event_id is not None or _arming_group(hook_spec) != _CAPTURE_ARMING_GROUP:
+        return None if event_id is None else str(event_id)
+    for row in getattr(trace, "state_history", ()):
+        if isinstance(row, dict) and row.get("op") == "intervention_event":
+            if row.get("door") == "trace":
+                return str(row.get("event_id"))
+    return None
 
 
 class _DoTransaction(NamedTuple):
@@ -1245,7 +1274,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             return ()
         rules: list[Any] = []
         for hook_spec in spec.hook_specs:
-            if _ARMING_GROUP_KEY not in hook_spec.metadata:
+            if _arming_group(hook_spec) is None:
                 continue
             edit = hook_spec.helper if hook_spec.helper is not None else hook_spec.hook
             target = normalize_selector_like(hook_spec.site_target, lifecycle="site")
@@ -1287,7 +1316,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         hook_specs = [
             hook_spec
             for hook_spec in (spec.hook_specs if spec is not None else ())
-            if _ARMING_GROUP_KEY in hook_spec.metadata
+            if _arming_group(hook_spec) is not None
         ]
         if not hook_specs:
             return None
@@ -1299,11 +1328,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             and row.get("door") == "backward"
             and row.get("status") == "fired"
         }
-        return sum(
-            1
-            for hook_spec in hook_specs
-            if str(hook_spec.metadata[_ARMING_GROUP_KEY]) not in fired_groups
-        )
+        return sum(1 for hook_spec in hook_specs if _arming_group(hook_spec) not in fired_groups)
 
     def _refresh_armed_annotation(self: "Trace") -> None:
         """Keep ``annotations["armed_gradient_edits"]`` equal to the unfired count.
@@ -2461,7 +2486,7 @@ def settle_armed_gradient_edits(trace: Any, *, pass_index: int) -> None:
         return
     groups: dict[str, list[Any]] = {}
     for hook_spec in getattr(spec, "hook_specs", ()):
-        group = hook_spec.metadata.get(_ARMING_GROUP_KEY)
+        group = _arming_group(hook_spec)
         if group is not None:
             groups.setdefault(str(group), []).append(hook_spec)
     if not groups:
@@ -2491,10 +2516,10 @@ def _settle_arming_group(
     from ..intervention.audit import record_intervention_event, site_keys_for_labels
 
     fires = [record for record in pass_records if _record_belongs_to(record, hook_specs)]
-    arming_event_id = hook_specs[0].metadata.get(_ARMING_EVENT_KEY)
+    arming_event_id = _arming_event_id(trace, hook_specs[0])
     extra: dict[str, Any] = {
         "arming_event_id": arming_event_id,
-        "arming_group": hook_specs[0].metadata.get(_ARMING_GROUP_KEY),
+        "arming_group": _arming_group(hook_specs[0]),
         "backward_pass_index": pass_index,
     }
     if arming_event_id is not None:
