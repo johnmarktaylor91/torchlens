@@ -48,7 +48,9 @@ def _assert_code(exc: BackendUnsupportedError, expected: str) -> None:
     assert exc.fields["code"] == expected
 
 
-def _spec(false_flag: str | None, trace_options: tuple[str, ...] = ()) -> Any:
+def _spec(
+    false_flag: str | None, trace_options: tuple[str, ...] = (), name: str = "fake_preview"
+) -> Any:
     """A spec stand-in whose boolean capability flags are True except ``false_flag``."""
 
     flags = {
@@ -57,7 +59,7 @@ def _spec(false_flag: str | None, trace_options: tuple[str, ...] = ()) -> Any:
         if field.type in ("bool", bool)
     }
     capabilities = SimpleNamespace(**flags, trace_options=trace_options)
-    return SimpleNamespace(name="fake_preview", capabilities=capabilities)
+    return SimpleNamespace(name=name, capabilities=capabilities)
 
 
 @pytest.mark.parametrize(("option", "flag"), sorted(TRACE_OPTION_CAPABILITY_GATES.items()))
@@ -110,6 +112,26 @@ def test_default_backend_early_refusal_is_coded() -> None:
         tl.trace(_Counts(), torch.ones(2), jax_static_argnums=(0,))
     _assert_code(excinfo.value, _OPTION_CODE)
     assert not calls
+
+
+@pytest.mark.parametrize("backend_name", ["torch", "fake_preview"])
+def test_record_capability_gate_raises_the_fastlog_code(
+    backend_name: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``tl.record`` refuses a backend whose ``fastlog`` flag is False with its code."""
+
+    import torch
+
+    import torchlens as tl
+    from torchlens.fastlog import _record_one_shot
+
+    monkeypatch.setattr(
+        _record_one_shot, "get_backend_spec", lambda name: _spec("fastlog", name=backend_name)
+    )
+    with pytest.raises(BackendUnsupportedError) as excinfo:
+        tl.record(torch.nn.Identity(), torch.ones(2), backend=backend_name)
+    _assert_code(excinfo.value, refusal_code_for_capability("fastlog"))
+    assert excinfo.value.fields["backend"] == backend_name
 
 
 def _policy(**messages: Any) -> PreviewTraceOptionPolicy:
