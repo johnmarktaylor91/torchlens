@@ -110,7 +110,7 @@ def _safe_visualizer_filename(label: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", label.replace(":", "pass")).strip("_") or "layer"
 
 
-def finish_trace(result: ForwardResult, request: CaptureRequest) -> Trace:
+def finish_trace(result: "ForwardResult", request: "CaptureRequest") -> Trace:
     """Return the finished trace of one door call.
 
     Seam entry: the door epilogue still runs inline at the end of
