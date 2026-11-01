@@ -309,7 +309,7 @@ def trace_text(
     finally:
         if had_tokenizer:
             model._torchlens_output_tokenizer = previous_tokenizer
-        elif hasattr(model, "_torchlens_output_tokenizer"):
+        elif not structure_only:
             delattr(model, "_torchlens_output_tokenizer")
     log.input_preprocessor = _tokenizer_preprocessing_record(
         tok,
