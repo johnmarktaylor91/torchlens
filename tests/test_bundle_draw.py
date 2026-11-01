@@ -13,6 +13,7 @@ Pins here:
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -39,14 +40,18 @@ class _Large(_Small):
 
 
 @pytest.fixture(scope="module")
-def bundle() -> tl.Bundle:
+def bundle() -> Iterator[tl.Bundle]:
     """Two members that differ by one ReLU."""
 
     torch.manual_seed(0)
     x = torch.randn(1, 3)
-    return tl.Bundle(
-        {"small": tl.trace(_Small(), x), "large": tl.trace(_Large(), x)}, baseline="small"
-    )
+    small = tl.trace(_Small(), x)
+    large = tl.trace(_Large(), x)
+    try:
+        yield tl.Bundle({"small": small, "large": large}, baseline="small")
+    finally:
+        small.cleanup()
+        large.cleanup()
 
 
 def test_draw_format_follows_the_path_extension(bundle: tl.Bundle, tmp_path: Path) -> None:
