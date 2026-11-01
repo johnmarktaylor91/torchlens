@@ -46,6 +46,7 @@ from .settle import (
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
     from ...recording._halt import StopSignal
+    from ..session import CaptureSession
     from ..stages import ForwardResult
 
 
@@ -175,7 +176,7 @@ def _complete_recorder_path(result: ForwardResult) -> Any:
     back off the trace and pop them immediately.
     """
     trace, backend, outputs = result.trace, result.backend, result.raw_output
-    capture_session = result.session
+    capture_session = cast("CaptureSession", result.session)
     output_tensors_any, output_tensor_addresses = backend.extract_and_mark_outputs(trace, outputs)
     trace._fastlog_output_tensors = list(output_tensors_any)
     trace._fastlog_output_tensor_addresses = output_tensor_addresses
@@ -196,7 +197,7 @@ def _complete_recorder_path(result: ForwardResult) -> Any:
 def _complete_trace_path(result: ForwardResult) -> Any:
     """Finish a completed forward that materializes the ``Trace`` now (the door path)."""
     trace, backend, outputs = result.trace, result.backend, result.raw_output
-    capture_session = result.session
+    capture_session = cast("CaptureSession", result.session)
     output_tensors_any, output_tensor_addresses = backend.extract_and_mark_outputs(trace, outputs)
     output_tensors = list(output_tensors_any)
     trace.__dict__.pop("_output_attribution_input_tensors", None)

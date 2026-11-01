@@ -7,7 +7,6 @@ torchlens/__init__.py::_extract_layers_with_trace	66
 torchlens/_capture/_episode_coupling.py::attest_coupling	86
 torchlens/_capture/_episode_derivation.py::_derive_step_column	91
 torchlens/_capture/_episode_derivation.py::_licensed_positions	65
-torchlens/_capture/_episode_fold.py::derive_episode_status	103
 torchlens/_capture/_episode_join.py	1306
 torchlens/_capture/_episode_join.py::settle_step_join	61
 torchlens/_capture/_episode_ledger.py	1997
@@ -23,15 +22,12 @@ torchlens/_capture/_input_records.py::_get_op_nums_from_user_labels	70
 torchlens/_capture/_input_records.py::_record_runnable_input_literal_leaves	82
 torchlens/_capture/_input_records.py::_record_runnable_input_tensor_sites	78
 torchlens/_capture/_input_records.py::_register_model_input_container_snapshots	80
-torchlens/_capture/_nonfinite_prefix.py::maybe_finalize_nonfinite_prefix	100
 torchlens/_capture/_plan_check.py::check_plan	84
 torchlens/_capture/_structure_only_bridge.py::compute_bound_state_digests	69
 torchlens/_capture/_structure_only_entry.py::_refuse_structure_only_conflicts	68
 torchlens/_capture/_weightsfree_admission.py::_absorbed_ambient_device_context	69
 torchlens/_capture/arg_positions.py	2638
 torchlens/_capture/arg_positions.py::_cache_dynamic_spec	96
-torchlens/_capture/finalize/settle.py::_finalize_halted_trace	74
-torchlens/_capture/finalize/settle.py::save_new_outs	185
 torchlens/_capture/flops.py	1942
 torchlens/_capture/flops.py::_einsum_flops	93
 torchlens/_capture/predicates.py::build_op_record_context	109

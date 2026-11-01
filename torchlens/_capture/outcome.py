@@ -22,7 +22,7 @@ from __future__ import annotations
 import traceback
 import warnings
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeGuard
 
 from ..errors import CaptureError
 from ._outcome_payload import (
@@ -403,7 +403,9 @@ def settle_halted(
     )
 
 
-def _is_clean_nonfinite_abort(stop_request: Any, exc: BaseException, interrupted: bool) -> bool:
+def _is_clean_nonfinite_abort(
+    stop_request: Any, exc: BaseException, interrupted: bool
+) -> TypeGuard[StopRequest]:
     """Return whether ``exc`` is the exact latched nonfinite abort (ABORTED_NONFINITE)."""
 
     return (

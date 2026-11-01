@@ -15,7 +15,7 @@ import re
 import warnings
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ..._data_classes._preprocessing_provenance import stamp_user_transform_provenance
 from ..._data_classes.trace import (
@@ -160,7 +160,7 @@ def finish_trace(result: ForwardResult, request: CaptureRequest) -> Trace:
     input_transform = plan.get("input_transform")
     if input_transform is not None:
         stamp_user_transform_provenance(trace, input_transform)
-    trace.profile_enabled = plan.get("profile_enabled")
+    trace.profile_enabled = cast("bool", plan.get("profile_enabled"))
     trace.save_grads = plan.get("save_grads_policy")
     if plan.get("uses_selective_layers_to_save"):
         _restrict_layer_nums_to_saved(trace, bool(plan.get("save_args")))

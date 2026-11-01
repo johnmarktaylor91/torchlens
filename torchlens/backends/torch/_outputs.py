@@ -118,12 +118,16 @@ def _retain_output_parent_payloads(
     trace: Trace,
     event: OpEvent,
     tensor: torch.Tensor,
-    spec: CaptureSpec,
-    intent: StorageIntent,
-    output_device: str | None,
+    storage: tuple[StorageIntent, str | None, CaptureSpec],
     ctx: Any,
 ) -> tuple[Any, Any, Any, PortableBlobRef | None, PortableBlobRef | None]:
-    """Admit, resolve and persist the promoted output-parent payloads."""
+    """Admit, resolve and persist the promoted output-parent payloads.
+
+    ``storage`` is the ``(intent, output_device, spec)`` triple from
+    ``_output_parent_storage_intent``.
+    """
+
+    intent, output_device, spec = storage
 
     from ...recording._storage_resolver import _resolve_storage
 
@@ -174,13 +178,22 @@ def _retain_output_parent_payloads(
 def _output_parent_output_ref(
     event: OpEvent,
     tensor: torch.Tensor,
-    ram_payload: Any,
-    transformed_ram_payload: Any,
-    transformed_disk_payload: Any,
-    raw_blob_ref: PortableBlobRef | None,
-    transformed_blob_ref: PortableBlobRef | None,
+    retained: tuple[Any, Any, Any, PortableBlobRef | None, PortableBlobRef | None],
 ) -> OutputRef:
-    """Rebind the event output to the retained output-parent payload refs."""
+    """Rebind the event output to the retained output-parent payload refs.
+
+    ``retained`` is the ``(ram_payload, transformed_ram_payload,
+    transformed_disk_payload, raw_blob_ref, transformed_blob_ref)`` tuple
+    from ``_retain_output_parent_payloads``.
+    """
+
+    (
+        ram_payload,
+        transformed_ram_payload,
+        transformed_disk_payload,
+        raw_blob_ref,
+        transformed_blob_ref,
+    ) = retained
 
     tensor_ref = dataclasses.replace(
         event.output.tensor,
@@ -258,23 +271,10 @@ def _promote_layers_to_save_output_parent(
     from ..._capture.projections import _record_context_from_event
 
     ctx = dataclasses.replace(_record_context_from_event(event), is_output_parent=True)
-    intent, output_device, spec = _output_parent_storage_intent(trace)
-    (
-        ram_payload,
-        transformed_ram_payload,
-        transformed_disk_payload,
-        raw_blob_ref,
-        transformed_blob_ref,
-    ) = _retain_output_parent_payloads(trace, event, tensor, spec, intent, output_device, ctx)
-    output_ref = _output_parent_output_ref(
-        event,
-        tensor,
-        ram_payload,
-        transformed_ram_payload,
-        transformed_disk_payload,
-        raw_blob_ref,
-        transformed_blob_ref,
-    )
+    storage = _output_parent_storage_intent(trace)
+    retained = _retain_output_parent_payloads(trace, event, tensor, storage, ctx)
+    output_ref = _output_parent_output_ref(event, tensor, retained)
+    spec = storage[2]
     policy = dataclasses.replace(event.policy, save_payload=True)
     return output_ref, policy, True, spec
 
