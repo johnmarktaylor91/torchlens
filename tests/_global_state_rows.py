@@ -1438,6 +1438,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/transformer/_wording.py", "__all__"),
         ("torchlens/types.py", "__all__"),
         ("torchlens/_utils/__init__.py", "__all__"),
+        ("torchlens/_utils/rng/__init__.py", "__all__"),
         ("torchlens/_utils/_multipass_access.py", "__all__"),
         ("torchlens/_utils/_torch_compat.py", "__all__"),
         ("torchlens/_utils/env_flags.py", "__all__"),

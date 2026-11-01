@@ -1597,6 +1597,7 @@ _NESTED_HOLDER_PROBE = """
 import sys
 import numpy as np
 from torchlens._utils import rng as rng_utils
+from torchlens._utils.rng import inventory_types as rng_inventory_types
 
 if not rng_inventory_types._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST:
     print("PROBE_SKIP: numpy build emits c_call for RNG draw methods")
