@@ -1,4 +1,4 @@
-"""Honest persistence of a trace's staged intervention spec.
+"""Refuse the legacy rerun of a loaded trace whose recorded values were intervened.
 
 ``Trace._intervention_spec`` is session-only (``FieldPolicy.DROP``): an
 ordinary save keeps the INTERVENED activations and their per-op provenance

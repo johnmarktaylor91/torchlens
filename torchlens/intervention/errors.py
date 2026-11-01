@@ -6,43 +6,25 @@ from .._errors import KeywordConflictError
 from .._selection.errors import (
     AmbiguousSiteError as AmbiguousSiteError,
     BindingPreflightError as BindingPreflightError,
+    InterventionWarning as InterventionWarning,
+    MultiMatchWarning as MultiMatchWarning,
     SelectionError as SelectionError,
     SelectorCapabilityError as SelectorCapabilityError,
     SelectorCompositionError as SelectorCompositionError,
     SiteResolutionError as SiteResolutionError,
     UnclassifiedSelectorError as UnclassifiedSelectorError,
+    _message_from_fields,
 )
 from ..errors._base import (
     CaptureError,
     CompatibilityError,
     ConfigurationError,
     InterventionError,
-    TorchLensWarning,
     ValidationError,
 )
 
 Severity = Literal["recoverable", "informational", "fatal"]
 """Public severity tag values for the intervention error catalog."""
-
-
-def _message_from_fields(class_name: str, fields: dict[str, object]) -> str:
-    """Format named constructor payloads into a stable fallback message.
-
-    Parameters
-    ----------
-    class_name:
-        Name of the error or warning class being constructed.
-    fields:
-        Named payload values supplied by the caller.
-
-    Returns
-    -------
-    str
-        Stable message containing every cited variable.
-    """
-
-    rendered = ", ".join(f"{key}={value!r}" for key, value in fields.items())
-    return f"{class_name}: {rendered}."
 
 
 class TorchLensInterventionError(InterventionError, RuntimeError):
@@ -78,39 +60,6 @@ class TorchLensInterventionError(InterventionError, RuntimeError):
             super().__init__()
 
 
-class InterventionWarning(TorchLensWarning):
-    """Base class for TorchLens intervention warnings."""
-
-    severity: Severity = "informational"
-
-    def __init__(self, *args: object, **fields: object) -> None:
-        """Initialize an intervention warning with message text or named fields.
-
-        Parameters
-        ----------
-        *args:
-            Existing positional message arguments.
-        **fields:
-            Named payload fields for catalog warnings with variable context.
-        """
-
-        if args and fields:
-            raise KeywordConflictError(
-                "Use either positional message args or named warning fields, not both",
-                code="error_constructor_args_conflict",
-                remedy="pass a message OR named fields when constructing this warning",
-            )
-        self.fields = dict(fields)
-        if fields:
-            super().__init__(_message_from_fields(type(self).__name__, self.fields))
-        elif len(args) > 1:
-            super().__init__(", ".join(str(arg) for arg in args))
-        elif args:
-            super().__init__(str(args[0]))
-        else:
-            super().__init__()
-
-
 class InterventionReadyConflictError(ConfigurationError, ValueError):
     """Raised when intervention-ready capture is requested with unsupported options."""
 
@@ -129,10 +78,6 @@ class DirectWriteIgnoredWarning(InterventionWarning):
 
 class InterventionAuditWarning(InterventionWarning):
     """Warning for non-canonical intervention state in audit contexts."""
-
-
-class MultiMatchWarning(InterventionWarning):
-    """Informational warning for selector queries that resolve multiple sites."""
 
 
 class PendingValueEditsWarning(InterventionWarning):

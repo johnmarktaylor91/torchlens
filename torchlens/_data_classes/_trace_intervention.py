@@ -26,6 +26,7 @@ else:
     _TraceMixinBase = object
 from .._errors import InvalidArgumentError
 from .._trace_state import TraceState
+from ..intervention.errors import EngineDispatchError
 from ..intervention.types import (
     FrozenInterventionSpec,
     InterventionSpec,
@@ -734,8 +735,6 @@ class TraceInterventionMixin(_TraceMixinBase):
             This model log after the selected propagation engine runs.
         """
 
-        from ..intervention.errors import EngineDispatchError
-
         engine_value = intervention_options.engine
         confirm_mutation_value = intervention_options.confirm_mutation
         strict_value = intervention_options.strict
@@ -1021,8 +1020,6 @@ class TraceInterventionMixin(_TraceMixinBase):
         EngineDispatchError
             If the engine cannot be inferred from an incomplete model/input pair.
         """
-
-        from ..intervention.errors import EngineDispatchError
 
         if engine != "auto":
             if engine == "rerun" and (model is None or x is None):
@@ -1382,7 +1379,6 @@ class TraceInterventionMixin(_TraceMixinBase):
 
         from .._selection.do_plan import build_selection_do_plan
         from .._selection.selection import _lift
-        from ..intervention.errors import EngineDispatchError
 
         lifted = _lift(selection)
         if lifted is not None and lifted.kind == "EDGE":

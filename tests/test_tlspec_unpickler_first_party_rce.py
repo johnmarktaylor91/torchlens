@@ -38,8 +38,8 @@ import torchlens._utils as tlutils
 from torchlens._io import ArtifactError
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
 from torchlens._utils._callable_safety import is_inert_first_party_callable
+from torchlens.intervention._spec_values import _resolve_import_ref
 from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.intervention.save import _resolve_import_ref
 from torchlens.options import CaptureOptions
 
 _CAP = CaptureOptions(

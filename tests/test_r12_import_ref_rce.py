@@ -33,12 +33,9 @@ import torch
 from example_models import TinyReluAdd as _ReluModel
 
 import torchlens as tl
+from torchlens.intervention._spec_values import LazyImportRef, _resolve_import_ref
 from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.intervention.save import (
-    LazyImportRef,
-    _resolve_import_ref,
-    load_intervention_spec,
-)
+from torchlens.intervention.save import load_intervention_spec
 
 
 def _write_evil_module(tmp_path: Path, sentinel: Path) -> str:
@@ -263,8 +260,9 @@ def test_lazy_import_ref_resaves_as_import_ref() -> None:
     legitimately saved executable -- without ever needing to import anything.
     """
 
+    from torchlens.intervention._spec_values import _serialize_callable
     from torchlens.intervention.errors import OpaqueCallableError
-    from torchlens.intervention.save import SaveLevel, _serialize_callable
+    from torchlens.intervention.save import SaveLevel
 
     ref = LazyImportRef("my_trusted_module:my_fn")
     payload = _serialize_callable(ref, SaveLevel.EXECUTABLE_WITH_CALLABLES)

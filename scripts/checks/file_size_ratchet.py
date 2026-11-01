@@ -538,12 +538,6 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # forks.11 FK5 midpoint-composed the rolled channel and deleted the tuned
     # head/tail placement classes.
     "torchlens/_visualization/_render_edges.py": 2100,
-    # Re-keyed 2400 -> 2300 at the C03 fix cycle (2026-08-27): the site-key-first
-    # compat checker (check_spec_compat + SpecCompat/TargetManifestDiff and its
-    # private helpers) moved to intervention/spec_compat.py, decomposed under
-    # the complexity ratchet; save.py re-exports the public names. Ceilings
-    # follow files down (R43-F2); save.py stays on the debloat-pass list.
-    "torchlens/intervention/save.py": 2300,
     # Raised 2400 -> 2425 at the facet-cache persistence fix (2026-08-17): the
     # +22 lines are the TEACHING half of the completeness refusal -- for an
     # undeclared `_<name>_cache` cell backed by a public property it now names

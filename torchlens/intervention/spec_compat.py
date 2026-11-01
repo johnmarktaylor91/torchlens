@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, NamedTuple
 
 from .._selection.resolver import _resolve_sites, _site_record, _SiteTable
+from ._spec_codec import _target_spec_from_json
 from .errors import GraphShapeMismatchError, SiteResolutionError
 from .types import InterventionSpec
 
@@ -138,8 +139,6 @@ class _EntryFacts(NamedTuple):
 
 def _resolve_entry(new_log: Any, entry: dict[str, Any], graph_hash: Any) -> _EntryFacts:
     """Resolve one manifest entry's selector on the new log (pure lookup)."""
-
-    from .save import _target_spec_from_json
 
     saved_labels = list(entry.get("resolved_labels", []))
     saved_keys_raw = entry.get("resolved_site_keys")

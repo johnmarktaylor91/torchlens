@@ -7962,7 +7962,7 @@
  {
   "ambiguous": false,
   "field": "intervention_replaced",
-  "file": "torchlens/intervention/_staged_spec_persistence.py",
+  "file": "torchlens/intervention/_intervened_rerun_guard.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true

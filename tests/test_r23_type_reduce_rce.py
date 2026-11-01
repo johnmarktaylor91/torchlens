@@ -4,7 +4,7 @@ The r22 fix positive-allowlisted first-party CALLABLES, but the bundle
 ``metadata.pkl`` unpickler still admitted ANY ``torchlens.*`` TYPE unconditionally
 ("reconstruction path, never invoked with attacker args"). That premise is FALSE: a
 pickle ``REDUCE`` INVOKES the admitted type (or its reconstructed instance) with
-attacker arguments. ``torchlens.intervention.save.LazyImportRef`` is a frozen
+attacker arguments. ``torchlens.intervention._spec_values.LazyImportRef`` is a frozen
 dataclass whose ``__call__`` resolves an ARBITRARY import path under a trust flag
 read from its OWN pickled field, so a crafted ``metadata.pkl`` reconstructs
 ``LazyImportRef(import_path="os:system", trust_custom_callables=True)`` and
@@ -44,8 +44,8 @@ import torchlens._utils as tlutils
 from torchlens._io import ArtifactError
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
 from torchlens.intervention._resolver_registry import resolve_import_ref
+from torchlens.intervention._spec_values import LazyImportRef
 from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.intervention.save import LazyImportRef
 from torchlens.options import CaptureOptions
 
 _CAP = CaptureOptions(

@@ -35,16 +35,16 @@ from torchlens.intervention._metrics import (
     is_scalar_like,
     relative_l1,
 )
-from torchlens.intervention.errors import NonExecutableSpecError, UntrustedCallableError
-from torchlens.intervention.helpers import Edit, helper_from_serialized
-from torchlens.intervention.save import (
+from torchlens.intervention._spec_values import (
     LazyImportRef,
-    SaveLevel,
     _deserialize_value,
     _resolve_import_ref,
     _serialize_value,
     _SerializedState,
 )
+from torchlens.intervention.errors import NonExecutableSpecError, UntrustedCallableError
+from torchlens.intervention.helpers import Edit, helper_from_serialized
+from torchlens.intervention.save import SaveLevel
 
 
 def _new_state() -> _SerializedState:

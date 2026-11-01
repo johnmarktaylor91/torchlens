@@ -1009,7 +1009,7 @@ class TraceValidationMixin(_TraceMixinBase):
                 argument="save",
             )
         _refuse_state_compromised_live_run(self)
-        from ..intervention._staged_spec_persistence import (
+        from ..intervention._intervened_rerun_guard import (
             refuse_unpersisted_intervention_rerun,
         )
 

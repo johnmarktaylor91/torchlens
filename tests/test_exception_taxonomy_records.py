@@ -225,8 +225,8 @@ def test_intervention_doors_carry_codes_and_remedies() -> None:
     """Converted intervention-family doors expose codes and remedies."""
 
     from torchlens.intervention._resolver_registry import resolve_import_ref
+    from torchlens.intervention._spec_codec import _validate_format_version
     from torchlens.intervention.errors import ReplayPreconditionError
-    from torchlens.intervention.save import _validate_format_version
 
     with pytest.raises(errors.TorchLensError) as exc_info:
         ReplayPreconditionError("message", selector="both")  # args + fields conflict

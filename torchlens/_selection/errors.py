@@ -9,10 +9,12 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from .._errors import _actionable_message
-from ..errors._base import ConfigurationError
+from .._errors import KeywordConflictError, _actionable_message
+from ..errors._base import ConfigurationError, Severity, TorchLensWarning
 
 __all__ = [
+    "InterventionWarning",
+    "MultiMatchWarning",
     "AmbiguousSiteError",
     "BindingPreflightError",
     "SelectionError",
@@ -21,6 +23,26 @@ __all__ = [
     "SiteResolutionError",
     "UnclassifiedSelectorError",
 ]
+
+
+def _message_from_fields(class_name: str, fields: dict[str, object]) -> str:
+    """Format named constructor payloads into a stable fallback message.
+
+    Parameters
+    ----------
+    class_name:
+        Name of the error or warning class being constructed.
+    fields:
+        Named payload values supplied by the caller.
+
+    Returns
+    -------
+    str
+        Stable message containing every cited variable.
+    """
+
+    rendered = ", ".join(f"{key}={value!r}" for key, value in fields.items())
+    return f"{class_name}: {rendered}."
 
 
 class SelectionError(ConfigurationError, ValueError):
@@ -103,3 +125,40 @@ class UnclassifiedSelectorError(SiteResolutionError):
 
 class AmbiguousSiteError(SiteResolutionError):
     """Raised when a site query resolves too many sites for the surface."""
+
+
+class InterventionWarning(TorchLensWarning):
+    """Base class for TorchLens intervention warnings."""
+
+    severity: Severity = "informational"
+
+    def __init__(self, *args: object, **fields: object) -> None:
+        """Initialize an intervention warning with message text or named fields.
+
+        Parameters
+        ----------
+        *args:
+            Existing positional message arguments.
+        **fields:
+            Named payload fields for catalog warnings with variable context.
+        """
+
+        if args and fields:
+            raise KeywordConflictError(
+                "Use either positional message args or named warning fields, not both",
+                code="error_constructor_args_conflict",
+                remedy="pass a message OR named fields when constructing this warning",
+            )
+        self.fields = dict(fields)
+        if fields:
+            super().__init__(_message_from_fields(type(self).__name__, self.fields))
+        elif len(args) > 1:
+            super().__init__(", ".join(str(arg) for arg in args))
+        elif args:
+            super().__init__(str(args[0]))
+        else:
+            super().__init__()
+
+
+class MultiMatchWarning(InterventionWarning):
+    """Informational warning for selector queries that resolve multiple sites."""

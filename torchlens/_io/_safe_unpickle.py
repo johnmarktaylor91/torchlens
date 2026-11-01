@@ -26,7 +26,7 @@ Allowlist policy (fail-closed):
   ``torchlens._utils._callable_safety.is_inert_first_party_callable``. A torchlens
   ``type`` is NO LONGER admitted unconditionally: a pickle ``REDUCE`` INVOKES the
   admitted type (or its reconstructed instance) with attacker args, so an
-  import-sink type such as ``torchlens.intervention.save.LazyImportRef`` (whose
+  import-sink type such as ``torchlens.intervention._spec_values.LazyImportRef`` (whose
   ``__call__`` resolves an arbitrary import path from its own pickled field) is a
   load-time RCE and is DENIED by the default-deny type allowlist. Trust is
   decided by the resolved object's real module, never the pickled path, so a key
@@ -827,7 +827,7 @@ def _is_torchlens_appliance_module(module: str) -> bool:
 # resolved type is "reconstructed via normal unpickling, never INVOKED with attacker
 # args". That premise is FALSE: a pickle ``REDUCE`` may INVOKE any admitted type
 # (its instance, or the type itself) with attacker-chosen arguments. The concrete
-# load-time RCE (r23): ``torchlens.intervention.save.LazyImportRef`` is a frozen
+# load-time RCE (r23): ``torchlens.intervention._spec_values.LazyImportRef`` is a frozen
 # dataclass whose ``__call__(import_path, ...)`` resolves an ARBITRARY import path
 # under a trust flag read from its OWN pickled field, so a crafted ``metadata.pkl``
 # reconstructs ``LazyImportRef(import_path="os:system", trust_custom_callables=True)``
@@ -854,7 +854,7 @@ def _is_torchlens_appliance_module(module: str) -> bool:
 # ``None`` before pickling, so it is not a reduce-invocable import sink). The result
 # was cross-checked against the torchlens types the real unpickler resolves across the
 # io / tlspec-runnable / semantic-facet / intervention / capture-oracle suites. The
-# import-sink / logic modules -- above all ``torchlens.intervention.save`` (home of
+# import-sink / logic modules -- above all ``torchlens.intervention._spec_values`` (home of
 # ``LazyImportRef``) -- are NOT data modules and are absent, so ``LazyImportRef`` is
 # denied on both counts (module not curated; instance-callable import sink). A legit
 # type not yet covered fails CLOSED (a load error surfacing in a test) and is added

@@ -65,11 +65,6 @@ from .hooks import (
 )
 from .population import Population, population
 from .regions import RegionBoundary, RegionEdge, RegionInstance, RegionTarget
-from .save import (
-    SpecCompat,
-    TargetManifestDiff,
-    check_spec_compat,
-)
 from .sites import SiteSpec as SiteSpec
 
 # The PUBLIC immutable multi-clause spec (C03 substrate; surgery memo 3.1)
@@ -78,6 +73,11 @@ from .sites import SiteSpec as SiteSpec
 # internal code and persisted pickles are untouched.
 from .spec import (
     Rule,
+)
+from .spec_compat import (
+    SpecCompat,
+    TargetManifestDiff,
+    check_spec_compat,
 )
 from .stochastic import (
     SamplingPlan,

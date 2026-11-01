@@ -18,7 +18,12 @@ from .._ir.selector_eval import (
     selector_contains_kind,
     walk_selector,
 )
-from .errors import AmbiguousSiteError, SelectorCompositionError, SiteResolutionError
+from .errors import (
+    AmbiguousSiteError,
+    MultiMatchWarning,
+    SelectorCompositionError,
+    SiteResolutionError,
+)
 from .module_alias_guard import refuse_trace_alias_spellings
 from .selectors import (
     BaseSelector,
@@ -356,8 +361,6 @@ def _resolve_sites(
             "Pass a larger max_fanout explicitly or use a narrower selector."
         )
     if len(matched) > 1:
-        from ..intervention.errors import MultiMatchWarning
-
         warnings.warn(
             _multi_match_message(selector, matched),
             MultiMatchWarning,

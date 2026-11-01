@@ -43,8 +43,8 @@ import torch
 
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
 from torchlens._io.bundle import _RenameAwareUnpickler
+from torchlens.intervention._spec_values import _resolve_import_ref
 from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.intervention.save import _resolve_import_ref
 
 _UNPICKLERS = [SafeBundleUnpickler, _RenameAwareUnpickler]
 
