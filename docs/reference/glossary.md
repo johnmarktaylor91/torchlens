@@ -3892,6 +3892,7 @@ Members of classes whose public home changed, one entry per class.
 ### Keywords
 | Spelling | Meaning |
 | --- | --- |
+| `backend_scorecards=` | field and constructor keyword of `tl.compat.CompatReport`: the shipped `PreviewScorecard` records |
 | `breakdown_k=` | keyword of `tl.report.flops`: how many rows the breakdown lists |
 | `builder=` | field of `RosterModel`: zero-argument factory returning `(model, example_input)` |
 | `captured_bytes=` | field and constructor keyword of `MemoryFacts`, `SummaryTotals` |
