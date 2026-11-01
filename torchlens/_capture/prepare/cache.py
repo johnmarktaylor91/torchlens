@@ -16,6 +16,7 @@ from typing import Any, cast
 
 from ..._capture_state_helpers import (
     _capture_cache_dir,
+    _prepare_log_for_capture_cache,
 )
 from ..._data_classes.trace import (
     Trace,
@@ -603,3 +604,10 @@ def _sweep_option_fields_into_cache_config(
         if isinstance(field_value, Path):
             field_value = str(field_value)
         cache_config[f"{prefix}:{field_name}"] = _stable_cache_fragment(field_value)
+
+
+def _store_capture_cache_entry(trace: Trace, path: Path, secret: Any) -> None:
+    """Write the authenticated capture-cache entry and evict its stale siblings."""
+    _prepare_log_for_capture_cache(trace)
+    if _store_authenticated_capture_cache(trace, path, secret):
+        _evict_capture_cache(path.parent, keep=path)

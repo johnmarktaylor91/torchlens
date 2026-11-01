@@ -112,6 +112,7 @@ from .cache import (
     CAPTURE_CACHE_KEY_NEUTRAL,
     _load_authenticated_capture_cache,
     _prepare_capture_cache_dir,
+    _store_capture_cache_entry,
     _sweep_option_fields_into_cache_config,
 )
 from .chunked import (
@@ -302,7 +303,7 @@ def _trace_torch_model(
         Captured torch trace.
     """
     state = _resolve_door(model, input_args, input_kwargs, _DoorArgs(**options))
-    request = _build_request(state)
+    request = _build_request(state, cache_store=_store_capture_cache_entry)
     cached = _lookup_capture_cache(request)
     if cached is not None:
         return cached
@@ -346,7 +347,10 @@ def prepare_capture(
         ``stop_after_ambient``, ``profile_enabled``, ``save_grads_policy`` and
         ``uses_selective_layers_to_save``.
     """
-    return _build_request(_resolve_door(model, input_args, input_kwargs, _DoorArgs(**options)))
+    return _build_request(
+        _resolve_door(model, input_args, input_kwargs, _DoorArgs(**options)),
+        cache_store=_store_capture_cache_entry,
+    )
 
 
 def _resolve_door(

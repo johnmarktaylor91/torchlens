@@ -307,28 +307,21 @@ def _rescue_eligible(state: _DoorState) -> bool:
     )
 
 
-def _store_capture_cache_entry(trace: Any, path: Path, secret: Any) -> None:
-    """Write the authenticated capture-cache entry and evict its stale siblings."""
-    from .cache import (
-        _evict_capture_cache,
-        _prepare_log_for_capture_cache,
-        _store_authenticated_capture_cache,
-    )
+def _build_request(
+    state: _DoorState, *, cache_store: Callable[[Any, Path, Any], None] | None = None
+) -> CaptureRequest:
+    """Pack the resolved door state into the request the RUN stage consumes.
 
-    _prepare_log_for_capture_cache(trace)
-    if _store_authenticated_capture_cache(trace, path, secret):
-        _evict_capture_cache(path.parent, keep=path)
-
-
-def _build_request(state: _DoorState) -> CaptureRequest:
-    """Pack the resolved door state into the request the RUN stage consumes."""
+    ``cache_store`` is the door's authenticated capture-cache writer; the
+    epilogue calls it through ``CaptureRequest.cache["store"]``.
+    """
     cache = None
     if state.cache_key is not None:
         cache = {
             "key": state.cache_key,
             "path": state.cache_path,
             "secret": state.cache_secret,
-            "store": _store_capture_cache_entry,
+            "store": cache_store,
         }
     return CaptureRequest(
         model=state.model,
