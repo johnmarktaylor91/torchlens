@@ -1051,12 +1051,12 @@ docs-md	docs/maintainers/where.md	120
 docs-md	docs/maintainers/where.md	1208
 docs-md	docs/maintainers/where.md	121
 docs-md	docs/maintainers/where.md	1210
-docs-md	docs/maintainers/where.md	1215
 docs-md	docs/maintainers/where.md	122
 docs-md	docs/maintainers/where.md	1225
 docs-md	docs/maintainers/where.md	1226
 docs-md	docs/maintainers/where.md	123
 docs-md	docs/maintainers/where.md	1237
+docs-md	docs/maintainers/where.md	1239
 docs-md	docs/maintainers/where.md	124
 docs-md	docs/maintainers/where.md	125
 docs-md	docs/maintainers/where.md	1250
@@ -1068,7 +1068,6 @@ docs-md	docs/maintainers/where.md	1288
 docs-md	docs/maintainers/where.md	129
 docs-md	docs/maintainers/where.md	1291
 docs-md	docs/maintainers/where.md	1294
-docs-md	docs/maintainers/where.md	12995
 docs-md	docs/maintainers/where.md	13
 docs-md	docs/maintainers/where.md	13,
 docs-md	docs/maintainers/where.md	130
@@ -1081,6 +1080,7 @@ docs-md	docs/maintainers/where.md	1332
 docs-md	docs/maintainers/where.md	134
 docs-md	docs/maintainers/where.md	1342
 docs-md	docs/maintainers/where.md	135
+docs-md	docs/maintainers/where.md	13505
 docs-md	docs/maintainers/where.md	136
 docs-md	docs/maintainers/where.md	1361
 docs-md	docs/maintainers/where.md	137
@@ -1143,7 +1143,7 @@ docs-md	docs/maintainers/where.md	1653
 docs-md	docs/maintainers/where.md	1656
 docs-md	docs/maintainers/where.md	166
 docs-md	docs/maintainers/where.md	1663
-docs-md	docs/maintainers/where.md	16657
+docs-md	docs/maintainers/where.md	16656
 docs-md	docs/maintainers/where.md	1668
 docs-md	docs/maintainers/where.md	167
 docs-md	docs/maintainers/where.md	168
@@ -1232,6 +1232,7 @@ docs-md	docs/maintainers/where.md	213
 docs-md	docs/maintainers/where.md	214
 docs-md	docs/maintainers/where.md	215
 docs-md	docs/maintainers/where.md	2150
+docs-md	docs/maintainers/where.md	21521
 docs-md	docs/maintainers/where.md	216
 docs-md	docs/maintainers/where.md	217
 docs-md	docs/maintainers/where.md	218
@@ -1243,7 +1244,6 @@ docs-md	docs/maintainers/where.md	221
 docs-md	docs/maintainers/where.md	2214
 docs-md	docs/maintainers/where.md	222
 docs-md	docs/maintainers/where.md	2235
-docs-md	docs/maintainers/where.md	22362
 docs-md	docs/maintainers/where.md	224
 docs-md	docs/maintainers/where.md	2248
 docs-md	docs/maintainers/where.md	225
@@ -1633,7 +1633,7 @@ docs-md	docs/maintainers/where.md	611
 docs-md	docs/maintainers/where.md	612
 docs-md	docs/maintainers/where.md	613
 docs-md	docs/maintainers/where.md	614
-docs-md	docs/maintainers/where.md	617276
+docs-md	docs/maintainers/where.md	617074
 docs-md	docs/maintainers/where.md	62
 docs-md	docs/maintainers/where.md	620
 docs-md	docs/maintainers/where.md	621
@@ -1794,13 +1794,13 @@ docs-md	docs/maintainers/where.md	93
 docs-md	docs/maintainers/where.md	934
 docs-md	docs/maintainers/where.md	94
 docs-md	docs/maintainers/where.md	942
-docs-md	docs/maintainers/where.md	9436
 docs-md	docs/maintainers/where.md	947
 docs-md	docs/maintainers/where.md	948
 docs-md	docs/maintainers/where.md	95
 docs-md	docs/maintainers/where.md	951
 docs-md	docs/maintainers/where.md	953
 docs-md	docs/maintainers/where.md	956
+docs-md	docs/maintainers/where.md	9566
 docs-md	docs/maintainers/where.md	957
 docs-md	docs/maintainers/where.md	96
 docs-md	docs/maintainers/where.md	960
@@ -4864,10 +4864,6 @@ package-docstrings	torchlens/_user_public_impls.py	38
 package-docstrings	torchlens/_user_public_impls.py	4.5
 package-docstrings	torchlens/_user_public_impls.py	64
 package-docstrings	torchlens/_user_public_impls.py	75
-package-docstrings	torchlens/_utils/__init__.py	1,900
-package-docstrings	torchlens/_utils/__init__.py	26
-package-docstrings	torchlens/_utils/__init__.py	562
-package-docstrings	torchlens/_utils/__init__.py	64
 package-docstrings	torchlens/_utils/_call_site.py	3.10
 package-docstrings	torchlens/_utils/_call_site.py	3.11
 package-docstrings	torchlens/_utils/_callable_safety.py	1842
@@ -4891,6 +4887,7 @@ package-docstrings	torchlens/_utils/_exception_notes.py	3.10
 package-docstrings	torchlens/_utils/_exception_notes.py	3.11.
 package-docstrings	torchlens/_utils/_exception_notes.py	678
 package-docstrings	torchlens/_utils/_multipass_access.py	12
+package-docstrings	torchlens/_utils/_onramp.py	64
 package-docstrings	torchlens/_utils/_rng_channels.py	051
 package-docstrings	torchlens/_utils/_rng_channels.py	2.16
 package-docstrings	torchlens/_utils/_rng_channels.py	2.17
@@ -6429,6 +6426,8 @@ package-docstrings	torchlens/report/_cost_tree.py	3.878
 package-docstrings	torchlens/report/_cost_tree.py	31
 package-docstrings	torchlens/report/_doctor.py	1,900
 package-docstrings	torchlens/report/_doctor.py	2,073
+package-docstrings	torchlens/report/_environment.py	1,900
+package-docstrings	torchlens/report/_environment.py	26
 package-docstrings	torchlens/report/_explain.py	40
 package-docstrings	torchlens/report/_explain.py	67
 package-docstrings	torchlens/report/_explain.py	88
