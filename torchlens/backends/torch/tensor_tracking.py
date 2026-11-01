@@ -537,12 +537,13 @@ def _install_tensor_grad_hook(
         # map would emit duplicate observations for one label. A target
         # map with no entry for the label stays permissive so redirected
         # gradients are not silently dropped.
+        edits_live = _state.active_capture()[0] is active_trace
         if active_trace is None or (
             active_trace is not trace_ref()
             and _foreign_label_owner(active_trace, tensor_label, hooked_tensor_id)
         ):
             return None
-        if _state.active_capture()[0] is active_trace:
+        if edits_live:
             grad = apply_gradient_site_edits(active_trace, grad, tensor_label)
         prebuilt = _emit_tensor_grad_event(active_trace, grad, tensor_label)
         # Gate the legacy layer-slot write on the ACTIVE per-call policy,
