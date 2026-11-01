@@ -49,8 +49,7 @@ torchlens/_capture/prepare/chunked.py::_append_chunk_trace_state	73
 torchlens/_capture/prepare/chunked.py::plan_chunks	76
 torchlens/_capture/prepare/dispatch.py::_trace_mlx_model	180
 torchlens/_capture/prepare/dispatch.py::_trace_mlx_model_from_public_kwargs	126
-torchlens/_capture/prepare/door.py	1634
-torchlens/_capture/prepare/door.py::_trace_torch_model	1308
+torchlens/_capture/prepare/door.py	1613
 torchlens/_capture/prepare/resolve.py::_record_capture_intervention_event	72
 torchlens/_capture/prepare/resolve.py::_warn_zero_match_capture_selectors	135
 torchlens/_capture/projections.py	1644
