@@ -15,7 +15,11 @@ auto-routes genuine framework models (MLX, JAX, tinygrad, Paddle, TensorFlow).
 metadata lives on `Trace.backend`, `Trace.module_identity_mode`, `Trace.param_source`,
 `Trace.derived_grads`, `Trace.autograd.intermediate_derived_grads`, `Trace.payload_load_status`,
 `Trace.validation_replay_status`, `dtype_ref`, `device_ref`, `backend_address`, and
-`resolver_status`.
+`resolver_status`. Every backend fills one contract, `tl.backends.BackendProtocol`; torch is
+`stable` and the five others are `preview`. Which capabilities each backend supports, its
+measured conformance scorecard and its tutorial are in [Backend Support](backends.md) and the
+per-backend pages it links; `tl.report.doctor()` shows each backend's `backend_scorecard:<name>`
+row, and refusals carry an `exc.code` from `tl.backends.REFUSAL_CODES`.
 JAX leaf gradients are requested with `tl.backends.jax.GradOptions`; they are derived by a
 second functional AD run and never populate backward-pass or op-gradient surfaces.
 JAX intermediate derived gradients are requested with
