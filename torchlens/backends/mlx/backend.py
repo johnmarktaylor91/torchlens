@@ -2141,9 +2141,15 @@ class MLXBackend:
                 "policy to keep the trace marked capture_verified=False instead",
                 code=UNWRAPPED_OP_REASON,
             )
+        from ...errors import TorchLensWarning
+
         warnings.warn(
-            message + " This capture is marked capture_verified=False.",
-            UserWarning,
+            TorchLensWarning(
+                message + " This capture is marked capture_verified=False. "
+                "Remedy: route the computation through the wrapped mx, mx.fast or nn "
+                "surface, or set the MLX unwrapped policy to 'refuse' to make the gap an error",
+                code="unwrapped_op_in_capture",
+            ),
             stacklevel=4,
         )
         trace.capture_verified = False
