@@ -54,7 +54,8 @@ from .stop import StopDirective
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
-from .._utils.display import _timed_phase, _vprint
+from .._utils._exception_notes import annotate_guarded
+from .._utils.display import _timed_phase, _vprint, user_stacklevel
 from .._utils.rng import (
     host_rng_advanced,
     log_current_rng_states,
@@ -80,7 +81,7 @@ from ._input_records import (
     _record_runnable_module_training_modes,
     _register_model_input_container_snapshots,
 )
-from ._run_state import _attach_note, _RunState
+from ._run_state import _RunState
 from .finalize.arms import (
     finalize_completed,
     finalize_failed,
@@ -658,10 +659,11 @@ def _teardown_ladder(self: "Trace", run: _RunState) -> None:
             and not isinstance(inflight_exc, Exception)
             and isinstance(teardown_exc, Exception)
         ):
-            _attach_note(
+            annotate_guarded(
                 inflight_exc,
                 "TorchLens post-settlement teardown also failed while handling "
                 f"this interrupt: {type(teardown_exc).__name__}: {safe_exception_str(teardown_exc)}",
+                stacklevel=user_stacklevel(1),
             )
             raise inflight_exc
         raise

@@ -19,11 +19,11 @@ Arms and what each returns:
 from __future__ import annotations
 
 import time
-import warnings
 from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 from ..._quantities import Duration
-from ..._utils.display import _vprint
+from ..._utils._exception_notes import annotate_guarded
+from ..._utils.display import _vprint, user_stacklevel
 from ..outcome import (
     CapturePhase,
     StopSignalSwallowedError,
@@ -59,16 +59,6 @@ def _postprocess_requested(result: ForwardResult) -> bool:
     """Return whether this run materializes the final ``Trace`` immediately."""
     request = result.request
     return True if request is None else bool(request.postprocess)
-
-
-def _attach_note(exc: BaseException, note: str) -> None:
-    """Attach ``note`` to ``exc``, or warn where exception notes do not exist."""
-    # PEP 678 notes; Python 3.10 has none, so the note surfaces as a warning.
-    add_note = getattr(exc, "add_note", None)
-    if add_note is not None:
-        add_note(note)
-    else:  # Python 3.10: no PEP 678 notes -- surface via warning.
-        warnings.warn(note, RuntimeWarning, stacklevel=3)
 
 
 def _raise_if_stop_swallowed(trace: Trace) -> None:
@@ -404,10 +394,11 @@ def _cleanup_failed_session(result: ForwardResult, e: BaseException) -> None:
         # arm: attach the secondary as a note and re-raise the primary.
         # A BaseException secondary (Ctrl-C during cleanup) keeps
         # escaping -- interrupts always win (B8-23 doctrine).
-        _attach_note(
+        annotate_guarded(
             e,
             "TorchLens failed-forward cleanup also failed while handling "
             f"this error: {type(cleanup_exc).__name__}: {safe_exception_str(cleanup_exc)}",
+            stacklevel=user_stacklevel(1),
         )
 
 
@@ -439,11 +430,12 @@ def finalize_interrupted(result: ForwardResult) -> NoReturn:
             # Exception escape here demoted the KI to ``__context__``, and
             # a caller's ``except Exception`` retry loop swallowed Ctrl-C
             # outright. Attach the cleanup failure instead of raising it.
-            _attach_note(
+            annotate_guarded(
                 interrupt_exc,
                 "TorchLens model-session cleanup also failed while handling "
                 f"this interrupt: {type(cleanup_exc).__name__}: "
                 f"{safe_exception_str(cleanup_exc)}",
+                stacklevel=user_stacklevel(1),
             )
         trace.__dict__.pop("_capture_producer_policy", None)
     finally:
@@ -463,10 +455,11 @@ def finalize_interrupted(result: ForwardResult) -> NoReturn:
             # letting a caller's ``except Exception`` swallow Ctrl-C.
             # Attach the failure to the interrupt instead; an unsettled
             # outcome reads UNKNOWN (most restrictive), never blessed.
-            _attach_note(
+            annotate_guarded(
                 interrupt_exc,
                 "TorchLens settlement/scrub also failed while handling "
                 f"this interrupt: {type(settle_exc).__name__}: {safe_exception_str(settle_exc)}",
+                stacklevel=user_stacklevel(1),
             )
     raise interrupt_exc
 
