@@ -36,6 +36,10 @@ _INIT_OP_TYPES = frozenset(
 )
 _MAX_SNAPSHOT_BYTES = 64 * 1024 * 1024
 
+#: Source kinds materialized as source ops with a saved payload: model inputs
+#: and (SPEC section 2, rule 1) array-valued closure constants.
+_MATERIALIZED_SOURCE_KINDS = frozenset({"input", "constant"})
+
 
 @dataclass(frozen=True)
 class TFSourceRecord:
@@ -755,7 +759,9 @@ class TFEagerCaptureSession:
         if existing is not None:
             return existing
         kind = _classify_source_tensor(tensor, consumer_op_type)
-        label_raw = self._emit_source_event(kind, tensor) if kind in {"input"} else None
+        label_raw = (
+            self._emit_source_event(kind, tensor) if kind in _MATERIALIZED_SOURCE_KINDS else None
+        )
         record = TFSourceRecord(kind=kind, ref_key=ref_key, tensor=tensor, label_raw=label_raw)
         self.source_by_ref[ref_key] = record
         self.source_records.append(record)
@@ -1207,7 +1213,31 @@ def _classify_source_tensor(tensor: Any, consumer_op_type: str) -> str:
         return "resource"
     if consumer_op_type in {"Reshape", "Shape", "StridedSlice", "Pack", "ConcatV2"}:
         return "shape/axis"
+    if _is_closure_constant(tensor):
+        return "constant"
     return "constant/factory"
+
+
+def _is_closure_constant(tensor: Any) -> bool:
+    """Whether a non-produced input is recorded as a ``constant`` source op.
+
+    The shared constants rule (SPEC section 2, rule 1) records every tensor
+    the forward used that is neither an input, a parameter nor a captured
+    output as a source op with a saved payload. TensorFlow converts Python
+    scalars to tensors before the callback sees them, so the rule is applied
+    to array-valued constants (rank one and above: closure weights and
+    ``tf.constant([...])`` literals); rank-zero scalars stay replayable
+    ``constant/factory`` values recorded on the consuming op's capture.
+    """
+
+    shape = getattr(tensor, "shape", None)
+    rank = getattr(shape, "rank", None)
+    if rank is None:
+        try:
+            rank = len(shape) if shape is not None else None
+        except TypeError:
+            rank = None
+    return rank is not None and rank >= 1
 
 
 def _is_scalar_bool_tensor_ref(tensor_ref: TensorRef) -> bool:
