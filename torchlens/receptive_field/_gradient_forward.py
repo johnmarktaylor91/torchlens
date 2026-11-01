@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 
 _RECAPTURE_RECIPE = (
     "tl.trace(model, x.requires_grad_(True), "
-    'capture=tl.options.CaptureOptions(backward_ready=True), save_mode="reference")'
+    'capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))'
 )
 
 
@@ -175,8 +175,8 @@ def _projective_recapture_recipe(source: Op, targets: Sequence[Op]) -> str:
     selectors = " | ".join(f"tl.label({label!r})" for label in labels)
     return (
         "tl.trace(model, x.requires_grad_(True), "
-        "capture=tl.options.CaptureOptions(backward_ready=True), "
-        f'save_mode="reference", save={selectors})'
+        'capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"), '
+        f"save={selectors})"
     )
 
 
