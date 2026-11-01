@@ -6965,8 +6965,6 @@ test-docstrings	tests/test_adversarial_scaling_gates.py	400
 test-docstrings	tests/test_adversarial_scaling_gates.py	45
 test-docstrings	tests/test_adversarial_scaling_gates.py	700
 test-docstrings	tests/test_affine_source.py	64.
-test-docstrings	tests/test_ag3_cross_layer_gemma2.py	32
-test-docstrings	tests/test_ag3_cross_layer_gemma2.py	64
 test-docstrings	tests/test_agent_surface_fold.py	051
 test-docstrings	tests/test_agent_surface_fold.py	12
 test-docstrings	tests/test_agent_surface_fold.py	18
@@ -9381,8 +9379,6 @@ test-names	tests/real_model/r1/test_circ3_induction_real.py	64_
 test-names	tests/real_model/r1/test_realism_moe_ssm_video.py	130
 test-names	tests/real_model/r1/test_realism_pretrained_core.py	18_
 test-names	tests/test_ag1_attribution_graph.py	32_
-test-names	tests/test_ag3_cross_layer_gemma2.py	32_
-test-names	tests/test_ag3_cross_layer_gemma2.py	64_
 test-names	tests/test_attrib_methods_captum_ledger.py	121_
 test-names	tests/test_attrib_methods_captum_ledger.py	18_
 test-names	tests/test_attrib_methods_realmodel.py	121_
