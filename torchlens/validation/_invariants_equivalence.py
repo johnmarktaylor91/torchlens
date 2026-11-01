@@ -70,6 +70,38 @@ def _canonical_equivalent_ops(owner: object) -> object:
     return _EQUIVALENT_OPS_UNAVAILABLE
 
 
+def _equivalence_member_index(ml: Trace) -> tuple[dict[str, set], dict[str, object]]:
+    """Map each grouped op label to its ``op_equivalence_classes`` group and key."""
+
+    # Membership index: per-op ``equivalence_class`` carries the module suffix
+    # appended at op creation (plus loop-detection ``_argsig`` splits), while
+    # the trace dict keys are pre-suffix, so a key-based lookup misses for
+    # EVERY parameterized in-module layer and the symmetry group comparison
+    # silently skipped -- symmetric corruption of ``equivalent_ops`` on all
+    # passes of a shared in-module layer passed the whole suite. Resolving the
+    # expected group by MEMBERSHIP (the same reconciliation the recurrent-group
+    # consistency check at the bottom of this module already uses) makes the
+    # invariant actually run for suffixed classes; the key lookup stays first
+    # so a label scrubbed OUT of its group still resolves the group and fails.
+    #
+    # The stamped class is NOT a key in the registry's namespace, though: the
+    # module path is joined without a separator, so it can spell an UNRELATED
+    # registry key (in a ``Sequential`` the ReLU at module "1" is stamped
+    # ``relu_<hash>_module1`` + "1", the key of the ReLU at module "11"), and
+    # the key lookup then compared an honest op against a foreign group. An
+    # op's own registry key always PREFIXES its stamped class (torch appends
+    # the module path to it; other backends stamp the key itself), so the
+    # group that holds the op under such a key is its own and is taken first.
+    group_by_member: dict[str, set] = {}
+    key_by_member: dict[str, object] = {}
+    for group_key, group in ml.op_equivalence_classes.items():
+        if isinstance(group, set):
+            for member_label in group:
+                group_by_member[member_label] = group
+                key_by_member[member_label] = group_key
+    return group_by_member, key_by_member
+
+
 def _check_equivalence_symmetry(ml: Trace) -> None:
     """Check L: op_equivalence_classes groups reference valid Op labels.
 
@@ -123,32 +155,7 @@ def _check_equivalence_symmetry(ml: Trace) -> None:
     # be recycled onto a different object mid-check.
     verified_op_pairs: set[tuple[int, int]] = set()
     verified_keepalive: list[object] = []
-    # Membership index: per-op ``equivalence_class`` carries the module suffix
-    # appended at op creation (plus loop-detection ``_argsig`` splits), while
-    # the trace dict keys are pre-suffix, so a key-based lookup misses for
-    # EVERY parameterized in-module layer and the group comparison below
-    # silently skipped -- symmetric corruption of ``equivalent_ops`` on all
-    # passes of a shared in-module layer passed the whole suite. Resolving the
-    # expected group by MEMBERSHIP (the same reconciliation the recurrent-group
-    # consistency check at the bottom of this module already uses) makes the
-    # invariant actually run for suffixed classes; the key lookup stays first
-    # so a label scrubbed OUT of its group still resolves the group and fails.
-    #
-    # The stamped class is NOT a key in the registry's namespace, though: the
-    # module path is joined without a separator, so it can spell an UNRELATED
-    # registry key (in a ``Sequential`` the ReLU at module "1" is stamped
-    # ``relu_<hash>_module1`` + "1", the key of the ReLU at module "11"), and
-    # the key lookup then compared an honest op against a foreign group. An
-    # op's own registry key always PREFIXES its stamped class (torch appends
-    # the module path to it; other backends stamp the key itself), so the
-    # group that holds the op under such a key is its own and is taken first.
-    group_by_member: dict[str, set] = {}
-    key_by_member: dict[str, object] = {}
-    for group_key, group in ml.op_equivalence_classes.items():
-        if isinstance(group, set):
-            for member_label in group:
-                group_by_member[member_label] = group
-                key_by_member[member_label] = group_key
+    group_by_member, key_by_member = _equivalence_member_index(ml)
     for op in ml.layer_list:
         equivalence_class = getattr(op, "equivalence_class", None)
         expected_group = None
