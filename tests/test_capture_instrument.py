@@ -25,8 +25,6 @@ from torchlens.backends.torch._tl import (
 )
 from torchlens.backends.torch.instrument import WrapPolicy
 
-pytestmark = pytest.mark.smoke
-
 
 class _Backend:
     """A backend that logs its calls and runs a real label session."""
