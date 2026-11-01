@@ -91,7 +91,7 @@ def test_mlx_repeated_block_groups_into_passes() -> None:
     assert all(op.num_passes == 2 for op in (*matmul_ops, *relu_ops))
     assert list(matmul_ops[0].recurrent_ops) == [op.label for op in matmul_ops]
     assert trace.layer_num_calls[matmul_ops[0].layer_label] == 2
-    assert MLXBackend().validate_trace(trace) is True
+    assert MLXBackend().validate_trace(trace).passed is True
 
 
 def test_mlx_module_reuse_groups_and_validates() -> None:
@@ -103,7 +103,7 @@ def test_mlx_module_reuse_groups_and_validates() -> None:
     assert [op.pass_index for op in linear_ops] == [1, 2, 3]
     assert {op.num_passes for op in linear_ops} == {3}
     assert len({op.layer_label for op in linear_ops}) == 1
-    assert MLXBackend().validate_trace(trace) is True
+    assert MLXBackend().validate_trace(trace).passed is True
 
 
 def test_mlx_distinct_module_sites_do_not_group() -> None:
@@ -145,7 +145,7 @@ def test_mlx_recurrence_detection_off_preserves_single_pass_layout() -> None:
 
     assert trace.recurrence_detection is False
     assert all(op.num_passes == 1 for op in trace.layer_list)
-    assert MLXBackend().validate_trace(trace) is True
+    assert MLXBackend().validate_trace(trace).passed is True
 
 
 def test_mlx_tamper_swapped_capture_labels_fail_validation() -> None:
