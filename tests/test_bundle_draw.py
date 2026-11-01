@@ -37,13 +37,12 @@ class _TinyRelu(torch.nn.Module):
 
 
 def _pair() -> tl.Bundle:
+    """Two unrelated members: comparisons refuse members joined by an ordering relation."""
     torch.manual_seed(0)
     x = torch.randn(2, 3)
     clean = tl.trace(_TinyRelu(), x)
     changed = tl.trace(_TinyRelu(offset=0.5), x)
-    bundle = tl.Bundle({"clean": clean, "changed": changed}, baseline="clean")
-    bundle.relate("forked_from", "changed", "clean", at_step=0)
-    return bundle
+    return tl.Bundle({"clean": clean, "changed": changed}, baseline="clean")
 
 
 @pytest.mark.smoke
@@ -83,11 +82,12 @@ def test_former_helper_table_methods_are_real_methods() -> None:
         assert inspect.isfunction(inspect.getattr_static(tl.Bundle, name)), name
     assert "__dir__" not in vars(tl.Bundle)
     bundle = _pair()
-    assert bundle.upstream("changed") == ("clean",)
-    assert bundle.downstream("clean") == ("changed",)
     name = bundle.store_comparison("relative_l2")
     assert bundle.stored_comparison_names() == (name,)
     assert bundle.stored_comparison(name) == bundle._delta_map("relative_l2")
+    bundle.relate("forked_from", "changed", "clean", at_step=0)
+    assert bundle.upstream("changed") == ("clean",)
+    assert bundle.downstream("clean") == ("changed",)
 
 
 @pytest.mark.smoke
