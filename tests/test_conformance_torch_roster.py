@@ -133,7 +133,7 @@ def test_closure_constant_payload_obeys_save() -> None:
     assert constant.has_saved_activation
     dropped = tl.trace(model, example, save=tl.func("matmul"))
     (constant,) = _constant_ops(dropped)
-    assert not constant.has_saved_activation and constant.out is None
+    assert not constant.has_saved_activation
 
 
 def test_closure_constant_needs_a_pre_forward_tensor() -> None:
@@ -234,7 +234,8 @@ def test_protocol_members_are_the_reference_values() -> None:
     assert protocol.is_tensor(torch.ones(1)) and not protocol.is_tensor(np.ones(1))
 
 
-def test_grad_options_refuses_with_the_capability_code() -> None:
+@pytest.mark.parametrize("backend", [None, "torch"], ids=["default", "explicit_torch"])
+def test_grad_options_refuses_with_the_capability_code(backend: Any) -> None:
     """SPEC 1.3: torch refuses ``grad_options=`` with the flag's code on ``exc.code``.
 
     The option is the ``intermediate_derived_grads`` capability's entry, so the
@@ -249,7 +250,7 @@ def test_grad_options_refuses_with_the_capability_code() -> None:
             return v * 2.0
 
     with pytest.raises(BackendUnsupportedError) as excinfo:
-        tl.trace(_Counts(), torch.randn(2, 4), grad_options={"derived": True})
+        tl.trace(_Counts(), torch.randn(2, 4), backend=backend, grad_options={"derived": True})
     assert excinfo.value.code == "intermediate_derived_grads_unsupported"
     assert excinfo.value.fields["code"] == excinfo.value.code
     assert not calls

@@ -2792,10 +2792,15 @@ def trace(
         if chunk_paths is not MISSING and chunk_paths is not None and chunk_size in (MISSING, None):
             raise ChunkedForwardConfigError("chunk_paths requires chunk_size.")
         if backend is None and (jax_static_argnums is not MISSING or grad_options is not MISSING):
+            refused_option = (
+                "jax_static_argnums" if jax_static_argnums is not MISSING else ("grad_options")
+            )
             raise BackendUnsupportedError(
                 "jax_static_argnums is only supported with backend='jax'; grad_options is "
                 "only supported with backend='jax', backend='mlx', backend='tinygrad', "
-                "backend='paddle', or backend='tf'."
+                "backend='paddle', or backend='tf'.",
+                code=_trace_option_refusal_code(refused_option),
+                option=refused_option,
             )
         explicit_backend_spec = None
         if backend is not None:
