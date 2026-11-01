@@ -458,8 +458,9 @@ def _lower_label_leaves(trace: Trace, site: Any) -> Any:
             fanout = len(trace.layer_list) + 1
             ops = trace.resolve_sites(value, max_fanout=fanout)
             raw = [getattr(op, "_layer_label_raw", None) for op in ops]
-            if raw and all(isinstance(name, str) for name in raw):
-                return _join_union([label(name) for name in dict.fromkeys(raw)])
+            names = [name for name in raw if isinstance(name, str)]
+            if names and len(names) == len(raw):
+                return _join_union([label(name) for name in dict.fromkeys(names)])
     return site
 
 
