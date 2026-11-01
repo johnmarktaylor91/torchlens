@@ -164,7 +164,11 @@ def _leaf_site(trace: Any) -> str | None:
 
 
 def _interior_site(cell: Cell, trace: Any) -> str:
-    """Return a saved, single-pass, floating-point op that has parents (a replayable func)."""
+    """Return a saved, single-pass, floating-point op that has parents (a replayable func).
+
+    Reads ``op.layer``, which a loaded trace's ops do not expose: choose on the
+    live trace and pass the label to the loaded leg.
+    """
 
     for op in trace.saved_ops:
         if (
@@ -365,9 +369,10 @@ def _after_fork_do(cell: Cell) -> None:
     """A fork edit halves the site, stays inside its cone, marks the op, and works on a loaded trace."""
 
     trace = cell.require_trace()
-    _halve_on_fork(cell, trace, "live")
+    label = _interior_site(cell, trace)
+    _halve_on_fork(cell, trace, "live", label)
     if cell.loaded is not None:
-        _halve_on_fork(cell, cell.loaded, "loaded")
+        _halve_on_fork(cell, cell.loaded, "loaded", label)
 
 
 # --- claimed rows: bundle -----------------------------------------------------
