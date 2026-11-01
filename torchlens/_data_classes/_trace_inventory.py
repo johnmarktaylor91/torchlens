@@ -66,7 +66,7 @@ def build_sites_table(trace: Trace) -> pd.DataFrame:
     from ._site_key import parse_site_key
 
     pd = _require_pandas()
-    ops = list(trace.layer_list)
+    ops = list(trace._layer_list)
     keyed = [(key, op) for op in ops if (key := getattr(op, "site_key", None)) is not None]
     if ops and not keyed:
         raise InvalidArgumentError(
@@ -99,7 +99,7 @@ def build_sites_table(trace: Trace) -> pd.DataFrame:
         layer_label = getattr(op, "layer_label", None)
         if layer_label is not None and layer_label not in entry["layer_labels"]:
             entry["layer_labels"].append(layer_label)
-        entry["passes"].append(getattr(op, "pass_index", 1))
+        entry["passes"].append(getattr(op, "pass_number", 1))
         shape = getattr(op, "shape", None)
         if shape not in entry["shapes"]:
             entry["shapes"].append(shape)
@@ -154,7 +154,7 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
     from .._quantities import Bytes
 
     outcome = getattr(trace, "outcome", None)
-    capture_duration = getattr(trace, "capture_duration", None)
+    capture_duration = trace._provenance_duration
     from .._capture_honesty import capture_advisories, poison_facts
     from ..report._factcore import factcore
 
@@ -167,13 +167,13 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
     logged_values = (getattr(trace, "annotations", {}) or {}).get("logged_values", {})
     return {
         "capture": {
-            "backend": getattr(trace, "backend", None),
-            "model_class_name": getattr(trace, "model_class_name", None),
+            "backend": trace._provenance_backend,
+            "model_class_name": trace._source_class_name,
             "outcome_status": getattr(getattr(outcome, "status", None), "value", None),
-            "capture_verified": getattr(trace, "capture_verified", None),
-            "structure_only": getattr(trace, "structure_only", False),
-            "grouping": getattr(trace, "grouping", None),
-            "save_mode": getattr(trace, "save_mode", None),
+            "capture_verified": trace._provenance_verified,
+            "structure_only": trace._options_structure_only,
+            "grouping": trace._options_grouping,
+            "save_mode": trace._options_save_mode,
             "capture_duration": capture_duration,
             **poison_facts(trace),
             "advisories": capture_advisories(trace),
@@ -191,7 +191,7 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
             "num_outputs": len(getattr(trace, "output_ops", ()) or ()),
             "is_recurrent": getattr(getattr(trace, "graph", None), "is_recurrent", False),
             "has_conditionals": getattr(getattr(trace, "graph", None), "has_conditionals", False),
-            "num_conditionals": len(getattr(trace, "conditionals", ())),
+            "num_conditionals": len(trace._graph_conditionals),
         },
         "parameters": {
             "num_params": core.params.total,
@@ -199,7 +199,7 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
             "num_params_frozen": core.params.frozen,
             "tied_param_groups": core.params.tied_groups,
             "num_param_tensors": len(getattr(trace, "params", {}) or {}),
-            "param_memory": getattr(trace, "total_param_memory", None),
+            "param_memory": trace._cost_total_param_memory,
         },
         "buffers": {
             "num_buffer_tensors": len(getattr(trace, "buffers", {}) or {}),
@@ -216,11 +216,11 @@ def build_bill_of_materials(trace: Trace) -> dict[str, Any]:
             "retained_now_memory": Bytes(memory_facts.retained_bytes),
             "num_present_now": memory_facts.retained_present_ops,
             "num_lazy_now": memory_facts.retained_lazy_ops,
-            "total_activation_memory": getattr(trace, "total_activation_memory", None),
+            "total_activation_memory": trace._cost_total_activation_memory,
         },
         "backward": {
-            "num_grad_fn_records": len(getattr(trace, "grad_fn_logs", {}) or {}),
-            "num_backward_passes": len(getattr(trace, "backward_pass_logs", {}) or {}),
+            "num_grad_fn_records": len(trace._grad_fn_logs or {}),
+            "num_backward_passes": len(trace._backward_pass_logs or {}),
         },
         "annotations": tuple(sorted(getattr(trace, "annotations", {}) or {})),
         # log_value read-back (sumfam D20): logged values are inventory, not

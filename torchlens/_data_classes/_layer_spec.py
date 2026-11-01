@@ -26,8 +26,7 @@ _LAYER_MIRROR_SPEC: dict[str, tuple[str, Any]] = {
         name: (name, None)
         for name in (
             "layer_label",
-            "layer_label_short",
-            "layer_type",
+            "short_layer_label",
             "type_index",
             "step_index",
             "ordinal_index",
@@ -61,7 +60,7 @@ _LAYER_MIRROR_SPEC: dict[str, tuple[str, Any]] = {
             "output_device",
             "visualizer_path",
             "activation_transform",
-            "intervention_replaced",
+            "is_edited",
             "detach_saved_activations",
             "save_grads",
             "transformed_grad_shape",
@@ -106,6 +105,8 @@ _LAYER_MIRROR_SPEC: dict[str, tuple[str, Any]] = {
             "is_atomic_module",
         )
     },
+    # The Layer's spelling of its ops' operation type (``Op.type``).
+    "layer_type": ("type", None),
     "activation_memory": ("activation_memory", as_bytes),
     "transformed_activation_memory": ("transformed_activation_memory", as_bytes),
     "autograd_memory": ("autograd_memory", as_bytes),
@@ -122,7 +123,7 @@ _LAYER_MIRROR_SPEC: dict[str, tuple[str, Any]] = {
 #: the handful of genuinely stored fields read from ``__dict__``.
 _LAYER_STATE_ORDER: tuple[str, ...] = (
     "layer_label",
-    "layer_label_short",
+    "short_layer_label",
     "layer_type",
     "type_index",
     "step_index",
@@ -163,7 +164,7 @@ _LAYER_STATE_ORDER: tuple[str, ...] = (
     "visualizer_path",
     "activation_transform",
     "annotations",
-    "intervention_replaced",
+    "is_edited",
     "detach_saved_activations",
     "save_grads",
     "transformed_grad_shape",

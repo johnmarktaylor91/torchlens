@@ -42,7 +42,7 @@ def net() -> tuple[nn.Module, torch.Tensor]:
 
 
 def _saved_labels(trace: Any) -> list[str]:
-    return [op.label for op in trace.layer_list if op.has_saved_activation]
+    return [op.label for op in trace._layer_list if op.has_saved_activation]
 
 
 _SAVE_SPELLING = re.compile(r"save=(\[[^\]]*\]|tl\.\w+\([^)]*\)|'[^']*')")
@@ -121,7 +121,7 @@ class _OutsideAppliance:
         self.trace = trace
 
     def op_count(self) -> int:
-        return len(self.trace.layer_list)
+        return len(self.trace._layer_list)
 
 
 def test_using_returns_registered_appliances(net, empty_registry) -> None:
@@ -129,7 +129,7 @@ def test_using_returns_registered_appliances(net, empty_registry) -> None:
     trace = tl.trace(model, x)
     tl.appliances.register("outside", _OutsideAppliance, summary="op counter")
     tl.appliances.register("lazy", "builtins:id")
-    assert trace.using("outside").op_count() == len(trace.layer_list)
+    assert trace.using("outside").op_count() == len(trace._layer_list)
     assert trace.using("outside").trace is trace
     assert trace.using("lazy") == id(trace)
     assert tl.appliances.names() == {"lazy": "", "outside": "op counter"}

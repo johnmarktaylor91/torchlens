@@ -90,7 +90,7 @@ def _count_nodes(model: nn.Module, x: torch.Tensor) -> int:
 
     with _tolerate_op_count_disclosure():
         trace = trace_fn(model, x)
-    count = len(trace.layer_list)
+    count = len(trace._layer_list)
     trace.cleanup()
     return count
 

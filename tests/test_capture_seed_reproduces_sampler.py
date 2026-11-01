@@ -1,7 +1,7 @@
 """Capture reproduces a sampling forward at the seed it discloses.
 
 ``tl.trace`` seeds torch's engines once per capture (``seed=`` or the
-fresh auto seed disclosed on ``trace.random_seed``) and restores the host
+fresh auto seed disclosed on ``trace.options.seed``) and restores the host
 stream afterwards, so a plain forward at that seed must produce the captured
 output bit for bit. The sampler here is the Gumbel-softmax draw
 (``torch.empty_like(logits).exponential_()``): an in-place seeded ATen
@@ -50,19 +50,19 @@ def test_explicit_seed_capture_matches_plain_forward_at_that_seed() -> None:
     model, x = _build()
     want = _plain_at(model, x, 7)
     trace = tl.trace(model, x.clone(), capture=tl.options.CaptureOptions(seed=7))
-    assert trace.random_seed == 7
+    assert trace.options.seed == 7
     assert torch.equal(trace.output_ops[0].out, want)
     assert torch.equal(trace["exponential_1_3"].out, trace["exponential_1_3"].out.clone())
 
 
 def test_auto_seed_capture_matches_plain_forward_at_disclosed_seed() -> None:
-    """An auto-seeded capture reproduces the plain forward at ``trace.random_seed``."""
+    """An auto-seeded capture reproduces the plain forward at ``trace.options.seed``."""
 
     model, x = _build()
     torch.manual_seed(0)
     trace = tl.trace(model, x.clone())
-    assert trace.random_seed is not None
-    want = _plain_at(model, x, int(trace.random_seed))
+    assert trace.options.seed is not None
+    want = _plain_at(model, x, int(trace.options.seed))
     assert torch.equal(trace.output_ops[0].out, want)
 
 

@@ -55,6 +55,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError, MissingDependencyError
 
 __all__ = [
@@ -492,7 +493,7 @@ def treescope_repr(obj: Any, path: str | None, subtree_renderer: Any) -> Any:
 
         facts = _trace_fact_lines(obj)
         children: list[Any] = [rp.text(line) for line in facts]
-        keys = [str(k) for k in (getattr(obj, "layer_logs", None) or ())][:64]
+        keys = [str(k) for k in ((obj._layer_logs if is_live_trace(obj) else None) or ())][:64]
         if keys:
             shown = keys[:_KEY_INDEX_BUDGET]
             index_children = [rp.text(f"['{key}']") for key in shown]
@@ -524,9 +525,11 @@ def _trace_fact_lines(obj: Any) -> list[str]:
     outcome_status = getattr(getattr(outcome, "status", None), "name", None)
     if outcome_status:
         lines.append(f"outcome: {outcome_status}")
-    num_ops = getattr(obj, "num_ops", None)
+    num_ops = obj._num_ops if is_live_trace(obj) else None
     if num_ops is not None:
-        lines.append(f"ops: {num_ops} (saved: {getattr(obj, 'num_saved_ops', '?')})")
+        lines.append(
+            f"ops: {num_ops} (saved: {len(obj.saved_ops) if hasattr(obj, 'saved_ops') else '?'})"
+        )
     return lines
 
 

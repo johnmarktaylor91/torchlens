@@ -19,6 +19,7 @@ import torch
 
 from ... import _state
 from ..._capture.projections import active_recording_state_or_none
+from ..._data_classes._trace_missing_attrs import is_live_trace
 from ..._utils._torch_compat import HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
 from ..._utils.tensor_leaves import iter_tensors
 from ..._utils.tensor_utils import safe_copy
@@ -48,7 +49,7 @@ def is_unregistered_parameter(trace: Any, value: Any) -> bool:
     address = None if meta is None else meta.param_address
     if not address:
         return True
-    param_logs = getattr(trace, "param_logs", None)
+    param_logs = trace._param_logs
     if param_logs is None or address not in param_logs:
         return True
     return getattr(param_logs[address], "_param_ref", None) is not value
@@ -81,7 +82,7 @@ def is_prepared_parameter_receiver(trace: Any, value: Any) -> bool:
     meta = get_param_meta(value)
     if meta is None:
         return False
-    return not getattr(trace.param_logs[meta.param_address], "_lazy_at_prep", False)
+    return not getattr(trace._param_logs[meta.param_address], "_lazy_at_prep", False)
 
 
 @contextmanager
@@ -219,7 +220,7 @@ def _prepared_parameter_lazy_flag(trace: Any, value: torch.nn.Parameter) -> bool
     op that ``tl.trace`` never shows.
     """
 
-    if getattr(trace, "capture_mode", None) == "predicate":
+    if trace is not None and is_live_trace(trace) and trace._options_mode == "predicate":
         state = active_recording_state_or_none()
         entry = None if state is None else state.prepared_params.get(id(value))
         if entry is None or entry[0]() is not value:

@@ -59,7 +59,7 @@ def gpt2_and_inputs():
 @pytest.fixture(scope="module")
 def runnable_trace(gpt2_and_inputs):
     model, input_ids = gpt2_and_inputs
-    trace = tl.trace(model, input_ids, capture=CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, input_ids, capture=CaptureOptions(replayable=True))
     try:
         yield trace
     finally:
@@ -164,9 +164,9 @@ def test_gpt2_recording_outcome_gate_reads_complete(gpt2_and_inputs):
 
 def test_gpt2_default_cache_config_live_run_reaches_verdict_or_typed_remedy(gpt2_and_inputs):
     """AUD-HONESTY H1 at the R0 roster tier: the rows above pin ``use_cache=False`` +
-    ``intervention_ready=True`` only, so the HF DEFAULT configuration (KV cache on) was
+    ``replayable=True`` only, so the HF DEFAULT configuration (KV cache on) was
     never exercised by a ``run()`` test. On both the default capture and the
-    ``intervention_ready`` capture a default-config GPT-2 ``run()`` must reach VERIFIED
+    ``replayable`` capture a default-config GPT-2 ``run()`` must reach VERIFIED
     or a TYPED remedy (never the bare "Not enough leaves" ValueError the audit hit),
     and the remedy must name ``use_cache=False``."""
 
@@ -174,7 +174,7 @@ def test_gpt2_default_cache_config_live_run_reaches_verdict_or_typed_remedy(gpt2
     torch.manual_seed(0)
     model = build_gpt2_default_cache("eager").eval()
     assert model.config.use_cache is True
-    for options in (CaptureOptions(), CaptureOptions(intervention_ready=True)):
+    for options in (CaptureOptions(), CaptureOptions(replayable=True)):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             trace = tl.trace(model, input_ids, capture=options)

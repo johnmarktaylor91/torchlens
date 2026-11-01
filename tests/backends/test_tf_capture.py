@@ -87,10 +87,10 @@ def test_tf_capture_hand_built_op_chain_edges_and_saved_values() -> None:
         return y * tf.constant([3.0, 4.0])
 
     trace = tl.trace(chain, tf.constant([2.0, 3.0]), backend="tf")
-    by_func = {op.func_name: op for op in trace.layer_list}
+    by_func = {op.func_name: op for op in trace._layer_list}
 
-    assert trace.backend == "tf"
-    assert {"AddV2", "Mul"} <= {op.func_name for op in trace.layer_list}
+    assert trace.provenance.backend == "tf"
+    assert {"AddV2", "Mul"} <= {op.func_name for op in trace._layer_list}
     # Torch parity: parents/children hold the FINAL label, not the internal
     # raw capture identifier (``_label_raw``) -- the preview finalizer now
     # relabels every op's edges. The final spelling is CONDITIONAL, exactly
@@ -131,8 +131,8 @@ def test_tf_capture_options_does_not_reject_the_whole_object() -> None:
         capture=tl.options.CaptureOptions(keep_orphans=True),
     )
 
-    assert trace.backend == "tf"
-    assert trace.num_ops > 0
+    assert trace.provenance.backend == "tf"
+    assert trace._num_ops > 0
 
 
 def test_tf_capture_small_keras_cnn_modules_params_and_warm_boundary() -> None:
@@ -141,11 +141,11 @@ def test_tf_capture_small_keras_cnn_modules_params_and_warm_boundary() -> None:
     tf.random.set_seed(1)
     model = SmallCnn()
     trace = tl.trace(model, tf.ones((1, 8, 8, 1)), backend="tf")
-    op_types = {op.func_name for op in trace.layer_list}
-    conv = next(op for op in trace.layer_list if op.func_name == "Conv2D")
-    dense = next(op for op in trace.layer_list if op.func_name == "MatMul")
+    op_types = {op.func_name for op in trace._layer_list}
+    conv = next(op for op in trace._layer_list if op.func_name == "Conv2D")
+    dense = next(op for op in trace._layer_list if op.func_name == "MatMul")
 
-    assert trace.backend == "tf"
+    assert trace.provenance.backend == "tf"
     assert {"Conv2D", "MatMul", "MaxPool", "Relu"} <= op_types
     assert conv.modules[-1].startswith("conv:")
     assert dense.modules[-1].startswith("dense:")
@@ -163,14 +163,14 @@ def test_tf_capture_small_transformer_nested_mha_frames() -> None:
     x = tf.ones((1, 4, 8))
     model(x)
     trace = tl.trace(model, x, backend="tf")
-    op_types = {op.func_name for op in trace.layer_list}
+    op_types = {op.func_name for op in trace._layer_list}
     projection_ops = [
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if op.func_name == "Einsum"
         and any("mha.query:" in module or module.startswith("mha:") for module in op.modules)
     ]
-    attention_ops = [op for op in trace.layer_list if op.func_name in {"BatchMatMulV2", "Softmax"}]
+    attention_ops = [op for op in trace._layer_list if op.func_name in {"BatchMatMulV2", "Softmax"}]
 
     assert {"Einsum", "Softmax", "Relu"} <= op_types
     assert projection_ops
@@ -185,11 +185,11 @@ def test_tf_capture_raw_tf_module_class_level_stack() -> None:
 
     module = RawModule()
     trace = tl.trace(module, tf.ones((1, 2)), backend="tf")
-    op_types = {op.func_name for op in trace.layer_list}
-    matmul = next(op for op in trace.layer_list if op.func_name == "MatMul")
+    op_types = {op.func_name for op in trace._layer_list}
+    matmul = next(op for op in trace._layer_list if op.func_name == "MatMul")
 
     assert {"ReadVariableOp", "MatMul", "AddV2", "Relu"} <= op_types
-    assert trace.module_identity_mode == "object_module"
+    assert trace.options.module_identity_mode == "object_module"
     assert matmul.modules == ("self:1",)
     assert getattr(trace, "_tf_init_op_labels", ()) == ()
     assert np.allclose(trace[matmul.label].out, np.array([[5.0]], dtype=np.float32))
@@ -205,9 +205,9 @@ def test_tf_save_func_selector_only_materializes_matching_payloads() -> None:
         return y * tf.constant([3.0, 4.0])
 
     trace = tl.trace(chain, tf.constant([2.0, 3.0]), backend="tf", save=tl.func("relu"))
-    relu_ops = [op for op in trace.layer_list if op.func_name == "Relu"]
+    relu_ops = [op for op in trace._layer_list if op.func_name == "Relu"]
     unsaved_ops = [
-        op for op in trace.layer_list if not op.is_input and op.func_name not in {"Relu"}
+        op for op in trace._layer_list if not op.is_input and op.func_name not in {"Relu"}
     ]
 
     assert relu_ops
@@ -223,11 +223,11 @@ def test_tf_save_in_module_selector_only_materializes_module_payloads() -> None:
     model = SmallCnn()
     trace = tl.trace(model, tf.ones((1, 8, 8, 1)), backend="tf", save=tl.in_module("conv"))
     conv_ops = [
-        op for op in trace.layer_list if any(module.startswith("conv:") for module in op.modules)
+        op for op in trace._layer_list if any(module.startswith("conv:") for module in op.modules)
     ]
     outside_ops = [
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if not op.is_input and not any(module.startswith("conv:") for module in op.modules)
     ]
 
@@ -244,7 +244,7 @@ def test_tf_save_composed_selector_materializes_intersection() -> None:
     model = SmallCnn()
     predicate = tl.in_module("conv") & tl.func("relu")
     trace = tl.trace(model, tf.ones((1, 8, 8, 1)), backend="tf", save=predicate)
-    saved_ops = [op for op in trace.layer_list if op.has_saved_activation and not op.is_input]
+    saved_ops = [op for op in trace._layer_list if op.has_saved_activation and not op.is_input]
 
     assert saved_ops
     assert {op.func_name for op in saved_ops} == {"Relu"}
@@ -263,7 +263,7 @@ def test_tf_save_all_and_default_materialize_all_op_payloads() -> None:
     explicit_trace = tl.trace(chain, tf.constant([-1.0, 3.0]), backend="tf", save="all")
 
     for trace in (default_trace, explicit_trace):
-        ops = [op for op in trace.layer_list if not op.is_input]
+        ops = [op for op in trace._layer_list if not op.is_input]
         assert ops
         assert all(op.out is not None and op.has_saved_activation for op in ops)
 
@@ -281,7 +281,7 @@ def test_tf_value_size_cap_skips_large_payload(monkeypatch: pytest.MonkeyPatch) 
         return x + tf.ones((4,), dtype=tf.float32)
 
     trace = tl.trace(chain, tf.ones((4,), dtype=tf.float32), backend="tf")
-    add = next(op for op in trace.layer_list if op.func_name == "AddV2")
+    add = next(op for op in trace._layer_list if op.func_name == "AddV2")
 
     assert add.out is None
     assert not add.has_saved_activation
@@ -298,11 +298,11 @@ def test_tf_trace_access_summary_smoke() -> None:
         return tf.nn.relu(x) + tf.constant([1.0, 2.0])
 
     trace = tl.trace(chain, tf.constant([-1.0, 3.0]), backend="tf")
-    relu = next(op for op in trace.layer_list if op.func_name == "Relu")
+    relu = next(op for op in trace._layer_list if op.func_name == "Relu")
 
     assert trace[relu.label] is relu
     assert trace["relu"] is relu
-    assert trace[0] is trace.layer_list[0]
+    assert trace[0] is trace._layer_list[0]
     assert relu.out is not None
     assert isinstance(trace.summary(), str)
 

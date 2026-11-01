@@ -147,7 +147,7 @@ def _first_saved_layer(trace: Trace) -> Any:
         First saved layer-pass entry.
     """
 
-    return next(layer for layer in trace.layer_list if layer.has_saved_activation)
+    return next(layer for layer in trace._layer_list if layer.has_saved_activation)
 
 
 def _read_manifest(bundle_path: Path) -> dict[str, Any]:
@@ -339,7 +339,7 @@ def test_rehydrate_nested_materializes_saved_args_blob_refs(tmp_path: Path) -> N
     lazy_log = load(bundle_path, lazy=True, materialize_nested=False)
     layer = next(
         layer
-        for layer in lazy_log.layer_list
+        for layer in lazy_log._layer_list
         if layer.has_saved_args
         and layer.saved_args is not None
         and _contains_blob_ref(layer.saved_args)
@@ -394,7 +394,7 @@ def test_save_drops_unmaterialized_nested_blob_refs_when_fields_are_excluded(
     )
     restored = load(resaved_path, lazy=False)
 
-    assert restored.model_class_name == lazy_log.model_class_name
+    assert restored.source.class_name == lazy_log.source.class_name
 
 
 @pytest.mark.parametrize("lazy", [False, True])

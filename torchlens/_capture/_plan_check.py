@@ -10,7 +10,7 @@ status until discharged — where nnsight's scan evaporates with its trace
 context.
 
 FOREVER SEPARATE from the runnable gate: checking a plan never sets
-``intervention_ready``, arms, replays, or lifts the L7b late-bind refusal —
+``replayable``, arms, replays, or lifts the L7b late-bind refusal —
 scanning a plan is not arming a capture. ``executable`` is ``False`` on
 every report by construction. Refused typed: arbitrary callables as
 replacements, value-derived selection, and REFUTED sources (through the one
@@ -199,9 +199,7 @@ def check_plan(trace: Any, plan: Any) -> PlanCheckReport:
         sites=tuple(checks),
         source_digest=tl_hash.trace(trace),
         evidence_status=(
-            claim_status_for(trace).value
-            if bool(getattr(trace, "structure_only", False))
-            else "measured"
+            claim_status_for(trace).value if bool(trace._options_structure_only) else "measured"
         ),
     )
 
@@ -246,9 +244,7 @@ def _index_bounds_finding(trace: Any, selector: Any) -> str | None:
         pass_index = int(pass_text)
     except ValueError:
         return None
-    layer_labels = {
-        str(getattr(layer, "layer_label", "")) for layer in getattr(trace, "layer_list", ())
-    }
+    layer_labels = {str(getattr(layer, "layer_label", "")) for layer in trace._layer_list}
     if base not in layer_labels:
         return None
     layer = trace[base]

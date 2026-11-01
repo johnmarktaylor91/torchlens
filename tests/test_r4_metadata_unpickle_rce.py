@@ -34,7 +34,7 @@ from torchlens._utils.display import identity
 from torchlens.options import CaptureOptions
 
 _CAP = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )
@@ -205,7 +205,7 @@ def test_control_flow_bundle_round_trips(tmp_path: Path) -> None:
     assert b"_load_from_bytes" not in _metadata_path(bundle).read_bytes()
     loaded = tl.load(bundle)
     assert loaded is not None
-    for conditional in loaded.conditionals:
+    for conditional in loaded.graph.conditionals:
         for arm in conditional.arms:
             assert arm._trace is loaded
 

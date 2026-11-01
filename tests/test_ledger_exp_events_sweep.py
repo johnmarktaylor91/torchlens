@@ -36,9 +36,7 @@ class _Tiny(nn.Module):
 
 def _ready_trace() -> tl.Trace:
     torch.manual_seed(3)
-    return tl.trace(
-        _Tiny(), torch.randn(2, 3), capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    return tl.trace(_Tiny(), torch.randn(2, 3), capture=tl.options.CaptureOptions(replayable=True))
 
 
 # ---------------------------------------------------------------------------

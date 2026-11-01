@@ -13,6 +13,7 @@ import torchlens as tl
 from torchlens._data_classes._layer_sites import (
     SHAPE_SUMMARY_CHARACTER_CLASS,
     layer_shape_summary,
+    layer_site_key,
 )
 from torchlens._errors import InvalidArgumentError
 
@@ -96,14 +97,14 @@ class _Grow(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# Layer.site_key
+# layer_site_key (the Layer-level site-key accessor)
 # ---------------------------------------------------------------------------
 
 
 def test_site_key_single_on_uniform_layer() -> None:
     log = tl.trace(_Tied(), torch.randn(2, 8))
-    assert log["linear_1_1"].site_key == "s1|lin|linear||1"
-    assert log["relu_1_2"].site_key == "s1|act|relu||1"
+    assert layer_site_key(log["linear_1_1"]) == "s1|lin|linear||1"
+    assert layer_site_key(log["relu_1_2"]) == "s1|act|relu||1"
 
 
 def test_site_key_refuses_typed_on_spanning_layer() -> None:
@@ -114,7 +115,7 @@ def test_site_key_refuses_typed_on_spanning_layer() -> None:
     member_keys = [op.site_key for _, op in sorted(layer.ops.items())]
     assert member_keys == ["s1|blk|tanh||1", "s1|blk|tanh||2"]
     with pytest.raises(InvalidArgumentError) as excinfo:
-        _ = layer.site_key
+        _ = layer_site_key(layer)
     assert excinfo.value.fields["code"] == "layer_site_ambiguous"
     assert ".ops[k].site_key" in str(excinfo.value)
 
@@ -127,7 +128,7 @@ def test_site_key_refuses_typed_when_keys_absent() -> None:
     for _, op in layer.ops.items():
         op.site_key = None
     with pytest.raises(InvalidArgumentError) as excinfo:
-        _ = layer.site_key
+        _ = layer_site_key(layer)
     assert excinfo.value.fields["code"] == "site_key_unavailable"
 
 

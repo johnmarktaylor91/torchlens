@@ -5,9 +5,9 @@ need no further version bump:
 
 - ``Op.injection_provenance`` (surgery memo 3.5 / items 8-9, 12; F01 writes):
   the injected-op durable structural key. ``None`` on every model op.
-- ``Trace.source_snapshots`` (convert memo item 24; F30 writes): the
+- ``Trace.source.snapshots`` (convert memo item 24; F30 writes): the
   per-(path, digest) source snapshot table. Empty until then.
-- ``Trace.structure_evidence`` (weightsfree memo section 5 / item 14; F33
+- ``Trace.graph.structure_evidence`` (weightsfree memo section 5 / item 14; F33
   writes): the immutable structure-only evidence envelope. ``None`` until
   then, and only a structure-only capture may carry one.
 
@@ -82,12 +82,12 @@ def _evidence_envelope(**overrides):
 def test_defaults_round_trip_on_ordinary_captures(tmp_path):
     trace = _traced()
     assert all(op.injection_provenance is None for op in trace.ops)
-    assert trace.source_snapshots == []
-    assert trace.structure_evidence is None
+    assert trace.source.snapshots == []
+    assert trace.graph.structure_evidence is None
     loaded = _roundtrip(trace, tmp_path, "defaults")
     assert all(op.injection_provenance is None for op in loaded.ops)
-    assert loaded.source_snapshots == []
-    assert loaded.structure_evidence is None
+    assert loaded.source.snapshots == []
+    assert loaded.graph.structure_evidence is None
 
 
 def test_injection_provenance_on_a_model_op_refuses_at_load(tmp_path):
@@ -138,9 +138,9 @@ def test_source_snapshots_round_trip_and_validate(tmp_path):
         {"path": "frame_filtered.py", "digest": _DIGEST, "text": None},
     ]
     trace = _traced()
-    trace.source_snapshots = rows
+    trace._source_snapshots = rows
     loaded = _roundtrip(trace, tmp_path, "snapshots_ok")
-    assert loaded.source_snapshots == rows
+    assert loaded.source.snapshots == rows
 
 
 @pytest.mark.parametrize(
@@ -159,7 +159,7 @@ def test_source_snapshots_round_trip_and_validate(tmp_path):
 )
 def test_malformed_source_snapshots_refuse_at_load(tmp_path, rows):
     trace = _traced()
-    trace.source_snapshots = rows
+    trace._source_snapshots = rows
     with pytest.raises(ArtifactError) as excinfo:
         _roundtrip(trace, tmp_path, "snapshots_bad")
     assert getattr(excinfo.value, "fields", {}).get("code") == "artifact_source_snapshots_invalid"
@@ -167,7 +167,7 @@ def test_malformed_source_snapshots_refuse_at_load(tmp_path, rows):
 
 def test_structure_evidence_requires_the_structure_only_marker(tmp_path):
     trace = _traced()
-    trace.structure_evidence = _evidence_envelope()
+    trace._graph_structure_evidence = _evidence_envelope()
     with pytest.raises(ArtifactError) as excinfo:
         _roundtrip(trace, tmp_path, "evidence_unmarked")
     assert getattr(excinfo.value, "fields", {}).get("code") == "artifact_structure_evidence_invalid"
@@ -180,9 +180,9 @@ def test_structure_evidence_round_trips_on_structure_only_captures(tmp_path):
         torch.randn(2, 4),
         capture=tl.options.CaptureOptions(structure_only=True),
     )
-    trace.structure_evidence = _evidence_envelope()
+    trace._graph_structure_evidence = _evidence_envelope()
     loaded = _roundtrip(trace, tmp_path, "evidence_ok")
-    assert loaded.structure_evidence == _evidence_envelope()
+    assert loaded.graph.structure_evidence == _evidence_envelope()
 
 
 @pytest.mark.parametrize(
@@ -206,7 +206,7 @@ def test_malformed_structure_evidence_refuses_at_load(tmp_path, mutation):
         torch.randn(2, 4),
         capture=tl.options.CaptureOptions(structure_only=True),
     )
-    trace.structure_evidence = _evidence_envelope(**mutation)
+    trace._graph_structure_evidence = _evidence_envelope(**mutation)
     with pytest.raises(ArtifactError) as excinfo:
         _roundtrip(trace, tmp_path, "evidence_bad")
     assert getattr(excinfo.value, "fields", {}).get("code") == "artifact_structure_evidence_invalid"
@@ -219,7 +219,7 @@ def test_malformed_evidence_claims_refuse_at_load(tmp_path):
         capture=tl.options.CaptureOptions(structure_only=True),
     )
     claims = dict(_evidence_envelope()["claims"], measured_values="available")
-    trace.structure_evidence = _evidence_envelope(claims=claims)
+    trace._graph_structure_evidence = _evidence_envelope(claims=claims)
     with pytest.raises(ArtifactError) as excinfo:
         _roundtrip(trace, tmp_path, "evidence_claims_bad")
     assert getattr(excinfo.value, "fields", {}).get("code") == "artifact_structure_evidence_invalid"

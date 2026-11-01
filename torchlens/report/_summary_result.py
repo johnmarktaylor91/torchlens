@@ -91,16 +91,16 @@ def collect_summary_facts(
     except Exception:  # noqa: BLE001 - fact gathering degrades to unknown, never breaks summary()
         buffer_count = None
     passes_max = 1
-    for op in getattr(trace, "layer_list", ()) or ():
+    for op in trace._layer_list or ():
         passes_max = max(passes_max, int(getattr(op, "num_passes", 1) or 1))
     return SummaryFacts(
-        model_class_name=getattr(trace, "model_class_name", None),
+        model_class_name=trace._source_class_name,
         input_shapes=input_shapes,
         input_dtypes=input_dtypes,
-        backend=getattr(trace, "backend", None),
+        backend=trace._provenance_backend,
         outcome_status=getattr(getattr(outcome, "status", None), "value", None),
-        capture_verified=getattr(trace, "capture_verified", None),
-        structure_only=bool(getattr(trace, "structure_only", False)),
+        capture_verified=trace._provenance_verified,
+        structure_only=bool(trace._options_structure_only),
         health_verdict=health.verdict,
         health_hint=nonfinite_option_hint(trace, health.verdict),
         params_total=core.params.total,

@@ -76,8 +76,8 @@ class TestNumbersRightAndObservationInert:
         for index in (0, len(series) - 1):
             spine = series[index].observation.spine
             direct = outputs[index]
-            assert spine.count_total == direct.numel()
-            assert spine.count_zero == int((direct == 0).sum())
+            assert spine.numel == direct.numel()
+            assert spine.num_zero == int((direct == 0).sum())
             assert spine.finite_max == pytest.approx(float(direct.max()), rel=1e-6)
             assert spine.sum == pytest.approx(float(direct.double().sum()), rel=1e-9)
 
@@ -101,13 +101,13 @@ class TestNumbersRightAndObservationInert:
         nan_steps = [
             p.step_lo
             for p in view.series(injector_site)
-            if p.observation.spine is not None and p.observation.spine.count_nan > 0
+            if p.observation.spine is not None and p.observation.spine.num_nan > 0
         ]
         assert nan_steps == [2], "NaN lands at exactly its (site, step) coordinate"
         assert "nonfinite" in quantile_fan(view, injector_site)
         # Observation is inert: no other site saw a NaN at step 2 upstream.
         upstream = next(s for s, r in view.sites.items() if r.module_path == "0")
-        assert all(p.observation.spine.count_nan == 0 for p in view.series(upstream))
+        assert all(p.observation.spine.num_nan == 0 for p in view.series(upstream))
 
 
 class TestResumeSegments:
@@ -173,7 +173,7 @@ class TestReusedModuleTruth:
         view = HistoryView.from_collector(collector)
         site = next(iter(view.sites))
         spine = view.series(site)[0].observation.spine
-        assert spine.count_total == 2 * (2 * 4), "both calls' populations folded exactly"
+        assert spine.numel == 2 * (2 * 4), "both calls' populations folded exactly"
 
 
 class TestFailOpenReducer:
@@ -219,7 +219,7 @@ class TestCrossSiteRollupRefused:
                 stream="activation",
                 phase="forward",
                 presence="observed",
-                spine=spine.result(),
+                spine=spine.compute(),
                 sketch=sketch.result(),
             )
 

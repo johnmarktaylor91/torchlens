@@ -12,6 +12,9 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .trace import Trace
 
+#: Where the live ``Trace`` class is defined; ``is_live_trace`` matches by identity.
+_TRACE_MODULE = __name__.rsplit(".", 1)[0] + ".trace"
+
 # Plausible-but-absent attribute names, mapped to the fields that answer them. A
 # frontier-scale user's first question is "how big is this capture?", and the
 # singular ``activation_memory`` spelling (which IS an ``Op`` field, meaning that
@@ -52,13 +55,13 @@ _REMOVED_TRACE_MEMBERS: dict[str, str] = {
         "use trace.validate_forward_pass(...) -- validate_saved_outs was its removed alias"
     ),
     "conditional_then_entry_edges": (
-        "use trace.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
+        "use trace.graph.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
     ),
     "conditional_elif_entry_edges": (
-        "use trace.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
+        "use trace.graph.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
     ),
     "conditional_else_entry_edges": (
-        "use trace.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
+        "use trace.graph.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
     ),
 }
 
@@ -99,3 +102,21 @@ def _raise_missing_trace_attribute(trace: Trace, name: str) -> Any:
     if hint is not None:
         raise AttributeError(f"{type(trace).__name__!s} object has no attribute {name!r}; {hint}")
     raise AttributeError(f"{type(trace).__name__!s} object has no attribute {name!r}")
+
+
+def is_live_trace(obj: Any) -> bool:
+    """Return whether ``obj`` is a ``Trace`` that still holds its stores.
+
+    Readers that accept any capture-shaped subject (a ``PartialTrace``, a
+    layer/module accessor, an ``Op``, a ``Recording``, or a trace husked by
+    ``cleanup()``) check this before reading a private Trace store, so only a
+    live Trace reaches the direct, fail-closed read and every other subject
+    keeps the reader's empty answer.
+    """
+
+    # Identity by class, not isinstance: importing ``trace`` here would make
+    # this module part of the Trace import cycle, and every reader imports it.
+    for cls in type(obj).__mro__:
+        if cls.__name__ == "Trace" and cls.__module__ == _TRACE_MODULE:
+            return not obj.__dict__.get("_tl_cleaned_up", False)
+    return False

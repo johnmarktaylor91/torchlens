@@ -12,7 +12,7 @@ opt-in checks that may never claim a match (memo D4). On request only,
 carry three separate epistemic claims:
 
 - :class:`torchlens._data_classes.trace.ResolvedPreprocessing` -- the
-  authority provenance record (persisted on ``Trace.input_preprocessor``),
+  authority provenance record (persisted on ``Trace.provenance.input_preprocessor``),
   with the derived closed ``status`` (authoritative / unverified_fallback /
   unknown).
 - :class:`PreprocessingComparison` -- the field-level configuration comparison

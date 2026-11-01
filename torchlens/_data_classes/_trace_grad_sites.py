@@ -330,5 +330,5 @@ def _qualifier_pass(value: Any) -> int | None:
         return value
     if isinstance(value, (tuple, list)) and value and isinstance(value[0], int):
         return int(value[0])
-    pass_index = getattr(value, "pass_index", None)
+    pass_index = getattr(value, "pass_number", getattr(value, "pass_index", None))
     return int(pass_index) if isinstance(pass_index, int) else None

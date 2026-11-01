@@ -253,5 +253,5 @@ def test_compile_wrapped_model_unwrapped_cross_link() -> None:
             torch.randn(3, 4, requires_grad=True),
             capture=tl.options.CaptureOptions(backward_ready=True),
         )
-    assert trace.layer_list
+    assert trace._layer_list
     trace.cleanup()

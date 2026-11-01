@@ -45,8 +45,8 @@ __tl_layer__ = "L1"
 # load validation; the "health_facts" and "capture_advisories" annotation
 # families are admitted as reserved keys; and the entry-dark field slots for
 # injection provenance (Op.injection_provenance), source snapshots
-# (Trace.source_snapshots + FuncCallLocation.source_file_digest), and the
-# structure-only evidence envelope (Trace.structure_evidence) are declared
+# (Trace.source.snapshots + FuncCallLocation.source_file_digest), and the
+# structure-only evidence envelope (Trace.graph.structure_evidence) are declared
 # with fail-closed load validation so their Phase-3 writers (F01/F30/F33)
 # need no further version bump.
 # The C07X amendment rides the SAME v9 window (TLSPEC_VERSION stays 9;
@@ -59,7 +59,7 @@ __tl_layer__ = "L1"
 # rows, arithmetic cache_len DELETED for the measured carried-state witness
 # slots entry_state_digest/exit_state_digest, capture_digest +
 # perturbed/intervention_digest/fire_count coupling slots, optional
-# step_join); the Trace.root_entry_point identity fact (written
+# step_join); the Trace.provenance.root_entry_point identity fact (written
 # unconditionally) with the Op.tl_authored_root marker and Op.episode_step
 # stamp -- all with fail-closed load validation so the F40b/F40c/F41/F42/
 # F-EPISODE/F-WITNESS writers need no further version bump.
@@ -77,15 +77,18 @@ __tl_layer__ = "L1"
 # the later member; optional ``chosen`` / ``candidates`` / ``evidence``);
 # a v9 reader refuses both bare kinds, as the loader doctrine requires. The v9
 # contract of record stays frozen byte-for-byte beside the v10 one.
-TLSPEC_VERSION = 10
+# v11 (3.0 persisted record shape): every stored key follows its decided
+# public name (renames, removals and private stored fields in one bump); the
+# v10 contract of record stays frozen byte-for-byte beside the v11 one.
+TLSPEC_VERSION = 11
 
-# Rehydration floor: the stamp every refusal reports as the oldest format the
-# writer contract still names. ``MIN_TORCHLENS_VERSION_TEXT`` is the floor release
-# text stamped into the writer contract; it is never matched against a manifest.
-# The loader itself reads only the current format: an older stamp was written by
-# torchlens 2.x and refuses with the one error in ``_pre3_module_paths``.
-MIN_TLSPEC_VERSION = 6
-MIN_TORCHLENS_VERSION_TEXT = "2.31.0"
+# Rehydration floor: this release reads only its own format. Every stamp below
+# the current one was written by torchlens 2.x and refuses with the one error in
+# ``_pre3_module_paths``. ``MIN_TORCHLENS_VERSION_TEXT`` is the floor release
+# text stamped into the writer contract (the first tlspec-11 writer); it is never
+# matched against a manifest. The frozen v9 and v10 contracts keep their texts.
+MIN_TLSPEC_VERSION = 11
+MIN_TORCHLENS_VERSION_TEXT = "3.0.0"
 
 # Reserved generation step-score vocabulary, credited to inseq: the
 # keys of inseq's ``STEP_SCORES_MAP`` (``inseq/attr/step_functions.py``,

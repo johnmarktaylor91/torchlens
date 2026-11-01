@@ -329,7 +329,7 @@ def test_grad_complement_and_union_normalise_inside_the_gradient_universe() -> N
     assert negated == tl.grad(~tl.label(first_relu))
     plan = resolve_site_plan(trace, negated)
     assert [branch.universe for branch in plan] == ["gradient"]
-    every_op = [op.label for op in trace.layer_list]
+    every_op = [op.label for op in trace._layer_list]
     assert [op.label for op in plan[0].sites] == [
         label for label in every_op if label != trace[first_relu].label
     ]
@@ -371,7 +371,7 @@ def test_grad_bridges_to_the_grad_fn_behind_its_op() -> None:
     first_relu, _ = _relu_labels(trace)
     relu_grad_fns = [
         site
-        for site in trace.grad_fn_logs.values()
+        for site in trace._grad_fn_logs.values()
         if site.has_op and site.op_label == trace[first_relu].layer_label
     ]
     assert relu_grad_fns

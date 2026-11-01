@@ -40,6 +40,7 @@ from typing import Any, Literal, NoReturn
 
 from .._errors import InvalidArgumentError, TorchLensWarning
 from ._bind_step import ACTIVE_BIND_SESSION, active_bind_decode_step
+from ._binding_calls import _alias_disclosure, _has_tensor, _is_in_place_call
 from ._helper_fingerprint import helper_versions
 from ._module_alias_guard import (
     bare_module_address,
@@ -392,7 +393,7 @@ class _RulePlan:
         self.helper_spec = decision.hook if isinstance(decision.hook, Edit) else None
         self.hook_callable = normalize_hook(decision.hook)
         self.display_name = (
-            self.helper_spec.helper_name
+            self.helper_spec.name
             if self.helper_spec is not None
             else getattr(decision.hook, "__qualname__", type(decision.hook).__name__)
         )
@@ -477,11 +478,11 @@ class _BindSession:
             target_label=site.target_label,
             container_path=site.container_path,
             engine="bind",
-            helper=plan.helper_spec,
+            edit=plan.helper_spec,
             site_label=site.site_key,
             timing="post",
             signal="forward",
-            helper_name=plan.display_name,
+            edit_name=plan.display_name,
             run_ctx=self.run_ctx,
             previous_notes=previous_notes,
             replaced=replaced,
@@ -550,26 +551,6 @@ class _BindDispatchMode:
         return _Mode()
 
 
-def _is_in_place_call(func_name: str, kwargs: dict[str, Any]) -> bool:
-    """Whether one intercepted torch call mutates its input storage in place."""
-
-    if kwargs.get("inplace") is True:
-        return True
-    return func_name.endswith("_") and not func_name.endswith("__")
-
-
-def _has_tensor(value: Any, tensor_type: type) -> bool:
-    """Cheap check that an output holds at least one top-level tensor."""
-
-    if isinstance(value, tensor_type):
-        return True
-    if isinstance(value, (list, tuple)):
-        return any(isinstance(item, tensor_type) for item in value)
-    if isinstance(value, dict):
-        return any(isinstance(item, tensor_type) for item in value.values())
-    return False
-
-
 _WRAP_UNIVERSE: frozenset[str] | None = None
 
 
@@ -591,6 +572,34 @@ def _wrap_name_universe() -> frozenset[str]:
     return _WRAP_UNIVERSE
 
 
+def _op_hook_ctx(
+    session: _BindSession,
+    plan: _RulePlan,
+    rule: Any,
+    op_identity: tuple[str, str, str],  # (raw_label, layer_type, func_name)
+    site_key: Any,
+) -> Any:
+    """Build the post-forward hook context for one matched op-level rule firing."""
+    from .hooks import make_hook_context
+
+    raw_label, layer_type, func_name = op_identity
+
+    return make_hook_context(
+        name=plan.display_name,
+        timing="post",
+        signal="forward",
+        op={
+            "label": raw_label,
+            "layer_type": layer_type,
+            "func_name": func_name,
+            "site_key": site_key,
+            "pass_number": max(session.root_passes, 1),
+        },
+        state=session.rule_scratch[session.rule_ids[id(rule)]],
+        run_context=session.run_ctx,
+    )
+
+
 def _consider_op(
     session: _BindSession,
     plans: list[_RulePlan],
@@ -610,7 +619,6 @@ def _consider_op(
         _iter_loggable_live_outputs,
         _replace_output_tensors_by_path,
     )
-    from .hooks import make_hook_context
     from .runtime import _execute_hook
 
     layer_type, func_name, out_orig = call
@@ -651,7 +659,9 @@ def _consider_op(
             sample_id=None,
             address=getattr(module_frame, "address", None) if module_frame else None,
             module_type=getattr(module_frame, "module_type", None) if module_frame else None,
-            module_pass_index=(getattr(module_frame, "pass_index", None) if module_frame else None),
+            module_pass_number=(
+                getattr(module_frame, "pass_number", None) if module_frame else None
+            ),
         )
         try:
             rule = binding.recipe.match(ctx)
@@ -675,20 +685,7 @@ def _consider_op(
             # rules apply at real module hooks); nothing to fire here.
             continue
         site_key = session.minter.key_for_context(ctx)
-        hook_ctx = make_hook_context(
-            name=plan.display_name,
-            timing="post",
-            signal="forward",
-            op={
-                "label": raw_label,
-                "layer_type": layer_type,
-                "func_name": func_name,
-                "site_key": site_key,
-                "pass_index": max(session.root_passes, 1),
-            },
-            state=session.rule_scratch[session.rule_ids[id(rule)]],
-            run_context=session.run_ctx,
-        )
+        hook_ctx = _op_hook_ctx(session, plan, rule, (raw_label, layer_type, func_name), site_key)
         hooked = _execute_hook(plan.hook_callable, out, hook_ctx)
         session.record_fire(
             plan,
@@ -832,7 +829,7 @@ class _ArmedRuntime:
                         address=address,
                         module_type=module_type,
                         module_id=module_id,
-                        pass_index=session.module_pass_counts[address],
+                        pass_number=session.module_pass_counts[address],
                     )
                 )
 
@@ -910,7 +907,7 @@ def _make_boundary_hook(
                 op={
                     "label": f"{address}:{pass_index}",
                     "module_address": address,
-                    "pass_index": pass_index,
+                    "pass_number": pass_index,
                 },
                 state=session.rule_scratch[session.rule_ids[id(plan.rule)]],
                 run_context=session.run_ctx,
@@ -948,15 +945,6 @@ def _decode_step_admits(plan: _RulePlan) -> bool:
         return True
     step = active_bind_decode_step()
     return step is not None and all(step in selector.steps for selector in parts[1])
-
-
-def _alias_disclosure(aliases: dict[str, str]) -> dict[str, tuple[str, ...]]:
-    """Invert the alias map into canonical address -> alias spellings."""
-
-    disclosure: dict[str, list[str]] = {}
-    for alias, canonical in aliases.items():
-        disclosure.setdefault(canonical, []).append(alias)
-    return {canonical: tuple(names) for canonical, names in disclosure.items()}
 
 
 def _lower_rules(

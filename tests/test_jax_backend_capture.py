@@ -14,6 +14,7 @@ import pytest
 import torchlens as tl
 from torchlens._data_classes._compaction import _COMPACTED_TRACES
 from torchlens._postprocess.graph_traversal import _remove_orphan_nodes
+from torchlens._record_type import record_type
 from torchlens.backends.jax.backend import (
     _control_parent_labels,
     _data_parent_arg_positions,
@@ -543,7 +544,7 @@ def _jax_equation_op(trace: Any, primitive: str) -> Any:
         Matching TorchLens op.
     """
 
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if op.func_name == primitive and "jax_source_path" in op.annotations:
             return op
     raise AssertionError(f"missing JAX primitive op: {primitive}")
@@ -567,7 +568,7 @@ def _jax_region_ops(trace: Any, primitive: str | None = None) -> list[Any]:
 
     return [
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if op.annotations.get("jax_capture_kind") in {"region", "region_output"}
         and (primitive is None or op.annotations.get("jax_region_primitive") == primitive)
     ]
@@ -621,17 +622,17 @@ def test_jax_trace_captures_equation_ops_and_params() -> None:
 
     trace = _trace_jax(_mlp, (params, x))
 
-    assert trace.backend == "jax"
-    assert trace.module_identity_mode == "function_root"
-    assert trace.param_source == "pytree-derived"
+    assert trace.provenance.backend == "jax"
+    assert trace.options.module_identity_mode == "function_root"
+    assert trace.provenance.param_source == "pytree-derived"
     assert trace.modules["self"].address == "self"
     assert set(trace.params.keys()) == {"w1", "b1", "w2"}
     assert trace.params["w1"].backend_address == "pytree:w1"
     assert trace.params["w1"].resolver_status == "metadata_only"
-    primitive_names = [op.func_name for op in trace.layer_list]
+    primitive_names = [op.func_name for op in trace._layer_list]
     assert "dot_general" in primitive_names
     assert "tanh" in primitive_names
-    assert all(op.has_saved_activation for op in trace.layer_list)
+    assert all(op.has_saved_activation for op in trace._layer_list)
     assert trace in _COMPACTED_TRACES
     assert trace.validate_forward_pass([])
 
@@ -647,7 +648,7 @@ def test_jax_function_root_attributes_params_to_consuming_ops() -> None:
     that annotation, so ``uses_params``/``used_by_ops``/``used_by_layers``
     all pointed at the input-echo ``input`` op instead of the real
     ``dot_general``/``broadcast_in_dim`` consumer, and
-    ``trace.num_layers_with_params`` stayed 0 (confirmed by reverting the
+    ``trace._num_layers_with_params`` stayed 0 (confirmed by reverting the
     fix and re-running this exact scenario). Now params are attached to the
     op whose graph ``parents`` include the param's source label -- i.e. the
     op that actually took the param value as a computational operand.
@@ -658,12 +659,12 @@ def test_jax_function_root_attributes_params_to_consuming_ops() -> None:
 
     trace = _trace_jax(_mlp, (params, x))
 
-    assert trace.module_identity_mode == "function_root"
+    assert trace.options.module_identity_mode == "function_root"
     # 3 distinct layers genuinely use a param: the two matmuls (w1, w2) and
     # the bias broadcast (b1).
-    assert trace.num_layers_with_params == 3
+    assert trace._num_layers_with_params == 3
 
-    param_using_ops = {op.label: op for op in trace.layer_list if op.has_params}
+    param_using_ops = {op.label: op for op in trace._layer_list if op.has_params}
     assert param_using_ops
     # No bare input-echo op should be reported as "using" a param -- params
     # are consumed downstream, not at the point they enter the trace.
@@ -695,7 +696,7 @@ def test_jax_trace_preserves_nested_param_paths() -> None:
 
     assert set(trace.params.keys()) == {"encoder.w", "encoder.b", "head.w"}
     assert trace.params["encoder.w"].backend_address == "pytree:encoder.w"
-    assert trace.param_source == "pytree-derived"
+    assert trace.provenance.param_source == "pytree-derived"
 
 
 def test_jax_trace_preserves_output_pytree_paths() -> None:
@@ -737,8 +738,8 @@ def test_jax_trace_accepts_declared_static_argnums() -> None:
         jax_static_argnums=2,
     )
 
-    assert trace.jax_static_argnums == (2,)
-    assert "mul" in {op.func_name for op in trace.layer_list}
+    assert trace.options.jax_static_argnums == (2,)
+    assert "mul" in {op.func_name for op in trace._layer_list}
     assert trace.validate_forward_pass([])
 
 
@@ -750,9 +751,9 @@ def test_jax_trace_inlines_allowlisted_pure_library_calls() -> None:
 
     trace = _trace_jax(_relu_block, (params, x))
 
-    assert "custom_jvp_call" in trace.jax_inlined_call_primitives
+    assert "custom_jvp_call" in trace.provenance.jax_inlined_call_primitives
     assert any(capture.inlined for capture in trace.jax_equation_captures)
-    assert "max" in {op.func_name for op in trace.layer_list}
+    assert "max" in {op.func_name for op in trace._layer_list}
     assert trace.validate_forward_pass([])
 
 
@@ -771,9 +772,9 @@ def test_jax_trace_inlines_non_allowlisted_jit_call() -> None:
         return user_dense(params, x) * 2.0
 
     trace = _trace_jax(model, (_params(), jnp.ones((2, 3), dtype=jnp.float32)))
-    inlined_ops = [op for op in trace.layer_list if op.annotations.get("jax_inlined") is True]
+    inlined_ops = [op for op in trace._layer_list if op.annotations.get("jax_inlined") is True]
 
-    assert "jit" in trace.jax_inlined_call_primitives
+    assert "jit" in trace.provenance.jax_inlined_call_primitives
     assert "dot_general" in {op.func_name for op in inlined_ops}
     assert "add" in {op.func_name for op in inlined_ops}
     assert trace.validate_forward_pass([]) is True
@@ -805,16 +806,16 @@ def test_jax_trace_inlines_jitted_scan_and_unrolls_body() -> None:
     )
     body_adds = [
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if op.func_name == "add"
         and op.annotations.get("jax_inlined") is True
         and ":jit/" in op.annotations.get("jax_source_path", "")
         and "/body/" in op.annotations.get("jax_source_path", "")
     ]
 
-    assert "jit" in trace.jax_inlined_call_primitives
+    assert "jit" in trace.provenance.jax_inlined_call_primitives
     assert len(body_adds) == 4
-    assert any(op.annotations.get("jax_capture_kind") == "scan_stack" for op in trace.layer_list)
+    assert any(op.annotations.get("jax_capture_kind") == "scan_stack" for op in trace._layer_list)
     assert trace.validate_forward_pass([]) is True
 
 
@@ -833,18 +834,18 @@ def test_jax_repeated_op_block_groups_into_passes() -> None:
         repeated_block,
         (None, jnp.ones((2, 3), dtype=jnp.float32)),
     )
-    add_ops = [op for op in trace.layer_list if op.func_name == "add"]
-    mul_ops = [op for op in trace.layer_list if op.func_name == "mul"]
+    add_ops = [op for op in trace._layer_list if op.func_name == "add"]
+    mul_ops = [op for op in trace._layer_list if op.func_name == "mul"]
 
-    assert [op.pass_index for op in add_ops] == [1, 2]
-    assert [op.pass_index for op in mul_ops] == [1, 2]
+    assert [op.pass_number for op in add_ops] == [1, 2]
+    assert [op.pass_number for op in mul_ops] == [1, 2]
     assert {op.layer_label for op in add_ops} == {add_ops[0].layer_label}
     assert {op.layer_label for op in mul_ops} == {mul_ops[0].layer_label}
     assert all(op.num_passes == 2 for op in (*add_ops, *mul_ops))
     assert add_ops[0].recurrent_ops == tuple(op.label for op in add_ops)
     assert mul_ops[0].recurrent_ops == tuple(op.label for op in mul_ops)
-    assert trace.layer_num_calls[add_ops[0].layer_label] == 2
-    assert trace.layer_num_calls[mul_ops[0].layer_label] == 2
+    assert trace._layer_num_calls[add_ops[0].layer_label] == 2
+    assert trace._layer_num_calls[mul_ops[0].layer_label] == 2
     assert trace.validate_forward_pass([])
 
 
@@ -932,7 +933,7 @@ def test_jax_synthetic_control_parent_is_not_a_value_replay_parent() -> None:
     )
     add_op = _jax_equation_op(trace, "add")
     mul_op = _jax_equation_op(trace, "mul")
-    control_parent = next(op for op in trace.layer_list if op.is_input)
+    control_parent = next(op for op in trace._layer_list if op.is_input)
 
     mul_op.parents = tuple(mul_op.parents) + (control_parent._label_raw,)
     control_parent.children = tuple(control_parent.children) + (mul_op._label_raw,)
@@ -1050,7 +1051,7 @@ def test_jax_validation_reports_synthetic_importer_region_as_unverified() -> Non
 
     trace = _trace_jax(_mlp, (_params(), jnp.ones((2, 3))))
     region_op = SimpleNamespace(layer_label="synthetic_region", annotations={})
-    trace.layer_list.append(region_op)
+    trace._layer_list.append(region_op)
     trace.annotations[REGION_REPLAY_PROVENANCE_KEY] = REGION_REPLAY_IMPORTER_PROVENANCE
     region_op.annotations[REGION_REPLAY_CLASS_KEY] = REGION_REPLAY_CLASS
     region_op.annotations[REGION_REPLAY_PROVENANCE_KEY] = REGION_REPLAY_IMPORTER_PROVENANCE
@@ -1115,12 +1116,12 @@ def test_jax_dynamic_while_over_cap_imports_unverified_region() -> None:
     region_ops = _jax_region_ops(trace, "while")
     replay_kinds = {
         op.annotations.get("jax_capture_kind")
-        for op in trace.layer_list
+        for op in trace._layer_list
         if "jax_capture_kind" in op.annotations
     }
 
-    assert len([op for op in region_ops if op.layer_type == "jax_region"]) == 1
-    assert len([op for op in region_ops if op.layer_type == "jax_region_out"]) == 2
+    assert len([op for op in region_ops if record_type(op) == "jax_region"]) == 1
+    assert len([op for op in region_ops if record_type(op) == "jax_region_out"]) == 2
     assert "while_decision" not in replay_kinds
     assert trace.validate_forward_pass([]).state == "unverified"
 
@@ -1158,8 +1159,8 @@ def test_jax_custom_vjp_forward_imports_unverified_region() -> None:
     )
     region_ops = _jax_region_ops(trace, "custom_vjp_call")
 
-    assert len([op for op in region_ops if op.layer_type == "jax_region"]) == 1
-    assert len([op for op in region_ops if op.layer_type == "jax_region_out"]) == 1
+    assert len([op for op in region_ops if record_type(op) == "jax_region"]) == 1
+    assert len([op for op in region_ops if record_type(op) == "jax_region_out"]) == 1
     assert trace.validate_forward_pass([]).state == "unverified"
 
 
@@ -1177,7 +1178,7 @@ def test_jax_region_boundary_corruption_is_caught() -> None:
         ({}, jnp.ones((5,), dtype=jnp.float32)),
         jax_max_control_flow_unroll=2,
     )
-    boundary = next(op for op in _jax_region_ops(trace, "scan") if op.layer_type == "jax_region")
+    boundary = next(op for op in _jax_region_ops(trace, "scan") if op.type == "jax_region")
     corrupted = (boundary.out[0] + 10.0, *boundary.out[1:])
     boundary._internal_set("out", corrupted)
 
@@ -1259,7 +1260,7 @@ def test_jax_region_summary_pandas_and_draw_work(tmp_path: Path) -> None:
     )
 
     assert "jax_region" in trace.summary(level="op")
-    assert len(trace.to_pandas()) == len(trace.layer_list)
+    assert len(trace.to_pandas()) == len(trace._layer_list)
     dot = trace.draw(
         path=str(tmp_path / "jax_region_graph"),
         vis_save_only=True,
@@ -1375,7 +1376,7 @@ def test_jax_trace_accepts_s0j_extended_corpus_subset() -> None:
 
     for name, fn, args, expected_primitives in cases:
         trace = _trace_jax(fn, args)
-        primitive_names = {op.func_name for op in trace.layer_list}
+        primitive_names = {op.func_name for op in trace._layer_list}
 
         assert expected_primitives <= primitive_names, name
         assert trace.validate_forward_pass([]), name
@@ -1397,15 +1398,15 @@ def test_jax_static_label_save_filters_public_payloads(tmp_path: Path) -> None:
         save=tl.func("dot_general"),
     )
     saved_ops = list(trace.saved_ops)
-    unsaved_ops = [op for op in trace.layer_list if not op.has_saved_activation]
+    unsaved_ops = [op for op in trace._layer_list if not op.has_saved_activation]
 
     assert saved_ops
     assert {op.func_name for op in saved_ops} == {"dot_general"}
     assert unsaved_ops
     assert all(op.out is None and op.out_ref is None for op in unsaved_ops)
     assert all(op.shape is not None and op.dtype_ref is not None for op in unsaved_ops)
-    assert trace.num_saved_ops == len(saved_ops)
-    assert int(trace.saved_activation_memory) == sum(
+    assert len(trace.saved_ops) == len(saved_ops)
+    assert int(trace.cost.saved_activation_memory) == sum(
         int(op.activation_memory or 0) for op in saved_ops
     )
     assert trace.validate_forward_pass([]) is True
@@ -1416,11 +1417,11 @@ def test_jax_static_label_save_filters_public_payloads(tmp_path: Path) -> None:
     out_entries = [entry for entry in manifest["body_index"] if entry.get("intended_use") == "out"]
     loaded = tl.load(path)
 
-    assert len(out_entries) == trace.num_saved_ops
-    assert loaded.backend == "jax"
-    assert len(list(loaded.saved_ops)) == trace.num_saved_ops
-    assert [op.has_saved_activation for op in loaded.layer_list] == [
-        op.has_saved_activation for op in trace.layer_list
+    assert len(out_entries) == len(trace.saved_ops)
+    assert loaded.provenance.backend == "jax"
+    assert len(list(loaded.saved_ops)) == len(trace.saved_ops)
+    assert [op.has_saved_activation for op in loaded._layer_list] == [
+        op.has_saved_activation for op in trace._layer_list
     ]
     assert loaded.validation_replay_status.reason == "loaded_trace_runtime_capture_stripped"
 
@@ -1446,7 +1447,7 @@ def test_jax_capture_index_map_survives_recurrent_relabeling() -> None:
     )
     assert all(index in capture_to_label for index in outvar_to_capture.values())
     assert all(key.startswith(f"{index}:") for key, index in outvar_to_capture.items())
-    assert [trace[label].pass_index for label in body_add_labels] == [1, 2, 3]
+    assert [trace[label].pass_number for label in body_add_labels] == [1, 2, 3]
     assert len({trace[label].layer_label for label in body_add_labels}) == 1
 
 
@@ -1509,14 +1510,14 @@ def test_jax_trace_unrolls_scan_and_groups_body_iterations() -> None:
         ),
     )
     scan_reads = [
-        op for op in trace.layer_list if op.annotations.get("jax_capture_kind") == "scan_read"
+        op for op in trace._layer_list if op.annotations.get("jax_capture_kind") == "scan_read"
     ]
     scan_stacks = [
-        op for op in trace.layer_list if op.annotations.get("jax_capture_kind") == "scan_stack"
+        op for op in trace._layer_list if op.annotations.get("jax_capture_kind") == "scan_stack"
     ]
     body_muls = [
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if op.func_name == "mul" and "/body/" in op.annotations.get("jax_source_path", "")
     ]
 
@@ -1524,7 +1525,7 @@ def test_jax_trace_unrolls_scan_and_groups_body_iterations() -> None:
     assert len(scan_stacks) == 1
     assert len(body_muls) == 4
     assert {op.layer_label for op in body_muls} == {body_muls[0].layer_label}
-    assert [op.pass_index for op in body_muls] == [1, 2, 3, 4]
+    assert [op.pass_number for op in body_muls] == [1, 2, 3, 4]
     assert {op.num_passes for op in body_muls} == {4}
     assert trace.validate_forward_pass([]) is True
 
@@ -1554,12 +1555,12 @@ def test_jax_trace_keeps_two_scan_groups_separate() -> None:
     )
     first_scan_adds = [
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if op.func_name == "add" and "root/0:scan/" in op.annotations.get("jax_source_path", "")
     ]
     second_scan_adds = [
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if op.func_name == "add" and "root/1:scan/" in op.annotations.get("jax_source_path", "")
     ]
 
@@ -1597,12 +1598,12 @@ def test_jax_trace_keeps_scan_body_primitive_separate_from_outside() -> None:
     )
     body_adds = [
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if op.func_name == "add" and "/body/" in op.annotations.get("jax_source_path", "")
     ]
     outside_adds = [
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if op.func_name == "add" and "/body/" not in op.annotations.get("jax_source_path", "")
     ]
 
@@ -1658,13 +1659,13 @@ def test_jax_trace_unrolls_cond_executed_branch_with_control_edge() -> None:
 
     trace = _trace_jax(uses_cond, (_params(), jnp.ones((2, 3), dtype=jnp.float32)))
     decisions = [
-        op for op in trace.layer_list if op.annotations.get("jax_capture_kind") == "cond_decision"
+        op for op in trace._layer_list if op.annotations.get("jax_capture_kind") == "cond_decision"
     ]
     branch_ops = [
-        op for op in trace.layer_list if "/branch=1/" in op.annotations.get("jax_source_path", "")
+        op for op in trace._layer_list if "/branch=1/" in op.annotations.get("jax_source_path", "")
     ]
     other_branch_ops = [
-        op for op in trace.layer_list if "/branch=0/" in op.annotations.get("jax_source_path", "")
+        op for op in trace._layer_list if "/branch=0/" in op.annotations.get("jax_source_path", "")
     ]
 
     assert len(decisions) == 1
@@ -1709,17 +1710,17 @@ def test_jax_trace_unrolls_while_and_groups_iterations() -> None:
         ),
     )
     decisions = [
-        op for op in trace.layer_list if op.annotations.get("jax_capture_kind") == "while_decision"
+        op for op in trace._layer_list if op.annotations.get("jax_capture_kind") == "while_decision"
     ]
     cond_ops = [
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if ":while/iter=" in op.annotations.get("jax_source_path", "")
         and "/cond/" in op.annotations.get("jax_source_path", "")
     ]
     body_adds = [
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if op.func_name == "add" and "/body/" in op.annotations.get("jax_source_path", "")
     ]
 
@@ -1762,10 +1763,10 @@ def test_jax_trace_while_zero_iteration_uses_initial_carry() -> None:
         ({"limit": jnp.asarray(0, dtype=jnp.int32)}, jnp.ones((2, 3), dtype=jnp.float32)),
     )
     decisions = [
-        op for op in trace.layer_list if op.annotations.get("jax_capture_kind") == "while_decision"
+        op for op in trace._layer_list if op.annotations.get("jax_capture_kind") == "while_decision"
     ]
     body_ops = [
-        op for op in trace.layer_list if "/body/" in op.annotations.get("jax_source_path", "")
+        op for op in trace._layer_list if "/body/" in op.annotations.get("jax_source_path", "")
     ]
 
     assert len(decisions) == 1
@@ -1848,5 +1849,5 @@ def test_jax_capture_options_does_not_reject_the_whole_object() -> None:
         capture=tl.options.CaptureOptions(keep_orphans=True),
     )
 
-    assert trace.backend == "jax"
-    assert trace.num_ops > 0
+    assert trace.provenance.backend == "jax"
+    assert trace._num_ops > 0

@@ -13,7 +13,7 @@ vocab/merges into an artifact the user believes is a graph.
 
 The pop block used to live ONLY on the normal forward-return arm, so the
 HALTED axis (and the failure/interrupt axes) exited with both still
-pinned, and neither was declared in ``Trace.FIELD_POLICY`` /
+pinned, and neither was declared in ``Trace._FIELD_POLICY`` /
 ``MODEL_LOG_FIELD_ORDER`` -- which is why the runtime-declaration lockstep gate
 never saw them.
 """
@@ -89,7 +89,7 @@ def test_halted_capture_drops_the_semantic_output_scratch() -> None:
         torch.ones(1, 3),
         halt=tl.func("relu"),
     )
-    assert trace.halted is True
+    assert trace.is_stopped is True
     assert _leaked(trace) == []
 
 
@@ -148,9 +148,9 @@ def test_halt_does_not_break_decoding_on_the_completed_path() -> None:
     model = Text().eval()
     model._torchlens_output_tokenizer = _Tokenizer()
     trace = tl.trace(model, torch.ones(1, 2))
-    assert trace.output_postprocessor is not None
-    assert trace.output_postprocessor.style == "hf_text"
-    assert trace.decoded_output is not None
+    assert trace.provenance.output_postprocessor is not None
+    assert trace.provenance.output_postprocessor.style == "hf_text"
+    assert trace._decoded_output is not None
     assert _leaked(trace) == []
 
 
@@ -164,7 +164,7 @@ def test_transient_fields_are_declared_drop_on_trace() -> None:
 
     from torchlens._constants import MODEL_LOG_FIELD_ORDER
 
-    policy = tl.Trace.FIELD_POLICY
+    policy = tl.Trace._FIELD_POLICY
     for name in _SEMANTIC_OUTPUT_TRANSIENT_FIELDS:
         assert name in policy, name
         assert policy[name].portable_policy is FieldPolicy.DROP, name

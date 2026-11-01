@@ -3,7 +3,7 @@
 Backends, capture, validation, viz, and I/O all reach in and write private
 attributes onto the Trace (``trace._mlx_op_captures = ...``,
 ``setattr(trace, "_validation_replay_status", ...)``). Most of those names
-appear in NO authority: not ``Trace.FIELD_POLICY`` (so no policy, no schema
+appear in NO authority: not ``Trace._FIELD_POLICY`` (so no policy, no schema
 row, no save/load decision), and not even ``_io/scrub.py``'s runtime-only
 allowance. SF-39 was one instance of exactly this shape, found and fixed by
 hand -- and nothing structural stopped the next one, which is why this is a
@@ -177,7 +177,7 @@ def test_every_external_private_write_is_declared_or_exempted() -> None:
     assert not undeclared, (
         "Private Trace attribute(s) written from outside _data_classes/ with no "
         f"declared owner and no exemption: {undeclared}. Declare the field on "
-        "Trace (FIELD_POLICY + a TRACE_FIELD_OWNERSHIP row) so it has a policy "
+        "Trace (_FIELD_POLICY + a TRACE_FIELD_OWNERSHIP row) so it has a policy "
         "and a schema decision, or -- if it is genuinely transient backend "
         "scratch -- add a reason-bearing row to "
         "TRACE_EXTERNAL_WRITE_EXEMPTIONS in "

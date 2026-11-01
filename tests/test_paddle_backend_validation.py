@@ -122,7 +122,7 @@ def test_paddle_validation_fails_dropped_parent_edge() -> None:
     """Fail validation when materialized graph parents lose a captured edge."""
 
     trace = _healthy_trace()
-    relu = next(op for op in trace.layer_list if op.layer_type == "functional.relu")
+    relu = next(op for op in trace._layer_list if op.type == "functional.relu")
     relu.parents = []
 
     assert PaddleBackend().validate_trace(trace) is False
@@ -132,7 +132,7 @@ def test_paddle_validation_fails_corrupted_saved_output() -> None:
     """Fail validation when a saved Paddle op output payload is corrupted."""
 
     trace = _healthy_trace()
-    relu = next(op for op in trace.layer_list if op.layer_type == "functional.relu")
+    relu = next(op for op in trace._layer_list if op.type == "functional.relu")
     relu.out = paddle.zeros_like(relu.out) - 99.0
 
     assert PaddleBackend().validate_trace(trace) is False
@@ -237,7 +237,7 @@ def test_paddle_validation_layer_parameters_are_known_sources() -> None:
 
     trace = tl.trace(_LinearRelu(), _layer_input(), backend="paddle")
 
-    assert trace.module_identity_mode == "object_module"
+    assert trace.options.module_identity_mode == "object_module"
     assert PaddleBackend().validate_trace(trace) is True
     assert trace.validation_replay_status.num_replayed_ops == 2
     linear = next(c for c in trace._paddle_op_captures if c.op_name == "functional.linear")
@@ -328,7 +328,7 @@ def test_paddle_validation_layer_corrupted_output_still_fails() -> None:
     """Corrupting the parameter-reading op's saved output still fails replay."""
 
     trace = tl.trace(_LinearRelu(), _layer_input(), backend="paddle")
-    linear = next(op for op in trace.layer_list if op.layer_type == "functional.linear")
+    linear = next(op for op in trace._layer_list if op.type == "functional.linear")
     linear.out = linear.out + 1.0
 
     assert _coverage_oracle(trace) is True
@@ -344,11 +344,11 @@ def test_paddle_function_root_trace_has_buffers_and_graph_shape_hash() -> None:
         lambda x: paddle.nn.functional.relu(x + 1.0), _layer_input(), backend="paddle"
     )
 
-    assert first.module_identity_mode == "function_root"
+    assert first.options.module_identity_mode == "function_root"
     assert first.buffers is not None and len(first.buffers) == 0
-    assert isinstance(first.graph_shape_hash, str)
-    assert first.graph_shape_hash == second.graph_shape_hash
-    assert different.graph_shape_hash != first.graph_shape_hash
+    assert isinstance(first.provenance.fingerprint, str)
+    assert first.provenance.fingerprint == second.provenance.fingerprint
+    assert different.provenance.fingerprint != first.provenance.fingerprint
 
 
 class _BnRelu(paddle.nn.Layer):
@@ -384,7 +384,7 @@ def test_paddle_validation_batchnorm_layer_import_alias_is_captured() -> None:
     x = paddle.arange(32, dtype="float32").reshape([1, 2, 4, 4]) / 16.0
     trace = tl.trace(model, x, backend="paddle")
 
-    assert "functional.batch_norm" in [op.layer_type for op in trace.layer_list]
+    assert "functional.batch_norm" in [op.type for op in trace._layer_list]
     assert PaddleBackend().validate_trace(trace) is True
     from paddle.nn.layer import norm as paddle_norm
 

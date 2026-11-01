@@ -86,7 +86,7 @@ def _receiver_and_set_op(model: nn.Module) -> tuple[Any, Any, str]:
     """Capture ``model`` and return its trace, its ``set_`` op and the receiver label."""
 
     trace, _ = _capture(model, torch.rand(4))
-    set_op = next(op for op in trace.layer_list if op.func_name == "set_")
+    set_op = next(op for op in trace._layer_list if op.func_name == "set_")
     return trace, set_op, set_op.parent_arg_positions["args"][0]
 
 
@@ -138,7 +138,7 @@ def test_dead_set_source_edge_still_fails_perturbation() -> None:
 
     trace, ground_truth = _capture(_SetToSource(), torch.rand(4))
     try:
-        set_op = next(op for op in trace.layer_list if op.func_name == "set_")
+        set_op = next(op for op in trace._layer_list if op.func_name == "set_")
         source_label = set_op.parent_arg_positions["args"][1]
         frozen = set_op.out.detach().clone()
 
@@ -400,7 +400,7 @@ def _storage_view_trace(
     x = torch.rand(4)
     ground_truth = copy.deepcopy(model)(x)
     trace = tl.trace(model, x, capture=CaptureOptions(layers_to_save="all", save_args=True))
-    set_op = next(op for op in trace.layer_list if op.func_name == "set_")
+    set_op = next(op for op in trace._layer_list if op.func_name == "set_")
     return model, trace, ground_truth, set_op
 
 

@@ -40,7 +40,7 @@ def persisted_anchor_facts(scrubbed_state: Mapping[str, Any]) -> int | None:
     Taken before rehydration, which mutates the persisted ``layer_list`` in place.
     """
 
-    rows = scrubbed_state.get("layer_list")
+    rows = scrubbed_state.get("_layer_list")
     return len(rows) if isinstance(rows, list) else None
 
 

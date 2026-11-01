@@ -153,7 +153,7 @@ def _graph(model: nn.Module) -> tuple[str, list[tuple[str, tuple[str, ...], Any]
                 tuple(layer.parents),
                 getattr(layer, "buffer_write_kind", None),
             )
-            for layer in trace.layer_list
+            for layer in trace._layer_list
         ]
         return compute_graph_shape_hash(trace, include_module_address=False), rows
     finally:

@@ -400,7 +400,7 @@ def _site_label(record: Any) -> str:
 
     label = str(record.layer_label)
     num_passes = getattr(record, "num_passes", None)
-    pass_index = getattr(record, "pass_index", None)
+    pass_index = getattr(record, "pass_number", None)
     if isinstance(num_passes, int) and num_passes > 1 and isinstance(pass_index, int):
         return f"{label}:{pass_index}"
     return label
@@ -433,7 +433,7 @@ def _saved_out(trace: Any, site: Any, side: str) -> torch.Tensor:
 def _captured_mask(trace: Any) -> torch.Tensor | None:
     """Return the saved ``attention_mask`` input of a trace, if any."""
 
-    for layer in getattr(trace, "layer_list", []):
+    for layer in trace._layer_list:
         role = getattr(layer, "io_role", None)
         if not getattr(layer, "is_input", False) or not isinstance(role, str):
             continue

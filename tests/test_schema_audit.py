@@ -56,10 +56,10 @@ def test_ordered_fields_have_phase1_lifecycle_policies() -> None:
 
     assert set(MODEL_LOG_FIELD_ORDER) <= set(Trace._PORTABLE_STATE_SPEC)
     assert set(MODEL_LOG_FIELD_ORDER) <= set(MODEL_LOG_FIELD_FORK_POLICY)
-    assert set(MODEL_LOG_FIELD_ORDER) <= set(Trace.DEFAULT_FILL_STATE)
+    assert set(MODEL_LOG_FIELD_ORDER) <= set(Trace._DEFAULT_FILL_STATE)
     assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(Op._PORTABLE_STATE_SPEC)
     assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(LAYER_PASS_LOG_FIELD_FORK_POLICY)
-    assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(Op.DEFAULT_FILL_STATE)
+    assert set(LAYER_PASS_LOG_FIELD_ORDER) <= set(Op._DEFAULT_FILL_STATE)
 
 
 def test_phase1_defaults_are_per_instance_and_fork_copy() -> None:
@@ -70,13 +70,15 @@ def test_phase1_defaults_are_per_instance_and_fork_copy() -> None:
     log_a.state_history.append({"op": "sentinel"})
     assert log_b.state_history == []
     assert log_a.state is TraceState.PRISTINE
-    assert all(value is Relationship.UNKNOWN for value in log_a.relationship_evidence.values())
+    assert all(
+        value is Relationship.UNKNOWN for value in log_a.graph.relationship_evidence.values()
+    )
 
     pass_a = next(iter(_capture_tiny_log()))
     pass_b = next(iter(_capture_tiny_log()))
-    pass_a.interventions.append({"op": "sentinel"})
-    assert pass_b.interventions == []
-    assert LAYER_PASS_LOG_FIELD_FORK_POLICY["interventions"] is ForkFieldPolicy.FORK_COPY
+    pass_a.edits.append({"op": "sentinel"})
+    assert pass_b.edits == []
+    assert LAYER_PASS_LOG_FIELD_FORK_POLICY["edits"] is ForkFieldPolicy.FORK_COPY
 
 
 def test_layer_pass_construction_guard_and_direct_write_flag() -> None:
@@ -107,7 +109,7 @@ def test_postprocess_internal_writes_do_not_mark_direct_write_dirty() -> None:
     for layer in log:
         assert hasattr(layer, "func_call_id")
         assert hasattr(layer, "container_path")
-        assert hasattr(layer, "interventions")
+        assert hasattr(layer, "edits")
         assert hasattr(layer, "_edge_uses")
         assert hasattr(layer, "edge_uses")
         assert isinstance(layer.edge_uses, tuple)

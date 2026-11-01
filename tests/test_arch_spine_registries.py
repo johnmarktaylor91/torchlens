@@ -52,7 +52,7 @@ class TestExportTargetDoor:
 
         def _write_labels(log, path):
             target = tmp_path / path
-            target.write_text("\n".join(str(layer.layer_label) for layer in log.layer_list))
+            target.write_text("\n".join(str(layer.layer_label) for layer in log._layer_list))
             return target
 
         ex.register_target(

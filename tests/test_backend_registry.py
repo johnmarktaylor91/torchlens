@@ -122,17 +122,17 @@ def _fake_capture_trace(*args: Any, **kwargs: Any) -> tl.Trace:
         backend="torch",
         capture=tl.options.CaptureOptions(layers_to_save="all", seed=1),
     )
-    trace.backend = "fake"
-    trace.module_identity_mode = "function_root"
-    trace.param_source = "none"
-    trace.model_class_name = "_FakeModel"
-    trace.model_label = "_FakeModel"
-    trace.model_class_qualname = "tests.test_backend_registry._FakeModel"
-    trace.trace_label = "fake-backend-trace"
-    for layer in trace.layer_list:
+    trace._provenance_backend = "fake"
+    trace._options_module_identity_mode = "function_root"
+    trace._provenance_param_source = "none"
+    trace._source_class_name = "_FakeModel"
+    trace.model_name = "_FakeModel"
+    trace._source_class_qualname = "tests.test_backend_registry._FakeModel"
+    trace.name = "fake-backend-trace"
+    for layer in trace._layer_list:
         layer.resolver_status = "metadata_only"
         layer.backend_address = f"fake:{layer.layer_label}"
-    for layer in trace.layer_logs.values():
+    for layer in trace._layer_logs.values():
         layer.resolver_status = "metadata_only"
         layer.backend_address = f"fake:{layer.layer_label}"
     return trace
@@ -204,7 +204,7 @@ def _register_fake_backend(name: str = "fake", *, priority: int = 50) -> None:
                 backward_capture=False,
                 has_validation_replay=True,
                 fastlog=False,
-                interventions=False,
+                can_intervene=False,
                 rng_replay=False,
                 payload_materialization=False,
                 has_streaming=False,
@@ -234,7 +234,7 @@ def test_explicit_torch_backend_matches_legacy_trace() -> None:
         backend="torch",
         capture=tl.options.CaptureOptions(layers_to_save="all", seed=1),
     )
-    assert explicit.backend == legacy.backend == "torch"
+    assert explicit.provenance.backend == legacy.provenance.backend == "torch"
     assert explicit.layer_labels == legacy.layer_labels
 
 
@@ -271,8 +271,8 @@ def test_torch_accepts_default_equivalent_trace_option_values() -> None:
         ),
     )
 
-    assert trace.backend == "torch"
-    assert trace.module_identity_mode == "torch_module"
+    assert trace.provenance.backend == "torch"
+    assert trace.options.module_identity_mode == "torch_module"
 
 
 def test_capture_backend_factory_checked_at_registration() -> None:
@@ -301,7 +301,7 @@ def test_capture_backend_factory_checked_at_registration() -> None:
                     backward_capture=False,
                     has_validation_replay=False,
                     fastlog=False,
-                    interventions=False,
+                    can_intervene=False,
                     rng_replay=False,
                     payload_materialization=False,
                     has_streaming=False,
@@ -331,7 +331,7 @@ def test_capture_backend_factory_import_error_is_not_exempted() -> None:
                     backward_capture=False,
                     has_validation_replay=False,
                     fastlog=False,
-                    interventions=False,
+                    can_intervene=False,
                     rng_replay=False,
                     payload_materialization=False,
                     has_streaming=False,
@@ -357,7 +357,7 @@ def test_replace_backend_spec_removes_stale_aliases() -> None:
             backward_capture=False,
             has_validation_replay=False,
             fastlog=False,
-            interventions=False,
+            can_intervene=False,
             rng_replay=False,
             payload_materialization=False,
             has_streaming=False,
@@ -398,7 +398,7 @@ def test_capability_sources_agree_for_preview_backends() -> None:
         jax_spec.capabilities.has_validation_replay == jax_capabilities.supports_validation_replay
     )
     assert jax_spec.capabilities.fastlog == jax_capabilities.supports_fastlog
-    assert jax_spec.capabilities.interventions == jax_capabilities.supports_intervention
+    assert jax_spec.capabilities.can_intervene == jax_capabilities.supports_intervention
     assert (
         jax_spec.capabilities.intermediate_derived_grads
         == jax_capabilities.supports_intermediate_derived_grads
@@ -428,7 +428,7 @@ def test_capability_sources_agree_for_preview_backends() -> None:
         mlx_spec.capabilities.has_validation_replay == mlx_capabilities.supports_validation_replay
     )
     assert mlx_spec.capabilities.fastlog == mlx_capabilities.supports_fastlog
-    assert mlx_spec.capabilities.interventions == mlx_capabilities.supports_intervention
+    assert mlx_spec.capabilities.can_intervene == mlx_capabilities.supports_intervention
     assert (
         mlx_spec.capabilities.intermediate_derived_grads
         == mlx_capabilities.supports_intermediate_derived_grads
@@ -459,7 +459,7 @@ def test_capability_sources_agree_for_preview_backends() -> None:
         == tinygrad_capabilities.supports_validation_replay
     )
     assert tinygrad_spec.capabilities.fastlog == tinygrad_capabilities.supports_fastlog
-    assert tinygrad_spec.capabilities.interventions == tinygrad_capabilities.supports_intervention
+    assert tinygrad_spec.capabilities.can_intervene == tinygrad_capabilities.supports_intervention
     assert (
         tinygrad_spec.capabilities.intermediate_derived_grads
         == tinygrad_capabilities.supports_intermediate_derived_grads
@@ -492,7 +492,7 @@ def test_capability_sources_agree_for_preview_backends() -> None:
         == paddle_capabilities.supports_validation_replay
     )
     assert paddle_spec.capabilities.fastlog == paddle_capabilities.supports_fastlog
-    assert paddle_spec.capabilities.interventions == paddle_capabilities.supports_intervention
+    assert paddle_spec.capabilities.can_intervene == paddle_capabilities.supports_intervention
     assert (
         paddle_spec.capabilities.intermediate_derived_grads
         == paddle_capabilities.supports_intermediate_derived_grads
@@ -782,7 +782,7 @@ def test_tf_detector_swallows_non_import_error_from_broken_tf_install(
     # not propagate up through ``resolve_backend_spec``.
     assert tl.backends.resolve(None, _TinyModel(), torch.ones(1)).name == "torch"
     trace = tl.trace(_TinyModel(), torch.ones(1))
-    assert trace.backend == "torch"
+    assert trace.provenance.backend == "torch"
 
 
 def test_tf_detector_reraises_genuine_backend_mismatch(
@@ -905,7 +905,7 @@ def test_paddle_preview_applies_static_label_save_selector() -> None:
         save=tl.label_contains("relu"),
     )
 
-    saved_ops = [op for op in trace.layer_list if op.has_saved_activation]
+    saved_ops = [op for op in trace._layer_list if op.has_saved_activation]
     assert len(saved_ops) == 1
     assert saved_ops[0].func_name == "functional.relu"
 
@@ -1033,9 +1033,9 @@ def test_fake_backend_explicit_trace_and_validate() -> None:
     try:
         result = tl.trace(_FakeModel(), object(), backend="fake")
         assert isinstance(result, tl.Trace)
-        assert result.backend == "fake"
-        assert result.module_identity_mode == "function_root"
-        assert result.param_source == "none"
+        assert result.provenance.backend == "fake"
+        assert result.options.module_identity_mode == "function_root"
+        assert result.provenance.param_source == "none"
         assert result.validate_forward_pass([]) is True
         assert tl.validate(_FakeModel(), object(), scope="forward", backend="fake")
     finally:
@@ -1070,9 +1070,9 @@ def test_fake_backend_trace_save_load_accessors_and_invariants(tmp_path: Path) -
         loaded = tl.load(path)
 
         assert isinstance(loaded, tl.Trace)
-        assert loaded.backend == "fake"
-        assert loaded.module_identity_mode == "function_root"
-        assert loaded.param_source == "none"
+        assert loaded.provenance.backend == "fake"
+        assert loaded.options.module_identity_mode == "function_root"
+        assert loaded.provenance.param_source == "none"
         assert loaded[0].resolver_status == "metadata_only"
         assert loaded[0].backend_address.startswith("fake:")
         assert check_metadata_invariants(loaded) is True
@@ -1083,18 +1083,26 @@ def test_fake_backend_trace_save_load_accessors_and_invariants(tmp_path: Path) -
 @pytest.mark.parametrize(
     ("mutate", "match"),
     [
-        (lambda trace: setattr(trace, "module_identity_mode", "torch_module"), "module_identity"),
+        (
+            lambda trace: setattr(trace, "_options_module_identity_mode", "torch_module"),
+            "module_identity",
+        ),
         # R74-1 killers for the three previously-unreferenced arms of
         # _check_backend_identity_invariants: out-of-vocabulary param_source,
         # a backend-capability violation matched on the arm's own message, and
-        # an empty Trace.backend.
-        (lambda trace: setattr(trace, "param_source", "not-a-param-source"), "param_source"),
+        # an empty Trace.provenance.backend.
         (
-            lambda trace: setattr(trace, "module_identity_mode", "unsupported_identity_mode"),
+            lambda trace: setattr(trace, "_provenance_param_source", "not-a-param-source"),
+            "param_source",
+        ),
+        (
+            lambda trace: setattr(
+                trace, "_options_module_identity_mode", "unsupported_identity_mode"
+            ),
             "is not supported by backend",
         ),
-        (lambda trace: setattr(trace, "has_backward_pass", True), "has_backward_pass"),
-        (lambda trace: trace.grad_fn_logs.__setitem__(1, object()), "grad_fn_logs"),
+        (lambda trace: setattr(trace, "_autograd_has_backward_pass", True), "has_backward_pass"),
+        (lambda trace: trace._grad_fn_logs.__setitem__(1, object()), "_grad_fn_logs"),
         (lambda trace: setattr(trace[0], "resolver_status", "lost"), "resolver_status"),
         (lambda trace: trace.output_layers.clear(), "output layer"),
     ],
@@ -1129,7 +1137,7 @@ def test_backend_identity_invariant_rejects_non_string_backend(bad_backend: Any)
     from torchlens.validation._invariants_entry import _check_backend_identity_invariants
 
     class _BadBackendStub:
-        backend = bad_backend
+        _provenance_backend = bad_backend
 
     with pytest.raises(MetadataInvariantError, match="non-empty string"):
         _check_backend_identity_invariants(_BadBackendStub())

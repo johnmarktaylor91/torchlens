@@ -239,8 +239,8 @@ def test_parent_child_and_input_counts(graph_trace) -> None:
     trace = graph_trace
     layers = {layer.layer_label: layer for layer in trace.layers}
     by_type: dict[str, list] = {}
-    for op in trace.layer_list:
-        by_type.setdefault(op.layer_type, []).append(op)
+    for op in trace._layer_list:
+        by_type.setdefault(op.type, []).append(op)
     (mul,) = by_type["mul"]
     (relu,) = by_type["relu"]
     first, second = by_type["linear"]
@@ -265,11 +265,11 @@ def test_parent_child_and_input_counts(graph_trace) -> None:
 def test_module_scope_edge_and_layer_counts(graph_trace) -> None:
     trace = graph_trace
     modules = {module.address: module for module in trace.modules}
-    calls = {call.call_label: call for call in trace.module_calls}
+    calls = {call.label: call for call in trace.module_calls}
     fc = modules["fc"]
     # fc holds both linear passes: one Layer; internal edge pass1 -> pass2,
     # input edge x -> pass1, output edge pass2 -> mul.
-    assert int(fc.num_layers) == 1
+    assert len(fc.layer_labels) == 1
     assert (int(fc.num_internal_edges), int(fc.num_input_edges), int(fc.num_output_edges)) == (
         1,
         1,
@@ -301,25 +301,25 @@ def test_module_call_and_param_use_counts(graph_trace, mixed_trace) -> None:
     assert int(trace.num_uncalled_modules) == 1
     # The two linear passes use parameters; one Layer holds both.
     assert int(len(trace.ops_with_params)) == 2
-    assert int(trace.num_layers_with_params) == 1
+    assert int(trace._num_layers_with_params) == 1
     # Mixed: root, wide, tied twice (tied2 is the same module).
     trace = mixed_trace
     assert int(len(trace.module_calls)) == 4
     assert int(trace.num_uncalled_modules) == 0
     assert int(len(trace.ops_with_params)) == 3  # wide, tied pass 1, tied pass 2
-    assert int(trace.num_layers_with_params) == 2
+    assert int(trace._num_layers_with_params) == 2
 
 
 def test_saved_activation_scope_counts(graph_trace, mixed_trace) -> None:
     # The default capture saves every Op, so every Layer, every module call
     # (each call's output Ops are saved) and every called module counts.
     trace = graph_trace
-    assert int(trace.num_saved_layers) == G_LAYERS
-    assert int(trace.num_saved_module_calls) == 3  # self:1, fc:1, fc:2
+    assert len(trace.saved_layers) == G_LAYERS
+    assert len(trace.saved_module_calls) == 3  # self:1, fc:1, fc:2
     assert int(len(trace.saved_modules)) == 2  # self, fc
     trace = mixed_trace
-    assert int(trace.num_saved_layers) == 6
-    assert int(trace.num_saved_module_calls) == 4  # self:1, wide:1, tied:1, tied:2
+    assert len(trace.saved_layers) == 6
+    assert len(trace.saved_module_calls) == 4  # self:1, wide:1, tied:1, tied:2
     assert int(len(trace.saved_modules)) == 3  # self, wide, tied
 
 
@@ -334,8 +334,8 @@ def test_saved_gradient_counts(grad_trace) -> None:
     assert int(len(trace.saved_grad_modules)) == 3
     # The backward nodes of the three captured differentiable ops (addmm,
     # relu, addmm) keep their gradients; two backward passes call each once.
-    assert int(trace.num_saved_grad_fns) == 3
-    assert int(trace.num_saved_grad_fn_calls) == 2 * 3
+    assert len(trace.autograd.saved_grad_fns) == 3
+    assert len(trace.autograd.saved_grad_fn_calls) == 2 * 3
 
 
 @pytest.mark.parametrize("axis", ["train_batchnorm", "in_place", "plain_cnn"])
@@ -350,9 +350,9 @@ def test_internal_source_flag_and_list_name_the_same_ops(axis: str) -> None:
     trace = tl.trace(model, model_input)
     try:
         listed = set(trace.internal_source_ops)
-        flagged = {op.label for op in trace.layer_list if op.is_internal_source}
+        flagged = {op.label for op in trace._layer_list if op.is_internal_source}
         assert listed == flagged, (listed, flagged)
-        for op in trace.layer_list:
+        for op in trace._layer_list:
             if op.is_internal_source:
                 assert not op.parents, op.label
     finally:

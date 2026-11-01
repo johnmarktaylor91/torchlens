@@ -100,9 +100,9 @@ def _run_step_4(ctx: StepContext) -> None:
 
 
 def _should_run_step_4(ctx: StepContext) -> bool:
-    """Gate step 4 on the opt-in ``Trace.mark_layer_depths`` flag."""
+    """Gate step 4 on the opt-in ``Trace.options.mark_layer_depths`` flag."""
 
-    return bool(ctx.trace.mark_layer_depths)
+    return bool(ctx.trace._options_mark_layer_depths)
 
 
 def _run_step_5(ctx: StepContext) -> None:
@@ -129,11 +129,11 @@ def _run_step_7(ctx: StepContext) -> None:
     trace = ctx.trace
     loop_desc = (
         "  Step 7: Loop detection (full)"
-        if trace.recurrence_detection
+        if trace._options_recurrence_detection
         else "  Step 7: Loop detection (params only)"
     )
     with _vtimed(trace, loop_desc):
-        if trace.recurrence_detection:
+        if trace._options_recurrence_detection:
             loop_detection._detect_and_label_loops(trace)
         else:
             loop_detection._group_by_shared_params(trace)
@@ -228,7 +228,7 @@ def _run_step_15(ctx: StepContext) -> None:
 def _run_step_15_5(ctx: StepContext) -> None:
     """Step 15.5: build aggregate ``Layer`` records and the pass-index index.
 
-    ``Trace.by_pass`` maps each pass index to the ``layer_list`` positions of
+    ``Trace._by_pass`` maps each pass index to the ``layer_list`` positions of
     the layers recorded at that pass; layers with no ``pass_index`` are absent
     rather than bucketed.
     """
@@ -236,11 +236,11 @@ def _run_step_15_5(ctx: StepContext) -> None:
     trace = ctx.trace
     with _vtimed(trace, "  Step 15.5: Build layer logs"):
         finalization._build_layer_logs(trace)
-        trace.by_pass = {}
-        for index, op in enumerate(trace.layer_list):
-            pass_index = getattr(op, "pass_index", None)
+        trace._by_pass = {}
+        for index, op in enumerate(trace._layer_list):
+            pass_index = getattr(op, "pass_number", None)
             if pass_index is not None:
-                trace.by_pass.setdefault(pass_index, []).append(index)
+                trace._by_pass.setdefault(pass_index, []).append(index)
 
 
 def _run_step_16(ctx: StepContext) -> None:
@@ -261,7 +261,7 @@ def _run_step_16_5(ctx: StepContext) -> None:
     trace = ctx.trace
     with _vtimed(trace, "  Step 16.5: Graph shape hash"):
         _hashing.populate_normalized_layer_addresses(trace)
-        trace.graph_shape_hash = _hashing.compute_graph_shape_hash(trace)
+        trace._provenance_fingerprint = _hashing.compute_graph_shape_hash(trace)
 
 
 def _run_step_17(ctx: StepContext) -> None:
@@ -374,19 +374,19 @@ STEP_REGISTRY: tuple[StepSpec, ...] = (
 def _step_11_violation(trace: Trace) -> str | None:
     """Return the first step-11 lookup-key postcondition violation, if any."""
 
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if not op.label:
             return f"Step 11 left {op!r} without a final op label"
         if not op.layer_label:
             return f"Step 11 left {op!r} without a final layer label"
         if not op.lookup_keys:
             return f"Step 11 left {op.label} without lookup keys"
-        if trace.layer_dict_all_keys[op.label] is not op:
+        if trace._layer_dict_all_keys[op.label] is not op:
             return f"Step 11 did not map op label {op.label!r} to its own op"
         # The bare layer label resolves to ONE pass of that layer (the public
         # lookup contract keeps the LAST pass for multi-pass layers), never to
         # a foreign layer's op.
-        resolved = trace.layer_dict_all_keys[op.layer_label]
+        resolved = trace._layer_dict_all_keys[op.layer_label]
         if resolved.layer_label != op.layer_label:
             return (
                 f"Step 11 mapped layer label {op.layer_label!r} to a foreign op {resolved.label!r}"
@@ -397,14 +397,14 @@ def _step_11_violation(trace: Trace) -> str | None:
 def _step_15_5_violation(trace: Trace) -> str | None:
     """Return the step-15.5 aggregate-layer postcondition violation, if any."""
 
-    if not trace.layer_logs:
+    if not trace._layer_logs:
         return "Step 15.5 must build aggregate layer logs"
-    if len(trace.layer_logs) != len(trace.layer_labels):
+    if len(trace._layer_logs) != len(trace.layer_labels):
         return (
-            f"Step 15.5 built {len(trace.layer_logs)} layer logs for "
+            f"Step 15.5 built {len(trace._layer_logs)} layer logs for "
             f"{len(trace.layer_labels)} layer labels"
         )
-    if not isinstance(trace.by_pass, dict):
+    if not isinstance(trace._by_pass, dict):
         return "Step 15.5 must build by_pass as a dict"
     return None
 
@@ -449,7 +449,7 @@ def _step_16_violation(trace: Trace) -> str | None:
 def _step_16_5_violation(trace: Trace) -> str | None:
     """Return the step-16.5 graph-hash postcondition violation, if any."""
 
-    if trace.graph_shape_hash is None:
+    if trace._provenance_fingerprint is None:
         return "Step 16.5 must compute graph_shape_hash"
     return None
 

@@ -20,16 +20,20 @@ class _DummyLog:
     def __init__(self) -> None:
         """Initialize a capture object with the attributes the wrappers expect."""
         self.cleanup_calls = 0
-        self.layer_logs: dict[str, Any] = {}
-        self.num_saved_ops = 0
+        self._layer_logs: dict[str, Any] = {}
+        self._layer_list: list[Any] = []
+        self._num_saved_ops = 0
+        self.saved_ops: list[Any] = []
         self.render_calls: list[dict[str, Any]] = []
         self.summary_calls: list[dict[str, Any]] = []
         self.summary_result = "summary output"
-        self.total_activation_memory = "0 B"
+        self._cost_total_activation_memory = "0 B"
+        self._provenance_verified: Any = None
         self.validate_calls: list[dict[str, Any]] = []
-        self.verbose = False
+        self._options_verbose = False
+        self._options_structure_only = False
         # Save options a real ``Trace`` records from its capture call.
-        self.output_device = "same"
+        self._options_output_device = "same"
         self.save_budget: Any = "auto"
 
     def cleanup(self) -> None:
@@ -146,7 +150,7 @@ def stubbed_runner(
 
         captured_calls.append(kwargs)
         dummy_log = _DummyLog()
-        dummy_log.output_device = kwargs.get("output_device", "same")
+        dummy_log._options_output_device = kwargs.get("output_device", "same")
         dummy_log.save_budget = kwargs.get("save_budget", "auto")
         dummy_logs.append(dummy_log)
         return dummy_log

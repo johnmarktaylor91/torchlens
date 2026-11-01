@@ -748,11 +748,11 @@ def derive_outcome_from_structural_state(state: Mapping[str, Any]) -> CaptureOut
     """
 
     finished = bool(state.get("_tracing_finished"))
-    halted = bool(state.get("halted"))
+    halted = bool(state.get("is_stopped"))
     inference_only = bool(state.get("inference_only"))
     if halted and finished:
-        reason = state.get("halt_reason")
-        frontier = state.get("halt_frontier")
+        reason = state.get("stop_reason")
+        frontier = state.get("_graph_stop_frontier")
         return CaptureOutcome(
             status=CaptureStatus.STOPPED,
             reason=reason if isinstance(reason, str) else None,
@@ -802,7 +802,7 @@ def resolve_loaded_outcome(state: Mapping[str, Any]) -> CaptureOutcome:
             is_derived=True,
             note=f"attestation_parse_failed: {exc}",
         )
-    halted = bool(state.get("halted"))
+    halted = bool(state.get("is_stopped"))
     finished = bool(state.get("_tracing_finished"))
     # b8-sol: the refusal names the rule that ACTUALLY failed. An internally
     # contradictory record (cross-field layer) used to be blamed on the
@@ -976,7 +976,7 @@ def classify_failure_origin(exc: BaseException) -> FailureOrigin:
 
 _TERMINAL_STATE_FOR_STATUS: dict[CaptureStatus, str] = {
     CaptureStatus.COMPLETE: "complete",
-    CaptureStatus.STOPPED: "halted",
+    CaptureStatus.STOPPED: "is_stopped",
     CaptureStatus.ABORTED_NONFINITE: "failed",
     CaptureStatus.FAILED: "failed",
     CaptureStatus.UNATTESTED: "failed",
@@ -1061,7 +1061,7 @@ def _stamp(trace: object, session: Any, outcome: CaptureOutcome) -> CaptureOutco
     return outcome
 
 
-def settle_completed(trace: object, session: object) -> CaptureOutcome:
+def settle_completed(trace: Any, session: object) -> CaptureOutcome:
     """Settle one successfully completed capture (paths 1-2)."""
 
     return _stamp(
@@ -1070,13 +1070,13 @@ def settle_completed(trace: object, session: object) -> CaptureOutcome:
         CaptureOutcome(
             status=CaptureStatus.COMPLETE,
             num_committed_ops=count_committed_ops(trace),
-            inference_only=bool(getattr(trace, "inference_only", False)),
+            inference_only=bool(trace._options_inference_only),
         ),
     )
 
 
 def settle_halted(
-    trace: object,
+    trace: Any,
     session: object,
     halt_exc: BaseException,
     *,
@@ -1104,10 +1104,10 @@ def settle_halted(
         # during the halted postprocess; the settled record mirrors them so
         # the boundary resolves through ``trace[...]`` on the finished
         # product. Raw-label boundaries stay only where postprocess never ran.
-        remapped_reason = getattr(trace, "halt_reason", None)
+        remapped_reason = getattr(trace, "stop_reason", None)
         if isinstance(remapped_reason, str):
             reason = remapped_reason
-        remapped_frontier = getattr(trace, "halt_frontier", None)
+        remapped_frontier = trace._graph_stop_frontier
         if isinstance(remapped_frontier, str):
             boundary_label = remapped_frontier
     return _stamp(
@@ -1120,13 +1120,13 @@ def settle_halted(
             boundary_label=boundary_label,
             frontier_labels=frontier,
             num_committed_ops=count_committed_ops(trace),
-            inference_only=bool(getattr(trace, "inference_only", False)),
+            inference_only=bool(trace._options_inference_only),
         ),
     )
 
 
 def settle_failed(
-    trace: object,
+    trace: Any,
     session: object,
     exc: BaseException,
     *,
@@ -1169,7 +1169,7 @@ def settle_failed(
                 boundary_kind=stop_request.boundary_kind,
                 boundary_label=stop_request.boundary_label,
                 num_committed_ops=num_committed_ops,
-                inference_only=bool(getattr(trace, "inference_only", False)),
+                inference_only=bool(trace._options_inference_only),
                 note=note,
             ),
         )
@@ -1184,7 +1184,7 @@ def settle_failed(
             reason=safe_exception_str(exc),
             error_type=_qualified_type_name(exc),
             num_committed_ops=num_committed_ops,
-            inference_only=bool(getattr(trace, "inference_only", False)),
+            inference_only=bool(trace._options_inference_only),
             note=note,
         ),
     )
@@ -1314,7 +1314,7 @@ def stamp_recording_outcome(recording: object, outcome: CaptureOutcome) -> Captu
     return outcome
 
 
-def stamp_backend_finalized(trace: object) -> CaptureOutcome:
+def stamp_backend_finalized(trace: Any) -> CaptureOutcome:
     """Settle one preview-backend capture at its true product boundary (path 20).
 
     Called as the LAST act of each preview backend's capture entry, after ALL
@@ -1329,7 +1329,7 @@ def stamp_backend_finalized(trace: object) -> CaptureOutcome:
     HALT-AWARE BY CONSTRUCTION (B1-01). A preview backend that supports
     ``halt=`` (paddle's shipped capability, MLX's ``_mlx_halt_selector``)
     catches its ``HaltSignal``, writes the structural halt fields, and then
-    falls through the SAME tail to this one stamp. Reading ``trace.halted``
+    falls through the SAME tail to this one stamp. Reading ``trace.is_stopped``
     here mirrors :func:`settle_halted` at the chokepoint, so no preview
     backend can stamp a halted product COMPLETE -- a wrongly-blessed settled
     status that the load-time coherence matrix would have to degrade to
@@ -1348,7 +1348,7 @@ def stamp_backend_finalized(trace: object) -> CaptureOutcome:
     """
 
     stop_request = trace.__dict__.pop("_stop_requested", None)
-    if isinstance(stop_request, StopRequest) and not bool(getattr(trace, "halted", False)):
+    if isinstance(stop_request, StopRequest) and not bool(getattr(trace, "is_stopped", False)):
         swallowed = StopSignalSwallowedError(
             "TorchLens raised a halt stop signal during this forward, but the "
             "capture reached its settlement stamp un-halted: user code "
@@ -1361,9 +1361,9 @@ def stamp_backend_finalized(trace: object) -> CaptureOutcome:
         )
         settle_failed(trace, None, swallowed)
         raise swallowed
-    if bool(getattr(trace, "halted", False)):
-        reason = getattr(trace, "halt_reason", None)
-        frontier_label = getattr(trace, "halt_frontier", None)
+    if bool(getattr(trace, "is_stopped", False)):
+        reason = getattr(trace, "stop_reason", None)
+        frontier_label = trace._graph_stop_frontier
         # The preview tail ran to completion (module attachment, relation
         # freeze), so ``output_layers`` holds this backend's final labels for
         # the halt frontier -- the same fact settle_halted reads on the
@@ -1382,7 +1382,7 @@ def stamp_backend_finalized(trace: object) -> CaptureOutcome:
                 boundary_label=frontier_label if isinstance(frontier_label, str) else None,
                 frontier_labels=frontier,
                 num_committed_ops=count_committed_ops(trace),
-                inference_only=bool(getattr(trace, "inference_only", False)),
+                inference_only=bool(trace._options_inference_only),
             ),
         )
     return _stamp(
@@ -1391,7 +1391,7 @@ def stamp_backend_finalized(trace: object) -> CaptureOutcome:
         CaptureOutcome(
             status=CaptureStatus.COMPLETE,
             num_committed_ops=count_committed_ops(trace),
-            inference_only=bool(getattr(trace, "inference_only", False)),
+            inference_only=bool(trace._options_inference_only),
         ),
     )
 

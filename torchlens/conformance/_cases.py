@@ -99,7 +99,7 @@ C2_MODEL_CASES: tuple[str, ...] = (
 def _captured_op_kinds(trace: Any) -> tuple[str, ...]:
     """The captured ops' kinds (``Op.func_name``) in capture order."""
 
-    rows = getattr(trace, "layer_list", None)
+    rows = trace._layer_list
     if rows is None:
         ops = trace.ops
         rows = ops.values() if hasattr(ops, "values") else ops
@@ -306,7 +306,7 @@ def run_c1_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[CaseResu
             dropped_ops = trace._conformance_dropped_ops
         except AttributeError:
             dropped_ops = False
-        if dropped_ops or not len(trace.layer_list):
+        if dropped_ops or not len(trace._layer_list):
             results.append(
                 _failed("c1_capture_completes", "C1", "capture dropped recorded ops", model)
             )

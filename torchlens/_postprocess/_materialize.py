@@ -191,9 +191,9 @@ def build_ingest_inputs(trace: Trace, events: CaptureEvents) -> IngestInputs:
         module_workspace=trace._module_capture_ws,
         raw_graph_workspace=trace._raw_graph_ws,
         buffer_initial_values=dict(getattr(trace, "_buffer_initial_values", {}) or {}),
-        op_equivalence_classes=trace.op_equivalence_classes,
+        op_equivalence_classes=trace._graph_op_equivalence_classes,
         source_model_ref=getattr(trace, "_source_model_ref", None),
-        param_logs=trace.param_logs,
+        param_logs=trace._param_logs,
         owning_trace=trace,
         op_row_store=core.ops,
         trace_core=core,
@@ -202,7 +202,7 @@ def build_ingest_inputs(trace: Trace, events: CaptureEvents) -> IngestInputs:
         # Orchestrator-side option read (contract I7: ingest itself never
         # touches the trace): structure-only captures strip buffer-write
         # payloads to declared geometry (W3, weightsfree memo defect L6).
-        scatter_options={"structure_only": bool(getattr(trace, "structure_only", False))},
+        scatter_options={"structure_only": bool(trace._options_structure_only)},
     )
 
 
@@ -215,8 +215,8 @@ def apply_step0_result(trace: Trace, result: Step0Result) -> None:
     for label_raw in result.input_layer_labels:
         if label_raw not in trace.input_layers:
             trace.input_layers.append(label_raw)
-    trace.op_equivalence_classes.clear()
-    trace.op_equivalence_classes.update(result.equivalence_class_map)
+    trace._graph_op_equivalence_classes.clear()
+    trace._graph_op_equivalence_classes.update(result.equivalence_class_map)
     side_channel = result.module_side_channel
     trace._module_capture_ws.module_build_data = side_channel.module_build_data
     trace._module_capture_ws.module_metadata = side_channel.module_metadata
@@ -1339,7 +1339,7 @@ def _module_output_fields(
         for output_index, label_raw in enumerate(event.output_tensor_labels_raw):
             fields = by_label.setdefault(label_raw, _empty_module_output_fields())
             fields["is_module_output"] = True
-            # NOTE: do NOT mark ``intervention_replaced`` here from
+            # NOTE: do NOT mark ``is_edited`` here from
             # ``has_user_forward_hooks``. That is a PROXY, not proof: a module can
             # carry a purely observational forward hook (returns ``None``, never
             # substitutes) and this overlay runs during plain postprocess with no
@@ -1349,7 +1349,7 @@ def _module_output_fields(
             # for a genuine replacement mark the PRE-replacement tensor. Genuine
             # replacements are marked with proof on the actual replacement op by
             # ``_make_user_forward_hook_wrapper`` and flow in via the authoritative
-            # ``event.intervention_replaced`` base field above.
+            # ``event.is_edited`` base field above.
             cast(list[Any], fields["output_of_modules"]).append(event.address)
             cast(list[Any], fields["output_of_module_calls"]).append(call_tuple)
             if output_index < len(event.output_names):

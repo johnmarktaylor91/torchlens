@@ -46,7 +46,7 @@ def _capture():
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_args=True),
+        capture=tl.options.CaptureOptions(replayable=True, save_args=True),
     )
     return model, x, trace
 
@@ -229,9 +229,9 @@ def test_edge_substitution_storage_fork_honesty(capture):
     assert not (parent_op.out_versions_by_child or {})
 
     # per-edge intervened marker; node-level key correctly never fires
-    edge_records = [r for r in child.interventions if r.edge_address]
+    edge_records = [r for r in child.edits if r.edge_address]
     assert edge_records and edge_records[0].edge_address == edge_address_of(edge)
-    assert not child.intervention_replaced
+    assert not child.is_edited
 
     # audit disclosure
     audit = fork.intervention_audit[-1]
@@ -290,7 +290,7 @@ def test_validation_positive_invariant_strip_fire_record(capture):
     model, x, trace = capture
     fork = _identity_edge_fork(trace)
     child = fork["conv2d_2_3"].ops[0]
-    child._internal_set("interventions", [r for r in child.interventions if not r.edge_address])
+    child._internal_set("edits", [r for r in child.edits if not r.edge_address])
     verdict = _check_edge_intervention_boundary(fork, child)
     assert verdict is not None and verdict.failed
     assert verdict.reason == "edge_substitution_uncorroborated"
@@ -320,9 +320,7 @@ def test_validation_captured_native_via_capture_surface_fails(capture: Any) -> N
     parent = fork["relu_1_2"].ops[0]
     child._internal_set("edge_substitutions", {})
     child._internal_set("edge_replacement_stamps", {})
-    child._internal_set(
-        "interventions", [record for record in child.interventions if not record.edge_address]
-    )
+    child._internal_set("edits", [record for record in child.edits if not record.edge_address])
     # Present the substituted value as capture-native in ONE persisted
     # consumed-value surface. The untouched saved_args twin contradicts it.
     parent._internal_set("out_versions_by_child", {child.label: torch.zeros_like(parent.out)})
@@ -360,9 +358,9 @@ def test_edge_save_refusal_refires_if_schema_regresses(capture, tmp_path, monkey
 
     model, x, trace = capture
     fork = _identity_edge_fork(trace)
-    entry = Op.FIELD_POLICY["edge_substitutions"]
+    entry = Op._FIELD_POLICY["edge_substitutions"]
     monkeypatch.setitem(
-        Op.FIELD_POLICY, "edge_substitutions", replace(entry, portable_policy=FieldPolicy.DROP)
+        Op._FIELD_POLICY, "edge_substitutions", replace(entry, portable_policy=FieldPolicy.DROP)
     )
     for index, level in enumerate(("audit", "executable_with_callables", "portable", "runnable")):
         with pytest.raises(Exception) as excinfo:
@@ -420,9 +418,9 @@ def test_forced_bundle_without_edge_corroboration_fails_validation(
     monkeypatch.setattr(bundle_module, "_refuse_edge_intervened_save", lambda _trace: None)
     for field_name in ("edge_substitutions", "edge_replacement_stamps"):
         monkeypatch.setitem(
-            Op.FIELD_POLICY,
+            Op._FIELD_POLICY,
             field_name,
-            replace(Op.FIELD_POLICY[field_name], portable_policy=FieldPolicy.DROP),
+            replace(Op._FIELD_POLICY[field_name], portable_policy=FieldPolicy.DROP),
         )
     monkeypatch.setitem(Op._PORTABLE_STATE_SPEC, "edge_substitutions", FieldPolicy.DROP)
     monkeypatch.setitem(Op._PORTABLE_STATE_SPEC, "edge_replacement_stamps", FieldPolicy.DROP)
@@ -437,7 +435,7 @@ def test_forced_bundle_without_edge_corroboration_fails_validation(
 
     # Trace func callables are DROP at this schema level. Reattach only the
     # source callables so the forced artifact reaches the divergence oracle.
-    for loaded_op in loaded.layer_list:
+    for loaded_op in loaded._layer_list:
         source_op = fork[loaded_op.layer_label].ops[0]
         loaded_op._internal_set("func", source_op.func)
     with warnings.catch_warnings():

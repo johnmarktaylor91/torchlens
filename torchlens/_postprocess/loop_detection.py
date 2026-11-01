@@ -10,6 +10,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
 from .._data_classes._site_key import SiteKeyMinter
+from .._record_type import record_type
 from ._call_site_contract import (
     CallSiteEntry,
     call_site_contract_violation,
@@ -283,7 +284,7 @@ def _mint_site_keys(self: "Trace") -> None:
             continue
         node.site_key = minter.mint(
             getattr(node, "modules", None) or (),
-            node.layer_type,
+            record_type(node),
             getattr(node, "multi_output_index", None),
         )
 
@@ -342,9 +343,9 @@ def _group_by_shared_params(self: "Trace") -> None:
             self[label]._layer_label_raw = leader_raw
 
     _rebuild_pass_assignments(self)
-    self.grouping_policy = build_grouping_policy_stamp(
+    self._options_grouping_policy = build_grouping_policy_stamp(
         ran_recurrence_grouping=False,
-        requested=getattr(self, "grouping", "structural"),
+        requested=self._options_grouping,
     )
 
 
@@ -373,9 +374,9 @@ def _detect_and_label_loops(self: "Trace") -> None:
         assignments = group_recurrent_nodes(grouping_graph)
         _apply_recurrence_assignments(self, assignments)
         detector = "grouper_v1"
-    self.grouping_policy = build_grouping_policy_stamp(
+    self._options_grouping_policy = build_grouping_policy_stamp(
         ran_recurrence_grouping=True,
-        requested=getattr(self, "grouping", "structural"),
+        requested=self._options_grouping,
         detector=detector,
     )
 
@@ -643,7 +644,7 @@ def _apply_recurrence_assignments(
             recurrent_labels = recurrent_labels_cached[1]
         node._layer_label_raw = assignment.layer_label
         node.recurrent_ops = recurrent_labels
-        node.pass_index = assignment.pass_index
+        node.pass_number = assignment.pass_index
         node.num_passes = assignment.num_passes
         node.equivalence_class = assignment.equivalence_key
 
@@ -668,5 +669,5 @@ def _rebuild_pass_assignments(self: "Trace") -> None:
         for pass_index, member_label in enumerate(members_sorted, start=1):
             member = self[member_label]
             member.recurrent_ops = members_sorted
-            member.pass_index = pass_index
+            member.pass_number = pass_index
             member.num_passes = len(members_sorted)

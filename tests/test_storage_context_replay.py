@@ -138,7 +138,7 @@ def test_capture_saves_the_aliased_receiver_with_its_source_storage() -> None:
             capture=CaptureOptions(layers_to_save="all", save_args=True, seed=0),
         )
     try:
-        op = next(layer for layer in trace.layer_list if layer.func_name == "as_strided_")
+        op = next(layer for layer in trace._layer_list if layer.func_name == "as_strided_")
         saved = op.saved_args[0]
         assert saved.storage_offset() == 1 and saved.untyped_storage().nbytes() == _SRC_BYTES
         assert saved.untyped_storage().data_ptr() != model.src.untyped_storage().data_ptr()
@@ -185,7 +185,7 @@ def test_wrong_storage_context_still_fails_replay() -> None:
     try:
         from torchlens.validation.core import validate_saved_outs
 
-        op = next(layer for layer in trace.layer_list if layer.func_name == "as_strided_")
+        op = next(layer for layer in trace._layer_list if layer.func_name == "as_strided_")
         saved = op.saved_args[0]
         context = torch.arange(16, dtype=torch.float32) + 1
         context[1:5] = saved

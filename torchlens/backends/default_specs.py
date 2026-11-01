@@ -1119,7 +1119,7 @@ def register_default_backend_specs() -> None:
                 backward_capture=False,
                 has_validation_replay=True,
                 fastlog=False,
-                interventions=True,
+                can_intervene=True,
                 rng_replay=False,
                 payload_materialization=True,
                 has_streaming=False,
@@ -1130,7 +1130,7 @@ def register_default_backend_specs() -> None:
                 trace_options=MLX_TRACE_OPTIONS,
             ),
             capability_implementations={
-                "interventions": _mlx_interventions_implementation,
+                "can_intervene": _mlx_interventions_implementation,
             },
             serialization_policy=SerializationPolicy(
                 payload_policy="array_payloads",
@@ -1155,7 +1155,7 @@ def register_default_backend_specs() -> None:
                 backward_capture=False,
                 has_validation_replay=True,
                 fastlog=False,
-                interventions=False,
+                can_intervene=False,
                 rng_replay=False,
                 payload_materialization=True,
                 has_streaming=False,
@@ -1188,7 +1188,7 @@ def register_default_backend_specs() -> None:
                 backward_capture=False,
                 has_validation_replay=True,
                 fastlog=False,
-                interventions=False,
+                can_intervene=False,
                 rng_replay=False,
                 payload_materialization=True,
                 has_streaming=False,
@@ -1222,7 +1222,7 @@ def register_default_backend_specs() -> None:
                 backward_capture=False,
                 has_validation_replay=True,
                 fastlog=False,
-                interventions=True,
+                can_intervene=True,
                 rng_replay=False,
                 payload_materialization=True,
                 has_streaming=False,
@@ -1233,7 +1233,7 @@ def register_default_backend_specs() -> None:
                 trace_options=PADDLE_TRACE_OPTIONS,
             ),
             capability_implementations={
-                "interventions": _paddle_interventions_implementation,
+                "can_intervene": _paddle_interventions_implementation,
             },
             serialization_policy=SerializationPolicy(
                 payload_policy="array_payloads",
@@ -1260,7 +1260,7 @@ def register_default_backend_specs() -> None:
                 backward_capture=False,
                 has_validation_replay=True,
                 fastlog=False,
-                interventions=True,
+                can_intervene=True,
                 rng_replay=False,
                 payload_materialization=True,
                 has_streaming=False,
@@ -1271,7 +1271,7 @@ def register_default_backend_specs() -> None:
                 trace_options=TF_TRACE_OPTIONS,
             ),
             capability_implementations={
-                "interventions": _tf_interventions_implementation,
+                "can_intervene": _tf_interventions_implementation,
             },
             serialization_policy=SerializationPolicy(
                 payload_policy="array_payloads",

@@ -107,7 +107,7 @@ def test_rollup_counts_survive_load_without_timing(tmp_path) -> None:
 
 def test_keyless_op_backed_rollup_refuses_site_key_unavailable(monkeypatch) -> None:
     trace = _backward_trace()
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         monkeypatch.setattr(type(op), "site_key", None, raising=False)
     with pytest.raises(InvalidArgumentError) as excinfo:
         _ = trace.grad_fn_site_summary

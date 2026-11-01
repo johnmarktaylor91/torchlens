@@ -228,7 +228,7 @@ def _trace_ops(trace: Trace) -> tuple[Any, ...]:
         Retained ops in the order used by the site-key minter.
     """
 
-    return tuple(getattr(trace, "layer_list", ()) or ())
+    return tuple(trace._layer_list or ())
 
 
 def _validate_site_keys(trace: Trace) -> None:
@@ -283,7 +283,7 @@ def _validate_site_keys(trace: Trace) -> None:
             )
 
     minter = SiteKeyMinter()
-    backend = str(getattr(trace, "backend", "torch") or "torch")
+    backend = str(trace._provenance_backend or "torch")
     for op, key in zip(ops, keys, strict=True):
         if backend == JAX_BACKEND_NAME:
             from ..backends.jax._site_dialect import _jax_site_components
@@ -324,7 +324,7 @@ def _validate_site_keys(trace: Trace) -> None:
 
 
 def _validate_distributed_scope(trace: Trace) -> None:
-    """Validate the closed ``Trace.distributed_scope`` vocabulary.
+    """Validate the closed ``Trace.provenance.distributed_scope`` vocabulary.
 
     Parameters
     ----------
@@ -332,12 +332,12 @@ def _validate_distributed_scope(trace: Trace) -> None:
         Loaded trace carrying the shard-local disclosure marker.
     """
 
-    value = getattr(trace, "distributed_scope", None)
+    value = trace._provenance_distributed_scope
     if value not in (None, "rank_local_shard"):
         _refuse(
             f"expected None or 'rank_local_shard', got {value!r}",
             code="artifact_distributed_scope_invalid",
-            field="Trace.distributed_scope",
+            field="Trace.provenance.distributed_scope",
             reason="vocabulary",
             remedy="re-save the source trace; do not invent distributed-scope markers",
         )
@@ -620,8 +620,8 @@ def _selection_recipes(trace: Trace) -> tuple[tuple[str, Mapping[str, Any]], ...
 
     recipes: list[tuple[str, Mapping[str, Any]]] = []
     for op in _trace_ops(trace):
-        for record in getattr(op, "interventions", ()) or ():
-            helper = getattr(record, "helper", None)
+        for record in getattr(op, "edits", ()) or ():
+            helper = getattr(record, "edit", None)
             recipe = getattr(helper, "selection_recipe", None) if helper is not None else None
             if recipe is None:
                 continue
@@ -630,7 +630,7 @@ def _selection_recipes(trace: Trace) -> tuple[tuple[str, Mapping[str, Any]], ...
                     f"Edit.selection_recipe must be a mapping, got {type(recipe).__name__}",
                     "recipe_type",
                 )
-            helper_name = getattr(helper, "helper_name", None)
+            helper_name = getattr(helper, "name", None)
             if not isinstance(helper_name, str):
                 _audit_invalid(
                     "Edit.selection_recipe has no string helper_name anchor",
@@ -1284,7 +1284,7 @@ def _structure_only_invalid(message: str, reason: str) -> NoReturn:
     _refuse(
         message,
         code="artifact_structure_only_incoherent",
-        field="Trace.structure_only",
+        field="Trace.options.structure_only",
         reason=reason,
         remedy=(
             "re-capture and re-save with one current TorchLens version; do "
@@ -1318,7 +1318,7 @@ def _validate_structure_only_coherence(trace: Trace) -> None:
         Loaded trace carrying the optional structure-only marker.
     """
 
-    marker = trace.__dict__.get("structure_only")
+    marker = trace.__dict__.get("_options_structure_only")
     if marker in (None, False):
         return
     if marker is not True:
@@ -1326,7 +1326,7 @@ def _validate_structure_only_coherence(trace: Trace) -> None:
             f"expected a bool marker, got {marker!r}",
             "type",
         )
-    if trace.__dict__.get("capture_verified") is True:
+    if trace.__dict__.get("_provenance_verified") is True:
         _structure_only_invalid(
             "capture_verified=True on a structure-only capture (verification requires values)",
             "verification_claim",
@@ -1797,7 +1797,7 @@ def _snapshot_invalid(message: str, reason: str) -> NoReturn:
     _refuse(
         message,
         code="artifact_source_snapshots_invalid",
-        field="Trace.source_snapshots",
+        field="Trace.source.snapshots",
         reason=reason,
         remedy="re-capture and re-save; do not hand-edit the source-snapshot table",
     )
@@ -1812,7 +1812,7 @@ def _validate_source_snapshots(trace: Trace) -> None:
     until the F30 writer lands; present rows validate fail-closed.
     """
 
-    rows = trace.__dict__.get("source_snapshots")
+    rows = trace.__dict__.get("_source_snapshots")
     if rows is None or rows == []:
         return
     if not _is_sequence(rows):
@@ -1884,7 +1884,7 @@ def _evidence_invalid(message: str, reason: str) -> NoReturn:
     _refuse(
         message,
         code="artifact_structure_evidence_invalid",
-        field="Trace.structure_evidence",
+        field="Trace.graph.structure_evidence",
         reason=reason,
         remedy=(
             "re-capture structure-only and re-save with one current "
@@ -1905,10 +1905,10 @@ def _validate_structure_evidence(trace: Trace) -> None:
     values contradicts the mode it exists to disclose.
     """
 
-    envelope = trace.__dict__.get("structure_evidence")
+    envelope = trace.__dict__.get("_graph_structure_evidence")
     if envelope is None:
         return
-    if not trace.__dict__.get("structure_only", False):
+    if not trace.__dict__.get("_options_structure_only", False):
         _evidence_invalid(
             "an evidence envelope is present on a capture whose "
             "structure_only marker is False; the envelope exists to disclose "

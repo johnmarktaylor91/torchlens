@@ -101,12 +101,12 @@ class _TraceGraph:
 
         by_label, parents, children = _graph_indexes(trace)
         order = tuple(
-            op.label for op in trace.layer_list if isinstance(getattr(op, "label", None), str)
+            op.label for op in trace._layer_list if isinstance(getattr(op, "label", None), str)
         )
         by_site: dict[tuple[str, int], str] = {}
         for label, op in by_label.items():
             layer_label = getattr(op, "layer_label", None) or label
-            pass_index = getattr(op, "pass_index", 1) or 1
+            pass_index = getattr(op, "pass_number", 1) or 1
             by_site[(layer_label, pass_index)] = label
         return cls(
             ops=by_label,

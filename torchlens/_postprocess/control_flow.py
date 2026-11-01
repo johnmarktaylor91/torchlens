@@ -151,13 +151,13 @@ def _can_fast_skip_step5(self: Trace) -> bool:
 
     if self.internally_terminated_bool_ops:
         return False
-    if self.conditional_records:
+    if self._graph_conditional_records:
         return False
-    if self.conditional_branch_edges:
+    if self._graph_conditional_branch_edges:
         return False
-    if self.conditional_arm_entry_edges:
+    if self._graph_conditional_arm_entry_edges:
         return False
-    return not self.conditional_edge_call_indices
+    return not self._graph_conditional_edge_call_indices
 
 
 def _build_file_indexes(
@@ -366,7 +366,7 @@ def _materialize_conditional_records(
     from .._data_classes.trace import ConditionalEvent
 
     record_lookup = _build_conditional_record_lookup(file_indexes)
-    self.conditional_records = []
+    self._graph_conditional_records = []
 
     events_by_key: dict[ast_branches.ConditionalKey, ConditionalEvent] = {}
     for conditional_id, conditional_key in enumerate(conditional_keys):
@@ -409,7 +409,7 @@ def _materialize_conditional_records(
         setattr(event, "_arm_test_structures", dict(record.branch_test_structures))
         setattr(event, "_bool_layers_raw", [])
         events_by_key[conditional_key] = event
-        self.conditional_records.append(event)
+        self._graph_conditional_records.append(event)
 
     for conditional_key in conditional_keys:
         record, _function_qualname = record_lookup[conditional_key]
@@ -480,7 +480,7 @@ def _mark_conditional_branches_if_backward_flood(
         Per-bool branch-participating classifications keyed by raw layer label.
     """
 
-    self.conditional_branch_edges = []
+    self._graph_conditional_branch_edges = []
     for layer in self:
         if getattr(layer, "is_orphan", False):
             continue
@@ -506,7 +506,7 @@ def _mark_conditional_branches_if_backward_flood(
                 parent_layer.conditional_entry_children.append(node_label)
                 parent_layer.is_in_conditional_body = False
                 nodes_seen.add(parent_label)
-                self.conditional_branch_edges.append((parent_label, node_label))
+                self._graph_conditional_branch_edges.append((parent_label, node_label))
             else:
                 if parent_label in nodes_seen:
                     continue
@@ -570,10 +570,10 @@ def _attribute_branches_forward(
                         conditional_id,
                         branch_kind,
                     )
-                ].append(child_layer.pass_index)
+                ].append(child_layer.pass_number)
 
-    self.conditional_arm_entry_edges = dict(conditional_arm_entry_edges)
-    self.conditional_edge_call_indices = dict(conditional_edge_call_indices)
+    self._graph_conditional_arm_entry_edges = dict(conditional_arm_entry_edges)
+    self._graph_conditional_edge_call_indices = dict(conditional_edge_call_indices)
 
 
 def _materialize_derived_views(self: Trace) -> None:
@@ -585,9 +585,9 @@ def _materialize_derived_views(self: Trace) -> None:
         Model log being postprocessed.
     """
 
-    self.conditional_edge_call_indices = {
+    self._graph_conditional_edge_call_indices = {
         key: sorted(set(call_indexs))
-        for key, call_indexs in self.conditional_edge_call_indices.items()
+        for key, call_indexs in self._graph_conditional_edge_call_indices.items()
     }
 
     for layer_label in self._raw_graph_ws.raw_layer_labels_list:
@@ -960,7 +960,7 @@ def _fix_buffer_layers(self: Trace) -> None:
             source_matches_buffer = _buffer_source_value_matches(
                 self[layer.buffer_source],
                 layer,
-                structure_only=bool(getattr(self, "structure_only", False)),
+                structure_only=bool(self._options_structure_only),
             )
             if source_matches_buffer:
                 layer.func = identity
@@ -1008,7 +1008,7 @@ def _fix_buffer_layers(self: Trace) -> None:
         layer = self[layer_label]
         address = layer.address
         layer.buffer_pass = buffer_counter[address]
-        self.buffer_num_calls[address] = buffer_counter[address]
+        self._buffer_num_calls[address] = buffer_counter[address]
         buffer_counter[address] += 1
 
 

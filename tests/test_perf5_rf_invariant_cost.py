@@ -216,7 +216,7 @@ def test_chain_invariants_do_linear_rule_calls_and_enumerate_no_window() -> None
     trace = tl.trace(_Chain(DEPTH), torch.randn(1, 1, 2 * DEPTH + 101))
     _engine.solve(trace)
     solve_projective(trace, tuple(trace.output_ops))
-    n_ops = len(trace.layer_list)
+    n_ops = len(trace._layer_list)
     with _counters() as counts:
         assert check_geometric_metadata_invariants(trace)
     # Base: about n^2 rule calls (one per hop of every query) and about n^3 / 3
@@ -229,7 +229,7 @@ def _all_boxes(trace: tl.Trace) -> list[tuple[str, str, str, Any]]:
     """Every invariant box of both directions, each query run on its own."""
 
     rows = []
-    ops_by_label = {op.label: op for op in trace.layer_list}
+    ops_by_label = {op.label: op for op in trace._layer_list}
     solutions = [(ReceptiveFieldDirection.RECEPTIVE, _engine.solve(trace))]
     if trace.output_ops:
         solutions.append(

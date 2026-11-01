@@ -125,10 +125,10 @@ def _last_op(trace: Any, func_name: str, *, field: str = "func_name") -> Any:
     always the canonical op name: tinygrad elementwise ops are reconstructed
     from the UOp DAG and carry the lambda wrapper's own name (``"<lambda>"``)
     as ``func_name``, with the semantic op name (``"add"``, ``"mul"``, ...)
-    only on ``layer_type`` instead. Pass ``field="layer_type"`` for those.
+    only on ``type`` instead. Pass ``field="type"`` for those.
     """
 
-    matches = [op for op in trace.layer_list if getattr(op, field) == func_name]
+    matches = [op for op in trace._layer_list if getattr(op, field) == func_name]
     assert matches
     return matches[-1]
 
@@ -226,7 +226,7 @@ def test_torchvision_resnet18_merge_geometry_matches_graph_derivation() -> None:
         capture=tl.options.CaptureOptions(backward_ready=True),
         save_mode="reference",
     )
-    merges = [op for op in trace.layer_list if op.func_name == "__iadd__"]
+    merges = [op for op in trace._layer_list if op.func_name == "__iadd__"]
     expected = _resnet18_merge_goldens()
     observed = []
     for merge in merges:
@@ -274,8 +274,8 @@ def test_geometric_hulls_equal_independent_gradient_support(model: nn.Module) ->
     inputs = torch.ones(1, 1, 5, 5, requires_grad=True)
     capture = tl.options.CaptureOptions(backward_ready=True)
     trace = tl.trace(model.eval(), inputs, capture=capture, save_mode="reference")
-    input_op = next(op for op in trace.layer_list if op.is_input)
-    targets = [op for op in trace.layer_list if op.func_name in {"conv2d", "__add__"}]
+    input_op = next(op for op in trace._layer_list if op.is_input)
+    targets = [op for op in trace._layer_list if op.func_name in {"conv2d", "__add__"}]
     assert targets
 
     for target in targets:
@@ -329,7 +329,7 @@ def test_non_torch_geometry_works_but_gradient_probe_is_gated() -> None:
         return value + 1.0
 
     trace = tl.trace(add_one, tinygrad.Tensor([1.0, 2.0, 3.0]), backend="tinygrad")
-    target = _last_op(trace, "add", field="layer_type")
+    target = _last_op(trace, "add", field="type")
     descriptor = next(iter(target.receptive_field.per_input.values()))
 
     assert descriptor.status is tl.receptive_field.ReceptiveFieldStatus.EXACT

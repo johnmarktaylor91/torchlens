@@ -67,7 +67,6 @@ class MetadataInvariantError(_ActionableErrorMixin, ValidationError, ValueError)
             Optional stable refusal code from the error-refusal contract,
             carried on ``fields["code"]``.
         """
-
         text = f"[{check_name}] {message}"
         if code is None:
             super().__init__(text)
@@ -119,11 +118,6 @@ class MetadataInvariantContract:
 
 # ---------------------------------------------------------------------------
 # Public entry point
-# ---------------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------------
-# A. Trace self-consistency
 # ---------------------------------------------------------------------------
 
 
@@ -280,6 +274,7 @@ _RAW_LABEL_BEARING_DICT_FIELDS = ("conditional_elif_children", "parent_arg_posit
 
 # Late imports (after this module's own definitions): the split modules import this
 # module's classes and constants back, so they must exist before the splits load.
+from .._record_type import record_type  # noqa: E402,F401  (rebound equivalence helpers read it)
 from ._invariants_backward_graph import (  # noqa: E402
     _check_backward_graph_invariants,
 )

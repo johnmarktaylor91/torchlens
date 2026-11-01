@@ -268,8 +268,8 @@ def _paired_pass_op(trace: Any, op_label: str | None, grad_fn_object_id: int | N
 
     if op_label is None:
         return None
-    entry = getattr(trace, "layer_dict_all_keys", {}).get(op_label)
-    layer = getattr(trace, "layer_logs", {}).get(op_label)
+    entry = trace._layer_dict_all_keys.get(op_label)
+    layer = trace._layer_logs.get(op_label)
     if layer is None or grad_fn_object_id is None:
         return entry
     pass_op = _pass_op_for_grad_fn(layer, grad_fn_object_id)
@@ -322,10 +322,10 @@ class GradFn:
         "backward_signature": FieldPolicy.KEEP,
         "backward_docstring": FieldPolicy.KEEP,
     }
-    FIELD_POLICY = build_record_field_policy_table(
+    _FIELD_POLICY = build_record_field_policy_table(
         GRAD_FN_LOG_FIELD_ORDER, _PORTABLE_STATE_SPEC, schema_key="grad_fn"
     )
-    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(_FIELD_POLICY)
 
     grad_fn_object_id: int
     class_name: str
@@ -376,8 +376,8 @@ class GradFn:
         else:
             self.calls._label = self.label
         for call in self.calls.values():
-            call.label = self.label
-            call.source_trace = self.trace
+            call.grad_fn_label = self.label
+            call._source_trace = self.trace
 
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state with weakrefs stripped and an IO format marker.
@@ -497,7 +497,7 @@ class GradFn:
 
         self._source_trace_ref = weakref.ref(value) if value is not None else None
         for call in self.calls.values():
-            call.source_trace = value
+            call._source_trace = value
 
     @property
     def op(self) -> Layer | None:
@@ -695,7 +695,7 @@ class GradFn:
         call_index = len(self.calls) + 1
         self.calls[call_index] = GradFnCall(
             call_index=call_index,
-            label=self.label,
+            grad_fn_label=self.label,
             grad_inputs=_clone_grad_value(grad_inputs),
             grad_outputs=_clone_grad_value(grad_outputs),
             _time_started=timestamp,

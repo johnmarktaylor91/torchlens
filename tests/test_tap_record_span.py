@@ -37,9 +37,7 @@ def test_tap_records_without_modifying_output() -> None:
     x = torch.tensor([[-1.0, 2.0]])
     tap = tl.observers.tap(tl.func("relu"))
 
-    hooked = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(intervention_ready=True, hooks=tap)
-    )
+    hooked = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True, hooks=tap))
     plain = tl.trace(model, x)
 
     assert tap.values()
@@ -56,9 +54,9 @@ def test_record_span_and_log_value_metadata() -> None:
     with tl.observers.span("phase_name"):
         log = tl.trace(MetricModel(), torch.tensor([[-1.0, 2.0]]))
 
-    assert log.observer_spans
-    assert log.observer_spans[0]["name"] == "phase_name"
-    assert log.observer_spans[0]["end"] is not None
+    assert log.provenance.observer_spans
+    assert log.provenance.observer_spans[0]["name"] == "phase_name"
+    assert log.provenance.observer_spans[0]["end"] is not None
     assert log.annotations["logged_values"]["out_sum"] == 2.0
     assert not hasattr(log, "report_values")
 

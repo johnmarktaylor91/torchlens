@@ -105,7 +105,7 @@ def to_pandas(trace: DryRun) -> Any:
 
     rows = [
         {
-            "call_index": ctx.pass_index,
+            "call_index": ctx.pass_number,
             "step_num": ctx.event_index,
             "kind": ctx.kind,
             "op_type": ctx.layer_type or ctx.func_name,

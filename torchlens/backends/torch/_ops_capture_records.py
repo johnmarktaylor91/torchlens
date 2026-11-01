@@ -179,7 +179,7 @@ def _compact_ancestor_sets(trace: Trace) -> None:
         Finished trace whose retained Op metadata should be compacted.
     """
 
-    ops = getattr(trace, "layer_list", None)
+    ops = trace._layer_list
     if not ops:
         return
 
@@ -443,11 +443,11 @@ def _should_keep_alias_mutation_contract(trace: Trace) -> bool:
         mutation-position metadata.
     """
 
-    save_grads = getattr(trace, "save_grads", None)
+    save_grads = trace._options_save_grads
     return bool(
-        getattr(trace, "save_arg_values", False)
-        or getattr(trace, "intervention_ready", False)
-        or getattr(trace, "backward_ready", False)
+        trace._options_save_args
+        or getattr(trace, "is_replayable", False)
+        or trace._options_backward_ready
         or save_grads not in (None, False)
         or getattr(trace, "_validation_active", False)
     )
@@ -468,7 +468,7 @@ def _snapshot_exhaustive_module_stack(self: Trace) -> list[tuple[str, int]]:
     """
 
     return [
-        (frame.address, frame.pass_index)
+        (frame.address, frame.pass_number)
         for frame in _mstack.snapshot(self._module_capture_ws.exhaustive_module_stack)
     ]
 
@@ -618,7 +618,7 @@ def _parent_edges_from_fields(fields_dict: dict[str, Any]) -> tuple[ParentEdge, 
         ParentEdge(
             parent_label_raw=label,
             arg_position=positions_by_label.get(label, (None, "arg"))[0],
-            edge_use=positions_by_label.get(label, (None, "arg"))[1],
+            _edge_use=positions_by_label.get(label, (None, "arg"))[1],
         )
         for label in fields_dict["parents"]
     )
@@ -756,7 +756,7 @@ def _exhaustive_capture_policy(trace: Trace, fields_dict: dict[str, Any]) -> Cap
     return CapturePolicy(
         save_payload=fields_dict["has_saved_activation"],
         save_grad=fields_dict["save_grads"],
-        save_mode=getattr(trace, "save_mode", "copy"),
+        save_mode=trace._options_save_mode,
     )
 
 

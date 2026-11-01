@@ -1555,7 +1555,7 @@ def _capture_observed_cuda_device(trace: Any) -> bool | None:
     """
 
     saw_device_fact = False
-    for source in (trace, getattr(trace, "layer_list", None)):
+    for source in (trace, trace._layer_list):
         if source is None:
             continue
         source_saw_fact = False
@@ -1612,7 +1612,7 @@ def capture_touched_cuda(trace: Any) -> bool:
         evidence, was stamped with a KNOWN non-CUDA backend.
     """
 
-    backend = getattr(trace, "forward_memory_backend", None)
+    backend = trace._provenance_forward_memory_backend
     if backend == "cuda":
         return True
     observed = _capture_observed_cuda_device(trace)

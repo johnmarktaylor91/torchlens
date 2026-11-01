@@ -115,7 +115,7 @@ def test_l7b_row_refusals_teach_the_boundary_and_the_remedy() -> None:
         require_structure_only_capability(log, "save_runnable")
     message = str(runnable_exc.value)
     assert "late-bind" in message
-    assert "intervention_ready=True" in message
+    assert "replayable=True" in message
     assert runnable_exc.value.fields["flip_event"] == "L7b amendment lands"
     with pytest.raises(StructureOnlyCapabilityError) as replay_exc:
         log.run(inputs=torch.randn(2, 3))
@@ -123,7 +123,7 @@ def test_l7b_row_refusals_teach_the_boundary_and_the_remedy() -> None:
 
 
 def test_entry_conflict_teaches_the_runnable_ready_flip_event() -> None:
-    """The structure_only + intervention_ready entry conflict names its
+    """The structure_only + replayable entry conflict names its
     capability row and the L7b amendment as the flip event."""
 
     from torchlens._errors import StructureOnlyOptionConflictError
@@ -132,7 +132,7 @@ def test_entry_conflict_teaches_the_runnable_ready_flip_event() -> None:
         tl.trace(
             _NonPersistentBufferModel(),
             torch.randn(2, 3),
-            capture=CaptureOptions(structure_only=True, intervention_ready=True),
+            capture=CaptureOptions(structure_only=True, replayable=True),
         )
     message = str(excinfo.value)
     assert "runnable_ready_composition" in message
@@ -239,9 +239,7 @@ def loaded_runnable_trace(tmp_path):
     trace = tl.trace(
         model,
         torch.tensor([1.0, 2.0, 3.0]),
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     path = tmp_path / "bridge.tlspec"
     import warnings
@@ -258,7 +256,7 @@ def test_late_bound_values_validate_through_the_s1_surface(loaded_runnable_trace
 
     bound = torch.tensor([5.0, 6.0, 7.0])
     binding = validate_and_digest_bound_buffers(
-        loaded_runnable_trace.runnable_descriptor,
+        loaded_runnable_trace._sparse_run_descriptor,
         {"scale": bound},
     )
     # The S1 validator stages by SLOT id (execution keying), one slot here.
@@ -278,7 +276,7 @@ def test_late_bound_geometry_violations_refuse_via_the_s1_validator(
     """Shape mismatches and missing keys refuse through the unchanged S1
     validator — the bridge adds digests, never a second validation layer."""
 
-    descriptor = loaded_runnable_trace.runnable_descriptor
+    descriptor = loaded_runnable_trace._sparse_run_descriptor
     with pytest.raises(StateBindingError):
         validate_and_digest_bound_buffers(descriptor, {"scale": torch.ones(7)})
     with pytest.raises(StateBindingError):

@@ -46,7 +46,7 @@ _FIRST_CAPTURE_UNDER_INFERENCE = textwrap.dedent(
         log = tl.trace(
             M().eval(),
             torch.randn(2, 4),
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
     assert len(list(log)) > 0
     print("OK", len(list(log)))

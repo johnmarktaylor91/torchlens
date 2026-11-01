@@ -67,10 +67,14 @@ class _DummyLog:
     def __init__(self) -> None:
         """Initialize captured state for a fake log object."""
 
-        self.verbose = False
-        self.layer_logs: dict[str, Any] = {}
-        self.num_saved_ops = 0
-        self.total_activation_memory = "0 B"
+        self._options_verbose = False
+        self._layer_logs: dict[str, Any] = {}
+        self._num_saved_ops = 0
+        self.saved_ops: list[Any] = []
+        self._cost_total_activation_memory = "0 B"
+        self._provenance_verified: Any = None
+        self._options_structure_only = False
+        self._options_output_device = "same"
         self.render_calls: list[dict[str, Any]] = []
         self.cleaned_up = False
 

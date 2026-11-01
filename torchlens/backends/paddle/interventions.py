@@ -344,7 +344,7 @@ class PaddleInterventionRuntime:
         """
 
         paddle = self._backend.paddle
-        name = helper.helper_name
+        name = helper.name
         args = tuple(helper.args)
         if name == "zero_ablate":
             return lambda out: paddle.zeros_like(out)

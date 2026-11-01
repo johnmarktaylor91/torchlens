@@ -53,7 +53,7 @@ def render_edit_repr(spec: Edit) -> str:
             if not _is_signature_default(target, key, value)
         )
         return f"{path}({', '.join(parts)})"
-    fields = [repr(spec.helper_name)]
+    fields = [repr(spec.name)]
     if spec.portability != "builtin":
         fields.append(f"portability={spec.portability!r}")
     if spec.signal is not None:
@@ -89,7 +89,7 @@ def _public_constructor(spec: Edit) -> tuple[str, Callable[..., Any]] | None:
         return None
     from .helpers import builtin_helper_constructor
 
-    target = builtin_helper_constructor(spec.helper_name)
+    target = builtin_helper_constructor(spec.name)
     if target is None:
         return None
     import importlib
@@ -97,13 +97,13 @@ def _public_constructor(spec: Edit) -> tuple[str, Callable[..., Any]] | None:
     for module_name, prefix in _PUBLIC_NAMESPACES:
         namespace = importlib.import_module(module_name)
         try:
-            candidate = getattr(namespace, spec.helper_name)
+            candidate = getattr(namespace, spec.name)
         except (AttributeError, ImportError):
             # Lazy facades raise (typed) AttributeError for absent or
             # redirected names and ImportError for gated extras.
             continue
         if candidate is target:
-            return f"{prefix}.{spec.helper_name}", target
+            return f"{prefix}.{spec.name}", target
     return None
 
 

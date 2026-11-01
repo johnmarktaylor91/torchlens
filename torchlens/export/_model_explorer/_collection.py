@@ -18,6 +18,7 @@ import json
 from typing import Any
 
 from ..._capture_honesty import capture_honesty_facts
+from ..._data_classes._trace_missing_attrs import is_live_trace
 from ..._errors import InvalidArgumentError
 from ...errors._base import TorchLensError
 from .._common import _iter_layers, _require_trace
@@ -89,8 +90,8 @@ def to_model_explorer_dict(trace: Any, **options: Any) -> dict[str, Any]:
         )
     collection_label = str(
         opts.label
-        or getattr(trace, "trace_label", None)
-        or getattr(trace, "model_class_name", None)
+        or getattr(trace, "name", None)
+        or (trace._source_class_name if is_live_trace(trace) else None)
         or "model"
     )
     attr_context = _attr_context(trace, opts.privacy_profile, opts.include_source)
@@ -176,7 +177,7 @@ def _base_root_facts(log: Any, privacy_profile: str) -> dict[str, str]:
 
     facts: dict[str, str] = {
         "produced_by": f"torchlens {torchlens.__version__}",
-        "backend": str(getattr(log, "backend", "") or "unknown"),
+        "backend": str((log._provenance_backend if is_live_trace(log) else "") or "unknown"),
         "privacy_profile": privacy_profile,
     }
     for key, value in capture_honesty_facts(log).items():

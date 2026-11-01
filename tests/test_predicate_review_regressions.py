@@ -179,7 +179,7 @@ def test_flat_nary_followed_by_conjunction_capture() -> None:
     def _saved(log: Any) -> list[str]:
         return sorted(
             str(op.layer_label)
-            for op in log.layer_list
+            for op in log._layer_list
             if getattr(op, "has_saved_activation", False)
         )
 
@@ -507,11 +507,16 @@ def test_strict_rejects_nested_where(conv_trace: Any) -> None:
 def test_capture_module_fallback_for_nontorch_backend() -> None:
     """Non-torch capture subjects fall back to the single ``module`` candidate."""
 
+    from torchlens._data_classes.trace import Trace
     from torchlens._ir.selector_eval import evaluate
 
+    # A Trace instance (built without a capture) owning a non-torch backend
+    # store; the fallback reads the backend from live Traces only.
+    mlx_session = object.__new__(Trace)
+    mlx_session.__dict__["_provenance_backend"] = "mlx"
     subject = SimpleNamespace(
         output_of_module_calls=(),
-        source_trace=SimpleNamespace(backend="mlx"),
+        source_trace=mlx_session,
         module="encoder.block",
         func_name=None,
         layer_type=None,
@@ -557,7 +562,7 @@ def test_followed_by_conjunction_is_association_insensitive() -> None:
             )
         return sorted(
             str(op.layer_label)
-            for op in log.layer_list
+            for op in log._layer_list
             if getattr(op, "has_saved_activation", False)
         )
 

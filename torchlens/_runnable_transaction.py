@@ -548,9 +548,9 @@ def _resolve_until_site(trace: Any, token: str) -> tuple[list[Any], list[str], l
     if token == "saved":
         saved_layers = [
             layer
-            for layer in trace.layer_list
+            for layer in trace._layer_list
             if bool(getattr(layer, "has_saved_activation", False))
-            and layer.layer_type not in ("input", "output")
+            and layer.type not in ("input", "output")
         ]
         if not saved_layers:
             raise InvalidArgumentError(
@@ -562,7 +562,7 @@ def _resolve_until_site(trace: Any, token: str) -> tuple[list[Any], list[str], l
             )
         labels = [layer.layer_label for layer in saved_layers]
         return saved_layers, labels, list(labels)
-    keys = trace.layer_dict_all_keys
+    keys = trace._layer_dict_all_keys
     if token in keys:
         layer = keys[token]
         return [layer], [layer.layer_label], [layer.layer_label]
@@ -885,7 +885,7 @@ def _live_readiness_report(trace: Any) -> ReadinessReport:
     return ReadinessReport(
         status=ReadinessStatus.READY,
         provider=RunProvider.LIVE,
-        backend=str(getattr(trace, "backend", "torch")),
+        backend=str(trace._provenance_backend),
         capability="live_model_fast_capture",
         resolver_records=(),
         state_sources_available=(StateSource.LIVE_MODEL_STATE,),

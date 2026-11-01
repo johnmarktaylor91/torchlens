@@ -53,6 +53,8 @@ from collections.abc import Callable
 from os import PathLike
 from typing import Any, Final, Protocol
 
+from .._record_type import record_type
+
 HASH_CHUNK_BYTES: Final[int] = 1 << 20
 """Read size for streamed file hashing (the digest does not depend on it)."""
 
@@ -274,10 +276,10 @@ def _hashable_path_component(component: Any) -> Any:
     component_type = type(component).__name__
     if component_type == "TupleIndex" and hasattr(component, "index"):
         return {"type": type(component).__name__, "index": component.index}
-    if component_type in {"DictKey", "HFKey"} and hasattr(component, "key"):
-        return {"type": type(component).__name__, "key": repr(component.key)}
-    if component_type in {"NamedField", "DataclassField"} and hasattr(component, "name"):
-        return {"type": type(component).__name__, "name": component.name}
+    if component_type in {"DictKey", "HFKey"} and hasattr(component, "_key"):
+        return {"type": type(component).__name__, "key": repr(component._key)}
+    if component_type in {"NamedField", "DataclassField"} and hasattr(component, "_name"):
+        return {"type": type(component).__name__, "name": component._name}
     return {"type": type(component).__name__, "value": repr(component)}
 
 
@@ -320,7 +322,7 @@ def populate_normalized_layer_addresses(trace: Any) -> None:
         Each layer's ``_address_normalized`` field is updated in place.
     """
 
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         layer._address_normalized = normalize_address_for_hash(getattr(layer, "module", None))
 
 
@@ -368,7 +370,7 @@ def compute_graph_shape_hash(
     order_by_label: dict[Any, int] = {}
     layer_by_label: dict[Any, Any] = {}
     kept_layers: list[Any] = []
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         reference_label = (
             layer.layer_label
             if getattr(layer, "num_passes", 1) == 1
@@ -406,7 +408,7 @@ def compute_graph_shape_hash(
         records.append(
             {
                 "index": index,
-                "layer_type": getattr(layer, "layer_type", None),
+                "layer_type": record_type(layer, None),
                 "func_name": str(getattr(layer, "func_name", None)),
                 "parent_indices": parent_indices,
                 "_address_normalized": hash_address,
@@ -441,7 +443,7 @@ def _replacement_layer_fold_target(
     parent's shape and dtype folds.
     """
 
-    if getattr(layer, "layer_type", None) != "interventionreplacement":
+    if record_type(layer, None) != "interventionreplacement":
         return None
     parents = list(getattr(layer, "parents", ()) or ())
     if len(parents) != 1 or parents[0] not in order_by_label:

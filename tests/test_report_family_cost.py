@@ -419,7 +419,7 @@ def test_position_scaling_closed_forms() -> None:
         linear_live = sum(real) / (len(real) * padded)
         quadratic_live = sum(r * r for r in real) / (len(real) * padded**2)
         expected = 0
-        for op in trace.layer_list:
+        for op in trace._layer_list:
             flops = int(getattr(op, "flops_forward", 0) or 0)
             if flops == 0:
                 continue
@@ -450,7 +450,7 @@ def test_padding_waste_refuses_bad_lengths(nested_trace) -> None:
 def test_sdpa_is_quadratic_linear_is_linear(sdpa_trace) -> None:
     """The scaling table's two anchor classes."""
 
-    ops = {str(op.layer_label): op for op in sdpa_trace.layer_list}
+    ops = {str(op.layer_label): op for op in sdpa_trace._layer_list}
     sdpa_op = next(op for label, op in ops.items() if label.startswith("scaleddotproduct"))
     linear_op = next(op for label, op in ops.items() if label.startswith("linear"))
     assert position_scaling_class(sdpa_op, 4) == "quadratic_in_sequence"

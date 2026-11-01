@@ -32,7 +32,9 @@ from torchlens.intervention.errors import SelectorCapabilityError, SiteResolutio
 
 def _saved(trace: tl.Trace) -> set[str]:
     return {
-        str(op.layer_label) for op in trace.layer_list if getattr(op, "has_saved_activation", False)
+        str(op.layer_label)
+        for op in trace._layer_list
+        if getattr(op, "has_saved_activation", False)
     }
 
 
@@ -73,7 +75,7 @@ def test_a_head_save_keeps_the_attention_interior_and_reads_the_slice(attn) -> N
     torch.testing.assert_close(trace[selector].value, full[selector].value, **TOL)
     interior = {
         str(op.layer_label)
-        for op in full.layer_list
+        for op in full._layer_list
         if any(str(m).split(":")[0].startswith("attn") for m in (op.modules or ()))
     }
     assert interior and interior <= _saved(trace)
@@ -110,7 +112,7 @@ def test_a_structural_facet_save_keeps_every_op() -> None:
     trace = tl.trace(model, x, save=tl.facet("out"))
     full = tl.trace(model, x)
     assert _saved(trace) == _saved(full)
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         torch.testing.assert_close(op.facets["out"].value, full[op.label].out, **TOL)
 
 
@@ -159,7 +161,7 @@ def test_capture_hooks_key_is_hashable_and_still_refuses_typed(attn, latent_setu
         tl.trace(
             model,
             x,
-            capture=tl.options.CaptureOptions(intervention_ready=True, hooks=hooks),
+            capture=tl.options.CaptureOptions(replayable=True, hooks=hooks),
         )
 
 

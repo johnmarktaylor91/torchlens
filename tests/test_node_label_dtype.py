@@ -42,7 +42,7 @@ def half_log() -> Any:
 
 def test_dtype_token_renders_each_nodes_output_dtype(half_log: tl.Trace) -> None:
     by_dtype: dict[str, list[str]] = {}
-    for layer in half_log.layer_logs.values():
+    for layer in half_log._layer_logs.values():
         lines = compute_default_node_lines(
             layer, vis_mode="rolled", node_label_fields=["name", "dtype"]
         )

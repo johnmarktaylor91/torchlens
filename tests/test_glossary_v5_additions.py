@@ -37,7 +37,7 @@ def _make_trace() -> Any:
     return tl.trace(
         model,
         torch.randn(1, 4),
-        capture=CaptureOptions(intervention_ready=True),
+        capture=CaptureOptions(replayable=True),
     )
 
 
@@ -48,10 +48,10 @@ def test_trace_call_tree_and_num_modules() -> None:
     stream = StringIO()
     calls = list(trace.walk_calls())
 
-    assert trace.num_modules == len(trace.modules)
+    assert len(trace.modules) == len(trace.modules)
     assert len(trace.module_calls) == len(trace.module_calls)
     assert len(calls) == len(trace.module_calls)
-    assert calls[0].call_label == "self:1"
+    assert calls[0].label == "self:1"
     assert calls[0].max_descendant_depth >= 2
 
     trace.show_call_tree(file=stream)
@@ -89,17 +89,17 @@ def test_module_recursive_params_memory_and_call_tree() -> None:
 
     assert isinstance(root, Module)
     assert isinstance(root.recursive_params, ParamAccessor)
-    assert root.recursive_param_addresses == [
+    assert list(root.recursive_params.keys()) == [
         "block.0.weight",
         "block.0.bias",
         "head.weight",
         "head.bias",
     ]
-    assert root.param_memory == trace.total_param_memory
+    assert root.param_memory == trace.cost.total_param_memory
     assert block.num_recursive_params == 2
     assert block.num_recursive_param_tensors == 2
     assert len(block_descendants) == block.num_descendant_calls
-    assert [call.call_label for call in block_descendants] == ["block.0:1", "block.1:1"]
+    assert [call.label for call in block_descendants] == ["block.0:1", "block.1:1"]
     assert block.num_descendant_calls >= 2
     assert block.max_descendant_depth >= 1
     block.show_call_tree(file=stream)

@@ -97,7 +97,7 @@ def _input_admission_checks(
     input_labels = list(getattr(trace, "input_layers", ()) or ())
     if not input_labels:
         return None, False
-    layer_dict = getattr(trace, "layer_dict_all_keys", None) or {}
+    layer_dict = trace._layer_dict_all_keys or {}
     # Module attribute, not a bound name: the guard-failure fault injection
     # patches ``_runnable_transaction._live_runtime_input_leaves``.
     leaves = _transaction._live_runtime_input_leaves(input_args, input_kwargs)
@@ -205,7 +205,7 @@ def hooked_run_diagnostic(trace: Any) -> RunnableDiagnostic | None:
     Returns
     -------
     RunnableDiagnostic | None
-        A ``user_intervention_not_replayable`` diagnostic (detection stage
+        A ``user_intervention_unsupported`` diagnostic (detection stage
         ``hooked_run_unverified``) when the trace stages a user entry.
     """
 
@@ -315,8 +315,8 @@ def graph_fired_addresses(trace: Any) -> frozenset[str]:
     """
 
     fired: set[str] = set()
-    for op in getattr(trace, "layer_list", ()):
-        for record in getattr(op, "interventions", None) or ():
+    for op in trace._layer_list:
+        for record in getattr(op, "edits", None) or ():
             for attr in ("site_label", "target_label"):
                 label = getattr(record, attr, None)
                 if isinstance(label, str) and label:
@@ -578,7 +578,7 @@ def clear_unrefreshed_shape_metadata(trace: Any, refreshed_labels: frozenset[str
     """
 
     cleared = 0
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if op.label in refreshed_labels:
             continue
         for field_name in _UNREFRESHED_SHAPE_FIELDS:

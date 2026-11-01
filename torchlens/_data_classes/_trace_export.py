@@ -16,6 +16,7 @@ else:
     _TraceMixinBase = object
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavailableError
+from .._utils.collections import _path_component_key
 from .interface import _format_conditional_branch_stack
 
 
@@ -36,11 +37,7 @@ def _output_role_from_container_path(path: Any) -> str | None:
     components = tuple(path or ())
     if not components:
         return None
-    component = components[-1]
-    for attr_name in ("index", "key", "name"):
-        if hasattr(component, attr_name):
-            return str(getattr(component, attr_name))
-    return str(component)
+    return str(_path_component_key(components[-1]))
 
 
 def _is_batch_topk_decoded(value: Any) -> bool:
@@ -183,7 +180,7 @@ _TO_PANDAS_EXCLUDED_OP_FIELDS: frozenset[str] = frozenset(
         "grad_fn_handle",
         "grad_fn_object_id",
         "activation_transform",
-        "interventions",
+        "edits",
         "code_context",
         "transform_fn_source",
         "args_template",
@@ -353,6 +350,31 @@ def _filtered_topk_rows(
     ]
 
 
+_TO_PANDAS_COLUMN_TYPES: dict[str, type] = {
+    "type_index": int,
+    "step_index": int,
+    "num_passes": int,
+    "pass_number": int,
+    "is_inplace": bool,
+    "is_input": bool,
+    "is_output": bool,
+    "is_buffer": bool,
+    "in_multi_output": bool,
+    "has_parents": bool,
+    "has_children": bool,
+    "has_siblings": bool,
+    "has_co_parents": bool,
+    "has_params": bool,
+    "num_params": int,
+    "param_memory": int,
+    "activation_memory": int,
+    "is_module_input": bool,
+    "is_module_output": bool,
+    "conditional_branch_depth": int,
+    "is_terminal_conditional_bool": bool,
+}
+
+
 class TraceExportMixin(_TraceMixinBase):
     """``Trace`` export surface: dataframe, dict, and tabular projections."""
 
@@ -452,8 +474,8 @@ class TraceExportMixin(_TraceMixinBase):
         lead_columns = [
             "layer_label",
             "label",
-            "layer_label_short",
-            "label_short",
+            "short_layer_label",
+            "short_label",
             "layer_type",
         ]
         property_columns = [
@@ -481,38 +503,17 @@ class TraceExportMixin(_TraceMixinBase):
             )
         )
 
-        fields_to_change_type = {
-            "type_index": int,
-            "step_index": int,
-            "num_passes": int,
-            "pass_index": int,
-            "is_inplace": bool,
-            "is_input": bool,
-            "is_output": bool,
-            "is_buffer": bool,
-            "in_multi_output": bool,
-            "has_parents": bool,
-            "has_children": bool,
-            "has_siblings": bool,
-            "has_co_parents": bool,
-            "has_params": bool,
-            "num_params": int,
-            "param_memory": int,
-            "activation_memory": int,
-            "is_module_input": bool,
-            "is_module_output": bool,
-            "conditional_branch_depth": int,
-            "is_terminal_conditional_bool": bool,
-        }
-
         model_df_dictlist: list[dict[str, Any]] = []
-        for layer_entry in self.layer_list:
+        for layer_entry in self._layer_list:
             layer_dict: dict[str, Any] = {}
             for field_name in fields_for_df:
                 if field_name == "conditional_branch_stack":
                     layer_dict[field_name] = _format_conditional_branch_stack(
                         layer_entry.conditional_branch_stack
                     )
+                elif field_name == "layer_type":
+                    # The table keeps its layer_type column; an Op names it type.
+                    layer_dict[field_name] = layer_entry.type
                 elif field_name == "grad":
                     layer_dict[field_name] = getattr(layer_entry, "grad")
                 elif field_name == "num_saved_grads":
@@ -532,8 +533,8 @@ class TraceExportMixin(_TraceMixinBase):
             model_df_dictlist.append(layer_dict)
         model_df = pd.DataFrame(model_df_dictlist)
 
-        for column_name in fields_to_change_type:
-            model_df[column_name] = model_df[column_name].astype(fields_to_change_type[column_name])
+        for column_name, column_type in _TO_PANDAS_COLUMN_TYPES.items():
+            model_df[column_name] = model_df[column_name].astype(column_type)
         model_df["terminal_conditional_id"] = model_df["terminal_conditional_id"].astype("Int64")
 
         from .._capture_honesty import attach_dataframe_honesty
@@ -597,14 +598,14 @@ class TraceExportMixin(_TraceMixinBase):
             return door.decode_trace_output(
                 self, style=style, head=head, tokenizer=tokenizer, top_n=k or door._TOP_N_CAPTURED
             )
-        if self.decoded_output is None:
+        if self._decoded_output is None:
             return _recompute_or_refuse(self, k)
         if k is None:
-            return self.decoded_output
-        captured_top_n = getattr(self.output_postprocessor, "top_n_captured", None)
+            return self._decoded_output
+        captured_top_n = getattr(self._provenance_output_postprocessor, "top_n_captured", None)
         if captured_top_n is not None and k > captured_top_n:
             return _recompute_above_captured(self, k, captured_top_n)
-        return _rank_filtered(self.decoded_output, k)
+        return _rank_filtered(self._decoded_output, k)
 
     def output_table(
         self: "Trace",
@@ -683,7 +684,7 @@ class TraceExportMixin(_TraceMixinBase):
             ``None``.
         """
 
-        postprocessor = getattr(self, "output_postprocessor", None)
+        postprocessor = self._provenance_output_postprocessor
         if postprocessor is None or getattr(postprocessor, "style", None) == "hf_text":
             return None
         logits = _retained_output_logits(self)
@@ -707,7 +708,9 @@ class TraceExportMixin(_TraceMixinBase):
             First decoded row summary, or ``None`` when unavailable.
         """
 
-        rows = _decoded_batch_topk_rows(getattr(self, "decoded_output", None))
+        rows = _decoded_batch_topk_rows(
+            None if self.__dict__.get("_tl_cleaned_up", False) else self._decoded_output
+        )
         if not rows:
             return None
         first_item = int(rows[0].get("batch_item", 0))

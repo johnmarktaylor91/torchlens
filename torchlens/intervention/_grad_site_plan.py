@@ -29,6 +29,7 @@ from .._data_classes._trace_grad_sites import (
     select_signal_plan_engine,
 )
 from .._data_classes._trace_intervention_records import _DoTransaction
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._ir.selector_eval import looks_like_finalized_label, normalize_selector_like
 from ..options import ReplayOptions
 from .audit import record_intervention_event, site_keys_for_labels
@@ -421,7 +422,7 @@ def _lower_label_leaves(trace: Trace, site: Any) -> Any:
         and isinstance(value, str)
         and looks_like_finalized_label(value)
     ):
-        fanout = len(trace.layer_list) + 1
+        fanout = len(trace._layer_list) + 1
         ops = trace._resolve_sites(value, max_fanout=fanout)
         raw = [getattr(op, "_layer_label_raw", None) for op in ops]
         names = [name for name in raw if isinstance(name, str)]
@@ -445,7 +446,7 @@ def drop_inherited_backward(trace: Trace) -> None:
         The rerun fork, before its forward runs.
     """
 
-    if not (trace.has_backward_pass or int(getattr(trace, "num_backward_passes", 0) or 0)):
+    if not (trace._autograd_has_backward_pass or int(trace._num_backward_passes or 0)):
         return
     _reset_backward_projection(trace)
 
@@ -458,9 +459,9 @@ def force_backward_ready(trace: Trace) -> bool:
     a forced rerun as ``last_run["backward_ready_forced"] = True``.
     """
 
-    if getattr(trace, "backward_ready", False):
+    if is_live_trace(trace) and trace._options_backward_ready:
         return False
-    trace.backward_ready = True
+    trace._options_backward_ready = True
     return True
 
 
@@ -536,7 +537,7 @@ def gradient_rule_sites(trace: Any) -> list[Any]:
     """
 
     spec = trace._intervention_spec
-    ops = tuple(getattr(trace, "layer_list", ()))
+    ops = tuple(trace._layer_list)
     sites: list[Any] = []
     for hook_spec in getattr(spec, "hook_specs", ()) or ():
         for universe, branch in split_site_branches(hook_spec.site_target):
@@ -566,7 +567,7 @@ def apply_gradient_site_edits(trace: Trace, grad: torch.Tensor, tensor_label: st
     """
 
     final_label = trace._raw_to_final_layer_labels.get(tensor_label)
-    layer_dict = getattr(trace, "layer_dict_all_keys", None) or {}
+    layer_dict = trace._layer_dict_all_keys if is_live_trace(trace) else {}
     op = layer_dict.get(final_label) if final_label is not None else None
     if op is None:
         return grad
@@ -630,7 +631,7 @@ def settle_armed_gradient_edits(trace: Any, *, pass_index: int) -> None:
         record
         for record in getattr(spec, "records", ())
         if getattr(record, "signal", None) == "backward"
-        and getattr(record, "backward_pass_index", None) == pass_index
+        and getattr(record, "backward_pass_number", None) == pass_index
     ]
     for hook_specs in groups.values():
         _settle_arming_group(trace, hook_specs, pass_records, pass_index=pass_index)
@@ -684,12 +685,12 @@ def _record_belongs_to(record: Any, hook_specs: list[Any]) -> bool:
     one the fire record carries); callables by their display name.
     """
 
-    helper = getattr(record, "helper", None)
+    helper = getattr(record, "edit", None)
     for hook_spec in hook_specs:
         if hook_spec.helper is not None:
             if helper is hook_spec.helper:
                 return True
-        elif helper is None and getattr(record, "helper_name", None) == getattr(
+        elif helper is None and getattr(record, "edit_name", None) == getattr(
             hook_spec.hook, "__name__", None
         ):
             return True
@@ -700,5 +701,5 @@ def _hook_spec_edit_name(hook_spec: Any) -> str:
     """Display name of one hook spec's edit for the settle row."""
 
     if hook_spec.helper is not None:
-        return str(getattr(hook_spec.helper, "helper_name", hook_spec.helper))
+        return str(getattr(hook_spec.helper, "name", hook_spec.helper))
     return str(getattr(hook_spec.hook, "__name__", type(hook_spec.hook).__name__))

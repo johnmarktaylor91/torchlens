@@ -49,7 +49,7 @@ def loop():
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(intervention_ready=True, save_args=True),
+        capture=tl.options.CaptureOptions(replayable=True, save_args=True),
     )
     try:
         yield model, x, trace
@@ -101,16 +101,16 @@ def test_fire_record_and_store_land_on_the_addressed_pass(loop) -> None:
     fork.do(edge.__selection__(), tl.zero_ablate())
     address = (edge.child_func_call_id, edge.arg_kind, edge.arg_path)
 
-    hit = fork["relu_1_2:1"].ops[0]
+    hit = fork["relu_1_2:1"]
     assert list(hit.edge_substitutions) == [(edge.arg_kind, edge.arg_path)]
     assert hit.edge_replacement_stamps[(edge.arg_kind, edge.arg_path)]["verdict"] is True
-    fires = [r for r in hit.interventions if r.edge_address is not None]
+    fires = [r for r in hit.edits if r.edge_address is not None]
     assert [r.edge_address for r in fires] == [address]
     assert fires[0].call_label == "relu_1_2:1"
     for other in (2, 3):
-        op = fork[f"relu_1_2:{other}"].ops[0]
+        op = fork[f"relu_1_2:{other}"]
         assert not (op.edge_substitutions or {})
-        assert not [r for r in op.interventions if r.edge_address is not None]
+        assert not [r for r in op.edits if r.edge_address is not None]
 
 
 def test_audit_row_describes_the_real_effect(loop) -> None:
@@ -122,7 +122,7 @@ def test_audit_row_describes_the_real_effect(loop) -> None:
     assert audit["kind"] == "EDGE"
     row = audit["edges"][0]
     assert row["child"] == "relu_1_2:1" and row["parent"] == "linear_1_1:1"
-    store_value = fork["relu_1_2:1"].ops[0].edge_substitutions[(edge.arg_kind, edge.arg_path)]
+    store_value = fork["relu_1_2:1"].edge_substitutions[(edge.arg_kind, edge.arg_path)]
     assert row["value_digest"] == tensor_content_digest(store_value["value"])
     assert bool((store_value["value"] == 0).all())
     assert fork.last_run["origins"] == ("relu_1_2:1",)

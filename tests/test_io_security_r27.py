@@ -155,7 +155,7 @@ def _build_intervention_spec(tmp_path: Path, *, name: str = "iv.tlspec") -> Path
     log = tl.trace(
         _InterventionModel(),
         inputs,
-        capture=CaptureOptions(intervention_ready=True, seed=0),
+        capture=CaptureOptions(replayable=True, seed=0),
     )
     log.set(tl.func("relu"), tl.steer(torch.ones(2, 3)), confirm_mutation=True)
     spec_path = tmp_path / name
@@ -313,7 +313,7 @@ def test_torch_bundle_normal_load(tmp_path: Path) -> None:
 
     bundle_path = _build_torch_bundle(tmp_path)
     trace = tl.load(bundle_path)
-    assert trace.model_class_name == "_TorchTraceModel"
+    assert trace.source.class_name == "_TorchTraceModel"
 
 
 def test_torch_bundle_rejects_non_torch_tensor_codec(tmp_path: Path) -> None:

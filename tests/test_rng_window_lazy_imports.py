@@ -90,7 +90,7 @@ trace = tl.trace(
     model,
     inputs,
     capture=CaptureOptions(
-        intervention_ready=True, capture_container_structure=True, cache=False
+        replayable=True, capture_container_structure=True, cache=False
     ),
 )
 assert finder.in_window == [], f"imports inside the RNG window: {finder.in_window}"

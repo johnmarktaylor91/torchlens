@@ -50,7 +50,7 @@ with torch.no_grad():
 clean_ids = torch.tensor([[3, 7, 1, 9, 4, 3], [2, 6, 1, 8, 5, 2]])
 corrupt_ids = torch.tensor([[5, 7, 2, 9, 8, 5], [4, 6, 3, 8, 1, 4]])
 
-ready = tl.options.CaptureOptions(layers_to_save="all", intervention_ready=True)
+ready = tl.options.CaptureOptions(layers_to_save="all", replayable=True)
 clean = tl.trace(model, clean_ids, capture=ready)
 corrupt_trace = tl.trace(model, corrupt_ids, capture=ready)
 graph = torchlens.mechinterp.component_graph(clean)

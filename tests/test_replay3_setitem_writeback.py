@@ -66,7 +66,7 @@ def _validate(model: nn.Module, inputs: list[torch.Tensor]) -> bool:
 
 
 def _setitem_ops(trace: Any) -> list[Any]:
-    return [op for op in trace.layer_list if op.func_name == "__setitem__"]
+    return [op for op in trace._layer_list if op.func_name == "__setitem__"]
 
 
 def test_keypoint_scaling_validates() -> None:
@@ -92,7 +92,7 @@ def test_consumers_after_the_write_back_bind_to_it() -> None:
     trace = tl.trace(_ScaleKeypoints(), [torch.rand(1, 17, 3), torch.tensor(0.5)])
     first, second = _setitem_ops(trace)
     assert trace[second.parent_arg_positions["args"][0]].label == first.label
-    (add,) = [op for op in trace.layer_list if op.func_name == "__add__"]
+    (add,) = [op for op in trace._layer_list if op.func_name == "__add__"]
     assert [trace[parent].label for parent in add.parents] == [second.label]
 
 
@@ -106,5 +106,5 @@ def test_write_into_another_region_keeps_the_mutation_edge() -> None:
 
 def test_read_of_a_view_mutated_base_still_binds_to_the_mutation() -> None:
     trace = tl.trace(_MutateViewThenReadBase(), [torch.randn(3, 4)])
-    double = [op for op in trace.layer_list if op.func_name == "__mul__"][-1]
+    double = [op for op in trace._layer_list if op.func_name == "__mul__"][-1]
     assert [trace[parent].func_name for parent in double.parents] == ["add_"]

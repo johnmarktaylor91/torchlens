@@ -16,6 +16,7 @@ from typing import Any, Literal, cast
 import torch
 from torch import nn
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .errors import AmbiguousAxisError, HookValueError, NonExecutableSpecError
 from .hooks import HookContext
 from .stochastic import _NAMED_AXIS_TOKENS, _resolve_over_axes
@@ -54,8 +55,8 @@ def _helper_spec(
     factory: Callable[[], Callable[..., Any]],
     metadata: dict[str, Any] | None = None,
     signal: Signal | None = None,
-    batch_independent: bool = False,
-    compatible_with_append: bool = False,
+    is_batch_independent: bool = False,
+    is_compatible_with_append: bool = False,
 ) -> Edit:
     """Build a Edit with stable tuple metadata.
 
@@ -76,9 +77,9 @@ def _helper_spec(
     signal:
         ``None`` for a neutral edit; ``"forward"`` for an edit that reads
         recorded forward state (refused on a gradient site).
-    batch_independent:
+    is_batch_independent:
         Whether this helper can be applied independently to each batch item.
-    compatible_with_append:
+    is_compatible_with_append:
         Whether this helper opts into append when it changes out shape.
 
     Returns
@@ -88,15 +89,15 @@ def _helper_spec(
     """
 
     return Edit(
-        helper_name=helper_name,
+        name=helper_name,
         args=args,
         kwargs=tuple(sorted((kwargs or {}).items())),
         portability=portability,
         factory=factory,
         metadata=tuple(sorted((metadata or {}).items())),
         signal=signal,
-        batch_independent=batch_independent,
-        compatible_with_append=compatible_with_append,
+        is_batch_independent=is_batch_independent,
+        is_compatible_with_append=is_compatible_with_append,
     )
 
 
@@ -205,7 +206,7 @@ def _non_executable_builtin_placeholder(
         )
 
     return Edit(
-        helper_name=name,
+        name=name,
         portability="opaque_audit",
         signal=cast(Any, data.get("signal")),
         factory=factory,
@@ -213,8 +214,8 @@ def _non_executable_builtin_placeholder(
             ("repr", f"<non-executable {name} helper (audit-only argument)>"),
             ("executable", False),
         ),
-        batch_independent=bool(data.get("batch_independent", False)),
-        compatible_with_append=bool(data.get("compatible_with_append", False)),
+        is_batch_independent=bool(data.get("is_batch_independent", False)),
+        is_compatible_with_append=bool(data.get("is_compatible_with_append", False)),
     )
 
 
@@ -396,7 +397,7 @@ def _live_capture_donor(source: Any, context: Mapping[str, Any]) -> tuple[Any, A
         if not raw_label.endswith("_raw"):
             continue
         final_label = raw_to_final.get(raw_label)
-        donor = None if final_label is None else source.layer_dict_all_keys.get(final_label)
+        donor = None if final_label is None else source._layer_dict_all_keys.get(final_label)
         if donor is None:
             return None, None
         if tuple(getattr(donor, "shape", None) or ()) != tuple(context.get("shape") or ()):
@@ -421,8 +422,8 @@ def _swap_with_spec(
         # A fixed tensor donor is neutral; a site or trace donor reads
         # recorded forward state.
         signal=None if isinstance(other_label, torch.Tensor) else "forward",
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -447,8 +448,8 @@ def _splice_module_spec(
         factory=factory,
         metadata={"input_route": input_route, "output_route": output_route},
         signal="forward",
-        batch_independent=False,
-        compatible_with_append=False,
+        is_batch_independent=False,
+        is_compatible_with_append=False,
     )
 
 
@@ -459,7 +460,9 @@ def _patch_source_identity(
 
     identity = {
         "source_trace_label": str(getattr(source, "trace_label", "") or ""),
-        "source_model_class": str(getattr(source, "model_class_qualname", "") or ""),
+        "source_model_class": str(
+            (source._source_class_qualname if is_live_trace(source) else "") or ""
+        ),
         "source_object_id": str(id(source)),
     }
     if source_site is not None:

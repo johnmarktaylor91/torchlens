@@ -83,7 +83,7 @@ def test_folded_input_premise() -> None:
     control, _ = _traces(_TwoInputs, _inputs(0), _inputs(0))
     assert folded.input_layers == ["input_1", "input_2"]
     assert all(len(folded[label].ops) == 1 for label in folded.input_layers)
-    relu_layers = [layer for layer in folded.layer_logs.values() if layer.func_name == "relu"]
+    relu_layers = [layer for layer in folded._layer_logs.values() if layer.func_name == "relu"]
     assert [len(layer.ops) for layer in relu_layers] == [2]
     assert control.input_layers == ["input_1", "input_2"]
 
@@ -116,7 +116,7 @@ def _intervention_case(
     torch.manual_seed(0)
     model = model_cls().eval()
     inputs = _inputs(0)
-    baseline = tl.trace(model, inputs, capture=CaptureOptions(intervention_ready=True))
+    baseline = tl.trace(model, inputs, capture=CaptureOptions(replayable=True))
     # The relu that reads the second input: a change to that input changes it.
     label = _relu_pass_labels(baseline)[-1]
     return model, inputs, baseline, label
@@ -138,7 +138,7 @@ def _value_predicate(baseline: Any, label: str) -> Any:
     def predicate(p: Any) -> bool:
         if getattr(p, "layer_label", None) != layer_label:
             return False
-        if str(getattr(p, "pass_index", None)) != pass_index:
+        if str(getattr(p, "pass_number", None)) != pass_index:
             return False
         out = getattr(p, "out", None)
         return isinstance(out, torch.Tensor) and torch.equal(out, reference)

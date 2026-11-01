@@ -148,7 +148,7 @@ def _graph(model: nn.Module) -> tuple[str, list[tuple[str, tuple[str, ...], Any]
                 tuple(layer.parents),
                 getattr(layer, "buffer_write_kind", None),
             )
-            for layer in trace.layer_list
+            for layer in trace._layer_list
         ]
         return compute_graph_shape_hash(trace, include_module_address=False), rows
     finally:
@@ -218,7 +218,7 @@ def test_shifting_a_view_on_the_same_storage_is_not_a_host_write() -> None:
         # The default capture rolls the buffer back after the forward.
         assert torch.equal(before, model.b)
         (buffer_node,) = [
-            layer for layer in trace.layer_list if layer.buffer_write_kind == "data_reassign"
+            layer for layer in trace._layer_list if layer.buffer_write_kind == "data_reassign"
         ]
         assert buffer_node.buffer_value_changed is True
     finally:
@@ -296,7 +296,7 @@ def test_storage_overload_capture_charges_the_saved_storage_copy() -> None:
             ),
         )
     try:
-        set_op = next(layer for layer in trace.layer_list if layer.layer_label.startswith("set_"))
+        set_op = next(layer for layer in trace._layer_list if layer.layer_label.startswith("set_"))
         saved_storage = set_op.saved_args[1]
         assert isinstance(saved_storage, torch.UntypedStorage)
         identity = ("cpu", saved_storage.data_ptr(), saved_storage.nbytes())

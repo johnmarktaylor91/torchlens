@@ -42,7 +42,7 @@ def _edited_and_grad(dtype: torch.dtype) -> tuple[torch.Tensor, torch.Tensor, nn
     model = _Net(dtype).eval()
     x, donors = _inputs(dtype)
     edit = set_direction_mean(_DIRECTION.to(dtype), population(donors, origin="donors"), dim=-1)
-    ready = tl.options.CaptureOptions(intervention_ready=True)
+    ready = tl.options.CaptureOptions(replayable=True)
     fork = tl.trace(model, x, capture=ready).fork()
     fork.do("linear_1_1", edit)
     fork[fork.output_layers[0]].out.sum().backward()
@@ -89,7 +89,7 @@ def test_recorded_coefficient_is_the_one_applied() -> None:
     unit32 = _DIRECTION.float() / _DIRECTION.float().norm()
     per_member = [(member.float() * unit32).sum(dim=-1).mean() for member in donors]
     assert coefficient == float(torch.stack(per_member).mean())
-    ready = tl.options.CaptureOptions(intervention_ready=True)
+    ready = tl.options.CaptureOptions(replayable=True)
     fork = tl.trace(_Net(torch.float64).eval(), x, capture=ready).fork()
     fork.do("linear_1_1", edit)
     unit = _DIRECTION / _DIRECTION.norm()
