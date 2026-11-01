@@ -32,6 +32,7 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
+from .._utils.tensor_utils import tensor_payload_bytes
 
 __tl_layer__ = "L3"
 
@@ -70,27 +71,6 @@ _HASHES: dict[str, Callable[[], Any]] = {
     "blake2b": hashlib.blake2b,
     "sha256": hashlib.sha256,
 }
-
-
-def _tensor_payload_bytes(tensor: torch.Tensor) -> bytes:
-    """Return a tensor's raw little-endian payload bytes (0-dim safe).
-
-    Parameters
-    ----------
-    tensor:
-        Any dense tensor (bf16/fp8 included; the byte view never routes
-        through a NumPy dtype for the element type itself).
-
-    Returns
-    -------
-    bytes
-        The flattened contiguous payload bytes.
-    """
-
-    flat = tensor.detach().reshape(-1).cpu().contiguous()
-    if flat.numel() == 0:
-        return b""
-    return flat.view(torch.uint8).numpy().tobytes()
 
 
 def _leaf_header(name: str, tensor: torch.Tensor) -> bytes:
@@ -211,7 +191,7 @@ def merkle_digest(
         hasher = hasher_ctor()
         hasher.update(_leaf_header(name, tensor))
         hasher.update(b"\x00")
-        hasher.update(_tensor_payload_bytes(tensor))
+        hasher.update(tensor_payload_bytes(tensor))
         return hasher.digest()
 
     if ordered:

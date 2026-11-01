@@ -138,11 +138,11 @@ def test_tier0_info_on_a_non_directory_path_stays_torch_free(tmp_path: Path) -> 
 def test_local_sha256_matches_the_io_authority(clean: Path) -> None:
     """The tier-0 streaming hash cannot drift from the _io authority."""
 
-    from torchlens._io.manifest import sha256_of_file
+    from torchlens._utils.hashing import sha256_file
     from torchlens.agent._artifacts import _sha256_of_file
 
     target = clean / "metadata.pkl"
-    assert _sha256_of_file(target) == sha256_of_file(target)
+    assert _sha256_of_file(target) == sha256_file(target)
 
 
 @pytest.mark.smoke

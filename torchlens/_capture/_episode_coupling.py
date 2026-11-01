@@ -22,11 +22,11 @@ refusal codes are the stable branch surface. Doc of record:
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
+
+from .._utils.hashing import sha256_canonical_json
 
 __all__ = [
     "INTERVENTION_DIGEST_SCHEMA",
@@ -192,7 +192,7 @@ def mint_intervention_digest(session: CouplingSession) -> str:
     identity, never output equality alone" test law.
     """
 
-    canonical = json.dumps(
+    return sha256_canonical_json(
         {
             "schema": INTERVENTION_DIGEST_SCHEMA,
             "rules": [list(row) for row in session.rule_identity],
@@ -202,11 +202,8 @@ def mint_intervention_digest(session: CouplingSession) -> str:
             ],
             "outside_step_fires": session.outside_step_fires,
         },
-        sort_keys=True,
-        separators=(",", ":"),
         default=str,
     )
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def stamp_episode_steps(trace: Any, calls: list[Any]) -> None:

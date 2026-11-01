@@ -19,11 +19,12 @@ from safetensors.torch import load_file, save_file
 from .._errors import InvalidArgumentError
 from .._io._durability import fsync_dir, fsync_file
 from .._io._json import read_bounded
-from .._io.manifest import TensorEntry, sha256_of_file
+from .._io.manifest import TensorEntry
 from .._io.paths import reject_symlink_path
 from .._io.tensor_policy import Ok, is_supported_for_save
 from .._io.tlspec import _TlSpecWriter
 from .._ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
+from .._utils.hashing import sha256_file
 from ._helper_fingerprint import refuse_changed_staged_helpers
 from .errors import (
     DirectActivationWriteWarning,
@@ -1941,7 +1942,7 @@ def _write_tlspec_tensor_blob(
         device_at_save=str(tensor.device),
         layout=str(contiguous.layout).replace("torch.", ""),
         bytes=int(contiguous.numel() * contiguous.element_size()),
-        sha256=sha256_of_file(blob_path),
+        sha256=sha256_file(blob_path),
         requires_grad=bool(tensor.requires_grad),
     )
 
@@ -1965,7 +1966,7 @@ def _load_tensor_refs(spec_path: Path, entries: list[TensorEntry]) -> dict[str, 
     tensors: dict[str, torch.Tensor] = {}
     for entry in entries:
         path = _resolve_intervention_tensor_path(spec_path, entry.relative_path)
-        if sha256_of_file(path) != entry.sha256:
+        if sha256_file(path) != entry.sha256:
             raise ReplayPreconditionError(f"Tensor sidecar checksum mismatch: {entry.blob_id}")
         tensor = load_file(str(path))[_BLOB_TENSOR_KEY]
         if entry.requires_grad:
