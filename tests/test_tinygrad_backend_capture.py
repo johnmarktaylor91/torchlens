@@ -457,6 +457,49 @@ def test_tinygrad_spec_registered() -> None:
     assert capabilities.trace_options == ("module_identity_mode", "grad_options")
 
 
+def test_unrealized_closure_constant_refuses_typed() -> None:
+    """A closure constant the forward never realized refuses ``constant_unrealizable``.
+
+    ``Tensor(ndarray)`` stays a host-side source buffer until something
+    realizes it; the per-uop payload copy of that buffer cannot be written
+    back to its device (tinygrad ``need copyin``). Until realize-once capture
+    lands the backend refuses typed, naming the op, instead of crashing.
+    """
+
+    weight = Tensor(np.asarray([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32))
+    bias = Tensor(np.asarray([0.5, -0.5], dtype=np.float32))
+    x = Tensor(np.asarray([[1.0, -1.0]], dtype=np.float32))
+
+    def forward(value: Any) -> Any:
+        return (value.matmul(weight) + bias).relu()
+
+    with pytest.raises(BackendUnsupportedError) as info:
+        tl.trace(forward, x, backend="tinygrad")
+
+    assert info.value.code == "constant_unrealizable"
+    assert "BUFFER" in str(info.value)
+
+
+def test_rng_bearing_graph_refuses_typed() -> None:
+    """A forward through a random-init ``tinygrad.nn`` layer refuses ``rng_state_in_graph``.
+
+    The lazy weight graph carries the Threefry generator; a per-op realization
+    would re-evaluate it and capture values that differ from eager (F11), so
+    the backend refuses before any payload is realized.
+    """
+
+    from tinygrad import nn
+
+    Tensor.manual_seed(0)
+    layer = nn.Linear(4, 3)
+    x = Tensor(np.ones((2, 4), dtype=np.float32))
+
+    with pytest.raises(BackendUnsupportedError) as info:
+        tl.trace(lambda value: layer(value).relu(), x, backend="tinygrad")
+
+    assert info.value.code == "rng_state_in_graph"
+
+
 def test_tinygrad_forward_capture_from_uop_snapshots() -> None:
     """Capture a tinygrad forward graph from output UOp snapshots."""
 
