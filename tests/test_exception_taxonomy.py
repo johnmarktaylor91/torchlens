@@ -1168,9 +1168,7 @@ def test_selector_direction_refusal_is_not_swallowed(monkeypatch: pytest.MonkeyP
     predicate.decision = InterventionDecision(action="transform")  # type: ignore[attr-defined]
     from torchlens import _capture_intervention
 
-    monkeypatch.setattr(
-        _capture_intervention, "_selector_resolution_direction", _raise_typed_refusal
-    )
+    monkeypatch.setattr(_capture_intervention, "classify_selector_universe", _raise_typed_refusal)
 
     with pytest.raises(SiteResolutionError) as exc_info:
         _capture_intervention._backward_intervention_spec_from_predicate(predicate)
