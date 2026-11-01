@@ -232,7 +232,7 @@ def test_g3_degraded_settlement_roundtrips_byte_stable(tmp_path) -> None:
         trace._options_grouping_policy = {**trace.options.grouping_policy, "policy": "greedy"}
 
     settled = _tampered_reload(tmp_path, forge_policy, "settle_once")
-    settled_payload = dict(settled.grouping_policy)
+    settled_payload = dict(settled.options.grouping_policy)
     # Re-save the SETTLED trace: the settlement is legal under the exact
     # writer schema, so the reload adopts it verbatim with NO further
     # warning and stays degraded (verdicts only worsen, never heal).
@@ -242,7 +242,7 @@ def test_g3_degraded_settlement_roundtrips_byte_stable(tmp_path) -> None:
         with warnings.catch_warnings():
             warnings.simplefilter("error", TorchLensWarning)
             resettled = tl.load(str(path))
-    assert resettled.grouping_policy == settled_payload
+    assert resettled.options.grouping_policy == settled_payload
 
 
 # ---------------------------------------------------------------------------
