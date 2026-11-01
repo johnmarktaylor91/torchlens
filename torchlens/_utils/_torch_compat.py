@@ -53,7 +53,6 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
 from ._module_call_dispatch import probe_module_call_dispatch_frame
-from ._producer_version import _torch_minor_version
 from ._torch_symbols import shadowed_torch_submodule, torch_attr
 
 __all__ = [
@@ -500,11 +499,10 @@ def resolve_runnable_torch_alias(
     source_qualname:
         Fully qualified recorded callable path.
     recorded_version:
-        Torch version that produced the registry key. Aliases may be bounded
-        to supported minor releases; monotonic moves with an open upper bound
-        rely on the live target-existence capability probe. Unknown versions
-        retain compatibility behavior for descriptors that predate this
-        metadata.
+        Torch version that produced the registry key. Aliases may be bounded to
+        supported minor releases; monotonic moves with an open upper bound rely on
+        the live target-existence capability probe. Unknown versions retain
+        compatibility behavior for descriptors that predate this metadata.
 
     Returns
     -------
@@ -512,6 +510,8 @@ def resolve_runnable_torch_alias(
         Target namespace, target qualname, and stable provenance, or ``None``
         when the path has no explicit monotonic alias.
     """
+
+    from ._producer_version import _torch_minor_version
 
     parsed_version = _torch_minor_version(recorded_version)
     for alias in _RUNNABLE_TORCH_ALIASES:

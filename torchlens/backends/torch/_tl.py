@@ -12,7 +12,6 @@ from torch import Tensor, nn
 from torch.utils.weak import WeakIdKeyDictionary
 
 from ... import _state
-from ._tl_collective import _async_collective_elem
 
 __all__ = [
     "TorchLensMeta",
@@ -1144,14 +1143,15 @@ def get_tensor_label(t: Any) -> str | None:
     """
     meta = get_tensor_meta(t)
     if meta is None or meta.label_raw is None:
-        # AsyncCollectiveTensor is a transparent async view of its inner
-        # ``.elem`` (merge-ranks C2 recording): the funcol boundary labels the
-        # inner tensor through the ordinary relabel dance, while user code
-        # holds the ACT wrapper. Delegating the read here -- the ONE label
-        # chokepoint -- lets every consumer parent on the boundary without
-        # stamping the wrapper (whose storage pin would not validate). The
-        # ``.elem`` read is a wrapper attribute access and never triggers the
-        # ACT's wait.
+        # AsyncCollectiveTensor is a transparent async view of its inner ``.elem``
+        # (merge-ranks C2 recording): the funcol boundary labels the inner tensor
+        # through the ordinary relabel dance, while user code holds the ACT wrapper.
+        # Delegating the read here -- the ONE label chokepoint -- lets every consumer
+        # parent on the boundary without stamping the wrapper (whose storage pin would
+        # not validate). The ``.elem`` read is a wrapper attribute access and never
+        # triggers the ACT's wait.
+        from ._tl_collective import _async_collective_elem
+
         inner = _async_collective_elem(t)
         if inner is not None:
             return get_tensor_label(inner)
