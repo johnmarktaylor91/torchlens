@@ -83,14 +83,15 @@ def _trace_with_tap(tap: TapObserver) -> object:
 
 
 def test_tap_backward_tensor_mount_forward_selector() -> None:
-    """Backward taps mount through direction-agnostic forward metadata selectors."""
+    """tl.grad(label) taps the output gradient of a forward site."""
 
-    tap = tl.observers.tap(tl.label("output_1"), signal="backward")
+    tap = tl.observers.tap(tl.grad(tl.label("output_1")))
     _trace_with_tap(tap)
 
     assert len(tap.records) == 1
     record = tap.records[0]
     assert record.signal == "backward"
+    assert record.site_label == "output_1"
     assert record.grad_kind == "grad_output"
     assert record.backward_call_index == 1
     assert torch.equal(record.value, torch.ones(2, 3))
@@ -99,12 +100,13 @@ def test_tap_backward_tensor_mount_forward_selector() -> None:
 def test_tap_backward_tensor_mount_compute_op_still_matches() -> None:
     """Backward taps mounted on the compute op still see the gradient stream."""
 
-    tap = tl.observers.tap(tl.label("relu_1_2"), signal="backward")
+    tap = tl.observers.tap(tl.grad(tl.label("relu_1_2")))
     _trace_with_tap(tap)
 
     assert len(tap.records) == 1
     record = tap.records[0]
     assert record.signal == "backward"
+    assert record.site_label == "relu_1_2"
     assert record.grad_kind == "grad_output"
     assert record.backward_call_index == 1
     assert torch.equal(record.value, torch.ones(2, 3))
@@ -116,7 +118,7 @@ def test_tap_backward_tensor_mount_input_alias_matches() -> None:
     torch.manual_seed(12)
     base = torch.randn(2, 3, requires_grad=True)
     x = base * 2
-    tap = tl.observers.tap(tl.label("input_1"), signal="backward")
+    tap = tl.observers.tap(tl.grad(tl.label("input_1")))
     trace = tl.trace(
         _Identity(),
         x,
@@ -136,7 +138,7 @@ def test_tap_backward_tensor_mount_input_alias_matches() -> None:
 def test_tap_backward_grad_fn_mount_backward_selector() -> None:
     """Backward taps mount directly on grad_fn_handle selectors."""
 
-    tap = tl.observers.tap(tl.grad_fn(name="relu"), signal="backward")
+    tap = tl.observers.tap(tl.grad_fn(name="relu"))
     _trace_with_tap(tap)
 
     assert len(tap.records) == 1
@@ -145,10 +147,10 @@ def test_tap_backward_grad_fn_mount_backward_selector() -> None:
     assert tap.records[0].site_label.startswith("relu_back")
 
 
-def test_tap_backward_both_directions_fire() -> None:
-    """A both-direction tap records forward and backward events."""
+def test_tap_gradient_and_activation_union_fires_both() -> None:
+    """tap(tl.grad(s) | s) records the activation and the gradient."""
 
-    tap = tl.observers.tap(tl.label_contains("linear"), signal="both")
+    tap = tl.observers.tap(tl.grad(tl.label_contains("linear")) | tl.label_contains("linear"))
     _trace_with_tap(tap)
 
     assert [record.signal for record in tap.records] == ["forward", "backward"]
@@ -159,7 +161,7 @@ def test_tap_backward_both_directions_fire() -> None:
 def test_tap_backward_intervening_grad_fn_only_grad_fn_mount() -> None:
     """Intervening selectors fire on backward-only grad_fn_handle sites."""
 
-    tap = tl.observers.tap(tl.without_op(), signal="backward")
+    tap = tl.observers.tap(tl.without_op())
     _trace_with_tap(tap)
 
     assert tap.records
@@ -169,21 +171,21 @@ def test_tap_backward_intervening_grad_fn_only_grad_fn_mount() -> None:
     )
 
 
-def test_record_span_backward_direction() -> None:
+def test_record_span_backward_signal() -> None:
     """Backward records include active span names."""
 
-    tap = tl.observers.tap(tl.grad_fn(name="relu"), signal="backward")
-    with tl.observers.span("backward_phase", direction="backward"):
+    tap = tl.observers.tap(tl.grad_fn(name="relu"))
+    with tl.observers.span("backward_phase", signal="backward"):
         _trace_with_tap(tap)
 
     assert tap.records[0].span_names == ("backward_phase",)
 
 
-def test_record_span_both_direction_captures_both() -> None:
-    """Both-direction spans annotate forward and backward tap records."""
+def test_record_span_both_signal_captures_both() -> None:
+    """signal="both" spans annotate forward and backward tap records."""
 
-    tap = tl.observers.tap(tl.label_contains("linear"), signal="both")
-    with tl.observers.span("both_phase", direction="both"):
+    tap = tl.observers.tap(tl.grad(tl.label_contains("linear")) | tl.label_contains("linear"))
+    with tl.observers.span("both_phase", signal="both"):
         _trace_with_tap(tap)
 
     assert [record.span_names for record in tap.records] == [
@@ -196,7 +198,7 @@ def test_record_span_backward_event_inside_active_span() -> None:
     """A span opened after forward capture still annotates backward records."""
 
     torch.manual_seed(12)
-    tap = tl.observers.tap(tl.grad_fn(name="relu"), signal="backward")
+    tap = tl.observers.tap(tl.grad_fn(name="relu"))
     model = _TinyRelu()
     x = torch.randn(2, 3)
     trace = tl.trace(
@@ -206,16 +208,16 @@ def test_record_span_backward_event_inside_active_span() -> None:
     )
     loss = trace[trace.output_layers[0]].out.sum()
 
-    with tl.observers.span("backward_only", direction="backward"):
+    with tl.observers.span("backward_only", signal="backward"):
         trace.log_backward(loss)
 
     assert tap.records[0].span_names == ("backward_only",)
 
 
-def test_tap_record_direction_field() -> None:
+def test_tap_record_signal_field() -> None:
     """TapRecord.signal distinguishes forward from backward events."""
 
-    tap = tl.observers.tap(tl.label_contains("linear"), signal="both")
+    tap = tl.observers.tap(tl.grad(tl.label_contains("linear")) | tl.label_contains("linear"))
     _trace_with_tap(tap)
 
     assert {record.signal for record in tap.records} == {"forward", "backward"}
@@ -224,7 +226,7 @@ def test_tap_record_direction_field() -> None:
 def test_tap_record_grad_kind_field() -> None:
     """Backward TapRecord.grad_kind identifies the captured gradient payload."""
 
-    tap = tl.observers.tap(tl.grad_fn(name="relu"), signal="backward")
+    tap = tl.observers.tap(tl.grad_fn(name="relu"))
     _trace_with_tap(tap)
 
     assert tap.records[0].grad_kind in {"grad_input", "grad_output"}
@@ -233,7 +235,7 @@ def test_tap_record_grad_kind_field() -> None:
 def test_tap_record_backward_call_index() -> None:
     """Backward TapRecord.backward_call_index is one-based."""
 
-    tap = tl.observers.tap(tl.grad_fn(name="relu"), signal="backward")
+    tap = tl.observers.tap(tl.grad_fn(name="relu"))
     _trace_with_tap(tap)
 
     assert tap.records[0].backward_call_index == 1
@@ -243,7 +245,7 @@ def test_tap_per_call_vs_per_event_count() -> None:
     """Backward taps record one event for each retained backward sweep."""
 
     torch.manual_seed(12)
-    tap = tl.observers.tap(tl.grad_fn(name="relu"), signal="backward")
+    tap = tl.observers.tap(tl.grad_fn(name="relu"))
     trace = tl.trace(
         _TinyRelu(),
         torch.randn(2, 3),
