@@ -405,3 +405,93 @@ def test_perf_bundle_benchmark_probe() -> None:
 
     budget_factor = float(os.environ.get("TORCHLENS_TIMING_BUDGET_FACTOR", "2.0"))
     assert elapsed < 60.0 * budget_factor, f"Bundle benchmark unexpectedly slow: {elapsed:.2f}s"
+
+
+# ---------------------------------------------------------------------------
+# Frame-filter calls per op on the code-context walk (deterministic counter)
+# ---------------------------------------------------------------------------
+
+
+class _CounterBlock(nn.Module):
+    """Conv, norm, activation and a residual: the dispatch counter's block."""
+
+    def __init__(self, channels: int) -> None:
+        super().__init__()
+        self.conv = nn.Conv2d(channels, channels, 3, padding=1)
+        self.bn = nn.BatchNorm2d(channels)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = torch.relu(self.bn(self.conv(x)))
+        return x + y * 0.5
+
+
+class _CounterModel(nn.Module):
+    """The dispatch counter's smoke model: a stem, ``depth`` blocks, pool and head."""
+
+    def __init__(self, depth: int) -> None:
+        super().__init__()
+        self.stem = nn.Conv2d(3, 8, 3, padding=1)
+        self.blocks = nn.Sequential(*[_CounterBlock(8) for _ in range(depth)])
+        self.pool = nn.AdaptiveAvgPool2d(1)
+        self.head = nn.Linear(8, 5)
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        x = self.stem(x)
+        x = self.blocks(x)
+        x = self.pool(x).flatten(1)
+        x = self.head(x)
+        return torch.softmax(x, dim=-1), x.mean()
+
+
+#: Marginal ``is_torchlens_code`` calls per op the capture batch's predecessor
+#: (train a95b45bbd) spent on the code-context walk, measured by the dispatch
+#: counter on this model (per-op calls 94.2 on the batch head minus the +18.25
+#: the batch added). The walk now reads the memoised verdicts inline, so the
+#: count is near zero; this ceiling is never raised.
+_FRAME_FILTER_CALLS_PER_OP_CEILING = 76.0
+
+
+def _frame_filter_calls_during_capture(depth: int) -> tuple[int, int]:
+    """Return (``is_torchlens_code`` calls, ops) for one capture after a warm one."""
+
+    from torchlens._utils import _package_frames
+
+    torch.manual_seed(0)
+    model = _CounterModel(depth).eval()
+    x = torch.randn(2, 3, 8, 8)
+    torchlens.trace(model, x)  # warm: wrappers installed, filename verdicts memoised
+    target = _package_frames.is_torchlens_code.__code__
+    calls = 0
+
+    def profiler(frame: types.FrameType, event: str, _arg: object) -> None:
+        nonlocal calls
+        if event == "call" and frame.f_code is target:
+            calls += 1
+
+    sys.setprofile(profiler)
+    try:
+        trace = torchlens.trace(model, x)
+    finally:
+        sys.setprofile(None)
+    return calls, len(trace.ops)
+
+
+def test_frame_filter_calls_per_op_stay_under_the_pre_batch_count() -> None:
+    """Per op, the code-context walk calls the frame filter at most as often as before.
+
+    The capture-stage split deepened the stack between the user's ``forward``
+    and the call site by 18 frames; the walk used to call ``is_torchlens_code``
+    once per frame per op, so every op paid for them. The walk reads the memoised
+    verdicts inline now; the marginal per-op count is pinned at or below the
+    pre-split measurement (a deterministic call counter, not a timing).
+    """
+
+    small_calls, small_ops = _frame_filter_calls_during_capture(1)
+    large_calls, large_ops = _frame_filter_calls_during_capture(3)
+    assert large_ops > small_ops
+    per_op = (large_calls - small_calls) / (large_ops - small_ops)
+    assert per_op <= _FRAME_FILTER_CALLS_PER_OP_CEILING, (
+        f"{per_op:.2f} is_torchlens_code calls per op on the code-context walk "
+        f"(ceiling {_FRAME_FILTER_CALLS_PER_OP_CEILING}); small={small_calls}/{small_ops} ops, "
+        f"large={large_calls}/{large_ops} ops"
+    )
