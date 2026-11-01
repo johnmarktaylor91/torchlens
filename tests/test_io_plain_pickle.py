@@ -495,6 +495,9 @@ def test_plain_pickle_preserves_in_memory_outs(tmp_path: Path) -> None:
     with pickle_path.open("rb") as handle:
         restored = pickle.load(handle)
 
+    assert trace._output_slot is not None
+    assert trace.__getstate__()["_output_slot"] is None
+    assert restored._output_slot is None
     restored_layer = _first_saved_layer(restored)
     assert isinstance(restored_layer.out, torch.Tensor)
     assert restored_layer.out_ref is None

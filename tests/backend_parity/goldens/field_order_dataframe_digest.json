@@ -227,6 +227,7 @@
       "output_id2label",
       "output_num_classes",
       "_output_transform",
+      "_output_slot",
       "save_raw_output",
       "layer_visualizers",
       "save_visualizations",
@@ -1068,13 +1069,13 @@
     ]
   },
   "sha256_chunks": [
-    "be150501",
-    "b318e2df",
-    "994ceb6d",
-    "02f78d90",
-    "fb906f59",
-    "6cf91452",
-    "2f4b123c",
-    "0208dc43"
+    "96960183",
+    "92b44833",
+    "789e7e64",
+    "c86536d6",
+    "61a37ad5",
+    "769207a1",
+    "ca38231b",
+    "af54606b"
   ]
 }

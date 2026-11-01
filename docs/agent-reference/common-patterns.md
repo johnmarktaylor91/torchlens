@@ -11,6 +11,7 @@ import torch
 import torchlens as tl
 
 log = tl.trace(model, x, save=tl.func("relu"))
+output = log.output  # the exact model return, independent of save= and output transforms
 activation = log["relu_1_2"].out
 # A default trace is a pure observer: buffers, modes, random state and plain module
 # attributes are put back afterwards. A value the forward stashes on a module
@@ -32,6 +33,9 @@ log.draw(order_siblings=True)  # default: verified sibling ordering for dot/unro
 log.draw(collapse="auto", show_containers=False)  # readability-targeted module overview
 print(log.module_collapse_order[:10])
 tl.release_model(model)  # restore whole-model pickle / torch.save serializability
+
+# Trace.output is memory only. A loaded/unpickled or derived trace refuses with
+# output_not_stored; stop_after= before the model returns gives output_capture_stopped.
 
 # Steered rerun: a module-targeted staged spec reruns through the guarded fast engine
 # (native forward + hooks, close to plain-forward cost); any typed refusal falls back

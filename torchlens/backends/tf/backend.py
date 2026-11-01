@@ -427,6 +427,9 @@ class TFBackend:
             # silently with zero payloads (R17 parity with sibling previews).
             warn_zero_match_save_predicate("tf")
         trace.forward_duration = Duration(time.time() - trace.capture_start_time)
+        from ..._capture.output_readback import returned
+
+        trace._output_slot = returned(result.output)
         trace.raw_output = output_transform(result.output) if callable(output_transform) else None
         trace.capture_events = result.events
         trace._tf_unresolved_producers = result.unresolved_producers

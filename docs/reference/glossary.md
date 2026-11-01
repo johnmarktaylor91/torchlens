@@ -37,11 +37,15 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   code `recording_backward_not_requested`. `tl.record` and `Recorder` build it; `Recording` has no
   public constructor. `tl.record` always returns one object.
 
-**Recording.output** *(spelling pending ratification)*
+**Trace.output / Recording.output** *(spelling pending ratification)*
 : The model's return value exactly as the model returned it (tensor, tuple, dict, Hugging Face
   output object, distribution); for a multi-pass `Recorder`, the last pass's. With
   `generate_kwargs=`, `GenerationRecording.output` (and its `recording.output`) is what
-  `generate()` returned. Held in memory only: a recording loaded from disk or unpickled refuses
+  `generate()` returned. `Trace.output` is the exact return from a live `tl.trace` forward,
+  independent of `save=` and output transforms; it is neither transformed `raw_output` nor
+  the saved-payload rebuild from `reconstruct_output()`. Traces cooked from recordings,
+  forked, or merged from chunks have no live forward return. Held in memory only: a trace
+  or recording loaded from disk or unpickled refuses
   with `output_not_stored`, a failed partial recording (`on_forward_error="return_partial"`)
   with `output_forward_failed`, and a capture that `stop_after=` ended before the model
   returned with `output_capture_stopped` (all `PayloadUnavailableError`); it never returns
