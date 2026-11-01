@@ -20,6 +20,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors import TorchLensWarning
+from torchlens.validation import last_validation_failure
+from torchlens.validation.diagnostics import CHECK_BACKWARD
 
 
 class _RootOnly(nn.Module):
@@ -114,6 +116,9 @@ def test_root_only_model_backward_verdict_is_disclosed_unverifiable() -> None:
         if isinstance(entry.message, TorchLensWarning)
     ]
     assert "backward_validation_no_module_output_evidence" in codes
+    failure = last_validation_failure()
+    assert failure is not None and failure.check == CHECK_BACKWARD
+    assert failure.extra["reason"] == "no_module_output_evidence"
 
 
 def test_root_only_model_parameter_gradients_alone_validate() -> None:
