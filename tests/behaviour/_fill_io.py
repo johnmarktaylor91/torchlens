@@ -326,6 +326,16 @@ def _halted(cell: Cell) -> bool:
     return any(feature.name == "halt" for feature in cell.features)
 
 
+def _stochastic(cell: Cell, trace: Any) -> bool:
+    """Whether another forward may differ: the case tag, or a random-drawing op in the trace."""
+
+    from tests.behaviour.cases import _draws_random_numbers
+
+    return cell.case.has("stochastic") or any(
+        _draws_random_numbers(op.func_name) for op in trace.ops
+    )
+
+
 def _frame_of(value: Any) -> Any:
     """Shape and dtype of a tensor payload, or the value's type."""
 
@@ -379,28 +389,42 @@ def _check_chunked_capture(cell: Cell, plain: Any) -> None:
     """A chunked forward (``chunk_size=``) gives the plain capture's ops and output."""
 
     stimuli = _batched_input(cell)
-    if stimuli is None or cell.case.has("stochastic"):
+    if stimuli is None or _stochastic(cell, plain):
         return
     rows = int(stimuli.shape[0])
     size = (rows + 1) // 2
-    try:
-        with torch.no_grad():
-            cell.model(stimuli[:size].clone())
-    except Exception:
-        return  # the model's own forward needs the whole batch (hidden sizes, batch-wise cat)
+    pieces = _row_wise_pieces(cell, stimuli, size)
+    if pieces is None:
+        return  # the model's forward is not row-wise over the batch; chunking is not defined
     torch.manual_seed(SEED)
     chunked = tl.trace(cell.model, stimuli.clone(), chunk_size=size)
-    cell.expect(
-        [op.label for op in chunked.ops] == list(cell.facts.labels),
-        "a chunked capture changed the op labels",
-    )
+    same_labels = [op.label for op in chunked.ops] == list(cell.facts.labels)
+    if not same_labels and cell.case.has("inplace"):
+        return  # state carried in mutated buffers changes the graph between forwards
+    cell.expect(same_labels, "a chunked capture changed the op labels")
     got = list(cell.leaves(chunked.reconstruct_output()))
-    if len(got) != 1 or not isinstance(got[0], torch.Tensor) or got[0].shape[:1] != (rows,):
-        return  # the appended output is defined row-wise only for one batched tensor output
+    if len(got) != 1 or not isinstance(got[0], torch.Tensor):
+        return
+    cell.expect_same_leaves([torch.cat(pieces, dim=0)], [got[0].detach()], "chunked capture output")
+
+
+def _row_wise_pieces(cell: Cell, stimuli: torch.Tensor, size: int) -> list[torch.Tensor] | None:
+    """Plain per-chunk outputs when the model is row-wise over the batch, else ``None``."""
+
+    rows = int(stimuli.shape[0])
     torch.manual_seed(SEED)
-    pieces = [cell.model(stimuli[start : start + size].clone()) for start in range(0, rows, size)]
-    want = torch.cat([piece.detach() for piece in pieces], dim=0)
-    cell.expect_same_leaves([want], [got[0].detach()], "chunked capture output")
+    try:
+        pieces = [
+            cell.model(stimuli[start : start + size].clone()) for start in range(0, rows, size)
+        ]
+    except Exception:  # noqa: BLE001 - the model's own forward needs the whole batch
+        return None
+    if not all(isinstance(piece, torch.Tensor) for piece in pieces):
+        return None
+    first = pieces[0]
+    if any(piece.dim() != first.dim() or piece.shape[1:] != first.shape[1:] for piece in pieces):
+        return None  # the output's non-batch shape depends on the batch size
+    return [piece.detach() for piece in pieces]
 
 
 def _check_streamed_payloads(cell: Cell, trace: Any, plain: Any) -> None:
@@ -421,7 +445,7 @@ def _check_streamed_payloads(cell: Cell, trace: Any, plain: Any) -> None:
             op.label for op in trace.saved_ops if op.out is not None and not _is_output(op)
         )
         cell.expect(not retained, f"streamed payloads kept in memory: {retained[:8]}")
-    stochastic = cell.case.has("stochastic")
+    stochastic = _stochastic(cell, trace)
     for op in trace.saved_ops:
         if _halted(cell) and _is_output(op):
             continue  # a halted capture's output is the halt frontier, not the model output
@@ -446,7 +470,7 @@ def _expect_streamed_payloads(cell: Cell, trace: Any, plain: Any, got: Any, what
     narrows it, and a ``halt=`` partner's output op is the halt frontier.
     """
 
-    stochastic = cell.case.has("stochastic")
+    stochastic = _stochastic(cell, trace)
     for op in trace.saved_ops:
         if _halted(cell) and _is_output(op):
             continue
