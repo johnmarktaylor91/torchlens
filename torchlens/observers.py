@@ -77,41 +77,57 @@ class TapRecord:
 class TapObserver:
     """Callable hook that records outs without modifying them.
 
+    The site alone decides which tensor the tap sees: a bare site observes the
+    activation, ``tl.grad(site)`` the gradient of the site's output, and
+    ``tl.grad(site) | site`` both.
+
     Parameters
     ----------
     site:
         Selector-like site where this tap should be registered.
-    signal:
-        Signal on which this tap should fire.
     """
 
     site: Any
-    signal: Literal["forward", "backward", "both"] = "forward"
     records: list[TapRecord] = field(default_factory=list)
 
     def __call__(self, out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
-        """Record an out and return it unchanged.
+        """Record the observed tensor and return it unchanged.
 
         Parameters
         ----------
         out:
-            Activation observed at the hook site.
+            Activation (forward fire) or output gradient (backward fire)
+            observed at the hook site.
         ctx:
-            Hook context supplied by TorchLens.
+            Hook context supplied by TorchLens; ``ctx.signal`` says which pass.
 
         Returns
         -------
         torch.Tensor
-            The original out.
+            The original tensor.
         """
 
         with _state.pause_logging():
             value = out.detach().clone()
-        span_names = _active_span_names("forward")
+        if getattr(ctx, "signal", "forward") == "backward":
+            kwargs = getattr(ctx, "kwargs", None) or {}
+            self.records.append(
+                TapRecord(
+                    value=value,
+                    span_names=_active_span_names("backward"),
+                    timestamp=time.monotonic(),
+                    signal="backward",
+                    grad_kind=kwargs.get("grad_kind", "grad_output"),
+                    backward_call_index=kwargs.get("call_index"),
+                    _raw_site_label=_hook_layer_label(ctx.op),
+                    _trace_ref=_active_trace_ref(),
+                )
+            )
+            return out
         self.records.append(
             TapRecord(
                 value=value,
-                span_names=span_names,
+                span_names=_active_span_names("forward"),
                 timestamp=time.monotonic(),
                 signal="forward",
                 _raw_site_label=_hook_layer_label(ctx.op),
@@ -283,20 +299,19 @@ def _active_trace_ref() -> Callable[[], Any] | None:
         return None
 
 
-def _active_span_names(direction: Literal["forward", "backward"]) -> tuple[str, ...]:
-    """Return active span names whose declared direction includes ``direction``.
+def _active_span_names(signal: Literal["forward", "backward"]) -> tuple[str, ...]:
+    """Return active span names whose declared signal includes ``signal``.
 
-    A span opened with ``direction="forward"`` scopes only forward observation and
-    a ``direction="backward"`` span only backward observation; a ``"both"`` span
+    A span opened with ``signal="forward"`` scopes only forward observation and
+    a ``signal="backward"`` span only backward observation; a ``"both"`` span
     scopes both. Enforcing this here stops a forward-only span from tagging a
-    backward tap record (and vice versa), which previously happened because every
-    active span was attached regardless of its declared direction.
+    backward tap record (and vice versa).
     """
 
     return tuple(
         str(span["name"])
         for span in _state._active_record_spans.get()
-        if span.get("direction") in (direction, "both")
+        if span.get("signal") in (signal, "both")
     )
 
 
@@ -321,19 +336,15 @@ def _hook_layer_label(layer_log: Any) -> str | None:
     return str(label) if label is not None else None
 
 
-def tap(
-    site: Any,
-    *,
-    signal: Literal["forward", "backward", "both"] = "forward",
-) -> TapObserver:
+def tap(site: Any) -> TapObserver:
     """Create a tap observer for a site.
 
     Parameters
     ----------
     site:
-        Selector-like site to observe.
-    signal:
-        Signal on which the tap should fire.
+        Selector-like site to observe. ``tl.grad(site)`` observes the gradient
+        of the site's output on each backward pass; ``tl.grad(site) | site``
+        observes both passes.
 
     Returns
     -------
@@ -341,16 +352,14 @@ def tap(
         Callable observer with ``records`` and ``values()`` accessors.
     """
 
-    if signal not in {"forward", "backward", "both"}:
-        raise ValueError("signal must be 'forward', 'backward', or 'both'.")
-    return TapObserver(site=site, signal=signal)
+    return TapObserver(site=site)
 
 
 @contextmanager
 def span(
     name: str,
     *,
-    direction: Literal["forward", "backward", "both"] = "both",
+    signal: Literal["forward", "backward", "both"] = "both",
 ) -> Iterator[dict[str, Any]]:
     """Record a named observer span around captures or hook execution.
 
@@ -358,8 +367,9 @@ def span(
     ----------
     name:
         Span name.
-    direction:
-        Direction scope metadata for this span.
+    signal:
+        Which records carry the span name: ``"forward"``, ``"backward"`` or
+        ``"both"`` (default).
 
     Yields
     ------
@@ -367,11 +377,11 @@ def span(
         Mutable span metadata record.
     """
 
-    if direction not in {"forward", "backward", "both"}:
-        raise ValueError("direction must be 'forward', 'backward', or 'both'.")
+    if signal not in {"forward", "backward", "both"}:
+        raise ValueError("signal must be 'forward', 'backward', or 'both'.")
     span_record = {
         "name": str(name),
-        "direction": direction,
+        "signal": signal,
         "start": time.monotonic(),
         "end": None,
     }
