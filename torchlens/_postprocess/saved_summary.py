@@ -189,6 +189,5 @@ def _refresh_fast_saved_summary(self: "Trace") -> None:
     from .._save_budget import retained_activation_bytes
 
     self._cost_saved_activation_memory = Bytes(retained_activation_bytes(saved_layers))
-    self.num_saved_layers = len({layer_entry.layer_label for layer_entry in saved_layers})
     refresh_saved_module_call_count(self, {layer_entry.label for layer_entry in saved_layers})
     refresh_pinned_autograd_memory(self, saved_layers)

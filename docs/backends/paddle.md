@@ -78,7 +78,7 @@ conformance cell yet.
 | Forward capture (eager dygraph) | supported | |
 | Replay validation (`has_validation_replay`) | supported | |
 | Payload materialization after load (`payload_materialization`) | supported | |
-| Live forward interventions and halt (`interventions`) | supported | |
+| Live forward interventions and halt (`can_intervene`) | supported | |
 | Derived gradients, including intermediates (`intermediate_derived_grads`) | supported | |
 | True backward capture (`backward_capture`) | unsupported | `backward_capture_unsupported` |
 | Fast logging (`fastlog`) | unsupported | `fastlog_unsupported` |

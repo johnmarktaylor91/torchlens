@@ -350,7 +350,7 @@ def _jax_ops_by_label(trace: Trace) -> dict[str, Any]:
     # single-pass parent reference. Index the bare label too (safe: a
     # single-pass op's bare label is unambiguous).
     ops_by_label: dict[str, Any] = {}
-    for op in getattr(trace, "_layer_list", []):
+    for op in trace._layer_list:
         labels = [getattr(op, "_label_raw", None), getattr(op, "label", None)]
         if getattr(op, "num_passes", 1) == 1:
             labels.append(getattr(op, "layer_label", None))

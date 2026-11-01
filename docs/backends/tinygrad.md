@@ -81,7 +81,7 @@ and its refusal cell has not yet passed on the pinned CI leg (not yet proven, no
 | `intermediate_derived_grads` | supported | opt-in through `GradOptions(intermediate_grads=True)` |
 | `backward_capture` | unsupported | refusal `backward_capture_unsupported` |
 | `fastlog` | unsupported | refusal `fastlog_unsupported` |
-| `interventions` | unsupported | refusal `interventions_unsupported` |
+| `can_intervene` | unsupported | refusal `interventions_unsupported` |
 | `rng_replay` | unsupported | refusal `rng_replay_unsupported` |
 | `has_streaming` | unsupported | refusal `streaming_unsupported` |
 | `structure_only_capture` | unsupported | refusal `structure_only_capture_unsupported` |

@@ -57,9 +57,7 @@ def _fail_dispatch_census(
 ) -> ValidationStatus:
     """Record a dispatch census mismatch and return the failed status."""
     dispatch_count = getattr(self, "_validation_dispatch_op_count")
-    captured_count = int(
-        getattr(self, "_validation_captured_dispatchable_op_count", getattr(self, "_num_ops", 0))
-    )
+    captured_count = int(getattr(self, "_validation_captured_dispatchable_op_count", self._num_ops))
     pruned_count = int(getattr(self, "_validation_pruned_dispatchable_op_count", 0))
     buffer_write_count = int(getattr(self, "_validation_buffer_write_dispatch_op_count", 0))
     message = (
