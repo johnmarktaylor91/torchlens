@@ -1401,7 +1401,7 @@ def apply_live_gradient_hooks(
     """
 
     hook_plan = _state._active_hook_plan
-    if not hook_plan or _state._active_trace is not trace:
+    if not hook_plan or _state.active_capture()[0] is not trace:
         return grad, ()
     pass_index = _trace_backward_pass_index(trace)
     current = grad
@@ -1785,7 +1785,7 @@ def _record_backward_selector_fire(entry: NormalizedHookEntry) -> None:
 
     if entry.metadata.get("created_by") != "intervene_backward_selector":
         return
-    trace = _state._active_trace
+    trace, _enabled = _state.active_capture()
     if trace is None:
         return
     trace._tl_intervene_selector_fire_count = (
