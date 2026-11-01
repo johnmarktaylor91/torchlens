@@ -142,7 +142,9 @@ def test_clip_norm_reaches_norm_one_on_gradient_and_activation_sites() -> None:
     )
     _backward(on_grad)
     assert torch.linalg.vector_norm(on_grad[mul].grad).item() == pytest.approx(1.0)
-    on_act = tl.trace(model, x, capture=_CAPTURE, intervene=tl.when(mul, tl.clip_norm(1.0)))
+    on_act = tl.trace(
+        model, x, capture=_CAPTURE, intervene=tl.when(tl.func("mul"), tl.clip_norm(1.0))
+    )
     assert torch.linalg.vector_norm(on_act[mul].out).item() == pytest.approx(1.0)
 
 

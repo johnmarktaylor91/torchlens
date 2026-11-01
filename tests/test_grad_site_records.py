@@ -65,7 +65,7 @@ def test_edit_signal_replaces_kind_and_direction() -> None:
         tl.clamp(low=-1.0, high=1.0),
         tl.add_noise(0.1, seed=0),
         tl.clip_norm(1.0),
-        tl.swap_with(torch.zeros(2)),
+        helper_module.swap_with(torch.zeros(2)),
     ):
         assert neutral.signal is None, neutral.helper_name
     model = nn.Linear(2, 2)
@@ -74,7 +74,7 @@ def test_edit_signal_replaces_kind_and_direction() -> None:
         tl.mean_ablate(),
         tl.splice_module(nn.Identity()),
         tl.patch_from(donor),
-        tl.swap_with(donor[donor.layer_labels[1]]),
+        helper_module.swap_with(donor[donor.layer_labels[1]]),
     ):
         assert forward_only.signal == "forward", forward_only.helper_name
 
@@ -84,7 +84,7 @@ def test_fire_record_and_audit_payload_carry_signal() -> None:
     assert "signal" in field_names and "direction" not in field_names
     assert "signal" in FireRecord._PORTABLE_STATE_SPEC
     assert "direction" not in FireRecord._PORTABLE_STATE_SPEC
-    recipe = tl.when("relu_1", tl.scale(0.5))
+    recipe = tl.when(tl.func("relu"), tl.scale(0.5))
     (row,) = rules_payload(recipe)
     assert row["signal"] == "forward" and "direction" not in row
     assert rule_signal(tl.grad("relu_1")) == "backward"
