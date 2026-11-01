@@ -51,11 +51,10 @@ def test_door_restores_on_error() -> None:
     _seed_all(7)
     expected = _draw()
     _seed_all(7)
-    with pytest.raises(RuntimeError, match="inside"):
-        with RngStreamsRestore():
-            torch.rand(50)
-            random.random()
-            raise RuntimeError("inside")
+    with pytest.raises(RuntimeError, match="inside"), RngStreamsRestore():
+        torch.rand(50)
+        random.random()
+        raise RuntimeError("inside")
     assert _draw() == expected
 
 
