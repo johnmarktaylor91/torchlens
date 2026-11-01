@@ -7288,7 +7288,6 @@ test-docstrings	tests/test_call_site_contract.py	30,
 test-docstrings	tests/test_call_site_contract.py	49
 test-docstrings	tests/test_call_site_contract.py	51
 test-docstrings	tests/test_capability_probe_lifecycle.py	953
-test-docstrings	tests/test_capsel_label_selector.py	2_4_
 test-docstrings	tests/test_capture_admission_ordering.py	57
 test-docstrings	tests/test_capture_cache_impl_fingerprint.py	16
 test-docstrings	tests/test_capture_cache_impl_fingerprint.py	256
@@ -7527,7 +7526,6 @@ test-docstrings	tests/test_entry_facade_modern_spelling.py	18
 test-docstrings	tests/test_episode_derivation_declared.py	13
 test-docstrings	tests/test_episode_join_persistence.py	40
 test-docstrings	tests/test_episode_truth_four_clause.py	40
-test-docstrings	tests/test_episode_truth_real_model.py	10
 test-docstrings	tests/test_episode_truth_refusals.py	13
 test-docstrings	tests/test_episode_truth_refusals.py	40
 test-docstrings	tests/test_episode_truth_refusals.py	42
@@ -7536,7 +7534,6 @@ test-docstrings	tests/test_episode_truth_travel_policy.py	12
 test-docstrings	tests/test_error_code_coverage.py	25
 test-docstrings	tests/test_error_code_coverage.py	900
 test-docstrings	tests/test_escape_disclosure_persistence.py	16
-test-docstrings	tests/test_escrow_bound_regressions.py	24
 test-docstrings	tests/test_exception_taxonomy.py	26.3
 test-docstrings	tests/test_exception_taxonomy.py	64
 test-docstrings	tests/test_explorer_watch_gates.py	11
@@ -7665,7 +7662,6 @@ test-docstrings	tests/test_fp8_guard.py	256
 test-docstrings	tests/test_fp8_guard.py	32
 test-docstrings	tests/test_fp8_guard.py	57344,
 test-docstrings	tests/test_fp8_guard.py	80
-test-docstrings	tests/test_func_config.py	10
 test-docstrings	tests/test_gc.py	128
 test-docstrings	tests/test_gc.py	18
 test-docstrings	tests/test_gc.py	20
@@ -9189,8 +9185,6 @@ test-docstrings	tests/test_trackers_sinks_records.py	3.5
 test-docstrings	tests/test_trackers_sinks_watch.py	3.11
 test-docstrings	tests/test_trackers_sinks_watch.py	3.13
 test-docstrings	tests/test_trackers_sinks_watch.py	32.1
-test-docstrings	tests/test_train_mode/test_edge_cases.py	10
-test-docstrings	tests/test_train_mode/test_edge_cases.py	2026
 test-docstrings	tests/test_train_mode/test_no_bare_detach.py	24
 test-docstrings	tests/test_transforms_lib_corpus.py	128
 test-docstrings	tests/test_transforms_lib_corpus.py	256
