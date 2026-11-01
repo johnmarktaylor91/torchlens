@@ -66,7 +66,7 @@ def _loaded_non_torch_validation_replay_unavailable(trace: Any) -> bool:
     return False
 
 
-def save_new_outs(
+def save_new_outs(  # noqa: PLR0913  (the thin Trace.save_new_outs shell keeps this documented call shape; the fold removes the duplicate site)
     trace: Trace,
     model: torch.nn.Module,
     input_args: torch.Tensor | list[Any],

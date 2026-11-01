@@ -241,7 +241,7 @@ def push_from(
     return _push_from_impl(trace, site, replay=replay_options)
 
 
-def run(
+def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call shape; the fold removes the duplicate site)
     trace: Trace,
     model: Any = None,
     x: Any = None,
