@@ -102,7 +102,7 @@ def _draw(trace: Any, output: Path, **kwargs: object) -> None:
     trace.draw(
         path=str(output.with_suffix("")),
         file_format="svg",
-        vis_save_only=True,
+        open_viewer=False,
         show_containers=False,
         **kwargs,
     )
