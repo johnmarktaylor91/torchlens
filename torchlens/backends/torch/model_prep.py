@@ -78,6 +78,7 @@ from ._tl import (
     get_live_tensor_label,
     get_module_meta,
     get_tensor_label,
+    is_forward_call_decorated,  # noqa: F401  (re-exported for tests)
     mark_tensor_replacement_wrapped,
     promote_label_to_buffer_source_and_clear_label,
     restore_param_requires_grad,
