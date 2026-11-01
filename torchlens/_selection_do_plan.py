@@ -13,11 +13,11 @@ from typing import Any
 
 import torch
 
+from ._data_classes._trace_intervention_records import _edit_identity
 from ._selection import (
     Selection,
     SelectionError,
     _apply_invalid,
-    _edit_identity,
     _find_act_ops,
     _lift,
     _unresolvable,
