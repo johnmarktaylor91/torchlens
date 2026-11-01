@@ -389,6 +389,7 @@ def arm_signal_plan(
         attached.extend(handles)
     if engine == "rerun":
         forced = force_backward_ready(trace)
+        drop_inherited_backward(trace)
         trace.run(model, x, replay=ReplayOptions(strict=strict))
     assert plan.backward is not None
     site, edit = plan.backward
@@ -460,6 +461,28 @@ def _lower_label_leaves(trace: Trace, site: Any) -> Any:
             if raw and all(isinstance(name, str) for name in raw):
                 return _join_union([label(name) for name in dict.fromkeys(raw)])
     return site
+
+
+def drop_inherited_backward(trace: Trace) -> None:
+    """Clear the backward passes a rerun fork inherited from its source.
+
+    The rerun result is a new execution: its backward passes, gradients and
+    settle rows count only the backwards run on it, so a source that already
+    ran ``backward`` must not leave pass 1 (and its ``.grad`` values) on the
+    fork. The fork is reset before the rerun's forward, so the rerun capture
+    then registers its own graph on it.
+
+    Parameters
+    ----------
+    trace:
+        The rerun fork, before its forward runs.
+    """
+
+    if not (trace.has_backward_pass or int(getattr(trace, "num_backward_passes", 0) or 0)):
+        return
+    from ..intervention.replay import _reset_backward_projection
+
+    _reset_backward_projection(trace)
 
 
 def force_backward_ready(trace: Trace) -> bool:
