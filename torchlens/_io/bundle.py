@@ -41,7 +41,7 @@ from .._data_classes.trace import Trace
 from .._errors import InvalidArgumentError
 from .._utils.display import user_stacklevel
 from ..backends.registry import BackendSpec, get_backend_spec
-from ..errors import TorchLensWarning
+from ..errors import RunnablePreflightError, TorchLensWarning
 from . import (
     TLSPEC_VERSION,
     ArtifactError,
@@ -510,7 +510,6 @@ def save(
         except CaptureOutcomeError as outcome_exc:
             if outcome_exc.fields.get("code") == "N4":
                 from .._runnable import RunnableErrorCode
-                from ..errors import RunnablePreflightError
 
                 raise RunnablePreflightError(
                     "Runnable save refuses a HALTED capture: the recorded graph "
@@ -897,7 +896,6 @@ def _require_canonical_runnable_labels(names: Iterable[object], *, family: str) 
     """
 
     from .._runnable import RunnableErrorCode
-    from ..errors import RunnablePreflightError
 
     for name in names:
         if not isinstance(name, str) or name == "":

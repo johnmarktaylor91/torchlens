@@ -111,6 +111,12 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "port-equivalence leg (F16): the slice-then-convert adapter comparison",
     ),
     "PIL": (TEST_EXTRA, "pillow (also a core torchlens dependency)"),
+    "build": (
+        OPTIONAL_PREVIEW,
+        "dev extra; the pr.yml packaging-install job installs build beside its "
+        "runner and executes tests/packaging_install/ (skips in a test-only env)",
+    ),
+    "yaml": (TEST_EXTRA, "PyYAML, declared in the [test] extra (workflow YAML parses)"),
     "_pytest.nodeid": (
         TEST_EXTRA,
         "pytest 9.2+ structured node ids (tests/test_xdist_groups.py); the pin allows"
@@ -160,6 +166,7 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "research-model dependency for real-world coverage, deliberately undeclared",
     ),
     "equinox": (OPTIONAL_PREVIEW, "jax extra"),
+    "flax": (OPTIONAL_PREVIEW, "jax extra"),
     "scipy": (
         OPTIONAL_PREVIEW,
         "extraction-export extra (MAT exporter); requested in "
@@ -374,6 +381,12 @@ DYNAMIC_IMPORTORSKIP_SITES = frozenset(
 
 # Every unconditional skip in tests/ (scanner key -> dated justification).
 UNCONDITIONAL_SKIP_LEDGER: dict[str, str] = {
+    "test_backend_scorecard_packaging.py::_wheel_build_command": (
+        "[2026-11-01] reached only when neither ``build`` nor ``pip`` is importable "
+        "(feature check, never a version parse): with no wheel builder the packaging "
+        "test has nothing to drive; every CI leg installs pip, so the skip is a guard, "
+        "not a dead test."
+    ),
     "real_model/test_track_compile_recompile_burst.py::_recompile_limit": (
         "[2026-10-12] reached only when the loop above finds neither Dynamo "
         "recompile-limit name (feature check, never a version parse): with no "

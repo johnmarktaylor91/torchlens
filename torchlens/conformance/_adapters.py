@@ -16,6 +16,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import torchlens as tl
+from torchlens._io._json import read_bounded
+
+from ..backends.registry import BackendUnsupportedError, get_backend_spec
+from ..backends.torch import _torch_ops_calls
 from ..errors import ConfigurationError
 
 __tl_layer__ = "L9"
@@ -32,6 +37,14 @@ FAKE_PLANTS: tuple[str, ...] = (
     "roundtrip_field_loss",
     "tamper_tripwire",
     "shared_adapter_assumption",
+    # protocol-era plants (SPEC 4.2): each fails exactly the cell named in
+    # ``torchlens.conformance._protocol_cases.PLANT_INTENDED_CELL``.
+    "untyped_refusal",
+    "bare_bool_validation",
+    "missing_constant_payload",
+    "shape_drift_after_load",
+    "flagged_trace",
+    "shape_metadata_drift",
 )
 
 
@@ -54,8 +67,24 @@ class RosterModel:
     expected_op_kinds:
         The independent op inventory: every op kind (``Op.func_name``) one
         forward of this model performs, in execution order, derived from the
-        model definition. When declared, C1 runs ``c1_op_inventory_complete``
+        model definition. When declared, c1 runs ``c1_op_inventory_complete``
         so output parity can never pass with an op missing or extra.
+    expected_intermediates:
+        Independent oracle for intermediate values: op kind (``Op.func_name``)
+        to the NumPy array (or the list of arrays, in capture order) that kind's
+        ops must produce, computed from the row's own definition with NumPy.
+        When declared, c1 runs ``c1_intermediates_match``.
+    has_constants:
+        The forward uses a tensor that is neither an input, a parameter nor
+        the output of a recorded op (a closure constant or a literal
+        producer); c1 then runs ``c1_constant_parents_recorded``.
+    random_init:
+        The builder seeds the framework RNG and draws random weights; on a
+        lazy backend c1 then runs ``c1_rng_consumed_once``.
+    group:
+        ``"config_built"`` (the per-change rows; they earn no claim) or
+        ``"ecosystem"`` (pinned pretrained families from the backend's own
+        ecosystem, graduation criterion 3).
     """
 
     family: str
@@ -63,6 +92,10 @@ class RosterModel:
     builder: Callable[[], tuple[Any, Any]]
     checkpoint_evidence: str = ""
     expected_op_kinds: tuple[str, ...] | None = None
+    expected_intermediates: dict[str, Any] | None = None
+    has_constants: bool = False
+    random_init: bool = False
+    group: str = "config_built"
 
 
 class TorchReferenceAdapter:
@@ -77,29 +110,96 @@ class TorchReferenceAdapter:
 
         return {"capture": True, "durable_save": True, "validation_replay": True}
 
+    def protocol(self) -> Any:
+        """The registered torch ``BackendProtocol`` object (the suite's view of the backend)."""
+
+        factory = get_backend_spec("torch").protocol
+        return factory() if factory is not None else None
+
+    def default_roster(self) -> tuple[RosterModel, ...]:
+        """Torch's own roster (``_rosters/torch.py``): the reference rows."""
+
+        from ._rosters.torch import roster
+
+        return roster()
+
     def trace(self, model: Any, example_input: Any) -> Any:
-        """Capture one forward pass through the public surface."""
+        """Capture one forward pass through the torch protocol object."""
 
-        import torchlens as tl
+        return self.trace_with(model, example_input)
 
-        return tl.trace(model, example_input)
+    def trace_with(self, model: Any, example_input: Any, **options: Any) -> Any:
+        """Capture through ``protocol().capture`` (the public ``tl.trace`` entry).
+
+        The protocol's capture records what replay validation needs unless
+        ``options`` carries its own ``capture=``; refusal cells pass their
+        trace options here.
+        """
+
+        return self.protocol().capture(model, example_input, None, **options)
 
     def reference_output(self, model: Any, example_input: Any) -> Any:
-        """Run the model directly (the parity oracle's independent arm)."""
+        """Run the model directly through the protocol's pristine oracle arm."""
 
-        return model(example_input)
+        protocol = self.protocol()
+        if protocol is None:
+            return model(example_input)
+        return protocol.reference_output(model, example_input, None)
 
-    def save(self, trace: Any, path: Path) -> None:
-        """Persist one captured trace as a portable artifact."""
+    def side_effect_snapshot(self) -> Any:
+        """Framework state a refusal must leave untouched: RNG bytes and wrapper count."""
 
-        trace.save(path)
+        import torch
+
+        return (torch.get_rng_state().numpy().tobytes(), len(_torch_ops_calls._WRAPPED_FUNC_CODE))
+
+    #: Save level whose bundle keeps what torch replay validation re-executes
+    #: from (saved arguments and RNG states); ``portable`` drops them by design.
+    #: Only ``c2_validation_after_load`` saves at it (SPEC 4.2: validation of
+    #: the loaded trace passes); every other c2 cell keeps the default level.
+    replay_save_level = "executable_with_callables"
+
+    def save(self, trace: Any, path: Path, level: str | None = None) -> None:
+        """Persist one captured trace (default level unless ``level`` is given)."""
+
+        if level is None:
+            trace.save(path)
+        else:
+            trace.save(path, level=level)
 
     def load(self, path: Path) -> Any:
         """Reload one persisted artifact."""
 
-        import torchlens as tl
-
         return tl.load(str(path))
+
+
+class PlantedProtocol:
+    """The fake provider's protocol view: torch's object with one plant armed.
+
+    Parameters
+    ----------
+    inner:
+        The torch protocol object every member delegates to.
+    plant:
+        The armed plant, or ``None``.
+    """
+
+    def __init__(self, inner: Any, plant: str | None) -> None:
+        self._inner = inner
+        self.plant = plant
+
+    def __getattr__(self, name: str) -> Any:
+        """Delegate every member the plants do not touch."""
+
+        return getattr(self._inner, name)
+
+    def validate(self, trace: Any, ground_truth: Any) -> Any:
+        """Replay validation; the bare-bool plant collapses a failure to ``False``."""
+
+        status = self._inner.validate(trace, ground_truth)
+        if self.plant == "bare_bool_validation" and getattr(status, "state", None) != "passed":
+            return False
+        return status
 
 
 class FakeProviderAdapter:
@@ -139,14 +239,55 @@ class FakeProviderAdapter:
             flags["validation_replay"] = True
         return flags
 
+    def protocol(self) -> Any:
+        """Torch's protocol object behind the plant layer."""
+
+        return PlantedProtocol(self._delegate.protocol(), self.plant)
+
     def trace(self, model: Any, example_input: Any) -> Any:
         """Capture, with the structural plant corrupting the graph."""
 
-        trace = self._delegate.trace(model, example_input)
+        return self.trace_with(model, example_input)
+
+    def trace_with(self, model: Any, example_input: Any, **options: Any) -> Any:
+        """Capture through the public entry; the capture-side plants act here.
+
+        The fake's capability table is torch's, whose one False flag owes a
+        typed refusal when its option is requested; the untyped plant raises a
+        plain ``RuntimeError`` instead (the refusal cell must read failed).
+        """
+
+        from ._protocol_cases import false_capability_flags
+        from ._refusal_cases import request_option_for_flag
+
+        for flag in false_capability_flags(self._delegate.protocol()):
+            option = request_option_for_flag(flag)
+            if option is not None and options.get(option) is not None:
+                if self.plant == "untyped_refusal":
+                    raise RuntimeError(f"fake provider cannot serve {option}")
+                raise BackendUnsupportedError(
+                    f"fake provider declares {flag}=False; {option}= is refused",
+                    code=f"{flag}_unsupported",
+                    remedy="omit the option",
+                )
+        trace = self._delegate.trace_with(model, example_input, **options)
         if self.plant == "structural_failure":
             # Simulate a provider that silently drops captured ops.
             object.__setattr__(trace, "_conformance_dropped_ops", True)
+        if self.plant == "flagged_trace":
+            # A capture that recorded a gap and flagged itself instead of refusing.
+            trace.capture_verified = False
+            trace.capture_verification_reason = "unwrapped_op_in_capture"
+        if self.plant == "missing_constant_payload":
+            _drop_first_constant_payload(trace)
+        if self.plant == "shape_metadata_drift":
+            _drift_first_shape_metadata(trace)
         return trace
+
+    def side_effect_snapshot(self) -> Any:
+        """Torch's framework state (the fake runs on torch)."""
+
+        return self._delegate.side_effect_snapshot()
 
     def reference_output(self, model: Any, example_input: Any) -> Any:
         """Direct-run oracle arm; the corruption plant skews it."""
@@ -165,10 +306,16 @@ class FakeProviderAdapter:
             raise AttributeError("fake provider declared validation_replay but has no engine")
         return trace
 
-    def save(self, trace: Any, path: Path) -> None:
+    @property
+    def replay_save_level(self) -> str:
+        """The torch delegate's replay save level (the fake validates through torch)."""
+
+        return self._delegate.replay_save_level
+
+    def save(self, trace: Any, path: Path, level: str | None = None) -> None:
         """Persist; the field-loss, identity, and tamper plants sabotage it."""
 
-        self._delegate.save(trace, path)
+        self._delegate.save(trace, path, level=level)
         self._last_saved = trace
         if self.plant == "tamper_tripwire":
             # Forge the writer identity to an earlier MAJOR release after the
@@ -176,8 +323,6 @@ class FakeProviderAdapter:
             # (c2_roundtrip_completes goes red), proving load-side tamper
             # detection rather than trusting the adapter's own report.
             import json
-
-            from torchlens._io._json import read_bounded
 
             manifest_path = Path(path) / "manifest.json"
             manifest = read_bounded(manifest_path)
@@ -194,7 +339,48 @@ class FakeProviderAdapter:
         loaded = self._delegate.load(path)
         if self.plant == "roundtrip_field_loss":
             object.__setattr__(loaded, "_conformance_field_lost", True)
+        if self.plant == "shape_drift_after_load":
+            _drift_first_payload_shape(loaded)
         return loaded
+
+
+def _drop_first_constant_payload(trace: Any) -> None:
+    """Strip the saved payload of the first constant-like op (a recorded node without data)."""
+
+    from ._protocol_cases import constant_like_ops
+
+    for op in constant_like_ops(trace):
+        if getattr(op, "out", None) is not None:
+            op.out = None
+            return
+
+
+def _drift_first_shape_metadata(trace: Any) -> None:
+    """Give the first saved payload's recorded ``shape`` a leading unit axis (payload kept)."""
+
+    import warnings
+
+    for op in trace.layer_list:
+        shape = getattr(op, "shape", None)
+        if getattr(op, "out", None) is None or shape is None:
+            continue
+        with warnings.catch_warnings():
+            # The metadata write is the plant itself, not a recipe edit.
+            warnings.simplefilter("ignore")
+            op.shape = (1, *tuple(shape))
+        return
+
+
+def _drift_first_payload_shape(trace: Any) -> None:
+    """Give the first saved payload a leading unit axis (values kept, shape drifted)."""
+
+    for op in trace.layer_list:
+        payload = getattr(op, "out", None)
+        reshape = getattr(payload, "reshape", None)
+        if payload is None or not callable(reshape):
+            continue
+        op.out = reshape(1, *tuple(payload.shape))
+        return
 
 
 #: The closed v1 adapter vocabulary, dispatched as data (never a literal
@@ -226,7 +412,7 @@ def resolve_adapter(backend: str, *, plant: str | None = None) -> Any:
     ------
     ConfigurationError
         ``conformance_backend_unknown`` for any other name (external
-        providers enter through the C0 provider-API pack once activated).
+        providers enter through the c0 provider-API pack once activated).
     """
 
     from ._preview_adapters import PREVIEW_ADAPTER_FACTORIES

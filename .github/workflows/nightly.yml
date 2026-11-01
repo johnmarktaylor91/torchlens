@@ -738,13 +738,19 @@ jobs:
           # importorskip/marker-drift regression fails the leg while normal
           # test-count churn does not. A floor of 1 would let a 49-of-50 skip
           # stay green.
+          #
+          # Each `install` is the framework's declared supported range or its
+          # pin (FrameworkRequirement in torchlens/backends/_protocols/), so
+          # nightly tracks the newest release inside the range while the
+          # per-change pr.yml backend-protocol legs test the pin;
+          # tests/test_backend_framework_pins.py holds both to the shells.
           - backend: tf
-            install: tensorflow-cpu
+            install: '"tensorflow-cpu>=2.16"'
             marker: tf_backend
             import_check: "import tensorflow, keras"
             executed_floor: 18
           - backend: jax
-            install: '"jax[cpu]" equinox flax'
+            install: '"jax[cpu]>=0.4.30" equinox flax'
             marker: backend_jax
             import_check: "import jax, jax.numpy, equinox, flax"
             executed_floor: 60
@@ -825,6 +831,44 @@ jobs:
         # must not stay green; each leg carries its own executed-test floor.
         run: |
           echo "preview-${{ matrix.backend }}.junit.xml ${{ matrix.executed_floor }}" >> "${{ runner.temp }}/junit/legs.floor"
+
+      - name: Restore the ${{ matrix.backend }} ecosystem weights cache
+        # Pretrained checkpoints for the ecosystem roster rows
+        # (torchlens/conformance/_rosters/<backend>.py, group `ecosystem`),
+        # keyed on the roster file so a changed row refetches its weights.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/.keras
+            ~/.cache/paddle
+            ~/.cache/tinygrad
+          key: conformance-weights-${{ matrix.backend }}-${{ hashFiles(format('torchlens/conformance/_rosters/{0}.py', matrix.backend)) }}-v1
+
+      - name: Run the ${{ matrix.backend }} ecosystem roster
+        # The networked conformance run: with TORCHLENS_CONFORMANCE_ECOSYSTEM=1
+        # the ecosystem rows fetch (or reuse cached) weights and run every C1
+        # and C2 cell; the computed scorecard record is kept as the nightly
+        # ecosystem evidence (graduation criterion G3). No --check here: this
+        # leg installs the newest framework in range, not the pin.
+        env:
+          TORCHLENS_CONFORMANCE_ECOSYSTEM: "1"
+          MLX_DISABLE_COMPILE: "1"
+          DEV: ${{ matrix.dev || '' }}
+          BACKEND: ${{ matrix.backend }}
+        run: |
+          mkdir -p "${{ runner.temp }}/ecosystem"
+          python -m torchlens.conformance.scorecard --backend "$BACKEND" \
+            > "${{ runner.temp }}/ecosystem/scorecard-$BACKEND.json"
+
+      - name: Upload the ${{ matrix.backend }} ecosystem scorecard
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ecosystem-scorecard-${{ matrix.backend }}
+          path: ${{ runner.temp }}/ecosystem/
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Upload junit and executed-test floors
         if: ${{ !cancelled() }}

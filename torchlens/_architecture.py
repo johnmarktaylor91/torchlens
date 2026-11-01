@@ -227,6 +227,11 @@ TORCH_PRIVATE_LICENSED_PACKAGES: frozenset[str] = frozenset(
         "_training_validation",
         "_fast_run",
         "_user_funcs",
+        # integ-F relocation: the trace-entry refusal guards moved out of
+        # _user_funcs (file cap) keep their one is_dynamo_compiled_callable()
+        # read at the ONE sanctioned probe chokepoint (_utils/_torch_compat);
+        # the module holds no direct torch._ touches of its own.
+        "_user_funcs_guards",
         # floor2 fix (2026-10-01): the runnable-save CPU float8 path
         # consumes get_cpu_float8_deterministic_fill_support() at the ONE
         # sanctioned probe chokepoint (_utils/_torch_compat); the module

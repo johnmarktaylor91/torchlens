@@ -16,6 +16,8 @@ import torchlens.validation.consolidated as consolidated_validation
 from torchlens._data_classes.grad_fn import GradFn
 from torchlens._ir.events import BackwardPassStart, OpGradObserved
 from torchlens.options import CaptureOptions, SaveOptions
+from torchlens.validation import last_validation_failure
+from torchlens.validation.diagnostics import CHECK_BACKWARD
 
 _NO_GRAD_AUTOGRAD_ERROR = "element 0 of tensors does not require grad and does not have a grad_fn"
 
@@ -2256,6 +2258,9 @@ def test_validate_backward_fails_closed_on_coverage_gaps() -> None:
             seed=11,
         )
     assert passed is False
+    failure = last_validation_failure()
+    assert failure is not None and failure.check_name == CHECK_BACKWARD
+    assert failure.extra["reason"] == "backward_coverage_gap"
 
 
 class _ForeachInplaceModel(nn.Module):

@@ -495,6 +495,11 @@ def _measure_deferred_codes() -> Counter[str]:
         assert completed.returncode in (0, 1), (
             f"ruff invocation failed ({scope_name}): {completed.stderr[-1000:]}"
         )
+        # A missing ruff module also exits 1 with empty stdout; a zero count from
+        # that would pass every ceiling vacuously, so refuse it outright.
+        assert "No module named" not in completed.stderr, (
+            f"ruff is not importable by {sys.executable} ({scope_name}): {completed.stderr[-300:]}"
+        )
         counts.update(_count_by_code(completed.stdout))
     return counts
 

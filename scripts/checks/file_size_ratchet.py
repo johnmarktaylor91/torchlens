@@ -119,7 +119,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 5350 -> 5200 (2026-10-05 rung-1 ratchet settle): the completeness
     # backstop census split to validation/_completeness_backstop.py; re-keyed
     # down to the next 50-line step above the measured 5188 (R43-F2).
-    "torchlens/validation/core.py": 5200,
+    "torchlens/validation/core.py": 4750,
     # 5250 -> 5100 (2026-08-27 C07 fix cycle): the user-transform apply +
     # validation helpers split to _op_transforms.py under R43 (the v9
     # injection_provenance rows nudged op.py over); re-keyed down to the
@@ -159,7 +159,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # merged tree; next 50-line step above it. Conscious raise, not drift;
     # the duplicate relabel/module-building code this same commit removed
     # already kept the net growth well under the commit's own diff size.
-    "torchlens/backends/jax/backend.py": 4650,
+    "torchlens/backends/jax/backend.py": 4400,
     # 4600 -> 4650: the L8 C2-recording settle above re-stepped bundle to 4600
     # but the merged file MEASURES 4603 -- the settle's own re-step was three
     # lines short, red on main since the merge. Reconciled to the next 50-line
@@ -286,7 +286,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # lanes landed reviewed fix mass on the merged tree (measures 4457);
     # next 50-line step above it. PRE-SPRINT BASELINE 3800 unchanged; the
     # post-features debloat pass keeps it as the target.
-    "torchlens/backends/torch/backward.py": 4500,
+    # 4500 -> 4300: the GradFn order-resolution helpers moved to
+    # _grad_fn_orders.py (4297 measured); the ceiling follows the file down.
+    "torchlens/backends/torch/backward.py": 4300,
     # 3800 -> 3850: L1 adds the grouping knob mirror + grouping_policy stamp
     # settlement (~25 lines) on top of the re-stepped feature-sprint baseline.
     # 3850 -> 3900: L9 adds the two DROP-gated backward-residuals fields
@@ -451,8 +453,11 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # conditional relabel epilogue and intermediate-grad dual-spelling
     # resolution fixes here as on jax; merged tree measures 3375. Next
     # 50-line step above it; conscious raise, not drift.
-    "torchlens/backends/tinygrad/backend.py": 3400,
-    "torchlens/backends/mlx/backend.py": 3250,
+    "torchlens/backends/tinygrad/backend.py": 3250,
+    # 3250 -> 2600 (2026-11-01 preview-protocol union): the intermediate-tap
+    # observers moved to _tap_observers.py and the derived-gradient oracle
+    # helpers to _grad_oracle.py (measured 2573); next 50-line step above it.
+    "torchlens/backends/mlx/backend.py": 2600,
     # A07 (2026-08-26): +9 lines -- the step-1 contract gains the
     # flops_forward/flops_backward boundary-reset writes and their pinned-pair
     # carrier rows (alias rows own no compute); conscious raise, not growth debt.
@@ -481,7 +486,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # clears the union and stays.
     # 3300 -> 3150: the quantized-module FLOPs estimator split to
     # _quantized_flops.py (3127 measured); the ceiling follows the file down.
-    "torchlens/backends/torch/model_prep.py": 3150,
+    "torchlens/backends/torch/model_prep.py": 2900,
     # 2950 -> 2800 (2026-08-29 F11 T74b fix): the call-tree display + call-scope
     # resolution helper family split to _data_classes/_call_tree.py after the
     # merged tree crossed the frozen 2950 (F10's Module lovely seam +10 atop
@@ -544,32 +549,6 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # the complexity ratchet; save.py re-exports the public names. Ceilings
     # follow files down (R43-F2); save.py stays on the debloat-pass list.
     "torchlens/intervention/save.py": 2300,
-    # Raised 2400 -> 2425 at the facet-cache persistence fix (2026-08-17): the
-    # +22 lines are the TEACHING half of the completeness refusal -- for an
-    # undeclared `_<name>_cache` cell backed by a public property it now names
-    # the accessor that populated it and states the DROP remedy, instead of
-    # naming an internal field the user never touched. The refusal itself was
-    # not weakened; only its message got smarter. Reviewed raise with a stated
-    # reason (the ratchet working as intended), NOT silent god-file regrowth --
-    # and scrub.py remains on the debloat-pass list as a genuine god file.
-    # Raised 2425 -> 2445 at the draw()-poisons-save fix (2026-08-17): the
-    # +20 lines enroll `_last_encoding_state` in the Trace runtime-only set
-    # and extend the same teaching refusal to LEDGERED-but-undeclared Trace
-    # transients (it now quotes the TRACE_EXTERNAL_WRITE_EXEMPTIONS row and
-    # states that a ledger row is documentation, not a scrub policy). Same
-    # reviewed-raise class as the row above; scrub.py stays on the
-    # debloat-pass list.
-    # Raised 2445 -> 2500 at the A08 persistence-honesty lane (2026-08-26): the
-    # +30 lines are the W3 weightsfree fix -- the structure-only buffer-payload
-    # strip (BN running stats are training-derived state a weights-free
-    # artifact must not carry; every structure-only save of a buffer-holding
-    # model was save-then-cannot-load at the M-C2 gate). Reviewed raise with a
-    # stated reason; scrub.py stays on the debloat-pass list.
-    # 2026-08-26 A09 fix cycle: source-embedding privacy policy family split
-    # out to _io/_source_privacy.py. Re-keyed ONCE at the T12 rebase for the
-    # final shape carrying both the A08 W3 raise and the A09 split (measured
-    # 2069; next 50-step). Shrink freely, raise consciously.
-    "torchlens/_io/scrub.py": 2100,
     "torchlens/debug/_infer_input_shape.py": 2250,
     "torchlens/_postprocess/ast_branches.py": 2250,
     "torchlens/_visualization/_render_nodes.py": 2150,

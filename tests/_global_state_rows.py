@@ -150,6 +150,9 @@ pins the high-risk members against exception and interruption paths.
 
 _INSTALL_STATE_AND_CACHES = frozenset(
     {
+        # Backend protocol shells resolve their spec through one lookup hook that
+        # the registry installs once at import (install-time fact, never rebound).
+        ("torchlens/backends/_backend_protocol.py", "_spec_lookup"),
         # Call-site grouping: the module forward wrapper code object, registered
         # idempotently when submodule forwards are decorated (one constant).
         ("torchlens/_utils/_call_site.py", "_BOUNDARY_CODES"),
@@ -369,6 +372,11 @@ _CAPABILITY_PROBE_STATE = frozenset(
         # first cleanup(); never varies afterwards.
         ("torchlens/_data_classes/cleanup.py", "_MALLOC_TRIM"),
         ("torchlens/_utils/_torch_compat.py", "HAS_C10D_ABORT_PG"),
+        # Module.__call__ dispatch-frame probe (fast-run forward wave): the code
+        # objects of the torch call-dispatch frames that reach forward, filled
+        # once by the import-time probe behind HAS_MODULE_CALL_DISPATCH_FRAME
+        # and cleared only when the probe reruns; never varies afterwards.
+        ("torchlens/_utils/_module_call_dispatch.py", "_DISPATCH_CODES"),
         # F27 Kineto/memory-profile capability flags: probed once at first
         # extraction (a live profiler session is required to observe an
         # event instance), never vary afterwards.
@@ -503,6 +511,10 @@ _DIAGNOSTIC_AUDIT_STATE = frozenset(
         # detector/witness install surfaces; assigned solely through the
         # module object (visible since the cross-module rebind detector).
         ("torchlens/_state.py", "_completeness_witness_mode"),
+        # MLX unwrapped-op policy ("flag"/"refuse", closed vocabulary): set only
+        # through set_unwrapped_policy, which returns the previous value so a
+        # caller restores it; read at capture settle time.
+        ("torchlens/backends/mlx/settings.py", "_unwrapped_policy"),
         ("torchlens/_state.py", "_escape_detector_mode"),
         ("torchlens/_trace_core/op_store.py", "_AUDIT_CLONE_READS"),
         ("torchlens/_trace_core/op_store.py", "_AUDIT_COLLECTORS"),
@@ -706,6 +718,11 @@ _PROCESS_CACHES = frozenset(
         # WeakKeyDictionary keyed by the code object, bounded by live code.
         ("torchlens/_utils/_call_site.py", "_CODE_TOKENS"),
         ("torchlens/_utils/_call_site.py", "_INSTRUCTION_MAPS"),
+        # Per-filename memo of the "is this frame TorchLens's own code" verdict
+        # (normalised-path prefix test). Keyed by the filename string, so it is
+        # bounded by the distinct source files a process loads; a verdict never
+        # changes for a filename, so it needs no epoch.
+        ("torchlens/_utils/_package_frames.py", "_VERDICTS"),
         # Post-T80 census sweep (F42 reconcile): bounded LRU stores merged
         # lanes added without heavy-census classification -- the projection
         # basis byte-budgeted digest store (+ its size counter) and the SRP
@@ -983,6 +1000,11 @@ _STATIC_EXPORT_LISTS = frozenset(
     {
         ("torchlens/__init__.py", "__all__"),
         ("torchlens/_capture_honesty.py", "__all__"),
+        ("torchlens/backends/_protocols/mlx_wrapped_state.py", "__all__"),
+        ("torchlens/backends/mlx/external_arrays.py", "__all__"),
+        ("torchlens/backends/mlx/settings.py", "__all__"),
+        ("torchlens/backends/torch/_session_cleanup.py", "__all__"),
+        ("torchlens/conformance/_rosters/mlx.py", "__all__"),
         ("torchlens/_data_substrate/__init__.py", "__all__"),
         ("torchlens/_data_substrate/artifact.py", "__all__"),
         ("torchlens/_data_substrate/digests.py", "__all__"),
