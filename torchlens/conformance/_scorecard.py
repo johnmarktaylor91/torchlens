@@ -234,7 +234,9 @@ def scorecard_from_json(text: str) -> PreviewScorecard:
         The record; its ``sha256`` is the stored digest, not recomputed.
     """
 
-    data = json.loads(text)
+    from .._io import _json
+
+    data = _json.loads_bounded(text)
     cells = tuple(
         ScorecardCell(
             tier=str(cell["tier"]),

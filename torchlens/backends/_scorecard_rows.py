@@ -13,7 +13,6 @@ backend's pinned CI leg), never hand-edited; a backend with no record reads
 
 from __future__ import annotations
 
-import json
 from dataclasses import fields as dataclass_fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -48,11 +47,13 @@ def read_shipped_scorecard(backend: str) -> dict[str, Any] | None:
     catches, not something the compat report should raise on.
     """
 
+    from .._io import _json
+
     path = shipped_scorecard_path(backend)
     if not path.is_file():
         return None
     try:
-        record = json.loads(path.read_text(encoding="utf-8"))
+        record = _json.read_bounded(path)
     except (OSError, ValueError):
         return None
     return record if isinstance(record, dict) else None
