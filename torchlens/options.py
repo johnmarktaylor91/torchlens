@@ -6,7 +6,7 @@ import importlib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Final, Literal, TypeVar, cast
 
 import torch
 
@@ -653,7 +653,7 @@ class CaptureOptions:
         0
     """
 
-    _layers_to_save: Any = field(default="all", init=False, repr=False)
+    _layers_to_save: ClassVar[Any] = "all"
     input_transform: Callable[[Any], Any] | None = None
     save_raw_input: str | bool = "small"
     batch_render: str = "auto"

@@ -26,7 +26,7 @@ tl.record(model, input, save=...)
   +- returns Recording; Recording.to_trace() materializes full structure
 ```
 
-Selective `layers_to_save` uses a predicate-backed single pass when early labels are
+Selective `save=` uses a predicate-backed single pass when early labels are
 sufficient and falls back to the two-pass strategy for final-numbering selectors:
 negative indexes, integer ordinals, indexed label strings (`relu_1_2`, `relu_1` — any
 `_<digit>` component; orphan removal renumbers ordinals AND type indexes after capture),

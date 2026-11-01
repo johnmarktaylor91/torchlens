@@ -39,7 +39,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 **Saved-activation autograd history** *(knob spellings documented-unstable)*
 : `CaptureOptions(detach_saved_activations=False)`, the `tl.trace` default, keeps every saved
   payload graph-connected on every save path: the save-all default, `tl.module` and
-  `tl.in_module` selectors, op-label `layers_to_save`, the legacy `trace.run(model, x)` rerun,
+  `tl.in_module` selectors, op-label `save=`, the legacy `trace.run(model, x)` rerun,
   `trace.run(inputs=...)` and `trace.run(inputs=..., fast=True)`; `True` detaches on every one
   of them. `tl.extract(..., detach_saved_activations=False)` and
   `tl.record(..., capture=CaptureOptions(detach_saved_activations=False))` (also
