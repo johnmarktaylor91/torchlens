@@ -706,6 +706,11 @@ _PROCESS_CACHES = frozenset(
         # WeakKeyDictionary keyed by the code object, bounded by live code.
         ("torchlens/_utils/_call_site.py", "_CODE_TOKENS"),
         ("torchlens/_utils/_call_site.py", "_INSTRUCTION_MAPS"),
+        # Per-filename memo of the "is this frame TorchLens's own code" verdict
+        # (normalised-path prefix test). Keyed by the filename string, so it is
+        # bounded by the distinct source files a process loads; a verdict never
+        # changes for a filename, so it needs no epoch.
+        ("torchlens/_utils/_package_frames.py", "_VERDICTS"),
         # Post-T80 census sweep (F42 reconcile): bounded LRU stores merged
         # lanes added without heavy-census classification -- the projection
         # basis byte-budgeted digest store (+ its size counter) and the SRP

@@ -106,8 +106,9 @@ from ._runnable_execution import (
     _write_argument,
     run_loaded_sparse_trace,
 )
+from ._runnable_input_metadata import _input_layout_ok
 from ._runnable_state import PreparedRunnableState, RunResourceCeiling, prepare_runnable_state
-from ._utils._torch_compat import tensor_has_named_dims
+from ._utils.arg_handling import normalize_input_args
 from ._utils.rng import restore_host_rng, set_random_seed, snapshot_host_rng
 from .errors import PathDivergenceError, RunCapabilityUnavailableError, RuntimeSignatureDriftError
 
@@ -234,19 +235,6 @@ def _compile_sparse_call(
             or call.execution_context.inference_mode != ambient_inference_mode
             or any(entry.enabled for entry in call.execution_context.autocast)
         ),
-    )
-
-
-def _input_layout_ok(value: torch.Tensor) -> bool:
-    """Return whether an input is in the fast sparse executor's admitted domain."""
-
-    return (
-        type(value) in {torch.Tensor, torch.nn.Parameter}
-        and value.layout == torch.strided
-        and not value.is_nested
-        and not bool(getattr(value, "is_meta", False))
-        and not bool(getattr(value, "is_quantized", False))
-        and not tensor_has_named_dims(value)
     )
 
 
@@ -1331,10 +1319,10 @@ class _FastLiveSession:
         truncation = None
         with self.activated(), self.steer_plan.context(), fingerprinting() as fingerprint:
             try:
-                if isinstance(input_args, list):
-                    output = model(*input_args, **dict(input_kwargs))
-                else:
-                    output = model(input_args, **dict(input_kwargs))
+                # Bind positional inputs exactly as capture and the ordinary live
+                # run do (a tuple or list spreads; a one-parameter forward takes a
+                # multi-element sequence whole), so one input tree means one call.
+                output = model(*normalize_input_args(input_args, model), **dict(input_kwargs))
             except FastUntilReached:
                 output = None
                 truncation = until

@@ -28,6 +28,7 @@ from .._utils.tensor_utils import (
     tensor_nanequal,
 )
 from ._buffer_addresses import _recorded_buffer_address
+from ._orphan_seeds import _orphan_flood_seeds
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -586,15 +587,7 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     _remove_foreign_kernel_interiors(self)
     orig_nodes = set(self._raw_graph_ws.raw_layer_labels_list)
     nodes_seen = set()
-    # Seed with inputs, outputs, and written buffer-version nodes. Written
-    # buffers such as BatchNorm.num_batches_tracked are state transitions even
-    # when the updated value is not read later in the forward graph.
-    written_buffer_layers = [
-        label
-        for label in self.buffer_layers
-        if getattr(self._raw_graph_ws.raw_layer_dict[label], "buffer_write_kind", None) is not None
-    ]
-    node_stack = self.input_layers + self.output_layers + written_buffer_layers
+    node_stack = _orphan_flood_seeds(self)
     # Shadow sets over the two trace-level list[str] sink ledgers: the former
     # per-node `label not in <list>` scans were O(k^2) in sink count
     # (hunt-6 R52-2). The lists stay the portable source of truth.

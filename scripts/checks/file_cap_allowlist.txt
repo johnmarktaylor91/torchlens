@@ -112,7 +112,7 @@ torchlens/_data_classes/_trace_stats.py::TraceStatsMixin.collapse_plan	69
 torchlens/_data_classes/_trace_stats.py::TraceStatsMixin.grad_fn_site_summary	62
 torchlens/_data_classes/_trace_validation.py	1463
 torchlens/_data_classes/_trace_validation.py::TraceValidationMixin._batch_remove_log_entries	67
-torchlens/_data_classes/_trace_validation.py::TraceValidationMixin.run	554
+torchlens/_data_classes/_trace_validation.py::TraceValidationMixin.run	553
 torchlens/_data_classes/_trace_validation.py::TraceValidationMixin.validate_forward_pass	65
 torchlens/_data_classes/_trace_validation.py::_warn_pending_value_edits_on_new_input_run	64
 torchlens/_data_classes/_trace_viz.py	1013
@@ -195,7 +195,7 @@ torchlens/_extraction/trace_safetensors.py::write_trace_safetensors	90
 torchlens/_extraction/views.py::shuffled_batches	64
 torchlens/_extraction_provenance.py::coerce_input_preprocessing	129
 torchlens/_fast_live_plans.py::build_function_plans	66
-torchlens/_fast_run.py	1780
+torchlens/_fast_run.py	1768
 torchlens/_fast_run.py::_FastLiveSession.__init__	85
 torchlens/_fast_run.py::_FastLiveSession._finalize_run	61
 torchlens/_fast_run.py::_FastLiveSession._refresh_boundary_payloads	79
@@ -424,9 +424,9 @@ torchlens/_postprocess/finalization.py::_finalize_param_logs	71
 torchlens/_postprocess/finalization.py::_finalize_streamed_bundle	73
 torchlens/_postprocess/finalization.py::_reconcile_multipass_layer_fields	77
 torchlens/_postprocess/finalization.py::_reuse_streamed_blob_ids	86
-torchlens/_postprocess/graph_traversal.py	1069
+torchlens/_postprocess/graph_traversal.py	1062
 torchlens/_postprocess/graph_traversal.py::_add_output_layers	296
-torchlens/_postprocess/graph_traversal.py::_remove_orphan_nodes	111
+torchlens/_postprocess/graph_traversal.py::_remove_orphan_nodes	103
 torchlens/_postprocess/graph_traversal.py::_resolve_output_parent_labels	132
 torchlens/_postprocess/labeling.py	1116
 torchlens/_postprocess/labeling.py::_add_lookup_keys_for_layer_entry	118
@@ -1263,12 +1263,12 @@ torchlens/intervention/regions.py	1053
 torchlens/intervention/regions.py::_evaluate_instance	106
 torchlens/intervention/regions.py::apply_region_do	106
 torchlens/intervention/regions.py::region	101
-torchlens/intervention/replay.py	1949
+torchlens/intervention/replay.py	1922
 torchlens/intervention/replay.py::_commit_replay_updates	85
 torchlens/intervention/replay.py::_reconstruct_args_from_template	63
 torchlens/intervention/replay.py::_resolve_arg_component	125
 torchlens/intervention/replay.py::_run_differentiable_replay	62
-torchlens/intervention/replay.py::_run_replay	213
+torchlens/intervention/replay.py::_run_replay	202
 torchlens/intervention/replay.py::_threaded_buffer_value	97
 torchlens/intervention/replay.py::cone_of_effect	65
 torchlens/intervention/rerun.py	1695

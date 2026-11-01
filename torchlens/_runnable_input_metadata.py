@@ -589,3 +589,16 @@ def _touched_bytes_relation(left: torch.Tensor, right: torch.Tensor) -> str:
 
     with _state.pause_logging():
         return touched_bytes_relation(left, right)
+
+
+def _input_layout_ok(value: torch.Tensor) -> bool:
+    """Return whether an input is in the fast sparse executor's admitted domain."""
+
+    return (
+        type(value) in {torch.Tensor, torch.nn.Parameter}
+        and value.layout == torch.strided
+        and not value.is_nested
+        and not bool(getattr(value, "is_meta", False))
+        and not bool(getattr(value, "is_quantized", False))
+        and not tensor_has_named_dims(value)
+    )
