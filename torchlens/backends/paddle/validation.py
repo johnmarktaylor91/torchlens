@@ -356,17 +356,13 @@ def _parent_perturbations_change_output(
     if set(rebuilt.parent_values) <= constant_labels:
         return True
     saved_output = _perturbation_baseline(baseline_output, ops_by_label, capture)
-    output_path = _capture_output_path(capture)
     attempted = False
-    for parent_label, parent_value in rebuilt.parent_values.items():
+    for parent_label in rebuilt.parent_values:
         if parent_label in constant_labels:
             continue
-        paths = rebuilt.leaf_paths_by_parent.get(parent_label, ())
-        if not paths:
+        if not rebuilt.leaf_paths_by_parent.get(parent_label, ()):
             continue
-        tried, changed = _perturb_parent(
-            backend, capture, rebuilt, paths, parent_value, output_path, saved_output
-        )
+        tried, changed = _perturb_parent(backend, capture, rebuilt, parent_label, saved_output)
         attempted = attempted or tried
         if changed:
             return True
@@ -389,9 +385,7 @@ def _perturb_parent(
     backend: Any,
     capture: Any,
     rebuilt: RebuiltPaddleInputs,
-    paths: tuple[tuple[Any, ...], ...],
-    parent_value: Any,
-    output_path: Any,
+    parent_label: str,
     saved_output: Any,
 ) -> tuple[bool, bool]:
     """Perturb one value parent through every candidate.
@@ -403,6 +397,9 @@ def _perturb_parent(
         the output.
     """
 
+    paths = rebuilt.leaf_paths_by_parent.get(parent_label, ())
+    parent_value = rebuilt.parent_values[parent_label]
+    output_path = _capture_output_path(capture)
     attempted = False
     for candidate in _perturb_candidates(parent_value):
         attempted = True
