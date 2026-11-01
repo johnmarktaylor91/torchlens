@@ -68,6 +68,7 @@ from .._options import MLX_PREVIEW_TRACE_OPTION_POLICY, reject_unsupported_trace
 from .._validation_shared import float_replay_tolerances
 from . import capabilities
 from ._replay_frames import _MLXReplayModuleFrames
+from .external_arrays import external_array_ids
 from .model_prep import (
     MLXModuleTree,
     cleanup_model_session,
@@ -75,6 +76,7 @@ from .model_prep import (
     prepare_model_once,
     prepare_model_session,
 )
+from .settings import UNWRAPPED_OP_REASON, get_unwrapped_policy
 from .tensor_store import MLXTensorLabelStore
 from .validation import MLXOpCapture, build_capture_template
 from .wrappers import is_mlx_wrapped, mlx_tap_observer, unwrap_mlx, wrap_mlx
@@ -656,6 +658,36 @@ def _find_mlx_compiled_attributes(
     return tuple(sorted(found))
 
 
+def _name_first_failure(status: ValidationStatus) -> ValidationStatus:
+    """Return ``status`` with a failed message that names the first offending op.
+
+    Parameters
+    ----------
+    status
+        A folded replay status.
+
+    Returns
+    -------
+    ValidationStatus
+        Unchanged unless ``state == "failed"`` and a failed decision exists;
+        then the message reads ``Replay validation failed at <op_label>
+        (<reason>): <detail>.``
+    """
+
+    if status.state != "failed":
+        return status
+    first = next((d for d in status.decisions if d.get("decision") == "failed"), None)
+    if first is None:
+        return status
+    return replace(
+        status,
+        message=(
+            f"Replay validation failed at {first.get('op_label')!s} "
+            f"({first.get('reason')!s}): {first.get('detail', '')!s}."
+        ),
+    )
+
+
 def _mlx_loaded_replay_unavailable(trace: Trace) -> bool:
     """Return whether a loaded MLX trace lacks live replay artifacts.
 
@@ -1076,11 +1108,21 @@ class MLXBackend:
         self,
         session: object,
         trace_state: RawGraphWorkspace,
+        *,
+        extra_values: Sequence[object] = (),
     ) -> None:
-        """Materialize deferred MLX payloads in a single batch."""
+        """Realize every deferred MLX payload and output in one evaluation.
+
+        This is the realize-once rule: the forward ran lazily to its outputs,
+        and exactly one ``mx.eval`` over the recorded payloads plus
+        ``extra_values`` (the outputs) materializes them together, so RNG and
+        fused regions evaluate once, as in one eager forward.
+        """
 
         del trace_state
-        payloads = getattr(session, "_mlx_saved_payloads", ())
+        payloads = list(getattr(session, "_mlx_saved_payloads", ()))
+        seen = {id(value) for value in payloads}
+        payloads.extend(value for value in extra_values if id(value) not in seen)
         if payloads:
             cast(Any, self.mx).eval(*payloads)
 
@@ -1145,7 +1187,8 @@ class MLXBackend:
         if seed is not None:
             raise BackendUnsupportedError(
                 "MLX backend preview does not support random_seed; pass explicit MLX RNG "
-                "state through the model/input surface instead."
+                "state through the model/input surface instead.",
+                code="explicit_seed_unsupported",
             )
         intervention_plan = None
         halt_selector = None
@@ -1155,7 +1198,8 @@ class MLXBackend:
                 raise BackendUnsupportedError(
                     "MLX backend capability table declares interventions=False; "
                     "refusing trace(intervene=/halt=) instead of silently "
-                    "ignoring the requested behavior."
+                    "ignoring the requested behavior.",
+                    code="interventions_unsupported",
                 )
             # The registered binding IS the dispatch surface: resolution and
             # application come from the capability implementation, so a bound-
@@ -1242,6 +1286,15 @@ class MLXBackend:
         trace._mlx_module_stack = []
         trace._mlx_intervention_plan = intervention_plan
         trace._mlx_halt_selector = halt_selector
+        # The constants rule needs two censuses before the forward runs: the
+        # model's parameter identities (a parameter leaf stays a parameter)
+        # and every array reachable from the model object (a closure constant).
+        # An unlabeled argument in neither came from an unwrapped op.
+        trace._mlx_param_ids = (
+            frozenset(module_tree.param_address_by_id) if module_tree is not None else frozenset()
+        )
+        trace._mlx_external_arrays = external_array_ids(model, self.is_tensor)
+        trace._mlx_unwrapped_intermediates = 0
         trace._pre_forward_rng_states = None
         setattr(
             trace,
@@ -1278,6 +1331,8 @@ class MLXBackend:
             # scrub (they are not in _PORTABLE_STATE_SPEC by design).
             del trace._mlx_intervention_plan
             del trace._mlx_halt_selector
+            del trace._mlx_param_ids
+            del trace._mlx_external_arrays
             # Zero-match disclosure (preview half of the torch-side fix): a
             # selector matching nothing produced a trace byte-identical to
             # plain capture with no warning and no counter anywhere.
@@ -1302,7 +1357,12 @@ class MLXBackend:
                 trace.raw_output = None
             else:
                 trace.raw_output = output_transform(output) if callable(output_transform) else None
-            self.finalize_forward_session(trace, trace._raw_graph_ws)
+            # Realize-once (SPEC section 3): one evaluation over every
+            # recorded value and the outputs, after the forward and before any
+            # payload is read; nothing below forces another evaluation.
+            self.finalize_forward_session(
+                trace, trace._raw_graph_ws, extra_values=tuple(self._iter_arrays(output))
+            )
             self._mark_outputs(trace, output)
             materialize_from_events(trace, trace.capture_events)
             delattr(trace, "capture_events")
@@ -1659,17 +1719,14 @@ class MLXBackend:
 
         validate_metadata = bool(kwargs.pop("validate_metadata", True))
         trace = self.capture_trace(*args, **kwargs)
-        result = self.validate_trace(trace, validate_metadata=validate_metadata)
-        if isinstance(result, ValidationStatus):
-            return result.passed
-        return result
+        return self.validate_trace(trace, validate_metadata=validate_metadata).passed
 
     def validate_trace(
         self,
         trace: Trace,
         *_args: Any,
         **kwargs: Any,
-    ) -> bool | ValidationStatus:
+    ) -> ValidationStatus:
         """Validate an MLX trace with per-op replay and perturbation.
 
         Parameters
@@ -1684,10 +1741,11 @@ class MLXBackend:
 
         Returns
         -------
-        bool or ValidationStatus
-            True for a verified live pass, False for a verified live failure,
-            or an explicit unavailable status for loaded payload-stripped
-            traces.
+        ValidationStatus
+            The replay status, never a bare bool (SPEC 1.1 ``validate``): a
+            ``failed`` status names the first offending op and a reason from
+            ``VALIDATION_REASONS`` in ``decisions`` and in its message; loaded
+            payload-stripped traces return the unavailable status.
         """
 
         status = trace.validation_replay_status
@@ -1700,29 +1758,54 @@ class MLXBackend:
             return status_result
         replayed_count = 0
         failed_count = 0
+        decisions: tuple[dict[str, Any], ...] = ()
         try:
             from ...validation.invariants import check_metadata_invariants
             from ...validation.status import count_importer_region_annotations
-            from .validation import validate_mlx_captures
+            from .validation import MLX_VALIDATION_REASONS, validate_mlx_captures_detailed
 
-            perturbation_gaps: tuple[str, ...] = ()
+            exempted: dict[str, int] = {}
+            unverified_reasons: dict[str, int] = {}
             if kwargs.get("validate_metadata", True) and not check_metadata_invariants(trace):
                 failed_count = 1
+                decisions = (
+                    {
+                        "op_label": "<trace>",
+                        "func_name": None,
+                        "phase": "metadata",
+                        "decision": "failed",
+                        "reason": MLX_VALIDATION_REASONS["metadata_invariant"],
+                        "detail": "backend-neutral metadata invariants failed",
+                    },
+                )
             else:
-                replayed_count, failed_count, perturbation_gaps = validate_mlx_captures(trace)
+                outcome = validate_mlx_captures_detailed(trace)
+                trace._mlx_perturbation_gaps = outcome.perturbation_gaps
+                replayed_count = outcome.replayed_count
+                failed_count = outcome.failed_count
+                decisions = outcome.decisions
+                exempted = dict(outcome.exempted_reason_counts)
+                unverified_reasons = dict(outcome.unverified_reason_counts)
             if failed_count == 0 and replayed_count < 1:
                 failed_count = 1
+                decisions = (
+                    *decisions,
+                    {
+                        "op_label": "<trace>",
+                        "func_name": None,
+                        "phase": "coverage",
+                        "decision": "failed",
+                        "reason": MLX_VALIDATION_REASONS["nothing_replayed"],
+                        "detail": "no op was replay-validated",
+                    },
+                )
             unverified_count = 0
-            reason_counts: dict[str, int] | None = None
             if failed_count == 0:
-                # Perturbation gaps are honest UNVERIFIED evidence, never a
-                # silent pass: a constant producer's parent dependency cannot
-                # be perturbation-proven.
-                unverified_count = count_importer_region_annotations(trace) + len(perturbation_gaps)
-                if perturbation_gaps:
-                    reason_counts = {
-                        "mlx_perturbation_no_perturbable_input": len(perturbation_gaps)
-                    }
+                # Perturbation gaps stay UNVERIFIED evidence, never a silent
+                # pass; only the named constant leaves are exempted.
+                unverified_count = count_importer_region_annotations(trace) + sum(
+                    unverified_reasons.values()
+                )
             status_result = ValidationStatus.from_replay_counts(
                 backend=self.name,
                 source=_mlx_validation_source(trace),
@@ -1730,9 +1813,22 @@ class MLXBackend:
                 num_unverified_ops=unverified_count,
                 num_failed_ops=failed_count,
                 payload_load_status=getattr(trace, "payload_load_status", None),
-                unverified_reason_counts=reason_counts,
+                unverified_reason_counts=unverified_reasons or None,
+                exempted_reason_counts=exempted or None,
+                decisions=decisions,
             )
-        except Exception:
+        except Exception as exc:  # noqa: BLE001 - a raising oracle is a failed verdict
+            decisions = (
+                *decisions,
+                {
+                    "op_label": "<trace>",
+                    "func_name": None,
+                    "phase": "replay",
+                    "decision": "failed",
+                    "reason": "no_replayable_function",
+                    "detail": f"{type(exc).__name__}: {exc}",
+                },
+            )
             status_result = ValidationStatus.result(
                 passed=False,
                 backend=self.name,
@@ -1740,9 +1836,11 @@ class MLXBackend:
                 payload_load_status=getattr(trace, "payload_load_status", None),
                 num_replayed_ops=replayed_count,
                 num_failed_ops=max(1, failed_count),
+                decisions=decisions,
             )
+        status_result = _name_first_failure(status_result)
         setattr(trace, "_validation_replay_status", status_result)
-        return status_result if status_result.state == "unverified" else status_result.passed
+        return status_result
 
     def emit_mlx_operation(
         self,
@@ -1776,6 +1874,9 @@ class MLXBackend:
         if events is None:
             events = CaptureEvents()
             trace.capture_events = events
+        # Closure constants are recorded first so a constant source op always
+        # precedes the op that consumes it in raw order.
+        self._record_closure_constants(trace, args, kwargs, events)
         reserved = events.reserve_label_block(op_name, len(outputs))
         func_call_id = events.func_call_id_counter + 1
         events.func_call_id_counter = func_call_id
@@ -2047,24 +2148,45 @@ class MLXBackend:
         output: object,
         *,
         raw_index: int,
+        reserved: ReservedLabel | None = None,
+        func_name: str = "input",
     ) -> OpEvent:
-        """Build an MLX source ``OpEvent`` for an input array."""
+        """Build an MLX source ``OpEvent`` for an input array or a constant.
 
-        reserved = ReservedLabel(
-            label=label,
-            label_raw=label,
-            raw_index=raw_index,
-            type_index=raw_index,
-            layer_type="input",
-            site=label,
-        )
+        Parameters
+        ----------
+        trace
+            The active trace.
+        label
+            Raw label of the source op.
+        output
+            The source array.
+        raw_index
+            Its raw layer index.
+        reserved
+            A label already reserved through the events block (constants);
+            ``None`` builds an input reservation from ``label``.
+        func_name
+            ``"input"`` for an input leaf, ``"constant"`` for a closure
+            constant (the shared constants rule, SPEC section 2 rule 1).
+        """
+
+        if reserved is None:
+            reserved = ReservedLabel(
+                label=label,
+                label_raw=label,
+                raw_index=raw_index,
+                type_index=raw_index,
+                layer_type="input",
+                site=label,
+            )
         return self._build_event(
             session=trace,
             kind="source",
             reserved=reserved,
             func_event_input=FunctionEventInput(
                 func=None,
-                func_name="input",
+                func_name=func_name,
                 func_qualname=None,
                 args=(),
                 kwargs={},
@@ -2081,8 +2203,86 @@ class MLXBackend:
             parent_arg_positions={"args": {}, "kwargs": {}},
             edge_uses=(),
             policy=self._capture_policy(trace),
-            is_input=True,
+            is_input=func_name == "input",
         )
+
+    def _record_closure_constants(
+        self,
+        trace: Trace,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        events: CaptureEvents,
+    ) -> None:
+        """Record closure constants among an op's array arguments (SPEC section 2).
+
+        Every unlabeled array leaf is classified before the op's parent labels
+        are read: a parameter of the model tree stays an unlabeled parameter
+        leaf; an array reachable from the model object before the forward is a
+        closure constant and becomes a ``constant`` source op with a saved
+        payload that the consuming op lists as a parent; anything else was
+        produced by an op no wrapper saw and is counted for the unwrapped
+        policy (it is never laundered into a constant).
+        """
+
+        param_ids: frozenset[int] = getattr(trace, "_mlx_param_ids", frozenset())
+        external: dict[int, Any] = getattr(trace, "_mlx_external_arrays", {})
+        policy = self._capture_policy(trace)
+        leaves: list[Any] = []
+        for value in args:
+            leaves.extend(self._iter_arrays(value))
+        for value in kwargs.values():
+            leaves.extend(self._iter_arrays(value))
+        for leaf in leaves:
+            if self.tensor_store.get_label(leaf) is not None or id(leaf) in param_ids:
+                continue
+            if id(leaf) not in external:
+                trace._mlx_unwrapped_intermediates = (
+                    getattr(trace, "_mlx_unwrapped_intermediates", 0) + 1
+                )
+                continue
+            reserved = events.reserve_label_block("constant", 1)[0]
+            self.tensor_store.set_label(leaf, reserved.label_raw)
+            if policy.save_payload:
+                getattr(trace, "_mlx_saved_payloads").append(leaf)
+            events.append(
+                self._build_source_event(
+                    trace,
+                    reserved.label_raw,
+                    leaf,
+                    raw_index=reserved.raw_index,
+                    reserved=reserved,
+                    func_name="constant",
+                )
+            )
+            self._inventory_constant(trace, reserved.label_raw)
+
+    def _inventory_constant(self, trace: Trace, label_raw: str) -> None:
+        """Enter a constant leaf in the replay inventory and capture records.
+
+        The constant has no function to replay; validation treats it as a
+        leaf whose saved payload must exist (decision reason
+        ``constant_producer_leaf``) and replays its consumers from that payload.
+        """
+
+        op_captures = getattr(trace, "_mlx_op_captures", None)
+        if op_captures is None:
+            op_captures = []
+            trace._mlx_op_captures = op_captures
+        inventory = getattr(trace, "_mlx_replay_inventory", None)
+        if inventory is None:
+            inventory = []
+            trace._mlx_replay_inventory = inventory
+        op_captures.append(
+            MLXOpCapture(
+                labels_raw=(label_raw,),
+                op_name="constant",
+                func=None,
+                args=(),
+                kwargs={},
+                output=None,
+            )
+        )
+        inventory.append(("constant", (label_raw,), (), (), ()))
 
     def _build_event(
         self,
@@ -2254,7 +2454,7 @@ class MLXBackend:
         return tuple(edges), {"args": arg_positions, "kwargs": kwarg_positions}, tuple(edge_uses)
 
     def _mark_outputs(self, trace: Trace, output: object) -> None:
-        """Mark final output-parent operations for an MLX trace."""
+        """Mark final output-parent operations and settle the unwrapped-op gap."""
 
         unlabeled = 0
         for value in self._iter_arrays(output):
@@ -2263,22 +2463,49 @@ class MLXBackend:
                 unlabeled += 1
                 continue
             mark_output_label(trace, label)
-        if unlabeled:
-            # The forward's result was produced by something the wrapper surface
-            # does not cover (an array operator such as ``a + b``, an array
-            # method, or an unwrapped ``mx.*`` function), so the trace is missing
-            # at least the op that made it. Say so instead of handing back a
-            # trace with no output op as if the capture were complete.
-            warnings.warn(
-                f"MLX capture: {unlabeled} output array(s) were not produced by a "
-                "wrapped operation (array operators, array methods and functions "
-                "outside the wrapped mx/nn surface are not logged); this capture is "
-                "marked capture_verified=False.",
-                UserWarning,
-                stacklevel=3,
+        intermediates = int(trace.__dict__.pop("_mlx_unwrapped_intermediates", 0))
+        if unlabeled or intermediates:
+            self._settle_unwrapped_gap(trace, unlabeled, intermediates)
+
+    def _settle_unwrapped_gap(self, trace: Trace, outputs: int, intermediates: int) -> None:
+        """Flag or refuse a capture that used an op no wrapper saw.
+
+        Parameters
+        ----------
+        trace
+            The trace being finalized.
+        outputs
+            Output arrays no recorded op produced.
+        intermediates
+            Arguments of recorded ops that were neither inputs, parameters,
+            closure constants nor recorded outputs.
+
+        Raises
+        ------
+        BackendUnsupportedError
+            Under the ``"refuse"`` unwrapped policy, code
+            ``unwrapped_op_in_capture``.
+        """
+
+        message = (
+            f"MLX capture: {outputs} output array(s) and {intermediates} intermediate "
+            "array(s) were not produced by a wrapped operation (a function outside the "
+            "wrapped mx, mx.fast, mx.array and nn surface, or an array built inside the "
+            "forward), so at least one op is missing from the trace."
+        )
+        if get_unwrapped_policy() == "refuse":
+            raise BackendUnsupportedError(
+                message + " The MLX unwrapped policy is 'refuse'; capture under the default 'flag' "
+                "policy to keep the trace marked capture_verified=False instead",
+                code=UNWRAPPED_OP_REASON,
             )
-            trace.capture_verified = False
-            trace.capture_verification_reason = "mlx_output_not_produced_by_wrapped_op"
+        warnings.warn(
+            message + " This capture is marked capture_verified=False.",
+            UserWarning,
+            stacklevel=4,
+        )
+        trace.capture_verified = False
+        trace.capture_verification_reason = UNWRAPPED_OP_REASON
 
     def _finish_trace(self, trace: Trace, module_tree: MLXModuleTree | None = None) -> None:
         """Finalize a manually captured MLX Trace.

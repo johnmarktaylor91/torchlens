@@ -118,38 +118,11 @@ def _roster_tf() -> tuple[RosterModel, ...]:
 
 
 def _roster_mlx() -> tuple[RosterModel, ...]:
-    """Function root plus an mlx.nn MLP for the mlx pack."""
+    """The MLX packet's roster (``torchlens.conformance._rosters.mlx``)."""
 
-    def build_fn() -> tuple[Any, Any]:
-        """Build the function root and its example input."""
+    from ._rosters.mlx import roster
 
-        import mlx.core as mx
-
-        weights = mx.array(_WEIGHTS)
-
-        def matmul_relu(x: Any) -> Any:
-            """Matmul then relu, the function root's whole computation."""
-
-            return mx.maximum(mx.matmul(x, weights), 0.0)
-
-        return matmul_relu, mx.array(_INPUT)
-
-    def build_module() -> tuple[Any, Any]:
-        """Build the module root and its example input."""
-
-        import mlx.core as mx
-        import mlx.nn as mlx_nn
-
-        mx.random.seed(0)
-        model = mlx_nn.Sequential(mlx_nn.Linear(4, 3), mlx_nn.ReLU(), mlx_nn.Linear(3, 2))
-        return model, mx.array(_INPUT)
-
-    return _rows(
-        build_fn,
-        build_module,
-        fn_ops=("input", "matmul", "maximum"),
-        module_ops=("input", "linear", "relu", "linear"),
-    )
+    return roster()
 
 
 def _roster_tinygrad() -> tuple[RosterModel, ...]:

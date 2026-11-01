@@ -311,6 +311,58 @@ def test_typed_backend_refusal_scores_unsupported() -> None:
     assert card.highest_tier == ""
 
 
+#: MLX's red cells on its packet roster, keyed ``(case_id, family)``, with the cause
+#: substring each detail must carry. Three causes, none an MLX capture gap:
+#: the MLX module tree addresses Sequential children ``block.layers.0`` while the
+#: shared finalization derives ``address_parent`` by splitting the address (the
+#: module-hierarchy invariant catches it); the shared preview option policy raises
+#: without a per-cause refusal code (and ``chunk_paths`` raises untyped); loaded
+#: non-torch traces drop the runtime capture replay needs.
+_MLX_REFUSAL_CODE_REDS: dict[str, str] = {
+    "c1_refusal_backward_capture": "contract is 'backward_capture_unsupported'",
+    "c1_refusal_fastlog": "contract is 'fastlog_unsupported'",
+    "c1_refusal_rng_replay": "contract is 'rng_replay_unsupported'",
+    "c1_refusal_has_streaming": "contract is 'has_streaming_unsupported'",
+    "c1_refusal_structure_only_capture": "contract is 'structure_only_capture_unsupported'",
+    **{
+        f"c1_refusal_trace_option_{name}": "contract is 'trace_option_unsupported'"
+        for name in (
+            "jax_control_flow",
+            "jax_max_control_flow_unroll",
+            "payload_policy",
+            "save_preview",
+            "capture_container_structure",
+            "inference_only",
+            "output_style",
+            "output_head",
+            "chunk_size",
+        )
+    },
+    "c1_refusal_trace_option_chunk_paths": "untyped ChunkedForwardConfigError",
+}
+_MLX_ROSTER_FAMILIES: tuple[str, ...] = (
+    "fn_chain_branch",
+    "fn_multi_output",
+    "fn_loop3",
+    "fn_norm_softmax",
+    "fn_reshape_transpose",
+    "fn_where_clip",
+    "mod_mlp",
+    "mod_shared_twice",
+    "mod_cnn",
+    "mod_nested_residual",
+)
+MLX_KNOWN_RED_CELLS: dict[tuple[str, str], str] = {
+    ("c1_validation_passes", "mod_nested_residual"): "[module_hierarchy]",
+    ("c1_validation_names_reason", "mod_nested_residual"): "[module_hierarchy]",
+    **{(case_id, ""): cause for case_id, cause in _MLX_REFUSAL_CODE_REDS.items()},
+    **{
+        ("c2_validation_after_load", family): "runtime capture data was stripped"
+        for family in _MLX_ROSTER_FAMILIES
+    },
+}
+
+
 def _assert_full_ladder(card: PreviewScorecard, backend: str) -> None:
     """A live pack passes every one of its cells and publishes C2."""
 
@@ -487,11 +539,35 @@ def test_tf_pack_earns_c0_with_its_named_red_cells(
 
 @pytest.mark.heavy
 @pytest.mark.backend_mlx
-def test_mlx_pack_full_ladder(tmp_path: Path) -> None:
-    """The mlx pack passes C0-C2 on its config-built roster."""
+def test_mlx_pack_earns_c0_with_its_named_red_cells(tmp_path: Path) -> None:
+    """The mlx pack on its ten-row packet roster earns C0; every red cell is named.
 
-    pytest.importorskip("mlx.core")
-    _assert_full_ladder(preview_scorecard("mlx", workdir=tmp_path), "mlx")
+    The set of non-passed cells must equal ``MLX_KNOWN_RED_CELLS`` exactly, each
+    with its cause: a new red or a fixed one both fail here, and the fix removes
+    its entry (and lifts the rung) in the same change.
+    """
+
+    mx = pytest.importorskip("mlx.core")
+    from torchlens.conformance import _roster_for
+
+    adapter = resolve_adapter("mlx")
+    roster = _roster_for(adapter, None)
+    report = run_conformance("mlx", tiers=("C0", "C1", "C2"), roster=roster, workdir=tmp_path)
+    card = scorecard_from_report(
+        report, roster, framework_version=str(mx.__version__), adapter=adapter
+    )
+    assert card.backend == "mlx"
+    assert card.roster_groups == {"config_built": 10}
+    red = {(cell.case_id, cell.family): cell for cell in card.cells if cell.state != "passed"}
+    assert set(red) == set(MLX_KNOWN_RED_CELLS), sorted(set(red) ^ set(MLX_KNOWN_RED_CELLS))
+    for key, cause in MLX_KNOWN_RED_CELLS.items():
+        assert red[key].state == "failed", red[key]
+        assert cause in red[key].detail, (key, red[key].detail)
+    assert card.counts["denominator"] == _preview_denominator("mlx")
+    # The refusal-code and validation reds sit in C1, so the ladder stops at C0.
+    assert card.highest_tier == "C0"
+    assert claim_string(report) == "TorchLens provider API compatible, C0"
+    assert "conformant" not in card.to_json().lower()
 
 
 @pytest.mark.heavy
