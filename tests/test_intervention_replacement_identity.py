@@ -142,3 +142,40 @@ def test_data_alias_mutating_hook_records_replaced_true() -> None:
     fire_records = list(op.interventions)
     assert fire_records and fire_records[-1].replaced is True
     assert bool((op.out == 0).all())
+
+
+class _IdentityReturnModel(nn.Module):
+    """A ``to`` call that returns its receiver unchanged (already on the device)."""
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Move ``value`` to the device it is already on, then double it."""
+
+        return value.to(value.device) * 2
+
+
+def test_identity_return_site_accepts_replacement() -> None:
+    """A fired edit at a non-mutating same-object return is recorded as replaced.
+
+    ``x.to(device)`` with ``x`` already there returns ``x`` itself. The live
+    site read label presence as mutation, so the hook runner looked for a
+    mutated receiver to copy the edit into, found none for ``to``, refused the
+    replacement with a warning and minted ``replaced=False`` on a rule that
+    had fired: ``on_zero_fire="error"`` stayed quiet while no op recorded the
+    edit. A non-mutating identity return hands its replacement to the caller
+    like any functional op, and the receiver keeps its value.
+    """
+
+    value = torch.randn(3)
+    original = value.clone()
+    log = tl.trace(
+        _IdentityReturnModel().eval(),
+        value,
+        intervene=tl.when(tl.func("to"), tl.scale(0.5)),
+        on_zero_fire="error",
+    )
+    op = log["to_1_1"]
+    assert op.intervention_replaced is True
+    assert op.interventions[-1].replaced is True
+    assert torch.allclose(op.out, original * 0.5)
+    assert torch.allclose(log.output_ops[0].out, original)
+    assert torch.equal(value, original)
