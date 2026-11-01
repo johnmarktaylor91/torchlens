@@ -1071,6 +1071,18 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   encoding is then undisclosed). On `Trace.draw` the key sits in the top-left block under the
   header and above the graph, so a top crop keeps both. The `None` value is *(unstable — no deprecation shim owed)* pending ratification.
 
+**show_containers / container_max_inline (Trace.draw kwargs)**
+: `show_containers` accepts `False` (default: the plain graph, container paths on the node
+  labels), `"labels"` (the key or index on each edge into a container leaf), `"collapsed"`
+  (`"labels"` plus: an unrolled container with more than `container_max_inline` leaves of
+  identical shape folds into one dashed summary box) or `"nodes"` (`"collapsed"` plus one dashed
+  record node per container, grey keyed source and sink edges, dashed member-of ties for mid-graph
+  containers, and a dotted box around an op-returned tuple whose leaves share one module). Any
+  string setting forces the `dot` engine. `container_max_inline` (default 12) is read only under
+  `"collapsed"` and `"nodes"`. The former `"auto"` (drew `"collapsed"`) and `"cluster"` (drew
+  `"labels"` plus the tuple box) spellings refuse `visualization_show_containers_invalid` with the
+  replacement named. Guide: `docs/containers.md`.
+
 ## Backend-neutral identity
 
 **Backend**

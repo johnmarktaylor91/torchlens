@@ -128,7 +128,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         for_paper: bool = False,
         return_graph: bool = False,
         order_siblings: bool = True,
-        show_containers: Literal[False, "labels", "cluster", "collapsed", "auto", "nodes"] = False,
+        show_containers: Literal[False, "labels", "collapsed", "nodes"] = False,
         container_max_inline: int = 12,
         show_input_transform_summary: bool = False,
         show_orphans: bool = False,  # Invariants support flipping this; owner visual review pending.
@@ -158,6 +158,16 @@ class TraceVisualizationMixin(_TraceMixinBase):
             ``show_buffers`` accepts ``"never"``, ``"meaningful"``, or
             ``"always"``. ``direction`` accepts ``"bottomup"``, ``"topdown"``,
             ``"leftright"``, or ``"rightleft"``.
+            ``show_containers`` accepts ``False`` (default: the plain graph; container
+            paths stay on the node labels), ``"labels"`` (adds the key or index as a
+            small label on each edge into a container leaf), ``"collapsed"`` (``"labels"``
+            plus: an unrolled container with more than ``container_max_inline`` leaves of
+            identical shape folds into one dashed summary box), or ``"nodes"`` (``"collapsed"``
+            plus one dashed record node per container, grey source and sink edges carrying
+            the keys, dashed member-of ties for mid-graph containers, and a dotted box
+            around an op-returned tuple whose leaves share one module). Any string setting
+            forces the ``dot`` engine; the removed ``"auto"`` and ``"cluster"`` spellings
+            refuse with the replacement named.
             ``vis_outpath=None`` (the default) writes a collision-safe file in
             the current directory -- ``modelgraph.<format>``, then
             ``modelgraph-2.<format>``, ``modelgraph-3.<format>`` -- and always
