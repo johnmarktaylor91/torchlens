@@ -597,14 +597,14 @@ class TraceExportMixin(_TraceMixinBase):
             return door.decode_trace_output(
                 self, style=style, head=head, tokenizer=tokenizer, top_n=k or door._TOP_N_CAPTURED
             )
-        if self.decoded_output is None:
+        if self._decoded_output is None:
             return _recompute_or_refuse(self, k)
         if k is None:
             return self._decoded_output
         captured_top_n = getattr(self._provenance_output_postprocessor, "top_n_captured", None)
         if captured_top_n is not None and k > captured_top_n:
             return _recompute_above_captured(self, k, captured_top_n)
-        return _rank_filtered(self.decoded_output, k)
+        return _rank_filtered(self._decoded_output, k)
 
     def output_table(
         self: "Trace",

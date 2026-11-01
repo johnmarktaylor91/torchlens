@@ -388,12 +388,12 @@ def _step_11_violation(trace: Trace) -> str | None:
             return f"Step 11 left {op!r} without a final layer label"
         if not op.lookup_keys:
             return f"Step 11 left {op.label} without lookup keys"
-        if trace.layer_dict_all_keys[op.label] is not op:
+        if trace._layer_dict_all_keys[op.label] is not op:
             return f"Step 11 did not map op label {op.label!r} to its own op"
         # The bare layer label resolves to ONE pass of that layer (the public
         # lookup contract keeps the LAST pass for multi-pass layers), never to
         # a foreign layer's op.
-        resolved = trace.layer_dict_all_keys[op.layer_label]
+        resolved = trace._layer_dict_all_keys[op.layer_label]
         if resolved.layer_label != op.layer_label:
             return (
                 f"Step 11 mapped layer label {op.layer_label!r} to a foreign op {resolved.label!r}"
@@ -411,7 +411,7 @@ def _step_15_5_violation(trace: Trace) -> str | None:
             f"Step 15.5 built {len(trace._layer_logs)} layer logs for "
             f"{len(trace.layer_labels)} layer labels"
         )
-    if not isinstance(trace.by_pass, dict):
+    if not isinstance(trace._by_pass, dict):
         return "Step 15.5 must build by_pass as a dict"
     return None
 

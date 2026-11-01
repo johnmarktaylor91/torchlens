@@ -872,7 +872,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Bundle.why / Bundle.provenance** *(spelling documented-unstable)*
 : `b.why(member, relative_to=None)` returns a `WhyReport`: the exact-or-refused ancestry of a
   member against the baseline (or `relative_to`), with lineage status, payload fidelity, value
-  residual and comparability reported as separate axes. `b.provenance()` is the per-member list of
+  residual and comparability reported as separate axes. `b.provenance.summary()` is the per-member list of
   the same facts. Both are derived views; nothing is stored. Reference:
   `docs/reference/experiment_ledger.md`.
 
@@ -2201,8 +2201,8 @@ default-keep); mask-application semantics documented-unstable*
   `name`, positional `args`, keyword `kwargs`
   (a tuple of name and value pairs), `signal`, `portability`, `metadata`
   (name and value pairs, such as `("keep_grad", True)` or the selection
-  disclosure a masked `do()` adds), `batch_independent`,
-  `compatible_with_append` (an edit that may change the output shape is
+  disclosure a masked `do()` adds), `is_batch_independent`,
+  `is_compatible_with_append` (an edit that may change the output shape is
   refused on an append rerun unless this is true) and `selection_recipe`
   (the selection recipe a selection-targeted `do()` attaches; `None`
   otherwise). The hook `factory` is session-side. `Edit._PORTABLE_STATE_SPEC`
@@ -3485,6 +3485,7 @@ describe each surface in depth.
 | `axis_roles=` | field and constructor keyword of `ReceptiveField` |
 | `backward_pass_number=` | field and constructor keyword of `FireRecord`; keyword of `build_fire_record` |
 | `bin_edges=` | field and constructor keyword of `HistogramPoint` |
+| `can_intervene=` | keyword of `BackendCapabilities` |
 | `candidate_num_components=` | keyword of `tl.transforms.srp_fidelity_probe`: the candidate numbers of output components (projection widths k) to probe, one report row each |
 | `comet_experiment=` | keyword of `tl.trackers.CometSink`: the Comet experiment to log to |
 | `draw_index=` | keyword of `tl.attribution.CausalAuditSet` |
@@ -3503,6 +3504,7 @@ describe each surface in depth.
 | `is_batch_invariant=` | keyword of `tl.neuro.PlanSite` |
 | `is_capture_complete=` | keyword of `ModuleInputSnapshot` |
 | `is_coarsened=` | keyword of `tl.trackers.SeriesPoint` |
+| `is_compatible_with_append=` | field and constructor keyword of `Edit` |
 | `is_detached=` | keyword of `tl.attribution.ReadRow` |
 | `is_frozen_requested=` | keyword of `tl.attribution.ReadRow` |
 | `is_frozen_resolved=` | keyword of `tl.attribution.ReadRow` |
@@ -3512,8 +3514,10 @@ describe each surface in depth.
 | `is_rescorable=` | keyword of `tl.attribution.ReadRow` |
 | `is_validated=` | keyword of `tl.mechinterp.LogitLens`, `tl.mechinterp.LogitLensPredictions` |
 | `module_pass_number=` | field and constructor keyword of `RecordContext` |
+| `mutation_version=` | keyword of `TensorInputObservation` |
 | `num_components=` | keyword of `tl.repgeom.classical_mds`, `tl.stats.PCA` and `tl.transforms.srp`: the number of components (output dimensions) to return |
 | `num_examples=` | keyword of `tl.mechinterp.TrajectoryStats` |
+| `num_finite=` | keyword of `RunningStatsResult` |
 | `num_heads=` | keyword of `FacetSpec.heads`: number of attention heads to split into |
 | `num_kv_heads=` | keyword of `tl.mechinterp.HeadWeightViews` |
 | `num_nan=` | keyword of `tl.stats.TensorStats` |
@@ -3526,6 +3530,7 @@ describe each surface in depth.
 | `num_true=` | keyword of `tl.stats.TensorStats` |
 | `num_zero=` | keyword of `tl.stats.TensorStats` |
 | `pass_number=` | field and constructor keyword of `BackwardPass`, `DiffRow`, `GradRecordContext`, `ModuleStackFrame`, `RecordContext`, `SiteRow` |
+| `python_object_id=` | keyword of `TensorInputObservation` |
 | `query_slice=` | keyword of `AttentionView.crop_to`: which query positions to keep, as a slice |
 | `rank_handles=` | keyword of `tl.types.MergedTrace`: mapping from rank to its handle |
 | `run_record=` | keyword of `tl.trackers.HistoryView` |
@@ -3749,6 +3754,7 @@ The sections above describe each surface in depth.
 | `DiffReport.rows_with_status` | Return the rows carrying one closed-vocabulary status |
 | `DiffRow.pass_number` | Pass number of the compared op |
 | `DryRun.filter` | Return a new trace with decisions from a new op predicate |
+| `Edit.is_compatible_with_append` | Whether the edit keeps the output shape, so `tl.append` may stack it with other edits |
 | `Edit.name` | The edit's public name (the builder that made it, such as `zero_ablate`) |
 | `Edit.signal` | Pass an edit is bound to: `"forward"` for edits that read recorded activations, `None` for neutral edits |
 | `EffectsView.rank_changes` | Rank candidates by the size of their change from baseline, descending |
@@ -3777,7 +3783,6 @@ The sections above describe each surface in depth.
 | `GqaInfo.num_query_heads` | Number of query heads |
 | `GradFnCall.fire_record` | The fire record of the edit that produced this grad-fn call, or `None` |
 | `GradFnCall.grad_fn_label` | Label of the grad_fn this call belongs to |
-| `GradFnCall.grad_fn_label` | Pass-qualified call label (`<grad_fn_label>:<call_index>`) |
 | `GradFnCall.label` | Pass-qualified call label (`<grad_fn_label>:<call_index>`) |
 | `GradFnSketch.num_nodes` | Number of walked nodes |
 | `GradReceptiveField.batch_support` | Batch indices the influence set reaches, or `None` |
@@ -3917,13 +3922,14 @@ The sections above describe each surface in depth.
 | `Super.absent_names` | Return bundle member names not represented by this view |
 | `Super.is_complete` | Return whether every bundle member is represented |
 | `TapRecord.signal` | Pass the tapped value belongs to: `"forward"` or `"backward"` |
+| `TensorInputObservation.mutation_version` | Captured PyTorch version counter of the input tensor (diagnostic, not portable) |
+| `TensorInputObservation.python_object_id` | In-process Python object identity of the input tensor (diagnostic, not portable) |
 | `TensorSpec.from_tensor` | Build a spec from a tensor (alternate constructor) |
 | `Trace.armed_edits` | Read-only tuple of the gradient rules in the trace's recipe |
 | `Trace.input` | The original user input before `input_transform` was applied (was `raw_input`) |
-| `TensorInputObservation.mutation_version` | Captured PyTorch version counter of the input tensor (diagnostic, not portable) |
-| `TensorInputObservation.python_object_id` | In-process Python object identity of the input tensor (diagnostic, not portable) |
 | `Trace.is_replayable` | Whether the capture kept what replay and edits need (set by `replayable=True`) |
 | `Trace.is_stopped` | Whether the capture stopped early (`until=`/`stop_after=`); a stopped trace is partial (was `halted`) |
+| `Trace.options.seed` | The torch seed the capture ran under (`seed=` on the capture door), or `None`; saved with the trace |
 | `Trace.transformed_output` | Human-readable model output after `output_transform` (was `raw_output`) |
 | `TraceSlice.empty` | Return whether the slice has no members (emptiness is disclosure) |
 | `ValidationDiagnostic.check_name` | Stable name for the validation diagnostic source |
@@ -4084,17 +4090,12 @@ alphabetical order.
 | `Trace.completeness_diagnostics` | List of reports of ATen dispatch events the completeness witness could not account for; empty when capture was complete |
 | `Trace.compute_coverage` | Counts of layer-list rows in each of four compute-coverage categories, as a dict |
 | `Trace.decode_output` | Return the decoded output rows captured during tracing, up to `k` ranks per batch item; with `style=`, `head=` or `tokenizer=` decode again on demand from the retained output tensors without touching `decoded_output`; raise if nothing was captured and no output tensor is retained |
-| `Trace.DEFAULT_FILL_STATE` | Class-level dict of the default fill value for each Trace field, derived from the field policy table |
 | `Trace.disarm_triggers` | Detach this Trace from global autograd backward interception so plain backward calls no longer record into it |
 | `Trace.escape_diagnostics` | List of reports of raw torch callables that ran outside their registered wrapper during capture, each with file, line and function |
-| `Trace.facet_registry_snapshot` | Snapshot of the registered facet recipes taken at capture, so later facet reads use the same vocabulary |
 | `Trace.factcore` | The single numbers substrate for this trace: counts, identity spine, parameter totals, compute aggregation and memory figures |
-| `Trace.FIELD_FORK_POLICY` | Class-level dict giving how each Trace field is handled when a trace is forked, derived from the field policy table |
 | `Trace.find_layers` | Return the Layer labels that fuzzy-match a query string, up to `limit` results |
 | `Trace.find_nan` | Return the first NaN or Inf found among saved outputs in execution order |
 | `Trace.find_sites` | Return a table of the intervention sites that match a selector |
-| `Trace.halt_reason` | Reason capture halted early, or `None` |
-| `Trace.halted` | Whether capture stopped early, leaving a partial trace |
 | `Trace.has_frozen_params` | Whether this Trace contains at least one frozen parameter |
 | `Trace.has_trainable_params` | Whether this Trace contains at least one trainable parameter |
 | `Trace.health_facts` | Normalized, serializable health observations for this trace, including non-finite value findings and coverage counts |
@@ -4112,34 +4113,24 @@ alphabetical order.
 | `Trace.layers_with_params` | Dict mapping each parameter-consuming layer label to its parameter records |
 | `Trace.logged_values` | Dict of the values recorded through `log_value` during this capture |
 | `Trace.macs_unknown_split_ops` | Labels of compute ops whose exact multiply-accumulate (MAC) split cannot be derived |
-| `Trace.model_label` | Display label for the model; user-overridable and defaults to `model_class_name` |
 | `Trace.model_ops` | Tuple of the trace's ordinary executed op records, excluding any ops injected by intervention hooks |
 | `Trace.model_profile` | The computed `ModelProfile` semantic input/output descriptor for this trace, not persisted |
 | `Trace.module_calls` | Accessor for per-invocation `ModuleCall` records, looked up by call label or index |
-| `Trace.module_filter` | Optional predicate over op records that gates which activations are saved, or `None`; not saved with the trace |
 | `Trace.modules_with_facet` | Yield the Modules whose semantic facet view currently has the facet `name` available |
 | `Trace.nonfinite_verdict` | Three-state health verdict: `found`, `checked_and_clean` or `not_checked` |
 | `Trace.num_context_lines` | Number of source lines captured around each call site for `FuncCallLocation` |
 | `Trace.num_edges` | Number of distinct edges in the per-pass Op graph, including boundary edges |
 | `Trace.num_input_layers` | Number of distinct input-boundary Layers (a multi-pass Layer counts once) |
-| `Trace.num_modules` | Number of registered submodules of the source model |
-| `Trace.num_modules` | Number of registered submodules of the source model |
 | `Trace.num_output_layers` | Number of distinct output-boundary Layers (a multi-pass Layer counts once) |
 | `Trace.num_params_frozen` | Number of scalar parameters that do not require gradients |
 | `Trace.num_params_trainable` | Number of scalar parameters that require gradients |
-| `Trace.num_saved_grad_fn_calls` | Number of `GradFnCall` records that have saved payloads |
-| `Trace.num_saved_grad_fns` | Number of `GradFn` records with at least one saved `GradFnCall` |
-| `Trace.num_saved_layers` | Number of Layers with at least one saved Op |
-| `Trace.num_saved_module_calls` | Number of `ModuleCall` records whose outputs were saved |
 | `Trace.op_labels` | Op labels in execution order, always pass-qualified (ending in a pass suffix such as `:1`) |
 | `Trace.output_id2label` | Dict mapping output class ids to label strings, used to decode model output, or `None` |
 | `Trace.output_layers` | Labels of the Layers that are model outputs |
 | `Trace.output_num_classes` | Number of output classes used to decode model output, or `None` |
-| `Trace.parent_run` | Weak reference to the Trace this one was forked from, or `None` if it is not a fork |
 | `Trace.parent_trace` | The immediate parent Trace in a fork or rerun lineage, or `None` |
 | `Trace.preview_fastlog` | Render a preview of what a fastlog predicate would keep on this model graph |
 | `Trace.profile_enabled` | Whether this capture was run with profiling requested |
-| `Trace.raw_input` | The original user input before the input transform was applied, or `None` |
 | `Trace.reconstruct_container` | Rebuild a captured container selected by site and role from saved Op values |
 | `Trace.reconstruct_output` | Rebuild the traced model's final Python output object from saved Op values |
 | `Trace.remove` | Detach the hook attachments made by the most recent single-hook `attach_hooks` call |
@@ -4147,7 +4138,6 @@ alphabetical order.
 | `Trace.replace_state_from` | Atomically replace this trace's run state with that of another `Trace` |
 | `Trace.root_module` | The `Module` record for the top-level model, `modules["self"]` |
 | `Trace.root_trace` | The ultimate root Trace of this fork or rerun lineage, or `None` |
-| `Trace.runnable_descriptor` | The parsed sparse run descriptor retained by a loaded artifact, or `None` |
 | `Trace.save_new_outs` | Re-run the model on new inputs, saving only the Op outputs |
 | `Trace.save_visualizations` | Whether rendered visualizations are persisted in bundles |
 | `Trace.saved_grad_module_calls` | Accessor for the ModuleCalls whose outputs include saved gradients |
@@ -4159,7 +4149,6 @@ alphabetical order.
 | `Trace.state_history` | Append-only list of lifecycle events for this trace, such as fork, push, run and direct write |
 | `Trace.tlspec_version` | Integer version of the `.tlspec` format, used for save and load compatibility |
 | `Trace.to_dagua_graph` | Translate this trace into an experimental Dagua graph |
-| `Trace.trace_label` | User-set label for this Trace within forks or Bundles, or `None` |
 | `Trace.transforms` | Tuple of the Op records that mark transform boundaries |
 | `Trace.uncalled_modules` | Registered module addresses that were not called during the captured pass |
 | `Trace.unknown_flop_ops` | Ledger of ops with unknown FLOPs, grouped by op name, with counts and example labels |
@@ -4210,13 +4199,11 @@ alphabetical order.
 | `Op.container` | Runtime container view for this Op, when available |
 | `Op.container_spec` | Rebuildable description of the container that holds this Op's output |
 | `Op.containers` | All input and output container views associated with this Op |
-| `Op.DEFAULT_FILL_STATE` | Class-level mapping of default values used to fill `Op` fields that are missing when a record is restored |
 | `Op.derived_grad` | Backend-owned intermediate gradient payload for this Op, or `None` |
 | `Op.dropped_edge_tensor_args` | Argument positions, such as `"arg1"`, whose tensor inputs did not become graph edges at capture |
 | `Op.edge_uses` | Tuple of `EdgeUseRecord` entries, one per parent edge use captured for this Op |
 | `Op.equivalence_class` | Key of the equivalence class that loop detection assigned to this Op |
 | `Op.equivalent_ops` | Labels of other Ops in the same equivalence class (same function and arguments) |
-| `Op.FIELD_FORK_POLICY` | Class-level mapping giving the policy for each `Op` field when a trace is forked |
 | `Op.flops_backward` | Approximate backward FLOPs for this Op |
 | `Op.flops_forward` | Approximate forward FLOPs for this Op |
 | `Op.flops_total` | Approximate total FLOPs for this Op |
@@ -4268,8 +4255,6 @@ alphabetical order.
 | `Op.input_was_parameter` | Whether this Op is an input boundary whose value was a model parameter |
 | `Op.internal_source_ancestors` | Labels of the internally initialized source Ops that are ancestors of this Op |
 | `Op.internal_source_parents` | Labels of the internally initialized source Ops that are direct parents of this Op |
-| `Op.intervention_replaced` | Whether an intervention replaced this Op's output |
-| `Op.interventions` | Intervention records applied to this Op |
 | `Op.is_atomic_module` | Whether this Op is the sole operation output of an atomic module call |
 | `Op.is_buffer` | Stored flag marking this Op as a buffer boundary; `is_buffer_source` exposes it |
 | `Op.is_buffer_source` | Whether this Op represents a buffer boundary (overwrites a buffer) |
@@ -4419,7 +4404,6 @@ alphabetical order.
 | `Layer.input_to_module_calls` | Labels of the module calls that this layer's output is fed into |
 | `Layer.input_was_parameter` | Whether this model input was an `nn.Parameter` |
 | `Layer.internal_source_parents` | Labels of the parent layers whose ancestry includes an internal source, a tensor made inside the model rather than passed in |
-| `Layer.intervention_replaced` | Whether an intervention replaced this layer's output value |
 | `Layer.is_atomic_module` | Whether this layer's op is the only op of a module call, a single-op leaf module |
 | `Layer.is_buffer` | Whether this layer is a registered-buffer version node, the flag `is_buffer_source` reports |
 | `Layer.is_buffer_source` | Whether this layer represents a buffer overwrite boundary |
@@ -4500,11 +4484,9 @@ alphabetical order.
 | `Module.backward_pre_hooks` | The backward pre-hooks registered on this module, as a list of `HookInfo` |
 | `Module.buffer_layers` | Labels of the buffer layers that belong to this module |
 | `Module.call_children` | Addresses of the modules this module calls directly in the dynamic call tree |
-| `Module.call_children_modules` | The child `Module` records in the dynamic call tree |
 | `Module.call_depth` | Depth of this module in the dynamic call stack |
 | `Module.call_labels` | Labels of this module's calls |
 | `Module.call_parent` | Address of the module that calls this one in the dynamic call tree, or `None` at the root |
-| `Module.call_parent_module` | The parent `Module` record in the dynamic call tree, or `None` at the root |
 | `Module.call_tree` | Return this module's single `ModuleCall` as the root of a nested call tree |
 | `Module.class_docstring` | The docstring of this module's class, or `None` |
 | `Module.class_name` | The class name of this module |
@@ -4551,7 +4533,6 @@ alphabetical order.
 | `Module.num_input_edges` | Number of edges whose child op is inside this module and whose parent op is outside it |
 | `Module.num_internal_edges` | Number of edges whose parent and child ops are both inside this module |
 | `Module.num_output_edges` | Number of edges whose parent op is inside this module and whose child op is outside it |
-| `Module.num_param_tensors` | Number of parameter tensors owned by this module |
 | `Module.num_param_tensors_frozen` | Number of frozen parameter tensors owned by this module |
 | `Module.num_param_tensors_trainable` | Number of trainable parameter tensors owned by this module |
 | `Module.num_params_frozen` | Number of frozen parameter elements owned by this module |
@@ -4568,7 +4549,6 @@ alphabetical order.
 | `Module.output_structure` | The structure of the single call's return container, or `None` when ambiguous |
 | `Module.outs` | Saved output tensors of a single-call module, as a list |
 | `Module.param_memory` | Bytes of parameters at this module's own address, the same for every call |
-| `Module.recursive_param_addresses` | Parameter addresses in the same order as `recursive_params` |
 | `Module.recursive_params` | The parameters owned by this module's address and by all of its address descendants |
 | `Module.show_call_tree` | Print the call subtrees of this module as ASCII trees |
 | `Module.total_backward_duration` | Total backward duration across calls, or `None` when backward timing is not available |
@@ -4608,7 +4588,6 @@ alphabetical order.
 | `ModuleCall.forward_pre_hook_effects` | Tuple of `PreHookEffect` records, one per user forward pre-hook that ran on this call |
 | `ModuleCall.func_calls_duration` | Total time spent in torch function calls inside this call, summed over their `Op` durations |
 | `ModuleCall.grads` | Saved output gradients of this call, one per tensor output in container-path order |
-| `ModuleCall.had_pre_hook_input_change` | Whether any user pre-hook changed the module inputs, or `None` when the evidence is incomplete |
 | `ModuleCall.has_frozen_params` | Whether the called module owns any frozen parameters |
 | `ModuleCall.has_multiple_addresses` | Whether the called module appears at more than one address |
 | `ModuleCall.has_saved_forward_args` | Whether the `forward()` arguments were captured for this call |
@@ -4656,7 +4635,7 @@ alphabetical order.
 | `Param.co_parent_params` | Addresses of other parameters used by the same operations as this one |
 | `Param.grad_dtype` | Dtype of this parameter's cached gradient, or `None` |
 | `Param.grad_shape` | Shape of this parameter's cached gradient, or `None` |
-| `Param.gradient_memory` | Size in bytes of this parameter's cached gradient |
+| `Param.grad_memory` | Size in bytes of this parameter's cached gradient |
 | `Param.grads` | Accessor over the per-backward-pass gradient increments observed for this parameter |
 | `Param.has_grad` | Whether this parameter has a cached gradient |
 | `Param.has_multiple_addresses` | Whether this parameter is registered at more than one address |
@@ -4664,8 +4643,6 @@ alphabetical order.
 | `Param.is_quantized` | Whether this parameter uses a quantized dtype such as `qint8` or `quint8` |
 | `Param.is_trainable` | Whether this parameter requires gradients |
 | `Param.module_cls` | The live class of the owning module, or `None` when unavailable |
-| `Param.num_uses_by_layers` | Number of distinct `Layer`s that used this parameter |
-| `Param.num_uses_by_ops` | Number of distinct `Op`s that used this parameter |
 | `Param.param_memory` | Memory used by the parameter tensor, in bytes |
 | `Param.resolver_status` | How the backend resolved this parameter, such as `"resolved"` or `"metadata_only"` |
 | `Param.used_by_layers` | Labels of the `Layer`s that used this parameter |
@@ -4674,13 +4651,11 @@ alphabetical order.
 
 | Spelling | Meaning |
 | --- | --- |
-| `Buffer.buffer_overwrite_index` | Overwrite index of the most recent version of this buffer, or `None`; alias of `buffer_pass` |
-| `Buffer.buffer_pass` | Pass index of the most recent version of this buffer, or `None` when it has no versions |
-| `Buffer.buffer_source` | Label of the producer of the most recent write to this buffer, or `None` |
+| `Buffer.writer_label` | Label of the producer of the most recent write to this buffer, or `None` |
 | `Buffer.final_value` | The buffer value at its last observed version, or `None` when there are no versions |
 | `Buffer.grad_dtype` | Dtype of the saved gradient at the final observed version |
 | `Buffer.grad_shape` | Shape of the saved gradient at the final observed version |
-| `Buffer.gradient_memory` | Memory used by the saved gradient at the final observed version |
+| `Buffer.grad_memory` | Memory used by the saved gradient at the final observed version |
 | `Buffer.has_grad` | Whether the final observed version has a saved gradient |
 | `Buffer.has_multiple_addresses` | Whether this buffer is registered at more than one module address |
 | `Buffer.has_saved_activation` | Whether the final observed version has a saved activation |
@@ -4749,7 +4724,6 @@ alphabetical order.
 | `GradFnCall.label` | Pass-qualified label of this call, in the form `label:call_index` |
 | `GradFnCall.grad_inputs` | Gradients flowing into this grad-fn, as observed by the backward hook |
 | `GradFnCall.grad_outputs` | Gradients flowing out of this grad-fn, as observed by the backward hook |
-| `GradFnCall.intervention_fire_ref` | Reference to the intervention record active when this call fired, or `None` |
 | `GradFnCall.is_saved` | Whether this call has saved gradient payloads |
 | `GradFnCall.ordinal_index` | 0-based position of this call in `trace.autograd.grad_fn_calls` |
 | `GradFnCall.timestamp` | Wall-clock time in seconds when the hook fired, or `None` |
@@ -4810,7 +4784,6 @@ alphabetical order.
 
 | Spelling | Meaning |
 | --- | --- |
-| `ModuleInputSnapshot.capture_complete` | Whether all supported mutation evidence was available for this snapshot |
 | `ModuleInputSnapshot.incomplete_reasons` | Tuple of stable reason strings explaining why the evidence is incomplete |
 | `ModuleInputSnapshot.structure` | Compact immutable description of the input container topology |
 | `ModuleInputSnapshot.tensor_observations` | Ordered `TensorInputObservation`s of the input tensors, keyed by typed input path |
@@ -4820,7 +4793,6 @@ alphabetical order.
 | Spelling | Meaning |
 | --- | --- |
 | `TensorInputObservation.alias_group` | Snapshot-local identity shared by input paths that alias the same tensor |
-| `TensorInputObservation.object_id` | In-process object identity of the tensor, for diagnostics only and not portable |
 | `TensorInputObservation.payload_origin` | Description of how the retained payload was obtained |
 | `TensorInputObservation.payload_status` | `"saved"`, or the reason no payload is available |
 | `TensorInputObservation.source_op` | Label of the final producer `Op` of this tensor, or `None` when unavailable |

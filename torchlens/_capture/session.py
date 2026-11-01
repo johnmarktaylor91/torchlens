@@ -1115,10 +1115,10 @@ def _live_output_by_raw_index(trace: Any, output_tensors: list[Any]) -> dict[int
 
     live_output_by_raw_index: dict[int, Any] = {}
     for output_label, output_tensor in zip(trace.output_layers, output_tensors, strict=True):
-        output_op = trace.layer_dict_all_keys[output_label]
+        output_op = trace._layer_dict_all_keys[output_label]
         live_output_by_raw_index[output_op.raw_index] = output_tensor
         for parent_label in output_op.parents:
-            parent = trace.layer_dict_all_keys[parent_label]
+            parent = trace._layer_dict_all_keys[parent_label]
             live_output_by_raw_index[parent.raw_index] = output_tensor
     return live_output_by_raw_index
 

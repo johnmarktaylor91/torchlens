@@ -53,24 +53,24 @@ Persisted fields in total: 779.
 | --- | --- | --- | --- |
 | `_executed_flops_record` | keep | fact | private |
 | `_source_trace_ref` | weakref_strip | fact | private |
-| `backward_call_context` | keep | fact | `BackwardPass.backward_call_context` (not in the glossary) |
+| `backward_call_context` | keep | fact | `BackwardPass.backward_call_context` |
 | `duration` | keep | fact | `BackwardPass.duration` |
-| `engine_flags` | keep | fact | `BackwardPass.engine_flags` (not in the glossary) |
+| `engine_flags` | keep | fact | `BackwardPass.engine_flags` |
 | `grad_fn_calls` | keep | fact | `BackwardPass.grad_fn_calls` |
-| `implicit` | keep | fact | `BackwardPass.implicit` (not in the glossary) |
-| `inputs_subset` | keep | fact | `BackwardPass.inputs_subset` (not in the glossary) |
-| `order` | keep | fact | `BackwardPass.order` (not in the glossary) |
-| `order_attribution_coverage` | keep | fact | `BackwardPass.order_attribution_coverage` (not in the glossary) |
-| `origin_backward_pass` | keep | fact | `BackwardPass.origin_backward_pass` (not in the glossary) |
-| `outer_context` | keep | fact | `BackwardPass.outer_context` (not in the glossary) |
+| `implicit` | keep | fact | `BackwardPass.implicit` |
+| `inputs_subset` | keep | fact | `BackwardPass.inputs_subset` |
+| `order` | keep | fact | `BackwardPass.order` |
+| `order_attribution_coverage` | keep | fact | `BackwardPass.order_attribution_coverage` |
+| `origin_backward_pass` | keep | fact | `BackwardPass.origin_backward_pass` |
+| `outer_context` | keep | fact | `BackwardPass.outer_context` |
 | `pass_number` | keep | fact | `BackwardPass.pass_number` |
-| `peak_memory` | keep | fact | `BackwardPass.peak_memory` (not in the glossary) |
-| `root_grad_arguments` | keep | fact | `BackwardPass.root_grad_arguments` (not in the glossary) |
-| `root_grad_fn_ids` | keep | fact | `BackwardPass.root_grad_fn_ids` (not in the glossary) |
-| `root_meta` | keep | fact | `BackwardPass.root_meta` (not in the glossary) |
-| `save_grads_policy` | keep | fact | `BackwardPass.save_grads_policy` (not in the glossary) |
+| `peak_memory` | keep | fact | `BackwardPass.peak_memory` |
+| `root_grad_arguments` | keep | fact | `BackwardPass.root_grad_arguments` |
+| `root_grad_fn_ids` | keep | fact | `BackwardPass.root_grad_fn_ids` |
+| `root_meta` | keep | fact | `BackwardPass.root_meta` |
+| `save_grads_policy` | keep | fact | `BackwardPass.save_grads_policy` |
 | `status` | keep | fact | `BackwardPass.status` |
-| `trigger` | keep | fact | `BackwardPass.trigger` (not in the glossary) |
+| `trigger` | keep | fact | `BackwardPass.trigger` |
 
 ## `buffer` (Buffer, 21 persisted of 21 fields)
 
@@ -79,15 +79,15 @@ Persisted fields in total: 779.
 | `_initial_value` | keep | fact | private |
 | `_source_ref` | weakref_strip | fact | private |
 | `activation_memory` | keep | fact | `Buffer.activation_memory` |
-| `address` | keep | fact | `Buffer.address` (not in the glossary) |
+| `address` | keep | fact | `Buffer.address` |
 | `call_index` | keep | fact | `Buffer.call_index` |
 | `dtype` | keep | fact | `Buffer.dtype` |
-| `grad_dtype` | keep | fact | `Buffer.grad_dtype` (not in the glossary) |
+| `grad_dtype` | keep | fact | `Buffer.grad_dtype` |
 | `grad_memory` | keep | fact | `Buffer.grad_memory` |
-| `grad_shape` | keep | fact | `Buffer.grad_shape` (not in the glossary) |
-| `has_grad` | keep | fact | `Buffer.has_grad` (not in the glossary) |
-| `has_saved_activation` | keep | fact | `Buffer.has_saved_activation` (not in the glossary) |
-| `initial_value` | keep | fact | `Buffer.initial_value` (not in the glossary) |
+| `grad_shape` | keep | fact | `Buffer.grad_shape` |
+| `has_grad` | keep | fact | `Buffer.has_grad` |
+| `has_saved_activation` | keep | fact | `Buffer.has_saved_activation` |
+| `initial_value` | keep | fact | `Buffer.initial_value` |
 | `layer_label` | keep | fact | `Buffer.layer_label` |
 | `module` | keep | fact | `Buffer.module` |
 | `module_address` | keep | fact | `Buffer.module_address` |
@@ -95,7 +95,7 @@ Persisted fields in total: 779.
 | `name` | keep | fact | `Buffer.name` |
 | `overwrite_index` | keep | fact | `Buffer.overwrite_index` |
 | `shape` | keep | fact | `Buffer.shape` |
-| `versions` | keep | fact | `Buffer.versions` (not in the glossary) |
+| `versions` | keep | fact | `Buffer.versions` |
 | `writer_label` | keep | fact | `Buffer.writer_label` |
 
 ## `func_call_location` (FuncCallLocation, 23 persisted of 25 fields)
@@ -111,20 +111,20 @@ Persisted fields in total: 779.
 | `_num_context_lines_requested` | keep | fact | private |
 | `_source_context` | keep | fact | private |
 | `_source_loaded` | keep | fact | private |
-| `call_line` | keep | fact | `FuncCallLocation.call_line` (not in the glossary) |
-| `code_context` | keep | fact | `FuncCallLocation.code_context` (not in the glossary) |
-| `code_context_labeled` | keep | fact | `FuncCallLocation.code_context_labeled` (not in the glossary) |
-| `code_firstlineno` | keep | fact | `FuncCallLocation.code_firstlineno` (not in the glossary) |
-| `col_offset` | keep | fact | `FuncCallLocation.col_offset` (not in the glossary) |
+| `call_line` | keep | fact | `FuncCallLocation.call_line` |
+| `code_context` | keep | fact | `FuncCallLocation.code_context` |
+| `code_context_labeled` | keep | fact | `FuncCallLocation.code_context_labeled` |
+| `code_firstlineno` | keep | fact | `FuncCallLocation.code_firstlineno` |
+| `col_offset` | keep | fact | `FuncCallLocation.col_offset` |
 | `file` | keep | fact | `FuncCallLocation.file` (not in the glossary) |
-| `func_docstring` | keep | fact | `FuncCallLocation.func_docstring` (not in the glossary) |
+| `func_docstring` | keep | fact | `FuncCallLocation.func_docstring` |
 | `func_name` | keep | fact | `FuncCallLocation.func_name` (not in the glossary) |
-| `func_qualname` | keep | fact | `FuncCallLocation.func_qualname` (not in the glossary) |
-| `func_signature` | keep | fact | `FuncCallLocation.func_signature` (not in the glossary) |
-| `line_number` | keep | fact | `FuncCallLocation.line_number` (not in the glossary) |
+| `func_qualname` | keep | fact | `FuncCallLocation.func_qualname` |
+| `func_signature` | keep | fact | `FuncCallLocation.func_signature` |
+| `line_number` | keep | fact | `FuncCallLocation.line_number` |
 | `num_context_lines` | keep | fact | `FuncCallLocation.num_context_lines` |
-| `source_context` | keep | fact | `FuncCallLocation.source_context` (not in the glossary) |
-| `source_loading_enabled` | keep | fact | `FuncCallLocation.source_loading_enabled` (not in the glossary) |
+| `source_context` | keep | fact | `FuncCallLocation.source_context` |
+| `source_loading_enabled` | keep | fact | `FuncCallLocation.source_loading_enabled` |
 
 Session-only (`drop`): `_frame_func_obj`, `_linecache_entry`.
 
@@ -133,58 +133,58 @@ Session-only (`drop`): `_frame_func_obj`, `_linecache_entry`.
 | key | policy | tier | public spelling |
 | --- | --- | --- | --- |
 | `_source_trace_ref` | weakref_strip | fact | private |
-| `backward_docstring` | keep | fact | `GradFn.backward_docstring` (not in the glossary) |
-| `backward_duration` | keep | fact | `GradFn.backward_duration` (not in the glossary) |
-| `backward_signature` | keep | fact | `GradFn.backward_signature` (not in the glossary) |
-| `backward_source_file` | keep | fact | `GradFn.backward_source_file` (not in the glossary) |
-| `backward_source_line` | keep | fact | `GradFn.backward_source_line` (not in the glossary) |
-| `backward_source_location` | keep | fact | `GradFn.backward_source_location` (not in the glossary) |
-| `call_labels` | keep | fact | `GradFn.call_labels` (not in the glossary) |
+| `backward_docstring` | keep | fact | `GradFn.backward_docstring` |
+| `backward_duration` | keep | fact | `GradFn.backward_duration` |
+| `backward_signature` | keep | fact | `GradFn.backward_signature` |
+| `backward_source_file` | keep | fact | `GradFn.backward_source_file` |
+| `backward_source_line` | keep | fact | `GradFn.backward_source_line` |
+| `backward_source_location` | keep | fact | `GradFn.backward_source_location` |
+| `call_labels` | keep | fact | `GradFn.call_labels` |
 | `calls` | keep | fact | `GradFn.calls` |
-| `children` | keep | fact | `GradFn.children` (not in the glossary) |
+| `children` | keep | fact | `GradFn.children` |
 | `class_docstring` | keep | fact | `GradFn.class_docstring` |
 | `class_name` | keep | fact | `GradFn.class_name` |
 | `class_qualname` | keep | fact | `GradFn.class_qualname` |
-| `class_source_file` | keep | fact | `GradFn.class_source_file` (not in the glossary) |
-| `class_source_line` | keep | fact | `GradFn.class_source_line` (not in the glossary) |
-| `class_source_location` | keep | fact | `GradFn.class_source_location` (not in the glossary) |
-| `co_parents` | keep | fact | `GradFn.co_parents` (not in the glossary) |
-| `creator_object_id` | keep | fact | `GradFn.creator_object_id` (not in the glossary) |
-| `differentiates` | keep | fact | `GradFn.differentiates` (not in the glossary) |
-| `forward_docstring` | keep | fact | `GradFn.forward_docstring` (not in the glossary) |
+| `class_source_file` | keep | fact | `GradFn.class_source_file` |
+| `class_source_line` | keep | fact | `GradFn.class_source_line` |
+| `class_source_location` | keep | fact | `GradFn.class_source_location` |
+| `co_parents` | keep | fact | `GradFn.co_parents` |
+| `creator_object_id` | keep | fact | `GradFn.creator_object_id` |
+| `differentiates` | keep | fact | `GradFn.differentiates` |
+| `forward_docstring` | keep | fact | `GradFn.forward_docstring` |
 | `forward_signature` | keep | fact | `GradFn.forward_signature` |
-| `forward_source_file` | keep | fact | `GradFn.forward_source_file` (not in the glossary) |
-| `forward_source_line` | keep | fact | `GradFn.forward_source_line` (not in the glossary) |
-| `forward_source_location` | keep | fact | `GradFn.forward_source_location` (not in the glossary) |
-| `grad_fn_object_id` | keep | fact | `GradFn.grad_fn_object_id` (not in the glossary) |
-| `has_children` | keep | fact | `GradFn.has_children` (not in the glossary) |
-| `has_co_parents` | keep | fact | `GradFn.has_co_parents` (not in the glossary) |
-| `has_op` | keep | fact | `GradFn.has_op` (not in the glossary) |
-| `has_parents` | keep | fact | `GradFn.has_parents` (not in the glossary) |
-| `has_siblings` | keep | fact | `GradFn.has_siblings` (not in the glossary) |
-| `init_docstring` | keep | fact | `GradFn.init_docstring` (not in the glossary) |
+| `forward_source_file` | keep | fact | `GradFn.forward_source_file` |
+| `forward_source_line` | keep | fact | `GradFn.forward_source_line` |
+| `forward_source_location` | keep | fact | `GradFn.forward_source_location` |
+| `grad_fn_object_id` | keep | fact | `GradFn.grad_fn_object_id` |
+| `has_children` | keep | fact | `GradFn.has_children` |
+| `has_co_parents` | keep | fact | `GradFn.has_co_parents` |
+| `has_op` | keep | fact | `GradFn.has_op` |
+| `has_parents` | keep | fact | `GradFn.has_parents` |
+| `has_siblings` | keep | fact | `GradFn.has_siblings` |
+| `init_docstring` | keep | fact | `GradFn.init_docstring` |
 | `init_signature` | keep | fact | `GradFn.init_signature` |
-| `init_source_file` | keep | fact | `GradFn.init_source_file` (not in the glossary) |
-| `init_source_line` | keep | fact | `GradFn.init_source_line` (not in the glossary) |
-| `init_source_location` | keep | fact | `GradFn.init_source_location` (not in the glossary) |
-| `is_custom` | keep | fact | `GradFn.is_custom` (not in the glossary) |
+| `init_source_file` | keep | fact | `GradFn.init_source_file` |
+| `init_source_line` | keep | fact | `GradFn.init_source_line` |
+| `init_source_location` | keep | fact | `GradFn.init_source_location` |
+| `is_custom` | keep | fact | `GradFn.is_custom` |
 | `label` | keep | fact | `GradFn.label` |
 | `module_address` | keep | fact | `GradFn.module_address` |
-| `module_membership_source` | keep | fact | `GradFn.module_membership_source` (not in the glossary) |
+| `module_membership_source` | keep | fact | `GradFn.module_membership_source` |
 | `modules` | keep | fact | `GradFn.modules` (not in the glossary) |
-| `next_grad_fn_ids` | keep | fact | `GradFn.next_grad_fn_ids` (not in the glossary) |
+| `next_grad_fn_ids` | keep | fact | `GradFn.next_grad_fn_ids` |
 | `num_calls` | keep | fact | `GradFn.num_calls` (not in the glossary) |
 | `op` | keep | fact | `GradFn.op` |
 | `op_label` | keep | fact | `GradFn.op_label` |
-| `order` | keep | fact | `GradFn.order` (not in the glossary) |
-| `ordinal_index` | keep | fact | `GradFn.ordinal_index` (not in the glossary) |
-| `origin_backward_pass` | keep | fact | `GradFn.origin_backward_pass` (not in the glossary) |
-| `parents` | keep | fact | `GradFn.parents` (not in the glossary) |
-| `siblings` | keep | fact | `GradFn.siblings` (not in the glossary) |
+| `order` | keep | fact | `GradFn.order` |
+| `ordinal_index` | keep | fact | `GradFn.ordinal_index` |
+| `origin_backward_pass` | keep | fact | `GradFn.origin_backward_pass` |
+| `parents` | keep | fact | `GradFn.parents` |
+| `siblings` | keep | fact | `GradFn.siblings` |
 | `step_index` | keep | fact | `GradFn.step_index` (not in the glossary) |
 | `total_backward_duration` | keep | fact | `GradFn.total_backward_duration` |
-| `type` | keep | fact | `GradFn.type` (not in the glossary) |
-| `type_index` | keep | fact | `GradFn.type_index` (not in the glossary) |
+| `type` | keep | fact | `GradFn.type` |
+| `type_index` | keep | fact | `GradFn.type_index` |
 
 ## `grad_fn_call` (GradFnCall, 14 persisted of 14 fields)
 
@@ -193,17 +193,17 @@ Session-only (`drop`): `_frame_func_obj`, `_linecache_entry`.
 | `_source_trace_ref` | weakref_strip | fact | private |
 | `_time_finished` | keep | fact | private |
 | `_time_started` | keep | fact | private |
-| `backward_duration` | keep | fact | `GradFnCall.backward_duration` (not in the glossary) |
-| `backward_pass_index` | keep | fact | `GradFnCall.backward_pass_index` (not in the glossary) |
+| `backward_duration` | keep | fact | `GradFnCall.backward_duration` |
+| `backward_pass_index` | keep | fact | `GradFnCall.backward_pass_index` |
 | `call_index` | keep | fact | `GradFnCall.call_index` |
 | `fire_record` | keep | fact | `GradFnCall.fire_record` |
 | `grad_fn_label` | keep | fact | `GradFnCall.grad_fn_label` |
-| `grad_inputs` | blob_recursive | fact | `GradFnCall.grad_inputs` (not in the glossary) |
-| `grad_outputs` | blob_recursive | fact | `GradFnCall.grad_outputs` (not in the glossary) |
-| `is_saved` | keep | fact | `GradFnCall.is_saved` (not in the glossary) |
-| `label` | keep | fact | `GradFnCall.grad_fn_label` |
-| `ordinal` | keep | fact | `GradFnCall.ordinal` (not in the glossary) |
-| `timestamp` | keep | fact | `GradFnCall.timestamp` (not in the glossary) |
+| `grad_inputs` | blob_recursive | fact | `GradFnCall.grad_inputs` |
+| `grad_outputs` | blob_recursive | fact | `GradFnCall.grad_outputs` |
+| `is_saved` | keep | fact | `GradFnCall.is_saved` |
+| `label` | keep | fact | `GradFnCall.label` |
+| `ordinal` | keep | fact | `GradFnCall.ordinal` |
+| `timestamp` | keep | fact | `GradFnCall.timestamp` |
 
 ## `layer` (Layer, 92 persisted of 100 fields)
 
@@ -214,93 +214,93 @@ Session-only (`drop`): `_frame_func_obj`, `_linecache_entry`.
 | `_param_logs` | keep | fact | private |
 | `_source_trace_ref` | weakref_strip | fact | private |
 | `activation_memory` | keep | fact | `Layer.activation_memory` |
-| `address` | keep | fact | `Layer.address` (not in the glossary) |
+| `address` | keep | fact | `Layer.address` |
 | `annotations` | keep | fact | `Layer.annotations` |
-| `arg_names` | keep | fact | `Layer.arg_names` (not in the glossary) |
+| `arg_names` | keep | fact | `Layer.arg_names` |
 | `autograd_memory` | keep | fact | `Layer.autograd_memory` (not in the glossary) |
-| `backend_address` | keep | fact | `Layer.backend_address` (not in the glossary) |
-| `bool_value` | keep | fact | `Layer.bool_value` (not in the glossary) |
-| `buffer_pass` | keep | fact | `Layer.buffer_pass` (not in the glossary) |
-| `buffer_replay_validated` | keep | fact | `Layer.buffer_replay_validated` (not in the glossary) |
-| `buffer_source` | keep | fact | `Layer.buffer_source` (not in the glossary) |
-| `buffer_source_func_name` | keep | fact | `Layer.buffer_source_func_name` (not in the glossary) |
-| `buffer_value_changed` | keep | fact | `Layer.buffer_value_changed` (not in the glossary) |
-| `buffer_write_kind` | keep | fact | `Layer.buffer_write_kind` (not in the glossary) |
-| `call_labels` | keep | fact | `Layer.call_labels` (not in the glossary) |
-| `conditional_arm_children` | keep | fact | `Layer.conditional_arm_children` (not in the glossary) |
-| `conditional_branch_stack_ops` | keep | fact | `Layer.conditional_branch_stack_ops` (not in the glossary) |
-| `conditional_elif_children` | keep | fact | `Layer.conditional_elif_children` (not in the glossary) |
-| `conditional_else_children` | keep | fact | `Layer.conditional_else_children` (not in the glossary) |
-| `conditional_entry_children` | keep | fact | `Layer.conditional_entry_children` (not in the glossary) |
-| `conditional_role_stacks` | keep | fact | `Layer.conditional_role_stacks` (not in the glossary) |
-| `conditional_then_children` | keep | fact | `Layer.conditional_then_children` (not in the glossary) |
+| `backend_address` | keep | fact | `Layer.backend_address` |
+| `bool_value` | keep | fact | `Layer.bool_value` |
+| `buffer_pass` | keep | fact | `Layer.buffer_pass` |
+| `buffer_replay_validated` | keep | fact | `Layer.buffer_replay_validated` |
+| `buffer_source` | keep | fact | `Layer.buffer_source` |
+| `buffer_source_func_name` | keep | fact | `Layer.buffer_source_func_name` |
+| `buffer_value_changed` | keep | fact | `Layer.buffer_value_changed` |
+| `buffer_write_kind` | keep | fact | `Layer.buffer_write_kind` |
+| `call_labels` | keep | fact | `Layer.call_labels` |
+| `conditional_arm_children` | keep | fact | `Layer.conditional_arm_children` |
+| `conditional_branch_stack_ops` | keep | fact | `Layer.conditional_branch_stack_ops` |
+| `conditional_elif_children` | keep | fact | `Layer.conditional_elif_children` |
+| `conditional_else_children` | keep | fact | `Layer.conditional_else_children` |
+| `conditional_entry_children` | keep | fact | `Layer.conditional_entry_children` |
+| `conditional_role_stacks` | keep | fact | `Layer.conditional_role_stacks` |
+| `conditional_then_children` | keep | fact | `Layer.conditional_then_children` |
 | `detach_saved_activations` | keep | fact | `Layer.detach_saved_activations` (not in the glossary) |
 | `device_ref` | keep | fact | `Layer.device_ref` |
 | `dtype` | keep | fact | `Layer.dtype` |
 | `dtype_ref` | keep | fact | `Layer.dtype_ref` |
-| `equivalence_class` | keep | fact | `Layer.equivalence_class` (not in the glossary) |
-| `equivalent_ops` | keep | fact | `Layer.equivalent_ops` (not in the glossary) |
-| `flops_backward` | keep | fact | `Layer.flops_backward` (not in the glossary) |
-| `flops_forward` | keep | fact | `Layer.flops_forward` (not in the glossary) |
-| `func_config` | blob_recursive | fact | `Layer.func_config` (not in the glossary) |
+| `equivalence_class` | keep | fact | `Layer.equivalence_class` |
+| `equivalent_ops` | keep | fact | `Layer.equivalent_ops` |
+| `flops_backward` | keep | fact | `Layer.flops_backward` |
+| `flops_forward` | keep | fact | `Layer.flops_forward` |
+| `func_config` | blob_recursive | fact | `Layer.func_config` |
 | `func_name` | keep | fact | `Layer.func_name` (not in the glossary) |
-| `func_qualname` | keep | fact | `Layer.func_qualname` (not in the glossary) |
-| `grad_fn_class_name` | keep | fact | `Layer.grad_fn_class_name` (not in the glossary) |
-| `grad_fn_class_qualname` | keep | fact | `Layer.grad_fn_class_qualname` (not in the glossary) |
-| `grad_fn_object_id` | keep | fact | `Layer.grad_fn_object_id` (not in the glossary) |
-| `has_input_ancestor` | keep | fact | `Layer.has_input_ancestor` (not in the glossary) |
+| `func_qualname` | keep | fact | `Layer.func_qualname` |
+| `grad_fn_class_name` | keep | fact | `Layer.grad_fn_class_name` |
+| `grad_fn_class_qualname` | keep | fact | `Layer.grad_fn_class_qualname` |
+| `grad_fn_object_id` | keep | fact | `Layer.grad_fn_object_id` |
+| `has_input_ancestor` | keep | fact | `Layer.has_input_ancestor` |
 | `in_conditionals` | keep | fact | `Layer.in_conditionals` |
-| `in_multi_output` | keep | fact | `Layer.in_multi_output` (not in the glossary) |
-| `input_was_parameter` | keep | fact | `Layer.input_was_parameter` (not in the glossary) |
+| `in_multi_output` | keep | fact | `Layer.in_multi_output` |
+| `input_was_parameter` | keep | fact | `Layer.input_was_parameter` |
 | `io_role` | keep | fact | `Layer.io_role` (not in the glossary) |
-| `is_atomic_module` | keep | fact | `Layer.is_atomic_module` (not in the glossary) |
-| `is_buffer` | keep | fact | `Layer.is_buffer` (not in the glossary) |
+| `is_atomic_module` | keep | fact | `Layer.is_atomic_module` |
+| `is_buffer` | keep | fact | `Layer.is_buffer` |
 | `is_edited` | keep | fact | `Layer.is_edited` |
-| `is_final_output` | keep | fact | `Layer.is_final_output` (not in the glossary) |
-| `is_inplace` | keep | fact | `Layer.is_inplace` (not in the glossary) |
-| `is_input` | keep | fact | `Layer.is_input` (not in the glossary) |
-| `is_internal_sink` | keep | fact | `Layer.is_internal_sink` (not in the glossary) |
-| `is_internal_source` | keep | fact | `Layer.is_internal_source` (not in the glossary) |
-| `is_output` | keep | fact | `Layer.is_output` (not in the glossary) |
-| `is_scalar_bool` | keep | fact | `Layer.is_scalar_bool` (not in the glossary) |
-| `is_terminal_bool` | keep | fact | `Layer.is_terminal_bool` (not in the glossary) |
+| `is_final_output` | keep | fact | `Layer.is_final_output` |
+| `is_inplace` | keep | fact | `Layer.is_inplace` |
+| `is_input` | keep | fact | `Layer.is_input` |
+| `is_internal_sink` | keep | fact | `Layer.is_internal_sink` |
+| `is_internal_source` | keep | fact | `Layer.is_internal_source` |
+| `is_output` | keep | fact | `Layer.is_output` |
+| `is_scalar_bool` | keep | fact | `Layer.is_scalar_bool` |
+| `is_terminal_bool` | keep | fact | `Layer.is_terminal_bool` |
 | `layer_label` | keep | fact | `Layer.layer_label` |
 | `layer_type` | keep | fact | `Layer.layer_type` |
 | `module` | keep | fact | `Layer.module` |
 | `modules` | keep | fact | `Layer.modules` (not in the glossary) |
-| `multi_output_index` | keep | fact | `Layer.multi_output_index` (not in the glossary) |
-| `multi_output_name` | keep | fact | `Layer.multi_output_name` (not in the glossary) |
-| `num_args_total` | keep | fact | `Layer.num_args_total` (not in the glossary) |
+| `multi_output_index` | keep | fact | `Layer.multi_output_index` |
+| `multi_output_name` | keep | fact | `Layer.multi_output_name` |
+| `num_args_total` | keep | fact | `Layer.num_args_total` |
 | `num_autograd_tensors` | keep | fact | `Layer.num_autograd_tensors` (not in the glossary) |
-| `num_kwargs` | keep | fact | `Layer.num_kwargs` (not in the glossary) |
-| `num_params` | keep | fact | `Layer.num_params` (not in the glossary) |
-| `num_params_frozen` | keep | fact | `Layer.num_params_frozen` (not in the glossary) |
-| `num_params_trainable` | keep | fact | `Layer.num_params_trainable` (not in the glossary) |
+| `num_kwargs` | keep | fact | `Layer.num_kwargs` |
+| `num_params` | keep | fact | `Layer.num_params` |
+| `num_params_frozen` | keep | fact | `Layer.num_params_frozen` |
+| `num_params_trainable` | keep | fact | `Layer.num_params_trainable` |
 | `num_passes` | keep | fact | `Layer.num_passes` |
-| `num_pos_args` | keep | fact | `Layer.num_pos_args` (not in the glossary) |
+| `num_pos_args` | keep | fact | `Layer.num_pos_args` |
 | `ops` | keep | fact | `Layer.ops` (not in the glossary) |
-| `ordinal_index` | keep | fact | `Layer.ordinal_index` (not in the glossary) |
+| `ordinal_index` | keep | fact | `Layer.ordinal_index` |
 | `output_device` | keep | fact | `Layer.output_device` |
-| `output_of_module_calls` | keep | fact | `Layer.output_of_module_calls` (not in the glossary) |
-| `output_of_modules` | keep | fact | `Layer.output_of_modules` (not in the glossary) |
-| `param_shapes` | keep | fact | `Layer.param_shapes` (not in the glossary) |
-| `raw_index` | keep | fact | `Layer.raw_index` (not in the glossary) |
-| `resolver_status` | keep | fact | `Layer.resolver_status` (not in the glossary) |
+| `output_of_module_calls` | keep | fact | `Layer.output_of_module_calls` |
+| `output_of_modules` | keep | fact | `Layer.output_of_modules` |
+| `param_shapes` | keep | fact | `Layer.param_shapes` |
+| `raw_index` | keep | fact | `Layer.raw_index` |
+| `resolver_status` | keep | fact | `Layer.resolver_status` |
 | `save_grads` | keep | fact | `Layer.save_grads` |
 | `shape` | keep | fact | `Layer.shape` |
 | `short_layer_label` | keep | fact | `Layer.short_layer_label` |
 | `step_index` | keep | fact | `Layer.step_index` (not in the glossary) |
-| `terminal_bool_for` | keep | fact | `Layer.terminal_bool_for` (not in the glossary) |
+| `terminal_bool_for` | keep | fact | `Layer.terminal_bool_for` |
 | `total_autograd_memory` | keep | fact | `Layer.total_autograd_memory` |
 | `total_param_memory` | keep | fact | `Layer.total_param_memory` |
 | `transformed_activation_memory` | keep | fact | `Layer.transformed_activation_memory` |
-| `transformed_grad_dtype` | keep | fact | `Layer.transformed_grad_dtype` (not in the glossary) |
-| `transformed_grad_shape` | keep | fact | `Layer.transformed_grad_shape` (not in the glossary) |
-| `transformed_gradient_memory` | keep | fact | `Layer.transformed_gradient_memory` (not in the glossary) |
-| `transformed_out_dtype` | keep | fact | `Layer.transformed_out_dtype` (not in the glossary) |
+| `transformed_grad_dtype` | keep | fact | `Layer.transformed_grad_dtype` |
+| `transformed_grad_shape` | keep | fact | `Layer.transformed_grad_shape` |
+| `transformed_gradient_memory` | keep | fact | `Layer.transformed_gradient_memory` |
+| `transformed_out_dtype` | keep | fact | `Layer.transformed_out_dtype` |
 | `transformed_out_shape` | keep | fact | `Layer.transformed_out_shape` |
-| `type_index` | keep | fact | `Layer.type_index` (not in the glossary) |
-| `visualizer_path` | keep | fact | `Layer.visualizer_path` (not in the glossary) |
+| `type_index` | keep | fact | `Layer.type_index` |
+| `visualizer_path` | keep | fact | `Layer.visualizer_path` |
 
 Session-only (`drop`): `activation_transform`, `func`, `grad_fn`, `grad_fn_handle`, `is_in_conditional_body`, `source_trace`, `transformed_grad`, `transformed_out`.
 
@@ -309,86 +309,86 @@ Session-only (`drop`): `activation_transform`, `func`, `grad_fn`, `grad_fn_handl
 | key | policy | tier | public spelling |
 | --- | --- | --- | --- |
 | `_source_trace_ref` | weakref_strip | fact | private |
-| `address` | keep | fact | `Module.address` (not in the glossary) |
-| `address_children` | keep | fact | `Module.address_children` (not in the glossary) |
-| `address_depth` | keep | fact | `Module.address_depth` (not in the glossary) |
-| `address_parent` | keep | fact | `Module.address_parent` (not in the glossary) |
+| `address` | keep | fact | `Module.address` |
+| `address_children` | keep | fact | `Module.address_children` |
+| `address_depth` | keep | fact | `Module.address_depth` |
+| `address_parent` | keep | fact | `Module.address_parent` |
 | `all_addresses` | keep | fact | `Module.all_addresses` |
-| `backward_duration` | keep | fact | `Module.backward_duration` (not in the glossary) |
-| `backward_hooks` | keep | fact | `Module.backward_hooks` (not in the glossary) |
-| `backward_pre_hooks` | keep | fact | `Module.backward_pre_hooks` (not in the glossary) |
-| `buffer_layers` | keep | fact | `Module.buffer_layers` (not in the glossary) |
-| `call_children` | keep | fact | `Module.call_children` (not in the glossary) |
-| `call_depth` | keep | fact | `Module.call_depth` (not in the glossary) |
-| `call_labels` | keep | fact | `Module.call_labels` (not in the glossary) |
-| `call_parent` | keep | fact | `Module.call_parent` (not in the glossary) |
+| `backward_duration` | keep | fact | `Module.backward_duration` |
+| `backward_hooks` | keep | fact | `Module.backward_hooks` |
+| `backward_pre_hooks` | keep | fact | `Module.backward_pre_hooks` |
+| `buffer_layers` | keep | fact | `Module.buffer_layers` |
+| `call_children` | keep | fact | `Module.call_children` |
+| `call_depth` | keep | fact | `Module.call_depth` |
+| `call_labels` | keep | fact | `Module.call_labels` |
+| `call_parent` | keep | fact | `Module.call_parent` |
 | `class_docstring` | keep | fact | `Module.class_docstring` |
 | `class_name` | keep | fact | `Module.class_name` |
 | `class_qualname` | keep | fact | `Module.class_qualname` |
-| `class_source_file` | keep | fact | `Module.class_source_file` (not in the glossary) |
-| `class_source_line` | keep | fact | `Module.class_source_line` (not in the glossary) |
-| `class_source_location` | keep | fact | `Module.class_source_location` (not in the glossary) |
-| `custom_attributes` | blob_recursive | fact | `Module.custom_attributes` (not in the glossary) |
-| `custom_methods` | keep | fact | `Module.custom_methods` (not in the glossary) |
-| `forward_args_summary` | keep | fact | `Module.forward_args_summary` (not in the glossary) |
-| `forward_args_template` | keep | fact | `Module.forward_args_template` (not in the glossary) |
-| `forward_docstring` | keep | fact | `Module.forward_docstring` (not in the glossary) |
+| `class_source_file` | keep | fact | `Module.class_source_file` |
+| `class_source_line` | keep | fact | `Module.class_source_line` |
+| `class_source_location` | keep | fact | `Module.class_source_location` |
+| `custom_attributes` | blob_recursive | fact | `Module.custom_attributes` |
+| `custom_methods` | keep | fact | `Module.custom_methods` |
+| `forward_args_summary` | keep | fact | `Module.forward_args_summary` |
+| `forward_args_template` | keep | fact | `Module.forward_args_template` |
+| `forward_docstring` | keep | fact | `Module.forward_docstring` |
 | `forward_duration` | keep | fact | `Module.forward_duration` |
-| `forward_hooks` | keep | fact | `Module.forward_hooks` (not in the glossary) |
-| `forward_kwargs_summary` | keep | fact | `Module.forward_kwargs_summary` (not in the glossary) |
-| `forward_kwargs_template` | keep | fact | `Module.forward_kwargs_template` (not in the glossary) |
-| `forward_pre_hooks` | keep | fact | `Module.forward_pre_hooks` (not in the glossary) |
+| `forward_hooks` | keep | fact | `Module.forward_hooks` |
+| `forward_kwargs_summary` | keep | fact | `Module.forward_kwargs_summary` |
+| `forward_kwargs_template` | keep | fact | `Module.forward_kwargs_template` |
+| `forward_pre_hooks` | keep | fact | `Module.forward_pre_hooks` |
 | `forward_signature` | keep | fact | `Module.forward_signature` |
-| `forward_source_file` | keep | fact | `Module.forward_source_file` (not in the glossary) |
-| `forward_source_line` | keep | fact | `Module.forward_source_line` (not in the glossary) |
-| `forward_source_location` | keep | fact | `Module.forward_source_location` (not in the glossary) |
-| `full_backward_hooks` | keep | fact | `Module.full_backward_hooks` (not in the glossary) |
-| `full_backward_pre_hooks` | keep | fact | `Module.full_backward_pre_hooks` (not in the glossary) |
+| `forward_source_file` | keep | fact | `Module.forward_source_file` |
+| `forward_source_line` | keep | fact | `Module.forward_source_line` |
+| `forward_source_location` | keep | fact | `Module.forward_source_location` |
+| `full_backward_hooks` | keep | fact | `Module.full_backward_hooks` |
+| `full_backward_pre_hooks` | keep | fact | `Module.full_backward_pre_hooks` |
 | `func_calls_duration` | keep | fact | `Module.func_calls_duration` |
-| `has_backward_hooks` | keep | fact | `Module.has_backward_hooks` (not in the glossary) |
-| `has_forward_hooks` | keep | fact | `Module.has_forward_hooks` (not in the glossary) |
-| `has_frozen_params` | keep | fact | `Module.has_frozen_params` (not in the glossary) |
-| `has_multiple_addresses` | keep | fact | `Module.has_multiple_addresses` (not in the glossary) |
-| `has_trainable_params` | keep | fact | `Module.has_trainable_params` (not in the glossary) |
-| `init_docstring` | keep | fact | `Module.init_docstring` (not in the glossary) |
+| `has_backward_hooks` | keep | fact | `Module.has_backward_hooks` |
+| `has_forward_hooks` | keep | fact | `Module.has_forward_hooks` |
+| `has_frozen_params` | keep | fact | `Module.has_frozen_params` |
+| `has_multiple_addresses` | keep | fact | `Module.has_multiple_addresses` |
+| `has_trainable_params` | keep | fact | `Module.has_trainable_params` |
+| `init_docstring` | keep | fact | `Module.init_docstring` |
 | `init_signature` | keep | fact | `Module.init_signature` |
-| `init_source_file` | keep | fact | `Module.init_source_file` (not in the glossary) |
-| `init_source_line` | keep | fact | `Module.init_source_line` (not in the glossary) |
-| `init_source_location` | keep | fact | `Module.init_source_location` (not in the glossary) |
-| `input_layers` | keep | fact | `Module.input_layers` (not in the glossary) |
+| `init_source_file` | keep | fact | `Module.init_source_file` |
+| `init_source_line` | keep | fact | `Module.init_source_line` |
+| `init_source_location` | keep | fact | `Module.init_source_location` |
+| `input_layers` | keep | fact | `Module.input_layers` |
 | `input_ops` | keep | fact | `Module.input_ops` |
 | `layer_labels` | keep | fact | `Module.layer_labels` |
 | `layers` | keep | fact | `Module.layers` |
-| `max_descendant_depth` | keep | fact | `Module.max_descendant_depth` (not in the glossary) |
+| `max_descendant_depth` | keep | fact | `Module.max_descendant_depth` |
 | `name` | keep | fact | `Module.name` |
 | `num_calls` | keep | fact | `Module.num_calls` (not in the glossary) |
-| `num_descendant_calls` | keep | fact | `Module.num_descendant_calls` (not in the glossary) |
-| `num_param_tensors_frozen` | keep | fact | `Module.num_param_tensors_frozen` (not in the glossary) |
-| `num_param_tensors_trainable` | keep | fact | `Module.num_param_tensors_trainable` (not in the glossary) |
-| `num_params` | keep | fact | `Module.num_params` (not in the glossary) |
-| `num_params_frozen` | keep | fact | `Module.num_params_frozen` (not in the glossary) |
-| `num_params_trainable` | keep | fact | `Module.num_params_trainable` (not in the glossary) |
-| `num_recursive_param_tensors` | keep | fact | `Module.num_recursive_param_tensors` (not in the glossary) |
-| `num_recursive_param_tensors_frozen` | keep | fact | `Module.num_recursive_param_tensors_frozen` (not in the glossary) |
-| `num_recursive_param_tensors_trainable` | keep | fact | `Module.num_recursive_param_tensors_trainable` (not in the glossary) |
-| `num_recursive_params` | keep | fact | `Module.num_recursive_params` (not in the glossary) |
-| `num_recursive_params_frozen` | keep | fact | `Module.num_recursive_params_frozen` (not in the glossary) |
-| `num_recursive_params_trainable` | keep | fact | `Module.num_recursive_params_trainable` (not in the glossary) |
+| `num_descendant_calls` | keep | fact | `Module.num_descendant_calls` |
+| `num_param_tensors_frozen` | keep | fact | `Module.num_param_tensors_frozen` |
+| `num_param_tensors_trainable` | keep | fact | `Module.num_param_tensors_trainable` |
+| `num_params` | keep | fact | `Module.num_params` |
+| `num_params_frozen` | keep | fact | `Module.num_params_frozen` |
+| `num_params_trainable` | keep | fact | `Module.num_params_trainable` |
+| `num_recursive_param_tensors` | keep | fact | `Module.num_recursive_param_tensors` |
+| `num_recursive_param_tensors_frozen` | keep | fact | `Module.num_recursive_param_tensors_frozen` |
+| `num_recursive_param_tensors_trainable` | keep | fact | `Module.num_recursive_param_tensors_trainable` |
+| `num_recursive_params` | keep | fact | `Module.num_recursive_params` |
+| `num_recursive_params_frozen` | keep | fact | `Module.num_recursive_params_frozen` |
+| `num_recursive_params_trainable` | keep | fact | `Module.num_recursive_params_trainable` |
 | `ops` | keep | fact | `Module.ops` (not in the glossary) |
-| `output_layers` | keep | fact | `Module.output_layers` (not in the glossary) |
+| `output_layers` | keep | fact | `Module.output_layers` |
 | `output_ops` | keep | fact | `Module.output_ops` |
-| `output_structure` | keep | fact | `Module.output_structure` (not in the glossary) |
-| `param_memory` | keep | fact | `Module.param_memory` (not in the glossary) |
+| `output_structure` | keep | fact | `Module.output_structure` |
+| `param_memory` | keep | fact | `Module.param_memory` |
 | `params` | keep | fact | `Module.params` |
-| `recursive_params` | keep | fact | `Module.recursive_params` (not in the glossary) |
+| `recursive_params` | keep | fact | `Module.recursive_params` |
 | `total_autograd_memory` | keep | fact | `Module.total_autograd_memory` |
 | `total_backward_duration` | keep | fact | `Module.total_backward_duration` |
-| `total_forward_duration` | keep | fact | `Module.total_forward_duration` (not in the glossary) |
-| `total_func_calls_duration` | keep | fact | `Module.total_func_calls_duration` (not in the glossary) |
-| `total_internal_activation_memory` | keep | fact | `Module.total_internal_activation_memory` (not in the glossary) |
-| `total_internal_gradient_memory` | keep | fact | `Module.total_internal_gradient_memory` (not in the glossary) |
-| `total_output_activation_memory` | keep | fact | `Module.total_output_activation_memory` (not in the glossary) |
-| `total_output_gradient_memory` | keep | fact | `Module.total_output_gradient_memory` (not in the glossary) |
+| `total_forward_duration` | keep | fact | `Module.total_forward_duration` |
+| `total_func_calls_duration` | keep | fact | `Module.total_func_calls_duration` |
+| `total_internal_activation_memory` | keep | fact | `Module.total_internal_activation_memory` |
+| `total_internal_gradient_memory` | keep | fact | `Module.total_internal_gradient_memory` |
+| `total_output_activation_memory` | keep | fact | `Module.total_output_activation_memory` |
+| `total_output_gradient_memory` | keep | fact | `Module.total_output_gradient_memory` |
 | `training` | keep | fact | `Module.training` |
 
 Session-only (`drop`): `_attribute_writes`, `_buffer_accessor`, `_facets_cache`, `attribute_writes`, `cls`.
@@ -398,56 +398,56 @@ Session-only (`drop`): `_attribute_writes`, `_buffer_accessor`, `_facets_cache`,
 | key | policy | tier | public spelling |
 | --- | --- | --- | --- |
 | `_source_trace_ref` | weakref_strip | fact | private |
-| `address` | keep | fact | `ModuleCall.address` (not in the glossary) |
+| `address` | keep | fact | `ModuleCall.address` |
 | `all_addresses` | keep | fact | `ModuleCall.all_addresses` (not in the glossary) |
 | `autograd_memory` | keep | fact | `ModuleCall.autograd_memory` |
-| `backward_duration` | keep | fact | `ModuleCall.backward_duration` (not in the glossary) |
-| `call_children` | keep | fact | `ModuleCall.call_children` (not in the glossary) |
+| `backward_duration` | keep | fact | `ModuleCall.backward_duration` |
+| `call_children` | keep | fact | `ModuleCall.call_children` |
 | `call_index` | keep | fact | `ModuleCall.call_index` |
-| `call_parent` | keep | fact | `ModuleCall.call_parent` (not in the glossary) |
+| `call_parent` | keep | fact | `ModuleCall.call_parent` |
 | `class_name` | keep | fact | `ModuleCall.class_name` |
 | `class_qualname` | keep | fact | `ModuleCall.class_qualname` |
-| `code_context` | keep | fact | `ModuleCall.code_context` (not in the glossary) |
-| `forward_arg_names` | keep | fact | `ModuleCall.forward_arg_names` (not in the glossary) |
-| `forward_args` | blob_recursive | fact | `ModuleCall.forward_args` (not in the glossary) |
-| `forward_args_summary` | keep | fact | `ModuleCall.forward_args_summary` (not in the glossary) |
+| `code_context` | keep | fact | `ModuleCall.code_context` |
+| `forward_arg_names` | keep | fact | `ModuleCall.forward_arg_names` |
+| `forward_args` | blob_recursive | fact | `ModuleCall.forward_args` |
+| `forward_args_summary` | keep | fact | `ModuleCall.forward_args_summary` |
 | `forward_duration` | keep | fact | `ModuleCall.forward_duration` |
-| `forward_kwargs` | blob_recursive | fact | `ModuleCall.forward_kwargs` (not in the glossary) |
-| `forward_kwargs_summary` | keep | fact | `ModuleCall.forward_kwargs_summary` (not in the glossary) |
-| `forward_pre_hook_effects` | keep | fact | `ModuleCall.forward_pre_hook_effects` (not in the glossary) |
+| `forward_kwargs` | blob_recursive | fact | `ModuleCall.forward_kwargs` |
+| `forward_kwargs_summary` | keep | fact | `ModuleCall.forward_kwargs_summary` |
+| `forward_pre_hook_effects` | keep | fact | `ModuleCall.forward_pre_hook_effects` |
 | `func_calls_duration` | keep | fact | `ModuleCall.func_calls_duration` |
-| `has_frozen_params` | keep | fact | `ModuleCall.has_frozen_params` (not in the glossary) |
-| `has_multiple_addresses` | keep | fact | `ModuleCall.has_multiple_addresses` (not in the glossary) |
+| `has_frozen_params` | keep | fact | `ModuleCall.has_frozen_params` |
+| `has_multiple_addresses` | keep | fact | `ModuleCall.has_multiple_addresses` |
 | `has_pre_hook_input_change` | keep | fact | `ModuleCall.has_pre_hook_input_change` |
-| `has_saved_forward_args` | keep | fact | `ModuleCall.has_saved_forward_args` (not in the glossary) |
-| `has_trainable_params` | keep | fact | `ModuleCall.has_trainable_params` (not in the glossary) |
-| `input_layers` | keep | fact | `ModuleCall.input_layers` (not in the glossary) |
+| `has_saved_forward_args` | keep | fact | `ModuleCall.has_saved_forward_args` |
+| `has_trainable_params` | keep | fact | `ModuleCall.has_trainable_params` |
+| `input_layers` | keep | fact | `ModuleCall.input_layers` |
 | `input_ops` | keep | fact | `ModuleCall.input_ops` |
-| `inputs_after_pre_hooks` | keep | fact | `ModuleCall.inputs_after_pre_hooks` (not in the glossary) |
-| `inputs_before_pre_hooks` | keep | fact | `ModuleCall.inputs_before_pre_hooks` (not in the glossary) |
-| `internal_activation_memory` | keep | fact | `ModuleCall.internal_activation_memory` (not in the glossary) |
-| `internal_gradient_memory` | keep | fact | `ModuleCall.internal_gradient_memory` (not in the glossary) |
+| `inputs_after_pre_hooks` | keep | fact | `ModuleCall.inputs_after_pre_hooks` |
+| `inputs_before_pre_hooks` | keep | fact | `ModuleCall.inputs_before_pre_hooks` |
+| `internal_activation_memory` | keep | fact | `ModuleCall.internal_activation_memory` |
+| `internal_gradient_memory` | keep | fact | `ModuleCall.internal_gradient_memory` |
 | `label` | keep | fact | `ModuleCall.label` |
-| `max_descendant_depth` | keep | fact | `ModuleCall.max_descendant_depth` (not in the glossary) |
+| `max_descendant_depth` | keep | fact | `ModuleCall.max_descendant_depth` |
 | `module` | keep | fact | `ModuleCall.module` |
 | `module_call_stack` | keep | fact | `ModuleCall.module_call_stack` |
 | `name` | keep | fact | `ModuleCall.name` |
-| `num_descendant_calls` | keep | fact | `ModuleCall.num_descendant_calls` (not in the glossary) |
-| `num_forward_args_total` | keep | fact | `ModuleCall.num_forward_args_total` (not in the glossary) |
-| `num_forward_kwargs` | keep | fact | `ModuleCall.num_forward_kwargs` (not in the glossary) |
-| `num_forward_pos_args` | keep | fact | `ModuleCall.num_forward_pos_args` (not in the glossary) |
-| `num_param_tensors` | keep | fact | `ModuleCall.num_param_tensors` (not in the glossary) |
-| `num_param_tensors_frozen` | keep | fact | `ModuleCall.num_param_tensors_frozen` (not in the glossary) |
-| `num_param_tensors_trainable` | keep | fact | `ModuleCall.num_param_tensors_trainable` (not in the glossary) |
+| `num_descendant_calls` | keep | fact | `ModuleCall.num_descendant_calls` |
+| `num_forward_args_total` | keep | fact | `ModuleCall.num_forward_args_total` |
+| `num_forward_kwargs` | keep | fact | `ModuleCall.num_forward_kwargs` |
+| `num_forward_pos_args` | keep | fact | `ModuleCall.num_forward_pos_args` |
+| `num_param_tensors` | keep | fact | `ModuleCall.num_param_tensors` |
+| `num_param_tensors_frozen` | keep | fact | `ModuleCall.num_param_tensors_frozen` |
+| `num_param_tensors_trainable` | keep | fact | `ModuleCall.num_param_tensors_trainable` |
 | `ops` | keep | fact | `ModuleCall.ops` |
-| `ordinal_index` | keep | fact | `ModuleCall.ordinal_index` (not in the glossary) |
-| `output_activation_memory` | keep | fact | `ModuleCall.output_activation_memory` (not in the glossary) |
-| `output_gradient_memory` | keep | fact | `ModuleCall.output_gradient_memory` (not in the glossary) |
-| `output_layers` | keep | fact | `ModuleCall.output_layers` (not in the glossary) |
+| `ordinal_index` | keep | fact | `ModuleCall.ordinal_index` |
+| `output_activation_memory` | keep | fact | `ModuleCall.output_activation_memory` |
+| `output_gradient_memory` | keep | fact | `ModuleCall.output_gradient_memory` |
+| `output_layers` | keep | fact | `ModuleCall.output_layers` |
 | `output_ops` | keep | fact | `ModuleCall.output_ops` |
-| `output_paths` | keep | fact | `ModuleCall.output_paths` (not in the glossary) |
-| `output_structure` | keep | fact | `ModuleCall.output_structure` (not in the glossary) |
-| `param_memory` | keep | fact | `ModuleCall.param_memory` (not in the glossary) |
+| `output_paths` | keep | fact | `ModuleCall.output_paths` |
+| `output_structure` | keep | fact | `ModuleCall.output_structure` |
+| `param_memory` | keep | fact | `ModuleCall.param_memory` |
 
 Session-only (`drop`): `_facets_cache`, `_forward_args_template`, `_forward_kwargs_template`, `_source_trace_strong`, `cls`, `forward_args_template`, `forward_kwargs_template`.
 
@@ -466,169 +466,169 @@ Session-only (`drop`): `_facets_cache`, `_forward_args_template`, `_forward_kwar
 | `_source_trace_ref` | weakref_strip | fact | private |
 | `_tracing_finished` | keep | fact | private |
 | `activation_memory` | keep | fact | `Op.activation_memory` |
-| `address` | keep | fact | `Op.address` (not in the glossary) |
+| `address` | keep | fact | `Op.address` |
 | `annotations` | keep | fact | `Op.annotations` |
-| `arg_names` | keep | fact | `Op.arg_names` (not in the glossary) |
-| `atomic_module_call` | keep | fact | `Op.atomic_module_call` (not in the glossary) |
+| `arg_names` | keep | fact | `Op.arg_names` |
+| `atomic_module_call` | keep | fact | `Op.atomic_module_call` |
 | `autograd_memory` | keep | fact | `Op.autograd_memory` |
-| `backend_address` | keep | fact | `Op.backend_address` (not in the glossary) |
-| `bool_value` | keep | fact | `Op.bool_value` (not in the glossary) |
-| `buffer_pass` | keep | fact | `Op.buffer_pass` (not in the glossary) |
-| `buffer_replay_validated` | keep | fact | `Op.buffer_replay_validated` (not in the glossary) |
-| `buffer_source` | keep | fact | `Op.buffer_source` (not in the glossary) |
-| `buffer_source_func_name` | keep | fact | `Op.buffer_source_func_name` (not in the glossary) |
-| `buffer_value_changed` | keep | fact | `Op.buffer_value_changed` (not in the glossary) |
-| `buffer_write_kind` | keep | fact | `Op.buffer_write_kind` (not in the glossary) |
-| `bytes_delta_at_call` | keep | enrichment | `Op.bytes_delta_at_call` (not in the glossary) |
-| `bytes_peak_at_call` | keep | enrichment | `Op.bytes_peak_at_call` (not in the glossary) |
-| `children` | keep | fact | `Op.children` (not in the glossary) |
-| `code_context` | keep | enrichment | `Op.code_context` (not in the glossary) |
-| `conditional_arm_children` | keep | fact | `Op.conditional_arm_children` (not in the glossary) |
-| `conditional_branch_depth` | keep | fact | `Op.conditional_branch_depth` (not in the glossary) |
+| `backend_address` | keep | fact | `Op.backend_address` |
+| `bool_value` | keep | fact | `Op.bool_value` |
+| `buffer_pass` | keep | fact | `Op.buffer_pass` |
+| `buffer_replay_validated` | keep | fact | `Op.buffer_replay_validated` |
+| `buffer_source` | keep | fact | `Op.buffer_source` |
+| `buffer_source_func_name` | keep | fact | `Op.buffer_source_func_name` |
+| `buffer_value_changed` | keep | fact | `Op.buffer_value_changed` |
+| `buffer_write_kind` | keep | fact | `Op.buffer_write_kind` |
+| `bytes_delta_at_call` | keep | enrichment | `Op.bytes_delta_at_call` |
+| `bytes_peak_at_call` | keep | enrichment | `Op.bytes_peak_at_call` |
+| `children` | keep | fact | `Op.children` |
+| `code_context` | keep | enrichment | `Op.code_context` |
+| `conditional_arm_children` | keep | fact | `Op.conditional_arm_children` |
+| `conditional_branch_depth` | keep | fact | `Op.conditional_branch_depth` |
 | `conditional_branch_stack` | keep | fact | `Op.conditional_branch_stack` (not in the glossary) |
-| `conditional_context_kind` | keep | fact | `Op.conditional_context_kind` (not in the glossary) |
-| `conditional_elif_children` | keep | fact | `Op.conditional_elif_children` (not in the glossary) |
-| `conditional_else_children` | keep | fact | `Op.conditional_else_children` (not in the glossary) |
-| `conditional_entry_children` | keep | fact | `Op.conditional_entry_children` (not in the glossary) |
-| `conditional_then_children` | keep | fact | `Op.conditional_then_children` (not in the glossary) |
-| `conditional_wrapper_kind` | keep | fact | `Op.conditional_wrapper_kind` (not in the glossary) |
+| `conditional_context_kind` | keep | fact | `Op.conditional_context_kind` |
+| `conditional_elif_children` | keep | fact | `Op.conditional_elif_children` |
+| `conditional_else_children` | keep | fact | `Op.conditional_else_children` |
+| `conditional_entry_children` | keep | fact | `Op.conditional_entry_children` |
+| `conditional_then_children` | keep | fact | `Op.conditional_then_children` |
+| `conditional_wrapper_kind` | keep | fact | `Op.conditional_wrapper_kind` |
 | `container_path` | keep | fact | `Op.container_path` |
-| `container_spec` | keep | fact | `Op.container_spec` (not in the glossary) |
+| `container_spec` | keep | fact | `Op.container_spec` |
 | `detach_saved_activations` | keep | fact | `Op.detach_saved_activations` (not in the glossary) |
 | `device_ref` | keep | fact | `Op.device_ref` |
-| `dropped_edge_tensor_args` | keep | fact | `Op.dropped_edge_tensor_args` (not in the glossary) |
+| `dropped_edge_tensor_args` | keep | fact | `Op.dropped_edge_tensor_args` |
 | `dtype` | keep | fact | `Op.dtype` |
 | `dtype_ref` | keep | fact | `Op.dtype_ref` |
 | `edge_replacement_stamps` | keep | fact | `Op.edge_replacement_stamps` |
 | `edge_substitutions` | blob_recursive | fact | `Op.edge_substitutions` |
 | `edits` | keep | fact | `Op.edits` |
 | `episode_step` | keep | fact | `Op.episode_step` |
-| `equivalence_class` | keep | fact | `Op.equivalence_class` (not in the glossary) |
-| `equivalent_ops` | keep | fact | `Op.equivalent_ops` (not in the glossary) |
-| `flops_backward` | keep | fact | `Op.flops_backward` (not in the glossary) |
-| `flops_forward` | keep | fact | `Op.flops_forward` (not in the glossary) |
-| `func_autocast_state` | keep | enrichment | `Op.func_autocast_state` (not in the glossary) |
+| `equivalence_class` | keep | fact | `Op.equivalence_class` |
+| `equivalent_ops` | keep | fact | `Op.equivalent_ops` |
+| `flops_backward` | keep | fact | `Op.flops_backward` |
+| `flops_forward` | keep | fact | `Op.flops_forward` |
+| `func_autocast_state` | keep | enrichment | `Op.func_autocast_state` |
 | `func_call_id` | keep | fact | `Op.func_call_id` |
-| `func_config` | blob_recursive | enrichment | `Op.func_config` (not in the glossary) |
-| `func_duration` | keep | fact | `Op.func_duration` (not in the glossary) |
-| `func_id` | keep | fact | `Op.func_id` (not in the glossary) |
+| `func_config` | blob_recursive | enrichment | `Op.func_config` |
+| `func_duration` | keep | fact | `Op.func_duration` |
+| `func_id` | keep | fact | `Op.func_id` |
 | `func_name` | keep | fact | `Op.func_name` |
-| `func_non_tensor_args` | keep | fact | `Op.func_non_tensor_args` (not in the glossary) |
-| `func_qualname` | keep | fact | `Op.func_qualname` (not in the glossary) |
-| `func_rng_states` | blob_recursive | fact | `Op.func_rng_states` (not in the glossary) |
-| `fx_call_index` | keep | fact | `Op.fx_call_index` (not in the glossary) |
-| `fx_qualpath` | keep | fact | `Op.fx_qualpath` (not in the glossary) |
+| `func_non_tensor_args` | keep | fact | `Op.func_non_tensor_args` |
+| `func_qualname` | keep | fact | `Op.func_qualname` |
+| `func_rng_states` | blob_recursive | fact | `Op.func_rng_states` |
+| `fx_call_index` | keep | fact | `Op.fx_call_index` |
+| `fx_qualpath` | keep | fact | `Op.fx_qualpath` |
 | `grad` | blob | fact | `Op.grad` |
-| `grad_dtype` | keep | fact | `Op.grad_dtype` (not in the glossary) |
-| `grad_fn_class_name` | keep | fact | `Op.grad_fn_class_name` (not in the glossary) |
-| `grad_fn_class_qualname` | keep | fact | `Op.grad_fn_class_qualname` (not in the glossary) |
-| `grad_fn_object_id` | keep | fact | `Op.grad_fn_object_id` (not in the glossary) |
-| `grad_shape` | keep | fact | `Op.grad_shape` (not in the glossary) |
-| `gradient_memory` | keep | fact | `Op.gradient_memory` (not in the glossary) |
-| `has_children` | keep | fact | `Op.has_children` (not in the glossary) |
-| `has_grad` | keep | fact | `Op.has_grad` (not in the glossary) |
-| `has_input_ancestor` | keep | fact | `Op.has_input_ancestor` (not in the glossary) |
-| `has_internal_source_ancestor` | keep | fact | `Op.has_internal_source_ancestor` (not in the glossary) |
-| `has_out_variations` | keep | fact | `Op.has_out_variations` (not in the glossary) |
-| `has_output_descendant` | keep | fact | `Op.has_output_descendant` (not in the glossary) |
-| `has_saved_activation` | keep | fact | `Op.has_saved_activation` (not in the glossary) |
-| `has_saved_args` | keep | fact | `Op.has_saved_args` (not in the glossary) |
+| `grad_dtype` | keep | fact | `Op.grad_dtype` |
+| `grad_fn_class_name` | keep | fact | `Op.grad_fn_class_name` |
+| `grad_fn_class_qualname` | keep | fact | `Op.grad_fn_class_qualname` |
+| `grad_fn_object_id` | keep | fact | `Op.grad_fn_object_id` |
+| `grad_shape` | keep | fact | `Op.grad_shape` |
+| `gradient_memory` | keep | fact | `Op.gradient_memory` |
+| `has_children` | keep | fact | `Op.has_children` |
+| `has_grad` | keep | fact | `Op.has_grad` |
+| `has_input_ancestor` | keep | fact | `Op.has_input_ancestor` |
+| `has_internal_source_ancestor` | keep | fact | `Op.has_internal_source_ancestor` |
+| `has_out_variations` | keep | fact | `Op.has_out_variations` |
+| `has_output_descendant` | keep | fact | `Op.has_output_descendant` |
+| `has_saved_activation` | keep | fact | `Op.has_saved_activation` |
+| `has_saved_args` | keep | fact | `Op.has_saved_args` |
 | `in_conditionals` | keep | fact | `Op.in_conditionals` |
-| `in_multi_output` | keep | fact | `Op.in_multi_output` (not in the glossary) |
-| `injection_provenance` | keep | fact | `Op.injection_provenance` (not in the glossary) |
-| `input_ancestors` | keep | derived | `Op.input_ancestors` (not in the glossary) |
-| `input_to_module_calls` | keep | fact | `Op.input_to_module_calls` (not in the glossary) |
-| `input_was_parameter` | keep | fact | `Op.input_was_parameter` (not in the glossary) |
-| `internal_source_ancestors` | keep | derived | `Op.internal_source_ancestors` (not in the glossary) |
-| `internal_source_parents` | keep | fact | `Op.internal_source_parents` (not in the glossary) |
+| `in_multi_output` | keep | fact | `Op.in_multi_output` |
+| `injection_provenance` | keep | fact | `Op.injection_provenance` |
+| `input_ancestors` | keep | derived | `Op.input_ancestors` |
+| `input_to_module_calls` | keep | fact | `Op.input_to_module_calls` |
+| `input_was_parameter` | keep | fact | `Op.input_was_parameter` |
+| `internal_source_ancestors` | keep | derived | `Op.internal_source_ancestors` |
+| `internal_source_parents` | keep | fact | `Op.internal_source_parents` |
 | `io_role` | keep | fact | `Op.io_role` (not in the glossary) |
-| `is_atomic_module` | keep | fact | `Op.is_atomic_module` (not in the glossary) |
-| `is_buffer` | keep | fact | `Op.is_buffer` (not in the glossary) |
+| `is_atomic_module` | keep | fact | `Op.is_atomic_module` |
+| `is_buffer` | keep | fact | `Op.is_buffer` |
 | `is_edited` | keep | fact | `Op.is_edited` |
-| `is_final_output` | keep | fact | `Op.is_final_output` (not in the glossary) |
-| `is_inplace` | keep | fact | `Op.is_inplace` (not in the glossary) |
-| `is_input` | keep | fact | `Op.is_input` (not in the glossary) |
-| `is_internal_sink` | keep | fact | `Op.is_internal_sink` (not in the glossary) |
-| `is_internal_source` | keep | fact | `Op.is_internal_source` (not in the glossary) |
-| `is_module_output` | keep | fact | `Op.is_module_output` (not in the glossary) |
-| `is_orphan` | keep | fact | `Op.is_orphan` (not in the glossary) |
-| `is_output` | keep | fact | `Op.is_output` (not in the glossary) |
-| `is_output_parent` | keep | fact | `Op.is_output_parent` (not in the glossary) |
-| `is_scalar_bool` | keep | fact | `Op.is_scalar_bool` (not in the glossary) |
-| `is_terminal_bool` | keep | fact | `Op.is_terminal_bool` (not in the glossary) |
-| `is_terminal_conditional_bool` | keep | fact | `Op.is_terminal_conditional_bool` (not in the glossary) |
-| `is_transform` | keep | fact | `Op.is_transform` (not in the glossary) |
+| `is_final_output` | keep | fact | `Op.is_final_output` |
+| `is_inplace` | keep | fact | `Op.is_inplace` |
+| `is_input` | keep | fact | `Op.is_input` |
+| `is_internal_sink` | keep | fact | `Op.is_internal_sink` |
+| `is_internal_source` | keep | fact | `Op.is_internal_source` |
+| `is_module_output` | keep | fact | `Op.is_module_output` |
+| `is_orphan` | keep | fact | `Op.is_orphan` |
+| `is_output` | keep | fact | `Op.is_output` |
+| `is_output_parent` | keep | fact | `Op.is_output_parent` |
+| `is_scalar_bool` | keep | fact | `Op.is_scalar_bool` |
+| `is_terminal_bool` | keep | fact | `Op.is_terminal_bool` |
+| `is_terminal_conditional_bool` | keep | fact | `Op.is_terminal_conditional_bool` |
+| `is_transform` | keep | fact | `Op.is_transform` |
 | `label` | keep | fact | `Op.label` |
 | `layer_label` | keep | fact | `Op.layer_label` |
-| `lookup_keys` | keep | derived | `Op.lookup_keys` (not in the glossary) |
-| `max_distance_from_input` | keep | fact | `Op.max_distance_from_input` (not in the glossary) |
-| `max_distance_to_output` | keep | fact | `Op.max_distance_to_output` (not in the glossary) |
-| `min_distance_from_input` | keep | fact | `Op.min_distance_from_input` (not in the glossary) |
-| `min_distance_to_output` | keep | fact | `Op.min_distance_to_output` (not in the glossary) |
+| `lookup_keys` | keep | derived | `Op.lookup_keys` |
+| `max_distance_from_input` | keep | fact | `Op.max_distance_from_input` |
+| `max_distance_to_output` | keep | fact | `Op.max_distance_to_output` |
+| `min_distance_from_input` | keep | fact | `Op.min_distance_from_input` |
+| `min_distance_to_output` | keep | fact | `Op.min_distance_to_output` |
 | `module` | keep | fact | `Op.module` |
 | `module_call_stack` | keep | fact | `Op.module_call_stack` |
-| `module_entry_arg_keys` | keep | fact | `Op.module_entry_arg_keys` (not in the glossary) |
+| `module_entry_arg_keys` | keep | fact | `Op.module_entry_arg_keys` |
 | `modules` | keep | fact | `Op.modules` (not in the glossary) |
-| `multi_output_index` | keep | fact | `Op.multi_output_index` (not in the glossary) |
-| `multi_output_name` | keep | fact | `Op.multi_output_name` (not in the glossary) |
-| `non_tensor_kwargs` | keep | fact | `Op.non_tensor_kwargs` (not in the glossary) |
-| `non_tensor_pos_args` | keep | fact | `Op.non_tensor_pos_args` (not in the glossary) |
-| `num_args_total` | keep | fact | `Op.num_args_total` (not in the glossary) |
+| `multi_output_index` | keep | fact | `Op.multi_output_index` |
+| `multi_output_name` | keep | fact | `Op.multi_output_name` |
+| `non_tensor_kwargs` | keep | fact | `Op.non_tensor_kwargs` |
+| `non_tensor_pos_args` | keep | fact | `Op.non_tensor_pos_args` |
+| `num_args_total` | keep | fact | `Op.num_args_total` |
 | `num_autograd_tensors` | keep | fact | `Op.num_autograd_tensors` |
-| `num_kwargs` | keep | fact | `Op.num_kwargs` (not in the glossary) |
-| `num_params` | keep | fact | `Op.num_params` (not in the glossary) |
-| `num_params_frozen` | keep | fact | `Op.num_params_frozen` (not in the glossary) |
-| `num_params_trainable` | keep | fact | `Op.num_params_trainable` (not in the glossary) |
+| `num_kwargs` | keep | fact | `Op.num_kwargs` |
+| `num_params` | keep | fact | `Op.num_params` |
+| `num_params_frozen` | keep | fact | `Op.num_params_frozen` |
+| `num_params_trainable` | keep | fact | `Op.num_params_trainable` |
 | `num_passes` | keep | fact | `Op.num_passes` |
-| `num_pos_args` | keep | fact | `Op.num_pos_args` (not in the glossary) |
-| `ordinal_index` | keep | fact | `Op.ordinal_index` (not in the glossary) |
+| `num_pos_args` | keep | fact | `Op.num_pos_args` |
+| `ordinal_index` | keep | fact | `Op.ordinal_index` |
 | `out` | blob | fact | `Op.out` |
 | `out_versions_by_child` | blob_recursive | fact | `Op.out_versions_by_child` |
-| `output_descendants` | keep | derived | `Op.output_descendants` (not in the glossary) |
+| `output_descendants` | keep | derived | `Op.output_descendants` |
 | `output_device` | keep | fact | `Op.output_device` |
-| `output_of_module_calls` | keep | fact | `Op.output_of_module_calls` (not in the glossary) |
-| `output_of_modules` | keep | fact | `Op.output_of_modules` (not in the glossary) |
-| `param_memory` | keep | fact | `Op.param_memory` (not in the glossary) |
-| `param_shapes` | keep | fact | `Op.param_shapes` (not in the glossary) |
-| `parent_arg_positions` | keep | fact | `Op.parent_arg_positions` (not in the glossary) |
-| `parent_param_ops` | keep | fact | `Op.parent_param_ops` (not in the glossary) |
-| `parent_params` | keep | fact | `Op.parent_params` (not in the glossary) |
-| `parents` | keep | fact | `Op.parents` (not in the glossary) |
+| `output_of_module_calls` | keep | fact | `Op.output_of_module_calls` |
+| `output_of_modules` | keep | fact | `Op.output_of_modules` |
+| `param_memory` | keep | fact | `Op.param_memory` |
+| `param_shapes` | keep | fact | `Op.param_shapes` |
+| `parent_arg_positions` | keep | fact | `Op.parent_arg_positions` |
+| `parent_param_ops` | keep | fact | `Op.parent_param_ops` |
+| `parent_params` | keep | fact | `Op.parent_params` |
+| `parents` | keep | fact | `Op.parents` |
 | `pass_number` | keep | fact | `Op.pass_number` |
-| `raw_index` | keep | fact | `Op.raw_index` (not in the glossary) |
-| `recurrent_ops` | keep | fact | `Op.recurrent_ops` (not in the glossary) |
-| `resolver_status` | keep | fact | `Op.resolver_status` (not in the glossary) |
-| `root_ancestors` | keep | derived | `Op.root_ancestors` (not in the glossary) |
+| `raw_index` | keep | fact | `Op.raw_index` |
+| `recurrent_ops` | keep | fact | `Op.recurrent_ops` |
+| `resolver_status` | keep | fact | `Op.resolver_status` |
+| `root_ancestors` | keep | derived | `Op.root_ancestors` |
 | `save_grads` | keep | fact | `Op.save_grads` |
 | `saved_args` | blob_recursive | fact | `Op.saved_args` |
-| `saved_kwargs` | blob_recursive | fact | `Op.saved_kwargs` (not in the glossary) |
+| `saved_kwargs` | blob_recursive | fact | `Op.saved_kwargs` |
 | `shape` | keep | fact | `Op.shape` |
 | `short_label` | keep | derived | `Op.short_label` |
 | `short_layer_label` | keep | derived | `Op.short_layer_label` |
 | `site_key` | keep | fact | `Op.site_key` |
 | `step_index` | keep | fact | `Op.step_index` (not in the glossary) |
-| `terminal_bool_for` | keep | fact | `Op.terminal_bool_for` (not in the glossary) |
-| `terminal_conditional_id` | keep | fact | `Op.terminal_conditional_id` (not in the glossary) |
+| `terminal_bool_for` | keep | fact | `Op.terminal_bool_for` |
+| `terminal_conditional_id` | keep | fact | `Op.terminal_conditional_id` |
 | `tl_authored_root` | keep | fact | `Op.tl_authored_root` (not in the glossary) |
-| `transform_chain` | keep | fact | `Op.transform_chain` (not in the glossary) |
-| `transform_config` | keep | fact | `Op.transform_config` (not in the glossary) |
-| `transform_fn_name` | keep | fact | `Op.transform_fn_name` (not in the glossary) |
-| `transform_fn_qualname` | keep | fact | `Op.transform_fn_qualname` (not in the glossary) |
-| `transform_fn_source` | keep | fact | `Op.transform_fn_source` (not in the glossary) |
+| `transform_chain` | keep | fact | `Op.transform_chain` |
+| `transform_config` | keep | fact | `Op.transform_config` |
+| `transform_fn_name` | keep | fact | `Op.transform_fn_name` |
+| `transform_fn_qualname` | keep | fact | `Op.transform_fn_qualname` |
+| `transform_fn_source` | keep | fact | `Op.transform_fn_source` |
 | `transform_kind` | keep | fact | `Op.transform_kind` (not in the glossary) |
 | `transformed_activation_memory` | keep | fact | `Op.transformed_activation_memory` |
 | `transformed_grad` | blob | fact | `Op.transformed_grad` |
-| `transformed_grad_dtype` | keep | fact | `Op.transformed_grad_dtype` (not in the glossary) |
-| `transformed_grad_shape` | keep | fact | `Op.transformed_grad_shape` (not in the glossary) |
-| `transformed_gradient_memory` | keep | fact | `Op.transformed_gradient_memory` (not in the glossary) |
+| `transformed_grad_dtype` | keep | fact | `Op.transformed_grad_dtype` |
+| `transformed_grad_shape` | keep | fact | `Op.transformed_grad_shape` |
+| `transformed_gradient_memory` | keep | fact | `Op.transformed_gradient_memory` |
 | `transformed_out` | blob | fact | `Op.transformed_out` |
-| `transformed_out_dtype` | keep | fact | `Op.transformed_out_dtype` (not in the glossary) |
+| `transformed_out_dtype` | keep | fact | `Op.transformed_out_dtype` |
 | `transformed_out_shape` | keep | fact | `Op.transformed_out_shape` |
 | `type` | keep | fact | `Op.type` |
-| `type_index` | keep | fact | `Op.type_index` (not in the glossary) |
-| `unattributed_tensor_args` | keep | fact | `Op.unattributed_tensor_args` (not in the glossary) |
-| `var_names` | keep | fact | `Op.var_names` (not in the glossary) |
-| `visualizer_path` | keep | fact | `Op.visualizer_path` (not in the glossary) |
+| `type_index` | keep | fact | `Op.type_index` |
+| `unattributed_tensor_args` | keep | fact | `Op.unattributed_tensor_args` |
+| `var_names` | keep | fact | `Op.var_names` |
+| `visualizer_path` | keep | fact | `Op.visualizer_path` |
 
 Session-only (`drop`): `_arg_expressions_cache`, `_construction_done`, `_facets_cache`, `_pending_blob_id`, `_pending_grad_blob_id`, `_pending_transformed_grad_blob_id`, `_pending_transformed_out_blob_id`, `_projective_field_cache`, `_receptive_field_cache`, `activation_transform`, `arg_expressions`, `args_template`, `func`, `grad_fn`, `grad_fn_handle`, `grad_ref`, `input_activations`, `input_dtypes`, `input_memory`, `input_ops`, `input_shapes`, `is_in_conditional_body`, `is_internally_initialized`, `kwargs_template`, `num_inputs`, `out_ref`, `raw_label`, `source_trace`.
 
@@ -642,38 +642,38 @@ Session-only (`drop`): `_arg_expressions_cache`, `_construction_done`, `_facets_
 | `_grad_memory` | keep | fact | private |
 | `_grad_shape` | keep | fact | private |
 | `_has_grad` | keep | fact | private |
-| `address` | keep | fact | `Param.address` (not in the glossary) |
+| `address` | keep | fact | `Param.address` |
 | `all_addresses` | keep | fact | `Param.all_addresses` (not in the glossary) |
-| `all_module_addresses` | keep | fact | `Param.all_module_addresses` (not in the glossary) |
-| `backend_address` | keep | fact | `Param.backend_address` (not in the glossary) |
-| `barcode` | keep | fact | `Param.barcode` (not in the glossary) |
-| `co_parent_params` | keep | fact | `Param.co_parent_params` (not in the glossary) |
+| `all_module_addresses` | keep | fact | `Param.all_module_addresses` |
+| `backend_address` | keep | fact | `Param.backend_address` |
+| `barcode` | keep | fact | `Param.barcode` |
+| `co_parent_params` | keep | fact | `Param.co_parent_params` |
 | `device_ref` | keep | fact | `Param.device_ref` |
 | `dtype` | keep | fact | `Param.dtype` |
 | `dtype_ref` | keep | fact | `Param.dtype_ref` |
-| `grad_dtype` | keep | fact | `Param.grad_dtype` (not in the glossary) |
+| `grad_dtype` | keep | fact | `Param.grad_dtype` |
 | `grad_memory` | keep | fact | `Param.grad_memory` |
-| `grad_shape` | keep | fact | `Param.grad_shape` (not in the glossary) |
-| `has_grad` | keep | fact | `Param.has_grad` (not in the glossary) |
-| `has_multiple_addresses` | keep | fact | `Param.has_multiple_addresses` (not in the glossary) |
-| `has_optimizer` | keep | fact | `Param.has_optimizer` (not in the glossary) |
-| `is_quantized` | keep | fact | `Param.is_quantized` (not in the glossary) |
-| `is_trainable` | keep | fact | `Param.is_trainable` (not in the glossary) |
+| `grad_shape` | keep | fact | `Param.grad_shape` |
+| `has_grad` | keep | fact | `Param.has_grad` |
+| `has_multiple_addresses` | keep | fact | `Param.has_multiple_addresses` |
+| `has_optimizer` | keep | fact | `Param.has_optimizer` |
+| `is_quantized` | keep | fact | `Param.is_quantized` |
+| `is_trainable` | keep | fact | `Param.is_trainable` |
 | `module_address` | keep | fact | `Param.module_address` |
-| `module_cls` | keep | fact | `Param.module_cls` (not in the glossary) |
+| `module_cls` | keep | fact | `Param.module_cls` |
 | `module_name` | keep | fact | `Param.module_name` |
 | `name` | keep | fact | `Param.name` |
 | `num_calls` | keep | fact | `Param.num_calls` |
 | `num_params` | keep | fact | `Param.num_params` (not in the glossary) |
-| `param_memory` | keep | fact | `Param.param_memory` (not in the glossary) |
-| `resolver_status` | keep | fact | `Param.resolver_status` (not in the glossary) |
+| `param_memory` | keep | fact | `Param.param_memory` |
+| `resolver_status` | keep | fact | `Param.resolver_status` |
 | `shape` | keep | fact | `Param.shape` |
-| `used_by_layers` | keep | fact | `Param.used_by_layers` (not in the glossary) |
+| `used_by_layers` | keep | fact | `Param.used_by_layers` |
 | `used_by_ops` | keep | fact | `Param.used_by_ops` |
 
 Session-only (`drop`): `_grad_records`, `_lazy_at_prep`, `_param_ref`, `_param_ref_released`, `_source_trace_ref`.
 
-## `trace` (Trace, 183 persisted of 341 fields)
+## `trace` (Trace, 183 persisted of 339 fields)
 
 | key | policy | tier | public spelling |
 | --- | --- | --- | --- |
@@ -826,39 +826,39 @@ Session-only (`drop`): `_grad_records`, `_lazy_at_prep`, `_param_ref`, `_param_r
 | `_spec_revision` | keep | fact | private |
 | `_tracing_finished` | keep | fact | private |
 | `annotations` | keep | fact | `Trace.annotations` |
-| `backend_runtime_device_summary` | keep | fact | `Trace.backend_runtime_device_summary` (not in the glossary) |
+| `backend_runtime_device_summary` | keep | fact | `Trace.backend_runtime_device_summary` |
 | `backward_peak_memory_reason` | keep | fact | `Trace.backward_peak_memory_reason` |
-| `batch_render` | keep | fact | `Trace.batch_render` (not in the glossary) |
-| `buffer_layers` | keep | fact | `Trace.buffer_layers` (not in the glossary) |
-| `capture_tensor_grad_hooks` | keep | fact | `Trace.capture_tensor_grad_hooks` (not in the glossary) |
+| `batch_render` | keep | fact | `Trace.batch_render` |
+| `buffer_layers` | keep | fact | `Trace.buffer_layers` |
+| `capture_tensor_grad_hooks` | keep | fact | `Trace.capture_tensor_grad_hooks` |
 | `checkpoint_invocation_witness` | keep | fact | `Trace.checkpoint_invocation_witness` |
 | `grad_fn_timing_provenance` | keep | fact | `Trace.grad_fn_timing_provenance` |
 | `input` | keep | fact | `Trace.input` |
-| `input_layers` | keep | fact | `Trace.input_layers` (not in the glossary) |
-| `internal_sink_ops` | keep | fact | `Trace.internal_sink_ops` (not in the glossary) |
-| `internal_source_ops` | keep | fact | `Trace.internal_source_ops` (not in the glossary) |
-| `internally_terminated_bool_ops` | keep | fact | `Trace.internally_terminated_bool_ops` (not in the glossary) |
+| `input_layers` | keep | fact | `Trace.input_layers` |
+| `internal_sink_ops` | keep | fact | `Trace.internal_sink_ops` |
+| `internal_source_ops` | keep | fact | `Trace.internal_source_ops` |
+| `internally_terminated_bool_ops` | keep | fact | `Trace.internally_terminated_bool_ops` |
 | `intervention_audit` | keep | fact | `Trace.intervention_audit` (not in the glossary) |
 | `is_replayable` | keep | fact | `Trace.is_replayable` |
 | `is_stopped` | keep | fact | `Trace.is_stopped` |
-| `layer_labels` | keep | fact | `Trace.layer_labels` (not in the glossary) |
-| `layers_with_params` | keep | fact | `Trace.layers_with_params` (not in the glossary) |
+| `layer_labels` | keep | fact | `Trace.layer_labels` |
+| `layers_with_params` | keep | fact | `Trace.layers_with_params` |
 | `model_name` | keep | fact | `Trace.model_name` |
 | `name` | keep | fact | `Trace.name` |
 | `num_context_lines` | keep | fact | `Trace.num_context_lines` |
-| `num_params` | keep | fact | `Trace.num_params` (not in the glossary) |
-| `num_params_frozen` | keep | fact | `Trace.num_params_frozen` (not in the glossary) |
-| `num_params_trainable` | keep | fact | `Trace.num_params_trainable` (not in the glossary) |
-| `op_labels` | keep | fact | `Trace.op_labels` (not in the glossary) |
-| `output_id2label` | keep | fact | `Trace.output_id2label` (not in the glossary) |
-| `output_layers` | keep | fact | `Trace.output_layers` (not in the glossary) |
-| `output_num_classes` | keep | fact | `Trace.output_num_classes` (not in the glossary) |
-| `profile_enabled` | keep | fact | `Trace.profile_enabled` (not in the glossary) |
-| `save_visualizations` | keep | fact | `Trace.save_visualizations` (not in the glossary) |
+| `num_params` | keep | fact | `Trace.num_params` |
+| `num_params_frozen` | keep | fact | `Trace.num_params_frozen` |
+| `num_params_trainable` | keep | fact | `Trace.num_params_trainable` |
+| `op_labels` | keep | fact | `Trace.op_labels` |
+| `output_id2label` | keep | fact | `Trace.output_id2label` |
+| `output_layers` | keep | fact | `Trace.output_layers` |
+| `output_num_classes` | keep | fact | `Trace.output_num_classes` |
+| `profile_enabled` | keep | fact | `Trace.profile_enabled` |
+| `save_visualizations` | keep | fact | `Trace.save_visualizations` |
 | `state` | keep | fact | `Trace.state` |
-| `state_history` | keep | fact | `Trace.state_history` (not in the glossary) |
+| `state_history` | keep | fact | `Trace.state_history` |
 | `stop_reason` | keep | fact | `Trace.stop_reason` |
-| `tlspec_version` | keep | fact | `Trace.tlspec_version` (not in the glossary) |
+| `tlspec_version` | keep | fact | `Trace.tlspec_version` |
 | `transformed_output` | keep | fact | `Trace.transformed_output` |
 
-Session-only (`drop`): `_active_backward_pass_index`, `_autograd_escape_detector_backward_coverage`, `_autograd_saved_bands`, `_autograd_seen_saved_storages`, `_backward_gradfn_refs`, `_backward_projection_event_count`, `_backward_projection_fold_state`, `_backward_projection_revision`, `_backward_roots_by_pass`, `_buffer_accessor`, `_buffer_storage_addresses`, `_buffer_write_tracker`, `_capture_config`, `_capture_events`, `_capture_parent_edge_truth`, `_capture_phase`, `_capture_session`, `_code_context_cache`, `_cooked_from`, `_cost_pinned_autograd_memory`, `_defer_streaming_bundle_finalization`, `_device_memory_samples`, `_distributed_plane_p`, `_fast_run_session`, `_forward_peak_memory_pair`, `_grad_fn_param_refs_by_object_id`, `_grad_stream_retain_in_memory`, `_halt_returns_partial_trace`, `_health_completeness_callback_ns`, `_health_completeness_decompositions`, `_health_completeness_mode`, `_health_completeness_verified`, `_health_escape_detector_callback_ns`, `_health_escape_detector_mode`, `_health_escape_detector_verified`, `_health_num_accounted_witness_events`, `_health_num_escape_detector_events`, `_health_num_expected_opaque_witness_events`, `_health_num_unaccounted_witness_events`, `_health_num_witness_events`, `_implicit_backward_pass_open`, `_intervention_spec`, `_keep_outs_in_memory`, `_last_hook_handle_ids`, `_last_validation_failure`, `_layer_accessor_cache`, `_mlx_capture_depth`, `_mlx_saved_payloads`, `_module_call_accessor`, `_module_capture_ws`, `_module_filter`, `_module_logs`, `_nonfinite_capture`, `_nonfinite_frontier_out`, `_nonfinite_prefix_finalize_error`, `_nonfinite_prefix_finalized`, `_op_accessor_cache`, `_optimizer`, `_options_activation_transform`, `_options_backward_ready`, `_options_grad_transform`, `_options_jax_static_argnums`, `_orphan_pruned_func_call_ids`, `_out_dedup_mode`, `_out_hash_cache`, `_out_identity_cache`, `_out_sink`, `_out_writer`, `_output_container_specs_by_raw_label`, `_output_head`, `_output_style`, `_output_tokenizer`, `_output_transform`, `_paddle_alias_annotations`, `_paddle_capture_depth`, `_paddle_capture_gap_markers`, `_paddle_op_captures`, `_param_log_by_pid`, `_param_logs_by_module`, `_param_storage_addresses`, `_parent_run`, `_pending_live_fire_records`, `_postprocessing_active`, `_pre_forward_rng_states`, `_predicate_current_contexts`, `_predicate_history`, `_predicate_history_size`, `_predicate_lookback`, `_predicate_lookback_candidates`, `_predicate_lookback_payload_policy`, `_predicate_save_decisions`, `_predicate_save_options`, `_provenance_jax_closed_jaxpr`, `_provenance_jax_inlined_call_primitives`, `_provenance_owner_thread_id`, `_provenance_owner_thread_qualified`, `_provenance_thread_activity_detected`, `_provenance_thread_count_end`, `_provenance_thread_count_start`, `_raw_call_fingerprint`, `_raw_dynamo_region_detected`, `_raw_event_shape_hash`, `_raw_graph_ws`, `_raw_transform_escape_detected`, `_receptive_field_solution`, `_replay_frontier`, `_rerun_save_request`, `_rescue_rerun`, `_rf_directional_solutions`, `_runnable`, `_save_budget_accountant`, `_saved_grad_labels`, `_semantic_output_metadata`, `_session_buffer_identity`, `_session_buffer_inventory`, `_session_param_inventory`, `_settlement_ops_committed`, `_source_bundle_manifest_sha256`, `_source_bundle_path`, `_source_model_ref`, `_stop_directive`, `_stop_requested`, `_tf_init_op_labels`, `_tf_op_captures`, `_tf_unresolved_producers`, `_tf_validation_result`, `_tl_backward_hooked_tensor_keys`, `_tl_backward_triggers_disarmed`, `_tl_cleaned_up`, `_tl_grad_hook_owner_by_label`, `_tl_injection_state`, `_tl_intervene_selector_fire_count`, `_tl_predicate_intervention_spec_keys`, `_tl_predicate_intervention_target_keys`, `_tl_rf_probe_active`, `_tl_save_selector_fire_count`, `_trace_core`, `_transform`, `_uncalled_module_addresses`, `_validation_diagnostics`, `_visualizer_dir`, `_warned_direct_write`, `_warned_mutate_in_place`, `_warned_once`, `_wrapper_runtime_ws`, `capture_guard_passes`, `completeness_diagnostics`, `distributed_witness`, `escape_diagnostics`, `facet_functions`, `last_run`, `layer_visualizers`, `measure_host_peak_memory`, `measure_python_peak_memory`, `ops_with_params`, `save_budget`, `track_device_memory`, `track_nonfinite`.
+Session-only (`drop`): `_active_backward_pass_index`, `_autograd_escape_detector_backward_coverage`, `_autograd_saved_bands`, `_autograd_seen_saved_storages`, `_backward_gradfn_refs`, `_backward_projection_event_count`, `_backward_projection_fold_state`, `_backward_projection_revision`, `_backward_roots_by_pass`, `_buffer_accessor`, `_buffer_storage_addresses`, `_buffer_write_tracker`, `_capture_config`, `_capture_events`, `_capture_parent_edge_truth`, `_capture_phase`, `_capture_session`, `_code_context_cache`, `_cooked_from`, `_cost_pinned_autograd_memory`, `_defer_streaming_bundle_finalization`, `_device_memory_samples`, `_distributed_plane_p`, `_fast_run_session`, `_forward_peak_memory_pair`, `_grad_fn_param_refs_by_object_id`, `_grad_stream_retain_in_memory`, `_halt_returns_partial_trace`, `_health_completeness_callback_ns`, `_health_completeness_decompositions`, `_health_completeness_mode`, `_health_completeness_verified`, `_health_escape_detector_callback_ns`, `_health_escape_detector_mode`, `_health_escape_detector_verified`, `_health_num_accounted_witness_events`, `_health_num_escape_detector_events`, `_health_num_expected_opaque_witness_events`, `_health_num_unaccounted_witness_events`, `_health_num_witness_events`, `_implicit_backward_pass_open`, `_intervention_spec`, `_keep_outs_in_memory`, `_last_hook_handle_ids`, `_last_validation_failure`, `_layer_accessor_cache`, `_mlx_capture_depth`, `_mlx_saved_payloads`, `_module_call_accessor`, `_module_capture_ws`, `_module_filter`, `_module_logs`, `_nonfinite_capture`, `_nonfinite_frontier_out`, `_nonfinite_prefix_finalize_error`, `_nonfinite_prefix_finalized`, `_op_accessor_cache`, `_optimizer`, `_options_activation_transform`, `_options_backward_ready`, `_options_grad_transform`, `_options_jax_static_argnums`, `_orphan_pruned_func_call_ids`, `_out_dedup_mode`, `_out_hash_cache`, `_out_identity_cache`, `_out_sink`, `_out_writer`, `_output_container_specs_by_raw_label`, `_output_tokenizer`, `_output_transform`, `_paddle_alias_annotations`, `_paddle_capture_depth`, `_paddle_capture_gap_markers`, `_paddle_op_captures`, `_param_log_by_pid`, `_param_logs_by_module`, `_param_storage_addresses`, `_parent_run`, `_pending_live_fire_records`, `_postprocessing_active`, `_pre_forward_rng_states`, `_predicate_current_contexts`, `_predicate_history`, `_predicate_history_size`, `_predicate_lookback`, `_predicate_lookback_candidates`, `_predicate_lookback_payload_policy`, `_predicate_save_decisions`, `_predicate_save_options`, `_provenance_jax_closed_jaxpr`, `_provenance_jax_inlined_call_primitives`, `_provenance_owner_thread_id`, `_provenance_owner_thread_qualified`, `_provenance_thread_activity_detected`, `_provenance_thread_count_end`, `_provenance_thread_count_start`, `_raw_call_fingerprint`, `_raw_dynamo_region_detected`, `_raw_event_shape_hash`, `_raw_graph_ws`, `_raw_transform_escape_detected`, `_receptive_field_solution`, `_replay_frontier`, `_rerun_save_request`, `_rescue_rerun`, `_rf_directional_solutions`, `_runnable`, `_save_budget_accountant`, `_saved_grad_labels`, `_semantic_output_metadata`, `_session_buffer_identity`, `_session_buffer_inventory`, `_session_param_inventory`, `_settlement_ops_committed`, `_source_bundle_manifest_sha256`, `_source_bundle_path`, `_source_model_ref`, `_stop_directive`, `_stop_requested`, `_tf_init_op_labels`, `_tf_op_captures`, `_tf_unresolved_producers`, `_tf_validation_result`, `_tl_backward_hooked_tensor_keys`, `_tl_backward_triggers_disarmed`, `_tl_cleaned_up`, `_tl_grad_hook_owner_by_label`, `_tl_injection_state`, `_tl_intervene_selector_fire_count`, `_tl_predicate_intervention_spec_keys`, `_tl_predicate_intervention_target_keys`, `_tl_rf_probe_active`, `_tl_save_selector_fire_count`, `_trace_core`, `_transform`, `_uncalled_module_addresses`, `_validation_diagnostics`, `_visualizer_dir`, `_warned_direct_write`, `_warned_mutate_in_place`, `_warned_once`, `_wrapper_runtime_ws`, `capture_guard_passes`, `completeness_diagnostics`, `distributed_witness`, `escape_diagnostics`, `facet_functions`, `last_run`, `layer_visualizers`, `measure_host_peak_memory`, `measure_python_peak_memory`, `ops_with_params`, `save_budget`, `track_device_memory`, `track_nonfinite`.
