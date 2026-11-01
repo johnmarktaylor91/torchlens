@@ -551,7 +551,7 @@ def _apply_gradient_site_edits(
 
     if not _state._active_hook_plan:
         return grad
-    final_label = getattr(trace, "_raw_to_final_layer_labels", {}).get(tensor_label)
+    final_label = trace._raw_to_final_layer_labels.get(tensor_label)
     layer_dict = getattr(trace, "layer_dict_all_keys", None) or {}
     op = layer_dict.get(final_label) if final_label is not None else None
     if op is None:

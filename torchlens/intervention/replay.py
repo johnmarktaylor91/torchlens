@@ -239,7 +239,7 @@ def _refuse_armed_gradient_rules(trace: Trace, hooks: Any = None) -> None:
 
     from .spec import is_gradient_site
 
-    spec = getattr(trace, "_intervention_spec", None)
+    spec = trace._intervention_spec
     targets = [hook_spec.site_target for hook_spec in getattr(spec, "hook_specs", ())]
     if isinstance(hooks, Mapping):
         targets.extend(hooks)

@@ -684,7 +684,7 @@ def settle_armed_gradient_edits(trace: Any, *, pass_index: int) -> None:
         One-based index of that backward pass.
     """
 
-    spec = getattr(trace, "_intervention_spec", None)
+    spec = trace._intervention_spec
     if spec is None:
         return
     groups: dict[str, list[Any]] = {}

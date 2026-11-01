@@ -1128,7 +1128,7 @@ def _gradient_rule_raw_indices(trace: Any) -> set[int]:
     from ..intervention.hooks import gradient_inners, split_site_branches
     from ..intervention.resolver import _resolve_unchecked
 
-    spec = getattr(trace, "_intervention_spec", None)
+    spec = trace._intervention_spec
     ops = tuple(getattr(trace, "layer_list", ()))
     indices: set[int] = set()
     for hook_spec in getattr(spec, "hook_specs", ()) or ():

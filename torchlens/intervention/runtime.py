@@ -1404,7 +1404,7 @@ def apply_live_gradient_hooks(
     hook_plan = _state._active_hook_plan
     if not hook_plan or _state._active_trace is not trace:
         return grad, ()
-    pass_index = getattr(trace, "_active_backward_pass_index", None)
+    pass_index = _trace_backward_pass_index(trace)
     current = grad
     fire_records: list[FireRecord] = []
     candidates = _gradient_site_ops(trace, op)
@@ -2220,6 +2220,26 @@ def _active_backward_pass_index(grad_fn_handle: Any) -> int | None:
     trace = getattr(grad_fn_handle, "trace", None)
     if trace is None:
         return None
+    return _trace_backward_pass_index(trace)
+
+
+def _trace_backward_pass_index(trace: Any) -> int | None:
+    """Return a trace's active one-based backward pass index (``None`` outside a pass).
+
+    The backward door sets the index for the length of one pass and drops it
+    afterwards, so its absence is the "no pass open" reading.
+
+    Parameters
+    ----------
+    trace:
+        Trace being backwarded.
+
+    Returns
+    -------
+    int | None
+        Active one-based backward pass index, when a pass is open.
+    """
+
     value = getattr(trace, "_active_backward_pass_index", None)
     return int(value) if isinstance(value, int) else None
 
