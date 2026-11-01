@@ -431,7 +431,7 @@ class FacetSpec(_SelectionOperand):
             home_kind=home_kind,
             home_label=getattr(home, "label", getattr(home, "call_label", None)),
             home_address=getattr(home, "address", None),
-            pass_index=getattr(home, "pass_index", None),
+            pass_index=getattr(home, "pass_number", None),
             call_index=getattr(home, "call_index", None),
             output_path=tuple(getattr(home, "container_path", ()) or ()),
             capability_flags=flags,
