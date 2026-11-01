@@ -952,14 +952,6 @@
   "via_getattr": false
  },
  {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/_data_classes/_trace_viz.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
   "ambiguous": false,
   "field": "is_edited",
   "file": "torchlens/_data_classes/_value_repr.py",
@@ -9150,6 +9142,14 @@
   "has_default": false,
   "sites": 9,
   "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/report/_trace_summary.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
  },
  {
   "ambiguous": true,
