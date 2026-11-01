@@ -1098,7 +1098,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   qualifier on a bare activation selector refuses `selector_signal_mismatch`. A gradient site resolves its inner selector exactly as the
   activation door does (zero matches refuse); a matched op the loss never reaches is a
   `no_fire`, never a resolution error and never a zero tensor. `Trace.find_sites(tl.grad(s))`
-  returns the matched forward sites with `signal="backward"`.
+  returns the matched forward sites with `signal="backward"`; its `.to_dataframe()` table
+  carries that value in a `signal` column (`"forward"` for activation sites, `"backward"` for node sites).
 
 **signal (record field)** *(spelling documented-unstable)*
 : The one field that says which pass a record or event belongs to: `"forward"` or `"backward"`
