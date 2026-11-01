@@ -104,6 +104,11 @@ MUTANTS: dict[str, tuple[str, str]] = {
         "torchlens/validation/core.py",
         "_check_whether_func_on_saved_parents_yields_saved_tensor",
     ),
+    # The two steps extracted from _validate_saved_outs_run (wip/mp-pp-union
+    # 459fbd9d5). ``return None`` on the first is "no output failed", on the
+    # second "the metadata invariants never ran": both the disarming direction.
+    "M20": ("torchlens/validation/core.py", "_check_ground_truth_outputs"),
+    "M21": ("torchlens/validation/core.py", "_check_metadata_invariants_recorded"),
 }
 
 #: mutant id -> (relative file, core-validation checker). The checkers of
@@ -142,6 +147,16 @@ CORE_CHECK_EXCLUSIONS: dict[str, str] = {
         "only so the entry's finally clears per-run scratch and loaded callables; "
         "it adds no verdict logic of its own (its verdict is composed of the "
         "enrolled comparators and checkers)"
+    ),
+    "_check_ground_truth_outputs": (
+        "enrolled as M20: it returns the failed ValidationStatus or None, so its "
+        "dangerous direction is return None (no output failed), not an "
+        "always-validated check result"
+    ),
+    "_check_metadata_invariants_recorded": (
+        "enrolled as M21: it returns None by contract and records through the "
+        "decision recorder, so its dangerous direction is skipping the invariants "
+        "run (return None at entry), not an always-validated check result"
     ),
 }
 
