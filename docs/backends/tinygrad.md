@@ -65,11 +65,9 @@ except BackendUnsupportedError as error:
     print(error.code)        # "module_identity_mode_unsupported"
 ```
 
-Capture realizes the forward once: after the forward returns, every recorded value and
-the outputs are realized by a single `Tensor.realize` call, and those realized tensors are
-the saved payloads (`trace.tinygrad_payload_policy == "realize_once"`). Closure weights
-built from a NumPy array (`Tensor(ndarray)`) are therefore recorded with their payloads; a
-value tinygrad cannot realize at all refuses `constant_unrealizable` naming the op.
+Closure weights built from a NumPy array (`Tensor(ndarray)`) stay host-side buffers until
+something realizes them; capturing a forward through one refuses `constant_unrealizable`
+naming the op. Realize the constant first (`weight.realize()`) or pass it as an input.
 
 ## Can and cannot
 
@@ -79,7 +77,7 @@ and its refusal cell has not yet passed on the pinned CI leg (not yet proven, no
 | Capability | State | Notes |
 |---|---|---|
 | `has_validation_replay` | supported | UOp replay plus parent perturbation on `DEV=PYTHON` payloads |
-| `payload_materialization` | supported | `array_payloads` via `.tlspec`; payloads from one `realize_once` call per capture |
+| `payload_materialization` | supported | `array_payloads` via `.tlspec`; realized copies per UOp today |
 | `intermediate_derived_grads` | supported | opt-in through `GradOptions(intermediate_grads=True)` |
 | `backward_capture` | untested | refusal `backward_capture_unsupported` |
 | `fastlog` | untested | refusal `fastlog_unsupported` |
@@ -88,8 +86,8 @@ and its refusal cell has not yet passed on the pinned CI leg (not yet proven, no
 | `has_streaming` | untested | refusal `streaming_unsupported` |
 | Closure constant with a readable buffer | supported | recorded as a parentless `buffer` op with payload (`tinygrad_constant_kind="closure"`) |
 | Literal producer (`Tensor.ones`, `Tensor.full`, scalar `const`) | supported | parentless op with payload (`tinygrad_constant_kind="literal"`) |
-| Value tinygrad cannot realize | unsupported | refusal `constant_unrealizable` naming the op |
-| Random-init layers (`tinygrad.nn` default init) or in-forward `Tensor.rand` | unsupported | refusal `rng_state_in_graph`; realize random-init layers before capture (RNG consumption under realize-once is not yet proven equal to one eager forward) |
+| Closure constant with no readable buffer (`Tensor(ndarray)` not realized) | unsupported | refusal `constant_unrealizable` naming the op |
+| Random-init layers (`tinygrad.nn` default init) or in-forward `Tensor.rand` | unsupported | refusal `rng_state_in_graph`; random-init layers must be realized before capture until realize-once capture lands |
 | `random_seed=` | unsupported | refusal `explicit_seed_unsupported` |
 | Trace options outside `module_identity_mode`, `grad_options` | unsupported | refusal `trace_option_unsupported` |
 | Mid-capture `Tensor.realize()`, `assign()`, TinyJit, input mutation | unsupported | typed `BackendUnsupportedError` |
@@ -100,5 +98,5 @@ and its refusal cell has not yet passed on the pinned CI leg (not yet proven, no
 (`python -m torchlens.conformance.scorecard --backend tinygrad --write`) and surfaces as the
 `backend_scorecard:tinygrad` row of `tl.compat.report()`. The roster behind it is
 `torchlens/conformance/_rosters/tinygrad.py`: ten fixed-weight `config_built` rows, three
-`random_init` rows (refused `rng_state_in_graph`), and two `ecosystem` rows that run only
+`random_init` rows (refused until realize-once), and two `ecosystem` rows that run only
 under `TORCHLENS_CONFORMANCE_ECOSYSTEM=1`.

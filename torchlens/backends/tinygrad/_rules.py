@@ -47,9 +47,8 @@ CONSTANT_KIND_ANNOTATION = "tinygrad_constant_kind"
 #: UOp names tinygrad's Threefry generator leaves in a graph that consumed RNG.
 RNG_UOP_NAMES: frozenset[str] = frozenset({"THREEFRY"})
 
-#: The payload policy a live capture records on a trace (SPEC 3, rule 6):
-#: every recorded value realized by one ``realize_once`` call after the forward.
-REALIZE_ONCE_PAYLOAD_POLICY = "realize_once"
+#: The payload policy the interim per-uop realization records on a trace.
+PER_UOP_PAYLOAD_POLICY = "dev_python_realized_copy"
 
 
 def describe_uop(uop: Any) -> str:
