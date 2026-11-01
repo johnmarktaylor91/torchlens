@@ -953,6 +953,7 @@ torchlens/backends/torch/_completeness_storage.py::_make_plain_scalar_escape_met
 torchlens/backends/torch/_completeness_storage.py::_make_storage_metadata_wrapper	82
 torchlens/backends/torch/_completeness_storage.py::_make_storage_metadata_wrapper.wrapper	75
 torchlens/backends/torch/_completeness_storage.py::capture_scalar_escape_warning	158
+torchlens/backends/torch/_held_tensor_scan.py::iter_module_held_plain_tensors	74
 torchlens/backends/torch/_ops_activations.py::_log_output_tensor_info	322
 torchlens/backends/torch/_ops_activations.py::_metadata_shape	65
 torchlens/backends/torch/_ops_activations.py::_save_activation_fields	211
@@ -1017,11 +1018,10 @@ torchlens/backends/torch/backward.py::install_autograd_wrappers	103
 torchlens/backends/torch/backward.py::log_recording_backward	84
 torchlens/backends/torch/belt.py::_derive	72
 torchlens/backends/torch/belt.py::sweep_stale_belt_references	72
-torchlens/backends/torch/buffer_writes.py	2000
+torchlens/backends/torch/buffer_writes.py	1813
 torchlens/backends/torch/buffer_writes.py::BufferWriteTracker._refresh_overlapping_alias_snapshots	66
 torchlens/backends/torch/buffer_writes.py::BufferWriteTracker._refresh_param_index	68
 torchlens/backends/torch/buffer_writes.py::BufferWriteTracker.reconcile	68
-torchlens/backends/torch/buffer_writes.py::iter_module_held_plain_tensors	74
 torchlens/backends/torch/buffer_writes.py::session_validated_buffer_address	61
 torchlens/backends/torch/collectives.py	842
 torchlens/backends/torch/collectives.py::_build_payload	102
@@ -1041,7 +1041,7 @@ torchlens/backends/torch/identity_shims.py	1043
 torchlens/backends/torch/identity_shims.py::_install_causal_bias_shim	81
 torchlens/backends/torch/identity_shims.py::_install_expanded_weights_shims	70
 torchlens/backends/torch/identity_shims.py::_install_overrides_membership_shims	70
-torchlens/backends/torch/model_prep.py	3145
+torchlens/backends/torch/model_prep.py	3142
 torchlens/backends/torch/model_prep.py::_capture_module_metadata	88
 torchlens/backends/torch/model_prep.py::_clear_callable_session_tensor_metadata	70
 torchlens/backends/torch/model_prep.py::_clear_session_tensor_metadata	119
@@ -1057,7 +1057,7 @@ torchlens/backends/torch/model_prep.py::_record_module_exit_metadata	183
 torchlens/backends/torch/model_prep.py::_record_predicate_module_boundary_outputs	144
 torchlens/backends/torch/model_prep.py::module_forward_decorator	319
 torchlens/backends/torch/model_prep.py::module_forward_decorator.decorated_forward	285
-torchlens/backends/torch/model_prep.py::prepare_buffer_tensors	76
+torchlens/backends/torch/model_prep.py::prepare_buffer_tensors	72
 torchlens/backends/torch/model_prep.py::release_model	62
 torchlens/backends/torch/offload_hooks.py::install_offload_hook_shims	66
 torchlens/backends/torch/ops.py	944
@@ -1088,8 +1088,8 @@ torchlens/backends/torch/wrappers.py::decorate_all_once	68
 torchlens/backends/torch/wrappers.py::direct_transform_decorator	98
 torchlens/backends/torch/wrappers.py::direct_transform_decorator.wrapped_direct	73
 torchlens/backends/torch/wrappers.py::get_arg_names	68
-torchlens/backends/torch/wrappers.py::torch_func_decorator	949
-torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	794
+torchlens/backends/torch/wrappers.py::torch_func_decorator	948
+torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	793
 torchlens/backends/torch/wrappers.py::transform_builder_decorator	112
 torchlens/backends/torch/wrappers.py::transform_builder_decorator.wrapped_builder	90
 torchlens/backends/torch/wrappers.py::transform_builder_decorator.wrapped_builder.wrapped_transform	62

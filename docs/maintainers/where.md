@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-77 packages, 1125 modules, 597261 lines, 0 modules without a docstring.
+77 packages, 1127 modules, 597705 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 88 | 55795 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 88 | 55901 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 4 | 1076 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -53,7 +53,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 9 | 5100 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 10 | 8029 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 3 | 3429 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 80 | 50710 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 81 | 50958 |
 | `torchlens.bridge` | External-tool bridge namespace. | 25 | 8008 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2700 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 17 | 7731 |
@@ -86,14 +86,14 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 4861 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 14 | 4571 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 5811 |
-| `torchlens.validation` | Validation subpackage for saved outs, backward capture, and invariants. | 45 | 26808 |
+| `torchlens.validation` | Validation subpackage for saved outs, backward capture, and invariants. | 46 | 26898 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 8 | 4085 |
 
 ## Modules by package
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (88 modules, 55795 lines)
+TorchLens - extract outs and metadata from PyTorch models. (88 modules, 55901 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -153,7 +153,7 @@ TorchLens - extract outs and metadata from PyTorch models. (88 modules, 55795 li
 | `_runnable_transaction` | Loaded-sparse transaction execution and allocation checks. | 1283 |
 | `_runnable_verification` | Seed, RNG, attestation, and fork utilities. | 711 |
 | `_runnable_witness_contracts` | Control, shape, and host-escape witness checks. | 608 |
-| `_save_budget` | Running budget for retained activation bytes, with a typed refusal. | 1010 |
+| `_save_budget` | Running budget for retained activation bytes, with a typed refusal. | 1045 |
 | `_selection` | Selection / intervention algebra: the dual selection types (L6 stage 1). | 1768 |
 | `_selection_align` | Cross-run selection alignment (L6 stage 4a). | 269 |
 | `_selection_compare` | Comparative selection producers: differential and cross-pass (L6 producer wave). | 956 |
@@ -165,7 +165,7 @@ TorchLens - extract outs and metadata from PyTorch models. (88 modules, 55795 li
 | `_source_links` | Source-location link formatting helpers. | 110 |
 | `_split_rebind` | Compatibility helpers for behavior-preserving module decomposition. | 87 |
 | `_state` | Global state for torchlens toggle-gated decoration. | 1395 |
-| `_storage_bindings` | Record and restore the storage binding of a parameter or buffer. | 91 |
+| `_storage_bindings` | Record and restore the storage binding of a parameter or buffer. | 162 |
 | `_surface` | SURFACE-table machinery: the root surface as machine-readable rows ( item 7). | 121 |
 | `_trace_selector_helpers` | Internal predicate and selector helpers for public trace capture. | 838 |
 | `_trace_slice` | ''TraceSlice'': the sub-DAG view presenter (L6 graph slice, P2). | 400 |
@@ -1001,7 +1001,7 @@ tinygrad backend preview. (3 modules, 3429 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (80 modules, 50710 lines)
+Torch backend implementation package for TorchLens capture. (81 modules, 50958 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1030,13 +1030,14 @@ Torch backend implementation package for TorchLens capture. (80 modules, 50710 l
 | `_gradfn_markers` | grad_fn-fire marker sink helpers (torchnative). | 149 |
 | `_held_refs` | Held torch-function reference normalization for ''release_model''. | 231 |
 | `_held_refs_capture` | Capture-scoped rebinding of module-held pristine torch functions. | 306 |
+| `_held_tensor_scan` | Bounded scan of the plain tensors a module holds outside ''register_buffer''. | 359 |
 | `_identity_cache` | Per-tensor metadata caches that stay correct when a tensor's ''id'' is reused. | 63 |
 | `_modes` | Shared ownership marker and pause bracket for TorchLens dispatch modes. | 109 |
 | `_module_arg_stubs` | Module-arg payload stubbing for release-at-emission ( W1a). | 88 |
 | `_module_boundary_adoption` | Module-boundary adoption records and the pre-forward tensor ownership snapshot. | 113 |
 | `_op_markers` | Per-call op markers: NVTX ranges + join markers. | 238 |
 | `_opaque_call_advisory` | Name the opaque call behind a completeness-witness gap. | 364 |
-| `_ops_activations` | Output tensor metadata and activation persistence. | 761 |
+| `_ops_activations` | Output tensor metadata and activation persistence. | 762 |
 | `_ops_arguments` | Argument templates, edge uses, and tensor provenance. | 447 |
 | `_ops_autograd` | Autograd saved-tensor statistics and container snapshots. | 435 |
 | `_ops_capture_records` | Ancestor storage, producer policy, and exhaustive record freezing. | 734 |
@@ -1048,7 +1049,7 @@ Torch backend implementation package for TorchLens capture. (80 modules, 50710 l
 | `_ops_interventions` | Legacy and predicate-mode live interventions. | 845 |
 | `_ops_predicate_events` | Predicate event records and graph relationship fields. | 516 |
 | `_ops_predicates` | Predicate output replacement and backend semantics. | 444 |
-| `_ops_retention` | Save budgets, predicate payloads, and lookback retention. | 873 |
+| `_ops_retention` | Save budgets, predicate payloads, and lookback retention. | 941 |
 | `_ops_shared_fields` | Shared operation fields and tensor variation tracking. | 384 |
 | `_param_fingerprint` | Capture-time parameter fingerprints for the replay changed-parameter check. | 73 |
 | `_pinned_graph` | Measure the autograd graph a trace's graph-connected saved activations keep alive. | 92 |
@@ -1067,14 +1068,14 @@ Torch backend implementation package for TorchLens capture. (80 modules, 50710 l
 | `backward` | Capture torch backward execution and autograd graph metadata. | 4426 |
 | `belt` | The mechanical BELT: protocol-invisible stale-reference coverage. | 492 |
 | `bound_root` | TL-authored synthetic root for bound-method capture. | 130 |
-| `buffer_writes` | Registered-buffer write capture for the torch backend. | 2000 |
+| `buffer_writes` | Registered-buffer write capture for the torch backend. | 1813 |
 | `collectives` | Collective boundary capture for explicit ''torch.distributed'' python calls. | 842 |
 | `completeness_witness` | Opt-in aten-dispatch completeness witness for torch capture. | 2043 |
 | `escape_detection` | Opt-in shadow detection for stale detached torch callable invocations. | 969 |
 | `funcol` | Functional-collective (funcol) boundary capture + plane-W completion authority. | 1016 |
 | `identity_shims` | Wrap-state identity shims: keep torch-internal identity checks truthful. | 1043 |
 | `legacy_ctors` | Capture of legacy tensor constructors: ''torch.<dtype>Tensor(...)'' and ''Variable(t)''. | 301 |
-| `model_prep` | Prepare torch ''nn.Module'' objects for capture sessions. | 3145 |
+| `model_prep` | Prepare torch ''nn.Module'' objects for capture sessions. | 3142 |
 | `module_stack` | Manage the torch capture module-call stack. | 87 |
 | `offload_hooks` | Accelerate offload/dispatch hook shims for eager capture (R5). | 214 |
 | `ops` | Log tensors produced by decorated torch operations. | 944 |
@@ -1084,7 +1085,7 @@ Torch backend implementation package for TorchLens capture. (80 modules, 50710 l
 | `sources` | Log torch capture source tensors. | 550 |
 | `structure_only_belt` | Structure-only teaching-refusal belts (L7a memo sec 2, -default branch). | 674 |
 | `tensor_tracking` | Track torch tensor provenance, family links, and equivalence classes. | 1669 |
-| `wrappers` | Lazy torch function wrapping for capture-time operation interception. | 3368 |
+| `wrappers` | Lazy torch function wrapping for capture-time operation interception. | 3378 |
 
 ### `torchlens.bridge`
 
@@ -1690,7 +1691,7 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved outs, backward capture, and invariants. (45 modules, 26808 lines)
+Validation subpackage for saved outs, backward capture, and invariants. (46 modules, 26898 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1725,6 +1726,7 @@ Validation subpackage for saved outs, backward capture, and invariants. (45 modu
 | `_pristine` | Pristine-torch context for wrap-state-independent validation oracles. | 130 |
 | `_replay_device` | Device alignment for replay when saved payloads live off the op's device. | 207 |
 | `_replay_grad_fidelity` | Replay arguments that carry the captured call's ''requires_grad'' and grad mode. | 326 |
+| `_replay_storage_context` | Replay a storage-geometry receiver on a clone of its saved storage context. | 72 |
 | `_replay_warnings` | Keep validation verdicts independent of the caller's warning filters. | 30 |
 | `_script_metadata_proof` | Graph proof that a TorchScript boundary call reads a tensor argument for metadata only. | 269 |
 | `_sdpa_value_proofs` | Value proofs for ''scaled_dot_product_attention'' operands that cannot reach the output. | 294 |
@@ -1734,9 +1736,9 @@ Validation subpackage for saved outs, backward capture, and invariants. (45 modu
 | `_value_predicates` | Saved-value predicates used by the posthoc value-proof decisions. | 193 |
 | `backward` | Validation helpers for backward-pass grad capture. | 829 |
 | `consolidated` | Consolidated validation entry point for TorchLens 2.0. | 687 |
-| `core` | Core validation logic for verifying saved outs. | 5156 |
+| `core` | Core validation logic for verifying saved outs. | 5168 |
 | `diagnostics` | Structured replay-failure diagnostics for forward validation. | 503 |
-| `exemptions` | Validation exemption registries for perturbation and forward-replay checks. | 2988 |
+| `exemptions` | Validation exemption registries for perturbation and forward-replay checks. | 2994 |
 | `invariants` | Metadata invariant checks for ''Trace'' and its sub-objects. | 838 |
 | `status` | Replay-validation status objects. | 586 |
 

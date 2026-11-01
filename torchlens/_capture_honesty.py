@@ -41,7 +41,7 @@ HOST_TENSOR_SOURCE_FUNCS: tuple[str, ...] = ("from_numpy", "from_dlpack", "fromb
 #: ``_warn_unattributed_tensor_args``).
 ADVISORY_MODULE_BOUNDARY_ADOPTION = "module_boundary_adoption"
 #: Advisory kind recorded when the module-held plain-tensor scan was cut
-#: (``backends/torch/buffer_writes.warn_held_scan_truncated``).
+#: (``backends/torch/_held_tensor_scan.warn_held_scan_truncated``).
 ADVISORY_HELD_SCAN_TRUNCATED = "held_tensor_scan_truncated"
 #: Advisory kind recorded when an orphan-pruned op had source-less tensor arguments
 #: (``G.sum().item()``, a control-flow predicate on a closure tensor): the pruned op

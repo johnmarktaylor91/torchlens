@@ -53,6 +53,7 @@ from ..._utils.tensor_utils import (
 from ...recording._halt import StopSignal
 from . import module_stack as _mstack
 from ._held_refs import normalize_held_torch_function_refs, register_released_model
+from ._held_tensor_scan import iter_module_held_plain_tensors, warn_held_scan_truncated
 from ._module_arg_stubs import stub_module_arg_payloads
 from ._module_boundary_adoption import (
     collect_pre_forward_tensor_ids,
@@ -1026,11 +1027,7 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
     registry (``trace._session_buffer_identity``) consulted by the buffer-rung
     storage-identity belt; the registry is reset here at session start.
     """
-    from .buffer_writes import (
-        iter_module_held_plain_tensors,
-        register_session_buffer_stamp,
-        warn_held_scan_truncated,
-    )
+    from .buffer_writes import register_session_buffer_stamp
 
     _state._tagged_buffer_ids.clear()
     trace._session_buffer_inventory = []
