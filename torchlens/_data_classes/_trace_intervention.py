@@ -1059,7 +1059,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             When only one of ``model=`` / ``x=`` is given.
         """
 
-        from ..intervention.replay import gradient_edit_replay_refusal
+        from ..intervention.replay import gradient_edit_replay_text
 
         if engine not in {"auto", "replay", "rerun", "set_only"}:
             raise InvalidArgumentError(
@@ -1072,7 +1072,13 @@ class TraceInterventionMixin(_TraceMixinBase):
         if engine == "set_only":
             return engine
         if engine == "replay" or (engine == "auto" and model is None and x is None):
-            raise gradient_edit_replay_refusal(plan.backward_repr)
+            message, remedy = gradient_edit_replay_text(plan.backward_repr)
+            raise InvalidArgumentError(
+                message,
+                code="replay_gradient_edit_unsupported",
+                remedy=remedy,
+                argument="hooks_or_site",
+            )
         return self._select_do_engine(engine, model=model, x=x)
 
     def _preflight_signal_plan(self: "Trace", plan: "_SignalPlan", *, strict: bool) -> None:

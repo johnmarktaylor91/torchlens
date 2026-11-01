@@ -185,8 +185,12 @@ def push(
         )
 
 
-def gradient_edit_replay_refusal(sites: str) -> InvalidArgumentError:
-    """Build the ONE refusal for a gradient edit reaching the replay engine.
+def gradient_edit_replay_text(sites: str) -> tuple[str, str]:
+    """Return the ONE ``(message, remedy)`` for a gradient edit meeting replay.
+
+    Every door that refuses ``replay_gradient_edit_unsupported`` for a
+    gradient site (``do`` with a replay engine, ``push`` on an armed recipe)
+    raises with this text, so the spelling lives in one place.
 
     Parameters
     ----------
@@ -195,22 +199,21 @@ def gradient_edit_replay_refusal(sites: str) -> InvalidArgumentError:
 
     Returns
     -------
-    InvalidArgumentError
-        ``replay_gradient_edit_unsupported`` with the remedy every door shares
-        (``do`` with a replay engine and ``push`` on an armed recipe).
+    tuple[str, str]
+        The refusal message and its remedy.
     """
 
-    return InvalidArgumentError(
+    message = (
         f"Replay re-executes forward ops only and cannot edit the gradient at {sites}. "
         "Pass model= and x= to rerun with the edit armed, then call "
         "result.backward(loss) (or pass loss=), or stage it with engine='set_only' "
-        "and call trace.backward(loss) on this trace.",
-        code="replay_gradient_edit_unsupported",
-        remedy="trace.do(tl.grad(site), edit, model=model, x=x, loss=fn), or "
-        "do(..., intervention=InterventionOptions(engine='set_only')) then "
-        "trace.backward(loss)",
-        argument="hooks_or_site",
+        "and call trace.backward(loss) on this trace."
     )
+    remedy = (
+        "trace.do(tl.grad(site), edit, model=model, x=x, loss=fn), or "
+        "do(..., intervention=InterventionOptions(engine='set_only')) then trace.backward(loss)"
+    )
+    return message, remedy
 
 
 def _refuse_armed_gradient_rules(trace: Trace) -> None:
@@ -235,7 +238,13 @@ def _refuse_armed_gradient_rules(trace: Trace) -> None:
         if is_gradient_site(hook_spec.site_target)
     ]
     if sites:
-        raise gradient_edit_replay_refusal(", ".join(dict.fromkeys(sites)))
+        message, remedy = gradient_edit_replay_text(", ".join(dict.fromkeys(sites)))
+        raise InvalidArgumentError(
+            message,
+            code="replay_gradient_edit_unsupported",
+            remedy=remedy,
+            argument="hooks_or_site",
+        )
 
 
 def push_from(
