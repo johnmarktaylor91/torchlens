@@ -516,3 +516,37 @@ def test_bind_door_zero_fire_names_the_distribution_output() -> None:
     (warning,) = _zero_fire_warnings(caught, "bind_zero_fire")
     assert warning.fields["reason"] == NON_TENSOR_MODULE_OUTPUT_REASON
     assert "(output paths .loc, .scale)" in warning.fields["reason_detail"]
+
+
+def test_runnable_save_round_trips_a_normal_output_verified(tmp_path: Path) -> None:
+    """A runnable bundle replays the Normal output from its recorded parameters, VERIFIED."""
+
+    from torchlens.options import CaptureOptions
+
+    model = NormalHead().eval()
+    trace = _trace(
+        model, capture=CaptureOptions(intervention_ready=True, capture_container_structure=True)
+    )
+    path = tmp_path / "normal.tlspec"
+    trace.save(path, level="runnable")
+    result = tl.load(path).run(inputs=_x())
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    _assert_same_distribution(result.output, model(_x()))
+
+
+def test_runnable_save_never_blesses_a_lossy_distribution(tmp_path: Path) -> None:
+    """A transform-carrying output refuses at save or loads UNVERIFIABLE; never VERIFIED."""
+
+    from torchlens.options import CaptureOptions
+
+    trace = _trace(
+        TanhHead().eval(),
+        capture=CaptureOptions(intervention_ready=True, capture_container_structure=True),
+    )
+    path = tmp_path / "tanh.tlspec"
+    try:
+        trace.save(path, level="runnable")
+    except tl.errors.TorchLensError:
+        return
+    result = tl.load(path).run(inputs=_x(), on_divergence="return")
+    assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
