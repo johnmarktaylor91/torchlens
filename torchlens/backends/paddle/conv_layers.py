@@ -16,6 +16,7 @@ The module imports no Paddle at import time.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 #: Layer class name -> emitted ``func_name``.
@@ -28,26 +29,12 @@ PADDLE_CONV_LAYER_OPS: dict[str, str] = {
 _SPATIAL_DIMS: dict[str, int] = {"conv1d": 1, "conv2d": 2, "conv3d": 3}
 
 
-def paddle_conv_layer_replay(
-    x: Any,
-    weight: Any,
-    bias: Any = None,
-    *,
-    spatial_dims: int,
-    padding_mode: str,
-    reversed_padding: Any,
-    stride: Any,
-    padding: Any,
-    dilation: Any,
-    groups: int,
-    data_format: str,
-) -> Any:
-    """Recompute a Paddle convolution layer's forward from public functionals.
+@dataclass(frozen=True)
+class _ConvHyperparameters:
+    """The recorded keyword hyperparameters of one convolution layer call.
 
     Parameters
     ----------
-    x, weight, bias:
-        Input, kernel and optional bias tensors.
     spatial_dims:
         1, 2 or 3.
     padding_mode:
@@ -58,6 +45,28 @@ def paddle_conv_layer_replay(
         ``padding_mode`` is not ``"zeros"``).
     stride, padding, dilation, groups, data_format:
         The layer's convolution hyperparameters.
+    """
+
+    spatial_dims: int
+    padding_mode: str
+    reversed_padding: Any
+    stride: Any
+    padding: Any
+    dilation: Any
+    groups: int
+    data_format: str
+
+
+def paddle_conv_layer_replay(x: Any, weight: Any, bias: Any = None, **hyperparameters: Any) -> Any:
+    """Recompute a Paddle convolution layer's forward from public functionals.
+
+    Parameters
+    ----------
+    x, weight, bias:
+        Input, kernel and optional bias tensors.
+    **hyperparameters:
+        The recorded keyword hyperparameters :func:`conv_layer_call` emits
+        (the fields of :class:`_ConvHyperparameters`).
 
     Returns
     -------
@@ -67,20 +76,26 @@ def paddle_conv_layer_replay(
 
     import paddle.nn.functional as paddle_functional
 
+    layer = _ConvHyperparameters(**hyperparameters)
     functional: Any = paddle_functional
-    if padding_mode != "zeros":
-        x = functional.pad(x, reversed_padding, mode=padding_mode, data_format=data_format)
+    padding = layer.padding
+    if layer.padding_mode != "zeros":
+        x = functional.pad(
+            x, layer.reversed_padding, mode=layer.padding_mode, data_format=layer.data_format
+        )
         padding = 0
-    convolution = {1: functional.conv1d, 2: functional.conv2d, 3: functional.conv3d}[spatial_dims]
+    convolution = {1: functional.conv1d, 2: functional.conv2d, 3: functional.conv3d}[
+        layer.spatial_dims
+    ]
     return convolution(
         x,
         weight,
         bias=bias,
-        stride=stride,
+        stride=layer.stride,
         padding=padding,
-        dilation=dilation,
-        groups=groups,
-        data_format=data_format,
+        dilation=layer.dilation,
+        groups=layer.groups,
+        data_format=layer.data_format,
     )
 
 
