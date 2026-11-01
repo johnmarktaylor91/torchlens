@@ -39,6 +39,7 @@ glossary documents:
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
@@ -473,12 +474,19 @@ def _after_bundle(cell: Cell) -> None:
 # --- claimed rows: bind -------------------------------------------------------
 
 
-def _after_bind(cell: Cell) -> None:
-    """The bound executor reproduces the traced edit and reports its recipe and firing."""
+def _after_bind_with(base_after: Callable[[Cell], None]) -> Callable[[Cell], None]:
+    """Extend the bind row's current ``after`` (whichever fill holds it) with the report checks."""
 
-    from tests.behaviour.features import _after_bind as _thin_after_bind
+    def _after_bind(cell: Cell) -> None:
+        base_after(cell)
+        _expect_bind_report(cell)
 
-    _thin_after_bind(cell)
+    return _after_bind
+
+
+def _expect_bind_report(cell: Cell) -> None:
+    """The bound executor reports its recipe and firing."""
+
     address = cell.facts.single_call_module
     spec = tl.when(tl.module(address), tl.scale(0.5))
     bound = spec.bind(cell.model)
@@ -732,9 +740,15 @@ def extend_features(rows: tuple[Feature, ...]) -> tuple[Feature, ...]:
         "intervene": {"prepare": _prepare_intervene, "after": _after_intervene},
         "fork_do": {"after": _after_fork_do},
         "bundle": {"prepare": _prepare_intervention_ready, "after": _after_bundle},
-        "bind": {"after": _after_bind},
     }
-    filled = tuple(replace(row, **fills[row.name]) if row.name in fills else row for row in rows)
+    filled = tuple(
+        replace(row, after=_after_bind_with(row.after))
+        if row.name == "bind"
+        else replace(row, **fills[row.name])
+        if row.name in fills
+        else row
+        for row in rows
+    )
     float_only = frozenset({"float_output"})
     new_rows = (
         Feature(
