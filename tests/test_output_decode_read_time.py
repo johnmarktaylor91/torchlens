@@ -79,6 +79,9 @@ def test_spellings_are_pinned_to_the_signatures() -> None:
     for keyword in (spellings.STYLE_KW, spellings.HEAD_KW):
         assert keyword in table_params, keyword
         assert table_params[keyword].kind is inspect.Parameter.KEYWORD_ONLY, keyword
+    assert spellings.STYLE_UNKNOWN_CODE == "decode_style_unknown"
+    assert spellings.HEAD_UNKNOWN_CODE == "decode_head_unknown"
+    assert spellings.HEAD_AMBIGUOUS_CODE == "decode_head_ambiguous"
 
 
 @pytest.mark.smoke
@@ -114,7 +117,7 @@ def test_unknown_head_refuses_with_the_available_heads() -> None:
 
     with pytest.raises(InvalidArgumentError) as excinfo:
         trace.decode_output(head="logits")
-    assert excinfo.value.fields["code"] == spellings.HEAD_UNKNOWN_CODE
+    assert excinfo.value.fields["code"] == "decode_head_unknown"
     assert sorted(excinfo.value.fields["available_heads"]) == ["aux", "main"]
 
 
@@ -124,7 +127,7 @@ def test_ambiguous_heads_refuse_when_none_is_named() -> None:
 
     with pytest.raises(InvalidArgumentError) as excinfo:
         trace.decode_output(style="classification")
-    assert excinfo.value.fields["code"] == spellings.HEAD_AMBIGUOUS_CODE
+    assert excinfo.value.fields["code"] == "decode_head_ambiguous"
     assert sorted(excinfo.value.fields["available_heads"]) == ["aux", "main"]
 
 
@@ -134,7 +137,7 @@ def test_unknown_style_refuses_with_did_you_mean() -> None:
 
     with pytest.raises(tl.errors.DecodeStyleUnknownError) as excinfo:
         trace.decode_output(style="clasification")
-    assert excinfo.value.fields["code"] == spellings.STYLE_UNKNOWN_CODE
+    assert excinfo.value.fields["code"] == "decode_style_unknown"
     assert "did you mean 'classification'?" in str(excinfo.value)
 
 
@@ -147,7 +150,7 @@ def test_hf_text_style_decodes_with_the_passed_tokenizer() -> None:
     assert decoded == [{"batch_item": 0, "rank": 1, "text": "tok1 tok0", "token_ids": [1, 0]}]
     with pytest.raises(InvalidArgumentError) as excinfo:
         trace.decode_output(style="hf_text")
-    assert excinfo.value.fields["code"] == spellings.STYLE_UNKNOWN_CODE
+    assert excinfo.value.fields["code"] == "decode_style_unknown"
 
 
 def test_attached_tokenizer_decodes_text_automatically_only_from_a_logits_head() -> None:
