@@ -74,7 +74,6 @@ from ._replay_device import (
 from ._replay_grad_fidelity import _copy_validation_args, _deep_clone_tensors  # noqa: F401
 from ._replay_warnings import replay_warnings_ignored
 from ._saved_outs_steps import (
-    _check_metadata_invariants_recorded,
     _fail_bfs_incomplete,
     _fail_dispatch_census,
     _fail_ground_truth_mismatch,
@@ -1013,6 +1012,50 @@ def _replay_parents_from_seeds(
         if parents_valid.failed:
             return None
     return validated_op_labels
+
+
+def _check_metadata_invariants_recorded(
+    self: "Trace",
+    decision_recorder: ValidationDecisionRecorder,
+    resolved_callables: list[Any] | None,
+    validate_metadata: bool,
+) -> None:
+    """Release replay callables, then run the metadata invariants, recording any firing one."""
+    # Metadata invariant checks (after out validation ops) read the loaded
+    # artifact as loaded: the replay-phase callables are released first.
+    from ._loaded_callables import release_loaded_callables
+
+    release_loaded_callables(resolved_callables or [])
+    if validate_metadata:
+        from .invariants import check_metadata_invariants
+
+        try:
+            check_metadata_invariants(self)
+        except Exception as invariant_error:
+            # ADD-ONLY: record the firing invariant on the side-channel, then
+            # RE-RAISE unchanged. The invariant remains a hard tripwire -- this
+            # only captures its identity for downstream reporting.
+            from .diagnostics import (
+                CHECK_METADATA_INVARIANT,
+                ValidationFailure,
+                record_validation_failure,
+            )
+
+            record_validation_failure(
+                self,
+                ValidationFailure(
+                    check_name=CHECK_METADATA_INVARIANT,
+                    message=f"{type(invariant_error).__name__}: {invariant_error}",
+                ),
+            )
+            decision_recorder.record(
+                op_label=None,
+                func_name=None,
+                phase="metadata",
+                decision="failed",
+                reason="metadata_invariant_exception",
+            )
+            raise
 
 
 def validate_parents_of_saved_layer(

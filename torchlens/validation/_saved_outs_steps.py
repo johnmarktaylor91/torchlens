@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Any
 from .diagnostics import (
     CHECK_COMPLETENESS,
     CHECK_GROUND_TRUTH,
-    CHECK_METADATA_INVARIANT,
     CHECK_OUTPUT_MISSING,
     ValidationDiagnostic,
     ValidationFailure,
@@ -274,41 +273,3 @@ def _fail_bfs_incomplete(
         reason="bfs_incomplete",
     )
     return _finish_run_status(self, decision_recorder)
-
-
-def _check_metadata_invariants_recorded(
-    self: Trace,
-    decision_recorder: ValidationDecisionRecorder,
-    resolved_callables: list[Any] | None,
-    validate_metadata: bool,
-) -> None:
-    """Release replay callables, then run the metadata invariants, recording any firing one."""
-    # Metadata invariant checks (after out validation ops) read the loaded
-    # artifact as loaded: the replay-phase callables are released first.
-    from ._loaded_callables import release_loaded_callables
-
-    release_loaded_callables(resolved_callables or [])
-    if validate_metadata:
-        from .invariants import check_metadata_invariants
-
-        try:
-            check_metadata_invariants(self)
-        except Exception as invariant_error:
-            # ADD-ONLY: record the firing invariant on the side-channel, then
-            # RE-RAISE unchanged. The invariant remains a hard tripwire -- this
-            # only captures its identity for downstream reporting.
-            record_validation_failure(
-                self,
-                ValidationFailure(
-                    check_name=CHECK_METADATA_INVARIANT,
-                    message=f"{type(invariant_error).__name__}: {invariant_error}",
-                ),
-            )
-            decision_recorder.record(
-                op_label=None,
-                func_name=None,
-                phase="metadata",
-                decision="failed",
-                reason="metadata_invariant_exception",
-            )
-            raise
