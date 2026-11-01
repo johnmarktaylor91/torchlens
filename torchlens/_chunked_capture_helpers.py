@@ -7,7 +7,7 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, NoReturn
 
 from ._data_classes.trace import Trace
 from ._deprecations import MISSING
@@ -37,6 +37,16 @@ def _should_store_auto_coerced_raw_input(original: Any, coerced: Any) -> bool:
     """
 
     return coerced is not original and _contains_auto_coercible_raw_input(original)
+
+
+def _refuse_chunk_option_conflict(message: str, alternative: str) -> NoReturn:
+    """Raise the typed refusal for an option that cannot compose with ``chunk_size``."""
+
+    raise ChunkedForwardConfigError(
+        message,
+        code="trace_option_unsupported",
+        remedy=f"{alternative}, or run without chunk_size",
+    )
 
 
 def _validate_chunked_forward_capture(
@@ -73,75 +83,48 @@ def _validate_chunked_forward_capture(
     ChunkedForwardConfigError
         If chunked forward capture cannot compose with the requested options.
     """
-
     if input_kwargs:
-        raise ChunkedForwardConfigError(
+        _refuse_chunk_option_conflict(
             "chunk_size capture is positional-input only in v1; keyword inputs are unsupported.",
-            code="trace_option_unsupported",
-            remedy="pass the inputs positionally, or run without chunk_size",
+            "pass the inputs positionally",
         )
     if backward_ready:
-        raise ChunkedForwardConfigError(
-            "chunk_size cannot be combined with backward_ready=True.",
-            code="trace_option_unsupported",
-            remedy="drop backward_ready=True, or run without chunk_size",
+        _refuse_chunk_option_conflict(
+            "chunk_size cannot combine with backward_ready=True.", "drop it"
         )
     if save_grads:
-        raise ChunkedForwardConfigError(
-            "chunk_size cannot be combined with save_grads.",
-            code="trace_option_unsupported",
-            remedy="drop save_grads, or run without chunk_size",
+        _refuse_chunk_option_conflict(
+            "chunk_size cannot be combined with save_grads.", "drop save_grads"
         )
     if hooks is not None:
-        raise ChunkedForwardConfigError(
-            "chunk_size cannot be combined with hooks=.",
-            code="trace_option_unsupported",
-            remedy="drop hooks=, or run without chunk_size",
-        )
+        _refuse_chunk_option_conflict("chunk_size cannot be combined with hooks=.", "drop hooks=")
     if intervene is not None:
-        raise ChunkedForwardConfigError(
-            "chunk_size cannot be combined with intervene=.",
-            code="trace_option_unsupported",
-            remedy="drop intervene=, or run without chunk_size",
+        _refuse_chunk_option_conflict(
+            "chunk_size cannot be combined with intervene=.", "drop intervene="
         )
     if halt is not None:
-        raise ChunkedForwardConfigError(
-            "chunk_size cannot be combined with halt=.",
-            code="trace_option_unsupported",
-            remedy="drop halt=, or run without chunk_size",
-        )
+        _refuse_chunk_option_conflict("chunk_size cannot be combined with halt=.", "drop halt=")
     if streaming.path is not None or streaming.on_save is not None:
-        raise ChunkedForwardConfigError(
+        _refuse_chunk_option_conflict(
             "chunk_size is in-memory only in v1 and cannot be combined with streaming storage.",
-            code="trace_option_unsupported",
-            remedy="drop storage=tl.to_disk(...), or run without chunk_size",
+            "drop storage=tl.to_disk(...)",
         )
 
 
 @contextmanager
-def _typed_chunk_forward(chunk_index: int, chunk_rows: int, total_rows: int) -> Iterator[None]:
-    """Turn a chunk forward or assembly failure into a typed chunk_size refusal.
+def _typed_chunk_forward(chunk_index: int, chunk_size: int, plan: Any) -> Iterator[int]:
+    """Run one chunk's capture, yielding its row count; a failure refuses typed.
 
-    A forward that needs the whole batch fails on a chunk with the model's own
-    exception; a forward whose activations are not row-wise over the batch
-    fails at assembly with ``AppendMismatchError``. Both mean the chunked
-    capture cannot stand for the whole batch, so the caller is told to run
-    without ``chunk_size`` instead of seeing a raw error (or a wrong result).
-    Other TorchLens refusals pass through unchanged.
-
-    Parameters
-    ----------
-    chunk_index:
-        Zero-based index of the chunk being captured.
-    chunk_rows:
-        Rows in this chunk.
-    total_rows:
-        Rows in the whole batch.
+    ``AppendMismatchError`` from chunk assembly means an activation is not row-wise over the
+    batch; any other error is the forward failing on a partial batch. Both become
+    ``ChunkedForwardConfigError`` (``trace_option_unsupported``) pointing at a plain capture.
     """
 
+    total_rows = int(plan.total_size)
+    chunk_rows = min(chunk_size, total_rows - chunk_index * chunk_size)
     where = f"chunk {chunk_index} ({chunk_rows} of {total_rows} rows)"
     try:
-        yield
+        yield chunk_rows
     except AppendMismatchError as exc:
         raise ChunkedForwardConfigError(
             f"chunk_size: assembling {where} found an activation that is not row-wise "

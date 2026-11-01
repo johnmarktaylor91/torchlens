@@ -14,9 +14,7 @@ For AI agents: ``trace.to_agent_json()``, ``trace.explain(max_tokens=N)``,
 
 from __future__ import annotations
 
-import contextlib as _contextlib
-import warnings as _warnings
-from collections.abc import Iterable as _Iterable, Iterator as _Iterator, Mapping as _Mapping
+from collections.abc import Iterable as _Iterable, Mapping as _Mapping
 from typing import TYPE_CHECKING as _TYPE_CHECKING, Any as _Any
 
 if _TYPE_CHECKING:
@@ -347,13 +345,6 @@ def __dir__() -> list[str]:
     return facade_dir(globals(), _LAZY_ATTRS)
 
 
-#: Remedy every extract-side lookup refusal carries.
-_EXTRACT_LOOKUP_REMEDY = (
-    "pass a layer label, module address or pass-qualified label the capture records; "
-    "trace.find_layers(substring) lists the candidates"
-)
-
-
 def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
     """Build a short suggestion suffix for lookup failures.
 
@@ -398,9 +389,12 @@ def _out_from_log(trace: Trace, layer: str) -> _torch.Tensor:
         ``activation_not_saved`` if it resolved but kept no out.
     """
 
-    from ._errors import InvalidArgumentError
+    from ._extract_refusals import (
+        TorchLensError,
+        refuse_activation_not_saved,
+        refuse_lookup_not_found,
+    )
     from ._trace_selector_helpers import canonical_module_site_key
-    from .errors._base import TorchLensError
 
     try:
         layer_log = trace[canonical_module_site_key(trace, layer) or layer]
@@ -410,23 +404,13 @@ def _out_from_log(trace: Trace, layer: str) -> _torch.Tensor:
         raise
     except (KeyError, ValueError) as exc:
         suggestions = trace.find_layers(layer) if hasattr(trace, "find_layers") else []
-        raise InvalidArgumentError(
-            _did_you_mean_message(layer, suggestions),
-            code="op_lookup_not_found",
-            remedy=_EXTRACT_LOOKUP_REMEDY,
-            key=layer,
-        ) from exc
+        refuse_lookup_not_found(_did_you_mean_message(layer, suggestions), layer, cause=exc)
 
     import torch
 
     out = getattr(layer_log, "out", None)
     if out is None:
-        raise InvalidArgumentError(
-            f"Layer {layer!r} resolved but has no saved out.",
-            code="activation_not_saved",
-            remedy="request the layer through extract's layers argument so the capture saves it",
-            key=layer,
-        )
+        refuse_activation_not_saved(layer)
     if not isinstance(out, torch.Tensor):
         raise TypeError(f"Layer {layer!r} out is not a torch.Tensor.")
     return out
@@ -527,6 +511,7 @@ def pluck(
         ``activation_not_saved`` if it produced no saved tensor.
     """
 
+    from ._extract_refusals import capture_quiet
     from .options import CaptureOptions
 
     # an explicit site rides the capture options, where the trace
@@ -536,25 +521,9 @@ def pluck(
         if stop_after is None
         else CaptureOptions(layers_to_save=[layer], stop_after=stop_after)
     )
-    with _extract_capture_quiet():
+    with capture_quiet():
         trace = _resolve_top_level("trace")(model, inputs, capture=capture)
     return _out_from_log(trace, layer)
-
-
-@_contextlib.contextmanager
-def _extract_capture_quiet() -> _Iterator[None]:
-    """Silence the capture-time ``layers_to_save`` zero-match warning during an extract capture.
-
-    ``extract`` and ``pluck`` resolve every requested layer right after the capture and refuse
-    typed (``op_lookup_not_found`` / ``activation_not_saved``) when nothing was saved, so the
-    capture's zero-match disclosure would double-report ahead of that refusal.
-    """
-
-    with _warnings.catch_warnings():
-        _warnings.filterwarnings(
-            "ignore", message=r"layers_to_save=.* matched zero layers", category=UserWarning
-        )
-        yield
 
 
 def _extract_facet_plan(layers: _Any) -> dict[str, _Any]:
@@ -643,11 +612,10 @@ def _extract_layers_with_trace(
     Raises
     ------
     InvalidArgumentError
-        ``op_lookup_not_found`` if a lookup resolves to no layer;
-        ``activation_not_saved`` if it resolved but produced no saved tensor.
+        ``op_lookup_not_found`` (no such layer) or ``activation_not_saved`` (no saved tensor).
     """
 
-    from ._errors import InvalidArgumentError
+    from ._extract_refusals import capture_quiet, refuse_lookup_not_found
     from ._trace_selector_helpers import canonical_module_site_key
     from .options import CaptureOptions as _LazyCaptureOptions
 
@@ -657,15 +625,11 @@ def _extract_layers_with_trace(
             model, x, layers, facet_plan, detach_saved_activations=detach_saved_activations
         )
     layer_plan = _normalize_extract_layers(layers)
-    with _extract_capture_quiet():
-        trace = _resolve_top_level("trace")(
-            model,
-            x,
-            capture=_LazyCaptureOptions(
-                layers_to_save=list(layer_plan.values()),
-                detach_saved_activations=detach_saved_activations,
-            ),
-        )
+    capture = _LazyCaptureOptions(
+        layers_to_save=list(layer_plan.values()), detach_saved_activations=detach_saved_activations
+    )
+    with capture_quiet():
+        trace = _resolve_top_level("trace")(model, x, capture=capture)
     outputs: dict[str, _torch.Tensor] = {}
     views: dict[str, _Any] = {}
     if isinstance(layers, _Mapping):
@@ -678,12 +642,7 @@ def _extract_layers_with_trace(
         matches = _matching_saved_layer_labels(trace, pattern)
         if not matches:
             suggestions = trace.find_layers(pattern)
-            raise InvalidArgumentError(
-                _did_you_mean_message(pattern, suggestions),
-                code="op_lookup_not_found",
-                remedy=_EXTRACT_LOOKUP_REMEDY,
-                key=pattern,
-            )
+            refuse_lookup_not_found(_did_you_mean_message(pattern, suggestions), pattern)
         for match in matches:
             outputs[match] = _out_from_log(trace, match)
             views[match] = trace[match]

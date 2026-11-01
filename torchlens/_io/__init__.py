@@ -47,6 +47,8 @@ from .format_errors import (
     ArtifactTooOldError,
     PreReleaseArtifactError,
     UnknownPersistedFieldError,
+    refuse_bundle_exists,
+    refuse_missing_blobs,
 )
 from .prerelease import validate_prerelease_state
 
@@ -57,6 +59,8 @@ __tl_layer__ = "FACADE"
 _LEGACY_THREAD_WARNING_EMITTED: dict[str, bool] = {"flag": False}
 
 __all__ = [
+    "refuse_bundle_exists",
+    "refuse_missing_blobs",
     "MIN_TLSPEC_VERSION",
     "MIN_TORCHLENS_VERSION_TEXT",
     "TLSPEC_VERSION",

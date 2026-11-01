@@ -3667,8 +3667,7 @@ def _trace_torch_model(
         recursive_save_raw_gradients: bool | MissingType = (
             save_raw_grads if save_predicate is not None and save_raw_grads is not True else MISSING
         )
-        total_rows = chunk_plan.total_size
-        with _typed_chunk_forward(0, min(normalized_chunk_size, total_rows), total_rows):
+        with _typed_chunk_forward(0, normalized_chunk_size, chunk_plan) as initial_chunk_size:
             trace = _trace_torch_model(
                 model=model,
                 input_args=cast(torch.Tensor | list[Any] | tuple[Any, ...], chunks[0]),
@@ -3739,7 +3738,6 @@ def _trace_torch_model(
                     requested_layers_to_save if uses_selective_layers_to_save else None
                 ),
             )
-        initial_chunk_size = min(normalized_chunk_size, chunk_plan.total_size)
         initial_record = {
             "engine": "trace",
             "append": False,
@@ -3748,15 +3746,11 @@ def _trace_torch_model(
             "append_sequence_id": 0,
             "chunk_paths": normalize_chunk_paths(chunk_paths_value),
         }
+        append = ReplayOptions(append=True)
         for chunk_index, chunk in enumerate(chunks[1:], start=1):
-            chunk_rows = min(
-                normalized_chunk_size, total_rows - chunk_index * normalized_chunk_size
-            )
-            with _typed_chunk_forward(chunk_index, chunk_rows, total_rows):
+            with _typed_chunk_forward(chunk_index, normalized_chunk_size, chunk_plan) as rows:
                 if save_predicate is None:
-                    trace.run(
-                        model, chunk, replay=ReplayOptions(append=True), input_transform=False
-                    )
+                    trace.run(model, chunk, replay=append, input_transform=False)
                     continue
                 new_trace = _trace_torch_model(
                     model=model,
@@ -3828,15 +3822,11 @@ def _trace_torch_model(
                         requested_layers_to_save if uses_selective_layers_to_save else None
                     ),
                 )
-                appended_chunk_size = min(
-                    normalized_chunk_size,
-                    chunk_plan.total_size - (chunk_index * normalized_chunk_size),
-                )
                 _append_chunk_trace_state(
                     trace,
                     new_trace,
                     _ChunkAppend(
-                        chunk_size=appended_chunk_size,
+                        chunk_size=rows,
                         total_batch_size=chunk_plan.total_size,
                         append_sequence_id=chunk_index,
                         chunk_paths=normalize_chunk_paths(chunk_paths_value),

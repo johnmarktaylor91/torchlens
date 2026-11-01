@@ -51,6 +51,7 @@ from . import (
     PayloadLoadHints,
     _json,
     raise_if_manifest_below_floor,
+    refuse_missing_blobs,
 )
 from ._artifact_anchors import check_manifest_metadata_anchors, persisted_anchor_facts
 from ._canonical_pickle import dump_canonical_metadata
@@ -2261,13 +2262,7 @@ def _preflight_unified_trace_body_index(
         if not blob_path.is_file():
             missing_blob_ids.append(str(tensor_entry.get("blob_id", "<unknown>")))
     if missing_blob_ids:
-        raise ArtifactError(
-            "Bundle manifest references missing blob files for blob_id(s): "
-            + ", ".join(missing_blob_ids)
-            + ".",
-            code="bundle_load_failed",
-            remedy="restore the missing blob files, or re-save the bundle from its source capture",
-        )
+        refuse_missing_blobs(missing_blob_ids)
 
 
 def _preflight_schema_v2_runtime(
@@ -3999,12 +3994,7 @@ def _validate_manifest_blob_paths(
         if not blob_path.exists():
             missing_blob_ids.append(entry.blob_id)
     if missing_blob_ids:
-        raise ArtifactError(
-            "Bundle manifest references missing blob files for blob_id(s): "
-            f"{', '.join(missing_blob_ids)}.",
-            code="bundle_load_failed",
-            remedy="restore the missing blob files, or re-save the bundle from its source capture",
-        )
+        refuse_missing_blobs(missing_blob_ids)
 
 
 def _eager_verify_blob_payloads(
