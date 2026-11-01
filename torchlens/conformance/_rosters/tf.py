@@ -24,16 +24,25 @@ _B4 = _RNG.standard_normal((4,)).astype(np.float32)
 _IMG = _RNG.standard_normal((1, 6, 6, 1)).astype(np.float32)
 
 
+#: The boolean row traits ``_config`` accepts as keywords, all ``False`` by default.
+_CONFIG_FLAGS = ("has_constants", "random_init")
+
+
 def _config(
     family: str,
     builder: Callable[[], tuple[Any, Any]],
     ops: tuple[str, ...],
     intermediates: dict[str, np.ndarray | list[np.ndarray]],
-    *,
-    has_constants: bool = False,
-    random_init: bool = False,
+    **flags: bool,
 ) -> dict[str, Any]:
-    """Describe one config-built model without importing its framework."""
+    """Describe one config-built model without importing its framework.
+
+    ``flags`` are the row traits in :data:`_CONFIG_FLAGS` (``has_constants``,
+    ``random_init``); an unknown trait is a programming error.
+    """
+    unknown = sorted(set(flags) - set(_CONFIG_FLAGS))
+    if unknown:
+        raise ValueError(f"unknown roster row traits: {unknown}")
     return {
         "family": family,
         "realism": "config_built",
@@ -41,8 +50,7 @@ def _config(
         "checkpoint_evidence": "",
         "expected_op_kinds": ops,
         "expected_intermediates": intermediates,
-        "has_constants": has_constants,
-        "random_init": random_init,
+        **{flag: flags.get(flag, False) for flag in _CONFIG_FLAGS},
         "group": "config_built",
     }
 

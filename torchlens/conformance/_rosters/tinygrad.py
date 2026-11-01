@@ -63,29 +63,42 @@ _FC_B = np.asarray([0.0, 0.1, -0.1], dtype=np.float32)
 _IMG = (np.arange(36, dtype=np.float32).reshape(1, 1, 6, 6) - 17.5) / 17.5
 
 
+#: Defaults of the optional :class:`RosterModel` fields ``_row`` accepts as keywords.
+_ROW_DEFAULTS: dict[str, Any] = {
+    "expected_op_kinds": None,
+    "expected_intermediates": None,
+    "has_constants": False,
+    "random_init": False,
+    "checkpoint_evidence": "",
+}
+
+
 def _row(
     family: str,
     builder: Callable[[], tuple[Any, Any]],
     *,
     group: str = "config_built",
-    expected_op_kinds: tuple[str, ...] | None = None,
-    expected_intermediates: Mapping[str, Any] | None = None,
-    has_constants: bool = False,
-    random_init: bool = False,
-    checkpoint_evidence: str = "",
+    **fields: Any,
 ) -> RosterModel:
-    """Build one roster row; ecosystem rows are the pretrained group."""
+    """Build one roster row; ecosystem rows are the pretrained group.
 
+    ``fields`` are the optional :class:`RosterModel` fields in
+    :data:`_ROW_DEFAULTS` (``expected_op_kinds``, ``expected_intermediates``,
+    ``has_constants``, ``random_init``, ``checkpoint_evidence``).
+    """
+
+    unknown = sorted(set(fields) - set(_ROW_DEFAULTS))
+    if unknown:
+        raise ValueError(f"unknown roster row fields: {unknown}")
+    values = {**_ROW_DEFAULTS, **fields}
+    intermediates: Mapping[str, Any] | None = values.pop("expected_intermediates")
     return RosterModel(
         family=family,
         realism="pretrained" if group == "ecosystem" else "config_built",
         builder=builder,
-        checkpoint_evidence=checkpoint_evidence,
-        expected_op_kinds=expected_op_kinds,
-        expected_intermediates=dict(expected_intermediates or {}),
-        has_constants=has_constants,
-        random_init=random_init,
+        expected_intermediates=dict(intermediates or {}),
         group=group,
+        **values,
     )
 
 
