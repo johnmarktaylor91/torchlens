@@ -199,7 +199,8 @@ log = tl.trace(model, x, save=tl.in_module('classifier'))
 # Save conv2d ops that are immediately followed by a relu, keeping a 4-op lookback window
 conv_before_relu = tl.func('conv2d') & tl.followed_by(tl.func('relu'))
 log = tl.trace(model, x, save=conv_before_relu,
-               lookback=4, lookback_payload_policy='detached_raw')
+               capture=tl.options.CaptureOptions(lookback=4,
+                                                 lookback_payload_policy='detached_raw'))
 
 # Stop capture early (can be faster than a plain forward pass)
 log = tl.trace(model, x, save=tl.in_module('features.6'), stop_after=tl.in_module('features.6'))
