@@ -269,8 +269,8 @@ def test_compare_keeps_a_site_whose_label_is_a_substring_of_another() -> None:
     trace, site, rows = _compare_fork(_SubstringLabels(), torch.randn(3, 4))
 
     assert site == "t_1_1"
-    superstrings = [name for name in trace.layer_logs if name != site and site in name]
-    assert superstrings == ["cat_1_10"], list(trace.layer_logs)
+    superstrings = [name for name in trace._layer_logs if name != site and site in name]
+    assert superstrings == ["cat_1_10"], list(trace._layer_logs)
     assert site in rows, sorted(rows)
     assert rows[site] == pytest.approx(1.0, abs=1e-5)
     assert "cat_1_10" in rows
