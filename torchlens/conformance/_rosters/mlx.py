@@ -10,10 +10,10 @@ forward) and ``random_init`` (parameters are random-initialized lazily from a
 seed, the realize-once check) select the C1 cells that apply.
 
 Rows are described by :class:`RosterRow` and folded into the runner's
-``RosterModel`` by :func:`roster`, passing only the fields that dataclass
-declares, so this file reads the same before and after the suite's record
-grows its ``expected_intermediates``, ``has_constants``, ``random_init`` and
-``group`` fields.
+``RosterModel`` by :func:`roster`. Ecosystem rows join the roster only when
+``TORCHLENS_CONFORMANCE_ECOSYSTEM=1`` (the same switch the torch reference
+roster uses for its pretrained rows); a row whose dependency is missing then
+fails its cells rather than reading as passed.
 """
 
 from __future__ import annotations
@@ -398,41 +398,40 @@ ECOSYSTEM: tuple[RosterRow, ...] = tuple(
 )
 
 
-def roster(include_ecosystem: bool = True) -> tuple[RosterModel, ...]:
+def roster(include_ecosystem: bool | None = None) -> tuple[RosterModel, ...]:
     """The MLX rows as the runner's ``RosterModel`` records.
 
     Parameters
     ----------
     include_ecosystem:
-        Whether the ecosystem rows are included (they report ``not_run``
-        when their weights or dependency are unavailable).
+        Whether the ecosystem rows are included; ``None`` (the default)
+        includes them when ``TORCHLENS_CONFORMANCE_ECOSYSTEM=1``.
 
     Returns
     -------
     tuple[RosterModel, ...]
-        Rows folded to the fields the installed ``RosterModel`` declares.
+        The config_built rows, then the ecosystem rows when included.
     """
 
-    names = {f.name for f in dataclasses.fields(RosterModel)}
+    if include_ecosystem is None:
+        include_ecosystem = os.environ.get(ECOSYSTEM_ENV) == "1"
     rows = CONFIG_BUILT + (ECOSYSTEM if include_ecosystem else ())
-    folded: list[RosterModel] = []
-    for row in rows:
-        values: dict[str, Any] = {
-            "family": row.family,
-            "realism": "config_built" if row.group == "config_built" else "pretrained",
-            "builder": row.builder,
-            "checkpoint_evidence": row.checkpoint_evidence,
-            "expected_op_kinds": row.expected_op_kinds,
-            "expected_intermediates": (
+    return tuple(
+        RosterModel(
+            family=row.family,
+            realism="config_built" if row.group == "config_built" else "pretrained",
+            builder=row.builder,
+            checkpoint_evidence=row.checkpoint_evidence,
+            expected_op_kinds=row.expected_op_kinds,
+            expected_intermediates=(
                 row.expected_intermediates() if row.expected_intermediates else None
             ),
-            "has_constants": row.has_constants,
-            "random_init": row.random_init,
-            "group": row.group,
-            "not_run_reason": row.not_run_reason,
-        }
-        folded.append(RosterModel(**{k: v for k, v in values.items() if k in names}))
-    return tuple(folded)
+            has_constants=row.has_constants,
+            random_init=row.random_init,
+            group=row.group,
+        )
+        for row in rows
+    )
 
 
 __all__ = [
