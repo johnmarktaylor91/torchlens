@@ -74,3 +74,34 @@ def test_debug_seed_copy_preserves_private_selection() -> None:
     trace = isolated_capture(model, torch.ones(1, 3), seed=7, capture=capture)
     assert any(op.has_saved_activation for op in trace if op.func_name == "relu")
     assert not any(op.has_saved_activation for op in trace if op.func_name == "linear")
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "expected_relu", "expected_linear"),
+    [({}, True, True), ({"save": ["relu"]}, True, False), ({"save": None}, False, False)],
+)
+def test_autoroute_reentry_preserves_resolved_save(
+    monkeypatch: pytest.MonkeyPatch, kwargs: dict, expected_relu: bool, expected_linear: bool
+) -> None:
+    def detector(model, payload, **forwarded):
+        if isinstance(payload, str):
+            return tl.trace(model, torch.ones(1, 3), **forwarded)
+        return None
+
+    monkeypatch.setattr("torchlens._autoroute.input.iter_by_priority", lambda: [detector])
+    trace = tl.trace(nn.Sequential(nn.Linear(3, 3), nn.ReLU()), "route", **kwargs)
+    assert (
+        any(op.has_saved_activation for op in trace.ops if op.func_name == "relu") is expected_relu
+    )
+    assert (
+        any(op.has_saved_activation for op in trace.ops if op.func_name == "linear")
+        is expected_linear
+    )
+
+
+def test_lit_probe_retains_its_save_all_default() -> None:
+    from torchlens.bridge.lit._runtime import traced_forward
+
+    x = torch.tensor([-1.0, 2.0])
+    trace = traced_forward(nn.ReLU(), {"input": x}, save=None)
+    assert torch.equal(trace.reconstruct_output(), torch.relu(x))

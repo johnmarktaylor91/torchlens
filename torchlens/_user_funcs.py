@@ -2770,6 +2770,10 @@ def trace(
                 "narrate": narrate,
                 "on_zero_fire": on_zero_fire,
             }
+            # Label/None selections are already carried privately by capture.
+            # Omitting the consumed save value preserves that receipt on re-entry.
+            if save is None:
+                autoroute_kwargs.pop("save")
             for detector in autoroute.input.iter_by_priority():
                 result = detector(model, input_args, **autoroute_kwargs)
                 if result is not None:
