@@ -653,7 +653,7 @@ def _run_replay(
     errors_non_fatal = 0
     pending_updates: dict[str, torch.Tensor] = {}
     pending_records: dict[str, list[FireRecord]] = {}
-    loaded = bool(getattr(log, "_loaded_from_bundle", False))
+    loaded = bool(log.__dict__.get("_loaded_from_bundle", False))
 
     for site in progress_bar(cone, total=len(cone), desc="torchlens.push"):
         site_key = _replay_site_key(site)
@@ -1308,7 +1308,7 @@ def _execute_group_call(
         return _execute_replay_func_strict(site, args, kwargs)
     except TorchLensError:
         raise
-    except Exception as exc:  # noqa: BLE001 - every torch failure is re-raised typed and chained
+    except Exception as exc:
         origin_labels = ", ".join(repr(_disclosure_label(origin)) for origin in origins)
         func_name = str(getattr(site, "func_name", "") or "the saved callable")
         raise ReplayPreconditionError(
@@ -1362,7 +1362,32 @@ def _keeps_captured_draw(
         return False
     if getattr(representative, "edge_substitutions", None):
         return False
+    if _edited_at_capture(representative):
+        # The captured out already carries the capture-time edit, and the
+        # replay composes that edit again at the site: keeping the value
+        # would apply it twice. The raw draw is only recoverable by
+        # re-execution (seeded when RNG states were saved).
+        return False
     return not _any_parent_updated(representative, pending_updates, label_keys)
+
+
+def _edited_at_capture(site: Op) -> bool:
+    """Whether ``site`` carries a capture-time fire record or replaced-op mark.
+
+    Parameters
+    ----------
+    site:
+        Op record to inspect.
+
+    Returns
+    -------
+    bool
+        True when a capture-time hook already shaped the recorded out.
+    """
+
+    if getattr(site, "intervention_replaced", False):
+        return True
+    return bool(getattr(site, "interventions", None))
 
 
 def _is_unseeded_single_draw(representative: Op, replay_group: Sequence[Op]) -> bool:

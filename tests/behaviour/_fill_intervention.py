@@ -222,7 +222,8 @@ def _expect_cone_only(cell: Cell, base: Any, edited: Any, label: str, what: str)
         cell.expect(
             _same(value, after[name]), f"{what}: {name} outside the cone of {label} changed"
         )
-    if _informative(before[label]):
+    # ``trace.ops`` omits input records: a leaf-site edit is asserted by its caller.
+    if label in before and label in after and _informative(before[label]):
         cell.expect(not _same(before[label], after[label]), f"{what}: {label} did not change")
 
 

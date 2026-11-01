@@ -240,7 +240,9 @@
   callable, so a hook aimed at one fires on the captured (or threaded) value and the edit
   propagates from there; a random-source op (`randn_like`, `dropout`, ...) with no recorded RNG
   state (`save_rng_states` off) keeps its captured draw when none of its arguments changed in the
-  replay, so an edit at it edits the value the trace holds, not a fresh draw. A trace loaded from a
+  replay, so an edit at it edits the value the trace holds, not a fresh draw (a random site that
+  was itself edited at capture holds a post-edit value, so its replay re-executes the draw, seeded
+  only when RNG states were saved). A trace loaded from a
   saved file carries no callables at any level, so every replay edit on it refuses
   `ReplayPreconditionError` naming that condition (remedy: re-capture in-process with
   `intervention_ready=True`, or `trace.run(model, inputs)`). A torch failure inside a replayed

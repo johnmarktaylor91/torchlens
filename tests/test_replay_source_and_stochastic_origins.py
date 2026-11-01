@@ -107,7 +107,6 @@ def test_fork_edit_on_loaded_trace_refuses_naming_the_loaded_condition(tmp_path)
     assert "trace.run(model, inputs)" in message
 
 
-@pytest.mark.smoke
 def test_fork_edit_at_random_source_site_edits_the_captured_draw() -> None:
     torch.manual_seed(0)
     model = _NoisyAffine().eval()
@@ -130,7 +129,42 @@ def test_fork_edit_at_random_source_site_edits_the_captured_draw() -> None:
     assert torch.equal(trace[noise_label].out, captured_noise), "the edit wrote through"
 
 
-@pytest.mark.smoke
+class _DropoutAffine(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.lin(torch.nn.functional.dropout(x, p=0.5, training=self.training))
+
+
+def test_fork_edit_at_a_random_site_edited_at_capture_applies_once() -> None:
+    """A capture-time edit is baked into the saved out; the fork edit must not re-apply it."""
+
+    torch.manual_seed(0)
+    model = _DropoutAffine().eval()
+    x = torch.randn(2, 4)
+    trace = tl.trace(
+        model,
+        x,
+        capture=_READY,
+        intervene=tl.when(tl.func("dropout"), tl.scale(0.5)),
+    )
+    dropout_label = _op_by_func(trace, "dropout")
+    captured = trace[dropout_label].out.detach().clone()
+    assert torch.equal(captured, x * 0.5), "the capture-time edit did not fire at the dropout"
+
+    fork = trace.fork()
+    fork.do(tl.label(dropout_label), tl.scale(0.5))
+
+    assert torch.equal(fork[dropout_label].out, captured * 0.5), (
+        "the fork edit re-applied the capture-time edit on the saved value"
+    )
+    with torch.no_grad():
+        expected = model.lin(captured * 0.5)
+    assert torch.allclose(fork.reconstruct_output(), expected, atol=1e-6)
+
+
 def test_edit_past_an_index_lookup_refuses_typed_naming_site_and_origin() -> None:
     torch.manual_seed(0)
     model = _IndexLookup().eval()
