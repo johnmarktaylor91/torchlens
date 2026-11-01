@@ -3051,3 +3051,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 82ee4d195e750019f4d19f845ed735d5d8504c04 (clean)
 recorded: 2026-11-01T06:03:45.029571+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: pp-union merge of the preview-protocol packets
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 50f2ffdcb3515f6f2283119a921623c12c38d6c6 (clean)
+recorded: 2026-11-01T06:43:57.326181+00:00
