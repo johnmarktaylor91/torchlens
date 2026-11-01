@@ -2857,6 +2857,14 @@
  },
  {
   "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/_postprocess/_conditional_records.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/_postprocess/_executor.py",
   "has_default": false,
@@ -3253,14 +3261,6 @@
   "file": "torchlens/_postprocess/finalization.py",
   "has_default": false,
   "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/_postprocess/finalization.py",
-  "has_default": false,
-  "sites": 2,
   "via_getattr": false
  },
  {

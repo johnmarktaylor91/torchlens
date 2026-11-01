@@ -113,3 +113,28 @@ def fsync_tree(root: Path) -> None:
                 continue
             fsync_file(file_path)
         fsync_dir(directory)
+
+
+def _restrict_mode(path: Path, mode: int) -> None:
+    """Best-effort tighten a streamed bundle path's permissions (POSIX only).
+
+    Twin of ``_io/bundle.py::_restrict_mode``: ``mkdir``/``open`` honor the
+    ambient umask, so under umask 002 the streaming bundle dir and its metadata
+    sidecars were left group-writable while the core bundle writer tightens
+    them. Best-effort: a filesystem that ignores mode bits is not a save
+    failure.
+
+    Parameters
+    ----------
+    path:
+        Bundle directory or file to tighten.
+    mode:
+        Target permission bits (``0o700`` for directories, ``0o600`` for files).
+    """
+
+    if os.name != "posix":
+        return
+    try:
+        path.chmod(mode)
+    except OSError:
+        pass

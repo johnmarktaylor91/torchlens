@@ -381,6 +381,11 @@
 
 ### Bug Fixes
 
+- **capture, to_disk**: a forward that returns one tensor in two output slots (`return a, a`)
+  gets one output op per slot, so the trace rebuilds. A streamed save no longer attaches another
+  op's tensor to an output after an orphan op shifted the blob numbering: save-time ids start
+  past the stream's issued count, and staging refuses a colliding id.
+
 - **replay**: replay no longer refuses a template parent as "ambiguous across the 2 passes of
   that layer" when a fused multi-pass layer's public raw label equals another op's final label
   (each residual add pair of a Hugging Face Gemma-2 decoder layer); it resolves the exact op the

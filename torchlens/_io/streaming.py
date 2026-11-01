@@ -11,7 +11,6 @@ bundle.
 from __future__ import annotations
 
 import io
-import os
 import pickle
 import platform
 import sys
@@ -29,7 +28,7 @@ from .. import __version__ as TORCHLENS_VERSION
 from .._state import pause_logging
 from . import TLSPEC_VERSION, ArtifactError
 from ._canonical_pickle import dump_canonical_metadata
-from ._durability import fsync_dir, fsync_tree
+from ._durability import _restrict_mode, fsync_dir, fsync_tree
 from .manifest import Manifest, TensorEntry, sha256_of_file
 from .scrub import BlobSpec
 from .streaming_async import (
@@ -66,31 +65,6 @@ class _PreparedPayload:
     requires_grad: bool
 
 
-def _restrict_mode(path: Path, mode: int) -> None:
-    """Best-effort tighten a streamed bundle path's permissions (POSIX only).
-
-    Twin of ``_io/bundle.py::_restrict_mode``: ``mkdir``/``open`` honor the
-    ambient umask, so under umask 002 the streaming bundle dir and its metadata
-    sidecars were left group-writable while the core bundle writer tightens
-    them. Best-effort: a filesystem that ignores mode bits is not a save
-    failure.
-
-    Parameters
-    ----------
-    path:
-        Bundle directory or file to tighten.
-    mode:
-        Target permission bits (``0o700`` for directories, ``0o600`` for files).
-    """
-
-    if os.name != "posix":
-        return
-    try:
-        path.chmod(mode)
-    except OSError:
-        pass
-
-
 def next_blob_id(blob_index: int) -> str:
     """Return the canonical zero-padded blob id for one monotonic counter.
 
@@ -106,6 +80,27 @@ def next_blob_id(blob_index: int) -> str:
     """
 
     return f"{blob_index:010d}"
+
+
+def _refuse_colliding_blob_id(
+    entries_by_blob_id: dict[str, TensorEntry], blob_id: str, label: str
+) -> None:
+    """Refuse a staged blob spec whose id the stream already wrote.
+
+    Scrub ids start past the stream's ids and reused blobs are filtered out, so a
+    written id here would make the scrubbed ref resolve to ANOTHER op's payload.
+
+    Raises
+    ------
+    ArtifactError
+        If ``blob_id`` was already streamed.
+    """
+
+    if (existing := entries_by_blob_id.get(blob_id)) is not None:
+        raise ArtifactError(
+            f"Streaming bundle blob id {blob_id} for {label!r} collides with "
+            f"the blob already streamed for {existing.label!r}."
+        )
 
 
 class BundleStreamWriter:
@@ -254,6 +249,11 @@ class BundleStreamWriter:
 
         self._blob_counter += 1
         return next_blob_id(self._blob_counter)
+
+    def _issued_blob_count(self) -> int:
+        """Return how many ids :meth:`next_blob_id` issued; save-time scrub ids start past it."""
+
+        return self._blob_counter
 
     def write_blob(
         self,
@@ -486,8 +486,7 @@ class BundleStreamWriter:
         self._settle_async_engine()
         try:
             for blob_id, tensor, kind, label in blob_specs:
-                if blob_id in self._entries_by_blob_id:
-                    continue
+                _refuse_colliding_blob_id(self._entries_by_blob_id, blob_id, label)
                 self.write_blob(blob_id, tensor, kind=kind, label=label)
 
             legacy_manifest = self._build_manifest(

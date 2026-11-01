@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from .._data_classes.op import Op, _dtype_or_none, _memory_or_none, _shape_or_none
+from .._ir._output_occurrences import output_container_path_meta
 from .._ir.op_record import amend_late_buffer_output_parent
 from .._quantities import Bytes, Duration
 from .._utils.display import identity
@@ -292,12 +293,9 @@ def _add_output_layers(
         if output_address_suffix != "":
             output_address += f".{output_address_suffix}"
         new_output_node.io_role = output_address
-        container_path_meta = getattr(self, "_output_container_specs_by_raw_label", {}).get(
-            output_node._label_raw
-        )
-        if container_path_meta is not None:
-            new_output_node.container_path = container_path_meta[0]
-            new_output_node.container_spec = container_path_meta[1]
+        path_meta = output_container_path_meta(self, output_node._label_raw, output_address_suffix)
+        if path_meta is not None:
+            new_output_node.container_path, new_output_node.container_spec = path_meta
 
         # Tensor metadata must describe the tensor the model actually returned,
         # not the parent op's recorded output: after an in-place mutation
