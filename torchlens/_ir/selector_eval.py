@@ -47,7 +47,7 @@ import re
 from collections.abc import Iterator, Sequence
 from typing import Any, Literal, cast
 
-from ..backends import TORCH_BACKEND_NAME
+from ..backends._backend_names import TORCH_BACKEND_NAME
 from ..intervention.errors import (
     LiveModeLabelError,
     SelectorCapabilityError,
