@@ -83,6 +83,34 @@ class _Masked(nn.Module):
         return torch.softmax(scores, dim=-1) @ hidden
 
 
+class _SubstringLabels(nn.Module):
+    """Ten ops whose first label (``t_1_1``) is a substring of the last (``cat_1_10``)."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Transpose, eight elementwise ops, transpose back, concatenate.
+
+        Parameters
+        ----------
+        x:
+            Input tensor of shape ``(rows, cols)``.
+
+        Returns
+        -------
+        torch.Tensor
+            Concatenation of the processed rows and the input.
+        """
+        hidden = x.t()
+        hidden = hidden + 1
+        hidden = hidden * 2
+        hidden = torch.relu(hidden)
+        hidden = hidden - 1
+        hidden = torch.tanh(hidden)
+        hidden = hidden / 2
+        hidden = torch.sigmoid(hidden)
+        hidden = hidden.t()
+        return torch.cat([hidden, x], dim=0)
+
+
 def _no_pass(label: str) -> str:
     head, sep, tail = label.rpartition(":")
     return head if sep and tail.isdigit() else label
@@ -96,9 +124,9 @@ def _first_interior_op(trace: tl.Trace) -> str:
     """Return the op label of the first saved single-pass op with parents."""
 
     for op in trace.saved_ops:
-        if op.parents and op.dtype is not None and op.dtype.is_floating_point:
-            if getattr(op.layer, "num_passes", 1) == 1 and op.out.numel() > 0:
-                return op.label
+        single_pass = getattr(op.layer, "num_passes", 1) == 1
+        if op.parents and op.dtype is not None and op.dtype.is_floating_point and single_pass:
+            return op.label
     raise AssertionError("no single-pass interior op")
 
 
@@ -181,7 +209,7 @@ def test_contradictory_member_orders_refuse_typed() -> None:
 # --- F6: identical ``-inf`` payloads read 0.0, not nan ------------------------
 
 
-@pytest.mark.parametrize("metric", ["relative_l2", "cosine", "relative_l1"])
+@pytest.mark.parametrize("metric", ["relative_l2", "cosine", "pearson"])
 def test_identical_payload_with_inf_reads_zero(metric: str) -> None:
     """Equal tensors holding ``-inf`` are unchanged under every registered metric."""
 
@@ -189,7 +217,18 @@ def test_identical_payload_with_inf_reads_zero(metric: str) -> None:
     assert _distance_value(mask, mask.clone(), metric) == 0.0
     with_nan = torch.tensor([1.0, float("nan"), 3.0])
     assert _distance_value(with_nan, with_nan.clone(), metric) == 0.0
-    assert _distance_value(torch.ones(3), torch.ones(3) * 2, metric) > 0.0
+    changed = _distance_value(torch.tensor([1.0, 2.0, 3.0]), torch.tensor([3.0, 2.0, 1.0]), metric)
+    assert math.isfinite(changed) and changed > 0.0
+
+
+def test_shared_non_finite_entries_are_left_out_of_the_metric() -> None:
+    """Masked positions both operands agree on do not turn the distance into nan."""
+
+    reference = torch.tensor([1.0, float("-inf"), 3.0])
+    candidate = torch.tensor([2.0, float("-inf"), 3.0])
+    assert _distance_value(reference, candidate, "relative_l2") == pytest.approx(1 / math.sqrt(10))
+    disagreeing = torch.tensor([1.0, 2.0, 3.0])
+    assert math.isnan(_distance_value(reference, disagreeing, "relative_l2"))
 
 
 def test_identical_payload_shortcut_leaves_user_callables_alone() -> None:
@@ -221,6 +260,20 @@ def test_masked_fork_reports_no_distance_outside_the_cone() -> None:
     assert set(mask_sites) <= set(outside)
     assert all(value == 0.0 for value in outside.values()), outside
     assert all(rows[site] >= value for value in outside.values())
+
+
+def test_compare_keeps_a_site_whose_label_is_a_substring_of_another() -> None:
+    """``t_1_1`` is resolved exactly in the other member, not as a substring of ``cat_1_10``."""
+
+    torch.manual_seed(0)
+    trace, site, rows = _compare_fork(_SubstringLabels(), torch.randn(3, 4))
+
+    assert site == "t_1_1"
+    superstrings = [name for name in trace.layer_logs if name != site and site in name]
+    assert superstrings == ["cat_1_10"], list(trace.layer_logs)
+    assert site in rows, sorted(rows)
+    assert rows[site] == pytest.approx(1.0, abs=1e-5)
+    assert "cat_1_10" in rows
 
 
 # --- F8: different shapes refuse naming the site ------------------------------

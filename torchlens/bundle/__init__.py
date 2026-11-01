@@ -31,6 +31,7 @@ from ..intervention.errors import (
     BundleMemberError,
 )
 from ..intervention.resolver import _resolve_sites
+from ..intervention.selectors import label as _exact_label
 from ..intervention.types import Relationship
 from ._aligned_sites import aligned_site_labels, resolve_aligned_site
 from ._alternatives import (
@@ -1661,10 +1662,11 @@ class Bundle:
         for left_site in getattr(left_log, "layer_list", []):
             label = str(left_site.layer_label)
             right_label = aligned.get(label, {}).get(right_name, label)
-            try:
-                right_site = _resolve_sites(right_log, right_label, max_fanout=1).first()
+            try:  # exact label: a bare string would be a substring selector
+                right_site = _resolve_sites(right_log, _exact_label(right_label), max_fanout=1)
             except Exception:  # noqa: BLE001 - missing sites are not common sites
                 continue
+            right_site = right_site.first()
             left_out = getattr(left_site, on, None)
             right_out = getattr(right_site, on, None)
             if not isinstance(left_out, torch.Tensor) or not isinstance(

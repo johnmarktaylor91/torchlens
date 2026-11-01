@@ -94,6 +94,45 @@ def _same_payload(reference: torch.Tensor, candidate: torch.Tensor) -> bool:
     return bool(torch.equal(reference[finite_mask], candidate[finite_mask]))
 
 
+def _finite_operands(
+    reference: torch.Tensor, candidate: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Drop the non-finite positions two operands agree on.
+
+    An additive attention mask puts ``-inf`` at the same positions of both
+    operands; a registered metric subtracts or normalises them and reads
+    ``nan`` even when every finite entry differs. When the non-finite entries
+    sit at the same positions with the same values (NaN-aware) the metric is
+    taken over the finite positions; otherwise the operands pass unchanged.
+
+    Parameters
+    ----------
+    reference:
+        Reference tensor.
+    candidate:
+        Compared tensor, same shape and dtype.
+
+    Returns
+    -------
+    tuple[torch.Tensor, torch.Tensor]
+        The operands, flattened to their shared finite positions when the
+        non-finite entries agree.
+    """
+
+    if not (reference.is_floating_point() or reference.is_complex()):
+        return reference, candidate
+    finite = torch.isfinite(reference)
+    if bool(finite.all()):
+        return reference, candidate
+    if reference.device != candidate.device:
+        candidate = candidate.to(reference.device)
+    if not torch.equal(finite, torch.isfinite(candidate)):
+        return reference, candidate
+    if not _same_payload(reference[~finite], candidate[~finite]):
+        return reference, candidate
+    return reference[finite], candidate[finite]
+
+
 def _distance_value(
     reference: torch.Tensor,
     candidate: torch.Tensor,
@@ -103,10 +142,9 @@ def _distance_value(
 ) -> float:
     """Return a Python float distance between two tensors.
 
-    Identical payloads read ``0.0`` under every registered metric without
-    evaluating it: the registered metrics divide by norms or subtract the
-    operands, so two equal tensors holding ``-inf`` (an additive attention
-    mask) or ``nan`` would otherwise read ``nan`` instead of "unchanged". A
+    Under a registered metric, identical payloads read ``0.0`` without
+    evaluating it and non-finite entries the operands agree on (an additive
+    ``-inf`` attention mask) are left out (see :func:`_finite_operands`); a
     user callable is evaluated as given. Operands of different shapes refuse
     (typed) instead of being compared flattened or failing inside torch.
 
@@ -129,9 +167,8 @@ def _distance_value(
     Raises
     ------
     InvalidArgumentError
-        ``code="metric_shape_mismatch"`` when the operands hold different
-        shapes (scalar-like pairs excepted: a 0-d and a 1-element tensor
-        compare as scalars).
+        ``code="metric_shape_mismatch"`` on different shapes (a 0-d and a
+        1-element tensor still compare as scalars).
     """
 
     metric_fn = resolve_metric(metric)
@@ -150,8 +187,10 @@ def _distance_value(
             reference_shape=tuple(reference.shape),
             candidate_shape=tuple(candidate.shape),
         )
-    if isinstance(metric, str) and _same_payload(reference, candidate):
-        return 0.0
+    if isinstance(metric, str):
+        if _same_payload(reference, candidate):
+            return 0.0
+        reference, candidate = _finite_operands(reference, candidate)
     value = relative_l1(reference, candidate) if scalar_pair else metric_fn(reference, candidate)
     return float(value.detach().item())
 

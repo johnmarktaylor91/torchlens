@@ -1209,7 +1209,7 @@ torchlens/intervention/_subspace_edits.py::subspace_ablate	90
 torchlens/intervention/_subspace_spec.py::rebuild_subspace_edit	71
 torchlens/intervention/_super/_base.py::_TensorBearing._require_immutable_param_evidence	64
 torchlens/intervention/_topology/topology.py::_find_alignment	70
-torchlens/intervention/_topology/topology.py::build_supergraph	127
+torchlens/intervention/_topology/topology.py::build_supergraph	108
 torchlens/intervention/audit.py::build_fire_record	71
 torchlens/intervention/audit.py::record_intervention_event	152
 torchlens/intervention/binding.py	1588

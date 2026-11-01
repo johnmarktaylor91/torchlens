@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 from ..intervention.resolver import _resolve_sites
+from ..intervention.selectors import label as _exact_label
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -74,8 +75,10 @@ def resolve_aligned_site(
     counterparts = aligned.get(label, {})
     resolved: dict[str, Any] = {}
     for name, log in members.items():
+        # Exact label: a bare string is a substring selector post hoc, so
+        # ``t_1_1`` would also match ``cat_1_10`` and drop the site as ambiguous.
         try:
-            table = _resolve_sites(log, counterparts.get(name, label), max_fanout=1)
+            table = _resolve_sites(log, _exact_label(counterparts.get(name, label)), max_fanout=1)
             resolved[name] = table.first()
         except Exception:  # noqa: BLE001 - missing sites are not common sites
             return None
