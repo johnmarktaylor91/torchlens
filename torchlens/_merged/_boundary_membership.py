@@ -12,9 +12,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..distributed._ledger import membership_digest_for_ranks
-from ._boundary_rules import _ROLE_NAMES, _is_strict_int, _refuse
-from ._enums import TENSORLESS_KINDS
+from ._boundary_rules import _refuse
+from ._rules import (
+    ROLE_NAMES,
+    empty_for_tensor_kind,
+    is_strict_int,
+    membership_digest_bound,
+    ranks_outside_membership,
+)
 
 __all__ = ("check_group_coherence", "check_group_membership", "check_roles")
 
@@ -41,11 +46,11 @@ def check_group_membership(entry: dict[str, Any], where: str, source: str) -> li
     if not isinstance(group.get("my_global_rank"), int):
         raise _refuse(f"{where} has no my_global_rank", source=source)
     global_ranks: list[Any] = group["global_ranks"]
-    if any(not _is_strict_int(rank) for rank in global_ranks):
+    if any(not is_strict_int(rank) for rank in global_ranks):
         raise _refuse(f"{where} group membership contains a non-integer rank", source=source)
     if len(set(global_ranks)) != len(global_ranks):
         raise _refuse(f"{where} group membership contains duplicate ranks", source=source)
-    if group["my_global_rank"] not in global_ranks:
+    if ranks_outside_membership((group["my_global_rank"],), global_ranks):
         raise _refuse(
             f"{where} claims rank {group['my_global_rank']} outside its group membership",
             source=source,
@@ -90,7 +95,7 @@ def check_group_coherence(
     # ``size`` is written by the recorder as len(global_ranks) and was never
     # validated: a forged size is a second, contradictory membership claim.
     size = group.get("size")
-    if not _is_strict_int(size) or size != len(global_ranks):
+    if not is_strict_int(size) or size != len(global_ranks):
         raise _refuse(
             f"{where} group size {size!r} does not equal its recorded "
             f"membership of {len(global_ranks)} rank(s)",
@@ -124,7 +129,7 @@ def _check_group_rank(
     """
 
     my_group_rank = group.get("my_group_rank")
-    if my_group_rank is not None and not _is_strict_int(my_group_rank):
+    if my_group_rank is not None and not is_strict_int(my_group_rank):
         raise _refuse(f"{where} my_group_rank is not an integer or null", source=source)
     # The group rank is definitionally the position of my_global_rank in the
     # recorded (c10d-ordered) rank list -- the writer reads it from
@@ -162,12 +167,10 @@ def _check_membership_digest_binding(
         When the digest is not ``membership_digest_for_ranks(global_ranks)``.
     """
 
-    # The membership digest is definitionally sha256(sorted(global_ranks)) and
-    # freely recomputable. A digest bound to a DIFFERENT membership rebinds this
-    # boundary's correlation joins, lifetime ordinals, and pre-join audit row to
-    # another communicator while the presence/relation checks keep reading the
-    # rank list -- the two views are attacker-separable unless tied here.
-    if correlation["membership_digest"] != membership_digest_for_ranks(global_ranks):
+    # The two views (digest-keyed joins, ordinals and audit row versus the
+    # rank-list-keyed presence and relation checks) are attacker-separable
+    # unless tied here; the derivation re-ties them for direct constructors.
+    if not membership_digest_bound(correlation, global_ranks):
         raise _refuse(
             f"{where} membership_digest does not equal the digest of its own "
             f"recorded group membership {sorted(int(r) for r in global_ranks)}",
@@ -195,7 +198,7 @@ def check_roles(entry: dict[str, Any], kind: Any, where: str, source: str) -> No
     # tensor-carrying kind records at least one role on a successful call, so
     # an empty record refuses here, at the one chokepoint merge time and load
     # rederivation share.
-    if not roles and kind not in TENSORLESS_KINDS:
+    if empty_for_tensor_kind(kind, roles):
         raise _refuse(
             f"{where} is a tensor-carrying {kind} boundary with zero tensor "
             "roles; a successful collective of this kind always records at "
@@ -238,14 +241,14 @@ def _check_role_entry(
 
     if not isinstance(role, dict):
         raise _refuse(f"{where} role entry {role_index} is not a mapping", source=source)
-    if role.get("role") not in _ROLE_NAMES:
+    if role.get("role") not in ROLE_NAMES:
         raise _refuse(
             f"{where} role entry {role_index} has role {role.get('role')!r} "
             "outside the closed vocabulary",
             source=source,
         )
     shape = role.get("shape")
-    if not isinstance(shape, list) or any(not _is_strict_int(dim) or dim < 0 for dim in shape):
+    if not isinstance(shape, list) or any(not is_strict_int(dim) or dim < 0 for dim in shape):
         raise _refuse(
             f"{where} role entry {role_index} has no well-formed shape "
             "(a list of non-negative integers)",
@@ -288,7 +291,7 @@ def _check_role_index(
     # and destination keeps its input position and leaves a hole in the
     # destination positions -- an honest recorder shape (R18-1 ii).
     index_value = role.get("index")
-    if not _is_strict_int(index_value) or index_value < 0:
+    if not is_strict_int(index_value) or index_value < 0:
         raise _refuse(
             f"{where} role entry {role_index} has no non-negative integer index",
             source=source,

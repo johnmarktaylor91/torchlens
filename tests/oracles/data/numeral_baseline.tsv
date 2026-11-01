@@ -3653,7 +3653,6 @@ error-strings	torchlens/_merged/_artifact.py	10
 error-strings	torchlens/_merged/_artifact.py	256
 error-strings	torchlens/_merged/_boundary_rules.py	10
 error-strings	torchlens/_merged/_boundary_rules.py	256
-error-strings	torchlens/_merged/_evidence.py	10
 error-strings	torchlens/_observability/_artifact.py	20
 error-strings	torchlens/_observability/_artifact.py	256
 error-strings	torchlens/_observability/_chassis.py	4.2
@@ -4352,12 +4351,13 @@ package-docstrings	torchlens/_merged/_boundary_rules.py	17
 package-docstrings	torchlens/_merged/_boundary_rules.py	65
 package-docstrings	torchlens/_merged/_engine.py	1.3
 package-docstrings	torchlens/_merged/_engine.py	2.2
-package-docstrings	torchlens/_merged/_engine.py	3.3
 package-docstrings	torchlens/_merged/_engine.py	4.3
 package-docstrings	torchlens/_merged/_enums.py	3.1
 package-docstrings	torchlens/_merged/_enums.py	3.3
 package-docstrings	torchlens/_merged/_enums.py	3.4
 package-docstrings	torchlens/_merged/_enums.py	3.5
+package-docstrings	torchlens/_merged/_evidence.py	10
+package-docstrings	torchlens/_merged/_evidence.py	18
 package-docstrings	torchlens/_merged/_evidence.py	3.2
 package-docstrings	torchlens/_merged/_evidence.py	4.3
 package-docstrings	torchlens/_merged/_presenter.py	10
@@ -4373,6 +4373,11 @@ package-docstrings	torchlens/_merged/_presenter.py	37
 package-docstrings	torchlens/_merged/_presenter.py	41
 package-docstrings	torchlens/_merged/_presenter.py	45
 package-docstrings	torchlens/_merged/_relation_table.py	1.5
+package-docstrings	torchlens/_merged/_relation_table.py	18
+package-docstrings	torchlens/_merged/_rules.py	10
+package-docstrings	torchlens/_merged/_rules.py	256
+package-docstrings	torchlens/_merged/_witness.py	18
+package-docstrings	torchlens/_merged/_witness.py	3.3
 package-docstrings	torchlens/_model_wrappers.py	10
 package-docstrings	torchlens/_notebook/_access.py	16
 package-docstrings	torchlens/_notebook/_access.py	1_1
