@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 import warnings
+import weakref
 from collections import Counter
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
@@ -153,6 +154,7 @@ def run(
         _release_discarded_capture(new_log)
     else:
         trace.replace_state_from(new_log)
+    _adopt_rerun_backward_graph(trace, new_log)
     trace.is_appended = False
     trace._append_sequence_id = 0
     trace.append_history = []
@@ -196,6 +198,43 @@ def run(
     trace._has_direct_writes = False
     trace._out_recipe_revision = getattr(trace, "_spec_revision", 0)
     return trace
+
+
+#: Rerun captures whose autograd graph a backward-ready rerun result adopted,
+#: kept alive exactly as long as that result (their tensor hooks route there).
+_RERUN_GRAPH_SOURCES: weakref.WeakKeyDictionary[Any, Any] = weakref.WeakKeyDictionary()
+
+
+def _adopt_rerun_backward_graph(trace: Trace, new_log: Trace) -> None:
+    """Make a backward-ready rerun result own the rerun capture's autograd graph.
+
+    The rerun's forward ran under ``new_log``, so its tensor grad hooks and
+    grad_fn registrations name ``new_log``, which the state swap discards. A
+    later ``trace.backward(loss)`` on the result would then record nothing on
+    the result (and an implicit pass on the discarded capture). Route the
+    capture's tensor hooks to ``trace`` and register its grad_fns there, the
+    same rebind the refresh projector performs, so a gradient edit armed on a
+    rerun result fires and ``.grad`` lands on the result. Traces that are not
+    backward-ready keep no graph and are left as they are.
+
+    Parameters
+    ----------
+    trace:
+        The rerun result (updated in place).
+    new_log:
+        The rerun's own capture.
+    """
+
+    if not getattr(trace, "backward_ready", False):
+        return
+    from ..backends.torch.backward import _register_forward_grad_fn
+
+    new_log._refresh_projection_target_ref = weakref.ref(trace)
+    _RERUN_GRAPH_SOURCES[trace] = new_log
+    for layer in trace.layer_list:
+        _register_forward_grad_fn(
+            trace, getattr(layer, "grad_fn_handle", None), layer._layer_label_raw
+        )
 
 
 def _release_discarded_capture(new_log: Trace) -> None:
