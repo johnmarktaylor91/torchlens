@@ -641,8 +641,9 @@ def _check_degraded_cache_coherence(cached: dict[str, Any], rederived: Any) -> N
        ranks (references to lost ranks stay unprovable and untouched).
     """
 
-    from ._engine import _STRUCTURAL_KINDS, _witness_consistency
+    from ._engine import _STRUCTURAL_KINDS
     from ._enums import BoundaryConsistency, MergeAlignment, MergeValueStatus
+    from ._witness import witness_consistency
 
     cached_joins = cached.get("joins")
     if not isinstance(cached_joins, list):
@@ -671,7 +672,7 @@ def _check_degraded_cache_coherence(cached: dict[str, Any], rederived: Any) -> N
                 f"descriptor cache join {index} consistency "
                 f"{join.get('consistency')!r} is outside the closed vocabulary"
             ) from exc
-        recomputed = _witness_consistency(
+        recomputed = witness_consistency(
             join["kind"],
             join["backend"],
             tuple(join["membership"]),
