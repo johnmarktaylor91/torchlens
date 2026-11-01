@@ -12,6 +12,7 @@ from torch import Tensor, nn
 from torch.utils.weak import WeakIdKeyDictionary
 
 from ... import _state
+from ._internal_read import internal_scalar_read
 
 __all__ = [
     "TorchLensMeta",
@@ -360,10 +361,7 @@ def mark_detached_saved_activation(
     # These `requires_grad`/`grad_fn` reads are TorchLens-internal bookkeeping run for
     # every saved activation (including registered-buffer sources). Mark them as internal
     # scalar reads so the r65 host-escape witness does not record them as host declared-state
-    # facts. Import locally: completeness_witness imports from this module, so a top-level
-    # import here would create a cycle.
-    from ._completeness_origins import internal_scalar_read
-
+    # facts.
     with internal_scalar_read():
         source_was_connected = bool(source.requires_grad and source.grad_fn is not None)
         retained_is_disconnected = not retained.requires_grad and retained.grad_fn is None
@@ -1092,14 +1090,11 @@ def set_tensor_label(t: Any, label: str) -> None:
     # the same storage, so re-insertion is idempotent) so in-place ops can
     # resolve overlapping live labeled aliases of their target. The
     # ``data_ptr()`` read is TorchLens bookkeeping on an already-pinned
-    # storage handle: it MUST run under ``internal_scalar_read`` (lazy import;
-    # ``completeness_witness`` imports from this module) plus
+    # storage handle: it MUST run under ``internal_scalar_read`` plus
     # ``pause_logging``, or the runnable host-escape patches record it as a
     # user raw-pointer escape and fail-close EVERY runnable capture to
     # UNVERIFIABLE (r15-H1 ``_HOST_ESCAPE_RAW_POINTER``).
     if meta.label_storage is not None:
-        from ._completeness_origins import internal_scalar_read
-
         try:
             with _state.pause_logging(), internal_scalar_read():
                 storage_ptr = storage_alias_index_key(meta.label_storage)
