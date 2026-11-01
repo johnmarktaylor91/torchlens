@@ -10,6 +10,8 @@ import sys
 import time
 import uuid
 import warnings
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NamedTuple, cast
@@ -43,7 +45,13 @@ __all__ = [
     "TraceInterventionMixin",
     "_ForkMemo",
     "_memoized_deep_copy",
+    "settle_armed_gradient_edits",
 ]
+
+#: HookSpec metadata naming the attach batch that armed a gradient rule.
+_ARMING_GROUP_KEY = "arming_group"
+#: HookSpec metadata naming the ``do`` arming row (``None`` for attach_hooks).
+_ARMING_EVENT_KEY = "arming_event_id"
 
 
 class _DoTransaction(NamedTuple):
@@ -59,6 +67,117 @@ class _DoTransaction(NamedTuple):
     engine: str
     transaction_start: float
     audit_rows_before: int
+
+
+@dataclass(frozen=True)
+class _SignalPlan:
+    """A ``do()`` plan split into its activation half and its backward half.
+
+    Each half is a ``(site, edit)`` door input (a list of pairs with ``edit``
+    ``None``, or a ``Recipe`` with ``edit`` ``None``), or ``None`` when the
+    plan has no site in that pass.
+    """
+
+    hooks_or_site: Any
+    value_or_hook: Any
+    forward: tuple[Any, Any] | None
+    backward: tuple[Any, Any] | None
+
+    @property
+    def backward_repr(self) -> str:
+        """Human rendering of the backward half's sites (for refusals)."""
+
+        assert self.backward is not None
+        site = self.backward[0]
+        if _is_public_recipe(site):
+            return ", ".join(repr(rule.target) for rule in site.rules)
+        if isinstance(site, list):
+            return ", ".join(repr(pair_site) for pair_site, _edit in site)
+        return repr(site)
+
+
+def _is_public_recipe(value: Any) -> bool:
+    """Whether ``value`` is the public immutable ``Recipe`` spec."""
+
+    from ..intervention.spec import Recipe
+
+    return isinstance(value, Recipe)
+
+
+def _door_pairs(hooks_or_site: Any, value_or_hook: Any) -> list[tuple[Any, Any]] | None:
+    """Lower the ``do()`` call shapes that can carry a gradient site to pairs.
+
+    Returns ``None`` for shapes that never address a gradient site
+    (selection batches, regions, slices), which keep their own doors.
+    """
+
+    if _is_public_recipe(hooks_or_site):
+        return [(rule.target, rule.edit) for rule in hooks_or_site.rules]
+    if value_or_hook is None and isinstance(hooks_or_site, Mapping):
+        return list(hooks_or_site.items())
+    if value_or_hook is None and isinstance(hooks_or_site, (list, tuple)):
+        if all(isinstance(pair, tuple) and len(pair) == 2 for pair in hooks_or_site):
+            return list(hooks_or_site)
+        return None
+    return [(hooks_or_site, value_or_hook)]
+
+
+def _signal_plan(hooks_or_site: Any, value_or_hook: Any) -> _SignalPlan | None:
+    """Split a ``do()`` input into its activation and backward halves.
+
+    Returns ``None`` when no site addresses the backward pass, so plain
+    activation edits keep the unchanged ``do`` path.
+    """
+
+    from ..intervention.spec import Rule, site_signal, split_site_by_signal
+
+    pairs = _door_pairs(hooks_or_site, value_or_hook)
+    if pairs is None or all(site_signal(site) == "forward" for site, _edit in pairs):
+        return None
+    forward: list[tuple[Any, Any]] = []
+    backward: list[tuple[Any, Any]] = []
+    for site, edit in pairs:
+        forward_site, backward_site = split_site_by_signal(site)
+        if forward_site is not None:
+            forward.append((forward_site, edit))
+        if backward_site is not None:
+            backward.append((backward_site, edit))
+
+    def _half(half: list[tuple[Any, Any]]) -> tuple[Any, Any] | None:
+        """Rebuild one half in the caller's own door shape."""
+
+        if not half:
+            return None
+        if _is_public_recipe(hooks_or_site):
+            from ..intervention.spec import Recipe
+
+            return Recipe(rules=tuple(Rule(site, edit) for site, edit in half)), None
+        if len(half) == 1 and value_or_hook is not None:
+            return half[0]
+        return list(half), None
+
+    return _SignalPlan(
+        hooks_or_site=hooks_or_site,
+        value_or_hook=value_or_hook,
+        forward=_half(forward),
+        backward=_half(backward),
+    )
+
+
+def _refuse_invalid_loss(loss: Any, plan: _SignalPlan | None) -> None:
+    """Refuse a ``loss=`` argument to ``do`` before any mutation."""
+
+    from ..intervention.spec import refuse_invalid_loss
+
+    refuse_invalid_loss(loss, has_gradient_site=plan is not None, door="do")
+
+
+def _is_gradient_entry(entry: Any) -> bool:
+    """Whether a normalized hook entry's site addresses the backward pass."""
+
+    from ..intervention.spec import site_signal
+
+    return site_signal(getattr(entry, "site_target", None)) == "backward"
 
 
 class TraceInterventionMixin(_TraceMixinBase):
@@ -300,9 +419,14 @@ class TraceInterventionMixin(_TraceMixinBase):
         strict: bool = False,
         prepend: bool = False,
         confirm_mutation: bool = False,
-        direction: str | None = None,
     ) -> Any:
         """Attach sticky hooks to the current intervention spec.
+
+        The site decides which tensor a hook sees: a bare site mounts on the
+        activation, ``tl.grad(site)`` on the gradient of the site's output
+        (fired by ``trace.backward(loss)``), and ``tl.grad(site) | site`` on
+        both. Attaching is registration only: nothing runs until the next
+        forward (activation hooks) or backward (gradient hooks).
 
         Raw PyTorch ``register_forward_hook`` remains supported for users who
         need module-local replacement logic outside this API; during active
@@ -324,9 +448,6 @@ class TraceInterventionMixin(_TraceMixinBase):
         confirm_mutation:
             Suppress the once-per-root mutate-in-place warning for callers that
             intentionally mutate this log.
-        direction:
-            Optional signal direction override: ``"forward"``, ``"backward"``,
-            or ``"both"``.
 
         Returns
         -------
@@ -343,23 +464,15 @@ class TraceInterventionMixin(_TraceMixinBase):
             entries_from_spec,
         )
 
-        if direction is not None and direction not in {"forward", "backward", "both"}:
-            raise InvalidArgumentError(
-                "attach_hooks(..., direction=...) must be 'forward', 'backward', or 'both'; "
-                f"received {direction!r}",
-                code="intervention_direction_invalid",
-                remedy="pass direction='forward', 'backward', 'both', or None",
-                argument="direction",
-            )
         if isinstance(hooks_or_site, PublicInterventionSpec):
             # C03 spec door: the ONE immutable spec is accepted unchanged.
-            # Its rules already carry site, action, and direction, so extra
-            # call arguments have nothing sound to bind to.
-            if hook is not None or extra_hooks or direction is not None:
+            # Its rules already carry site and action, so extra call
+            # arguments have nothing sound to bind to.
+            if hook is not None or extra_hooks:
                 raise InvalidArgumentError(
                     "attach_hooks(spec) takes the InterventionSpec alone: its "
-                    "rules already carry the site, action, and direction, so "
-                    "extra hook/direction arguments have nothing to bind to",
+                    "rules already carry the site and action, so extra hook "
+                    "arguments have nothing to bind to",
                     code="spec_door_extra_arguments",
                     remedy="pass only the spec (build clauses with tl.when and "
                     "merge them), or use the (site, hook) call shape without a spec",
@@ -371,14 +484,12 @@ class TraceInterventionMixin(_TraceMixinBase):
                 raise HookSignatureError("extra hooks require an initial hook argument.")
             entries = normalize_hook_plan(
                 [(hooks_or_site, hook_like) for hook_like in (hook, *extra_hooks)],
-                direction=cast(Any, direction),
                 allow_replay_only_site_targets=True,
             )
         else:
             entries = normalize_hook_plan(
                 hooks_or_site,
                 hook,
-                direction=cast(Any, direction),
                 allow_replay_only_site_targets=True,
             )
         from ..intervention.hooks import expand_facet_hook_entries
@@ -389,10 +500,19 @@ class TraceInterventionMixin(_TraceMixinBase):
             self._validate_intervention_site(entry.site_target, strict=strict)
         spec = self._ensure_intervention_spec()
         handle_ids: list[str] = []
+        arming_group = f"arm-{uuid.uuid4().hex}"
+        gradient_entries = 0
         for entry in entries:
             handle_id = f"hook-{uuid.uuid4().hex}"
             handle_ids.append(handle_id)
             metadata = dict(entry.metadata)
+            if _is_gradient_entry(entry):
+                # Settle contract: every gradient rule names the attach batch
+                # that armed it, so the backward pass end writes one settle
+                # row per arming transaction (settle_armed_gradient_edits).
+                metadata[_ARMING_GROUP_KEY] = arming_group
+                metadata.setdefault(_ARMING_EVENT_KEY, None)
+                gradient_entries += 1
             if metadata.get("facet_write"):
                 # Facet-slice entries MUST store the scatter wrapper built by
                 # expand_facet_hook_entries as the fire-time hook: storing the raw
@@ -414,7 +534,16 @@ class TraceInterventionMixin(_TraceMixinBase):
                 metadata=metadata,
                 prepend=prepend,
             )
-        self._mark_intervention_spec_mutated()
+        if gradient_entries == len(entries):
+            # Gradient rules edit nothing the forward recorded, so the saved
+            # activations stay current: bump the recipe revision without
+            # marking the outs stale.
+            self._mark_intervention_spec_mutated(outs_stale=False)
+        else:
+            self._mark_intervention_spec_mutated()
+        history: dict[str, Any] = {}
+        if gradient_entries and not self._live_backward_graph_available():
+            history["armed_for"] = "next_rerun"
         self._record_operation(
             "attach_hooks",
             hook_count=len(entries),
@@ -422,7 +551,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             strict=strict,
             prepend=prepend,
             handles=tuple(handle_ids),
-            direction=direction,
+            **history,
         )
         self._last_hook_handle_ids = tuple(handle_ids)
         return HookHandle(self, tuple(handle_ids), confirm_mutation=confirm_mutation)
@@ -635,9 +764,18 @@ class TraceInterventionMixin(_TraceMixinBase):
         model: nn.Module | None = None,
         x: Any = None,
         intervention: InterventionOptions | None = None,
-        direction: str | None = None,
+        loss: Callable[["Trace"], torch.Tensor] | None = None,
     ) -> "Trace":
         """Apply an intervention and dispatch to replay, rerun, or set-only.
+
+        The site decides which tensor the edit changes: a bare site edits the
+        activation, ``tl.grad(site)`` the gradient of the site's output, and
+        ``tl.grad(site) | site`` both. A gradient edit needs a backward pass:
+        with ``model=`` and ``x=`` the forward reruns on a new trace with the
+        edit armed (the audit row says ``"armed"``) and the next
+        ``result.backward(loss)`` applies it; ``engine="set_only"`` arms it on
+        this trace instead. Replay re-executes forward ops only and refuses a
+        gradient edit (``replay_gradient_edit_unsupported``).
 
         Parameters
         ----------
@@ -653,13 +791,19 @@ class TraceInterventionMixin(_TraceMixinBase):
             Grouped intervention options (``InterventionOptions``: ``engine``
             in ``"auto"``/``"replay"``/``"rerun"``/``"set_only"``,
             ``confirm_mutation``, ``strict``).
-        direction:
-            Optional signal direction override for hook-style mutations.
+        loss:
+            Callable of the returned trace giving a scalar loss, for a plan
+            with a gradient site: after arming, the door runs
+            ``result.backward(loss(result))`` so the gradient edit fires inside
+            this call. Refuses ``do_loss_not_callable`` for a tensor or any
+            other non-callable and ``do_loss_without_gradient_site`` when no
+            site is a gradient site.
 
         Returns
         -------
         Trace
-            This model log after the selected propagation engine runs.
+            This model log after the selected propagation engine runs, or, for
+            a gradient plan rerun, the new trace holding the armed edits.
         """
 
         if type(hooks_or_site).__name__ == "SiteTable":
@@ -670,16 +814,25 @@ class TraceInterventionMixin(_TraceMixinBase):
 
             hooks_or_site = normalize_selector_like(hooks_or_site, lifecycle="live")
         intervention_options = merge_intervention_options(intervention=intervention)
+        signal_plan = _signal_plan(hooks_or_site, value_or_hook)
+        _refuse_invalid_loss(loss, signal_plan)
         from ..intervention._param_fingerprint import changed_param_scope
 
         with changed_param_scope(intervention_options.allow_changed_params):
+            if signal_plan is not None:
+                return self._do_signal_plan(
+                    signal_plan,
+                    model=model,
+                    x=x,
+                    intervention_options=intervention_options,
+                    loss=loss,
+                )
             return self._do_with_options(
                 hooks_or_site,
                 value_or_hook,
                 model=model,
                 x=x,
                 intervention_options=intervention_options,
-                direction=direction,
             )
 
     def _do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges the options and enters the changed-parameter scope
@@ -690,7 +843,6 @@ class TraceInterventionMixin(_TraceMixinBase):
         model: nn.Module | None,
         x: Any,
         intervention_options: InterventionOptions,
-        direction: str | None,
     ) -> "Trace":
         """Run one ``do()`` transaction under its merged options.
 
@@ -710,8 +862,6 @@ class TraceInterventionMixin(_TraceMixinBase):
             Input required when ``engine="rerun"``.
         intervention_options:
             Merged ``InterventionOptions``.
-        direction:
-            Optional signal direction override for hook-style mutations.
 
         Returns
         -------
@@ -757,7 +907,6 @@ class TraceInterventionMixin(_TraceMixinBase):
                 engine=selected_engine,
                 strict=strict_value,
                 confirm_mutation=confirm_mutation_value,
-                direction=direction,
             )
         except BaseException as exc:
             self._record_do_intervention_event(txn, status="error", error=repr(exc))
@@ -770,7 +919,6 @@ class TraceInterventionMixin(_TraceMixinBase):
             model_supplied=model is not None,
             x_supplied=x is not None,
             strict=strict_value,
-            direction=direction,
         )
 
         if (
@@ -801,6 +949,385 @@ class TraceInterventionMixin(_TraceMixinBase):
         quarantine_episode_after_perturbed_replay(result)
         return result
 
+    def _do_signal_plan(
+        self: "Trace",
+        plan: "_SignalPlan",
+        *,
+        model: nn.Module | None,
+        x: Any,
+        intervention_options: InterventionOptions,
+        loss: Callable[["Trace"], torch.Tensor] | None,
+    ) -> "Trace":
+        """Run one ``do()`` whose plan has a gradient (or autograd-node) site.
+
+        The engine is chosen and the WHOLE plan (both halves, every edit) is
+        normalised and resolved before anything mutates, so a refused
+        gradient edit leaves no activation edit behind. ``rerun`` runs the
+        activation half live on a fork and arms the gradient half on that
+        fork only; ``set_only`` arms both on this trace. The canonical audit
+        row says ``"armed"`` until a backward pass settles it.
+
+        Parameters
+        ----------
+        plan:
+            The site plan split into its activation and backward halves.
+        model:
+            Model for the rerun.
+        x:
+            Input for the rerun.
+        intervention_options:
+            Merged ``InterventionOptions``.
+        loss:
+            Optional callable of the returned trace; runs the backward here.
+
+        Returns
+        -------
+        Trace
+            The armed trace: a new trace after a rerun, this trace under
+            ``set_only``.
+        """
+
+        engine = self._select_signal_plan_engine(
+            intervention_options.engine, model=model, x=x, plan=plan
+        )
+        strict = intervention_options.strict
+        preflight_txn = _DoTransaction(
+            hooks_or_site=plan.hooks_or_site,
+            value_or_hook=plan.value_or_hook,
+            engine=engine,
+            transaction_start=time.monotonic(),
+            audit_rows_before=len(self.intervention_audit),
+        )
+        try:
+            self._preflight_signal_plan(plan, strict=strict)
+            if engine == "rerun":
+                assert model is not None
+                self._validate_supplied_model_matches_capture(model)
+        except BaseException as exc:
+            self._record_do_intervention_event(
+                preflight_txn, status="error", error=repr(exc), event_row=True
+            )
+            raise
+        if engine == "rerun":
+            result = self._fork_trace(name=None)
+        else:
+            self._warn_if_root_mutation(confirm_mutation=intervention_options.confirm_mutation)
+            result = self
+        txn = preflight_txn._replace(audit_rows_before=len(result.intervention_audit))
+        attached: list[str] = []
+        try:
+            backward_handles, forced = result._arm_signal_plan(
+                plan, engine=engine, strict=strict, model=model, x=x, attached=attached
+            )
+        except BaseException as exc:
+            result._detach_handles(attached)
+            self._record_do_intervention_event(
+                preflight_txn._replace(audit_rows_before=len(self.intervention_audit)),
+                status="error",
+                error=repr(exc),
+                event_row=True,
+            )
+            raise
+        envelope = result._record_do_intervention_event(
+            txn,
+            status=None if plan.forward is not None else "armed",
+            staged_only=engine == "set_only" and plan.forward is not None,
+            extra_fields={"armed_edits": len(backward_handles), "awaiting": "backward"},
+            event_row=True,
+        )
+        result._stamp_arming_event(backward_handles, str(envelope["event_id"]))
+        if forced:
+            result.last_run["backward_ready_forced"] = True
+        result._record_operation(
+            "do",
+            mutation_kind="signal_plan",
+            engine=engine,
+            requested_engine=intervention_options.engine,
+            model_supplied=model is not None,
+            x_supplied=x is not None,
+            strict=strict,
+            armed_edits=len(backward_handles),
+        )
+        if plan.forward is not None and engine == "rerun":
+            from ..capture._episode_coupling import quarantine_episode_after_perturbed_replay
+
+            quarantine_episode_after_perturbed_replay(result)
+        if loss is not None:
+            result._run_do_loss(loss, attached=tuple(attached), txn=txn)
+        return result
+
+    def _select_signal_plan_engine(
+        self: "Trace",
+        engine: str,
+        *,
+        model: nn.Module | None,
+        x: Any,
+        plan: "_SignalPlan",
+    ) -> str:
+        """Pick the engine for a gradient plan, refusing replay before any mutation.
+
+        Raises
+        ------
+        InvalidArgumentError
+            ``intervention_engine_invalid`` for an unknown engine, and
+            ``replay_gradient_edit_unsupported`` for ``engine="replay"`` or an
+            ``auto`` engine with neither ``model=`` nor ``x=``.
+        EngineDispatchError
+            When only one of ``model=`` / ``x=`` is given.
+        """
+
+        from ..intervention.replay import gradient_edit_replay_refusal
+
+        if engine not in {"auto", "replay", "rerun", "set_only"}:
+            raise InvalidArgumentError(
+                "do(..., engine=...) must be 'auto', 'replay', 'rerun', or 'set_only'; "
+                f"received {engine!r}",
+                code="intervention_engine_invalid",
+                remedy="pass engine='auto', 'replay', 'rerun', or 'set_only'",
+                argument="engine",
+            )
+        if engine == "set_only":
+            return engine
+        if engine == "replay" or (engine == "auto" and model is None and x is None):
+            raise gradient_edit_replay_refusal(plan.backward_repr)
+        return self._select_do_engine(engine, model=model, x=x)
+
+    def _preflight_signal_plan(self: "Trace", plan: "_SignalPlan", *, strict: bool) -> None:
+        """Normalise and resolve both halves of a gradient plan without mutating.
+
+        Normalisation runs every edit's mount check (an activation-only edit
+        on a gradient site refuses ``edit_signal_mismatch`` there), and every
+        site resolves on this trace, so a refusal anywhere leaves the trace
+        exactly as it was.
+        """
+
+        from ..intervention.hooks import normalize_hook_plan
+        from ..intervention.spec import entries_from_spec
+
+        for half in (plan.forward, plan.backward):
+            if half is None:
+                continue
+            site, edit = half
+            if _is_public_recipe(site):
+                entries = entries_from_spec(site, door="do")
+            else:
+                entries = normalize_hook_plan(site, edit, allow_replay_only_site_targets=True)
+            for entry in entries:
+                self._validate_intervention_site(entry.site_target, strict=strict)
+
+    def _arm_signal_plan(
+        self: "Trace",
+        plan: "_SignalPlan",
+        *,
+        engine: str,
+        strict: bool,
+        model: nn.Module | None,
+        x: Any,
+        attached: list[str],
+    ) -> tuple[tuple[str, ...], bool]:
+        """Apply the activation half, run the rerun, then arm the backward half.
+
+        ``attached`` collects every handle this transaction attaches, so the
+        caller can detach them all when any step fails.
+
+        Returns
+        -------
+        tuple[tuple[str, ...], bool]
+            The backward-half handle ids and whether the rerun had to force
+            backward readiness.
+        """
+
+        forced = False
+        if plan.forward is not None:
+            _kind, handles = self._apply_do_mutation(
+                plan.forward[0],
+                plan.forward[1],
+                engine=engine,
+                strict=strict,
+                confirm_mutation=True,
+            )
+            attached.extend(handles)
+        if engine == "rerun":
+            forced = self._force_backward_ready()
+            self.run(model, x, replay=ReplayOptions(strict=strict))
+        assert plan.backward is not None
+        site, edit = plan.backward
+        if _is_public_recipe(site):
+            handle = self.attach_hooks(site, strict=strict, confirm_mutation=True)
+        else:
+            handle = self.attach_hooks(site, edit, strict=strict, confirm_mutation=True)
+        backward_handles = tuple(handle.handle_ids)
+        attached.extend(backward_handles)
+        return backward_handles, forced
+
+    def _force_backward_ready(self: "Trace") -> bool:
+        """Make this trace's next rerun graph-connected; return whether it had to.
+
+        A gradient edit needs the autograd graph, so a rerun that arms one is
+        backward-ready whatever the source capture chose. The caller discloses
+        a forced rerun as ``last_run["backward_ready_forced"] = True``.
+        """
+
+        if getattr(self, "backward_ready", False):
+            return False
+        self.backward_ready = True
+        return True
+
+    def _detach_handles(self: "Trace", handle_ids: list[str] | tuple[str, ...]) -> None:
+        """Remove exactly the sticky hooks one transaction attached."""
+
+        for handle_id in handle_ids:
+            self.clear_edits(handle=handle_id, confirm_mutation=True)
+
+    def _stamp_arming_event(self: "Trace", handle_ids: tuple[str, ...], event_id: str) -> None:
+        """Record the arming row's id on the gradient rules it armed.
+
+        The settle rows written at each backward pass end name this id as
+        their ``parent_event_id`` (registration identity), while each pass
+        writes its own row (execution identity).
+        """
+
+        wanted = set(handle_ids)
+        spec = self._intervention_spec
+        if spec is None:
+            return
+        for hook_spec in spec.hook_specs:
+            if hook_spec.handle in wanted and _ARMING_GROUP_KEY in hook_spec.metadata:
+                hook_spec.metadata[_ARMING_EVENT_KEY] = event_id
+        self._mark_intervention_spec_mutated(outs_stale=False)
+
+    def _run_do_loss(
+        self: "Trace",
+        loss: Callable[["Trace"], torch.Tensor],
+        *,
+        attached: tuple[str, ...],
+        txn: _DoTransaction,
+    ) -> None:
+        """Run ``self.backward(loss(self))`` for ``do(..., loss=)``.
+
+        A loss callable that raises (or a backward that refuses its value,
+        such as a non-scalar or detached tensor) writes an ``error`` envelope,
+        removes the hooks this ``do`` attached, and re-raises the original
+        exception, the same cleanup a failed rerun gets.
+        """
+
+        try:
+            self.backward(loss(self))
+        except BaseException as exc:
+            self._detach_handles(attached)
+            self._record_do_intervention_event(
+                txn._replace(audit_rows_before=len(self.intervention_audit)),
+                status="error",
+                error=repr(exc),
+                event_row=True,
+            )
+            raise
+
+    def _live_backward_graph_available(self: "Trace") -> bool:
+        """Whether a backward on this trace can reach its recorded forward.
+
+        A loaded trace carries no live autograd graph, and a replay result's
+        values were recomputed off the graph, so gradient rules attached there
+        wait for the next rerun.
+        """
+
+        if bool(self.__dict__.get("_loaded_from_bundle", False)):
+            return False
+        return bool(self.state != TraceState.REPLAY_PROPAGATED)
+
+    @property
+    def armed_edits(self: "Trace") -> tuple[Any, ...]:
+        """The gradient rules in this trace's recipe, as ``Rule`` clauses.
+
+        Read-only. Each entry is ``Rule(target=tl.grad(...), edit=...)`` with
+        ``signal == "backward"``; the rules stay armed (sticky) until
+        ``clear_edits(...)`` or their handle's ``remove()``.
+        """
+
+        from .._ir.selector_eval import selector_from_spec
+        from ..intervention.spec import Rule
+
+        spec = self._intervention_spec
+        if spec is None:
+            return ()
+        rules: list[Any] = []
+        for hook_spec in spec.hook_specs:
+            if _ARMING_GROUP_KEY not in hook_spec.metadata:
+                continue
+            edit = hook_spec.helper if hook_spec.helper is not None else hook_spec.hook
+            rules.append(Rule(selector_from_spec(hook_spec.site_target), edit))
+        return tuple(rules)
+
+    def _armed_summary_line(self: "Trace") -> str | None:
+        """Summary text while any armed gradient rule has not fired here.
+
+        Returns
+        -------
+        str | None
+            ``"N gradient edits armed; call trace.backward(loss)"`` or ``None``.
+        """
+
+        if bool(self.__dict__.get("_loaded_from_bundle", False)):
+            annotations = getattr(self, "annotations", None) or {}
+            persisted = annotations.get("armed_gradient_edits")
+            if isinstance(persisted, int) and persisted > 0:
+                noun = "edit" if persisted == 1 else "edits"
+                return f"{persisted} gradient {noun} armed; they cannot run until a rerun"
+            return None
+        pending = self._unfired_gradient_rule_count()
+        if not pending:
+            return None
+        noun = "edit" if pending == 1 else "edits"
+        return f"{pending} gradient {noun} armed; call trace.backward(loss)"
+
+    def _unfired_gradient_rule_count(self: "Trace") -> int | None:
+        """Count the gradient rules in the recipe that never fired on this trace.
+
+        Returns
+        -------
+        int | None
+            The count, or ``None`` when the recipe holds no gradient rule.
+        """
+
+        spec = self._intervention_spec
+        hook_specs = [
+            hook_spec
+            for hook_spec in (spec.hook_specs if spec is not None else ())
+            if _ARMING_GROUP_KEY in hook_spec.metadata
+        ]
+        if not hook_specs:
+            return None
+        fired_groups = {
+            str(row.get("arming_group"))
+            for row in self.state_history
+            if isinstance(row, dict)
+            and row.get("op") == "intervention_event"
+            and row.get("door") == "backward"
+            and row.get("status") == "fired"
+        }
+        return sum(
+            1
+            for hook_spec in hook_specs
+            if str(hook_spec.metadata[_ARMING_GROUP_KEY]) not in fired_groups
+        )
+
+    def _refresh_armed_annotation(self: "Trace") -> None:
+        """Keep ``annotations["armed_gradient_edits"]`` equal to the unfired count.
+
+        The annotation persists with the trace, so a saved armed result says
+        how many gradient edits never ran (the recipe itself travels through
+        ``save_intervention``).
+        """
+
+        count = self._unfired_gradient_rule_count()
+        annotations = getattr(self, "annotations", None)
+        if count is None:
+            if isinstance(annotations, dict):
+                annotations.pop("armed_gradient_edits", None)
+            return
+        if isinstance(annotations, dict):
+            annotations["armed_gradient_edits"] = count
+
     def _record_do_intervention_event(
         self: "Trace",
         txn: _DoTransaction,
@@ -808,7 +1335,9 @@ class TraceInterventionMixin(_TraceMixinBase):
         status: str | None,
         error: str | None = None,
         staged_only: bool = False,
-    ) -> None:
+        extra_fields: dict[str, Any] | None = None,
+        event_row: bool = False,
+    ) -> dict[str, Any]:
         """Write the ONE InterventionEvent envelope for one do() transaction.
 
         Parameters
@@ -824,6 +1353,17 @@ class TraceInterventionMixin(_TraceMixinBase):
             Stringified failure for error rows.
         staged_only:
             Whether the edit was staged without any propagation attempt.
+        extra_fields:
+            Further envelope disclosures (the armed keys of a gradient plan).
+        event_row:
+            Write the canonical audit row as the ``EVENT`` envelope row (which
+            carries ``status``) instead of the ``ACT`` row: a gradient plan's
+            row must say ``"armed"`` in ``intervention_audit[-1]``.
+
+        Returns
+        -------
+        dict
+            The envelope row.
         """
 
         from ..intervention.audit import (
@@ -889,6 +1429,8 @@ class TraceInterventionMixin(_TraceMixinBase):
         extra: dict[str, Any] = {}
         if staged_only:
             extra["staged_only"] = True
+        if extra_fields:
+            extra.update(extra_fields)
         if self._is_selection_batch(hooks_or_site):
             kinds = [self._selection_batch_kind(selection) for selection, _edit in hooks_or_site]
             extra["selection_batch"] = {
@@ -900,7 +1442,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                     for door in ("act", "param", "edge")
                 },
             }
-        record_intervention_event(
+        return record_intervention_event(
             self,
             lane="set_only" if engine == "set_only" else engine,  # type: ignore[arg-type]
             door="do",
@@ -913,7 +1455,9 @@ class TraceInterventionMixin(_TraceMixinBase):
             zero_fire_rule_ids=zero_fire_rule_ids,
             error=error,
             extra=extra or None,
-            append_audit_row=len(self.intervention_audit) == txn.audit_rows_before,
+            append_audit_row=not event_row
+            and len(self.intervention_audit) == txn.audit_rows_before,
+            audit_event_row=event_row,
         )
 
     def fork(self: "Trace", name: str | None = None) -> "Trace":
@@ -1038,7 +1582,6 @@ class TraceInterventionMixin(_TraceMixinBase):
         engine: str,
         strict: bool,
         confirm_mutation: bool,
-        direction: str | None,
     ) -> tuple[str, tuple[str, ...]]:
         """Apply the mutation part of ``do`` and report its kind.
 
@@ -1054,8 +1597,6 @@ class TraceInterventionMixin(_TraceMixinBase):
             Whether selector checks should be strict.
         confirm_mutation:
             Whether root mutation warnings should be suppressed.
-        direction:
-            Optional signal direction override.
 
         Returns
         -------
@@ -1121,9 +1662,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                     remedy="pass only the (selection, edit) pair list",
                     argument="value_or_hook",
                 )
-            return self._apply_selection_batch_do(
-                hooks_or_site, engine=engine, strict=strict, direction=direction
-            )
+            return self._apply_selection_batch_do(hooks_or_site, engine=engine, strict=strict)
         if isinstance(hooks_or_site, (Selector, Selection)):
             self._warn_if_root_mutation(confirm_mutation=confirm_mutation)
             return self._apply_selection_do(
@@ -1131,13 +1670,11 @@ class TraceInterventionMixin(_TraceMixinBase):
                 value_or_hook,
                 engine=engine,
                 strict=strict,
-                direction=direction,
             )
         if value_or_hook is not None and (engine == "set_only" or not callable(value_or_hook)):
             self.set(
                 hooks_or_site,
                 value_or_hook,
-                direction=direction or "forward",
                 strict=strict,
                 confirm_mutation=confirm_mutation,
             )
@@ -1145,7 +1682,6 @@ class TraceInterventionMixin(_TraceMixinBase):
         handle = self.attach_hooks(
             hooks_or_site,
             value_or_hook,
-            direction=direction,
             strict=strict,
             confirm_mutation=confirm_mutation,
         )
@@ -1190,7 +1726,6 @@ class TraceInterventionMixin(_TraceMixinBase):
         *,
         engine: str,
         strict: bool,
-        direction: str | None,
     ) -> tuple[str, tuple[str, ...]]:
         """Apply a selection-batch ``do([(selection, edit), ...])`` (D33, v1).
 
@@ -1250,17 +1785,13 @@ class TraceInterventionMixin(_TraceMixinBase):
 
         normalized = assign_batch_donor_groups(normalized)
         if any(kind != "ACT" for kind in kinds):
-            return self._apply_cross_kind_batch_do(
-                normalized, kinds, engine=engine, strict=strict, direction=direction
-            )
+            return self._apply_cross_kind_batch_do(normalized, kinds, engine=engine, strict=strict)
         plans = [
             self._batch_act_plan(index, selection, edit)
             for index, (selection, edit) in enumerate(normalized)
         ]
         all_hook_items = [item for _resolved, plan, _audit in plans for item in plan]
-        attached = self._attach_selection_plan_hooks(
-            all_hook_items, strict=strict, direction=direction
-        )
+        attached = self._attach_selection_plan_hooks(all_hook_items, strict=strict)
         for _resolved, _plan, audit in plans:
             self.intervention_audit.append(audit)
         return "selection_hooks", attached
@@ -1294,7 +1825,6 @@ class TraceInterventionMixin(_TraceMixinBase):
         *,
         engine: str,
         strict: bool,
-        direction: str | None,
     ) -> tuple[str, tuple[str, ...]]:
         """Apply a batch mixing ACT with PARAM/EDGE selections as ONE transaction.
 
@@ -1338,14 +1868,12 @@ class TraceInterventionMixin(_TraceMixinBase):
             for kind, step in steps:
                 if kind == "ACT":
                     items = [item for _resolved, plan, _audit in step for item in plan]
-                    attached.extend(
-                        self._attach_selection_plan_hooks(items, strict=strict, direction=direction)
-                    )
+                    attached.extend(self._attach_selection_plan_hooks(items, strict=strict))
                     self.intervention_audit.extend(audit for _resolved, _plan, audit in step)
                     self.push(replay=ReplayOptions(strict=strict))
                     continue
                 mutation_kind, handles = self._apply_selection_do(
-                    *step, engine=engine, strict=strict, direction=direction
+                    *step, engine=engine, strict=strict
                 )
                 attached.extend(handles)
                 if mutation_kind == "selection_hooks":
@@ -1364,7 +1892,6 @@ class TraceInterventionMixin(_TraceMixinBase):
         *,
         engine: str,
         strict: bool,
-        direction: str | None,
     ) -> tuple[str, tuple[str, ...]]:
         """Apply a Selection-targeted edit under the mask-application contract.
 
@@ -1443,7 +1970,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 return "selection_replayed", ()
             self.intervention_audit.append(audit)
             return "selection_set", ()
-        attached = self._attach_selection_plan_hooks(hook_items, strict=strict, direction=direction)
+        attached = self._attach_selection_plan_hooks(hook_items, strict=strict)
         self.intervention_audit.append(audit)
         return "selection_hooks", attached
 
@@ -1452,7 +1979,6 @@ class TraceInterventionMixin(_TraceMixinBase):
         hook_items: list[dict[str, Any]],
         *,
         strict: bool,
-        direction: str | None,
     ) -> tuple[str, ...]:
         """Attach one selection plan's hooks transactionally.
 
@@ -1471,7 +1997,6 @@ class TraceInterventionMixin(_TraceMixinBase):
                     item["edit"],
                     strict=strict,
                     confirm_mutation=True,
-                    direction=direction,
                 )
                 attached.extend(handle.handle_ids)
         except BaseException:
@@ -1658,9 +2183,9 @@ class TraceInterventionMixin(_TraceMixinBase):
                     helper=helper_spec,
                     site_label=op.layer_label,
                     timing="post",
-                    direction="forward",
+                    signal="forward",
                     helper_name=helper_name,
-                    run_ctx=context.run_ctx if hasattr(context, "run_ctx") else None,
+                    run_ctx=getattr(context, "run_state", None),
                     replaced=applied is not saved,
                 )
             ]
@@ -1828,8 +2353,12 @@ class TraceInterventionMixin(_TraceMixinBase):
             self._intervention_spec = InterventionSpec()
         return self._intervention_spec
 
-    def _mark_intervention_spec_mutated(self: "Trace") -> None:
+    def _mark_intervention_spec_mutated(self: "Trace", *, outs_stale: bool = True) -> None:
         """Invalidate cached frozen views and mark the spec stale.
+
+        ``outs_stale=False`` is for gradient-only recipe changes: they edit
+        nothing the forward recorded, so a trace whose outs matched its recipe
+        keeps that state and stays current.
 
         Returns
         -------
@@ -1837,10 +2366,15 @@ class TraceInterventionMixin(_TraceMixinBase):
             This model log is mutated in place.
         """
 
+        was_clean = self._recipe_is_clean()
         self._spec_revision += 1
         self.__dict__.pop("recipe", None)
         self.__dict__.pop("_frozen_intervention_spec", None)
         self.__dict__.pop("_cached_frozen_intervention_spec", None)
+        self._refresh_armed_annotation()
+        if not outs_stale and was_clean:
+            self._out_recipe_revision = self._spec_revision
+            return
         self.state = TraceState.SPEC_STALE
 
     def _validate_intervention_site(self: "Trace", site: Any, *, strict: bool) -> None:
@@ -1859,17 +2393,13 @@ class TraceInterventionMixin(_TraceMixinBase):
             Raises when the site cannot resolve.
         """
 
-        from ..intervention.errors import SiteResolutionError
-        from ..intervention.resolver import _selector_resolution_direction
+        from ..intervention.spec import addresses_autograd_nodes
 
-        # L1 narrowing (r3): only a typed direction-classification refusal may
-        # fall through to the strict forward resolution below (which raises its
-        # own typed refusal); any other exception is a bug and propagates.
-        try:
-            if _selector_resolution_direction(site) == "backward":
-                return
-        except SiteResolutionError:
-            pass
+        # Autograd-node sites resolve against grad_fn records, which exist
+        # only after a backward pass; gradient (tl.grad) sites resolve their
+        # inner selector against the forward ops like any activation site.
+        if addresses_autograd_nodes(site):
+            return
         max_fanout = max(1, len(self.layer_list))
         self.resolve_sites(site, strict=strict, max_fanout=max_fanout)
 
@@ -1909,3 +2439,152 @@ class TraceInterventionMixin(_TraceMixinBase):
         if hasattr(site, "layer_label"):
             return TargetSpec("label", str(site.layer_label), strict=strict)
         return TargetSpec("label", site, strict=strict)
+
+
+def settle_armed_gradient_edits(trace: Any, *, pass_index: int) -> None:
+    """Write the settle rows of one finished backward pass.
+
+    Called once at backward pass end. For every arming transaction whose
+    gradient rules sit in ``trace``'s recipe, one ``intervention_event_v2``
+    envelope records what the pass did: ``door="backward"``,
+    ``lane="live_hook"``, ``parent_event_id`` = the arming row (registration
+    identity), ``status`` ``"fired"`` or ``"no_fire"`` with this pass's
+    ``fire_count``, and ``extra`` ``arming_event_id`` / ``backward_pass_index``
+    plus a ``no_fire_reason`` from ``{"gradient_not_reached",
+    "pass_filtered"}``. Each pass writes its own row, so a second backward
+    never rewrites the first pass's row.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose backward pass just ended.
+    pass_index:
+        One-based index of that backward pass.
+    """
+
+    spec = getattr(trace, "_intervention_spec", None)
+    if spec is None:
+        return
+    groups: dict[str, list[Any]] = {}
+    for hook_spec in getattr(spec, "hook_specs", ()):
+        group = hook_spec.metadata.get(_ARMING_GROUP_KEY)
+        if group is not None:
+            groups.setdefault(str(group), []).append(hook_spec)
+    if not groups:
+        return
+    pass_records = [
+        record
+        for record in getattr(spec, "records", ())
+        if getattr(record, "signal", None) == "backward"
+        and getattr(record, "backward_pass_index", None) == pass_index
+    ]
+    for hook_specs in groups.values():
+        _settle_arming_group(trace, hook_specs, pass_records, pass_index=pass_index)
+    refresh = getattr(trace, "_refresh_armed_annotation", None)
+    if refresh is not None:
+        refresh()
+
+
+def _settle_arming_group(
+    trace: Any,
+    hook_specs: list[Any],
+    pass_records: list[Any],
+    *,
+    pass_index: int,
+) -> None:
+    """Write one settle row for the gradient rules of one arming transaction."""
+
+    from ..intervention.audit import record_intervention_event, site_keys_for_labels
+
+    fires = [record for record in pass_records if _record_belongs_to(record, hook_specs)]
+    arming_event_id = hook_specs[0].metadata.get(_ARMING_EVENT_KEY)
+    extra: dict[str, Any] = {
+        "arming_event_id": arming_event_id,
+        "arming_group": hook_specs[0].metadata.get(_ARMING_GROUP_KEY),
+        "backward_pass_index": pass_index,
+    }
+    if arming_event_id is not None:
+        extra["parent_event_id"] = arming_event_id
+    if not fires:
+        extra["no_fire_reason"] = (
+            "pass_filtered"
+            if all(_pass_filtered(hook_spec.site_target, pass_index) for hook_spec in hook_specs)
+            else "gradient_not_reached"
+        )
+    labels = tuple(dict.fromkeys(str(record.site_label or record.target_label) for record in fires))
+    record_intervention_event(
+        trace,
+        lane="live_hook",
+        door="backward",
+        edit_names=tuple(_hook_spec_edit_name(hook_spec) for hook_spec in hook_specs),
+        selection_repr=" | ".join(repr(hook_spec.site_target) for hook_spec in hook_specs),
+        status="fired" if fires else "no_fire",
+        fire_count=len(fires),
+        site_keys=site_keys_for_labels(trace, labels),
+        extra=extra,
+        append_audit_row=False,
+        audit_event_row=True,
+    )
+
+
+def _record_belongs_to(record: Any, hook_specs: list[Any]) -> bool:
+    """Whether one backward FireRecord came from one of these hook specs.
+
+    Built-in edits are matched by object identity (the stored helper is the
+    one the fire record carries); callables by their display name.
+    """
+
+    helper = getattr(record, "helper", None)
+    for hook_spec in hook_specs:
+        if hook_spec.helper is not None:
+            if helper is hook_spec.helper:
+                return True
+        elif helper is None and getattr(record, "helper_name", None) == getattr(
+            hook_spec.hook, "__name__", None
+        ):
+            return True
+    return False
+
+
+def _hook_spec_edit_name(hook_spec: Any) -> str:
+    """Display name of one hook spec's edit for the settle row."""
+
+    if hook_spec.helper is not None:
+        return str(getattr(hook_spec.helper, "helper_name", hook_spec.helper))
+    return str(getattr(hook_spec.hook, "__name__", type(hook_spec.hook).__name__))
+
+
+def _pass_filtered(target: Any, pass_index: int) -> bool:
+    """Whether a target's backward-pass qualifiers exclude ``pass_index``.
+
+    Walks the frozen target for ``backward_pass`` qualifiers; a target with
+    none never filters a pass.
+    """
+
+    stack: list[Any] = [target]
+    qualifiers: list[Any] = []
+    while stack:
+        node = stack.pop()
+        if isinstance(node, (tuple, list)):
+            stack.extend(node)
+            continue
+        kind = getattr(node, "selector_kind", None)
+        if kind is None:
+            continue
+        value = getattr(node, "selector_value", None)
+        if kind == "backward_pass":
+            qualifiers.append(value)
+        elif value is not None and not isinstance(value, (str, int, float)):
+            stack.append(value)
+    return bool(qualifiers) and all(_qualifier_pass(value) != pass_index for value in qualifiers)
+
+
+def _qualifier_pass(value: Any) -> int | None:
+    """Pass index carried by a ``backward_pass`` qualifier value."""
+
+    if isinstance(value, int):
+        return value
+    if isinstance(value, (tuple, list)) and value and isinstance(value[0], int):
+        return int(value[0])
+    pass_index = getattr(value, "pass_index", None)
+    return int(pass_index) if isinstance(pass_index, int) else None
