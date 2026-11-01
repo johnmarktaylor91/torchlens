@@ -133,7 +133,14 @@ def test_no_hot_path_liveoprecord_construction_or_field_writes() -> None:
         root / "torchlens/backends/torch/buffer_writes.py",
         root / "torchlens/backends/torch/tensor_tracking.py",
         root / "torchlens/_capture/trace.py",
+        root / "torchlens/_capture/run.py",
+        root / "torchlens/_capture/_forward_helpers.py",
+        root / "torchlens/_capture/_input_records.py",
+        root / "torchlens/_capture/finalize/settle.py",
         root / "torchlens/_user_funcs.py",
+        root / "torchlens/_capture/run_entry.py",
+        *sorted((root / "torchlens/_capture/prepare").glob("*.py")),
+        *sorted((root / "torchlens/_capture/finalize").glob("*.py")),
     ]
     hot_source = "\n".join(path.read_text() for path in hot_files)
 
