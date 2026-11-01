@@ -118,13 +118,6 @@ def test_replay_verdict_decisions_and_message() -> None:
     assert "add_1" in failed.message() and "replay_mismatch" in failed.message()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the shared seed gate in user_funcs refuses before the backend and carries no code yet "
-        "(cross-packet request in the P4 report)"
-    ),
-)
 def test_explicit_seed_refuses_with_registered_code() -> None:
     """An explicit seed on the preview refuses with a registered code (SPEC 1.3)."""
 
