@@ -190,7 +190,10 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # reach-ins (getattr + setattr) and _trace_validation.py's new
     # `_loaded_from_bundle` read converted to direct private reads guarded
     # by try/except AttributeError.
-    "_data_classes": 25,
+    # 25 -> 24 (2026-11-01 batch D, grad-p5 streaming split): op.py's two
+    # `_defer_streaming_bundle_finalization` reads moved into
+    # _op_grad_stream.py as one read (the other reach-ins moved unchanged).
+    "_data_classes": 24,
     "experimental": 1,
     "recording": 2,
     # 43 -> 44 (2026-08-17 privprobes reconcile, d4a2b8a6 one-shot-warning
