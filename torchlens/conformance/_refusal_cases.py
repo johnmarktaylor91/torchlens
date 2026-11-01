@@ -6,6 +6,11 @@ holds a non-default probe value per public spine option. A cell passes only on
 a ``BackendUnsupportedError`` whose code is the contracted one and whose raise
 left the framework state (RNG, wrappers) unchanged; an entry that proceeds or
 raises untyped fails (SPEC 1.3 and 4.2).
+
+Expected codes come from the registry, never from a spelling written here: a
+capability cell expects ``refusal_code_for_capability(flag)`` and an option cell
+expects :data:`_TRACE_OPTION_CODE`, the one ``REFUSAL_CODES`` member for an
+option outside ``trace_options()`` (a test keeps it registered).
 """
 
 from __future__ import annotations
@@ -27,6 +32,9 @@ from ._protocol_cases import (
 )
 
 __tl_layer__ = "L9"
+
+#: SPEC 1.3's code for a public trace option outside ``trace_options()``.
+_TRACE_OPTION_CODE = "trace_option_unsupported"
 
 
 @dataclass(frozen=True)
@@ -145,6 +153,8 @@ def run_c1_refusal_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[
         One row per refusal cell the backend defines.
     """
 
+    from ..backends._backend_protocol import refusal_code_for_capability
+
     protocol = adapter_protocol(adapter)
     if protocol is None or not roster:
         return []
@@ -155,7 +165,7 @@ def run_c1_refusal_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[
         if request is None:
             results.append(_failed(case_id, "C1", f"no request recipe for capability {flag}"))
             continue
-        expected = f"{flag}_unsupported"
+        expected = refusal_code_for_capability(flag)
         results.append(_refusal_cell(case_id, adapter, protocol, roster[0], request, expected))
     for option in foreign_trace_options(protocol):
         case_id = f"{C1_REFUSAL_OPTION_PREFIX}{option}"
@@ -166,9 +176,7 @@ def run_c1_refusal_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[
         kind = "capture_option" if option in CAPTURE_OPTION_SPINE_FIELDS else "trace_option"
         request = CapabilityRequest(kind, option, probe)
         results.append(
-            _refusal_cell(
-                case_id, adapter, protocol, roster[0], request, "trace_option_unsupported"
-            )
+            _refusal_cell(case_id, adapter, protocol, roster[0], request, _TRACE_OPTION_CODE)
         )
     return results
 

@@ -8,6 +8,8 @@ their expected codes from the same registry, never from a spelling of their own.
 
 from __future__ import annotations
 
+import ast
+import inspect
 from dataclasses import fields
 from types import SimpleNamespace
 from typing import Any
@@ -15,6 +17,7 @@ from typing import Any
 import pytest
 
 from torchlens.backends._backend_protocol import (
+    REFUSABLE_CAPABILITY_FLAGS,
     REFUSAL_CODES,
     refusal_code_for_capability,
 )
@@ -26,6 +29,10 @@ from torchlens.backends._options import (
     reject_unsupported_trace_options,
 )
 from torchlens.backends.registry import BackendCapabilities, BackendUnsupportedError
+from torchlens.conformance import _refusal_cases
+from torchlens.conformance._refusal_cases import (
+    CAPABILITY_REQUESTS,
+)
 
 _OPTION_CODE = "trace_option_unsupported"
 
@@ -186,3 +193,56 @@ def test_extra_kwarg_refusal_raises_one_registered_code(
         reject_extra_trace_kwargs(kwargs, policy)
     _assert_code(excinfo.value, expected)
     assert excinfo.value.fields["options"] == sorted(kwargs)
+
+
+# ---------------------------------------------------------------------------
+# The refusal cells take their codes from the registry.
+# ---------------------------------------------------------------------------
+
+
+def test_every_refusable_flag_has_a_request_recipe() -> None:
+    """Each flag the registry maps has exactly one request recipe."""
+
+    assert set(CAPABILITY_REQUESTS) == set(REFUSABLE_CAPABILITY_FLAGS)
+
+
+def test_option_cell_code_is_registered() -> None:
+    """The one option code the cells expect is a registry member."""
+
+    assert _refusal_cases._TRACE_OPTION_CODE == _OPTION_CODE
+    assert _OPTION_CODE in REFUSAL_CODES
+
+
+def test_refusal_cells_hard_code_no_mapped_code() -> None:
+    """No refusal-code spelling sits in the cell module beyond the option constant.
+
+    Capability codes come from ``refusal_code_for_capability``; a literal or an
+    f-string ending in ``_unsupported`` would bypass the registry the way the
+    old ``f"{flag}_unsupported"`` read did (``has_streaming_unsupported``).
+    """
+
+    tree = ast.parse(inspect.getsource(_refusal_cases))
+    spellings = [
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and node.value.endswith("_unsupported")
+    ]
+    assert spellings == [_OPTION_CODE], spellings
+    formatted = [
+        ast.unparse(node)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.JoinedStr)
+        and any(
+            isinstance(part, ast.Constant) and str(part.value).endswith("_unsupported")
+            for part in node.values
+        )
+    ]
+    assert not formatted, formatted
+
+
+def test_streaming_cell_expects_the_registered_code() -> None:
+    """The streaming cell reads ``streaming_unsupported``, the code the flag maps to."""
+
+    assert refusal_code_for_capability("has_streaming") == "streaming_unsupported"
