@@ -25,7 +25,6 @@ from typing import Any, Literal, cast, get_args
 
 import torch
 
-from ..backends.torch._internal_read import internal_scalar_read
 from ..backends.torch._tl import get_tensor_label, set_tensor_label
 from ._torch_compat import (
     HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
@@ -1102,6 +1101,7 @@ def _paused_internal_reads() -> Iterator[None]:
     would register as user raw-pointer escapes on witness-armed captures.
     """
     from .._state import pause_logging
+    from ..backends.torch._internal_read import internal_scalar_read
 
     with pause_logging(), internal_scalar_read():
         yield
@@ -1209,6 +1209,8 @@ def _try_defer_payload_alias(
     state_ptrs = _DEFER_STATE_PTRS
     if state_ptrs is None:
         return None
+    from ..backends.torch._internal_read import internal_scalar_read
+
     with internal_scalar_read():
         key = _deferred_storage_key(x)
     if key is None or key[0] in state_ptrs:
