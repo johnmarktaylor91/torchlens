@@ -131,6 +131,10 @@ class ModuleCaptureWorkspace:
     # wrapper) per decorated submodule; installed at session start, emptied by
     # the session cleanup that puts every prior forward back.
     session_forward_wrappers: list[tuple[Any, Any, Any]] = field(default_factory=list)
+    # Addresses of modules this capture entered by a direct ``module.forward(x)``
+    # call (no ``Module.__call__``, so no torch hook fired); the fast live run
+    # routes exactly these around its hooks (``_fast_live_direct``).
+    direct_forward_addresses: set[str] = field(default_factory=set)
 
 
 def _init_module_hierarchy_data() -> dict[str, Any]:
