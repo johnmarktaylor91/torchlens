@@ -376,8 +376,11 @@ def arm_signal_plan(
 
     forced = False
     if plan.forward is not None:
+        forward_site = plan.forward[0]
+        if engine == "rerun":
+            forward_site = lower_live_labels(trace, forward_site)
         _kind, handles = trace._apply_do_mutation(
-            plan.forward[0],
+            forward_site,
             plan.forward[1],
             engine=engine,
             strict=strict,
@@ -396,6 +399,67 @@ def arm_signal_plan(
     backward_handles = tuple(handle.handle_ids)
     attached.extend(backward_handles)
     return backward_handles, forced
+
+
+def lower_live_labels(trace: Trace, site: Any) -> Any:
+    """Readdress the finalized labels of a mixed plan's activation half for a live rerun.
+
+    ``tl.grad(s) | s`` addresses one op in both passes. The gradient half
+    arms on the finished rerun trace, where finalized labels exist; the
+    activation half matches during the rerun's live forward, where they do
+    not yet. Each exact finalized label (a bare string or ``tl.label``) is
+    resolved on this trace, which still holds the source graph, and replaced
+    by the raw capture labels of the ops it names, which a live forward
+    matches. The rerun's own graph-divergence check covers a rerun whose
+    graph no longer lines up with the source.
+
+    Parameters
+    ----------
+    trace:
+        Trace about to rerun (a fork of the source, not yet rerun).
+    site:
+        The activation half's site: a selector, a string, a ``Recipe`` or a
+        list of ``(site, edit)`` pairs.
+
+    Returns
+    -------
+    Any
+        The site with every lowerable finalized label readdressed; the same
+        object when nothing needed lowering.
+    """
+
+    if _is_public_recipe(site):
+        from ..intervention.spec import Recipe, Rule
+
+        rules = tuple(Rule(_lower_label_leaves(trace, r.target), r.edit) for r in site.rules)
+        return Recipe(rules=rules)
+    if isinstance(site, list):
+        return [(_lower_label_leaves(trace, pair_site), edit) for pair_site, edit in site]
+    return _lower_label_leaves(trace, site)
+
+
+def _lower_label_leaves(trace: Trace, site: Any) -> Any:
+    """Replace finalized exact-label leaves of one selector tree by raw labels."""
+
+    from .._ir.selector_eval import looks_like_finalized_label
+    from ..intervention.selectors import CompositeSelector, NotSelector, label
+    from ..intervention.spec import _join_union, _selector_children
+
+    kind = getattr(site, "selector_kind", None)
+    if kind in ("and", "or"):
+        children = tuple(_lower_label_leaves(trace, child) for child in _selector_children(site))
+        return CompositeSelector(kind, children)
+    if kind == "not":
+        return NotSelector(_lower_label_leaves(trace, _selector_children(site)[0]))
+    value = site if isinstance(site, str) else getattr(site, "selector_value", None)
+    if (isinstance(site, str) or kind == "label") and isinstance(value, str):
+        if looks_like_finalized_label(value):
+            fanout = len(trace.layer_list) + 1
+            ops = trace.resolve_sites(value, max_fanout=fanout)
+            raw = [getattr(op, "_layer_label_raw", None) for op in ops]
+            if raw and all(isinstance(name, str) for name in raw):
+                return _join_union([label(name) for name in dict.fromkeys(raw)])
+    return site
 
 
 def force_backward_ready(trace: Trace) -> bool:
