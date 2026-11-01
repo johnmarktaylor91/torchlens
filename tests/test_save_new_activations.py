@@ -383,10 +383,8 @@ class TestSaveNewActivationsStateReset:
     def test_5x_stress(self, trace_kwargs: dict[str, str]) -> None:
         """Stress test: repeated refreshes stay aligned for default and explicit-all saves."""
         model = _SimpleLinear()
-        capture_kwargs = (
-            {"capture": tl.options.CaptureOptions(**trace_kwargs)} if trace_kwargs else {}
-        )
-        log = trace_fn(model, torch.randn(2, 10), **capture_kwargs)
+        save_kwargs = {"save": trace_kwargs["layers_to_save"]} if trace_kwargs else {}
+        log = trace_fn(model, torch.randn(2, 10), **save_kwargs)
         try:
             for _ in range(5):
                 next_x = torch.randn(2, 10)
