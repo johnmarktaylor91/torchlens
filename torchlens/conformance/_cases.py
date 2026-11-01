@@ -77,6 +77,11 @@ def _failed(case_id: str, tier: str, detail: str, model: RosterModel | None = No
 UNSUPPORTED_DETAIL_PREFIX = "unsupported"
 
 #: Per-model case ids each rung runs, in order (a named skip covers all of them).
+#: Scorecard tier labels, spelled once for every case builder.
+TIER_C0 = "C0"
+TIER_C1 = "C1"
+TIER_C2 = "C2"
+
 C1_MODEL_CASES: tuple[str, ...] = (
     "c1_capture_completes",
     "c1_reference_parity",

@@ -62,20 +62,20 @@ class RosterModel:
     expected_op_kinds:
         The independent op inventory: every op kind (``Op.func_name``) one
         forward of this model performs, in execution order, derived from the
-        model definition. When declared, C1 runs ``c1_op_inventory_complete``
+        model definition. When declared, c1 runs ``c1_op_inventory_complete``
         so output parity can never pass with an op missing or extra.
     expected_intermediates:
         Independent oracle for intermediate values: op kind (``Op.func_name``)
         to the NumPy array (or the list of arrays, in capture order) that kind's
         ops must produce, computed from the row's own definition with NumPy.
-        When declared, C1 runs ``c1_intermediates_match``.
+        When declared, c1 runs ``c1_intermediates_match``.
     has_constants:
         The forward uses a tensor that is neither an input, a parameter nor
         the output of a recorded op (a closure constant or a literal
-        producer); C1 then runs ``c1_constant_parents_recorded``.
+        producer); c1 then runs ``c1_constant_parents_recorded``.
     random_init:
         The builder seeds the framework RNG and draws random weights; on a
-        lazy backend C1 then runs ``c1_rng_consumed_once``.
+        lazy backend c1 then runs ``c1_rng_consumed_once``.
     group:
         ``"config_built"`` (the per-change rows; they earn no claim) or
         ``"ecosystem"`` (pinned pretrained families from the backend's own
@@ -155,7 +155,7 @@ class TorchReferenceAdapter:
     #: Save level whose bundle keeps what torch replay validation re-executes
     #: from (saved arguments and RNG states); ``portable`` drops them by design.
     #: Only ``c2_validation_after_load`` saves at it (SPEC 4.2: validation of
-    #: the loaded trace passes); every other C2 cell keeps the default level.
+    #: the loaded trace passes); every other c2 cell keeps the default level.
     replay_save_level = "executable_with_callables"
 
     def save(self, trace: Any, path: Path, level: str | None = None) -> None:
@@ -376,7 +376,7 @@ def _drift_first_shape_metadata(trace: Any) -> None:
 
 
 def _drift_first_payload_shape(trace: Any) -> None:
-    """Give the first saved payload a leading unit axis (values kept, shape drifted; F3)."""
+    """Give the first saved payload a leading unit axis (values kept, shape drifted)."""
 
     for op in trace.layer_list:
         payload = getattr(op, "out", None)
@@ -416,7 +416,7 @@ def resolve_adapter(backend: str, *, plant: str | None = None) -> Any:
     ------
     ConfigurationError
         ``conformance_backend_unknown`` for any other name (external
-        providers enter through the C0 provider-API pack once activated).
+        providers enter through the c0 provider-API pack once activated).
     """
 
     from ._preview_adapters import PREVIEW_ADAPTER_FACTORIES

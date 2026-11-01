@@ -7,7 +7,7 @@ source ops included) and, where the model is deterministic, its expected
 intermediate values computed with NumPy from the row's own definition. The
 flags ``has_constants`` (a closure constant or a literal producer is in the
 forward) and ``random_init`` (parameters are random-initialized lazily from a
-seed, the realize-once check) select the C1 cells that apply.
+seed, the realize-once check) select the c1 cells that apply.
 
 Rows are described by :class:`RosterRow` and folded into the runner's
 ``RosterModel`` by :func:`roster`. Ecosystem rows join the roster only when

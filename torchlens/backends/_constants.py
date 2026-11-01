@@ -362,7 +362,7 @@ def _unrealizable(
 ) -> BackendUnsupportedError:
     """Build the typed refusal for a constant with no readable buffer.
 
-    ``code`` is spelled at every raise site so the S-17 census reads the
+    ``code`` is spelled at every raise site so the raise-site census reads the
     refusal as coded there (it is always :data:`CONSTANT_UNREALIZABLE_CODE`).
     """
 

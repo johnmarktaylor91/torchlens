@@ -491,7 +491,7 @@ def validate_tf_trace_status(trace: Any, *, validate_metadata: bool = True) -> V
         trace._validation_replay_status = status
         return status
     # Direct read of the load-provenance marker: present only on a loaded
-    # trace, so its absence IS the typed "live" reading (b5 R45-2 seam).
+    # trace, so its absence IS the typed "live" reading (the live-reading seam).
     try:
         loaded_from_bundle = bool(trace._loaded_from_bundle)
     except AttributeError:

@@ -6,7 +6,7 @@ Two groups (SPEC 4.4):
   multi-output, 3-step loop, norm plus softmax, reshape and transpose, MLP,
   shared-weight module, CNN, nested residual, constants plant). Every weight
   is a literal so no row consumes RNG; the ``random_init`` group below holds
-  the random-init layers (F11) separately. ``expected_op_kinds`` is each
+  the random-init layers separately. ``expected_op_kinds`` is each
   model's independent op inventory as the PYTHON device records it, checked
   against the definition; ``expected_intermediates`` is computed here with
   NumPy only (FORKS F-N) and keyed by the recorded op kind.
@@ -458,7 +458,7 @@ def config_built_rows() -> tuple[RosterModel, ...]:
 
 
 def random_init_rows() -> tuple[RosterModel, ...]:
-    """The F11 rows: default-init Linear, Conv2d and LayerNorm (refused until realize-once)."""
+    """The random-init rows: default-init Linear, Conv2d and LayerNorm (refused until realize-once)."""
 
     return (
         _row("nn_linear_random_init", _build_random_linear, random_init=True),

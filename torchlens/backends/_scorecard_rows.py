@@ -170,7 +170,7 @@ def _status_for(
 
     No shipped record reads ``not_tested``; any failed cell reads
     ``known_broken``; a framework that is not installed here reads ``scope``;
-    a clean record at C2 reads ``pass``; a clean record below C2 reads
+    a clean record at c2 reads ``pass``; a clean record below c2 reads
     ``not_tested`` when cells did not run, else ``scope`` (typed refusals
     bound the tier).
     """

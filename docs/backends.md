@@ -64,7 +64,7 @@ exercised), `unsupported` (False, and the request refuses with the contracted co
 (False, refusal not yet proven by a passing cell); the pages render `untested` as "not yet proven".
 
 `tl.report.doctor()` shows one row per registered backend, key `backend_scorecard:<name>`, read
-from the shipped record only (no framework import). Its status is `pass` (highest tier C2, no
+from the shipped record only (no framework import). Its status is `pass` (the durable tier reached, no
 failed cell), `known_broken` (a cell failed), `scope` (framework not installed here) or
 `not_tested` (no record ships). Its details read
 `<maturity>; <passed>/<denominator> cells passed, <unsupported> unsupported, <failed> failed;

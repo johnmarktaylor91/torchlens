@@ -38,7 +38,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from ._adapters import RosterModel, resolve_adapter
-from ._cases import UNSUPPORTED_DETAIL_PREFIX
+from ._cases import TIER_C0, TIER_C1, TIER_C2, UNSUPPORTED_DETAIL_PREFIX
 from ._graduation import GraduationItem, graduation_items
 from ._protocol_cases import (
     C1_REFUSAL_PREFIX,
@@ -68,7 +68,7 @@ SCORECARD_FILENAME = "scorecard.json"
 #: The stable backend whose scorecard is the graduation reference (SPEC 5, G1).
 REFERENCE_BACKEND = "torch"
 
-_TIERS: tuple[str, ...] = ("C0", "C1", "C2")
+_TIERS: tuple[str, ...] = (TIER_C0, TIER_C1, TIER_C2)
 _CLAIM_WORD = re.compile("conformant", flags=re.IGNORECASE)
 
 #: Installed distribution that versions each backend's framework.

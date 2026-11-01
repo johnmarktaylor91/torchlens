@@ -1,9 +1,9 @@
 """Conformance cells that drive a backend through its ``BackendProtocol``.
 
-The C0 cells here run for every adapter whose name is a registered backend
+The c0 cells here run for every adapter whose name is a registered backend
 with a protocol factory (torch and the five previews). The reserved ``fake``
 plant substrate and external providers have no registered spec, so they
-define none of these slots; their C0 pack stays the provider-API trio.
+define none of these slots; their c0 pack stays the provider-API trio.
 
 Cells (SPEC section 4.2):
 
@@ -15,7 +15,7 @@ Cells (SPEC section 4.2):
 - ``c0_capability_table_complete``: every capability field holds a value of
   its declared kind.
 
-The C1 and C2 cells here run for every adapter that exposes a protocol view
+The c1 and c2 cells here run for every adapter that exposes a protocol view
 (``adapter.protocol()``): the torch reference, the five previews and the
 reserved ``fake`` substrate, whose view is torch's protocol behind a plant
 layer. Per roster row: graph integrity, shape metadata against the payload, no
@@ -23,7 +23,7 @@ silent gap, intermediates against the row's NumPy oracle, replay validation
 passes, a tampered payload is named with a reason, constants are recorded
 parents, RNG is consumed once (lazy backends); once per backend: a typed
 refusal for every False capability flag and for every public trace option the
-backend does not implement; per row at C2: payloads survive the round trip bit
+backend does not implement; per row at c2: payloads survive the round trip bit
 for bit and the reloaded trace still validates.
 
 Every request recipe, probe value and plant-to-cell mapping lives in one table
@@ -38,7 +38,16 @@ from pathlib import Path
 from typing import Any
 
 from ._adapters import RosterModel
-from ._cases import C2_MODEL_CASES, CaseResult, _failed, _failure_detail, _passed
+from ._cases import (
+    C2_MODEL_CASES,
+    TIER_C0,
+    TIER_C1,
+    TIER_C2,
+    CaseResult,
+    _failed,
+    _failure_detail,
+    _passed,
+)
 from ._validation_cells import (
     _is_input,
     capture_for_validation,
@@ -50,7 +59,7 @@ from ._validation_cells import (
 
 __tl_layer__ = "L9"
 
-#: The protocol-level C0 case ids, in report order.
+#: The protocol-level c0 case ids, in report order.
 C0_PROTOCOL_CASES: tuple[str, ...] = (
     "c0_protocol_complete",
     "c0_framework_requirement_consistent",
@@ -72,7 +81,7 @@ def registered_protocol_spec(backend: str) -> Any | None:
 
 
 def run_c0_protocol_cases(backend: str) -> list[CaseResult]:
-    """The protocol-level C0 cells for one registered backend.
+    """The protocol-level c0 cells for one registered backend.
 
     Parameters
     ----------
@@ -95,13 +104,13 @@ def run_c0_protocol_cases(backend: str) -> list[CaseResult]:
         candidate = spec.protocol()
     except Exception as exc:  # noqa: BLE001 - a factory crash is a red cell, never a crash
         detail = f"protocol factory raised {type(exc).__name__}: {exc}"[:300]
-        return [_failed(case_id, "C0", detail) for case_id in C0_PROTOCOL_CASES]
+        return [_failed(case_id, TIER_C0, detail) for case_id in C0_PROTOCOL_CASES]
     results: list[CaseResult] = []
     problems = protocol_problems(candidate, expected_name=backend)
     if problems:
-        results.append(_failed("c0_protocol_complete", "C0", "; ".join(problems)[:300]))
+        results.append(_failed("c0_protocol_complete", TIER_C0, "; ".join(problems)[:300]))
     else:
-        results.append(_passed("c0_protocol_complete", "C0"))
+        results.append(_passed("c0_protocol_complete", TIER_C0))
     results.append(_framework_requirement_cell(candidate))
     results.append(_refusal_codes_cell(candidate, REFUSAL_CODES))
     results.append(_capability_table_cell(candidate))
@@ -115,12 +124,14 @@ def _framework_requirement_cell(candidate: Any) -> CaseResult:
     check = getattr(requirement, "_consistency_problems", None)
     if not callable(check):
         return _failed(
-            "c0_framework_requirement_consistent", "C0", "framework is not a FrameworkRequirement"
+            "c0_framework_requirement_consistent",
+            TIER_C0,
+            "framework is not a FrameworkRequirement",
         )
     problems = check()
     if problems:
-        return _failed("c0_framework_requirement_consistent", "C0", "; ".join(problems)[:300])
-    return _passed("c0_framework_requirement_consistent", "C0")
+        return _failed("c0_framework_requirement_consistent", TIER_C0, "; ".join(problems)[:300])
+    return _passed("c0_framework_requirement_consistent", TIER_C0)
 
 
 def _refusal_codes_cell(candidate: Any, registry: frozenset[str]) -> CaseResult:
@@ -129,13 +140,15 @@ def _refusal_codes_cell(candidate: Any, registry: frozenset[str]) -> CaseResult:
     try:
         declared = set(candidate.refusal_codes())
     except Exception as exc:  # noqa: BLE001
-        return _failed("c0_refusal_codes_registered", "C0", f"refusal_codes() raised {exc}"[:300])
+        return _failed(
+            "c0_refusal_codes_registered", TIER_C0, f"refusal_codes() raised {exc}"[:300]
+        )
     unknown = sorted(code for code in declared if code not in registry)
     if unknown:
         return _failed(
-            "c0_refusal_codes_registered", "C0", f"codes outside REFUSAL_CODES: {unknown}"[:300]
+            "c0_refusal_codes_registered", TIER_C0, f"codes outside REFUSAL_CODES: {unknown}"[:300]
         )
-    return _passed("c0_refusal_codes_registered", "C0")
+    return _passed("c0_refusal_codes_registered", TIER_C0)
 
 
 def _capability_table_cell(candidate: Any) -> CaseResult:
@@ -146,10 +159,14 @@ def _capability_table_cell(candidate: Any) -> CaseResult:
     try:
         table = candidate.capabilities()
     except Exception as exc:  # noqa: BLE001
-        return _failed("c0_capability_table_complete", "C0", f"capabilities() raised {exc}"[:300])
+        return _failed(
+            "c0_capability_table_complete", TIER_C0, f"capabilities() raised {exc}"[:300]
+        )
     if not isinstance(table, BackendCapabilities):
         return _failed(
-            "c0_capability_table_complete", "C0", f"capabilities() returned {type(table).__name__}"
+            "c0_capability_table_complete",
+            TIER_C0,
+            f"capabilities() returned {type(table).__name__}",
         )
     bad: list[str] = []
     for field_info in dataclass_fields(BackendCapabilities):
@@ -164,12 +181,12 @@ def _capability_table_cell(candidate: Any) -> CaseResult:
         elif "Literal" in kind and value not in ("none", "paths_only", "full_spec"):
             bad.append(f"{field_info.name} has value {value!r}")
     if bad:
-        return _failed("c0_capability_table_complete", "C0", "; ".join(bad)[:300])
-    return _passed("c0_capability_table_complete", "C0")
+        return _failed("c0_capability_table_complete", TIER_C0, "; ".join(bad)[:300])
+    return _passed("c0_capability_table_complete", TIER_C0)
 
 
 # ----------------------------------------------------------------------------
-# Backend-neutral C1 helpers (wired into the C1 pack by the suite packet).
+# Backend-neutral c1 helpers (wired into the c1 pack by the suite packet).
 
 
 def graph_integrity_problems(trace: Any) -> tuple[str, ...]:
@@ -247,7 +264,7 @@ def silent_gap_reason(trace: Any) -> str | None:
 # ----------------------------------------------------------------------------
 # Case ids (SPEC 4.2) and the protocol view of an adapter.
 
-#: Per-row C1 cells every protocol-bearing adapter defines, in report order
+#: Per-row c1 cells every protocol-bearing adapter defines, in report order
 #: (``c1_intermediates_match`` joins after the first three when the row declares
 #: an oracle; the constants and RNG cells join at the end when the row is flagged).
 C1_PROTOCOL_ROW_CASES: tuple[str, ...] = (
@@ -262,7 +279,7 @@ C1_CONSTANTS_CASE = "c1_constant_parents_recorded"
 C1_RNG_CASE = "c1_rng_consumed_once"
 C1_REFUSAL_PREFIX = "c1_refusal_"
 C1_REFUSAL_OPTION_PREFIX = "c1_refusal_trace_option_"
-#: Per-row C2 cells every protocol-bearing adapter defines, after the v1 trio.
+#: Per-row c2 cells every protocol-bearing adapter defines, after the v1 trio.
 C2_PROTOCOL_ROW_CASES: tuple[str, ...] = ("c2_payload_values_equal", "c2_validation_after_load")
 
 #: The fake provider's protocol-era plants and the one cell each must fail.
@@ -296,7 +313,7 @@ def adapter_protocol(adapter: Any) -> Any | None:
         return None
     try:
         return probe()
-    except Exception:  # noqa: BLE001 - a failing factory is C0's red cell, not a slot here
+    except Exception:  # noqa: BLE001 - a failing factory is c0's red cell, not a slot here
         return None
 
 
@@ -321,7 +338,7 @@ def foreign_trace_options(protocol: Any) -> tuple[str, ...]:
 
 
 def c1_row_case_ids(adapter: Any, model: RosterModel) -> tuple[str, ...]:
-    """Every C1 case id one roster row defines for ``adapter``, in report order."""
+    """Every c1 case id one roster row defines for ``adapter``, in report order."""
 
     ids = ["c1_capture_completes"]
     if model.expected_op_kinds is not None:
@@ -342,7 +359,7 @@ def c1_row_case_ids(adapter: Any, model: RosterModel) -> tuple[str, ...]:
 
 
 def c1_tail_case_ids(adapter: Any) -> tuple[str, ...]:
-    """The once-per-backend C1 case ids (consumption, then every refusal cell)."""
+    """The once-per-backend c1 case ids (consumption, then every refusal cell)."""
 
     ids = ["c1_capabilities_consumed"]
     protocol = adapter_protocol(adapter)
@@ -354,7 +371,7 @@ def c1_tail_case_ids(adapter: Any) -> tuple[str, ...]:
 
 
 def c2_row_case_ids(adapter: Any, model: RosterModel) -> tuple[str, ...]:
-    """Every C2 case id one roster row defines for ``adapter``, in report order."""
+    """Every c2 case id one roster row defines for ``adapter``, in report order."""
 
     ids = list(C2_MODEL_CASES)
     if adapter_protocol(adapter) is not None:
@@ -550,7 +567,7 @@ def _guarded(
 def run_c1_protocol_row_cases(
     adapter: Any, model: RosterModel, trace: Any, reference: Any
 ) -> list[CaseResult]:
-    """The per-row protocol C1 cells for one captured roster row.
+    """The per-row protocol c1 cells for one captured roster row.
 
     Parameters
     ----------
@@ -566,7 +583,7 @@ def run_c1_protocol_row_cases(
     Returns
     -------
     list[CaseResult]
-        One row per protocol C1 case id the row defines, in report order.
+        One row per protocol c1 case id the row defines, in report order.
     """
 
     protocol = adapter_protocol(adapter)
@@ -574,21 +591,21 @@ def run_c1_protocol_row_cases(
         return []
     host_copy = protocol.host_copy
     results = [
-        _guarded("c1_graph_integrity", "C1", model, lambda: graph_integrity_problems(trace)),
+        _guarded("c1_graph_integrity", TIER_C1, model, lambda: graph_integrity_problems(trace)),
         _guarded(
             "c1_shape_metadata_matches_payload",
-            "C1",
+            TIER_C1,
             model,
             lambda: shape_metadata_problems(trace, host_copy),
         ),
-        _guarded("c1_no_silent_gap", "C1", model, lambda: _silent_gap_problems(trace)),
+        _guarded("c1_no_silent_gap", TIER_C1, model, lambda: _silent_gap_problems(trace)),
     ]
     if model.expected_intermediates:
         expected = model.expected_intermediates
         results.append(
             _guarded(
                 C1_INTERMEDIATES_CASE,
-                "C1",
+                TIER_C1,
                 model,
                 lambda: intermediates_problems(trace, expected, host_copy),
             )
@@ -600,13 +617,13 @@ def run_c1_protocol_row_cases(
 def _c1_validation_and_tail_cells(
     adapter: Any, protocol: Any, model: RosterModel, trace: Any, reference: Any
 ) -> list[CaseResult]:
-    """The validation, constants and RNG cells that close a row's protocol C1 block."""
+    """The validation, constants and RNG cells that close a row's protocol c1 block."""
 
     host_copy = protocol.host_copy
     results = [
         _guarded(
             "c1_validation_passes",
-            "C1",
+            TIER_C1,
             model,
             lambda: validation_status_problems(
                 protocol.validate(trace, _as_output_list(reference))
@@ -614,7 +631,7 @@ def _c1_validation_and_tail_cells(
         ),
         _guarded(
             "c1_validation_names_reason",
-            "C1",
+            TIER_C1,
             model,
             lambda: _names_reason_body(adapter, protocol, model),
         ),
@@ -622,11 +639,16 @@ def _c1_validation_and_tail_cells(
     if model.has_constants:
         results.append(
             _guarded(
-                C1_CONSTANTS_CASE, "C1", model, lambda: constant_parents_problems(trace, host_copy)
+                C1_CONSTANTS_CASE,
+                TIER_C1,
+                model,
+                lambda: constant_parents_problems(trace, host_copy),
             )
         )
     if model.random_init and getattr(protocol, "materialization", "eager") == "lazy":
-        results.append(_guarded(C1_RNG_CASE, "C1", model, lambda: _rng_once_body(adapter, model)))
+        results.append(
+            _guarded(C1_RNG_CASE, TIER_C1, model, lambda: _rng_once_body(adapter, model))
+        )
     return results
 
 
@@ -737,7 +759,7 @@ def _validate_after_load_problems(protocol: Any, replay_loaded: Any, reference: 
 
 @dataclass(frozen=True)
 class C2Reload:
-    """One row's saved-and-reloaded pair for the protocol C2 cells.
+    """One row's saved-and-reloaded pair for the protocol c2 cells.
 
     Parameters
     ----------
@@ -758,7 +780,7 @@ class C2Reload:
 def run_c2_protocol_row_cases(
     adapter: Any, model: RosterModel, reload: C2Reload, reference: Any
 ) -> list[CaseResult]:
-    """The per-row protocol C2 cells: payload equality and validation after load.
+    """The per-row protocol c2 cells: payload equality and validation after load.
 
     Parameters
     ----------
@@ -783,13 +805,13 @@ def run_c2_protocol_row_cases(
     return [
         _guarded(
             "c2_payload_values_equal",
-            "C2",
+            TIER_C2,
             model,
             lambda: payload_equality_problems(reload.trace, reload.loaded, protocol.host_copy),
         ),
         _guarded(
             "c2_validation_after_load",
-            "C2",
+            TIER_C2,
             model,
             lambda: _validate_after_load_problems(
                 protocol,

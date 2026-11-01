@@ -1734,7 +1734,7 @@ class TinygradBackend:
             return Tensor(value.tolist(), dtype=value.dtype, device=value.device).realize()
         except NotImplementedError as error:
             # ``need copyin``: a host-side source buffer (closure constant) that
-            # the forward never realized; refuse typed instead of crashing (F2).
+            # the forward never realized; refuse typed instead of crashing.
             raise refuse_constant_unrealizable(
                 uop if uop is not None else value.uop, error, code=CONSTANT_UNREALIZABLE_CODE
             ) from error

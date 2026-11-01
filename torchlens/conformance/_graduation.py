@@ -14,6 +14,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from ._cases import TIER_C1, TIER_C2
+
 if TYPE_CHECKING:
     from ._scorecard import PreviewScorecard
 
@@ -28,7 +30,7 @@ _G2_CELLS: tuple[str, ...] = (
     "c1_validation_names_reason",
     "c2_validation_after_load",
 )
-#: Ecosystem families G3 requires with every C1 and C2 cell passed.
+#: Ecosystem families G3 requires with every c1 and c2 cell passed.
 _G3_MIN_FAMILIES = 2
 #: Per-change roster group (the graduation evidence group).
 _PER_CHANGE_GROUP = "config_built"
@@ -179,7 +181,7 @@ def _g3(card: PreviewScorecard) -> GraduationItem:
 
     families: dict[str, list[str]] = {}
     for cell in card.cells:
-        if cell.group == _ECOSYSTEM_GROUP and cell.tier in ("C1", "C2"):
+        if cell.group == _ECOSYSTEM_GROUP and cell.tier in (TIER_C1, TIER_C2):
             families.setdefault(cell.family, []).append(cell.state)
     clean = sorted(name for name, states in families.items() if all(s == "passed" for s in states))
     if len(clean) >= _G3_MIN_FAMILIES:
@@ -187,7 +189,7 @@ def _g3(card: PreviewScorecard) -> GraduationItem:
     return GraduationItem(
         "G3",
         False,
-        f"{len(clean)} ecosystem families with every C1 and C2 cell passed "
+        f"{len(clean)} ecosystem families with every c1 and c2 cell passed "
         f"(need {_G3_MIN_FAMILIES}); roster declares {card.roster_groups.get(_ECOSYSTEM_GROUP, 0)}",
     )
 

@@ -44,7 +44,7 @@ def _parser() -> argparse.ArgumentParser:
         help="print the graduation report from the shipped record",
     )
     parser.add_argument(
-        "--workdir", type=Path, default=None, help="scratch directory for C2 artifacts"
+        "--workdir", type=Path, default=None, help="scratch directory for c2 artifacts"
     )
     parser.add_argument(
         "--repo-root", type=Path, default=None, help="repository root for the file-based items"
