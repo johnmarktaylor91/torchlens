@@ -332,7 +332,7 @@ _LoaderFactory = Callable[[bytes], Any]
 
 
 def _normalize(value: Any, depth: int = 0) -> Any:
-    """A comparable, hashable-free rendering of a loaded object graph."""
+    """A comparable rendering of a loaded object graph (no identities, no addresses)."""
 
     if depth > 12:
         return "<deep>"
@@ -342,27 +342,34 @@ def _normalize(value: Any, depth: int = 0) -> Any:
         return ("ndarray", str(value.dtype), value.shape, value.flatten().tolist())
     if isinstance(value, np.generic):
         return ("npscalar", str(value.dtype), value.item())
+    if isinstance(value, (str, bytes, bytearray, int, float, complex, bool, type(None))):
+        return value
     if isinstance(value, dict):
         return (
             "dict",
             [(_normalize(k, depth + 1), _normalize(v, depth + 1)) for k, v in value.items()],
         )
-    if isinstance(value, (list, tuple, set, frozenset)):
-        members = [_normalize(v, depth + 1) for v in value]
-        return (
-            type(value).__name__,
-            sorted(map(repr, members)) if isinstance(value, (set, frozenset)) else members,
-        )
-    if isinstance(value, (type, nn.Module)) or callable(value):
-        return ("callable", type(value).__qualname__, getattr(value, "__qualname__", repr(value)))
+    if isinstance(value, (list, tuple)):
+        return (type(value).__name__, [_normalize(v, depth + 1) for v in value])
+    if isinstance(value, (set, frozenset)):
+        return (type(value).__name__, sorted(repr(_normalize(v, depth + 1)) for v in value))
+    if isinstance(value, (torch.dtype, torch.Size, torch.device, slice)):
+        return repr(value)
+    if isinstance(value, type) or callable(value) and not hasattr(value, "__dict__"):
+        return ("callable", type(value).__qualname__, getattr(value, "__qualname__", ""))
     if is_dataclass(value) and not isinstance(value, type):
         return (
             type(value).__qualname__,
             [(f.name, _normalize(getattr(value, f.name), depth + 1)) for f in fields(value)],
         )
-    if isinstance(value, (torch.dtype, torch.Size, torch.device)):
-        return repr(value)
-    return value
+    state = getattr(value, "__dict__", None)
+    if state is None and hasattr(type(value), "__slots__"):
+        state = {
+            slot: getattr(value, slot) for slot in type(value).__slots__ if hasattr(value, slot)
+        }
+    if isinstance(state, dict):
+        return (type(value).__qualname__, _normalize(state, depth + 1))
+    return (type(value).__qualname__,)
 
 
 def _refusal_class(exc: BaseException) -> str:
