@@ -632,10 +632,11 @@ _SCRUB_TUPLE = 4
 _SCRUB_SET = 5
 _SCRUB_FROZENSET = 6
 _SCRUB_OBJECT = 7
-# The two mapping kinds sort ABOVE _SCRUB_OBJECT so one ``>=`` test selects "is a
-# mapping" (which shares the key-payload refusal) before splitting on flavour.
 _SCRUB_ORDERED_DICT = 8
 _SCRUB_MAPPING = 9
+# A ``_PORTABLE_STATE_SPEC`` owner that is not one of the containers above; the
+# spec itself is read at scrub time (tests edit spec rows in place).
+_SCRUB_SPEC_OBJECT = 10
 
 _SCRUB_VALUE_KINDS: weakref.WeakKeyDictionary[type, int] = weakref.WeakKeyDictionary()
 
@@ -646,7 +647,8 @@ def _scrub_value_kind(value_type: type) -> int:
     The branch order below is exactly the ``isinstance`` chain it replaces:
     ``torch.Size`` before ``tuple`` (it is a tuple subclass), and
     ``OrderedDict``/``defaultdict`` before plain ``dict`` so their observable
-    ordering and default-factory behavior survive a round trip.
+    ordering and default-factory behavior survive a round trip. A spec owner is
+    only recognized after every container kind, as the old chain did.
     """
 
     if issubclass(value_type, _SIMPLE_KEEP_TYPES):
@@ -667,6 +669,8 @@ def _scrub_value_kind(value_type: type) -> int:
         kind = _SCRUB_ORDERED_DICT
     elif issubclass(value_type, dict):
         kind = _SCRUB_MAPPING
+    elif getattr(value_type, "_PORTABLE_STATE_SPEC", None) is not None:
+        kind = _SCRUB_SPEC_OBJECT
     else:
         kind = _SCRUB_OBJECT
     _SCRUB_VALUE_KINDS[value_type] = kind
@@ -958,18 +962,6 @@ def _scrub_size_node(value: Any, walk: _ScrubWalk, depth: int) -> Any:
     return torch.Size(value)
 
 
-def _scrub_list_node(value: Any, walk: _ScrubWalk, depth: int) -> Any:
-    """Rebuild a list (subclasses flatten to a plain list, disclosed once)."""
-
-    return _scrub_mutable_collection(value, walk, depth, list)
-
-
-def _scrub_set_node(value: Any, walk: _ScrubWalk, depth: int) -> Any:
-    """Rebuild a set (subclasses flatten to a plain set, disclosed once)."""
-
-    return _scrub_mutable_collection(value, walk, depth, set)
-
-
 def _scrub_mutable_collection(
     value: Any, walk: _ScrubWalk, depth: int, builtin: type[list[Any]] | type[set[Any]]
 ) -> Any:
@@ -980,6 +972,11 @@ def _scrub_mutable_collection(
     of recursing until the depth cap. Only the metadata walk discloses a
     flattened subclass (R10-9 symmetry with tuples); the payload walk never
     did, and this keeps its warning surface unchanged.
+
+    Items are appended in a plain loop rather than through a generator: a
+    generator is one more Python frame per nesting level, and the depth cap
+    must fire as a typed ``ArtifactError`` before the interpreter's recursion
+    limit does.
     """
 
     memo = walk.memo
@@ -997,18 +994,10 @@ def _scrub_mutable_collection(
     rebuilt = builtin()
     _pin_in_memo(memo, value)
     memo[obj_id] = rebuilt
-    items = (_scrub_node(item, walk, depth + 1) for item in value)
-    if builtin is list:
-        rebuilt.extend(items)  # type: ignore[union-attr]
-    else:
-        rebuilt.update(items)  # type: ignore[union-attr]
+    add = rebuilt.append if isinstance(rebuilt, list) else rebuilt.add
+    for item in value:
+        add(_scrub_node(item, walk, depth + 1))
     return rebuilt
-
-
-def _scrub_tuple_node(value: Any, walk: _ScrubWalk, depth: int) -> Any:
-    """Rebuild a tuple-like container (see :func:`_rebuild_tuple_value`)."""
-
-    return _scrub_immutable_collection(value, walk, depth, _rebuild_tuple_value, "tuple", False)
 
 
 def _rebuild_frozenset_value(
@@ -1017,14 +1006,6 @@ def _rebuild_frozenset_value(
     """Rebuild a frozenset from its scrubbed items (subclass type not kept)."""
 
     return frozenset(items)
-
-
-def _scrub_frozenset_node(value: Any, walk: _ScrubWalk, depth: int) -> Any:
-    """Rebuild a frozenset as a plain frozenset of scrubbed items."""
-
-    return _scrub_immutable_collection(
-        value, walk, depth, _rebuild_frozenset_value, "frozenset", True
-    )
 
 
 def _scrub_immutable_collection(
@@ -1062,9 +1043,10 @@ def _scrub_immutable_collection(
     _pin_in_memo(memo, value)
     memo[obj_id] = _SCRUB_IN_PROGRESS
     try:
-        rebuilt = rebuild(
-            value, (_scrub_node(item, walk, depth + 1) for item in value), walk.options
-        )
+        items: list[Any] = []
+        for item in value:
+            items.append(_scrub_node(item, walk, depth + 1))
+        rebuilt = rebuild(value, items, walk.options)
     except BaseException:
         memo.pop(obj_id, None)
         raise
@@ -1113,7 +1095,7 @@ def _scrub_mapping_node(value: Any, walk: _ScrubWalk, depth: int) -> Any:
 
 
 def _scrub_object_node(value: Any, walk: _ScrubWalk, depth: int) -> Any:
-    """Scrub a non-container node: tensor payload, spec object or opaque leaf.
+    """Scrub a spec-less non-container node: tensor payload or opaque leaf.
 
     The payload walk blobifies anything its codec recognizes and stringifies
     every other spec-less object (the ``saved_args``/``custom_attributes``
@@ -1127,9 +1109,6 @@ def _scrub_object_node(value: Any, walk: _ScrubWalk, depth: int) -> Any:
         return _blobify_tensor_field(
             owner[0], owner[1], value, walk.blob_specs, walk.blob_counter, walk.options
         )
-    spec = getattr(type(value), "_PORTABLE_STATE_SPEC", None)
-    if spec is not None:
-        return _scrub_spec_object(value, spec, walk.for_fields(), depth)
     if owner is not None:
         return _stringify_value(value)
     if walk.stringify_unknown and not _is_safely_picklable(value):
@@ -1137,36 +1116,30 @@ def _scrub_object_node(value: Any, walk: _ScrubWalk, depth: int) -> Any:
     return value
 
 
-#: Per-kind scrub rules, indexed by the :func:`_scrub_value_kind` constants.
-_SCRUB_NODE_HANDLERS: tuple[Callable[[Any, _ScrubWalk, int], Any], ...] = (
-    _keep_node,  # _SCRUB_SIMPLE
-    _scrub_size_node,  # _SCRUB_SIZE
-    _keep_node,  # _SCRUB_BLOBREF
-    _scrub_list_node,  # _SCRUB_LIST
-    _scrub_tuple_node,  # _SCRUB_TUPLE
-    _scrub_set_node,  # _SCRUB_SET
-    _scrub_frozenset_node,  # _SCRUB_FROZENSET
-    _scrub_object_node,  # _SCRUB_OBJECT
-    _scrub_mapping_node,  # _SCRUB_ORDERED_DICT
-    _scrub_mapping_node,  # _SCRUB_MAPPING
-)
-
-
-def _scrub_spec_object(
-    value: Any, spec: Mapping[str, FieldPolicy], walk: _ScrubWalk, depth: int
-) -> Any:
+def _scrub_spec_object(value: Any, walk: _ScrubWalk, depth: int) -> Any:
     """Scrub an object that declares a ``_PORTABLE_STATE_SPEC``, field by field.
 
-    Every live state field needs a declared policy: an undeclared field is
-    refused (:func:`_undeclared_field_error`) unless it is a
-    ``functools.cached_property`` cell, which is derived state that rebuilds
-    on access and is skipped structurally.
+    An undeclared live field is refused (:func:`_undeclared_field_error`)
+    unless it is a ``functools.cached_property`` cell (derived state, skipped).
+    DROP/WEAKREF_STRIP and plain KEEP are resolved inline, in ``_scrub_field``'s
+    own branch order, because this loop scrubs ~160k fields per ResNet save
+    and one Python call per field was measurable.
     """
 
+    owner = walk.payload_owner
+    if owner is not None:
+        if walk.options.payload_codec.can_encode(value):
+            return _blobify_tensor_field(
+                owner[0], owner[1], value, walk.blob_specs, walk.blob_counter, walk.options
+            )
+        walk = walk.for_fields()
+    elif walk.stringify_unknown:
+        walk = walk.for_fields()
     memo = walk.memo
     obj_id = id(value)
     if obj_id in memo:
         return memo[obj_id]
+    spec: Mapping[str, FieldPolicy] = type(value)._PORTABLE_STATE_SPEC
     scrubbed_obj = state_new(type(value))
     _pin_in_memo(memo, value)
     memo[obj_id] = scrubbed_obj
@@ -1180,15 +1153,61 @@ def _scrub_spec_object(
             if _is_cached_property_cell(type(value), field_name):
                 continue
             raise _undeclared_field_error(value, field_name, owner_is_trace)
-        scrubbed_state[field_name] = _scrub_declared_field(
-            value, field_name, field_value, declared, walk, depth, owner_is_trace
-        )
+        if field_name in _NORMALIZED_FIELD_NAMES:
+            field_value = _normalize_field_value(field_name, field_value)
+        policy = _effective_policy(value, field_name, declared, walk.options)
+        if policy is FieldPolicy.DROP or policy is FieldPolicy.WEAKREF_STRIP:
+            scrubbed_state[field_name] = None
+        elif policy is FieldPolicy.KEEP and not (
+            owner_is_trace and field_name in _TRACE_RAW_FIELDS
+        ):
+            scrubbed_state[field_name] = _scrub_node(field_value, walk, depth + 1)
+        else:
+            scrubbed_state[field_name] = _scrub_field(
+                owner=value,
+                field_name=field_name,
+                field_value=field_value,
+                policy=policy,
+                walk=walk,
+                depth=depth + 1,
+            )
     if owner_is_trace:
         _stamp_trace_portable_rows(value, scrubbed_state, walk.options)
     else:
         _apply_owner_source_policies(value, scrubbed_state, walk.options)
     return state_restore(scrubbed_obj, scrubbed_state)
 
+
+#: Per-kind scrub rules, indexed by the :func:`_scrub_value_kind` constants.
+#: Container rules are bound with ``functools.partial`` (a C-level call, no
+#: extra Python frame) so every nesting level costs the same two frames the
+#: old branch chain did; see :func:`_scrub_mutable_collection`.
+_SCRUB_NODE_HANDLERS: tuple[Callable[[Any, _ScrubWalk, int], Any], ...] = (
+    _keep_node,  # _SCRUB_SIMPLE
+    _scrub_size_node,  # _SCRUB_SIZE
+    _keep_node,  # _SCRUB_BLOBREF
+    functools.partial(_scrub_mutable_collection, builtin=list),  # _SCRUB_LIST
+    functools.partial(  # _SCRUB_TUPLE
+        _scrub_immutable_collection,
+        rebuild=_rebuild_tuple_value,
+        noun="tuple",
+        disclose_subclass=False,
+    ),
+    functools.partial(_scrub_mutable_collection, builtin=set),  # _SCRUB_SET
+    functools.partial(  # _SCRUB_FROZENSET
+        _scrub_immutable_collection,
+        rebuild=_rebuild_frozenset_value,
+        noun="frozenset",
+        disclose_subclass=True,
+    ),
+    _scrub_object_node,  # _SCRUB_OBJECT
+    _scrub_mapping_node,  # _SCRUB_ORDERED_DICT
+    _scrub_mapping_node,  # _SCRUB_MAPPING
+    _scrub_spec_object,  # _SCRUB_SPEC_OBJECT
+)
+
+#: Trace fields whose KEEP policy still routes through the raw-value save policy.
+_TRACE_RAW_FIELDS = frozenset({"raw_input", "raw_output"})
 
 #: Fields whose live value is normalized before its policy applies.
 _NORMALIZED_FIELD_NAMES = frozenset({"_is_in_conditional_body", "_capture_outcome"})
@@ -1205,45 +1224,6 @@ def _normalize_field_value(field_name: str, field_value: Any) -> Any:
         # class, and loads parse the payload against closed vocabularies.
         return field_value.to_payload() if hasattr(field_value, "to_payload") else None
     return field_value
-
-
-def _scrub_declared_field(
-    owner: Any,
-    field_name: str,
-    field_value: Any,
-    declared: FieldPolicy,
-    walk: _ScrubWalk,
-    depth: int,
-    owner_is_trace: bool,
-) -> Any:
-    """Scrub one declared field under its effective policy.
-
-    The two overwhelmingly common policies are resolved here instead of
-    through :func:`_scrub_field`, which is one Python call per field on a walk
-    that scrubs ~160k fields per ResNet save. Both shortcuts reproduce
-    ``_scrub_field``'s own branch order exactly: its DROP/WEAKREF_STRIP test
-    runs first, and KEEP falls through every field-specific serializer to the
-    generic node scrub -- except for a Trace raw input/output field, which
-    keeps routing through the full function.
-    """
-
-    if field_name in _NORMALIZED_FIELD_NAMES:
-        field_value = _normalize_field_value(field_name, field_value)
-    policy = _effective_policy(owner, field_name, declared, walk.options)
-    if policy is FieldPolicy.DROP or policy is FieldPolicy.WEAKREF_STRIP:
-        return None
-    if policy is FieldPolicy.KEEP and not (
-        owner_is_trace and (field_name == "raw_input" or field_name == "raw_output")
-    ):
-        return _scrub_node(field_value, walk, depth + 1)
-    return _scrub_field(
-        owner=owner,
-        field_name=field_name,
-        field_value=field_value,
-        policy=policy,
-        walk=walk,
-        depth=depth + 1,
-    )
 
 
 def _is_cached_property_cell(owner_type: type, field_name: str) -> bool:
