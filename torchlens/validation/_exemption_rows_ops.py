@@ -31,6 +31,8 @@ def _member_test(kind: str, name: str) -> str:
 
 
 def _skip_validation(name: str, reason: str, negative_test: str | None) -> ExemptionRow:
+    """Declare an op whose forward replay and perturbation are both skipped."""
+
     admits = (
         "forward replay and perturbation are both skipped for this op; the saved "
         "bytes are uninitialized memory and no deterministic replay exists"
@@ -47,6 +49,8 @@ def _skip_validation(name: str, reason: str, negative_test: str | None) -> Exemp
 
 
 def _skip_perturbation(name: str, reason: str, negative_test: str | None) -> ExemptionRow:
+    """Declare an op whose parents are never perturbed (forward replay still runs)."""
+
     admits = (
         "perturbation is skipped for every parent of this op; forward replay still "
         "runs and must reproduce the saved output"
@@ -93,6 +97,8 @@ def _structural(
 def _custom(
     names: str | tuple[str, ...], check: str, admits: str, reason: str, negative_test: str | None
 ) -> ExemptionRow:
+    """Declare spellings whose exemption is decided by the named predicate in exemptions.py."""
+
     spelled = _spell(names)
     return ExemptionRow(
         spelled,

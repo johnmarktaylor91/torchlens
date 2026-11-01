@@ -37,7 +37,7 @@ from ._exemption_schema import (
     structural_positions,
 )
 
-__all__ = [
+__all__ = (
     "EXEMPTION_TABLE",
     "ExemptionKind",
     "ExemptionRow",
@@ -47,7 +47,7 @@ __all__ = [
     "exemption_row",
     "skip_perturbation_justifications",
     "skip_validation_justifications",
-]
+)
 
 EXEMPTION_TABLE: tuple[ExemptionRow, ...] = (
     _REGISTRY_ROWS + _DECISION_ROWS + _TOLERANCE_ROWS + _INVARIANT_ROWS
