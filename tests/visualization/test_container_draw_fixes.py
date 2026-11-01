@@ -280,13 +280,13 @@ def test_cluster_mode_draws_the_gpt2_split_box_with_sibling_ordering(tmp_path: P
 
 
 @pytest.mark.heavy
-def test_trace_output_on_an_opaque_cache_names_the_real_cause() -> None:
+def test_reconstruct_output_on_an_opaque_cache_names_the_real_cause() -> None:
     """With container structure captured, the refusal names the opaque member, not the option."""
 
     trace = tl.trace(_tiny_gpt2(), torch.randint(0, 50, (1, 5)), capture=STRUCTURE)
 
     with pytest.raises(PayloadUnavailableError) as excinfo:
-        trace.output
+        trace.reconstruct_output()
 
     message = str(excinfo.value)
     assert excinfo.value.fields["code"] == "container_not_reconstructable"
