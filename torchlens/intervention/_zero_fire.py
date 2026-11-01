@@ -36,6 +36,7 @@ __all__ = (
     "check_zero_fire_policy",
     "current_zero_fire_policy",
     "external_stacklevel",
+    "live_distribution_leaf_paths",
     "non_tensor_module_output_detail",
     "non_tensor_reason_fields",
     "raise_rerun_zero_fire",
@@ -131,11 +132,45 @@ def recorded_non_tensor_details(trace: Any, addresses: Any) -> list[str]:
             continue
         paths: tuple[str, ...] = ()
         if kind == DISTRIBUTION_CONTAINER_KIND:
-            paths = tuple(f".{name}" for name in getattr(spec, "fields", ()))
+            paths = _distribution_leaf_paths(spec)
         details.append(
             non_tensor_module_output_detail(target, str(spec.type_qualname or kind), paths)
         )
     return details
+
+
+def _distribution_leaf_paths(spec: Any, prefix: str = "") -> tuple[str, ...]:
+    """Return the recorded tensor-leaf attribute paths of a distribution spec.
+
+    A nested distribution (``Independent.base_dist``) contributes its own leaves
+    (``.base_dist.loc``), so the paths name ops the user can target.
+    """
+
+    children = dict(getattr(spec, "child_specs", ()) or ())
+    paths: list[str] = []
+    for name in getattr(spec, "fields", ()) or ():
+        child = next(
+            (
+                node
+                for component, node in children.items()
+                if getattr(component, "name", None) == name
+            ),
+            None,
+        )
+        if child is not None and child.kind == spec.kind:
+            paths.extend(_distribution_leaf_paths(child, f"{prefix}.{name}"))
+        else:
+            paths.append(f"{prefix}.{name}")
+    return tuple(paths)
+
+
+def live_distribution_leaf_paths(output: Any) -> tuple[str, ...]:
+    """Return the tensor-leaf attribute paths capture records for a live distribution."""
+
+    from ..backends.torch.ops import _try_build_container_spec
+
+    spec = _try_build_container_spec(output)
+    return _distribution_leaf_paths(spec) if spec is not None else ()
 
 
 def non_tensor_reason_fields(details: Any) -> dict[str, Any]:

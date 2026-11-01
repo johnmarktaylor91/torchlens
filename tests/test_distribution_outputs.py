@@ -550,3 +550,15 @@ def test_runnable_save_never_blesses_a_lossy_distribution(tmp_path: Path) -> Non
         return
     result = tl.load(path).run(inputs=_x(), on_divergence="return")
     assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
+
+
+def test_zero_fire_reason_names_nested_parameter_leaves() -> None:
+    """A nested distribution's reason names the leaf ops (``.base_dist.loc``), not the container."""
+
+    from torchlens.intervention._zero_fire import live_distribution_leaf_paths
+
+    assert live_distribution_leaf_paths(IndependentHead().eval()(_x())) == (
+        ".base_dist.loc",
+        ".base_dist.scale",
+    )
+    assert live_distribution_leaf_paths(NormalHead().eval()(_x())) == (".loc", ".scale")

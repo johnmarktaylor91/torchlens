@@ -952,12 +952,12 @@ def _boundary_output_is_not_a_tensor(session: _BindSession, address: str, output
     so the rule fires at zero sites and the reason names the parameter paths.
     """
 
-    from .._ir.distribution_container import distribution_children, is_distribution
-    from ._zero_fire import non_tensor_module_output_detail
+    from .._ir.distribution_container import is_distribution
+    from ._zero_fire import live_distribution_leaf_paths, non_tensor_module_output_detail
 
     if not is_distribution(output):
         return False
-    paths = tuple(f".{name}" for name, _child in distribution_children(output))
+    paths = live_distribution_leaf_paths(output)
     session.non_tensor_details.setdefault(
         address, non_tensor_module_output_detail(address, type(output).__qualname__, paths)
     )
