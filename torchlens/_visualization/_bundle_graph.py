@@ -560,17 +560,17 @@ def resolve_draw_target(
 
     from ._render_utils import collision_safe_outpath, strip_known_extension
 
-    stem = None if path is None else strip_known_extension(str(path))
-    extension = None if path is None or stem == str(path) else str(path)[len(stem) + 1 :].lower()
+    if path is None:
+        fileformat = file_format or "pdf"
+        return collision_safe_outpath(default_stem, fileformat), fileformat
+    stem = strip_known_extension(str(path))
+    extension = str(path)[len(stem) + 1 :].lower() if stem != str(path) else None
     if extension is not None and file_format is not None and extension != file_format.lower():
         raise ValueError(
             f"path {path!r} names format {extension!r} but file_format={file_format!r}; "
             "drop one of them."
         )
-    fileformat = extension or file_format or "pdf"
-    if stem is None:
-        return collision_safe_outpath(default_stem, fileformat), fileformat
-    return stem, fileformat
+    return stem, extension or file_format or "pdf"
 
 
 def draw_bundle(  # noqa: PLR0913 - one keyword per Bundle.draw keyword
