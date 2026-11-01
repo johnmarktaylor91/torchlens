@@ -204,7 +204,7 @@ Use `tl.facet(name)` for a named facet and `tl.head(index, name)` or
 log = tl.trace(
     model,
     x,
-    capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+    capture=tl.options.CaptureOptions(save_args=True), save="all",
 )
 edited = log.fork("ablated")
 edited.attach_hooks(tl.head(3, "q"), tl.zero_ablate())

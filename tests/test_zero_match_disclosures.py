@@ -258,7 +258,7 @@ def test_layers_to_save_zero_match_warns_and_persists(tmp_path) -> None:
         log = tl.trace(
             _model(),
             torch.ones(1, 3),
-            capture=tl.options.CaptureOptions(layers_to_save=["nosuchlayerzzz"]),
+            save=["nosuchlayerzzz"],
         )
     assert any("matched zero layers" in str(w.message) for w in caught), (
         "typo'd layers_to_save produced no zero-match warning"
@@ -282,7 +282,7 @@ def test_layers_to_save_zero_match_warns_and_persists(tmp_path) -> None:
         control = tl.trace(
             _model(),
             torch.ones(1, 3),
-            capture=tl.options.CaptureOptions(layers_to_save=["linear"]),
+            save=["linear"],
         )
     assert not any("matched zero layers" in str(w.message) for w in clean)
     assert not control.annotations.get("unmatched_capture_selectors")

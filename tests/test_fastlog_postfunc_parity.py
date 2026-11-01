@@ -14,6 +14,7 @@ documenting the intentional fastlog divergence:
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -142,7 +143,7 @@ def test_no_transform_leaves_transformed_payload_unset() -> None:
         recording=tl.options.RecordingOptions(default_op=True),
     )
 
-    assert recording._activation_transform_repr is None
+    assert recording.options.activation_transform is None
     for record in recording.records:
         assert record.transformed_ram_payload is None
         assert record.transformed_disk_payload is None
@@ -391,8 +392,13 @@ def test_transform_error_wrapped_with_event_context() -> None:
     assert "custom failure" in str(exc_info.value.__cause__)
 
 
-def test__activation_transform_repr_exposed_and_persisted(tmp_path: Path) -> None:
-    """Recording exposes ``_activation_transform_repr`` and persists it on disk."""
+def test_activation_transform_readback_and_persisted_audit(tmp_path: Path) -> None:
+    """``Recording.options`` returns the live transform; a bundle keeps a scrubbed repr.
+
+    A recovered recording cannot hold the callable: its record reads ``None``
+    for the transform while the bundle metadata keeps the audit repr and the
+    plain settings.
+    """
 
     def named_transform(t: torch.Tensor) -> torch.Tensor:
         """Doubling transform with a stable repr."""
@@ -405,22 +411,26 @@ def test__activation_transform_repr_exposed_and_persisted(tmp_path: Path) -> Non
         recording=tl.options.RecordingOptions(default_op=True),
         capture=tl.options.CaptureOptions(activation_transform=named_transform),
     )
-    assert recording._activation_transform_repr is not None
-    assert "named_transform" in recording._activation_transform_repr
+    assert recording.options.activation_transform is named_transform
+    assert recording.options.default_op is True
 
     bundle_path = tmp_path / "metadata.tlfast"
-    persisted = tl.record(
+    tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
         storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
-        recording=tl.options.RecordingOptions(default_op=True),
+        recording=tl.options.RecordingOptions(default_op=True, history_size=3),
         capture=tl.options.CaptureOptions(activation_transform=named_transform),
     )
     metadata = json.loads((bundle_path / "metadata.json").read_text(encoding="utf-8"))
-    assert metadata.get("_activation_transform_repr") is not None
-    assert "named_transform" in metadata["_activation_transform_repr"]
+    assert "named_transform" in metadata["_settings_reprs"]["activation_transform"]
+    assert re.search(r"0x[0-9a-fA-F]", metadata["_settings_reprs"]["activation_transform"]) is None
+    assert metadata["settings"]["history_size"] == 3
+    assert "activation_transform" not in metadata["settings"]
     loaded = tl.load(bundle_path)
-    assert loaded._activation_transform_repr == persisted._activation_transform_repr
+    assert loaded.options.activation_transform is None
+    assert loaded.options.history_size == 3
+    assert loaded.options.default_op is True
 
 
 def test_transform_roundtrips_via_disk_recovery(tmp_path: Path) -> None:

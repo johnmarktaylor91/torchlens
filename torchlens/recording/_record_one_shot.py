@@ -11,7 +11,7 @@ from torchlens.backends.registry import BackendUnsupportedError
 
 from .._capture_state_helpers import unwrap_compiled_model
 from .._deprecations import MISSING
-from .._errors import ArgumentTypeError, KeywordConflictError
+from .._errors import ArgumentTypeError
 from .._input_coerce import _coerce_input_args
 from .._robustness import check_model_and_input_variants
 from ..backends.registry import (
@@ -26,7 +26,7 @@ from ._generation import GenerationRecording, enrich_generation, record_generati
 from ._recorder import Recorder
 from ._validation import validate_postprocess
 from .options import HaltPredicateFn, PredicateFn, RecordingOptions
-from .types import Recording
+from .types import Recording, returned as output_returned
 
 _RECORDING_DOOR_FIELDS: tuple[str, ...] = (
     "default_op",
@@ -100,10 +100,10 @@ def _unfold_record_options(
                 argument="capture",
             )
     for name in _RECORDING_DOOR_FIELDS:
-        explicit = recording is not None and recording.is_field_explicit(name)
+        explicit = isinstance(recording, RecordingOptions) and recording._is_field_explicit(name)  # noqa: SLF001
         flat[name] = getattr(recording, name) if explicit else MISSING
     for name in _CAPTURE_DOOR_FIELDS:
-        explicit = capture is not None and capture.is_field_explicit(name)
+        explicit = isinstance(capture, CaptureOptions) and capture._is_field_explicit(name)  # noqa: SLF001
         flat[name] = getattr(capture, name) if explicit else MISSING
     flat["backward_ready"] = bool(capture.backward_ready) if capture is not None else False
     # The door's former flat defaults, resolved here so the generation path
@@ -128,8 +128,7 @@ def record(
     narrate: Any | None = None,
     backend: BackendName | None = None,
     generate_kwargs: Mapping[str, Any] | None = None,
-    return_output: bool = False,
-) -> Recording | GenerationRecording | tuple[Any, Recording | GenerationRecording]:
+) -> Recording | GenerationRecording:
     """Record one model forward pass with capture predicates.
 
     ``record(save=...)`` is the one predicate spelling and matches
@@ -161,9 +160,8 @@ def record(
     on_forward_error:
         Controls failed-forward handling. ``"raise"`` preserves the historical
         behavior, ``"attach_partial"`` attaches ``exc.partial_recording`` and
-        re-raises, and ``"return_partial"`` returns a failed partial Recording.
-        With ``return_output=True``, the returned output is ``None`` because no
-        valid model output exists on failure.
+        re-raises, and ``"return_partial"`` returns a failed partial Recording,
+        whose ``output`` refuses with ``output_forward_failed``.
     intervene:
         Optional predicate-time intervention slot evaluated on operation contexts.
     stop_after:
@@ -207,16 +205,15 @@ def record(
         position of every forward, the token sequences, the settings that
         decide the tokens). Beam search, more than one return sequence, batched
         prompts, assisted decoding, encoder-decoder models, ``use_cache=False``,
-        ``intervene=``, ``halt=`` and partial forward-error modes refuse with
+        ``intervene=``, ``stop_after=`` and partial forward-error modes refuse with
         code ``record_generation_unsupported``.
-    return_output:
-        Whether to return ``(model_output, recording)``; with
-        ``generate_kwargs`` the output is ``generate()``'s own return value.
 
     Returns
     -------
-    Recording | tuple[Any, Recording]
-        Fastlog recording, optionally with the model output.
+    Recording | GenerationRecording
+        The recording (a ``GenerationRecording`` with ``generate_kwargs``). Its
+        ``output`` is the model's return value (``generate()``'s own return value
+        with ``generate_kwargs``), held in memory only.
     """
 
     # The capability table gates this surface for EVERY resolution, including
@@ -256,7 +253,6 @@ def record(
     max_predicate_failures = flat["max_predicate_failures"]
     on_predicate_error = flat["on_predicate_error"]
     on_forward_error = flat["on_forward_error"]
-    streaming = None
     seed = flat["seed"]
     activation_transform = flat["activation_transform"]
     save_raw_activations = flat["save_raw_activations"]
@@ -267,12 +263,6 @@ def record(
     backward_ready = flat["backward_ready"]
     detach_saved_activations = flat["detach_saved_activations"]
     postprocess = flat["postprocess"]
-    if storage is not None and streaming is not None:
-        raise KeywordConflictError(
-            "Do not pass both `storage` and `streaming`",
-            code="storage_argument_conflict",
-            remedy="prefer storage=, or remove one of the two arguments",
-        )
     validate_postprocess(postprocess)
     input_args = _coerce_input_args(model, input_args)
     # Fail fast on tensor variants the logging pipeline cannot handle (meta tensors have no
@@ -300,7 +290,6 @@ def record(
                 "on_predicate_error": on_predicate_error,
                 "on_forward_error": on_forward_error,
                 "storage": storage,
-                "streaming": streaming,
                 "seed": seed,
                 "activation_transform": activation_transform,
                 "save_raw_activations": save_raw_activations,
@@ -313,10 +302,8 @@ def record(
                 "detach_saved_activations": detach_saved_activations,
             },
         )
-        generation = enrich_generation(generation, postprocess)
-        if return_output:
-            return output, generation
-        return generation
+        object.__setattr__(generation.recording, "_output", output_returned(output))
+        return enrich_generation(generation, postprocess)
     with Recorder(
         model,
         save=save,
@@ -332,7 +319,6 @@ def record(
         on_predicate_error=on_predicate_error,
         on_forward_error=on_forward_error,
         storage=storage,
-        streaming=streaming,
         seed=seed,
         activation_transform=activation_transform,
         save_raw_activations=save_raw_activations,
@@ -344,10 +330,8 @@ def record(
         narrate=narrate,
         detach_saved_activations=detach_saved_activations,
     ) as recorder:
-        output = recorder(input_args, input_kwargs)
+        recorder(input_args, input_kwargs)
     result = recorder.recording
     if postprocess != "none":
         result = result.enrich(postprocess)
-    if return_output:
-        return output, result
     return result

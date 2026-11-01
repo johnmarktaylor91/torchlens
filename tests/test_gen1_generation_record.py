@@ -74,9 +74,8 @@ def test_each_decode_step_matches_a_full_no_cache_forward(family: str) -> None:
     n_new = 8
     plain = model.generate(PROMPT, **_greedy(n_new))
 
-    tokens, generation = tl.record(
-        model, PROMPT, save=_save(sites), generate_kwargs=_greedy(n_new), return_output=True
-    )
+    generation = tl.record(model, PROMPT, save=_save(sites), generate_kwargs=_greedy(n_new))
+    tokens = generation.output
 
     assert isinstance(generation, GenerationRecording)
     assert torch.equal(tokens, plain)

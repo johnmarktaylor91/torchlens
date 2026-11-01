@@ -97,12 +97,12 @@ def _build_live_log() -> Trace:
         model,
         x,
         capture=tl.options.CaptureOptions(
-            layers_to_save="all",
             save_args=True,
             save_rng=True,
             save_source_context=True,
             seed=0,
         ),
+        save="all",
     )
 
 
@@ -160,7 +160,8 @@ def test_partial_activation_transform_repr_does_not_leak_bound_values(tmp_path: 
     trace = trace_fn(
         _TinyIOModel(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", activation_transform=transform),
+        capture=tl.options.CaptureOptions(activation_transform=transform),
+        save="all",
     )
     spec = tmp_path / "partial.tlspec"
     trace.save(str(spec))
@@ -801,7 +802,8 @@ def test_r69_ordinary_analysis_save_retains_raw_values(tmp_path: Path) -> None:
     trace = trace_fn(
         _NestedStr(),
         [torch.randn(3), {"mode": "fast"}],
-        capture=tl.options.CaptureOptions(layers_to_save="none", save_raw_input="small"),
+        capture=tl.options.CaptureOptions(save_raw_input="small"),
+        save="none",
     )
     path = tmp_path / "analysis_raw.tlspec"
     trace.save(path)
@@ -822,7 +824,7 @@ def test_small_raw_input_pil_round_trips_bounded_image(tmp_path: Path) -> None:
     trace = trace_fn(
         _TinyImageInputModel(),
         image,
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
     path = tmp_path / "pil_raw_input.tlspec"
 

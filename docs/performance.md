@@ -79,8 +79,8 @@ assert gelu_site.out.shape == (2, 4)
 
 When a fastlog forward raises, the default remains `on_forward_error="raise"`. Opt into
 `on_forward_error="attach_partial"` to attach `exc.partial_recording` and re-raise, or
-`on_forward_error="return_partial"` to return a failed partial `Recording` (`return_output=True`
-returns `(None, partial)`). Failed partials set `status="partial_error"`, `failed=True`,
+`on_forward_error="return_partial"` to return a failed partial `Recording` (its `output` refuses
+with `output_forward_failed`). Failed partials set `status="partial_error"`, `failed=True`,
 string-only error metadata, `num_committed_ops`, and best-effort `last_event_*` fields. user-op
 failures exclude the failing call; TL-side capture failures may include a skipped/partial
 current-call event. Failed partials cannot be converted with `Recording.to_trace()` or used with
@@ -303,7 +303,7 @@ Use disk-backed storage for selected payloads that are too large or numerous to 
 Trace repr, notebook HTML, and JSON explanation do not materialize lazy disk payloads for their
 NaN/Inf summary; those refs are reported as unexamined until you call ``op.materialize_out()``.
 This exemption applies to predicate-selected disk-only payloads. Exhaustive saving
-(``layers_to_save="all"``, the default) keeps RAM copies until postprocess, so combine a narrower
+(``save="all"``, the default) keeps RAM copies until postprocess, so combine a narrower
 ``save=`` with disk streaming to reduce peak retained memory. Note that ``save=`` itself takes a
 predicate, selector, or ``CaptureOptions`` — never the string ``"all"``.
 Portable `.tlspec/` bundles store manifest data plus tensor sidecars when the backend supports

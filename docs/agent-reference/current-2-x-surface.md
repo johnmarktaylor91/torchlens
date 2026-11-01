@@ -6,7 +6,7 @@
   `spec.bind(model)` (`tl.when(site, action).bind(model)`) is the capture-free bound executor,
   about 1.0 to 1.2x a plain forward hook and exact, also through HF `generate()` with the KV
   cache (`bound.generate(...)`).
-  `tl.record(..., intervene=spec, return_output=True)` is the lighter evidence path (about
+  `tl.record(..., intervene=spec)` (output in `recording.output`) is the lighter evidence path (about
   1 ms per op against about 3 ms for `tl.trace` on the tested CPU decoders). A pure
   `tl.module(...)` save selector (or a `|` union of them, or one intersected with any selector by
   `&`) escrows only the ops inside matching module passes; joining it with a non-module term by
@@ -46,8 +46,8 @@
   scrub rebinds the group row once for all members, and caller mutation is
   impossible — this supersedes the historical fresh-mutable-copy-per-read barrier.
 - Steering many forwards or a generation loop: `spec.bind(model)` (capture-free, about 1x a
-  plain hook, works with HF `generate()` and the KV cache), `tl.record(..., intervene=spec,
-  return_output=True)` per forward when activations are needed as evidence, and one full
+  plain hook, works with HF `generate()` and the KV cache), `tl.record(..., intervene=spec)`
+  per forward when activations are needed as evidence (the output is `recording.output`), and one full
   `tl.trace(..., intervene=spec)` as the correctness oracle. Trace-then-rerun
   (`trace.run(model, x)` on a module-targeted staged spec) is a fast path too: the guarded
   fast engine, about 1.5x a plain hook, with the trace's saved sites refreshed. Recipe:
@@ -62,6 +62,9 @@
   TorchLens). The old `tl.bridge.steering_vectors.vector`, `tl.bridge.repeng.control_vector`
   and `tl.bridge.dialz.vector` trainers are removed.
 - `tl.record(..., save=...)` is the sparse predicate recorder; it returns `Recording`.
+  `recording.options` is a read-only `tl.types.RecordingSettings` of the settings it was made
+  with (live values, for example `recording.options.save_grads`), and `recording.output` is the
+  model's return value (memory only; a loaded recording refuses with `output_not_stored`).
   `tl.record(model, ids, save=..., generate_kwargs={...})` (DOCUMENTED-UNSTABLE) runs one real
   cached HF `generate()` and records the sites at every forward it issues (one Recorder pass
   per forward, so each decode step records only its new position and cost is linear in
@@ -76,7 +79,7 @@
   the historical `on_forward_error="raise"` behavior; opt into
   `on_forward_error="attach_partial"` to attach `exc.partial_recording` and re-raise, or
   `on_forward_error="return_partial"` to return a failed partial `Recording`. Failed partials
-  set `status="partial_error"`, `is_failed=True`, string-only error metadata, `num_committed_ops`,
+  set `status="partial_error"` and `is_failed` `True`, string-only error metadata, `num_committed_ops`,
   and best-effort `last_event_*` fields. user-op failures exclude the failing call; TL-side
   capture failures may include a skipped/partial current-call event. Failed partials cannot be
   converted with `Recording.to_trace()` or used with `Recording.backward()`.
@@ -574,7 +577,7 @@
   alias-aware, but this is not a general OOM guarantee: the forward, transform-only deltas, and
   cross-device temporaries can allocate first. A float sets another fraction, an int an absolute
   cap, and `None` disables it. Predicate-selected disk-only saves are exempt; exhaustive
-  `capture=tl.options.CaptureOptions(layers_to_save="all")` plus `to_disk(...)` remains budgeted
+  `save="all"` plus `to_disk(...)` remains budgeted
   until postprocess eviction (the former bare flat
   `layers_to_save=` kwarg is removed). Unmeasurable auto
   devices warn on first charge and require an absolute budget for enforcement. The reported figure

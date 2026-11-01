@@ -52,9 +52,7 @@ def _make_trace() -> tuple[_HandleModel, tl.Trace]:
     torch.manual_seed(0)
     model = _HandleModel()
     x = torch.randn(4, 3, requires_grad=True)
-    trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all")
-    )
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads="all"), save="all")
     trace[trace.output_layers[0]].out.sum().backward()
     return model, trace
 

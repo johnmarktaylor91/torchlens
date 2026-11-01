@@ -158,7 +158,7 @@ class TestTraceGC:
         model = _TwoLayerNet()
         x = torch.randn(1, 5)
         # Two-pass path: exhaustive first, then fast via save_new_outs
-        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=None))
+        trace = tl.trace(model, x, save=None)
 
         # Warm up
         trace.save_new_outs(model, torch.randn(1, 5), layers_to_save="all")
@@ -311,9 +311,7 @@ class TestTraceGC:
         gc.collect()
         gc.disable()
         try:
-            trace = tl.trace(
-                model, torch.randn(1, 5), capture=tl.options.CaptureOptions(layers_to_save="all")
-            )
+            trace = tl.trace(model, torch.randn(1, 5), save="all")
             activation = trace["relu_1_2"].out
             trace_ref = weakref.ref(trace)
             activation_ref = weakref.ref(activation)
@@ -670,7 +668,7 @@ class TestLifetimeCoverageGaps:
         trace = tl.trace(
             _TwoLayerNet(),
             torch.randn(1, 5),
-            capture=tl.options.CaptureOptions(layers_to_save="all"),
+            save="all",
         )
         restored = pickle.loads(pickle.dumps(trace))
         assert len(restored) > 0
@@ -687,7 +685,7 @@ class TestLifetimeCoverageGaps:
         parent = tl.trace(
             _TwoLayerNet(),
             torch.randn(1, 5),
-            capture=tl.options.CaptureOptions(layers_to_save="all"),
+            save="all",
         )
         fork = parent.fork()
         fork_ref = weakref.ref(fork)
@@ -713,9 +711,7 @@ class TestLifetimeCoverageGaps:
         """
 
         model = _TwoLayerNet().eval()
-        source = tl.trace(
-            model, torch.randn(1, 5), capture=tl.options.CaptureOptions(layers_to_save="all")
-        )
+        source = tl.trace(model, torch.randn(1, 5), save="all")
         result = source.run(inputs=torch.randn(1, 5))
         fork_ref = weakref.ref(result.trace)
 
@@ -791,9 +787,8 @@ class TestLifetimeCoverageGaps:
         trace = tl.trace(
             model,
             x,
-            capture=tl.options.CaptureOptions(
-                intervention_ready=True, cache=False, layers_to_save="all"
-            ),
+            capture=tl.options.CaptureOptions(intervention_ready=True, cache=False),
+            save="all",
         )
         path = tmp_path / "gc_archived.tlspec"
         trace.save(path, level="runnable", include_weights=True, include_activations=True)

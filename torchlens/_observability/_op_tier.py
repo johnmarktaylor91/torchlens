@@ -414,15 +414,15 @@ class OpTierCollector:
 
         _record: Any = _record_one_shot.record
 
-        output, _recording = _record(
+        _recording = _record(
             self.model,
             input_args,
             input_kwargs=input_kwargs,
             save=self.save,
             recording=RecordingOptions(default_op=True),
             capture=CaptureOptions(activation_transform=self._reducer, save_raw_activations=False),
-            return_output=True,
         )
+        output = _recording.output
         return output
 
     def observe_step(
@@ -448,15 +448,15 @@ class OpTierCollector:
 
         _record: Any = _record_one_shot.record
 
-        output, recording = _record(
+        recording = _record(
             self.model,
             input_args,
             input_kwargs=input_kwargs,
             save=self.save,
             recording=RecordingOptions(default_op=True),
             capture=CaptureOptions(activation_transform=self._reducer, save_raw_activations=False),
-            return_output=True,
         )
+        output = recording.output
         step = self._open_block_step()
         # Batch the host transfer (D16): one stacked .cpu() per device per
         # step over every packed row, never a per-site sync.

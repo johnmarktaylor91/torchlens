@@ -16,7 +16,7 @@ import torchlens as tl
 from torchlens._snoop import normalize_echo
 from torchlens.errors import NarrationConfigError
 from torchlens.options import NarrationOptions
-from torchlens.recording.options import RecordingOptions
+from torchlens.recording.options import _RecordingConfig
 
 
 class OneOp(nn.Module):
@@ -176,7 +176,7 @@ def test_halt_only_fast_path_declines_when_echo_is_armed() -> None:
 
     from torchlens._capture.predicates import _is_halt_only_capture
 
-    halt_only = RecordingOptions(halt=lambda ctx: False)
+    halt_only = _RecordingConfig(halt=lambda ctx: False)
     assert _is_halt_only_capture(halt_only)
-    with_echo = RecordingOptions(halt=lambda ctx: False, narrate=NarrationOptions(sites=True))
+    with_echo = _RecordingConfig(halt=lambda ctx: False, echo=NarrationOptions(sites=True))
     assert not _is_halt_only_capture(with_echo)

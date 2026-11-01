@@ -16,7 +16,7 @@ from torchlens._errors import InvalidArgumentError
 from torchlens.recording.options import (
     LOOKBACK_PAYLOAD_POLICIES,
     LookbackPayloadPolicy,
-    RecordingOptions,
+    _RecordingConfig,
 )
 
 
@@ -37,7 +37,7 @@ def test_runtime_tuple_derives_from_the_canonical_literal() -> None:
 def test_every_documented_policy_validates(policy: str) -> None:
     """Each vocabulary member is accepted by option validation."""
 
-    options = RecordingOptions(lookback_payload_policy=policy)
+    options = _RecordingConfig(lookback_payload_policy=policy)
     assert options.lookback_payload_policy == policy
 
 
@@ -45,7 +45,7 @@ def test_unknown_policy_refuses_typed_and_names_the_vocabulary() -> None:
     """An unknown policy fails closed with the typed code and the full list."""
 
     with pytest.raises(InvalidArgumentError) as excinfo:
-        RecordingOptions(lookback_payload_policy="bogus")
+        _RecordingConfig(lookback_payload_policy="bogus")
     assert excinfo.value.fields["code"] == "lookback_payload_policy_invalid"
     message = str(excinfo.value)
     for policy in LOOKBACK_PAYLOAD_POLICIES:

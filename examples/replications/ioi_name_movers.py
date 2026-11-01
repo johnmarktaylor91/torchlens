@@ -77,7 +77,7 @@ def prompt_contributions(
     ids = tokenizer(row["prompt"], return_tensors="pt").input_ids
     answer = common.single_token(tokenizer, row["indirect_object"])
     versus = common.single_token(tokenizer, row["subject"])
-    trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    trace = tl.trace(model, ids, save="all")
     try:
         scores = torchlens.mechinterp.direct_logit_contributions(
             trace, torchlens.mechinterp.full_decomposition(trace), answer=answer, vs=versus
@@ -154,7 +154,7 @@ def _save_first_prompt(
     if out_dir is None:
         return
     ids = tokenizer(row["prompt"], return_tensors="pt").input_ids
-    trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    trace = tl.trace(model, ids, save="all")
     try:
         common.save_trace(trace, out_dir, "ioi_name_movers")
     finally:

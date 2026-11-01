@@ -13,7 +13,6 @@ from torch import nn
 import torchlens as tl
 from torchlens._utils import _call_site
 from torchlens._visualization._render_nodes import compute_default_node_lines
-from torchlens.options import CaptureOptions
 
 # Session-private output root (conftest exports it before collection); the
 # repo-local fallback raced across parallel worktree lanes (b2p2 R77).
@@ -574,7 +573,7 @@ def _trace(model: nn.Module) -> tl.Trace:
     """Trace a demo model deterministically."""
 
     torch.manual_seed(0)
-    return tl.trace(model, torch.randn(1, 4), capture=CaptureOptions(layers_to_save="none"))
+    return tl.trace(model, torch.randn(1, 4), save="none")
 
 
 def _first_layer(trace: tl.Trace, layer_type: str) -> tl.Layer:

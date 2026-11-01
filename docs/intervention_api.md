@@ -4,8 +4,8 @@ This page documents the public v2 intervention API that shipped in the current
 branch. It avoids proposed naming changes from separate design workstreams.
 
 To apply one intervention to many forwards or a `generate()` loop, use `spec.bind(model)`
-(capture-free, about the cost of a plain hook) or `tl.record(..., intervene=spec,
-return_output=True)` when you need activations too, or rerun a steered trace with
+(capture-free, about the cost of a plain hook) or `tl.record(..., intervene=spec)` (the
+model output is `recording.output`) when you need activations too, or rerun a steered trace with
 `trace.run(model, x)` (the guarded fast engine when the spec targets modules; see the glossary
 entry "Guarded fast rerun"). Recipe: "Steering many forwards / generation" in
 [agent-reference/common-patterns.md](agent-reference/common-patterns.md).
@@ -191,8 +191,8 @@ capability statement).
 Forward exceptions keep the historical behavior unless you opt in. With
 `on_forward_error="attach_partial"`, TorchLens attaches `exc.partial_recording` and re-raises
 the original exception. With `on_forward_error="return_partial"`, `tl.record(...)` returns a
-failed partial `Recording`; `return_output=True` returns `(None, partial)` because there is no
-valid model output. Failed partials carry `status="partial_error"`, `failed=True`,
+failed partial `Recording`; its `output` refuses with `output_forward_failed` because there is
+no valid model output. Failed partials carry `status="partial_error"`, `failed=True`,
 string-only error metadata, `num_committed_ops`, and best-effort `last_event_*` fields. user-op
 failures exclude the failing call; TL-side capture failures may include a skipped/partial
 current-call event. Failed partials are not topology-complete, so `Recording.to_trace()` and

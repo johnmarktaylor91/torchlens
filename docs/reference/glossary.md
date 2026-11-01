@@ -34,16 +34,52 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `Recording.to_trace()` materializes full graph structure; reading a payload that was not selected
   by `save=` fails explicitly. `tl.record` installs gradient hooks only when `backward_ready=True`,
   `save_grads=` or `default_grad=` is given; without one, `Recording.backward()` refuses with
-  code `recording_backward_not_requested`.
+  code `recording_backward_not_requested`. `tl.record` and `Recorder` build it; `Recording` has no
+  public constructor. `tl.record` always returns one object.
+
+**Trace.output / Recording.output** *(spelling pending ratification)*
+: The model's return value exactly as the model returned it (tensor, tuple, dict, Hugging Face
+  output object, distribution); for a multi-pass `Recorder`, the last pass's. With
+  `generate_kwargs=`, `GenerationRecording.output` (and its `recording.output`) is what
+  `generate()` returned. `Trace.output` is the exact return from a live `tl.trace` forward,
+  independent of `save=` and output transforms; it is neither transformed `raw_output` nor
+  the saved-payload rebuild from `reconstruct_output()`. Traces cooked from recordings,
+  forked, or merged from chunks have no live forward return. The trace or recording keeps
+  that object alive for as long as it exists (for a Hugging Face model this includes
+  `past_key_values`); the object is released when the trace or recording is dropped. Held in
+  memory only: a trace or recording loaded from disk or unpickled refuses
+  with `output_not_stored`, a failed partial recording (`on_forward_error="return_partial"`)
+  with `output_forward_failed`, and a capture that `stop_after=` ended before the model
+  returned with `output_capture_stopped` (all `PayloadUnavailableError`); it never returns
+  `None` for a missing output.
+
+**Recording.options / RecordingSettings** *(record class spelling pending ratification)*
+: `Recording.options` returns a `tl.types.RecordingSettings`, the read-only record of the settings
+  the recording was made with, across every door that configured it: the capture knobs from
+  `capture=CaptureOptions(...)` (`RecordingSettings.save_grads`,
+  `RecordingSettings.activation_transform`, `RecordingSettings.grad_transform`,
+  `RecordingSettings.save_raw_activations`, `RecordingSettings.save_raw_grads`,
+  `RecordingSettings.detach_saved_activations`, `RecordingSettings.lookback`,
+  `RecordingSettings.lookback_payload_policy`, `RecordingSettings.seed`), the recorder knobs from
+  `recording=RecordingOptions(...)` (`RecordingSettings.keep_op`, `RecordingSettings.default_op`,
+  `RecordingSettings.default_module`, `RecordingSettings.default_grad`,
+  `RecordingSettings.history_size`, `RecordingSettings.include_source_events`,
+  `RecordingSettings.intervene`, `RecordingSettings.max_predicate_failures`,
+  `RecordingSettings.on_predicate_error`, `RecordingSettings.on_forward_error`,
+  `RecordingSettings.postprocess`) and the door keywords (`RecordingSettings.stop_after`,
+  `RecordingSettings.storage`, `RecordingSettings.narrate`). Values are the live objects the
+  recorder used, never repr strings; there is no public constructor. A recording recovered from
+  disk keeps the plain values (bools, numbers, strings); callables and objects are not stored with
+  saved recordings and read `None` there.
 
 **Saved-activation autograd history** *(knob spellings documented-unstable)*
 : `CaptureOptions(detach_saved_activations=False)`, the `tl.trace` default, keeps every saved
   payload graph-connected on every save path: the save-all default, `tl.module` and
-  `tl.in_module` selectors, op-label `layers_to_save`, the legacy `trace.run(model, x)` rerun,
+  `tl.in_module` selectors, op-label `save=`, the legacy `trace.run(model, x)` rerun,
   `trace.run(inputs=...)` and `trace.run(inputs=..., fast=True)`; `True` detaches on every one
   of them. `tl.extract(..., detach_saved_activations=False)` and
-  `tl.record(..., detach_saved_activations=False)` (also `tl.recording.Recorder` and
-  `RecordingOptions.detach_saved_activations`) attach on request; both keep their detached
+  `tl.record(..., capture=CaptureOptions(detach_saved_activations=False))` (also
+  `tl.recording.Recorder`) attach on request; both keep their detached
   default, and `tl.record` refuses an explicit `True` with `backward_ready=True`
   (`backward_ready_conflict`). A per-site `CaptureSpec(save_grad=True)` stays attached either
   way, and disk payloads are always detached. An escrowed deferred-selector payload spilled to
@@ -59,7 +95,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   silently treated as complete.
 
 **Failed partial Recording**
-: A `Recording` with `status="partial_error"` and `is_failed=True`. Use
+: A `Recording` with `status="partial_error"` and `is_failed` `True`. Use
   `on_forward_error="attach_partial"` to attach it as `exc.partial_recording`, or
   `on_forward_error="return_partial"` to return it. It carries string-only error metadata,
   `num_committed_ops`, and best-effort `last_event_*` fields. It cannot be passed to
@@ -463,11 +499,15 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   temporal composition. `save=` is the only selective sparse-capture spelling; removed
   `keep_op=` and `keep_module=` arguments raise `TypeError`. On `tl.trace`, `save=` also takes
   the list form (layer names, pass-qualified labels, module addresses, integer indexes,
-  substrings, `'all'`, `'none'`), which selects exactly what
-  `capture=CaptureOptions(layers_to_save=[...])` selects; passing both refuses
-  `save_selection_conflict`. `save="stats"` is a third level beside `'all'` and `'none'`:
+  substrings, `'all'`, `'none'`), with final-label selection resolved after capture. `save="stats"` is a third level beside `'all'` and `'none'`:
   reduce and discard, one `tl.stats.RunningStats` per op and no payload (see Streaming
   statistics).
+
+**Capture options**
+: `CaptureOptions` configures capture mechanics. Select payloads with the `save=`
+  argument on `tl.trace` and `tl.record`; payload selection is not a public field
+  of `CaptureOptions`. Preview saving is not a capture option. `module_filter`
+  remains an additional gate on the selected payloads.
 
 **Lookback**
 : A bounded window of earlier metadata or detached payloads retained so a later temporal predicate
@@ -2974,10 +3014,11 @@ deprecation shim owed*
   in this release.
 
 **Recording keywords**
-: `tl.record(...)`, `Recorder(...)` and `tl.options.RecordingOptions` take `narrate=` (a
+: `tl.record(...)` and `Recorder(...)` take `narrate=` (a
   `tl.options.NarrationOptions`, with `NarrationOptions.as_dict()`,
-  `NarrationOptions.from_values()` and `NarrationOptions.is_field_explicit()`) and
-  `save_raw_grads=` (`RecordingOptions.save_raw_grads`). `NarrationOptions.sites` (`sites=`)
+  `NarrationOptions.from_values()` and `NarrationOptions.is_field_explicit()`);
+  `save_raw_grads` is a `CaptureOptions` field (`capture=CaptureOptions(save_raw_grads=...)`
+  on `tl.record`). `NarrationOptions.sites` (`sites=`)
   scopes the narration (`True` for every event, `"modules"` for structure lines only, or a
   live selector); `trace.narrate(select=...)` filters post hoc. `NarrationOptions.sink` receives the
   narrated lines, `NarrationOptions.max_lines` caps them, `NarrationOptions.on_error_only`
@@ -3008,9 +3049,9 @@ deprecation shim owed*
   `FailureOrigin.USER_OP`, `FailureOrigin.TORCHLENS` and `FailureOrigin.INTERRUPT`.
 
 **Recording state**
-: `Recording.is_failed` (`is_failed=`), `Recording.is_stopped` (`is_stopped=`),
-  `Recording.stop_reason` (`stop_reason=`), `Recording.stops_by_pass` (`stops_by_pass=`),
-  `Recording.records_in_pass(pass_index)`, `Recording.num_ops` (`num_ops=`),
+: `Recording.is_failed`, `Recording.is_stopped`,
+  `Recording.stop_reason`, `Recording.stops_by_pass`,
+  `Recording.records_in_pass(pass_index)`, `Recording.num_ops`,
   `Recording.num_committed_ops`, `Recording.num_passes`, `Recording.lazy_trace`,
   `Recording.is_recovered` and `Recording.backward(loss)`. `Recorder.__call__` runs one pass
   (`recorder(x)`) and `Recorder.backward(loss)` records its backward.
@@ -4903,7 +4944,6 @@ alphabetical order.
 | `num_joins=` | field and constructor keyword of `MergeReport` |
 | `num_multiplied_ops=` | field and constructor keyword of `BackwardEstimate` |
 | `num_pages=` | field and constructor keyword of `SavedFigure` |
-| `num_predicate_failure_overflows=` | field and constructor keyword of `Recording` |
 | `num_pure_unverified_ops=` | field and constructor keyword of `ValidationStatus` |
 | `num_query_heads=` | field and constructor keyword of `GqaInfo` |
 | `num_replayed_ops=` | field and constructor keyword of `ValidationStatus` |

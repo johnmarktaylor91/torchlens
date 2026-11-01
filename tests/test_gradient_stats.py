@@ -92,7 +92,8 @@ def test_aggregate_grad_basic_norms() -> None:
         trace = tl.trace(
             model,
             inputs,
-            capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=True),
+            capture=tl.options.CaptureOptions(save_grads=True),
+            save="all",
         )
         loss = _mse_loss(trace[trace.output_layers[-1]].out, targets)
         trace.log_backward(loss)
@@ -111,7 +112,8 @@ def test_aggregate_grad_warns_on_ambiguous_saved_selector_and_uses_first_match()
     trace = tl.trace(
         model,
         batch[0],
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=tl.func("linear")),
+        capture=tl.options.CaptureOptions(save_grads=tl.func("linear")),
+        save="all",
     )
     loss = _mse_loss(trace[trace.output_layers[-1]].out, batch[1])
     trace.log_backward(loss)

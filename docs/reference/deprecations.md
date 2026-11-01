@@ -97,7 +97,7 @@ unaffected.
 | Old name | New name | Status |
 | --- | --- | --- |
 | `capture_output_structure` | `capture_container_structure` | removed |
-| `layers_to_save` | `save` or grouped capture options | removed |
+| `layers_to_save` | `save=...` | removed |
 | `random_seed` | grouped capture options | removed |
 | `save_grads` | backward capture options | removed |
 | `vis_node_mode` | `node_style` | removed |
@@ -112,7 +112,7 @@ unaffected.
 | `save_outs_to` | `streaming.path` | removed |
 | `keep_outs_in_memory` | `streaming.retain_in_memory` | removed |
 | `out_sink` | `streaming.on_save` | removed |
-| `log_forward_pass(layers=...)` | `trace(layers_to_save=...)` | removed |
+| `log_forward_pass(layers=...)` | `trace(save=...)` | removed |
 | `log_forward_pass(save_function_args=...)` | `trace(save_args=...)` | removed |
 | `log_forward_pass(save_gradients=...)` | `trace(save_grads=...)` | removed |
 | `log_forward_pass(keep_unsaved_layers=...)` | no direct equivalent; see migration guide | removed |

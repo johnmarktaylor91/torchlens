@@ -93,7 +93,7 @@ def run(out_dir: Path | None = None) -> dict[str, Any]:
     oracle = common.load_data("induction_oracle.json")
     model, _tokenizer = common.load_gpt2()
     tokens = induction_tokens(oracle["protocol"])
-    trace = tl.trace(model, tokens, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    trace = tl.trace(model, tokens, save="all")
     try:
         result = torchlens.mechinterp.head_scores(
             trace, kind=torchlens.mechinterp.FixedPeriodInduction(period=PERIOD), measure="mul"
@@ -146,7 +146,7 @@ def _save_small_trace(model: torch.nn.Module, tokens: torch.Tensor, out_dir: Pat
 
     if out_dir is None:
         return
-    trace = tl.trace(model, tokens[:1], capture=tl.options.CaptureOptions(layers_to_save="all"))
+    trace = tl.trace(model, tokens[:1], save="all")
     try:
         common.save_trace(trace, out_dir, "induction_heads")
     finally:

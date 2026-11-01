@@ -601,7 +601,8 @@ def _run_capture(
             tl.trace(
                 model,
                 input_tensor,
-                capture=tl.options.CaptureOptions(layers_to_save="all", seed=_SEED),
+                capture=tl.options.CaptureOptions(seed=_SEED),
+                save="all",
             ),
             None,
             None,
@@ -631,7 +632,8 @@ def _run_capture(
             tl.trace(
                 model,
                 input_tensor,
-                capture=tl.options.CaptureOptions(layers_to_save=[-1], seed=_SEED),
+                capture=tl.options.CaptureOptions(seed=_SEED),
+                save=[-1],
             ),
             None,
             None,
@@ -641,7 +643,8 @@ def _run_capture(
             tl.trace(
                 model,
                 input_tensor,
-                capture=tl.options.CaptureOptions(layers_to_save=[1, -1], seed=_SEED),
+                capture=tl.options.CaptureOptions(seed=_SEED),
+                save=[1, -1],
             ),
             None,
             None,
@@ -699,9 +702,8 @@ def _run_capture(
         trace = tl.trace(
             model,
             input_tensor.requires_grad_(True),
-            capture=tl.options.CaptureOptions(
-                layers_to_save="all", save_grads="all", backward_ready=True, seed=_SEED
-            ),
+            capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True, seed=_SEED),
+            save="all",
         )
         output_op = trace[trace.output_layers[0]]
         if not getattr(output_op, "has_saved_activation", False):
@@ -709,17 +711,14 @@ def _run_capture(
         trace.log_backward(output_op.out.sum())
         return trace, None, None
     if config == "backward_record":
-        output, recording = cast(
-            tuple[torch.Tensor, Recording],
-            tl.record(
-                model,
-                input_tensor.requires_grad_(True),
-                save=_save_all_ops,
-                return_output=True,
-                recording=tl.options.RecordingOptions(include_source_events=True),
-                capture=tl.options.CaptureOptions(save_grads=True, backward_ready=True, seed=_SEED),
-            ),
+        recording = tl.record(
+            model,
+            input_tensor.requires_grad_(True),
+            save=_save_all_ops,
+            recording=tl.options.RecordingOptions(include_source_events=True),
+            capture=tl.options.CaptureOptions(save_grads=True, backward_ready=True, seed=_SEED),
         )
+        output = cast(torch.Tensor, recording.output)
         recording.backward(output.sum(), save_grads=True)
         return recording, None, output
     if config == "disk_exhaustive":
@@ -727,7 +726,8 @@ def _run_capture(
             model,
             input_tensor,
             storage=tl.to_disk(disk_path, retain_in_memory=True),
-            capture=tl.options.CaptureOptions(layers_to_save="all", seed=_SEED),
+            capture=tl.options.CaptureOptions(seed=_SEED),
+            save="all",
         )
         return trace, None, None
     if config == "disk_predicate":
@@ -765,7 +765,8 @@ def _run_capture(
             tl.trace(
                 model,
                 input_tensor,
-                capture=tl.options.CaptureOptions(layers_to_save="all", seed=_SEED),
+                capture=tl.options.CaptureOptions(seed=_SEED),
+                save="all",
             )
         except RuntimeError as exc:
             return tl._partial.from_failed_capture(exc), exc, None

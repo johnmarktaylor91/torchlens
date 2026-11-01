@@ -49,9 +49,7 @@ class _Counted(nn.Module):
 def _trace(n: int = 24) -> tuple[_Counted, tl.Trace]:
     torch.manual_seed(0)
     model = _Counted().eval()
-    log = tl.trace(
-        model, torch.randn(n, 6), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    log = tl.trace(model, torch.randn(n, 6), save="all")
     return model, log
 
 

@@ -65,7 +65,7 @@ def test_layers_to_save_final_selectors_survive_orphan_shift(selector) -> None:
     trace = tl.trace(
         OrphanBranchModel(),
         x,
-        capture=CaptureOptions(layers_to_save=[selector]),
+        save=[selector],
     )
     assert trace.layer_list[2].layer_label == "relu_1_2"
     saved = _saved_labels(trace)
@@ -80,7 +80,7 @@ def test_layers_to_save_type_indexed_label_survives_same_type_orphan() -> None:
     trace = tl.trace(
         SameTypeOrphanModel(),
         x,
-        capture=CaptureOptions(layers_to_save=["relu_1"]),
+        save=["relu_1"],
     )
     saved = _saved_labels(trace)
     assert "relu_1_2" in saved, f"requested 'relu_1' but saved only {saved}"
@@ -95,7 +95,7 @@ def test_layers_to_save_final_selectors_clean_model_unchanged(selector) -> None:
     trace = tl.trace(
         CleanModel(),
         x,
-        capture=CaptureOptions(layers_to_save=[selector]),
+        save=[selector],
     )
     saved = _saved_labels(trace)
     assert "relu_1_2" in saved
@@ -109,7 +109,7 @@ def test_layers_to_save_substring_stays_exact_under_orphans() -> None:
     trace = tl.trace(
         OrphanBranchModel(),
         x,
-        capture=CaptureOptions(layers_to_save=["relu"]),
+        save=["relu"],
     )
     assert "relu_1_2" in _saved_labels(trace)
     torch.testing.assert_close(trace["relu_1_2"].out, torch.relu(x + 1.0))
@@ -122,7 +122,7 @@ def test_layers_to_save_mixed_live_and_final_selectors() -> None:
     trace = tl.trace(
         OrphanBranchModel(),
         x,
-        capture=CaptureOptions(layers_to_save=["add", 2]),
+        save=["add", 2],
     )
     saved = _saved_labels(trace)
     assert "add_1_1" in saved
@@ -143,7 +143,7 @@ def test_layers_to_save_positive_int_survives_negative_tail_window() -> None:
     trace = tl.trace(
         OrphanBranchModel(),
         x,
-        capture=CaptureOptions(layers_to_save=[1, -1]),
+        save=[1, -1],
     )
     saved = _saved_labels(trace)
     assert "add_1_1" in saved, f"requested ordinal 1 but saved only {saved}"
@@ -174,7 +174,7 @@ def test_layers_to_save_unmatched_final_label_raises() -> None:
         tl.trace(
             OrphanBranchModel(),
             torch.randn(4),
-            capture=CaptureOptions(layers_to_save=["relu_1_9"]),
+            save=["relu_1_9"],
         )
 
 

@@ -6,13 +6,13 @@ from pathlib import Path
 
 import torchlens as tl
 from torchlens._capture.projections import _resolve_storage_intent
-from torchlens.recording.options import RecordingOptions
+from torchlens.recording.options import _RecordingConfig
 
 
 def test_streaming_none_is_ram_only_intent() -> None:
     """StorageOptions(path=None) resolves to RAM-only storage."""
 
-    options = RecordingOptions(default_op=True, streaming=tl.options.StorageOptions(path=None))
+    options = _RecordingConfig(default_op=True, streaming=tl.options.StorageOptions(path=None))
 
     assert _resolve_storage_intent(options).in_ram is True
     assert _resolve_storage_intent(options).on_disk is False
@@ -21,7 +21,7 @@ def test_streaming_none_is_ram_only_intent() -> None:
 def test_streaming_bundle_retain_true_is_ram_disk_mirror(tmp_path: Path) -> None:
     """path plus retain_in_memory=True resolves to RAM and disk."""
 
-    options = RecordingOptions(
+    options = _RecordingConfig(
         default_op=True,
         streaming=tl.options.StorageOptions(path=tmp_path / "bundle", retain_in_memory=True),
     )
@@ -33,7 +33,7 @@ def test_streaming_bundle_retain_true_is_ram_disk_mirror(tmp_path: Path) -> None
 def test_streaming_bundle_retain_false_is_disk_only(tmp_path: Path) -> None:
     """path plus retain_in_memory=False resolves to disk only."""
 
-    options = RecordingOptions(
+    options = _RecordingConfig(
         default_op=True,
         streaming=tl.options.StorageOptions(path=tmp_path / "bundle", retain_in_memory=False),
     )

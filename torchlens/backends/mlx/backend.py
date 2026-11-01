@@ -1298,9 +1298,13 @@ class MLXBackend:
                     stacklevel=2,
                 )
             trace.forward_duration = Duration(time.time() - trace.capture_start_time)
+            from ...recording.types import returned, stopped
+
             if halt_signal is not None:
+                trace._output_slot = stopped(halt_signal.reason)
                 trace.raw_output = None
             else:
+                trace._output_slot = returned(output)
                 trace.raw_output = output_transform(output) if callable(output_transform) else None
             self.finalize_forward_session(trace, trace._raw_graph_ws)
             self._mark_outputs(trace, output)

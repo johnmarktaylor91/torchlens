@@ -6,7 +6,7 @@ import importlib
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Final, Literal, TypeVar, cast
 
 import torch
 
@@ -66,7 +66,6 @@ _GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
 
 
 _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
-    "layers_to_save",
     "input_transform",
     "save_raw_input",
     "batch_render",
@@ -105,7 +104,6 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "jax_max_control_flow_unroll",
     "module_identity_mode",
     "payload_policy",
-    "save_preview",
     "emit_nvtx",
     "measure_python_peak_memory",
     "save_budget",
@@ -196,7 +194,6 @@ _STREAMING_FIELDS: Final[tuple[str, ...]] = (
     "max_pending_bytes",
 )
 _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
-    "layers_to_save": "layers_to_save",
     "input_transform": "input_transform",
     "save_raw_input": "save_raw_input",
     "batch_render": "batch_render",
@@ -235,7 +232,6 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "jax_max_control_flow_unroll": "jax_max_control_flow_unroll",
     "module_identity_mode": "module_identity_mode",
     "payload_policy": "payload_policy",
-    "save_preview": "save_preview",
     "on_nonfinite": "on_nonfinite",
     "structure_only": "structure_only",
     "activation_transform": "activation_transform",
@@ -364,7 +360,18 @@ def _merge_grouped_options(
             )
         values[group_field] = flat_value
         specified_fields = frozenset((*specified_fields, group_field))
-    return option_factory().from_values(values, specified_fields)
+    return _build_option(option_factory, values, specified_fields)
+
+
+def _build_option(
+    option_factory: Any, values: Mapping[str, Any], specified_fields: frozenset[str]
+) -> Any:
+    """Build an option object from resolved values through its (possibly private) builder."""
+
+    builder = getattr(option_factory, "_from_values", None)
+    if builder is None:
+        builder = option_factory.from_values
+    return builder(values, specified_fields)
 
 
 @dataclass(frozen=True, init=False)
@@ -373,8 +380,6 @@ class CaptureOptions:
 
         Parameters
         ----------
-        layers_to_save:
-            Activation layer selector to capture.
         input_transform:
     Optional callable applied once to the user input before ``model.forward``.
         save_raw_input:
@@ -497,9 +502,9 @@ class CaptureOptions:
         cache_dir:
             Optional directory for content-hash cache entries.
         module_filter:
-            Optional THIRD save gate composed (AND) with ``save=`` /
-            ``layers_to_save``: an op's payload is retained only when the
-            save selection picks it AND this predicate returns truthy. The
+            Optional THIRD save gate composed (AND) with ``save=``: an op's
+            payload is retained only when the save selection picks it AND this
+            predicate returns truthy. The
             predicate receives an op-record namespace (the legacy-shaped
             ``SimpleNamespace`` of captured op fields such as ``func_name``,
             ``layer_label``, and ``modules``), NEVER an
@@ -517,9 +522,6 @@ class CaptureOptions:
             Declared backend module-mode selection passthrough.
         payload_policy:
             Declared payload materialization/codec policy passthrough.
-        save_preview:
-            Non-torch preview backends' declared flag reserving extended ``save=``
-            semantics; the shipped torch ``save=`` kwarg is independent of it.
         emit_nvtx:
             Whether torch capture emits NVIDIA Tools Extension (NVTX) CUDA profiling
             ranges around each logged operation. Range names carry call identity
@@ -647,12 +649,13 @@ class CaptureOptions:
 
         Examples
         --------
-        >>> opts = CaptureOptions(layers_to_save=["fc1"], seed=0)
-        >>> opts.layers_to_save
-        ['fc1']
+        >>> opts = CaptureOptions(seed=0)
+        >>> opts.seed
+        0
     """
 
-    layers_to_save: str | list[Any] | None = "all"
+    _layers_to_save: ClassVar[Any] = "all"
+    _layers_to_save_explicit: ClassVar[bool] = False
     input_transform: Callable[[Any], Any] | None = None
     save_raw_input: str | bool = "small"
     batch_render: str = "auto"
@@ -691,7 +694,6 @@ class CaptureOptions:
     jax_max_control_flow_unroll: int = 64
     module_identity_mode: str | None = None
     payload_policy: str | None = None
-    save_preview: bool = False
     emit_nvtx: bool = False
     measure_python_peak_memory: bool = False
     save_budget: SaveBudgetOption = "auto"
@@ -717,7 +719,6 @@ class CaptureOptions:
 
     def __init__(
         self,
-        layers_to_save: str | list[Any] | None | MissingType = MISSING,
         input_transform: Callable[[Any], Any] | None | MissingType = MISSING,
         save_raw_input: str | bool | MissingType = MISSING,
         batch_render: str | MissingType = MISSING,
@@ -756,7 +757,6 @@ class CaptureOptions:
         jax_max_control_flow_unroll: int | MissingType = MISSING,
         module_identity_mode: str | None | MissingType = MISSING,
         payload_policy: str | None | MissingType = MISSING,
-        save_preview: bool | MissingType = MISSING,
         emit_nvtx: bool | MissingType = MISSING,
         measure_python_peak_memory: bool | MissingType = MISSING,
         save_budget: SaveBudgetOption | MissingType = MISSING,
@@ -784,9 +784,6 @@ class CaptureOptions:
 
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
-            "layers_to_save": _resolve_option_value(
-                "layers_to_save", layers_to_save, "all", specified_fields
-            ),
             "input_transform": _resolve_option_value(
                 "input_transform", input_transform, None, specified_fields
             ),
@@ -893,9 +890,6 @@ class CaptureOptions:
             "payload_policy": _resolve_option_value(
                 "payload_policy", payload_policy, None, specified_fields
             ),
-            "save_preview": _resolve_option_value(
-                "save_preview", save_preview, False, specified_fields
-            ),
             "emit_nvtx": _resolve_option_value("emit_nvtx", emit_nvtx, False, specified_fields),
             "measure_python_peak_memory": _resolve_option_value(
                 "measure_python_peak_memory",
@@ -971,16 +965,21 @@ class CaptureOptions:
 
         return {field_name: getattr(self, field_name) for field_name in _CAPTURE_FIELDS}
 
-    def is_field_explicit(self, field_name: str) -> bool:
-        """Return whether a field was explicitly supplied by the caller."""
+    def _is_field_explicit(self, field_name: str) -> bool:
+        """Return whether a field was explicitly supplied by the caller (private)."""
 
         return _field_is_explicit(self, field_name)
 
     @classmethod
-    def from_values(
-        cls, values: Mapping[str, Any], specified_fields: frozenset[str]
+    def _from_values(
+        cls,
+        values: Mapping[str, Any],
+        specified_fields: frozenset[str],
+        *,
+        _layers_to_save: Any = "all",
+        _layers_to_save_explicit: bool = False,
     ) -> CaptureOptions:
-        """Build an instance from already-resolved field values.
+        """Build an instance from already-resolved field values (private).
 
         Applies the same invariants as ``__init__`` (via
         :func:`_validate_capture_values`) so this construction path -- used by
@@ -991,6 +990,8 @@ class CaptureOptions:
         _validate_capture_values(values)
         instance = object.__new__(cls)
         _set_frozen_fields(instance, _CAPTURE_FIELDS, values)
+        object.__setattr__(instance, "_layers_to_save", _layers_to_save)
+        object.__setattr__(instance, "_layers_to_save_explicit", _layers_to_save_explicit)
         object.__setattr__(instance, "_specified_fields", specified_fields)
         return instance
 
@@ -1741,11 +1742,12 @@ def to_disk(
 def merge_capture_options(
     *,
     capture: CaptureOptions | None,
+    _layers_to_save: Any = MISSING,
     **flat_values: Any,
 ) -> CaptureOptions:
-    """Merge individual capture kwargs into a grouped options object."""
+    """Merge capture kwargs, preserving the private resolved ``save=`` selection."""
 
-    return cast(
+    merged = cast(
         CaptureOptions,
         _merge_grouped_options(
             option=capture,
@@ -1758,6 +1760,12 @@ def merge_capture_options(
             ),
         ),
     )
+    explicit = _layers_to_save is not MISSING or getattr(capture, "_layers_to_save_explicit", False)
+    if _layers_to_save is MISSING:
+        _layers_to_save = getattr(capture, "_layers_to_save", "all")
+    object.__setattr__(merged, "_layers_to_save", _layers_to_save)
+    object.__setattr__(merged, "_layers_to_save_explicit", explicit)
+    return merged
 
 
 def _save_transforms_from_capture(capture: CaptureOptions) -> _SaveTransforms:

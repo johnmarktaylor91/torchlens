@@ -33,7 +33,7 @@ def test_qk_ov_circuits_equal_explicit_products_gpt2_small(r1_loader):
     trace = tl.trace(
         model,
         ids["input_ids"],
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     try:
         for layer in range(config.n_layer):

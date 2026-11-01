@@ -15,7 +15,7 @@ from torchlens._capture.predicates import (
 from torchlens._capture.projections import _build_record_context
 from torchlens.intervention.selectors import BaseSelector
 from torchlens.recording.exceptions import PredicateError
-from torchlens.recording.options import RecordingOptions
+from torchlens.recording.options import _RecordingConfig
 from torchlens.recording.types import CaptureSpec, ModuleStackFrame
 
 
@@ -85,7 +85,7 @@ def test_evaluate_keep_op_and_module_use_predicates_and_defaults() -> None:
     """The op slot calls its predicate; module events follow default_module."""
 
     ctx = _ctx()
-    options = RecordingOptions(
+    options = _RecordingConfig(
         keep_op=lambda event: event.func_name == "linear",
         default_module=True,
     )
@@ -139,7 +139,7 @@ def test_evaluate_keep_op_skips_alias_retry_for_structured_selectors() -> None:
     calls: list[str] = []
     selector = _CountingMissingLabelSelector(calls)
     ctx = _ctx()
-    options = RecordingOptions(keep_op=selector)
+    options = _RecordingConfig(keep_op=selector)
 
     assert _evaluate_keep_op(ctx, options) == CaptureSpec(save_out=False, save_metadata=False)
     assert calls == ["linear_1_1_raw"]

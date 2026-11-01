@@ -18,7 +18,7 @@ from torchlens._errors import InvalidArgumentError
 from torchlens._save_budget import SaveBudgetExceededError
 from torchlens.errors._base import TorchLensWarning
 
-_SAVE_ALL = {"capture": tl.options.CaptureOptions(layers_to_save="all")}
+_SAVE_ALL = {"capture": tl.options.CaptureOptions()}
 
 
 def _traced_toy():

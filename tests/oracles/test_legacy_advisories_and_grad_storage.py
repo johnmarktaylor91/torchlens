@@ -76,9 +76,11 @@ def test_capture_advisories_match_the_planted_kinds_and_counts() -> None:
 
 def _two_pass_trace(transform: Callable[[torch.Tensor], torch.Tensor] | None) -> tl.Trace:
     torch.manual_seed(0)
-    save = CaptureOptions(grad_transform=transform) if transform is not None else None
     trace = tl.trace(
-        Grad().train(), torch.randn(3, 4), capture=CaptureOptions(save_grads=True), save=save
+        Grad().train(),
+        torch.randn(3, 4),
+        capture=CaptureOptions(save_grads=True, grad_transform=transform),
+        save="all",
     )
     loss = trace[trace.output_layers[0]].out.sum()
     trace.backward(loss, retain_graph=True)

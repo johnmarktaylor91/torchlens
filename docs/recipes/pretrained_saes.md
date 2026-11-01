@@ -175,7 +175,7 @@ transcoder = Transcoder(TranscoderConfig(d_in=16, d_sae=48, d_out=16, apply_b_de
 with torch.no_grad():
     for parameter in transcoder.parameters():
         parameter.copy_(0.3 * torch.randn(parameter.shape, generator=torch.Generator().manual_seed(2)))
-clean = tl.trace(model, ids, capture=tl.options.CaptureOptions(layers_to_save="all"))
+clean = tl.trace(model, ids, save="all")
 spliced = tl.trace(
     model,
     ids,

@@ -5361,6 +5361,7 @@
    "_out_hash_cache": {},
    "_out_identity_cache": {},
    "_out_recipe_revision": 0,
+   "_output_slot": null,
    "_output_transform": null,
    "_phase_timings": "<measured>",
    "_raw_to_final_layer_labels": {
@@ -6133,6 +6134,7 @@
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
    "outcome": "<torchlens._capture.outcome.CaptureOutcome>",
+   "output": "<raises PayloadUnavailableError>",
    "output_device": "same",
    "output_id2label": null,
    "output_layers": [
@@ -11584,6 +11586,7 @@
    "_out_hash_cache": {},
    "_out_identity_cache": {},
    "_out_recipe_revision": 0,
+   "_output_slot": "<torchlens.recording.types.OutputSlot>",
    "_output_transform": null,
    "_phase_timings": "<measured>",
    "_raw_to_final_layer_labels": {
@@ -12352,6 +12355,16 @@
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
    "outcome": "<torchlens._capture.outcome.CaptureOutcome>",
+   "output": {
+    "__tensor__": true,
+    "dtype": "torch.float32",
+    "requires_grad": true,
+    "sha256": "f9608ea44282e0450ccf493f24b31431b403b1bf43d2c961785e9ebc2ee48f22",
+    "shape": [
+     2,
+     4
+    ]
+   },
    "output_device": "same",
    "output_id2label": null,
    "output_layers": [
@@ -17750,6 +17763,7 @@
    "_out_hash_cache": {},
    "_out_identity_cache": {},
    "_out_recipe_revision": 0,
+   "_output_slot": null,
    "_output_transform": null,
    "_phase_timings": "<measured>",
    "_raw_to_final_layer_labels": {
@@ -18522,6 +18536,7 @@
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
    "outcome": "<torchlens._capture.outcome.CaptureOutcome>",
+   "output": "<raises PayloadUnavailableError>",
    "output_device": "same",
    "output_id2label": null,
    "output_layers": [
@@ -23967,6 +23982,7 @@
    "_out_hash_cache": {},
    "_out_identity_cache": {},
    "_out_recipe_revision": 0,
+   "_output_slot": "<torchlens.recording.types.OutputSlot>",
    "_output_transform": null,
    "_phase_timings": "<measured>",
    "_raw_to_final_layer_labels": {
@@ -24739,6 +24755,16 @@
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
    "outcome": "<torchlens._capture.outcome.CaptureOutcome>",
+   "output": {
+    "__tensor__": true,
+    "dtype": "torch.float32",
+    "requires_grad": true,
+    "sha256": "f9608ea44282e0450ccf493f24b31431b403b1bf43d2c961785e9ebc2ee48f22",
+    "shape": [
+     2,
+     4
+    ]
+   },
    "output_device": "same",
    "output_id2label": null,
    "output_layers": [
@@ -29973,6 +29999,7 @@
    "_out_hash_cache": {},
    "_out_identity_cache": {},
    "_out_recipe_revision": 0,
+   "_output_slot": null,
    "_output_transform": null,
    "_phase_timings": "<measured>",
    "_raw_to_final_layer_labels": {
@@ -30739,6 +30766,7 @@
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "orphan_records": [],
    "outcome": "<torchlens._capture.outcome.CaptureOutcome>",
+   "output": "<raises PayloadUnavailableError>",
    "output_device": "same",
    "output_id2label": null,
    "output_layers": [

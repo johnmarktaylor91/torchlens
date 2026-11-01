@@ -568,7 +568,7 @@ def test_tinygrad_rejects_tinyjit_callable() -> None:
     ("kwargs", "pattern"),
     (
         ({"save": tl.where(lambda op: op.out is not None)}, "concrete activation values"),
-        ({"layers_to_save": ["relu"]}, "full-save only.*save shaping"),
+        ({"save": ["relu"]}, "full-save only.*save shaping"),
         ({"lookback": 1}, "full-save only.*save-window"),
         # Gated options refuse through the central capability gate, whose
         # canonical message names the owning flag and the refused option.
@@ -627,7 +627,6 @@ def test_tinygrad_static_label_save_filters_public_payloads(tmp_path: Path) -> N
         ({"jax_max_control_flow_unroll": 4}, "control-flow unrolling.*not implemented"),
         ({"module_identity_mode": "pytree_module"}, "module_identity_mode must be"),
         ({"payload_policy": "full"}, "payload_policy.*not implemented"),
-        ({"save_preview": True}, "save_preview.*not implemented"),
     ),
 )
 def test_tinygrad_rejects_declared_future_public_options(

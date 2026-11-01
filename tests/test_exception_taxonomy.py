@@ -1084,7 +1084,6 @@ def test_predicate_type_doors_split_by_surface() -> None:
     from torch import nn
 
     import torchlens as tl
-    from torchlens.recording.options import RecordingOptions
 
     for kwarg, trace_code in (
         ("intervene", "intervention_predicate_type_invalid"),
@@ -1098,9 +1097,11 @@ def test_predicate_type_doors_split_by_surface() -> None:
         assert isinstance(trace_info.value, TypeError)
         assert not isinstance(trace_info.value, ValueError)
 
-    for kwarg, base in (("intervene", "intervention"), ("halt", "halt")):
+    # the record surface resolves both predicates in the Recorder (intervene=
+    # and stop_after= on the door); the recording_* codes keep ValueError lineage
+    for kwarg, base in (("intervene", "intervention"), ("stop_after", "halt")):
         with pytest.raises(errors.InvalidArgumentError) as record_info:
-            RecordingOptions(**{kwarg: 123})
+            tl.record(nn.Identity(), torch.randn(2), **{kwarg: 123})
         assert record_info.value.fields["code"] == f"recording_{base}_predicate_type_invalid"
         assert isinstance(record_info.value, ValueError)
         assert not isinstance(record_info.value, TypeError)
@@ -1594,11 +1595,9 @@ def test_layers_to_save_type_invalid_provoked() -> None:
         tl.trace(model, torch.ones(2), None, torch.ones(2))  # type: ignore[misc]
     assert excinfo.value.fields["code"] == "extra_positional_input_invalid"
     with pytest.raises(ArgumentTypeError) as excinfo:
-        tl.trace(
-            model,
-            torch.ones(2),
-            capture=tl.options.CaptureOptions(layers_to_save=torch.ones(2)),  # type: ignore[arg-type]
-        )
+        from torchlens._user_funcs import _trace_torch_model
+
+        _trace_torch_model(model, torch.ones(2), layers_to_save=torch.ones(2))  # type: ignore[arg-type]
     assert excinfo.value.fields["code"] == "layers_to_save_type_invalid"
 
 

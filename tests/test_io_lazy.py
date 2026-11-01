@@ -76,11 +76,11 @@ def _build_log(
         model,
         inputs,
         capture=tl.options.CaptureOptions(
-            layers_to_save="all",
             save_args=save_args,
             save_rng=save_rng,
             seed=seed,
         ),
+        save="all",
     )
 
 

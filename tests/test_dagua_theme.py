@@ -7,7 +7,6 @@ import example_models
 import pytest
 import torch
 
-import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens.experimental import dagua
 
@@ -16,26 +15,7 @@ def test_dagua_renderer_requires_experimental_opt_in() -> None:
     """Core renderer rejects Dagua before the experimental module is imported."""
 
     script = textwrap.dedent(
-        """
-import torch
-from torch import nn
-import torchlens as tl
-
-class M(nn.Module):
-    def forward(self, x):
-        return x + 1
-
-log = tl.trace(M(), torch.ones(1), capture=tl.options.CaptureOptions(layers_to_save=None))
-try:
-    try:
-        log.draw(vis_renderer="dagua", vis_save_only=True, file_format="svg")
-    except RuntimeError as exc:
-        message = "opt in via `from torchlens.experimental import dagua` first"
-        raise SystemExit(0 if message in str(exc) else 2)
-    raise SystemExit(1)
-finally:
-    log.cleanup()
-"""
+        '\nimport torch\nfrom torch import nn\nimport torchlens as tl\n\nclass M(nn.Module):\n    def forward(self, x):\n        return x + 1\n\nlog = tl.trace(M(), torch.ones(1), save=None)\ntry:\n    try:\n        log.draw(vis_renderer="dagua", vis_save_only=True, file_format="svg")\n    except RuntimeError as exc:\n        message = "opt in via `from torchlens.experimental import dagua` first"\n        raise SystemExit(0 if message in str(exc) else 2)\n    raise SystemExit(1)\nfinally:\n    log.cleanup()\n'
     )
     result = subprocess.run(
         [sys.executable, "-c", script],
@@ -49,7 +29,7 @@ finally:
 def test_trace_to_dagua_graph_builds_semantic_nodes_and_clusters() -> None:
     pytest.importorskip("dagua")
     model = example_models.AestheticFrozenMix().eval()
-    log = trace_fn(model, torch.rand(1, 8), capture=tl.options.CaptureOptions(layers_to_save=None))
+    log = trace_fn(model, torch.rand(1, 8), save=None)
     try:
         graph = dagua.trace_to_dagua_graph(log, vis_mode="unrolled", direction="leftright")
         labels = [graph.node_labels[i] for i in range(graph.num_nodes)]
@@ -67,7 +47,7 @@ def test_dagua_renderer_exports_svg(tmp_path: Path) -> None:
     log = trace_fn(
         model,
         torch.rand(1, 16, 16, 16),
-        capture=tl.options.CaptureOptions(layers_to_save=None),
+        save=None,
     )
     out = tmp_path / "residual.svg"
     try:
@@ -89,7 +69,7 @@ def test_dagua_renderer_exports_svg(tmp_path: Path) -> None:
 def test_render_audit_exposes_unused_fields() -> None:
     pytest.importorskip("dagua")
     model = example_models.SimpleFF().eval()
-    log = trace_fn(model, torch.rand(5, 5), capture=tl.options.CaptureOptions(layers_to_save=None))
+    log = trace_fn(model, torch.rand(5, 5), save=None)
     try:
         audit = dagua.build_render_audit(log).to_dict()
         assert "trace_unused" in audit

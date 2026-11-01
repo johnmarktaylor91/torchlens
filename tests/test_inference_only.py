@@ -54,9 +54,7 @@ def test_inference_only_discards_saved_output_grad_fn() -> None:
     """Inference-only capture saves outputs without autograd history."""
 
     model, x = _model_and_input()
-    trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", inference_only=True)
-    )
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(inference_only=True), save="all")
     try:
         assert trace.inference_only is True
         assert trace[trace.output_layers[0]].out.grad_fn is None
@@ -68,7 +66,7 @@ def test_default_capture_retains_saved_output_grad_fn() -> None:
     """Default capture keeps the existing grad-fn behavior."""
 
     model, x = _model_and_input()
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    trace = tl.trace(model, x, save="all")
     try:
         assert trace.inference_only is False
         assert trace[trace.output_layers[0]].out.grad_fn is not None
@@ -114,9 +112,7 @@ def test_inference_only_deferred_backward_raises_clear_error() -> None:
     """Deferred backward is rejected because inference-only has no autograd graph."""
 
     model, x = _model_and_input()
-    trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", inference_only=True)
-    )
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(inference_only=True), save="all")
     try:
         loss = model(x)
         with pytest.raises(ConfigurationError, match="autograd graph was discarded"):

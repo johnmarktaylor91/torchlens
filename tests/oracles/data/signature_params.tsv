@@ -13,6 +13,6 @@ trace.intervene=explicit
 trace.model=explicit
 trace.narrate=explicit
 trace.on_zero_fire=missing
-trace.save=explicit
+trace.save=missing
 trace.stop_after=explicit
 trace.storage=explicit

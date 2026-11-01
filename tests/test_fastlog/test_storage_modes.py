@@ -148,7 +148,7 @@ def test_disk_only_keep_grad_default_rejected_at_construction(tmp_path: Path) ->
         tl.recording.Recorder(
             StorageModel(),
             default_op=CaptureSpec(save_grad=True),
-            streaming=StorageOptions(
+            storage=StorageOptions(
                 path=tmp_path / "disk.tlfast",
                 retain_in_memory=False,
             ),

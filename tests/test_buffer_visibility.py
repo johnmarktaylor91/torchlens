@@ -11,7 +11,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes.trace import Trace
-from torchlens.options import CaptureOptions
 
 
 class _BatchNormOnly(nn.Module):
@@ -131,7 +130,7 @@ def _log_model(model: nn.Module) -> Trace:
     return tl.trace(
         model,
         torch.randn(2, 4),
-        capture=CaptureOptions(layers_to_save="none"),
+        save="none",
     )
 
 
@@ -403,7 +402,7 @@ def test_collapsed_batchnorm_labels_ops_and_buffers(
 
     model = _BatchNormOnly()
     model.train(training)
-    log = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(layers_to_save="none"))
+    log = tl.trace(model, torch.randn(2, 4), save="none")
     try:
         dot_source = _render_collapsed_module(log, tmp_path)
     finally:
@@ -416,7 +415,7 @@ def test_collapsed_batchnorm_labels_ops_and_buffers(
 def test_collapsed_pure_op_module_omits_buffer_clause(tmp_path: Path) -> None:
     """Collapsed modules without buffers render only their operation count."""
 
-    log = tl.trace(_PureOpModel(), torch.randn(2, 4), capture=CaptureOptions(layers_to_save="none"))
+    log = tl.trace(_PureOpModel(), torch.randn(2, 4), save="none")
     try:
         dot_source = log.draw(
             vis_save_only=True,

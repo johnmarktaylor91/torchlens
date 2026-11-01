@@ -24,7 +24,7 @@ from torchlens._ecosystem import plugins
 from torchlens.export import resolve_target
 
 rows = plugins.discover("torchlens.export_targets")  # metadata only, nothing imported
-plugins.activate("torchlens-example-provider")       # imports the module, registers the target
+plugins.activate("torchlens-example-provider")  # imports the module, registers the target
 
 trace = tl.trace(torch.nn.Sequential(torch.nn.Linear(3, 2), torch.nn.ReLU()), torch.randn(1, 3))
 summary = resolve_target("example_provider_summary")(trace)

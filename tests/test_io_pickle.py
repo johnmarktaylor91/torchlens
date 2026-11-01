@@ -48,12 +48,12 @@ def _build_live_log() -> Trace:
         model,
         x,
         capture=tl.options.CaptureOptions(
-            layers_to_save="all",
             save_args=True,
             save_rng=True,
             save_source_context=True,
             seed=0,
         ),
+        save="all",
     )
 
 
@@ -203,7 +203,8 @@ def test_plain_pickle_roundtrip_still_works() -> None:
     live_log = trace_fn(
         _PlainPickleModel(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", seed=0),
+        capture=tl.options.CaptureOptions(seed=0),
+        save="all",
     )
     restored = pickle.loads(pickle.dumps(live_log))
 

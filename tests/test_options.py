@@ -59,3 +59,9 @@ def test_streaming_option_rejects_bool_with_clear_type_error() -> None:
 
     with pytest.raises(TypeError, match="received bool, not StorageOptions"):
         merge_streaming_options(streaming=True)  # type: ignore[arg-type]
+
+
+def test_private_selection_is_not_an_option_field() -> None:
+    """Internal selection must not enter the public dataclass field census."""
+
+    assert "_layers_to_save" not in {item.name for item in fields(CaptureOptions)}

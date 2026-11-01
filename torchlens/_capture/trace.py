@@ -750,6 +750,7 @@ def save_new_outs(
             projected_layer_nums,
             projected_grad_layer_nums,
         ).project_prefix(refreshed, _run_until_plan)
+        self._output_slot = refreshed._output_slot
         self._runnable.output_losslessness = None
         self._replay_arg_version_data_complete = False
         return
@@ -1504,6 +1505,9 @@ def _finalize_halted_trace(
     self.halt_reason = halt_exc.reason
     self.halt_frontier = halt_exc.reason
     self.raw_output = None
+    from ..recording.types import stopped
+
+    self._output_slot = stopped(halt_exc.reason)
     if not postprocess:
         self.__dict__.pop("_output_attribution_input_tensors", None)
         self.capture_end_time = time.time()
@@ -2038,6 +2042,9 @@ def run_and_log_inputs_through_model(
         drain_pending_nonfinite(self)
         backend.finalize_forward_session(self, self._raw_graph_ws)
 
+        from ..recording.types import returned
+
+        self._output_slot = returned(outputs)
         output_transform = getattr(self, "_output_transform", None)
         self.raw_output = output_transform(outputs) if output_transform is not None else None
         from .._autoroute._builtin_output import decode_outputs_for_trace
