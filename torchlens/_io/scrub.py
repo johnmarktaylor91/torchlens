@@ -216,9 +216,8 @@ def scrub_for_save(
     sparse_runnable:
         Whether to apply the runnable sparse-core payload exclusion policy.
     blob_id_floor:
-        Blob ids are numbered from ``blob_id_floor + 1``. A streaming finalize
-        passes the stream writer's issued count so scrub ids never equal an id
-        the capture already streamed.
+        Ids start at ``blob_id_floor + 1``; a streaming finalize passes the
+        writer's issued count so no scrub id repeats a streamed id.
 
     Returns
     -------
@@ -255,11 +254,7 @@ def scrub_for_save(
     module_accessor = getattr(trace, "_module_logs", None)
     if module_accessor is not None:
         scrubbed_state["_io_module_accessor_state"] = _scrub_value(
-            module_accessor,
-            options,
-            memo,
-            blob_specs,
-            blob_counter,
+            module_accessor, options, memo, blob_specs, blob_counter
         )
     else:
         scrubbed_state["_io_module_accessor_state"] = None

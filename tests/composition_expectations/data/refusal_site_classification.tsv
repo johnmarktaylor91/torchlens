@@ -69,6 +69,7 @@ torchlens._io.streaming:BundleStreamWriter.stage_for_settlement:ArtifactError::2
 torchlens._io.streaming:BundleStreamWriter.publish_staged:ArtifactError::1	INTERNAL		publish-without-stage protocol guard (lane A08 settlement seam); reachable only through a TorchLens sequencing defect
 torchlens._io.streaming:BundleStreamWriter.publish_staged:ArtifactError::2	INTERNAL		double-publish protocol guard; reachable only through a TorchLens sequencing defect
 torchlens._io.streaming:BundleStreamWriter.publish_staged:ArtifactError::3	INTERNAL		publish-after-abort guard (refuses renaming PARTIAL debris into a final artifact); reachable only through a TorchLens sequencing defect
+torchlens._io.streaming:_refuse_colliding_blob_id:ArtifactError::1	INTERNAL		staging guard: a save-time scrub blob id equal to an id the capture stream already wrote; save-time ids start past the stream's issued count, so it fires only on a TorchLens numbering defect, never on lawful user input
 torchlens._io.streaming:BundleStreamWriter._write_staged_metadata:ArtifactError::1	KNOWN-GAP		metadata.pkl write failure wrap (disk/serialization; user-environment-reachable); typed, uncoded
 torchlens._io.streaming:BundleStreamWriter._write_staged_metadata:ArtifactError::2	KNOWN-GAP		metadata.pkl BaseException wrap (same family as :1); typed, uncoded
 torchlens._io.streaming:BundleStreamWriter.publish_staged:ArtifactError::4	KNOWN-GAP		pre-publish fsync failure wrap (moved from finalize; user-environment-reachable); typed, uncoded
