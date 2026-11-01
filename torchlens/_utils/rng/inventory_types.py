@@ -27,6 +27,11 @@ from typing import Any
 import numpy as np
 import torch
 
+try:  # ``resource`` is POSIX-only; feature-detected for the clock family.
+    import resource as _resource_module
+except ImportError:  # pragma: no cover - non-POSIX platforms
+    _resource_module = None  # type: ignore[assignment]
+
 _NUMPY_RNG_INSTANCE_TYPES: tuple[type, ...] = (
     np.random.Generator,
     np.random.RandomState,
@@ -108,7 +113,7 @@ _NUMPY_RNG_METHODS_NEED_FRAME_DIGEST = _numpy_rng_methods_need_frame_digest()
 """Whether NumPy RNG draws need the profiled-frame state-digest fallback."""
 
 _NUMPY_FRAME_DIGEST_INTERNAL_PATH_PREFIXES = (
-    f"{_os_module.path.dirname(_os_module.path.dirname(__file__))}{_os_module.sep}",
+    f"{_os_module.path.dirname(_os_module.path.dirname(_os_module.path.dirname(__file__)))}{_os_module.sep}",
     f"{_os_module.path.dirname(np.__file__)}{_os_module.sep}",
     f"{_os_module.path.dirname(torch.__file__)}{_os_module.sep}",
 )

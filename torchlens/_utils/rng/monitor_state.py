@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:  # pragma: no cover - typing-only cycle
+if TYPE_CHECKING:
     from .monitor import host_nondeterminism_monitor
 
 from collections.abc import Iterator

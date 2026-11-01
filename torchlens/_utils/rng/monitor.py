@@ -28,6 +28,9 @@ from typing import Any, cast
 import numpy as np
 import torch
 
+from .._torch_compat import (
+    warm_lazy_torch_imports,
+)
 from . import (
     channels,
     deep_inventory,
@@ -36,24 +39,16 @@ from . import (
     generator_sweep,
     inventory_types as _types,
     inventory_walk,
+    monitor_state,
     numpy_frames,
 )
-
-try:  # ``resource`` is POSIX-only; feature-detected for the clock family.
-    import resource as _resource_module
-except ImportError:  # pragma: no cover - non-POSIX platforms
-    _resource_module = None  # type: ignore[assignment]
-
-from .._torch_compat import (
-    warm_lazy_torch_imports,
-)
-from . import monitor_state
 from .call_sites import _call_site_time_arg_proof
 from .channels import HostRngMonitorResult
 from .inventory_types import (
     _NUMPY_RNG_INSTANCE_TYPES,
     _UNCERTAIN_DETAIL_CAP,
     _numpy_rng_receiver,
+    _resource_module,
     _rng_exempt_instances,
     _torchlens_module_globals_ids,
     _untrusted_rng_override,
@@ -1123,17 +1118,17 @@ class host_nondeterminism_monitor:
         # benign: the in-window retry's draws are then honestly marked.
         # A different hazard, same fix, for the other imports a first capture
         # triggers (torch's ``torch.backends.opt_einsum`` inside ``torch.einsum``,
-        # warmed by it, and TorchLens's observability session reader on the first
-        # wrapped op): an in-window import runs the ``sys.meta_path`` finders'
+        # warmed by it, and TorchLens's observability session reader, which the op markers
+        # resolve on the first wrapped op): an in-window import runs the ``sys.meta_path`` finders'
         # frames, which the frame-reachable inventory walks as roots, so a large
         # graph behind a finder (pytest's assertion rewriter) exhausted the budget.
         try:
             warm_lazy_torch_imports()  # first, so a failed import below cannot skip it
-            from .._state import pause_logging
-            from ..backends.torch._op_markers import resolve_active_session_fn
+            from ..._observability._session import active_session
+            from ..._state import pause_logging
 
             with pause_logging():
-                resolve_active_session_fn()
+                active_session()
         except Exception:
             pass
         try:

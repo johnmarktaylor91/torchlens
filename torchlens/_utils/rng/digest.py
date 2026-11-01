@@ -8,12 +8,6 @@ from typing import Any
 import numpy as np
 import torch
 
-try:  # ``resource`` is POSIX-only; feature-detected for the clock family.
-    import resource as _resource_module
-except ImportError:  # pragma: no cover - non-POSIX platforms
-    _resource_module = None  # type: ignore[assignment]
-
-
 from .inventory_types import (
     _NotADigestableRng,
 )

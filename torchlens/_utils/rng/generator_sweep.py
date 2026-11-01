@@ -5,20 +5,12 @@ from __future__ import annotations
 import contextvars as _contextvars_module
 import weakref as _weakref_module
 from collections.abc import Collection, Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
 
 from . import inventory_types as _types
-
-try:  # ``resource`` is POSIX-only; feature-detected for the clock family.
-    import resource as _resource_module
-except ImportError:  # pragma: no cover - non-POSIX platforms
-    _resource_module = None  # type: ignore[assignment]
-
-from typing import TYPE_CHECKING
-
 from .inventory_types import (
     _INVENTORY_LEAF_TYPES,
     _WEAKREF_PROXY_TYPES,

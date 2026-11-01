@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-if TYPE_CHECKING:  # pragma: no cover - the import cycle is typing-only
+if TYPE_CHECKING:
     from .monitor import host_nondeterminism_monitor
 
 

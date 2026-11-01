@@ -17,7 +17,7 @@ import weakref
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-if TYPE_CHECKING:  # pragma: no cover - the import cycle is typing-only
+if TYPE_CHECKING:
     from .monitor import host_nondeterminism_monitor
 
 

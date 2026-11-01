@@ -18,19 +18,11 @@ from types import (
     ModuleType,
     SimpleNamespace,
 )
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from . import inventory_types as _types
-
-try:  # ``resource`` is POSIX-only; feature-detected for the clock family.
-    import resource as _resource_module
-except ImportError:  # pragma: no cover - non-POSIX platforms
-    _resource_module = None  # type: ignore[assignment]
-
-from typing import TYPE_CHECKING
-
 from .inventory_types import (
     _INERT_PRIMITIVE_LEAF_TYPES,
     _LRU_CACHE_WRAPPER_TYPE,

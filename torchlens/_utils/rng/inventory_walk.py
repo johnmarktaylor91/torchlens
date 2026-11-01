@@ -19,12 +19,6 @@ import numpy as np
 import torch
 
 from . import inventory_types as _types
-
-try:  # ``resource`` is POSIX-only; feature-detected for the clock family.
-    import resource as _resource_module
-except ImportError:  # pragma: no cover - non-POSIX platforms
-    _resource_module = None  # type: ignore[assignment]
-
 from .inventory_types import (
     _AMBIENT_BRIDGE_LEAF_TYPES,
     _CUSTOM_HOLDER_SKIP_MODULES,

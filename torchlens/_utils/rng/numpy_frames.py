@@ -22,14 +22,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from . import inventory_types as _types
-
-try:  # ``resource`` is POSIX-only; feature-detected for the clock family.
-    import resource as _resource_module
-except ImportError:  # pragma: no cover - non-POSIX platforms
-    _resource_module = None  # type: ignore[assignment]
-
-from . import inventory_walk
+from . import inventory_types as _types, inventory_walk
 from .inventory_types import (
     _CUSTOM_HOLDER_SKIP_MODULES,
     _LRU_CACHE_WRAPPER_TYPE,
