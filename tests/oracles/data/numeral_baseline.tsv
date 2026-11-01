@@ -7130,8 +7130,6 @@ test-docstrings	tests/test_adversarial_scaling_gates.py	400
 test-docstrings	tests/test_adversarial_scaling_gates.py	45
 test-docstrings	tests/test_adversarial_scaling_gates.py	700
 test-docstrings	tests/test_affine_source.py	64.
-test-docstrings	tests/test_ag3_cross_layer_gemma2.py	32
-test-docstrings	tests/test_ag3_cross_layer_gemma2.py	64
 test-docstrings	tests/test_agent_surface_fold.py	051
 test-docstrings	tests/test_agent_surface_fold.py	12
 test-docstrings	tests/test_agent_surface_fold.py	18
@@ -7184,9 +7182,7 @@ test-docstrings	tests/test_argpos_hardening.py	5.0
 test-docstrings	tests/test_aten_profile.py	2.1
 test-docstrings	tests/test_aten_profile.py	2.2
 test-docstrings	tests/test_attested_coupling_evidence.py	40
-test-docstrings	tests/test_attested_coupling_real_models.py	051
 test-docstrings	tests/test_attested_coupling_selectors.py	42
-test-docstrings	tests/test_attr7_edge_sets.py	64
 test-docstrings	tests/test_attrib_methods_captum_ledger.py	13
 test-docstrings	tests/test_attrib_methods_captum_ledger.py	18
 test-docstrings	tests/test_attrib_methods_captum_ledger.py	2.80
@@ -7280,7 +7276,6 @@ test-docstrings	tests/test_backward_p5_modules.py	26
 test-docstrings	tests/test_backward_p5_modules.py	27
 test-docstrings	tests/test_backward_validation_walker_guards.py	40
 test-docstrings	tests/test_bound_method_root_contract.py	41
-test-docstrings	tests/test_bound_method_root_real_model.py	11
 test-docstrings	tests/test_brainpipe_byte_model.py	64
 test-docstrings	tests/test_brainpipe_capture_floor.py	11
 test-docstrings	tests/test_brainpipe_capture_floor.py	20
@@ -7582,7 +7577,6 @@ test-docstrings	tests/test_entry_facade_lazy_entry.py	15
 test-docstrings	tests/test_entry_facade_lazy_entry.py	20
 test-docstrings	tests/test_entry_facade_modern_spelling.py	18
 test-docstrings	tests/test_episode_derivation_declared.py	13
-test-docstrings	tests/test_episode_derivation_real_model.py	13
 test-docstrings	tests/test_episode_join_persistence.py	40
 test-docstrings	tests/test_episode_truth_four_clause.py	40
 test-docstrings	tests/test_episode_truth_real_model.py	10
@@ -7675,7 +7669,6 @@ test-docstrings	tests/test_fast_until.py	32
 test-docstrings	tests/test_fast_until.py	32,
 test-docstrings	tests/test_fastlog/test_ddp_unwrap.py	10
 test-docstrings	tests/test_fastlog/test_ddp_unwrap.py	2026
-test-docstrings	tests/test_fastlog/test_dynamic_graph.py	1000
 test-docstrings	tests/test_fastlog/test_persistence_recover.py	10
 test-docstrings	tests/test_fastlog/test_persistence_recover.py	13
 test-docstrings	tests/test_fastlog/test_persistence_recover.py	15
@@ -8069,13 +8062,6 @@ test-docstrings	tests/test_lovely_containers_reprs.py	31
 test-docstrings	tests/test_lovely_edge_semantics.py	28
 test-docstrings	tests/test_lovely_glance_seams.py	14
 test-docstrings	tests/test_lovely_golden_corpus.py	33
-test-docstrings	tests/test_lovely_value_reprs.py	10
-test-docstrings	tests/test_lovely_value_reprs.py	120
-test-docstrings	tests/test_lovely_value_reprs.py	15
-test-docstrings	tests/test_lovely_value_reprs.py	30
-test-docstrings	tests/test_lovely_value_reprs.py	32
-test-docstrings	tests/test_lovely_value_reprs.py	4.4
-test-docstrings	tests/test_lovely_value_reprs.py	52
 test-docstrings	tests/test_marker_lint.py	10
 test-docstrings	tests/test_marker_lint.py	1300
 test-docstrings	tests/test_marker_lint.py	15,
@@ -8156,7 +8142,6 @@ test-docstrings	tests/test_modelexplorer_episode.py	12
 test-docstrings	tests/test_modelexplorer_episode.py	14
 test-docstrings	tests/test_modelexplorer_export.py	14
 test-docstrings	tests/test_modelexplorer_export.py	19
-test-docstrings	tests/test_modelexplorer_multigraph.py	10
 test-docstrings	tests/test_modelexplorer_overlay.py	12
 test-docstrings	tests/test_modelexplorer_overlay.py	14
 test-docstrings	tests/test_modelexplorer_real.py	100
@@ -8719,8 +8704,6 @@ test-docstrings	tests/test_run_until.py	3.3.1
 test-docstrings	tests/test_run_until.py	3.3.2
 test-docstrings	tests/test_run_until.py	3.3.3
 test-docstrings	tests/test_run_until.py	36
-test-docstrings	tests/test_run_until_backbone_grad.py	18
-test-docstrings	tests/test_run_until_backbone_grad.py	62
 test-docstrings	tests/test_runnable_ambient_restore.py	32
 test-docstrings	tests/test_runnable_ambient_restore.py	32_
 test-docstrings	tests/test_runnable_code_provocation.py	27
@@ -8792,9 +8775,6 @@ test-docstrings	tests/test_selector_semantics_matrix.py	53
 test-docstrings	tests/test_sem_recon_tolerance.py	18.80
 test-docstrings	tests/test_sem_recon_tolerance.py	32
 test-docstrings	tests/test_semantic_io_a3.py	1000
-test-docstrings	tests/test_set_direction_mean_precision.py	32
-test-docstrings	tests/test_set_direction_mean_precision.py	64
-test-docstrings	tests/test_set_direction_mean_precision.py	64.
 test-docstrings	tests/test_silent_swallow_seals.py	22
 test-docstrings	tests/test_site_join.py	1,3
 test-docstrings	tests/test_site_join.py	26
@@ -9594,8 +9574,6 @@ test-names	tests/real_model/r1/test_circ3_induction_real.py	64_
 test-names	tests/real_model/r1/test_realism_moe_ssm_video.py	130
 test-names	tests/real_model/r1/test_realism_pretrained_core.py	18_
 test-names	tests/test_ag1_attribution_graph.py	32_
-test-names	tests/test_ag3_cross_layer_gemma2.py	32_
-test-names	tests/test_ag3_cross_layer_gemma2.py	64_
 test-names	tests/test_attrib_methods_captum_ledger.py	121_
 test-names	tests/test_attrib_methods_captum_ledger.py	18_
 test-names	tests/test_attrib_methods_realmodel.py	121_
@@ -9649,8 +9627,6 @@ test-names	tests/test_extract_v2_workflows.py	18_
 test-names	tests/test_factcore_tensor_stats.py	16_
 test-names	tests/test_factcore_tensor_stats.py	64
 test-names	tests/test_fast_until.py	18_
-test-names	tests/test_fastlog/test_dynamic_graph.py	1000_
-test-names	tests/test_fixa_escrow_replay_output_contract.py	18_
 test-names	tests/test_fixa_escrow_spill.py	16_
 test-names	tests/test_fixa_escrow_spill.py	18_
 test-names	tests/test_fixa_escrow_spill.py	50_
@@ -9848,7 +9824,6 @@ test-names	tests/test_rf_crossval.py	18_
 test-names	tests/test_rf_ext_integration.py	18_
 test-names	tests/test_rf_integration.py	18_
 test-names	tests/test_robustness_pr1.py	313_
-test-names	tests/test_run_until_backbone_grad.py	18_
 test-names	tests/test_runnable_ambient_restore.py	32_
 test-names	tests/test_runnable_r36_regressions.py	11
 test-names	tests/test_runnable_r36_regressions.py	12

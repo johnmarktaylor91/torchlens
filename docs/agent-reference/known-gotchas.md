@@ -169,7 +169,7 @@
   removed, the next wrap re-patches the class from the recorded C constructor.
 - A trace's staged intervention spec (`Trace._intervention_spec`) is read-only to every engine:
   reruns, append and chunked reruns, failed or interrupted reruns, and `fork()` leave it exactly
-  as staged (`tests/test_state_hygiene_oracles.py`, `tests/test_rerun_hook_staging.py`). Validation
+  as staged (`tests/test_state_hygiene_oracles.py`, `tests/test_helper_tensor_fingerprint.py`). Validation
   cannot see a violation (each rerun is self-consistent with the plan it ran), so the oracles
   compare reruns against an independent expectation. A capture-time `intervene=` predicate that is
   not lowered to module hooks stages per-op entries on FINAL labels, which the live matcher refuses;

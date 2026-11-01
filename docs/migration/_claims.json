@@ -21,7 +21,6 @@
       "fix_lane": "A05 (FIX-A: replay output-contract fix)",
       "closed_by": "A05 (FIX-A replay output-contract fix); in the D05 release commit lineage (base 0537becb799d)",
       "closure_evidence": [
-        "tests/test_fixa_escrow_replay_output_contract.py (5 arms)",
         "tests/real_model/r0/test_realism_randinit_axes.py::test_container_output_do_lands_through_model_output_container (real distilgpt2 nested cache)"
       ],
       "verified_at": "2026-09-02 (D05 release gate: P tier on the release commit and on the venv-installed wheel)"
@@ -233,7 +232,6 @@
           "claim": "run(until=...) skips everything downstream of the cut; kept values equal the full run and gradients equal a hand-truncated eager model.",
           "evidence": [
             "tests/test_fast_until.py::test_resnet18_until_fast_gradients_equal_hand_truncated_eager",
-            "tests/test_run_until_backbone_grad.py::test_until_backward_without_carry_state_matches_hand_truncated_eager",
             "tests/test_run_until_projection_cost.py::test_until_values_match_the_full_run"
           ]
         },

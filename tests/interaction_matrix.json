@@ -449,7 +449,7 @@
    "a": "backward",
    "b": "rerun",
    "status": "composes",
-   "evidence": "tests/test_run_until_backbone_grad.py::test_full_run_backward_without_carry_state_matches_eager",
+   "evidence": "tests/test_capture_pure_observer.py::test_train_mode_run_backward_matches_eager_gradients",
    "confidence": "medium",
    "note": "A gradient edit on a rerun arms on the result and fires on its next backward (tl.grad(site))."
   },
