@@ -475,7 +475,7 @@ def test_recording_to_trace_halted_produces_valid_halted_trace() -> None:
     assert cooked.is_stopped is True
     assert cooked.is_stopped == exhaustive.is_stopped
     assert cooked.stop_reason == exhaustive.stop_reason
-    assert cooked.graph.stop_frontier == exhaustive.halt_frontier
+    assert cooked.graph.stop_frontier == exhaustive.graph.stop_frontier
     assert list(cooked.output_layers) == list(exhaustive.output_layers)
 
     # And it must pass the FULL invariant chain rather than crashing.
@@ -657,7 +657,7 @@ def test_recording_to_trace_halt_labels_match_exhaustive_across_buffer() -> None
     assert cooked.is_stopped is True
     # Final labels (not raw) -- and they match exhaustive exactly.
     assert cooked.stop_reason == exhaustive.stop_reason
-    assert cooked.graph.stop_frontier == exhaustive.halt_frontier
+    assert cooked.graph.stop_frontier == exhaustive.graph.stop_frontier
     assert not cooked.stop_reason.endswith("_raw")
     check_metadata_invariants(cooked)
     check_metadata_invariants(exhaustive)

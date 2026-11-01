@@ -89,7 +89,7 @@ def test_unrecognized_transform_still_stamps_user_transform() -> None:
     def halve(image: torch.Tensor) -> torch.Tensor:
         return torch.nn.functional.interpolate(image, size=(224, 224)) / 2
 
-    record = _trace_with(halve).input_preprocessor
+    record = _trace_with(halve).provenance.input_preprocessor
     assert record.source == "user_transform"
     assert provenance.status_of(record) == provenance.STATUS_UNKNOWN
 

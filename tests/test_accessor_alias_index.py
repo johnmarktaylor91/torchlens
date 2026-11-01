@@ -207,7 +207,9 @@ def _reference_module_call_match(accessor: TraceModuleCallAccessor, key: str) ->
 def _reference_grad_fn_call_match(accessor: TraceGradFnCallAccessor, key: str) -> Any:
     """Resolve a GradFnCall key by scanning, mirroring the pre-index behavior."""
 
-    parent_matches = [call for call in accessor._list if key == getattr(call, "label", None)]
+    parent_matches = [
+        call for call in accessor._list if key == getattr(call, "grad_fn_label", None)
+    ]
     if len(parent_matches) == 1:
         return parent_matches[0]
     if len(parent_matches) > 1:

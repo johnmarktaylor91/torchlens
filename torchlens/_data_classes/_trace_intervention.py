@@ -27,6 +27,7 @@ else:
 from .._errors import InvalidArgumentError
 from .._trace_state import TraceState
 from ..intervention.types import (
+    Edit,
     FrozenInterventionSpec,
     InterventionSpec,
     TargetSpec,
@@ -1519,7 +1520,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 "kind": "EDGE",
                 "selection_repr": repr(selection),
                 "resolve_digest": resolved_edges.digest,
-                "edit": getattr(edit, "name", getattr(edit, "__name__", "value")),
+                "edit": edit.name if isinstance(edit, Edit) else getattr(edit, "__name__", "value"),
                 **payload,
             }
         )
@@ -1571,7 +1572,7 @@ class TraceInterventionMixin(_TraceMixinBase):
                 "kind": "PARAM",
                 "selection_repr": repr(selection),
                 "resolve_digest": resolved_params.digest,
-                "edit": getattr(edit, "name", getattr(edit, "__name__", "value")),
+                "edit": edit.name if isinstance(edit, Edit) else getattr(edit, "__name__", "value"),
                 **payload,
             }
         )
@@ -1591,7 +1592,6 @@ class TraceInterventionMixin(_TraceMixinBase):
         from ..intervention.audit import build_fire_record
         from ..intervention.hooks import make_hook_context
         from ..intervention.replay import _commit_replay_updates, _replay_site_key
-        from ..intervention.types import Edit
 
         pending_updates: dict[str, torch.Tensor] = {}
         pending_records: dict[str, list[Any]] = {}

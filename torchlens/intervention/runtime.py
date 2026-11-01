@@ -1487,10 +1487,10 @@ def _stamp_live_site_identity(site: Any) -> None:
         modules = _snapshot_exhaustive_module_stack(trace)
     layer_type = record_type(site, "") or ""
     site.site_key = minter.peek(modules, layer_type, minter.output_slot(site))
-    if getattr(site, "pass_index", None) is None:
+    if getattr(site, "pass_number", None) is None:
         innermost = modules[-1] if modules else None
-        pass_index = innermost[1] if isinstance(innermost, tuple) and len(innermost) == 2 else 1
-        site.pass_index = int(pass_index) if isinstance(pass_index, int) else 1
+        pass_number = innermost[1] if isinstance(innermost, tuple) and len(innermost) == 2 else 1
+        site.pass_number = int(pass_number) if isinstance(pass_number, int) else 1
 
 
 def _build_live_fire_record(

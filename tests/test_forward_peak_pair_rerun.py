@@ -109,6 +109,6 @@ def test_cuda_bracket_clears_a_stale_reason(monkeypatch: pytest.MonkeyPatch) -> 
     with capture_trace._forward_peak_memory_bracket(trace, SimpleNamespace(type="cuda")):
         pass
 
-    assert int(trace.cost.forward_peak_memory) == 200
-    assert trace.cost.forward_peak_memory_reason is None
-    assert trace.provenance.forward_memory_backend == "cuda"
+    assert int(trace._cost_forward_peak_memory) == 200
+    assert trace._cost_forward_peak_memory_reason is None
+    assert trace._provenance_forward_memory_backend == "cuda"

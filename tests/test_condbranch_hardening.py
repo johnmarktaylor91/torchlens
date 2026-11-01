@@ -212,7 +212,7 @@ def test_assert_then_if_still_materializes_branch() -> None:
     control = _log_model(IfOnlyModel(), torch.ones(2, 2))
 
     assert len(guarded.graph.conditional_records) == 1
-    assert len(control.conditional_records) == 1
+    assert len(control.graph.conditional_records) == 1
 
     guarded_relu = _find_only_layer(guarded, "relu")
     control_relu = _find_only_layer(control, "relu")

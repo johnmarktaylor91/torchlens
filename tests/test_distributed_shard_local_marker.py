@@ -115,8 +115,8 @@ class TestMarkerFieldSubstrate:
         from torchlens._data_classes.trace import Trace
         from torchlens._io import FieldPolicy
 
-        assert "distributed_scope" in MODEL_LOG_FIELD_ORDER
-        entry = Trace._FIELD_POLICY["distributed_scope"]
+        assert "_provenance_distributed_scope" in MODEL_LOG_FIELD_ORDER
+        entry = Trace._FIELD_POLICY["_provenance_distributed_scope"]
         # tlspec v8: the marker persists (the erasure guard's second conjunct
         # goes false by construction; see TestErasurePreventionInvariant).
         assert getattr(entry, "portable_policy", entry) is FieldPolicy.KEEP
@@ -172,10 +172,10 @@ class TestErasurePreventionInvariant:
         from torchlens._io import FieldPolicy, prerelease
 
         log = self._marked_trace()
-        entry = Trace._FIELD_POLICY["distributed_scope"]
+        entry = Trace._FIELD_POLICY["_provenance_distributed_scope"]
         monkeypatch.setitem(
             Trace._FIELD_POLICY,
-            "distributed_scope",
+            "_provenance_distributed_scope",
             replace(entry, portable_policy=FieldPolicy.DROP),
         )
         monkeypatch.setattr(prerelease, "_ACTIVE", False)

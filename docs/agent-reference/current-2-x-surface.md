@@ -337,7 +337,7 @@
   diverged/unrelated/unattested with the evidence basis disclosed; payload
   fidelity declared/opaque; value residual where identical recorded chains
   with differing outputs read `unexplained`; comparability) — additive
-  wording only on an empty reference suffix; `bundle.provenance.summary()` is the
+  wording only on an empty reference suffix; `bundle.provenance()` is the
   per-member view. `bundle.vary(mapping)` = one explicit spec or None
   identity PER member (do broadcasts; vary names), complete coverage by
   default, whole-mapping donor normalization, no-rollback partial outcomes

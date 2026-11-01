@@ -230,7 +230,7 @@ def test_explicit_torch_backend_matches_legacy_trace() -> None:
         backend="torch",
         capture=tl.options.CaptureOptions(layers_to_save="all", seed=1),
     )
-    assert explicit.provenance.backend == legacy.backend == "torch"
+    assert explicit.provenance.backend == legacy.provenance.backend == "torch"
     assert explicit.layer_labels == legacy.layer_labels
 
 

@@ -38,7 +38,7 @@ def _build_selection_do_plan(
     # A bare tl.subspace(...) target is projection-valued: the edit acts on
     # the component along the basis (resolve() still reports the support).
     projection = subspace_projection_of(selection_like)
-    if projection is None and getattr(edit, "helper_name", None) == "set_affine_coordinates":
+    if projection is None and _edit_identity(edit, "") == "set_affine_coordinates":
         from .intervention._affine_source import needs_subspace
 
         # Refuse at do(), before anything is staged: a [k, d] map needs a basis.
@@ -108,10 +108,10 @@ def _build_selection_do_plan(
             }
             for entry in resolved
         ],
-        "edit": getattr(edit, "helper_name", getattr(edit, "__name__", repr(type(edit)))),
+        "edit": _edit_identity(edit, repr(type(edit))),
     }
     source_identity = getattr(edit, "kwargs", None)
-    if getattr(edit, "helper_name", None) == "patch_from" and source_identity:
+    if _edit_identity(edit, "") == "patch_from" and source_identity:
         audit["patch_source"] = dict(source_identity)
     return resolved, plan, audit
 
@@ -148,3 +148,19 @@ def _resolve_do_target(trace: Any, selection_like: Any) -> Selection:
             "edge selections address edge substitution (stage 3), not node edits.",
         )
     return resolved
+
+
+def _edit_identity(edit: Any, fallback: str) -> str:
+    """Return the string identity of one edit for audit rows and messages.
+
+    An ``Edit`` carries its ``name`` and a hook callable carries ``__name__``.
+    Only string attributes count: a replacement tensor exposes a ``name``
+    attribute that is ``None``, and the persisted audit contract requires a
+    string ``edit`` field, so a value edit falls back to ``fallback``.
+    """
+
+    for attribute in ("name", "__name__"):
+        candidate = getattr(edit, attribute, None)
+        if isinstance(candidate, str):
+            return candidate
+    return fallback

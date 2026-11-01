@@ -872,7 +872,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Bundle.why / Bundle.provenance** *(spelling documented-unstable)*
 : `b.why(member, relative_to=None)` returns a `WhyReport`: the exact-or-refused ancestry of a
   member against the baseline (or `relative_to`), with lineage status, payload fidelity, value
-  residual and comparability reported as separate axes. `b.provenance.summary()` is the per-member list of
+  residual and comparability reported as separate axes. `b.provenance()` is the per-member list of
   the same facts. Both are derived views; nothing is stored. Reference:
   `docs/reference/experiment_ledger.md`.
 

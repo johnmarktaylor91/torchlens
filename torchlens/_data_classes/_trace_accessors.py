@@ -596,9 +596,9 @@ class TraceGradFnCallAccessor(Accessor[Any]):
         """Resolve unique bare GradFn label to its only GradFnCall."""
 
         if self._label_index is None:
-            # Grouping by label in list order reproduces the per-lookup filter
+            # Grouping by the parent GradFn label in list order reproduces the per-lookup filter
             # exactly; lifetime is this accessor instance's immutable ``_list``.
-            self._label_index = _group_by_attr(self._list, "label")
+            self._label_index = _group_by_attr(self._list, "grad_fn_label")
         parent_matches = self._label_index.get(key, ())
         if len(parent_matches) == 1:
             return parent_matches[0]

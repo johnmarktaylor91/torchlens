@@ -176,7 +176,7 @@ class Edit:
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "name": FieldPolicy.KEEP,
-        "args": FieldPolicy.BLOB_RECURSIVE,
+        "args": FieldPolicy.KEEP,
         "kwargs": FieldPolicy.KEEP,
         "portability": FieldPolicy.KEEP,
         "factory": FieldPolicy.DROP,

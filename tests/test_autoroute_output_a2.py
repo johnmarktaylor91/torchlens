@@ -243,10 +243,10 @@ def test_multi_output_selects_logits_and_fails_closed_on_ambiguity() -> None:
         x,
     )
     assert ambiguous._decoded_output is None
-    assert ambiguous.output_postprocessor is not None
+    assert ambiguous.provenance.output_postprocessor is not None
     assert (
         "call trace.decode_output(style=..., head=...)"
-        in ambiguous.output_postprocessor.description
+        in ambiguous.provenance.output_postprocessor.description
     )
 
 

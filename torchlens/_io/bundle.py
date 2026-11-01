@@ -2730,6 +2730,7 @@ def _scrub_trace_for_bundle(
         if hasattr(trace, attr_name):
             transient_attrs[attr_name] = getattr(trace, attr_name)
             delattr(trace, attr_name)
+    backend_name = str(trace._provenance_backend if is_live_trace(trace) else "torch")
     try:
         return scrub_for_save(
             trace,
@@ -2741,9 +2742,9 @@ def _scrub_trace_for_bundle(
             include_custom_attributes=include_custom_attributes,
             include_buffer_values=include_buffer_values,
             sparse_runnable=sparse_runnable,
-            backend_name=str(trace._provenance_backend),
+            backend_name=backend_name,
             payload_materialization=get_backend_spec(
-                str(trace._provenance_backend)
+                backend_name
             ).capabilities.payload_materialization,
         )
     finally:
@@ -3657,7 +3658,7 @@ def _validate_activation_transform_outputs(
         If a saved out is not a plain tensor.
     """
 
-    if not include_outs or trace._options_activation_transform is None:
+    if not include_outs or not is_live_trace(trace) or trace._options_activation_transform is None:
         return
     for layer in trace._layer_list:
         if not getattr(layer, "has_saved_activation", False):

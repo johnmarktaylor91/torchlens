@@ -300,7 +300,7 @@ def _synthetic_call(address: str, call_index: int, output_layers: list[str]) -> 
     return SimpleNamespace(
         address=address,
         call_index=call_index,
-        call_label=f"{address}:{call_index}",
+        label=f"{address}:{call_index}",
         output_layers=output_layers,
     )
 

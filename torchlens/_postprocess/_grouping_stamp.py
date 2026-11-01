@@ -265,13 +265,13 @@ def settle_loaded_grouping_policy(state: dict[str, Any]) -> dict[str, Any]:
     settles with the violated rule's name in the settlement token.
     """
 
-    payload = state.get("grouping_policy")
+    payload = state.get("_options_grouping_policy")
     if payload is None:
         return degraded_grouping_policy_stamp("legacy")
     violated = validate_grouping_policy_stamp(
         payload,
-        recurrence_detection=state.get("recurrence_detection"),
-        grouping=state.get("grouping"),
+        recurrence_detection=state.get("_options_recurrence_detection"),
+        grouping=state.get("_options_grouping"),
     )
     if violated is None:
         return dict(payload)
