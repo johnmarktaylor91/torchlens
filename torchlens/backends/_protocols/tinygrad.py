@@ -1,4 +1,12 @@
-"""tinygrad preview ``BackendProtocol`` shell (delegating; lazy, realize-once)."""
+"""tinygrad preview ``BackendProtocol`` shell (delegating; lazy, realize-once).
+
+The shell delegates capture and validation to the registered spec and adds
+the framework-specific members: ``is_tensor``, ``host_copy`` (a NumPy copy
+that refuses ``constant_unrealizable`` when tinygrad cannot read the buffer),
+``realize_once`` (one ``Tensor.realize`` over every value) and ``validate``,
+which always returns the replay status object the backend stored, never the
+public entry's boolean.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +14,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from .._backend_protocol import FrameworkRequirement, SpecBackedProtocol
+from ..registry import BackendUnsupportedError
 
 TINYGRAD_FRAMEWORK = FrameworkRequirement(
     distributions=("tinygrad",),
@@ -31,6 +40,7 @@ class TinygradProtocol(SpecBackedProtocol):
             trace_options=TINYGRAD_TRACE_OPTIONS,
             refusal_codes=(
                 "trace_option_unsupported",
+                "module_identity_mode_unsupported",
                 "explicit_seed_unsupported",
                 "runtime_missing",
                 "runtime_version_unsupported",
@@ -60,6 +70,45 @@ class TinygradProtocol(SpecBackedProtocol):
         except Exception:  # noqa: BLE001
             return False
         return isinstance(value, Tensor)
+
+    def host_copy(self, value: Any) -> Any:
+        """A NumPy copy of a tinygrad value, shape and dtype kept (0-d stays 0-d).
+
+        Raises
+        ------
+        BackendUnsupportedError
+            Coded ``constant_unrealizable`` when the value has no readable buffer.
+        """
+
+        import numpy as np
+
+        if not self.is_tensor(value):
+            return np.array(value, copy=True)
+        try:
+            return np.array(value.numpy(), copy=True)
+        except NotImplementedError as error:
+            from ..tinygrad._rules import refuse_constant_unrealizable
+
+            raise refuse_constant_unrealizable(value.uop, error) from error
+
+    def validate(self, trace: Any, ground_truth: Any) -> Any:
+        """Replay validation returning the stored status object, never a bool.
+
+        The spec's ``validate_trace`` keeps the public boolean contract of
+        ``Trace.validate_forward_pass``; the status it stores on the trace
+        carries the per-op decisions (first offending op, reason) the suite reads.
+        """
+
+        result = super().validate(trace, ground_truth)
+        if not isinstance(result, bool):
+            return result
+        status = getattr(trace, "_validation_replay_status", None)
+        if status is None:
+            raise BackendUnsupportedError(
+                "tinygrad validation produced a boolean without storing its replay status",
+                code="validation_replay_unsupported",
+            )
+        return status
 
     def realize_once(self, values: Sequence[Any]) -> None:
         """One ``Tensor.realize`` over every value: each listed tensor gets its own buffer."""

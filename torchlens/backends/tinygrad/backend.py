@@ -73,6 +73,16 @@ from .._options import (
     resolve_optional_capture_field as _resolve_optional_capture_field,
 )
 from .._validation_shared import float_replay_tolerances_for_dtype_name, scalar_replay_close
+from ._rules import (
+    CONSTANT_KIND_ANNOTATION,
+    PER_UOP_PAYLOAD_POLICY,
+    ReplayVerdict,
+    constant_func_name,
+    constant_kind_for_uop,
+    refuse_constant_unrealizable,
+    refuse_rng_state_in_graph,
+    rng_state_uops,
+)
 
 _ACTIVE_TINYGRAD_MODULE_STACK: list[TinygradModuleFrame] = []
 
@@ -437,7 +447,8 @@ class TinygradBackend:
         if random_seed is not None:
             raise BackendUnsupportedError(
                 "tinygrad backend preview does not support random_seed; pass explicit RNG "
-                "state through the model/input surface instead."
+                "state through the model/input surface instead.",
+                code="explicit_seed_unsupported",
             )
         args = self._normalize_input_args(input_args)
         module_tree = discover_tinygrad_module_tree(model)
@@ -540,7 +551,7 @@ class TinygradBackend:
         trace.num_layers_with_params = 0
         self._finish_trace(trace, module_tree if use_object_module else None)
         trace.tinygrad_uop_captures = captures
-        trace.tinygrad_payload_policy = "dev_python_realized_copy"
+        trace.tinygrad_payload_policy = PER_UOP_PAYLOAD_POLICY
         apply_static_label_save_policy(trace, save_predicate, backend_name="tinygrad")
         if grad_options is not None:
             self._attach_derived_grads(
@@ -589,63 +600,68 @@ class TinygradBackend:
                 from ...validation.invariants import check_metadata_invariants
 
                 check_metadata_invariants(trace)
-            passed = self._validate_uops(trace)
-            status_result = self._validation_status_from_counts(trace, passed=passed)
+            verdict = self._validate_uops(trace)
+            status_result = self._validation_status_from_counts(trace, verdict=verdict)
         except BackendUnsupportedError:
             raise
-        except Exception:
-            passed = False
-            status_result = ValidationStatus.result(
-                passed=False,
-                backend="tinygrad",
-                source="loaded" if getattr(trace, "_loaded_from_bundle", False) else "live",
-                payload_load_status=getattr(trace, "payload_load_status", None),
-                num_failed_ops=1,
+        except Exception as error:
+            verdict = ReplayVerdict.fail(
+                label="<metadata>",
+                reason="replay_mismatch",
+                detail=f"{type(error).__name__}: {error}",
+                num_replayed=0,
             )
+            status_result = self._validation_status_from_counts(trace, verdict=verdict)
         setattr(
             trace,
             "_validation_replay_status",
             status_result,
         )
-        return status_result if status_result.state == "unverified" else passed
+        return status_result if status_result.state == "unverified" else verdict.passed
 
     def _validation_status_from_counts(
         self,
         trace: Trace,
         *,
-        passed: bool,
+        verdict: ReplayVerdict,
     ) -> ValidationStatus:
-        """Build aggregate replay status from tinygrad replay and region counts.
+        """Build aggregate replay status from the tinygrad replay verdict.
 
         Parameters
         ----------
         trace
             Trace produced by this backend.
-        passed
-            Whether UOp replay validation passed.
+        verdict
+            Outcome of UOp replay validation; a failure names the first
+            offending op and its reason.
 
         Returns
         -------
         ValidationStatus
-            Failed status when replay failed, unverified status when all
-            replayed ops passed but importer-owned regions are present, and
-            passed status otherwise.
+            Failed status naming the op when replay failed, unverified status
+            when all replayed ops passed but importer-owned regions are
+            present, and passed status otherwise.
         """
 
         source: ValidationReplaySource = (
             "loaded" if getattr(trace, "_loaded_from_bundle", False) else "live"
         )
         payload_load_status = getattr(trace, "payload_load_status", None)
+        passed = verdict.passed
         replayed_node_count = len(getattr(trace, "tinygrad_uop_captures", ())) if passed else 0
         unverified_node_count = count_importer_region_annotations(trace) if passed else 0
-        return ValidationStatus.from_replay_counts(
+        status = ValidationStatus.from_replay_counts(
             backend="tinygrad",
             source=source,
             num_replayed_ops=replayed_node_count,
             num_unverified_ops=unverified_node_count,
             num_failed_ops=0 if passed else 1,
             payload_load_status=payload_load_status,
+            decisions=verdict.decisions(),
         )
+        if status.state == "unverified":
+            return status
+        return replace(status, message=verdict.message())
 
     def validate_entry(self, *args: Any, **kwargs: Any) -> bool:
         """Capture then validate a tinygrad forward pass.
@@ -799,6 +815,11 @@ class TinygradBackend:
 
         captures: list[TinygradUOpCapture] = []
         uops = _unique_uops(outputs)
+        # Refuse before any payload realization could re-evaluate lazy RNG
+        # state (FORKS F-K interim; realize-once capture lifts this).
+        rng_uops = rng_state_uops(uops)
+        if rng_uops:
+            raise refuse_rng_state_in_graph(rng_uops[0])
         for uop in uops:
             if id(uop) in uop_labels or not _is_materializable_uop(uop):
                 continue
@@ -814,25 +835,36 @@ class TinygradBackend:
             }
             module_stack = _module_stack_for_uop(uop, observed_module_stacks, module_tree)
             param_refs = _param_refs_for_uop(uop, module_tree)
+            constant_kind = constant_kind_for_uop(
+                uop,
+                parent_labels=tuple(edge.parent_label_raw for edge in parents),
+                is_input=False,
+                is_parameter=bool(param_refs),
+            )
             tensor = self._tensor_from_uop(uop)
-            payload = self._realized_copy(tensor)
+            payload = self._realized_copy(tensor, uop=uop)
+            annotations: dict[str, object] = {
+                "tinygrad_uop": op_name,
+                "tinygrad_uop_signature": _uop_signature(uop),
+                "tinygrad_observed_tensor_ops": tuple(observed_ops.get(id(uop), ())),
+                "tinygrad_identity": _identity(tensor),
+            }
+            if constant_kind is not None:
+                annotations[CONSTANT_KIND_ANNOTATION] = constant_kind
             event = self._append_event(
                 trace=trace,
                 kind="op",
-                layer_type=op_name.lower(),
-                func_name=(observed_ops.get(id(uop)) or [op_name.lower()])[-1],
+                layer_type=constant_func_name(constant_kind, op_name.lower()),
+                func_name=constant_func_name(
+                    constant_kind, (observed_ops.get(id(uop)) or [op_name.lower()])[-1]
+                ),
                 output=payload,
                 parents=parents,
                 parent_arg_positions=parent_positions,
                 module_stack=module_stack,
                 params=param_refs,
                 container_path=(),
-                annotations={
-                    "tinygrad_uop": op_name,
-                    "tinygrad_uop_signature": _uop_signature(uop),
-                    "tinygrad_observed_tensor_ops": tuple(observed_ops.get(id(uop), ())),
-                    "tinygrad_identity": _identity(tensor),
-                },
+                annotations=annotations,
             )
             uop_labels[id(uop)] = event.label_raw
             captures.append(
@@ -1405,7 +1437,7 @@ class TinygradBackend:
         )
         return IntermediateDerivedGradAccessor(records)
 
-    def _validate_uops(self, trace: Trace) -> bool:
+    def _validate_uops(self, trace: Trace) -> ReplayVerdict:
         """Validate saved tinygrad payloads against replayed UOps.
 
         Parameters
@@ -1415,8 +1447,10 @@ class TinygradBackend:
 
         Returns
         -------
-        bool
-            True when every captured UOp replays to its saved payload.
+        ReplayVerdict
+            Passed when every captured UOp replays to its saved payload and
+            reacts to parent perturbation; otherwise the first offending op
+            with its ``VALIDATION_REASONS`` reason.
         """
 
         captures_raw = getattr(trace, "tinygrad_uop_captures", None)
@@ -1430,19 +1464,33 @@ class TinygradBackend:
             getattr(op, "_label_raw", ""): op for op in getattr(trace, "layer_list", ())
         }
         hidden_outputs_by_label = dict(getattr(trace, "_selective_save_hidden_payloads", {}))
-        for capture in captures:
-            op = ops_by_raw_label.get(capture.label_raw)
+        for index, capture in enumerate(captures):
+            label = capture.label_raw
+            op = ops_by_raw_label.get(label)
             if op is None:
-                return False
-            saved_output = _saved_single_output(op, hidden_outputs_by_label)
-            replayed = self._replay_uop_from_trace_graph(
-                capture,
-                op,
-                ops_by_raw_label,
-                hidden_outputs_by_label=hidden_outputs_by_label,
-            )
+                return ReplayVerdict.fail(
+                    label, "parent_payload_missing", "the op record is gone", index
+                )
+            try:
+                saved_output = _saved_single_output(op, hidden_outputs_by_label)
+            except ValueError as error:
+                return ReplayVerdict.fail(label, "parent_payload_missing", str(error), index)
+            try:
+                replayed = self._replay_uop_from_trace_graph(
+                    capture,
+                    op,
+                    ops_by_raw_label,
+                    hidden_outputs_by_label=hidden_outputs_by_label,
+                )
+            except (KeyError, ValueError) as error:
+                return ReplayVerdict.fail(label, "replay_mismatch", str(error), index)
             if not _payloads_close(replayed, saved_output):
-                return False
+                return ReplayVerdict.fail(
+                    label,
+                    "replay_mismatch",
+                    "the replayed UOp output differs from the saved payload",
+                    index,
+                )
             if not _parent_perturbations_change_output(
                 backend=self,
                 capture=capture,
@@ -1451,8 +1499,13 @@ class TinygradBackend:
                 hidden_outputs_by_label=hidden_outputs_by_label,
                 saved_output=saved_output,
             ):
-                return False
-        return True
+                return ReplayVerdict.fail(
+                    label,
+                    "perturbation_insensitive",
+                    "perturbing the saved parents left the replayed output unchanged",
+                    index,
+                )
+        return ReplayVerdict.ok(len(captures))
 
     def _replay_uop_from_trace_graph(
         self,
@@ -1609,13 +1662,17 @@ class TinygradBackend:
 
         return Tensor(uop)
 
-    def _realized_copy(self, value: Any) -> Any:
+    def _realized_copy(self, value: Any, *, uop: Any | None = None) -> Any:
         """Return a sanctioned live payload copy for ``DEV=PYTHON`` tinygrad.
 
         Parameters
         ----------
         value
             tinygrad Tensor to copy.
+        uop
+            The forward-graph UOp the payload belongs to, when the copy is a
+            capture payload; names the op in the ``constant_unrealizable``
+            refusal when the value has no readable buffer.
 
         Returns
         -------
@@ -1625,7 +1682,14 @@ class TinygradBackend:
 
         from tinygrad import Tensor
 
-        return Tensor(value.tolist(), dtype=value.dtype, device=value.device).realize()
+        try:
+            return Tensor(value.tolist(), dtype=value.dtype, device=value.device).realize()
+        except NotImplementedError as error:
+            # ``need copyin``: a host-side source buffer (closure constant) that
+            # the forward never realized; refuse typed instead of crashing (F2).
+            raise refuse_constant_unrealizable(
+                uop if uop is not None else value.uop, error
+            ) from error
 
     def _assert_runtime_supported(self) -> None:
         """Reject tinygrad runtimes outside the S0.G-proven live-payload envelope.
@@ -1641,7 +1705,8 @@ class TinygradBackend:
         version = getattr(tinygrad, "__version__", None)
         if version not in {"0.13.0", None}:
             raise BackendUnsupportedError(
-                f"tinygrad backend preview is pinned to tinygrad==0.13.0; found {version!r}."
+                f"tinygrad backend preview is pinned to tinygrad==0.13.0; found {version!r}.",
+                code="runtime_version_unsupported",
             )
 
     def _assert_tinygrad_inputs(self, args: Sequence[Any]) -> None:
@@ -2388,13 +2453,15 @@ def _resolve_tinygrad_module_identity_mode(
 
     if value not in {None, "function_root", "object_module"}:
         raise BackendUnsupportedError(
-            "tinygrad module_identity_mode must be None, 'function_root', or 'object_module'."
+            "tinygrad module_identity_mode must be None, 'function_root', or 'object_module'.",
+            code="module_identity_mode_unsupported",
         )
     if value == "object_module" and module_tree is None:
         raise BackendUnsupportedError(
             "tinygrad module_identity_mode='object_module' requires a callable object with "
             "discoverable tinygrad module attributes. Raw callables use "
-            "module_identity_mode='function_root'."
+            "module_identity_mode='function_root'.",
+            code="module_identity_mode_unsupported",
         )
     if value == "function_root":
         return False

@@ -174,7 +174,10 @@ def _roster_tinygrad() -> tuple[RosterModel, ...]:
     # Without tinygrad no case runs; the CPU lists keep that scorecard's denominator.
     inventories = _TINYGRAD_INVENTORIES.get(_tinygrad_default_device() or "CPU")
     fn_ops, module_ops = inventories if inventories is not None else (None, None)
-    return _rows(build_fn, build_module, fn_ops=fn_ops, module_ops=module_ops)
+    # The backend's own roster (``_rosters/tinygrad.py``) follows the two probe rows.
+    from ._rosters.tinygrad import runner_rows
+
+    return _rows(build_fn, build_module, fn_ops=fn_ops, module_ops=module_ops) + runner_rows()
 
 
 def _tinygrad_default_device() -> str | None:
