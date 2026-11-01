@@ -615,7 +615,7 @@ torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._snapshot_numpy_fra
 torchlens/_utils/rng/monitor.py::host_nondeterminism_monitor._teardown	77
 torchlens/_utils/rng/numpy_frames.py::_numpy_frame_candidate_children	165
 torchlens/_utils/rng/registry.py::_build_host_nondeterminism_registry	107
-torchlens/_utils/tensor_utils.py	1958
+torchlens/_utils/tensor_utils.py	1900
 torchlens/_utils/tensor_utils.py::_clone_tensor_payload	74
 torchlens/_utils/tensor_utils.py::_copy_tensor_payload	105
 torchlens/_utils/tensor_utils.py::tensor_nanequal	181
@@ -973,7 +973,7 @@ torchlens/backends/torch/_predicate_boundary_replacements.py::log_predicate_boun
 torchlens/backends/torch/_tl.py	1789
 torchlens/backends/torch/_tl.py::set_tensor_label	63
 torchlens/backends/torch/aliasing.py::detect_torch_alias_contract	61
-torchlens/backends/torch/backend.py	1663
+torchlens/backends/torch/backend.py	1660
 torchlens/backends/torch/backend.py::TorchBackend.cleanup_failed_forward_session	146
 torchlens/backends/torch/backend.py::TorchBackend.extract_and_mark_outputs	157
 torchlens/backends/torch/backend.py::TorchBackend.fetch_label_move_input_tensors	153

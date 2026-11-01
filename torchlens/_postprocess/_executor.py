@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .._utils import hashing as _hashing, tensor_utils as _tensor_utils
+from .._utils import _cuda_probe, hashing as _hashing, tensor_utils as _tensor_utils
 from .._utils.display import _vtimed
 from . import (
     _layer_depths,
@@ -207,7 +207,7 @@ def _run_step_13(ctx: StepContext) -> None:
     # Unwrapped by _vtimed (historical). R36-3: additionally gated on the CAPTURE having touched CUDA (the
     # trace-level forward_memory_backend fact) so a CPU-only trace inside a
     # GPU training loop no longer flushes the caller's allocator.
-    if _tensor_utils._is_cuda_available() and _tensor_utils.capture_touched_cuda(ctx.trace):
+    if _cuda_probe._is_cuda_available() and _tensor_utils.capture_touched_cuda(ctx.trace):
         torch.cuda.empty_cache()
 
 

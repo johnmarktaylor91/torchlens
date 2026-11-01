@@ -60,12 +60,12 @@ this package mostly stateless and free of high-level TorchLens business logic.
 ## Introspection
 - `get_vars_of_type_from_obj()` is a bounded recursive finder for tensors/modules.
 - `_ATTR_SKIP_SET` avoids expensive tensor pseudo-properties.
-- (`_is_cuda_available`/`_is_cuda_initialized` live in `tensor_utils.py`, not
-  `introspection.py`.)
-- `_is_cuda_available()` caches CUDA availability to avoid repeated driver probes, and treats a
-  raising probe as "no CUDA" (warned once) so a broken accelerator cannot abort a CPU capture.
-- `_is_cuda_initialized()` is the uncached, probe-free read of torch's own init flag; use it to
-  skip opportunistic CUDA work instead of force-initializing devices.
+- The CUDA probes live in the leaf module `_cuda_probe.py` (torch only, no TorchLens imports,
+  so `rng/streams.py` and the cleanup paths read them without joining the capture import cycle):
+  `_is_cuda_available()` caches CUDA availability (`_cuda_available`) to avoid repeated driver
+  probes, and treats a raising probe as "no CUDA" (warned once) so a broken accelerator cannot
+  abort a CPU capture; `_is_cuda_initialized()` is the uncached, probe-free read of torch's own
+  init flag; use it to skip opportunistic CUDA work instead of force-initializing devices.
 
 ## Gotchas
 - Clean torch function imports must happen before decoration or use originals from `_state`.

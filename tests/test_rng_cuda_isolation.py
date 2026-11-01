@@ -28,7 +28,7 @@ import textwrap
 import pytest
 import torch
 
-from torchlens._utils import rng as tl_rng, tensor_utils
+from torchlens._utils import _cuda_probe, rng as tl_rng
 from torchlens._utils.rng import streams as rng_streams
 
 # Markers are additive: a file-level smoke pytestmark would keep the heavy tests
@@ -322,22 +322,22 @@ def test_cuda_availability_probe_failure_degrades_to_unavailable(
 
         raise RuntimeError("simulated incompatible visible CUDA driver")
 
-    monkeypatch.setattr(tensor_utils, "_cuda_available", None)
+    monkeypatch.setattr(_cuda_probe, "_cuda_available", None)
     monkeypatch.setattr(torch.cuda, "is_available", _explode)
 
     with pytest.warns(UserWarning, match="torch.cuda.is_available"):
-        assert tensor_utils._is_cuda_available() is False
+        assert _cuda_probe._is_cuda_available() is False
     # Cached: the failing probe is not repeated.
-    assert tensor_utils._is_cuda_available() is False
+    assert _cuda_probe._is_cuda_available() is False
 
 
 def test_cuda_initialized_probe_is_not_cached(monkeypatch: pytest.MonkeyPatch) -> None:
     """``_is_cuda_initialized`` tracks torch's flag instead of caching it."""
 
     monkeypatch.setattr(torch.cuda, "is_initialized", lambda: False)
-    assert tensor_utils._is_cuda_initialized() is False
+    assert _cuda_probe._is_cuda_initialized() is False
     monkeypatch.setattr(torch.cuda, "is_initialized", lambda: True)
-    assert tensor_utils._is_cuda_initialized() is True
+    assert _cuda_probe._is_cuda_initialized() is True
 
 
 def test_seeding_degrades_when_accelerator_seed_leg_fails(

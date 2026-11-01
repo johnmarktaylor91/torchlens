@@ -472,7 +472,7 @@ _CAPABILITY_PROBE_STATE = frozenset(
         # One-shot warm of torch's lazy torch._compile/torch._dynamo cascade,
         # fired by the RNG monitor BEFORE its window arms (hunt-b8 F1).
         ("torchlens/_utils/_torch_compat.py", "_LAZY_TORCH_IMPORTS_WARMED"),
-        ("torchlens/_utils/tensor_utils.py", "_cuda_available"),
+        ("torchlens/_utils/_cuda_probe.py", "_cuda_available"),
         # floor2 fix (2026-10-01): torch 2.1.2-floor capability probes --
         # GradientEdge (one-backward tuple-output signature), the
         # tuple-dim overload of reduce ops, CPU half-precision kernel

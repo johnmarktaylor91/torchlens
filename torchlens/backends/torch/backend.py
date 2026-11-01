@@ -27,6 +27,7 @@ from ..._ir.predicate import RecordContext
 from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
 from ..._ir.workspaces import RawGraphWorkspace
+from ..._utils._cuda_probe import _is_cuda_available
 from ..._utils._exception_notes import annotate_guarded
 from ..._utils.arg_handling import (
     INPUT_WAS_PARAMETER_ATTR,
@@ -39,7 +40,7 @@ from ..._utils.introspection import (
     nested_assign,
 )
 from ..._utils.rng import log_current_rng_states, set_random_seed, set_rng_from_saved_states
-from ..._utils.tensor_utils import _is_cuda_available, safe_copy
+from ..._utils.tensor_utils import safe_copy
 from ...recording.types import CaptureSpec, ModuleStackFrame, StorageIntent
 from . import _tl
 from ._completeness_finalize import capture_completeness_witness
@@ -52,11 +53,7 @@ from ._ops_emission import log_function_output_tensors
 from .aliasing import detect_torch_alias_contract
 from .buffer_writes import reconcile_buffer_writes, uninstall_buffer_write_tracker
 from .escape_detection import capture_escape_guard
-from .model_prep import (
-    _cleanup_model_session,
-    _ensure_model_prepared,
-    _prepare_model_session,
-)
+from .model_prep import _cleanup_model_session, _ensure_model_prepared, _prepare_model_session
 from .module_stack import pop_frame, push_existing_frame
 from .sources import log_source_tensor as _log_source_tensor
 from .structure_only_belt import structure_only_escape_belt

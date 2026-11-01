@@ -19,7 +19,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from ..tensor_utils import _is_cuda_available, _is_cuda_initialized
+from .._cuda_probe import _is_cuda_available, _is_cuda_initialized
 from .monitor_state import _suppress_active_monitor_marks
 
 
