@@ -31,6 +31,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import re
 import shutil
@@ -85,6 +86,17 @@ def _venv_python(venv: Path) -> Path:
     return venv / "bin" / "python"
 
 
+def _pyproject_digest() -> str:
+    """Return a stamp line that changes whenever ``pyproject.toml`` changes.
+
+    The extras resolve from ``pyproject.toml``, so a requirement added there
+    must rebuild a venv whose install spec is otherwise unchanged.
+    """
+
+    digest = hashlib.sha256((PROJECT_ROOT / "pyproject.toml").read_bytes()).hexdigest()
+    return f"pyproject {digest}\n"
+
+
 def ensure_venv(venv: Path, reinstall: bool) -> Path:
     """Create or refresh the pinned venv; return its interpreter.
 
@@ -103,7 +115,7 @@ def ensure_venv(venv: Path, reinstall: bool) -> Path:
 
     if shutil.which("uv") is None:
         raise SystemExit("smoke_ci_parity: uv is required (CI installs with uv)")
-    stamp_text = f"python {PYTHON}\n" + "\n".join(install_spec()) + "\n"
+    stamp_text = f"python {PYTHON}\n" + "\n".join(install_spec()) + "\n" + _pyproject_digest()
     stamp = venv / _STAMP_NAME
     if not reinstall and stamp.exists() and stamp.read_text() == stamp_text:
         return _venv_python(venv)
