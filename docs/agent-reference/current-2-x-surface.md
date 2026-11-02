@@ -1794,9 +1794,22 @@ object's docstring):
 - `tl.debug.BackwardNanReport`: Result of `bisect_nan_backward`.
 - `tl.debug.BisectNanReport`: Result returned by `bisect_nan`.
 - `tl.debug.BisectPrecisionReport`: Result of `bisect_precision`.
+- `tl.debug.CheckFinding`: One immutable finding recorded by a training-loop check.
+- `tl.debug.CheckReport`: Deterministically finalized report of the findings a checks session collected.
+- `tl.debug.ChecksSession`: Standalone, capture-free registry of training-loop checks bound to a model and optimizer.
+- `tl.debug.ClipLedger`: Clip-saturation evidence in three tiers, never a silent guess.
+- `tl.debug.ClipLedgerSnapshot`: Frozen clip-saturation facts, tiered and honest.
 - `tl.debug.FindNanReport`: Structured first-non-finite diagnostic returned by `find_nan`.
 - `tl.debug.GuessInputShapeReport`: Result returned by `guess_input_shape`.
 - `tl.debug.LineageReport`: Result returned by `lineage`.
+- `tl.debug.LivenessProbe`: Liveness statistic recorder; never a verdict.
+- `tl.debug.OptimizerFacts`: Adapter-read facts about one optimizer.
+- `tl.debug.RangeProbe`: Opt-in live semantic range check per site.
+- `tl.debug.ScaleLedger`: The decrement-counting mixed-precision skip ledger.
+- `tl.debug.ScaleLedgerSnapshot`: Frozen skip and scale ledger facts for reports and events.
+- `tl.debug.ScanRow`: Health facts for one unique tensor in a parameter scan.
+- `tl.debug.Watchdog`: Death-spiral watchdog: warns when no step is ever accepted.
+- `tl.debug.WatchdogSnapshot`: Frozen death-spiral watchdog state.
 - `tl.differential.DiffReport`: The settled two-capture differential: rows plus honest totals.
 - `tl.differential.diff`: Settle two captures into the guarded differential projection.
 - `tl.distributed.is_vetted_build`: Capability probe: does this torch build match a censused snapshot?

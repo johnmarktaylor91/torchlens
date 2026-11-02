@@ -135,8 +135,8 @@ def test_imports_through_a_reexporting_module_follow_the_export(tmp_path: Path) 
         tmp_path,
         {
             "torchlens/__init__.py": "",
-            "torchlens/debug/_checks/__init__.py": "from ._audit import OldAudit\n",
-            "torchlens/debug/_checks/_audit.py": "class OldAudit:\n    pass\n",
+            "torchlens/checks/__init__.py": "from ._audit import OldAudit\n",
+            "torchlens/checks/_audit.py": "class OldAudit:\n    pass\n",
             "torchlens/debug/__init__.py": "from ._shim import OldAudit\n",
             "torchlens/debug/_shim.py": (
                 "from ..checks._audit import OldAudit\n\n__all__ = ['OldAudit']\n"
@@ -151,12 +151,12 @@ def test_imports_through_a_reexporting_module_follow_the_export(tmp_path: Path) 
         "proposed": "NewAudit",
         "path": "tl.debug.OldAudit",
         "owner": "tl.debug",
-        "module": "torchlens.debug._checks._audit",
+        "module": "torchlens.checks._audit",
     }
     edits = codemod.plan([row], root, roots=("torchlens", "tests"))
     assert _sites(edits) == {
-        ("torchlens/debug/_checks/_audit.py", 1, 7, codemod.DEFINITE),
-        ("torchlens/debug/_checks/__init__.py", 1, 21, codemod.DEFINITE),
+        ("torchlens/checks/_audit.py", 1, 7, codemod.DEFINITE),
+        ("torchlens/checks/__init__.py", 1, 21, codemod.DEFINITE),
         ("torchlens/debug/_shim.py", 1, 29, codemod.DEFINITE),
         ("torchlens/debug/_shim.py", 3, 13, codemod.DEFINITE),
         ("torchlens/debug/__init__.py", 1, 20, codemod.DEFINITE),

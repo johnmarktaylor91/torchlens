@@ -3804,6 +3804,16 @@ The sections above describe each surface in depth.
 | `tl.export.unregister_target` | Remove one export-target registration |
 | `tl.fingerprint.StructuralHashMismatchError` | Raised when a model's provisional structural hash differs from its pin |
 | `tl.fingerprint.content` | Return a deterministic SHA-256 digest of nested tensor content |
+| `CheckReport.counters` | Event counters the checks session accumulated |
+| `CheckReport.finalized_reason` | Why the report was finalized, such as scope exit |
+| `CheckReport.ledgers` | The clip, scale and watchdog snapshots collected into the report |
+| `ClipLedger.observe_step` | Record one accepted step's post-clip total norm, and the pre-clip norm when the magnitude tier is armed |
+| `LivenessProbe.facts` | Per-site liveness statistics recorded so far |
+| `LivenessProbe.hook_plan` | The `hooks=` mapping to pass to `CaptureOptions` |
+| `RangeProbe.hook_plan` | The `hooks=` mapping to pass to `CaptureOptions` |
+| `RangeProbe.observed_fires` | Per-label fire counts, so a site that never fired is visible |
+| `Watchdog.on_accepted` | Reset on an accepted step and re-arm the single warning |
+| `Watchdog.on_backward` | Record one backward pass; returns `True` exactly once, when the watchdog trips |
 | `tl.grad` | Address the gradient of a site's output: `tl.grad("relu_3")`; builds a `GradSelector` |
 | `tl.intervention.BundleComparisonError` | The same class as `tl.errors.BundleComparisonError` |
 | `tl.intervention.Population` | A prepared, provenance-stamped donor population: `members`, `datums`, `origin`, `kind`, `content_digest`, `digest_kind`, `identity`, `eligible_indices(...)`, `mean(dim=None, ...)`, `std(dim=None, ...)`; built by `tl.intervention.population` |
@@ -3929,8 +3939,37 @@ The sections above describe each surface in depth.
 | `CausalReceipt.num_measured_heads` | Return how many displayed heads carry a measured effect |
 | `CheckFinding.check_name` | Name of the check that produced the finding |
 | `CheckFinding.param_names` | The offending parameter or site names, with every alias of a tied tensor kept |
+| `CheckFinding.accepted_step_id` | Identifier of the accepted optimizer step the finding belongs to, or `None` |
+| `CheckFinding.attempted_step_id` | Identifier of the attempted step the finding belongs to, or `None` |
+| `CheckFinding.backward_id` | Identifier of the backward pass the finding belongs to, or `None` |
+| `CheckFinding.collateral_zeroed` | Count of values zeroed as collateral of the problem, or `None` |
+| `CheckFinding.follow_up` | The call that localizes the culprit the finding only narrows to a cone |
+| `CheckFinding.global_step` | The training step the finding was recorded at, or `None` |
+| `CheckFinding.scale_provenance` | Where the grad-scaler scale in the finding came from, or `None` |
+| `CheckFinding.step_provenance` | How the step number was known: observed or inferred |
+| `CheckFinding.zero_baseline` | Whether the value was compared against a zero baseline, or `None` |
 | `ChecksSession.register_nonfinite_grad_check` | Register the live parameter-gradient nonfinite check |
+| `ChecksSession.attach` | Install the scheduled gradient, optimizer and step hooks |
+| `ChecksSession.detach` | Remove every hook handle; safe to call more than once |
+| `ChecksSession.disable` | Suspend all checks until `enable` is called |
+| `ChecksSession.enable` | Re-enable checks after `disable` |
+| `ChecksSession.estimated_snapshot_bytes` | Clone-tier snapshot budget estimated from element count and dtype size alone |
+| `ChecksSession.final_report` | The report finalized at scope exit, when the session was entered as a context manager |
+| `ChecksSession.paused` | Context manager that suspends all checks inside its block |
+| `ChecksSession.register_change_check` | Register the parameter-change fact check |
+| `ChecksSession.register_frozen_check` | Register the declared-frozen-parameter invariant check |
+| `ChecksSession.register_magnitude_check` | Arm the pre-clip gradient magnitude check |
+| `ChecksSession.register_nonfinite_param_check` | Register the scheduled parameter and buffer nonfinite scan |
+| `ChecksSession.register_update_ratio_check` | Register the update-to-weight ratio check |
 | `ClipLedgerSnapshot.has_constancy_hint` | Whether the clip ledger saw a constant clipping pattern worth hinting |
+| `ClipLedgerSnapshot.accepted_steps_observed` | Number of accepted steps the clip ledger observed |
+| `ClipLedgerSnapshot.applied_clip_factors` | The exact applied clip factor per step, when the magnitude tier was armed |
+| `ClipLedgerSnapshot.constant_total` | The post-clip total norm when it stayed constant, else `None` |
+| `ClipLedgerSnapshot.declared_clip_norm` | The clip norm the caller declared, or `None` |
+| `ClipLedgerSnapshot.nonfinite_totals` | Count of steps whose total norm was nonfinite |
+| `ClipLedgerSnapshot.saturated_steps` | Count of steps clipped to the declared norm |
+| `ClipLedgerSnapshot.saturation_rate` | Fraction of observed steps that saturated the declared clip norm, or `None` |
+| `ClipLedgerSnapshot.tier` | Evidence tier of the clip facts: exact factors, declared norm, or constancy hint |
 | `CloseReport.is_disabled` | Whether the watcher was disabled |
 | `CloseReport.is_final_sample_forced` | Whether close forced a final sample |
 | `CostTreeRow.num_unknown_ops` | Directly-owned ops with no cost rule |
@@ -4059,6 +4098,7 @@ The sections above describe each surface in depth.
 | `ModuleStackFrame.pass_number` | Call number of this module in the stack |
 | `NarrationEvent.has_intervention` | Whether an intervention acted at this event |
 | `NarrationEvent.stats` | `tl.stats.TensorStats` for this tensor, or `None` when no statistics were requested or available |
+| `NarrationEvent.tier` | Capture tier the event came from, such as `post_hoc`, or `None` |
 | `Op.edits` | The FireRecords of every edit that fired at this op, in fire order (was `interventions`) |
 | `Op.is_edited` | Whether a user edit replaced this op's output |
 | `Op.pass_number` | 1-based pass of this op within its layer |
@@ -4066,6 +4106,9 @@ The sections above describe each surface in depth.
 | `Op.short_layer_label` | Short layer label (no pass suffix) |
 | `Op.type` | The op's normalized operation type token (for example `"linear"`); `Layer.layer_type` is the Layer's spelling |
 | `OptimizerFacts.is_known` | Whether the optimizer is recognised; an unknown optimizer gives `band_reason` instead of a guessed band |
+| `OptimizerFacts.decoupled_decay` | Whether the optimizer applies weight decay decoupled from the gradient step |
+| `OptimizerFacts.group_fact` | One per-parameter-group hyperparameter fact, or `None` when unknown |
+| `OptimizerFacts.param_group_facts` | The per-parameter-group facts read from the optimizer |
 | `PreHookEffect.has_changes` | `True`/`False` when the pre-hook's mutation evidence is complete, otherwise `None` |
 | `PreprocessingComparison.applied_source` | How the applied side was obtained: `"resolution"` / `"declaration"` / `"parsed_transform"` / `"undeclared"` / `"opaque_transform"` |
 | `PreprocessingComparison.authority_status` | The authority's standing (`authoritative` / `unverified_fallback` / `unknown`); a non-authoritative reference caps the verdict below `verified` |
@@ -4114,10 +4157,25 @@ The sections above describe each surface in depth.
 | `ScaleLedger.is_enabled` | Whether a live, enabled GradScaler is attached |
 | `ScaleLedger.observe_accepted_step` | Record one accepted optimizer step |
 | `ScaleLedger.observe_backward` | Record one backward's scale reading; count decrements exactly |
+| `ScaleLedger.observe_scale` | Fold any unobserved grad-scaler movement into the ledger without counting a backward |
 | `ScaleLedgerSnapshot.has_scaler` | Whether a GradScaler was attached |
 | `ScaleLedgerSnapshot.is_enabled` | Whether the attached GradScaler was enabled |
+| `ScaleLedgerSnapshot.accepted_steps` | Number of optimizer steps the scaler accepted |
+| `ScaleLedgerSnapshot.backward_reads` | Number of backward passes observed |
+| `ScaleLedgerSnapshot.current_scale` | The grad-scaler scale at snapshot time |
+| `ScaleLedgerSnapshot.growth_events` | Number of scale growth events observed |
+| `ScaleLedgerSnapshot.inferred_k` | The inferred growth interval, or `None` when it could not be inferred |
+| `ScaleLedgerSnapshot.initial_scale` | The grad-scaler scale when observation began |
+| `ScaleLedgerSnapshot.preconditions` | The preconditions the ledger checked before inferring scaler behaviour |
+| `ScaleLedgerSnapshot.skipped_attempts` | Number of step attempts the scaler skipped |
 | `ScanRow.is_audited` | False exactly when `skip_reason` says why the row was not audited |
 | `ScanRow.is_constant` | Whether the scanned value stayed constant (`None` when unknown) |
+| `ScanRow.abs_max` | Largest absolute value of the scanned tensor |
+| `ScanRow.bounds_above` | Count of values above the declared upper bound |
+| `ScanRow.bounds_below` | Count of values below the declared lower bound |
+| `ScanRow.dtype_max` | Largest finite value the tensor dtype can hold |
+| `ScanRow.subnormal_fraction` | Fraction of values in the subnormal range |
+| `ScanRow.zero_fraction` | Fraction of values equal to zero |
 | `Selection.align_to` | Re-bind a resolved selection onto another trace |
 | `Selection.labels` | Pass-qualified op label of every row, in row order |
 | `Selection.selector` | The selector that produced the rows, or `None` |
@@ -4178,6 +4236,7 @@ The sections above describe each surface in depth.
 | `ValidationStatus.unavailable_unsupported` | Build an unavailable status for a backend without replay validation |
 | `ValidationStatus.unverified_reason_counts` | Stable reason-code counts for nodes that replay could not verify |
 | `WatchdogSnapshot.is_tripped` | Whether the watchdog fired |
+| `WatchdogSnapshot.backwards_since_accepted` | Backward passes seen since the last accepted step |
 ### Members by class
 Members of classes whose public home changed, one entry per class.
 
