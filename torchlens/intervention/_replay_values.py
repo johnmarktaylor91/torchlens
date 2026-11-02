@@ -131,8 +131,15 @@ def tensor_content_digest(value: torch.Tensor) -> str:
     shape or dtype, so callers compare digests only within one site.
     """
 
-    payload = value.detach().cpu().contiguous()
+    payload = value.detach().cpu()
     if payload.numel() == 0:
         return hashlib.sha256(b"").hexdigest()
-    raw = payload.view(-1).view(torch.uint8)
+    flat = payload.reshape(-1)
+    if flat.stride() != (1,):
+        # ``contiguous()`` and ``reshape`` leave a one-element payload's stride
+        # alone (``x[:, 0]`` of a ``(1, 4)`` tensor is ``(1,)`` with stride 4,
+        # and still "contiguous"), and the byte reinterpretation below needs
+        # a unit stride. Materialize a dense copy only in that case.
+        flat = flat.clone(memory_format=torch.contiguous_format)
+    raw = flat.view(torch.uint8)
     return hashlib.sha256(raw.numpy().tobytes()).hexdigest()

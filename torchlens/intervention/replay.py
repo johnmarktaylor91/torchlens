@@ -1358,15 +1358,23 @@ def _commit_replay_updates(
         for label, tensor in pending_updates.items():
             site = log._layer_dict_all_keys[label]
             _record_capture_digest(site, known_digests, new_digests)
+            # Every field ``_apply_out_update`` (through
+            # ``_set_saved_out_metadata``) or the record replacement below
+            # writes, under its live name: the rollback sets them back
+            # verbatim, so a stale key here would turn the error it unwinds
+            # into a bare ``AttributeError``.
             snapshots[label] = {
                 "out": site.out,
                 "transformed_out": site.transformed_out,
                 "shape": site.shape,
                 "transformed_out_shape": site.transformed_out_shape,
                 "dtype": site.dtype,
+                "dtype_ref": site.dtype_ref,
+                "device_ref": site.device_ref,
                 "transformed_out_dtype": site.transformed_out_dtype,
-                "memory": site.activation_memory,
+                "activation_memory": site.activation_memory,
                 "transformed_activation_memory": site.transformed_activation_memory,
+                "has_saved_activation": site.has_saved_activation,
                 "edits": list(site.edits),
                 "is_edited": site.is_edited,
             }
