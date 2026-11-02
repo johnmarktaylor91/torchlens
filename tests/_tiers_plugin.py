@@ -141,11 +141,13 @@ def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool 
     files as arguments instead selects the same tests but costs more: pytest
     re-walks the parent directory for every file argument (measured 2026-11-02,
     459 file arguments: about 130 s to collect against about 65 s for the whole
-    tree). A module named on the command line is always collected.
+    tree). A module named on the command line is always collected, and
+    ``TORCHLENS_SMOKE_PREFILTER=0`` turns the skip off (a whole-tree count).
     """
 
     if (
-        collection_path.suffix != ".py"
+        os.environ.get("TORCHLENS_SMOKE_PREFILTER", "1") == "0"
+        or collection_path.suffix != ".py"
         or not collection_path.name.startswith("test_")
         or not smoke_only_session(config)
         or not collection_path.resolve().is_relative_to(TESTS_DIR.resolve())

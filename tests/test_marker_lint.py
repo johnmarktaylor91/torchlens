@@ -1350,11 +1350,14 @@ def test_item_collection_records_smoke_items_off_the_file_list(tmp_path: Path) -
     fail_on_off_list_smoke_items([])
 
 
-def test_smoke_session_skips_test_modules_off_the_file_list(tmp_path: Path) -> None:
+def test_smoke_session_skips_test_modules_off_the_file_list(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Under ``-m smoke`` only listed test modules under ``tests/`` are collected."""
 
     from _tiers_plugin import pytest_ignore_collect
 
+    monkeypatch.delenv("TORCHLENS_SMOKE_PREFILTER", raising=False)
     tests_dir = Path(__file__).resolve().parent
     off_list = next(
         path for path in sorted(tests_dir.glob("test_*.py")) if not on_smoke_file_list(path)
@@ -1373,6 +1376,8 @@ def test_smoke_session_skips_test_modules_off_the_file_list(tmp_path: Path) -> N
         assert _ignored(tests_dir / "conftest.py", markexpr) is None
     for markexpr in ("", "not rare", "not smoke", "heavy or smoke"):
         assert _ignored(off_list, markexpr) is None
+    monkeypatch.setenv("TORCHLENS_SMOKE_PREFILTER", "0")
+    assert _ignored(off_list, "smoke") is None
 
 
 @pytest.mark.smoke
