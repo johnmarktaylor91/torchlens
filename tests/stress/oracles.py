@@ -141,8 +141,8 @@ def snapshot_torch() -> TorchSnapshot:
 RNG_STREAMS = ("torch", "random", "numpy", "numpy_tail")
 
 
-RNG_RESTORING_STAGES: frozenset[str] = frozenset({"trace", "save", "load"})
-"""Stages whose documented contract restores the global RNG streams (not ``validate``)."""
+RNG_RESTORING_STAGES: frozenset[str] = frozenset({"trace", "save", "load", "validate"})
+"""Stages whose documented contract restores the global RNG streams."""
 
 
 def rng_difference(before: tuple[bytes, ...], after: tuple[bytes, ...]) -> list[str]:
@@ -556,12 +556,9 @@ def torch_clean_after_cell(result: CellResult) -> Verdict:
     Each stage is held to its documented RNG contract. Capture documents that
     it snapshots the global RNG streams and restores them on every exit path,
     so trace, save and load must leave the torch, ``random`` and NumPy streams
-    exactly as they found them, pass or fail. ``tl.validate`` documents the
-    opposite for its ``random_seed``: it "reseeds the process-global RNG
-    engines without restoring them", so its RNG effect is recorded in
-    ``CellResult.rng_changed`` but is not a failure here; the trace-versus-
-    validate inconsistency is a filed finding, and ``RNG_RESTORING_STAGES``
-    grows to include ``validate`` when validate adopts the trace contract.
+    exactly as they found them, pass or fail. ``tl.validate`` makes the same
+    promise: it seeds the engines for its own runs and restores the caller's
+    streams on return and on error, so its RNG effect is judged like trace's.
     Wrappers install lazily on the first capture and stay installed by design,
     so the oracle accepts an install but never an uninstall or a swap. A cell
     whose eager forward itself raised ran no TorchLens stage, so there is

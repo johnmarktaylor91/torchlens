@@ -1417,7 +1417,11 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **Validation entry**
 : `tl.validate(model, x, scope=...)` validates a model/input pair for a requested scope
-  (for example `"saved"` or `"receptive_field"`), capturing what it needs itself.
+  (for example `"saved"` or `"receptive_field"`), capturing what it needs itself. Like
+  `tl.trace`, it seeds the global RNG streams (Python `random`, NumPy, torch CPU and CUDA) for
+  its own runs and restores the caller's streams on return and on error; the lower-level
+  `torchlens.validation.validate_forward_pass` and `validate_backward_pass` make the same
+  promise.
   Keyword-only `output_device` and `save_budget` set the validator capture's save options,
   with the same values and defaults as `CaptureOptions.output_device` (`"same"`) and
   `CaptureOptions.save_budget` (`"auto"`): `output_device="cpu"` lets a GPU model validate

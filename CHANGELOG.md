@@ -37,6 +37,8 @@
 - **validation**: `tl.validate` restores the caller's global RNG streams (Python `random`, NumPy,
   torch CPU and CUDA generators) on return and on error, the way `tl.trace` does; before, a
   backward or layer-gradient validation left the process reseeded with the validation seed.
+  The lower-level `torchlens.validation.validate_forward_pass` and `validate_backward_pass`
+  make the same promise.
 - **root namespaces**: `tl.mechinterp`, `tl.semantic` and `tl.tviz` are not root attributes;
   in a fresh process they raise a typed `AttributeError` (code `facade_redirect`) that names
   the import. Import the subpackage (`import torchlens.mechinterp`) and call
