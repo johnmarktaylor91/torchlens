@@ -19,9 +19,11 @@ pre-fix behavior:
 
 from __future__ import annotations
 
+import json
 import os
 import stat
 from pathlib import Path
+from typing import Any
 
 import pytest
 import torch
@@ -30,6 +32,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._io import bundle as bundle_mod
 from torchlens._io.bundle import _mark_partial, _reanchor_visualizer_paths, cleanup_tmp
+from torchlens._io.format3.values import decode_value
 from torchlens.errors import ArtifactError
 
 
@@ -55,7 +58,7 @@ def _save(tmp_path: Path, name: str = "b.tlspec") -> Path:
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX mode bits are the checked signal")
 def test_bundle_sidecars_and_dirs_are_private(tmp_path: Path) -> None:
-    """metadata.pkl/manifest.json are 0600 and the directories 0700.
+    """Every file of a 3.0 save is 0600 and every directory 0700.
 
     Fail-before: the sidecars carrying forward source and harvested attributes
     inherited the umask (0664 under umask 002) while the blobs were 0600.
@@ -66,10 +69,14 @@ def test_bundle_sidecars_and_dirs_are_private(tmp_path: Path) -> None:
         spec = _save(tmp_path)
     finally:
         os.umask(prior)
-    assert stat.S_IMODE((spec / "metadata.pkl").stat().st_mode) & 0o077 == 0
-    assert stat.S_IMODE((spec / "manifest.json").stat().st_mode) & 0o077 == 0
-    assert stat.S_IMODE(spec.stat().st_mode) & 0o077 == 0
-    assert stat.S_IMODE((spec / "blobs").stat().st_mode) & 0o077 == 0
+    assert (spec / "manifest.json").is_file()
+    assert (spec / "blobs").is_dir()
+    open_modes = {
+        path.relative_to(spec).as_posix(): oct(stat.S_IMODE(path.stat().st_mode))
+        for path in (spec, *spec.rglob("*"))
+        if stat.S_IMODE(path.stat().st_mode) & 0o077
+    }
+    assert not open_modes, open_modes
 
 
 # --------------------------------------------------------------------------- #
@@ -213,6 +220,19 @@ class _NestedParamModel(nn.Module):
         return self.enc(x)
 
 
+def _persisted_equivalence_groups(spec: Path) -> Any:
+    """Decode the trace record's persisted op equivalence groups from a 3.0 save."""
+
+    manifest = json.loads((spec / "manifest.json").read_text(encoding="utf-8"))
+    trace_table = json.loads(
+        (spec / manifest["records"]["trace"]["path"]).read_text(encoding="utf-8")
+    )
+    return decode_value(
+        trace_table["fields"].get("_graph_op_equivalence_classes"),
+        at="trace._graph_op_equivalence_classes",
+    )
+
+
 def test_persisted_equivalence_class_keys_are_canonically_ordered(tmp_path: Path) -> None:
     """Trace-level op_equivalence_classes keys sort their param_NNNNNN run.
 
@@ -224,7 +244,6 @@ def test_persisted_equivalence_class_keys_are_canonically_ordered(tmp_path: Path
     captures make the flip near-certain to appear if the canonicalization is absent.
     """
 
-    import pickle
     import re
 
     param_token = re.compile(r"param_\d{6}")
@@ -237,9 +256,7 @@ def test_persisted_equivalence_class_keys_are_canonically_ordered(tmp_path: Path
         )
         spec = tmp_path / f"nested_{index}.tlspec"
         trace.save(str(spec))
-        groups = pickle.loads((spec / "metadata.pkl").read_bytes()).get(
-            "_graph_op_equivalence_classes"
-        )
+        groups = _persisted_equivalence_groups(spec)
         for key in groups or {}:
             tokens = param_token.findall(key)
             if len(tokens) >= 2:
@@ -271,10 +288,7 @@ def test_persisted_equivalence_keys_preserve_outindex_suffix(tmp_path: Path) -> 
     the dict rebuild silently kept only the last group.
     """
 
-    import json
     import re
-
-    from torchlens._io.format3.values import decode_value
 
     trace = tl.trace(
         _NestedMultiOutputParamModel().eval(),
@@ -287,14 +301,7 @@ def test_persisted_equivalence_keys_preserve_outindex_suffix(tmp_path: Path) -> 
 
     spec = tmp_path / "lstm_outindex.tlspec"
     trace.save(str(spec))
-    manifest = json.loads((spec / "manifest.json").read_text(encoding="utf-8"))
-    trace_table = json.loads(
-        (spec / manifest["records"]["trace"]["path"]).read_text(encoding="utf-8")
-    )
-    persisted = decode_value(
-        trace_table["fields"].get("_graph_op_equivalence_classes"),
-        at="trace._graph_op_equivalence_classes",
-    )
+    persisted = _persisted_equivalence_groups(spec)
     assert persisted is not None
 
     persisted_outindex_keys = {key for key in persisted if "_outindex" in key}
