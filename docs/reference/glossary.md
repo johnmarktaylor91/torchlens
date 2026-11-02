@@ -310,8 +310,8 @@ without a compatibility alias. No validation or honesty tripwire may be weakened
   and, with `backward_ready=True`, for `Trace.backward()` / `log_backward()`. The default installs
   no dispatch mode and adds no per-op work. A session-time knob (not persisted; load restores
   `False`) that `run()` refreshes inherit; the recorded rows themselves persist (tlspec v8+), so a
-  loaded trace keeps `has_aten_ops`. `run(fast=True)` results and non-torch backends record
-  nothing. GPU kernel recording is out of scope. Spelling: velocity walk builds.2 (1 Nov 2026).
+  loaded trace keeps `has_aten_ops`. `run()` results, fast or not, inherit the recording of the
+  trace they refresh; non-torch backends record nothing. GPU kernel recording is out of scope. Spelling: velocity walk builds.2 (1 Nov 2026).
 
 **Trace.has_aten_ops**
 : `True` when the trace carries recorded ATen operations: after a capture with

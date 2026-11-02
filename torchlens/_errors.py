@@ -651,8 +651,8 @@ class AtenOpsUnavailableError(_ActionableErrorMixin, CaptureError, RuntimeError)
     """Raised when ``aten_ops`` accessors are read on a trace that recorded none.
 
     ATen operation recording is opt-in (``CaptureOptions(aten_ops=True)``): a
-    capture without the switch, a loaded artifact saved without it, and a
-    fast re-run carry no profile, so the accessors refuse typed instead of
+    capture without the switch and a loaded artifact saved without it carry
+    no profile, so the accessors refuse typed instead of
     returning an empty answer that looks like "this op dispatched nothing".
     Branch on ``exc.fields["code"] == "aten_ops_unavailable"``.
     """

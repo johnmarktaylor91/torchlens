@@ -41,8 +41,7 @@ def _require_aten_profile(record: Any, *, what: str) -> _PrimitiveOpProfile:
     if profile is None:
         raise AtenOpsUnavailableError(
             f"{what} needs ATen operation rows, but this capture recorded none "
-            "(the aten_ops option was off, the artifact was saved without it, "
-            "or the trace is a fast re-run)"
+            "(the aten_ops option was off, or the artifact was saved without it)"
         )
     return profile
 
@@ -56,7 +55,8 @@ class TraceAtenMixin:
 
         ``True`` after a capture with ``CaptureOptions(aten_ops=True)`` and after
         loading an artifact saved from one (a present-but-empty profile counts);
-        ``False`` otherwise, including ``run(fast=True)`` results.
+        ``False`` otherwise. ``run()`` results, fast or not, inherit the recording
+        of the trace they refresh.
         """
         return getattr(self, "_primitive_op_profile", None) is not None
 

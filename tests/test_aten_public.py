@@ -192,9 +192,13 @@ def test_refresh_inherits_the_switch_and_fast_run_refuses() -> None:
     assert refreshed.has_aten_ops is True
     assert _row_keys(refreshed) == before
 
+    # The fast live tier refreshes the SAME live Trace in place (its result
+    # trace is this trace), so the capture's recording stays, held to the
+    # recorded path by the fast static guard.
     fast = trace.run(inputs=torch.ones(2) * 3, fast=True)
-    assert fast.has_aten_ops is False
-    _assert_refuses(lambda: fast.aten_ops)
+    assert fast.trace is trace
+    assert fast.trace.has_aten_ops is True
+    assert _row_keys(fast.trace) == before
 
 
 def test_intervention_capture_with_the_switch_passes_invariants() -> None:
@@ -270,6 +274,6 @@ def test_classics_smoke_model_records_and_validates() -> None:
     assert trace.has_aten_ops is True
     assert trace.aten_ops
     with torch.no_grad():
-        expected = model(inputs)
+        expected = model(*inputs)
     assert trace.validate_forward_pass(expected, validate_metadata=True) is True
     assert all(isinstance(op.aten_ops, tuple) for op in trace.ops)

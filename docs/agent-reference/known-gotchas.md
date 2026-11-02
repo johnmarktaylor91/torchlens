@@ -29,7 +29,7 @@
   `False`, and `trace.aten_ops` / `op.aten_ops` / `trace.aten_gaps` raise
   `AtenOpsUnavailableError` (`aten_ops_unavailable`) rather than returning an empty tuple. Pass
   `capture=tl.options.CaptureOptions(aten_ops=True)`; the switch is a session knob (not persisted,
-  inherited by `run()` refreshes, off on `run(fast=True)` results) while the recorded rows persist.
+  inherited by `run()` refreshes, fast or not) while the recorded rows persist.
 - Distributed/sharded state is detected in `torchlens/_distributed.py` and refused at capture entry
   with `DistributedCaptureUnsupportedError`; the same detection feeds the `dtensor` / `device_mesh` /
   `tensor_parallel` / `pipeline_parallel` rows of `tl.report.doctor`, so the two cannot drift.
