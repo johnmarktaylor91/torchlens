@@ -435,7 +435,7 @@ def select_collapse_plan(
                     code="collapse_pathological_skip",
                 ),
                 # r7 R19 (opus b6 LOW): a fixed stacklevel resolved to TorchLens's
-                # own _trace_stats caller; blame the user's draw()/collapse_plan()
+                # own _trace_collapse caller; blame the user's draw()/collapse_plan()
                 # line instead (the entry depth differs per public spelling).
                 stacklevel=user_stacklevel(),
             )
