@@ -38,20 +38,35 @@ def _label_key_map(trace: Trace) -> dict[str, tuple[str, ...]]:
     bare labels, historical position labels) maps to that op's replay key; a
     layer-wide spelling of a multi-pass layer (its bare ``layer_label``, its
     short label) maps to EVERY pass's key and is therefore pass-ambiguous.
+
+    Final labels win over historical ones. Relations (``parents``,
+    ``children``) are spelled in final labels, and a historical spelling of
+    one op (the raw label it carried before pass grouping renumbered it) can
+    equal the FINAL label of another op; were both kept, a child edge into
+    the second op would also enter the first, pulling an unrelated branch
+    into the replay cone.
     """
 
-    mapping: dict[str, list[str]] = {}
+    final: dict[str, list[str]] = {}
+    historical: dict[str, list[str]] = {}
     for op in trace._layer_list:
         key = _replay_site_key(op)
-        spellings = {key, op.layer_label}
+        for spelling in {key, op.layer_label}:
+            _add_key(final, spelling, key)
         for spelling in getattr(op, "lookup_keys", ()) or ():
             if isinstance(spelling, str):
-                spellings.add(spelling)
-        for spelling in spellings:
-            keys = mapping.setdefault(spelling, [])
-            if key not in keys:
-                keys.append(key)
+                _add_key(historical, spelling, key)
+    mapping = {spelling: keys for spelling, keys in historical.items() if spelling not in final}
+    mapping.update(final)
     return {spelling: tuple(keys) for spelling, keys in mapping.items()}
+
+
+def _add_key(mapping: dict[str, list[str]], spelling: str, key: str) -> None:
+    """Record ``key`` under ``spelling`` once."""
+
+    keys = mapping.setdefault(spelling, [])
+    if key not in keys:
+        keys.append(key)
 
 
 def _validated_cone_origins(origins: Iterable[Op]) -> list[Op]:
