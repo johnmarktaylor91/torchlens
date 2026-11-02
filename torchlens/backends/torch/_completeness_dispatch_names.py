@@ -407,9 +407,6 @@ def _is_buffer_state_view_dispatch(
     source = args[0]
     if not isinstance(source, torch.Tensor):
         return False
-    # Imported here: ``completeness_witness`` rebinds this function into its own
-    # globals, so a module-level name would not resolve at dispatch time.
-
     if _is_uninitialized_lazy_tensor(source):
         return True
     return session_validated_buffer_address(trace, source) is not None

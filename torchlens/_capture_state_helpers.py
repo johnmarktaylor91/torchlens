@@ -41,6 +41,7 @@ from ._utils._torch_compat import (
     is_dynamo_compiled_callable,
 )
 from ._utils.tensor_leaves import iter_tensors
+from ._utils.tensor_utils import _is_uninitialized_lazy_tensor as _is_uninitialized_param
 from ._validation_state_snapshot import describe_copy_failure, warn_copy_failed
 
 # Content-fingerprint / attribute-fragment family: split to _capture_fingerprint.py
@@ -1420,19 +1421,6 @@ def _fingerprint_model_weights(model: nn.Module) -> str:
             continue
         entries.append((name, tuple(param.shape), str(param.dtype)))
     return hashlib.sha256(repr(entries).encode("utf-8")).hexdigest()
-
-
-def _is_uninitialized_param(value: Any) -> bool:
-    """Return whether ``value`` is a lazy (uninitialized) parameter or buffer.
-
-    Shape/numel/storage access on such values raises until the first forward
-    materializes them in place. One implementation, shared with the payload
-    copy path (see ``utils.tensor_utils._is_uninitialized_lazy_tensor``).
-    """
-
-    from ._utils.tensor_utils import _is_uninitialized_lazy_tensor
-
-    return _is_uninitialized_lazy_tensor(value)
 
 
 def _input_id_for_relationship_evidence(input_args: Any) -> int:

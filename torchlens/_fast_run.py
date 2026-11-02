@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import sys
 import threading
 import time
 import weakref
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager, nullcontext
 from typing import Any, cast
 
@@ -19,14 +18,11 @@ from . import _state
 from ._call_fingerprint import (
     fingerprinting,
     install_module_token_hooks,
-    module_fingerprint_address,
 )
 from ._capture._fused_attention_hold import hold_fused_attention_fastpath_off
 from ._data_classes._trace_accessors import boundary_label_rows
 from ._fast_live_plans import (
-    DirectForwardRoute,
     _admitted_collection_labels,
-    _direct_call,
     _drop_uncollected_payloads,
     _FastOutputPlan,
     _live_modules_by_address,
@@ -34,9 +30,11 @@ from ._fast_live_plans import (
     _output_tensor_leaves,
     _pair_output_leaves,
     _remove_fast_live_hooks,
+    build_direct_forward_routes,
     build_function_plans,
     build_module_plans,
     collected_function_output,
+    direct_forward_routes_installed,
     install_collection_hooks,
     repeats_last_function_output,
     require_distinct_plan_modules,
@@ -134,12 +132,9 @@ from ._runnable.witness_contracts import (
     _tensor_leaf_paths,
     _unbound_state_escape_stale,
 )
-from ._utils._module_call_dispatch import forward_entered_through_module_call
 from ._utils.arg_handling import normalize_input_args
 from ._utils.rng import restore_host_rng, set_random_seed, snapshot_host_rng
 from .backends.torch._ops_container_base import _try_build_container_spec
-from .backends.torch._session_forwards import _NO_INSTANCE_FORWARD, _SessionForward
-from .backends.torch._tl import get_module_meta
 from .errors import PathDivergenceError, RunCapabilityUnavailableError, RuntimeSignatureDriftError
 
 
@@ -151,112 +146,6 @@ def _is_opaque_output_root(output: Any) -> bool:
         and not isinstance(output, torch.Tensor)
         and _try_build_container_spec(output) is None
     )
-
-
-def _was_called_directly(module: nn.Module) -> bool:
-    """Return whether a capture marked ``module`` as entered by a direct call."""
-
-    meta = get_module_meta(module)
-    return meta is not None and meta.direct_forward_called
-
-
-def build_direct_forward_routes(
-    model: nn.Module,
-    modules: Mapping[str, nn.Module],
-    plan_addresses: tuple[str, ...],
-    steer_modules: Mapping[str, nn.Module],
-) -> tuple[DirectForwardRoute, ...]:
-    """Build one route per live module a capture entered by a direct ``forward()`` call.
-
-    Parameters
-    ----------
-    model:
-        Live root model (never routed: capture leaves the root undecorated).
-    modules:
-        Every live address, alias spellings included.
-    plan_addresses:
-        Addresses the session collects through a forward hook.
-    steer_modules:
-        Steered address to live module, as the steer plan resolved them.
-    """
-
-    routes: list[DirectForwardRoute] = []
-    for name, module in model.named_modules():
-        if module is model or not _was_called_directly(module):
-            continue
-        collect = [
-            planned
-            for planned in plan_addresses
-            if modules.get("" if planned == "self" else planned) is module
-        ]
-        routes.append(
-            DirectForwardRoute(
-                module_ref=weakref.ref(module),
-                token=_state.module_token(module_fingerprint_address(module, name)),
-                steer_addresses=tuple(
-                    steered for steered, target in steer_modules.items() if target is module
-                ),
-                collect_address=collect[0] if collect else None,
-            )
-        )
-    return tuple(routes)
-
-
-class _RoutedForward(_SessionForward):
-    """A per-run ``forward`` that runs the session hook work on a direct call only."""
-
-    def __init__(
-        self,
-        direct: Callable[..., Any],
-        module: nn.Module,
-        original: Callable[..., Any],
-        prior: Any,
-    ) -> None:
-        """Hold the direct-call delegate and the module's own ``forward``."""
-
-        super().__init__(direct, module, original, prior)
-        self._original = original
-
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        """Pass a ``Module.__call__`` call through; route a direct call."""
-
-        if forward_entered_through_module_call(sys._getframe(1)):
-            return self._original(*args, **kwargs)
-        return self._delegate(*args, **kwargs)
-
-
-@contextmanager
-def direct_forward_routes_installed(
-    routes: tuple[DirectForwardRoute, ...], session_ref: weakref.ReferenceType[Any]
-) -> Iterator[None]:
-    """Install the routes for one native forward, then restore every ``forward``.
-
-    A module whose ``forward`` no longer holds the route at exit (the model
-    reassigned it mid-forward) keeps the newer value, as session cleanup does.
-    """
-
-    installed: list[tuple[nn.Module, Any, _RoutedForward]] = []
-    try:
-        for route in routes:
-            module = route.module_ref()
-            if module is None:
-                continue
-            prior = module.__dict__.get("forward", _NO_INSTANCE_FORWARD)
-            original = module.forward
-            wrapper = _RoutedForward(
-                _direct_call(route, module, original, session_ref), module, original, prior
-            )
-            module.__dict__["forward"] = wrapper
-            installed.append((module, prior, wrapper))
-        yield
-    finally:
-        for module, prior, wrapper in reversed(installed):
-            if module.__dict__.get("forward") is not wrapper:
-                continue
-            if prior is _NO_INSTANCE_FORWARD:
-                module.__dict__.pop("forward", None)
-            else:
-                module.__dict__["forward"] = prior
 
 
 class _FastSparseSession:
@@ -1150,6 +1039,24 @@ class _FastLiveSession:
             _raise_failed_contract_as_divergence(failed_input, fork=None)
         return input_args, input_kwargs, input_size_changed
 
+    @contextmanager
+    def _forward_scope(self, model: nn.Module, routes: Any) -> Iterator[Any]:
+        """Enter everything one native forward runs under; yield the fingerprint.
+
+        The native forward must run the attention program the capture recorded
+        (its call fingerprint is compared against the trace's), so the fused
+        fast path is held off exactly as at capture entry.
+        """
+
+        with (
+            self.activated(),
+            self.steer_plan.context(),
+            routes,
+            fingerprinting() as fingerprint,
+            hold_fused_attention_fastpath_off(model),
+        ):
+            yield fingerprint
+
     def run(self, inputs: Any, *, seed: int | None, until: Any = None) -> RunResult:
         """Execute one native forward and enforce the cached static graph guard.
 
@@ -1180,16 +1087,7 @@ class _FastLiveSession:
             set_random_seed(seed)
         truncation = None
         routes = direct_forward_routes_installed(self.direct_routes, weakref.ref(self))
-        with (
-            self.activated(),
-            self.steer_plan.context(),
-            routes,
-            fingerprinting() as fingerprint,
-            # The native forward must run the attention program the capture
-            # recorded (its call fingerprint is compared against the trace's), so
-            # the fused fast path is held off exactly as at capture entry.
-            hold_fused_attention_fastpath_off(model),
-        ):
+        with self._forward_scope(model, routes) as fingerprint:
             try:
                 # Bind positional inputs exactly as capture and the ordinary live
                 # run do (a tuple or list spreads; a one-parameter forward takes a

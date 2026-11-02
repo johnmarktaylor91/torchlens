@@ -85,6 +85,12 @@ import torch
 
 from ... import _state
 from ..._utils import _torch_compat
+from ._identity_shim_views import (
+    _LedgerResolvingDefaultTable,
+    _LedgerResolvingMembers,
+    _LedgerResolvingTable,
+    _resolve,
+)
 
 __all__ = [
     "identity_shims_installed",
@@ -230,27 +236,6 @@ def _remove_import_hook() -> None:
         if len(with_hook) != len(sys.meta_path):
             sys.meta_path[:] = with_hook
         _import_hook = None
-
-
-def _resolve(fn: Any) -> Any:
-    """Follow the wrapper ledger from a torchlens wrapper to its original.
-
-    Parameters
-    ----------
-    fn:
-        Any object; non-wrappers resolve to themselves.
-
-    Returns
-    -------
-    Any
-        The original torch callable for a torchlens wrapper, else ``fn``.
-    """
-
-    seen: set[int] = set()
-    while id(fn) in _state._decorated_to_orig and id(fn) not in seen:
-        seen.add(id(fn))
-        fn = _state._decorated_to_orig[id(fn)]
-    return fn
 
 
 def _register_shim(fn: Any) -> Any:
@@ -814,86 +799,6 @@ def _install_fx_trace_shim(records: list[tuple[Any, str, Any]]) -> None:
 # ---------------------------------------------------------------------------
 # Site 7: torch.overrides membership tables
 # ---------------------------------------------------------------------------
-
-
-class _LedgerResolvingTable(dict):
-    """Dict view whose LOOKUPS resolve torchlens wrappers to originals.
-
-    Iteration/keys stay exactly the underlying original-keyed contents (the
-    wrapper-poisoning census gate keeps holding); only ``in``/``[]``/``get``
-    additionally accept the live wrapper alias, so the documented
-    ``func in torch.overrides.get_testing_overrides()`` membership check
-    answers the same in both wrap epochs (grind-r5 b7 R55-A).
-    """
-
-    def __contains__(self, key: Any) -> bool:
-        if super().__contains__(key):
-            return True
-        original = _resolve(key)
-        return original is not key and super().__contains__(original)
-
-    def __getitem__(self, key: Any) -> Any:
-        try:
-            return super().__getitem__(key)
-        except KeyError:
-            original = _resolve(key)
-            if original is not key:
-                return super().__getitem__(original)
-            raise
-
-    def get(self, key: Any, default: Any = None) -> Any:
-        """Return the value for ``key`` (wrapper-resolving), else ``default``."""
-
-        try:
-            return self[key]
-        except KeyError:
-            return default
-
-
-class _LedgerResolvingMembers(list):
-    """List view whose membership test resolves torchlens wrappers."""
-
-    def __contains__(self, item: Any) -> bool:
-        if super().__contains__(item):
-            return True
-        original = _resolve(item)
-        return original is not item and super().__contains__(original)
-
-
-class _LedgerResolvingDefaultTable(collections.defaultdict):
-    """Wrapper-resolving view that PRESERVES defaultdict semantics.
-
-    ``get_overridable_functions()`` returns a ``defaultdict(list)``; the r5
-    membership fix rebuilt it as a plain resolving dict, so a caller indexing
-    a namespace with no recorded entries -- auto-vivification the upstream
-    type guarantees -- started raising KeyError (grind-r6 b8 R56, opus
-    wave-introduced residue). Ledger resolution runs BEFORE the default
-    factory so a wrapper alias still finds its original's row rather than
-    minting an empty one.
-    """
-
-    def __contains__(self, key: Any) -> bool:
-        if dict.__contains__(self, key):
-            return True
-        original = _resolve(key)
-        return original is not key and dict.__contains__(self, original)
-
-    def __getitem__(self, key: Any) -> Any:
-        if not dict.__contains__(self, key):
-            original = _resolve(key)
-            if original is not key and dict.__contains__(self, original):
-                return dict.__getitem__(self, original)
-        return super().__getitem__(key)
-
-    def get(self, key: Any, default: Any = None) -> Any:
-        """Return the value for ``key`` (wrapper-resolving), never auto-creating."""
-
-        if dict.__contains__(self, key):
-            return dict.__getitem__(self, key)
-        original = _resolve(key)
-        if original is not key and dict.__contains__(self, original):
-            return dict.__getitem__(self, original)
-        return default
 
 
 def _install_overrides_membership_shims(records: list[tuple[Any, str, Any]]) -> None:

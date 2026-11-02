@@ -269,6 +269,17 @@ def _plain_parameter_snapshot(value: torch.nn.Parameter) -> torch.Tensor:
     return tensor
 
 
+# A lazy module's in-forward initialization of its Parameter (``reset_parameters``
+# after torch materialized the pending slot; see ``is_prepared_parameter_receiver``)
+# IS converted like the initialization of a module created inside ``forward``: the
+# op is logged against a snapshot output that no later read consumes (the Parameter
+# does not take the op's label, so consumers read it as prepared state), the
+# postprocess orphan-prunes it, and the dispatch census still owns its ``uniform_``
+# dispatch. Returning the Parameter instead left that mutating dispatch with no
+# captured op (``owner_not_captured``), which failed forward validation's
+# completeness backstop for every lazy module. Both capture modes classify alike
+# through ``_prepared_parameter_lazy_flag``; predicate capture (``tl.record``) keeps
+# the final-graph view and records no op for it.
 def parameter_mutation_output_for_logging(
     trace: Any,
     value: Any,
@@ -292,18 +303,8 @@ def parameter_mutation_output_for_logging(
     label so every later read in the pass consumes the op's output. One prepared
     case is NOT converted and keeps the plain-capture treatment: a
     storage-rebinding ``param.data = rhs`` setter (still visible to the
-    completeness tripwire). The in-forward initialization of a lazy module's
-    Parameter (``reset_parameters`` after torch materialized the pending slot; see
-    ``is_prepared_parameter_receiver``) IS converted like the initialization of a
-    module created inside ``forward``: the op is logged against a snapshot output
-    that no later read consumes (the Parameter does not take the op's label, so
-    consumers read it as prepared state), the postprocess orphan-prunes it, and
-    the dispatch census still owns its ``uniform_`` dispatch. Returning the
-    Parameter here instead left that mutating dispatch with no captured op
-    (``owner_not_captured``), which failed forward validation's completeness
-    backstop for every lazy module. Both capture modes classify alike through
-    ``_prepared_parameter_lazy_flag``; predicate capture (``tl.record``) keeps
-    the final-graph view and records no op for it.
+    completeness tripwire). A lazy module's in-forward initialization is converted
+    too (comment above).
 
     Parameters
     ----------
@@ -461,6 +462,55 @@ def _record_creation_advisory(trace: Trace, entry: str) -> None:
     append_capture_advisory(trace, ADVISORY_PARAMETER_CREATED_IN_FORWARD, [entry])
 
 
+def _late_param_log(
+    trace: Trace, param: nn.Parameter, addresses: list[str], requires_grad_before: bool
+) -> Param:
+    """Stamp ``param`` and build its record for a late in-forward registration.
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace.
+    param:
+        The materialized Parameter, already forced to prep-like ``requires_grad``.
+    addresses:
+        Every live-tree address of ``param``; the first is canonical.
+    requires_grad_before:
+        The Parameter's ``requires_grad`` before capture forced it on.
+    """
+
+    address = addresses[0]
+    module_address, _, name = address.rpartition(".")
+    barcode = make_random_barcode()
+    set_param_meta(
+        param, barcode=barcode, address=address, requires_grad_before=requires_grad_before
+    )
+    param_log = Param(
+        module_address=module_address or "self",
+        name=name,
+        shape=tuple(param.shape),
+        dtype=param.dtype,
+        num_params=param.numel(),
+        param_memory=Bytes(get_memory_amount(param)),
+        trainable=requires_grad_before,
+        address=address,
+        barcode=barcode,
+        has_optimizer=_has_optimizer_like_prep(trace),
+    )
+    param_log._param_ref = param
+    # Pending when the slot entered the session (creation time here, prep time for a
+    # prep-registered lazy slot): the materialization writes that follow create the
+    # parameter's first value instead of mutating a prepared one, so they keep the
+    # plain-capture treatment, and step 15 reads the live geometry.
+    param_log._lazy_at_prep = True  # type: ignore[attr-defined]
+    for alias in addresses[1:]:
+        param_log.all_addresses.append(alias)
+        alias_module = alias.rpartition(".")[0] or "self"
+        if alias_module not in param_log.all_module_addresses:
+            param_log.all_module_addresses.append(alias_module)
+    return param_log
+
+
 def late_register_forward_created_parameter(trace: Trace, param: torch.Tensor) -> str | None:
     """Register a Parameter torch materialized from a pending slot during this forward.
 
@@ -497,37 +547,10 @@ def late_register_forward_created_parameter(trace: Trace, param: torch.Tensor) -
     if not addresses:
         return None
 
-    address = addresses[0]
-    module_address, _, name = address.rpartition(".")
     requires_grad_before = param.requires_grad
     _force_requires_grad_like_prep(trace, param)
-    barcode = make_random_barcode()
-    set_param_meta(
-        param, barcode=barcode, address=address, requires_grad_before=requires_grad_before
-    )
-    param_log = Param(
-        module_address=module_address or "self",
-        name=name,
-        shape=tuple(param.shape),
-        dtype=param.dtype,
-        num_params=param.numel(),
-        param_memory=Bytes(get_memory_amount(param)),
-        trainable=requires_grad_before,
-        address=address,
-        barcode=barcode,
-        has_optimizer=_has_optimizer_like_prep(trace),
-    )
-    param_log._param_ref = param
-    # Pending when the slot entered the session (creation time here, prep time for a
-    # prep-registered lazy slot): the materialization writes that follow create the
-    # parameter's first value instead of mutating a prepared one, so they keep the
-    # plain-capture treatment, and step 15 reads the live geometry.
-    param_log._lazy_at_prep = True  # type: ignore[attr-defined]
-    for alias in addresses[1:]:
-        param_log.all_addresses.append(alias)
-        alias_module = alias.rpartition(".")[0] or "self"
-        if alias_module not in param_log.all_module_addresses:
-            param_log.all_module_addresses.append(alias_module)
+    param_log = _late_param_log(trace, param, addresses, requires_grad_before)
+    address = param_log.address
 
     existing: dict[str, Param] = dict(trace._param_logs._dict)
     displaced = existing.get(address)

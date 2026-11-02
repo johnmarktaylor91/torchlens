@@ -29,8 +29,10 @@ identity.
 
 from __future__ import annotations
 
+import sys
 import weakref
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
@@ -38,8 +40,12 @@ import torch
 from torch import nn
 
 from . import _state
+from ._call_fingerprint import module_fingerprint_address
 from ._fast_live_steer import apply_steer_paused, session_is_active
 from ._runnable import RunnableErrorCode
+from ._utils._module_call_dispatch import forward_entered_through_module_call
+from .backends.torch._session_forwards import _NO_INSTANCE_FORWARD, _SessionForward
+from .backends.torch._tl import get_module_meta
 from .backends.torch.model_prep import shared_module_addresses
 from .backends.torch.wrappers import _MUTATING_TENSOR_PROPERTY_SETTERS
 from .errors import RunCapabilityUnavailableError
@@ -662,3 +668,109 @@ def _remove_fast_live_hooks(handles: list[Any]) -> None:
     handles.clear()
     if first_error is not None:
         raise first_error
+
+
+def _was_called_directly(module: nn.Module) -> bool:
+    """Return whether a capture marked ``module`` as entered by a direct call."""
+
+    meta = get_module_meta(module)
+    return meta is not None and meta.direct_forward_called
+
+
+def build_direct_forward_routes(
+    model: nn.Module,
+    modules: Mapping[str, nn.Module],
+    plan_addresses: tuple[str, ...],
+    steer_modules: Mapping[str, nn.Module],
+) -> tuple[DirectForwardRoute, ...]:
+    """Build one route per live module a capture entered by a direct ``forward()`` call.
+
+    Parameters
+    ----------
+    model:
+        Live root model (never routed: capture leaves the root undecorated).
+    modules:
+        Every live address, alias spellings included.
+    plan_addresses:
+        Addresses the session collects through a forward hook.
+    steer_modules:
+        Steered address to live module, as the steer plan resolved them.
+    """
+
+    routes: list[DirectForwardRoute] = []
+    for name, module in model.named_modules():
+        if module is model or not _was_called_directly(module):
+            continue
+        collect = [
+            planned
+            for planned in plan_addresses
+            if modules.get("" if planned == "self" else planned) is module
+        ]
+        routes.append(
+            DirectForwardRoute(
+                module_ref=weakref.ref(module),
+                token=_state.module_token(module_fingerprint_address(module, name)),
+                steer_addresses=tuple(
+                    steered for steered, target in steer_modules.items() if target is module
+                ),
+                collect_address=collect[0] if collect else None,
+            )
+        )
+    return tuple(routes)
+
+
+class _RoutedForward(_SessionForward):
+    """A per-run ``forward`` that runs the session hook work on a direct call only."""
+
+    def __init__(
+        self,
+        direct: Callable[..., Any],
+        module: nn.Module,
+        original: Callable[..., Any],
+        prior: Any,
+    ) -> None:
+        """Hold the direct-call delegate and the module's own ``forward``."""
+
+        super().__init__(direct, module, original, prior)
+        self._original = original
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Pass a ``Module.__call__`` call through; route a direct call."""
+
+        if forward_entered_through_module_call(sys._getframe(1)):
+            return self._original(*args, **kwargs)
+        return self._delegate(*args, **kwargs)
+
+
+@contextmanager
+def direct_forward_routes_installed(
+    routes: tuple[DirectForwardRoute, ...], session_ref: weakref.ReferenceType[Any]
+) -> Iterator[None]:
+    """Install the routes for one native forward, then restore every ``forward``.
+
+    A module whose ``forward`` no longer holds the route at exit (the model
+    reassigned it mid-forward) keeps the newer value, as session cleanup does.
+    """
+
+    installed: list[tuple[nn.Module, Any, _RoutedForward]] = []
+    try:
+        for route in routes:
+            module = route.module_ref()
+            if module is None:
+                continue
+            prior = module.__dict__.get("forward", _NO_INSTANCE_FORWARD)
+            original = module.forward
+            wrapper = _RoutedForward(
+                _direct_call(route, module, original, session_ref), module, original, prior
+            )
+            module.__dict__["forward"] = wrapper
+            installed.append((module, prior, wrapper))
+        yield
+    finally:
+        for module, prior, wrapper in reversed(installed):
+            if module.__dict__.get("forward") is not wrapper:
+                continue
+            if prior is _NO_INSTANCE_FORWARD:
+                module.__dict__.pop("forward", None)
+            else:
+                module.__dict__["forward"] = prior

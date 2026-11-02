@@ -16,7 +16,6 @@ from tqdm import tqdm
 from torchlens.backends.registry import BackendUnsupportedError
 
 from . import _user_funcs as _user_funcs, _validation_argument_references as _arg_references
-from ._capture._fused_attention_hold import hold_fused_attention_fastpath_off
 from ._capture_state_helpers import (
     _model_for_ground_truth_validation,
     _model_for_validation_replay,
@@ -1534,7 +1533,7 @@ def _validate_forward_pass_torch(
                 {"code": COPY_FAILED_CODE} if plain_attr_snapshot.copy_failure else None,
             )
         from .backends.torch._ops_containers import _walk_output_tensors_with_paths
-        from .validation._pristine import pristine_torch_oracle
+        from .validation._pristine import pristine_ground_truth_oracle
 
         # R75-1: the phase-0 ground truth must observe through PRISTINE
         # torch. In a wrapped process this forward used to run through the
@@ -1545,16 +1544,8 @@ def _validate_forward_pass_torch(
         # one forward and reinstalled after; if they cannot be removed (a
         # capture is active), validation REFUSES rather than blessing a
         # wrap-state-dependent ground truth.
-        # The ground truth runs the SAME attention program capture records: the
-        # fused MHA fast path is held off here exactly as the capture scope
-        # holds it (``hold_fused_attention_fastpath_off``), since capture's
-        # forced ``requires_grad`` alone would otherwise steer the two forwards
-        # onto different kernels (wave-3 stress F4).
         try:
-            with (
-                pristine_torch_oracle(),
-                hold_fused_attention_fastpath_off(ground_truth_model),
-            ):
+            with pristine_ground_truth_oracle(ground_truth_model):
                 ground_truth_output = ground_truth_model(*input_args_copy, **input_kwargs_copy)
         except CaptureNotActiveError:
             return _refuse_validation_precondition(

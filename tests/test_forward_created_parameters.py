@@ -34,7 +34,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import _state
 from torchlens._capture_honesty import ADVISORY_PARAMETER_CREATED_IN_FORWARD
-from torchlens.backends.torch.completeness_witness import LAZY_MODULE_MATERIALIZE_WRAPPER
+from torchlens.backends.torch._completeness_audited import LAZY_MODULE_MATERIALIZE_WRAPPER
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.validation import last_validation_failure
 from torchlens.validation.diagnostics import (
