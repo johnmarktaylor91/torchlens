@@ -49,6 +49,10 @@ _DOC_ROW_PATTERN = re.compile(r"^\| `([a-z0-9_]+)` \| (.*?) \| (.*?) \|$")
 # gate exactly like an inline-code drift. New constant-spelled kinds must be
 # enrolled here AND documented in the contract's constant-spelled table.
 _CONSTANT_SPELLED_CODES: dict[str, tuple[str, str]] = {
+    # sweep_grid per-cell outcomes: recorded on a refused effect row, never
+    # raised, so the code= scanner cannot see them; spelled as constants.
+    "grid_cell_unresolved": ("torchlens/experiment/_grid.py", "_UNRESOLVED"),
+    "grid_cell_multi_site": ("torchlens/experiment/_grid.py", "_MULTI_SITE"),
     "ambiguous_group_lifetime": (
         "torchlens/distributed/_lifecycle.py",
         "AMBIGUOUS_GROUP_LIFETIME",

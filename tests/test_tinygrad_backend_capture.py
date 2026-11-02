@@ -561,23 +561,67 @@ def test_tinygrad_wide_corpus_capture_and_validation() -> None:
     assert trace.validate_forward_pass(list(_wide_corpus(x))) is True
 
 
+_EXECUTION_OR_MUTATION_CODES = frozenset(
+    {"mid_capture_execution_unsupported", "input_mutation_unsupported"}
+)
+
+
 @pytest.mark.parametrize(
-    ("fn", "pattern"),
+    ("fn", "pattern", "codes"),
     (
-        (_realize_inside, "Tensor\\.realize|lazy tinygrad expression"),
-        (_assign_inside, "Tensor\\.assign|lazy tinygrad expression"),
-        (_replace_inside, "Tensor\\.replace|pure lazy tinygrad expression"),
-        (_setitem_inside, "setitem input mutation|pure lazy tinygrad expression"),
+        (
+            _realize_inside,
+            "Tensor\\.realize|lazy tinygrad expression",
+            frozenset({"mid_capture_execution_unsupported"}),
+        ),
+        (
+            _assign_inside,
+            "Tensor\\.assign|lazy tinygrad expression",
+            _EXECUTION_OR_MUTATION_CODES,
+        ),
+        (
+            _replace_inside,
+            "Tensor\\.replace|pure lazy tinygrad expression",
+            _EXECUTION_OR_MUTATION_CODES,
+        ),
+        (
+            _setitem_inside,
+            "setitem input mutation|pure lazy tinygrad expression",
+            _EXECUTION_OR_MUTATION_CODES,
+        ),
     ),
 )
 def test_tinygrad_rejects_mid_capture_realize_and_mutation(
     fn: Any,
     pattern: str,
+    codes: frozenset[str],
 ) -> None:
-    """Reject tinygrad execution that can truncate lazy lineage during capture."""
+    """Reject tinygrad execution that can truncate lazy lineage during capture.
 
-    with pytest.raises(BackendUnsupportedError, match=pattern):
+    Assign, replace and setitem may be refused by the realization guard
+    (when tinygrad executes the mutation eagerly) or by the post-call input
+    identity check (when it stays lazy); either code names the case.
+    """
+
+    with pytest.raises(BackendUnsupportedError, match=pattern) as info:
         tl.trace(fn, Tensor([1.0, 2.0]), backend="tinygrad")
+    assert info.value.code in codes
+
+
+def test_tinygrad_refuses_callable_without_tensor_output() -> None:
+    """A traced callable that returns no tinygrad Tensor refuses typed."""
+
+    with pytest.raises(BackendUnsupportedError, match="Tensor output") as info:
+        tl.trace(lambda x: 3.0, Tensor([1.0, 2.0]), backend="tinygrad")
+    assert info.value.code == "tensor_output_required"
+
+
+def test_tinygrad_refuses_inputs_without_a_tinygrad_tensor() -> None:
+    """Positional inputs with no tinygrad Tensor leaf refuse typed."""
+
+    with pytest.raises(BackendUnsupportedError, match="Tensor inputs") as info:
+        TinygradBackend()._assert_tinygrad_inputs((1.0,))
+    assert info.value.code == "tinygrad_input_required"
 
 
 def test_tinygrad_rejects_tinyjit_callable() -> None:
@@ -603,8 +647,9 @@ def test_tinygrad_rejects_tinyjit_callable() -> None:
         return (x + 1.0).realize()
 
     x = Tensor([1.0, 2.0])
-    with pytest.raises(BackendUnsupportedError, match="realize|assign|TinyJit"):
+    with pytest.raises(BackendUnsupportedError, match="realize|assign|TinyJit") as info:
         tl.trace(jit_block, x, backend="tinygrad")
+    assert info.value.code == "mid_capture_execution_unsupported"
 
 
 @pytest.mark.parametrize(
@@ -867,7 +912,7 @@ def test_tinygrad_derived_grads_reject_audit_only_payload_envelope() -> None:
     trace = tl.trace(_tiny_square_loss, x, backend="tinygrad")
     trace.tinygrad_payload_policy = "audit_only"
 
-    with pytest.raises(BackendUnsupportedError, match="audit-only|derived_grads"):
+    with pytest.raises(BackendUnsupportedError, match="audit-only|derived_grads") as info:
         backend._attach_derived_grads(
             trace=trace,
             model=_tiny_square_loss,
@@ -875,6 +920,7 @@ def test_tinygrad_derived_grads_reject_audit_only_payload_envelope() -> None:
             captured_output=_tiny_square_loss(x),
             grad_options=GradOptions(input_grad_argnums=(0,)),
         )
+    assert info.value.code == "live_payloads_required"
 
 
 def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
