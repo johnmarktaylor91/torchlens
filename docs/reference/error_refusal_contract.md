@@ -286,6 +286,9 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `backend_maturity_invalid` | A `BackendSpec` declares a maturity label outside the closed set (`preview`, `stable`); `BackendRegistryError` at registration | Register the spec with maturity `preview` or `stable` |
 | `backend_mismatch` | Explicit backend cannot handle the model or inputs | Select the owning backend |
 | `bundle_draw_graph_invalid` | `Bundle.draw(graph=)` is not one of `forward`, `backward`, `combined` or `diff` | Pass one of the four graph names |
+| `bundle_draw_keyword_unsupported` | `Bundle.draw` got a keyword the bundle renderer does not support yet (a `Trace.draw` keyword such as `depth=` or `vis_mode=`, or a removed spelling such as `signal=`); `ArgumentTypeError` naming the supported list | Use the keywords `Bundle.draw` lists (`graph=` replaces `signal=`); draw one member with `bundle[name].draw(...)` for the other `Trace.draw` keywords |
+| `bundle_show_kind_invalid` | `Bundle.show(kind=)` is not `None`, `graph`, `strip`, `repr` or `html` | Pass `kind=None` (the merged graph) or one of the four kind names |
+| `draw_format_mismatch` | `Trace.draw` or `Bundle.draw` got a path whose extension names one format and a `file_format=` naming another (`ArgumentConflictError`) | Drop `file_format=` (the extension picks the format), or end the path with the extension of the format you want |
 | `bundle_load_failed` | Bundle load failed on torch/codec drift or a missing dependency | Inspect the chained cause; restore the missing dependency or re-save |
 | `bundle_metadata_integrity_refused` | Bundle metadata pickle is denylisted, corrupt, or truncated | Treat as tamper/corruption; re-save from the source capture |
 | `bundle_producer_unverifiable` | Current-schema bundle's recorded `torchlens_version` does not parse under PEP 440 | Re-save the artifact with a released torchlens |

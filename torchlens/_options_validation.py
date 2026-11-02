@@ -364,10 +364,10 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
     -------
     dict[str, Any]
         Keyword arguments expected by ``Trace.draw``: the field names, with
-        ``container_path`` as ``path``; ``fold_repeats`` only when set or
-        explicit; the tri-state and optional channels only when set.
+        ``container_path`` as ``path``; ``file_format`` only when explicit,
+        ``fold_repeats`` when set or explicit, the rest only when set.
     """
-
+    explicit = visualization.is_field_explicit
     kwargs: dict[str, Any] = {
         "path": visualization.container_path,
         "graph": visualization.graph,
@@ -384,7 +384,7 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         "grad_edge_overrides": visualization.grad_edge_overrides,
         "module_overrides": visualization.module_overrides,
         "open_viewer": visualization.open_viewer,
-        "file_format": visualization.file_format,
+        "file_format": visualization.file_format if explicit("file_format") else None,
         "show_buffers": visualization.show_buffers,
         "direction": visualization.direction,
         "layout": visualization.layout,
@@ -393,7 +393,7 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         "intervention_mode": visualization.intervention_mode,
         "show_cone": visualization.show_cone,
     }
-    if visualization.fold_repeats is not None or visualization.is_field_explicit("fold_repeats"):
+    if visualization.fold_repeats is not None or explicit("fold_repeats"):
         kwargs["fold_repeats"] = visualization.fold_repeats
     optional_kwargs = {
         "node_overlay": visualization.node_overlay,
@@ -409,6 +409,6 @@ def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[
         "order_siblings": visualization.order_siblings,
     }
     for field_name, value in optional_kwargs.items():
-        if value is not None and value is not False or visualization.is_field_explicit(field_name):
+        if value is not None and value is not False or explicit(field_name):
             kwargs[field_name] = value
     return kwargs

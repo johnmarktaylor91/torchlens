@@ -2653,10 +2653,23 @@ shim owed*
   `visualization_direction_invalid` naming all four.
 
 **path=None (draw default)** — *unstable — no deprecation shim owed*
-: A bare `Trace.draw()` writes a collision-safe file in the current directory --
+: Outside a notebook a bare `Trace.draw()` writes a collision-safe file in the current directory --
   `modelgraph.<format>`, then `modelgraph-2.<format>`, `modelgraph-3.<format>` -- and always prints
   `TorchLens graph written to <path>`, so a second bare draw never overwrites the first picture.
-  An explicit `path=` is written exactly (overwriting) and printed only on a verbose trace.
+  In a Jupyter kernel (the same detection as `tl.draw`) a bare `trace.draw()` writes no file and
+  returns the `Drawing` with its rendered bytes (SVG unless `file_format=` says otherwise), which
+  the notebook displays inline (JMT decision, Sun 1 Nov 2026, 3:00 PM PT). An explicit `path=` is
+  always written exactly (overwriting), in a notebook too, and printed only on a verbose trace.
+  `Bundle.draw` follows the same rules.
+
+**file_format (draw kwarg)** — *unstable — no deprecation shim owed*
+: The path's extension picks the format: `trace.draw("graph.png")` writes PNG, and
+  `b.draw("graph.svg")` writes SVG. `file_format=` applies only to a path with no extension
+  (`trace.draw("graph", file_format="svg")` writes `graph.svg`) and to a bare call; its default is
+  `"pdf"` (`"svg"` for a notebook bare call and for `Bundle.draw(graph="diff")`). A `file_format`
+  that disagrees with the path's extension refuses with `ArgumentConflictError`
+  (`draw_format_mismatch`). Both draw doors share this rule (JMT decision, Sun 1 Nov 2026,
+  3:00 PM PT); `VisualizationOptions.file_format` reaches `Trace.draw` only when set explicitly.
 
 **show_module_paths / show_grad_values (draw kwargs, `graph="backward"`)** — *unstable — no deprecation shim owed; keyword-only*
 : Opt-in label rows on `Trace.draw(graph="backward")`: `show_module_paths=True` adds `module <address>` to
@@ -3740,6 +3753,7 @@ describe each surface in depth.
 | `VisualizationOptions.graph` | Which graph the picture draws: ``"forward"`` (default), ``"backward"`` or ``"combined"`` |
 | `VisualizationOptions.rolled` | ``True`` draws each repeated module once (the rolled graph); ``False`` (default) draws every pass |
 | `VisualizationOptions.open_viewer` | ``True`` opens the written picture in the system viewer; the default never does |
+| `VisualizationOptions.file_format` | Format for a ``container_path`` with no extension (default ``"pdf"``); an extension on the path picks the format, and a disagreeing explicit value refuses ``draw_format_mismatch`` |
 | `VisualizationOptions.animate` | A site label, pass-qualified label or record: the picture is the HTML animation of the repeated ops at that site (default ``None``) |
 
 #### `tl.Recording`

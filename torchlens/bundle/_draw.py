@@ -51,6 +51,7 @@ def bundle_draw(
         _KNOWN_EXTS,
         announce_written_graph,
         collision_safe_outpath,
+        direction_to_rankdir,
     )
     from ..viz._drawing import resolve_draw_target
 
@@ -76,8 +77,12 @@ def bundle_draw(
         outpath = collision_safe_outpath(
             "bundle_diff" if graph == "diff" else "bundle_modelgraph", target.file_format
         )
-    drawn = _draw_diff if graph == "diff" else _draw_graph
-    dot = drawn(bundle, target, outpath, options)
+    if graph == "diff":
+        dot = _draw_diff(bundle, target, outpath, options)
+    else:
+        direction = options["direction"]
+        rankdir = direction_to_rankdir(direction if direction is not None else "bottomup")
+        dot = _draw_graph(bundle, target, outpath, rankdir, options)
     if target.path is None:
         announce_written_graph(f"{outpath}.{target.file_format}")
     policy = {"graph": graph, "nodes": options["nodes"], "rolled": options["rolled"]}
@@ -105,24 +110,24 @@ def _draw_diff(bundle: Bundle, target: DrawTarget, outpath: str, options: dict[s
     )
 
 
-def _draw_graph(bundle: Bundle, target: DrawTarget, outpath: str, options: dict[str, Any]) -> str:
-    """The union (or member relation) graph."""
+def _draw_graph(
+    bundle: Bundle, target: DrawTarget, outpath: str, rankdir: str, options: dict[str, Any]
+) -> str:
+    """The union (or member relation) graph, laid out along ``rankdir``."""
 
     from .._visualization._bundle_graph import BundlePictureOptions, render_bundle_graph
-    from .._visualization._render_utils import direction_to_rankdir
 
     nodes = options["nodes"]
     if nodes not in ("ops", "members"):
         raise ValueError(f"nodes must be 'ops' or 'members'; received {nodes!r}.")
     if nodes == "members" and options["graph"] != "forward":
         raise ValueError("nodes='members' draws the relation graph; leave graph='forward'.")
-    direction = options["direction"]
     theme = options["theme"]
     picture = BundlePictureOptions(
         outpath=target.stem or outpath,
         vis_mode="rolled" if options["rolled"] else "unrolled",
         direction=_PASS_SIGNALS[options["graph"]],
-        rankdir=direction_to_rankdir(direction if direction is not None else "bottomup"),
+        rankdir=rankdir,
         graph_overrides=options["graph_overrides"],
         node_overrides=options["node_overrides"],
         edge_overrides=options["edge_overrides"],
