@@ -301,6 +301,7 @@ a model fed embeddings, no batches).
 
 ```python
 from torch import nn
+import torchlens.mechinterp
 from torchlens.facets import FacetSpec
 from torchlens._semantic.recipes._helpers import parameter_spec
 
