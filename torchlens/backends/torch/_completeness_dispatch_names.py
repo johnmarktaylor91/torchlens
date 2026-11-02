@@ -369,10 +369,9 @@ def _is_buffer_state_view_dispatch(
 
     * ``owner is None`` -- the dispatch has NO python-wrapper owner (a wrapped ``.detach()``
       call would be an accounted owner, not a gap; only the property-accessor path is unowned).
-    * ``not mutates`` -- the operator writes to no argument (ground-truth schema flag). A
-      value-affecting in-place drop can never be credited here.
-    * ``aten.detach`` / ``aten.alias`` only -- pure aliasing views. A dropped value-producing
-      op (``aten.add``/``aten.mul``/...) on the buffer is NOT in this set and stays unaccounted.
+    * ``not mutates`` -- the operator writes to no argument (schema flag); no in-place drop.
+    * ``aten.detach`` / ``aten.alias`` only -- pure aliasing views; a dropped value-producing
+      op (``aten.add``/``aten.mul``/...) stays unaccounted.
     * ``args[0]`` is a REGISTERED BUFFER whose stamp is SESSION-VALIDATED (r81:
       current-session object + live storage identity -- a stale or input-rebound
       stamp is never credited as a benign state view), or an UNINITIALIZED lazy
@@ -396,17 +395,16 @@ def _is_buffer_state_view_dispatch(
     Returns
     -------
     bool
-        ``True`` only for a ``.data``-accessor view dispatch on a registered buffer or a
-        pending lazy slot.
+        ``True`` only for a ``.data``-accessor view on a registered buffer or pending lazy slot.
     """
 
-    if owner is not None or mutates:
+    if (
+        owner is not None
+        or mutates
+        or _operator_base_name(func) not in _BUFFER_STATE_VIEW_OPERATORS
+    ):
         return False
-    if _operator_base_name(func) not in _BUFFER_STATE_VIEW_OPERATORS:
-        return False
-    if not args:
-        return False
-    source = args[0]
+    source = args[0] if args else None
     if not isinstance(source, torch.Tensor):
         return False
     if _is_uninitialized_lazy_tensor(source):

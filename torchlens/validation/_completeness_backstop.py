@@ -212,17 +212,14 @@ def completeness_backstop_counts(trace: "Trace") -> tuple[int, int]:
     except (AttributeError, TypeError):
         pass
 
-    # State-accessor dispatches: the ``aten.detach``/``aten.alias`` a registered
-    # buffer's ``.data`` property getter emits during the ``self.b.data.copy_(x)`` write idiom,
-    # and the same ``.data`` read ``UninitializedParameter.materialize`` makes on a pending
-    # lazy slot when a lazy module first runs inside the captured forward.
+    # State-accessor dispatches: the ``aten.detach``/``aten.alias`` a registered buffer's
+    # ``.data`` getter emits in ``self.b.data.copy_(x)`` or ``UninitializedParameter.materialize``.
     # ``.data`` is a C-level tensor property (not a wrapped torch function), so the detach has
     # NO python-wrapper owner and is counted above as an ``unowned_dispatch`` in
     # ``unowned_gap_dispatch_count``. The write itself (``copy_``) IS captured; only this
     # accessor view is legitimately uncaptured -- a THIRD not-in-captured-count category
     # alongside orphan-pruned dead computation. The witness flags each such event
-    # (``state_view_accessor``: unowned + non-mutating + pure-view + registered buffer or
-    # pending lazy slot only),
+    # (``state_view_accessor``: unowned + non-mutating + pure-view + buffer or lazy slot only),
     # so counting them here is apples-to-apples with the census: it is a strict SUBSET of the
     # exact ``unowned_dispatch`` entries already added to the dispatch census, so crediting it
     # in the backstop exactly offsets its own contribution. A genuine untraced dispatch (a

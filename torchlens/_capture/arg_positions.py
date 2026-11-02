@@ -1606,27 +1606,20 @@ FUNC_ARG_SPECS["gridsample"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input",
 FUNC_ARG_SPECS["cudnngridsampler"] = ArgSpec(positions=(0, 1), tensor_kwargs=("input", "grid"))
 FUNC_ARG_SPECS["cudnnaffinegridgenerator"] = _P0
 
-# affine_grid: (theta, size) — theta is a tensor
+# affine_grid: (theta, size), theta is a tensor; one_hot: (tensor, num_classes)
 FUNC_ARG_SPECS["affinegrid"] = _P0
-
-# one_hot: (tensor, num_classes)
 FUNC_ARG_SPECS["onehot"] = _P0
 
 FUNC_ARG_SPECS["cat"] = ArgSpec(sequence_positions=(0,), tensor_kwargs=("tensors",))
 FUNC_ARG_SPECS["concat"] = FUNC_ARG_SPECS["cat"]
 FUNC_ARG_SPECS["concatenate"] = FUNC_ARG_SPECS["cat"]
 FUNC_ARG_SPECS["stack"] = ArgSpec(sequence_positions=(0,), tensor_kwargs=("tensors",))
-# In-forward ``torch.autograd.grad`` boundary op: ``outputs``, ``inputs`` and
-# ``grad_outputs`` each hold a tensor or a shallow tensor sequence (any length).
+# In-forward autograd boundary ops (autogradbackward's receiver: the leaf's previous grad or None).
 FUNC_ARG_SPECS["autogradgrad"] = ArgSpec(
     positions=(0, 1, 2), tensor_kwargs=("outputs", "inputs", "grad_outputs")
 )
-# In-forward ``torch.autograd.backward`` boundary op: the receiver (the leaf's previous
-# grad, or None), the roots ``tensors`` and ``grad_tensors`` (a tensor or a shallow
-# sequence) and the one written leaf in ``inputs``.
 FUNC_ARG_SPECS["autogradbackward"] = ArgSpec(
-    positions=(0, 1, 2, 3),
-    tensor_kwargs=("accumulate_into", "tensors", "grad_tensors", "inputs"),
+    positions=(0, 1, 2, 3), tensor_kwargs=("accumulate_into", "tensors", "grad_tensors", "inputs")
 )
 FUNC_ARG_SPECS["where"] = ArgSpec(
     positions=(0, 1, 2), tensor_kwargs=("condition", "input", "other")
