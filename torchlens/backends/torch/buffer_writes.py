@@ -13,8 +13,8 @@ from torch import nn
 from ... import _state
 from ..._capture_state_helpers import _is_uninitialized_param
 from ..._ir import BufferWriteEvent
-from ..._utils._torch_compat import sparse_component_tensors, tensor_version_or_none
-from ..._utils.tensor_utils import safe_copy
+from ..._utils._torch_compat import tensor_version_or_none
+from ..._utils.tensor_utils import safe_copy, sparse_component_tensors
 from ._identity_cache import IdentityCache, identity_cached
 from ._storage_overlap import _ranges_overlap, _storage_range
 from ._tl import (

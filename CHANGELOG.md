@@ -416,8 +416,11 @@
 - **capture**: a model with a sparse registered buffer (a `to_sparse()` adjacency fed to
   `torch.sparse.mm`) can be captured again; the buffer-write tracker's whole-storage snapshot
   read `untyped_storage()`, which a sparse tensor does not have, so every capture failed before
-  the forward ran. Sparse buffers are now snapshot through their index and value components
-  (capability flag `HAS_SPARSE_COMPONENT_ACCESS`).
+  the forward ran. Sparse buffers are now snapshot through their index and value components,
+  and the `torch.sparse` tensor ops (`mm`, `addmm`, `sampled_addmm`, `sum`, `softmax`,
+  `log_softmax`, `spdiags`, `spsolve`) are wrapped: torch re-exports them from `torch._C._sparse`
+  into a namespace the function crawl never visited, so `torch.sparse.mm` ran unrecorded and
+  its output refused with `output_attribution_failed`.
 - **errors**: `TraceCaptureError` carries a stable `fields["code"]`: `forward_raised` when the
   model's own code raised, `capture_internal_error` when the innermost attributable frame was
   TorchLens's. `LiveModeLabelError` defaults to `label_selector_not_live`, so a live selector

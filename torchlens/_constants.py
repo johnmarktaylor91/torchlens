@@ -1127,6 +1127,26 @@ IGNORED_FUNCS = [
     ("torch", "sparse_bsc_tensor"),
     ("torch", "sparse_compressed_tensor"),
     ("torch", "_sparse_csr_tensor"),
+    # The ``torch.sparse`` tensor ops. torch re-exports these C builtins
+    # (``torch._C._sparse._sparse_mm`` and kin) into a namespace the overridable
+    # crawl never visits, so ``torch.sparse.mm(adjacency, features)`` ran
+    # unrecorded and its dense result could not be attributed to any op (the
+    # capture refused with ``output_attribution_failed``). Feature-detected:
+    # ``spsolve`` is newer than the 2.1 floor.
+    *(
+        ("torch.sparse", _sparse_op_name)
+        for _sparse_op_name in (
+            "addmm",
+            "log_softmax",
+            "mm",
+            "sampled_addmm",
+            "softmax",
+            "spdiags",
+            "spsolve",
+            "sum",
+        )
+        if hasattr(torch.sparse, _sparse_op_name)
+    ),
     # The MODERN documented window-factory namespace. Only the legacy top-level twins
     # (``hann_window``, ``bartlett_window``, ...) were re-added, so a model using
     # ``torch.signal.windows.hann`` silently recorded its window as an unattributed

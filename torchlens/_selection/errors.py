@@ -76,7 +76,7 @@ class LiveModeLabelError(SiteResolutionError):
         message: str | None = None,
         *,
         code: str = "label_selector_not_live",
-        **fields: object,
+        **fields: Any,
     ) -> None:
         """Initialize a live-label refusal with its stable code.
 
@@ -108,7 +108,7 @@ class SelectorCompositionError(SiteResolutionError):
         *args: object,
         code: str | None = None,
         remedy: str | None = None,
-        **fields: object,
+        **fields: Any,
     ) -> None:
         """Initialize a selector composition refusal.
 

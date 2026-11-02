@@ -19,8 +19,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._constants import ORIG_TORCH_FUNCS
 from torchlens._ir.selector_eval import evaluate
-from torchlens._utils._torch_compat import sparse_component_tensors
+from torchlens._utils.tensor_utils import sparse_component_tensors
 from torchlens.backends.torch.buffer_writes import _whole_storage_uint8
 from torchlens.errors import TraceCaptureError
 from torchlens.intervention.errors import LiveModeLabelError
@@ -151,6 +152,14 @@ def test_sparse_buffer_model_captures() -> None:
         expected = model(x)
     trace = tl.trace(model, [x])
     torch.testing.assert_close(trace[trace.output_layers[0]].out, expected)
+    labels = [layer.layer_label for layer in trace.layers]
+    assert any(label.startswith("mm_") for label in labels), labels
+
+
+def test_torch_sparse_ops_are_in_the_wrap_inventory() -> None:
+    """``torch.sparse`` re-exports C builtins the overridable crawl never visits."""
+    for name in ("mm", "addmm", "sum", "softmax", "log_softmax", "sampled_addmm"):
+        assert ("torch.sparse", name) in ORIG_TORCH_FUNCS, name
 
 
 def test_whole_storage_bytes_cover_sparse_components() -> None:
@@ -167,5 +176,5 @@ def test_sparse_component_tensors_per_layout() -> None:
     assert len(sparse_component_tensors(dense.to_sparse())) == 2
     assert len(sparse_component_tensors(dense.to_sparse_csr())) == 3
     assert len(sparse_component_tensors(dense.to_sparse_csc())) == 3
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(ValueError, match="no known component decomposition"):
         sparse_component_tensors(dense)

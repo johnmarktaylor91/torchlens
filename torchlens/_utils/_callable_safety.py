@@ -157,6 +157,7 @@ _ALLOWED_FORWARD_OP_MODULES: frozenset[str] = frozenset(
         "torch.fft",
         "torch.linalg",
         "torch.special",
+        "torch.sparse",
         "torch.nested",
         "torch._C",
         "torch._C._nn",

@@ -544,9 +544,6 @@ def test_torch_capability_snapshot_contract() -> None:
         # Declined-protocol redispatch skips torch's disabled-handler sentinel,
         # present across the supported range.
         "HAS_DISABLED_TORCH_FUNCTION_IMPL": True,
-        # Sparse buffer snapshots read the index/value component tensors;
-        # the accessors exist across the supported range.
-        "HAS_SPARSE_COMPONENT_ACCESS": True,
         "HAS_TENSOR_SEQUENCE_SLOT_FIX": True,
         # Legacy tensor-constructor capture: CPython type-layout probe.
         "HAS_LEGACY_CONSTRUCTOR_NEW_PATCH": True,
