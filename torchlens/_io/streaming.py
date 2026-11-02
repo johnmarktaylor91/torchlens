@@ -1,32 +1,36 @@
 """Streaming bundle writer used during forward-pass out capture.
 
 This module implements the strict streaming writer behind
-``trace(storage=tl.to_disk(...))``. It writes one safetensors blob
-per saved out into a temporary bundle during the forward pass, then
-finalizes ``manifest.json`` and ``metadata.pkl`` at postprocess time so the
-returned log can stay memory-backed or disk-backed with the same on-disk
-bundle.
+``trace(storage=tl.to_disk(...))``. During the forward pass every saved
+payload is queued as one opaque key (``t<k>``) into the open chunk
+``blobs/<codec>-<nnnn>.safetensors`` of a temporary bundle; a chunk is written
+once it reaches ``format3.payloads.PAYLOAD_CHUNK_BYTES``. Staging closes the
+chunks and digests them; publishing writes the 3.0 envelope (typed JSON record
+tables plus ``manifest.json``) through ``format3.writer``, reloads it once, and
+renames the bundle into place, so the returned log can stay memory-backed or
+disk-backed with the same on-disk bundle. Relabeling a streamed payload edits
+its manifest entry only: the chunk key is opaque and never rewritten.
 """
 
 from __future__ import annotations
 
-import io
-import pickle
+import dataclasses
 import platform
 import threading
+import weakref
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import torch
-from safetensors.torch import save_file
 
 from .. import __version__ as TORCHLENS_VERSION
 from .._state import pause_logging
 from .._utils.hashing import sha256_file
 from . import TLSPEC_VERSION, ArtifactError, refuse_bundle_exists
-from ._canonical_pickle import dump_canonical_metadata
 from ._durability import _restrict_mode, fsync_dir, fsync_tree
+from .format3.payloads import TORCH_CODEC, PayloadStore, host_tensor, tensor_reference
+from .format3.writer import preflight_reload, write_trace_envelope
 from .manifest import Manifest, TensorEntry, _runtime_python_version
 from .paths import _make_tmp_bundle_path, reject_symlink_path
 from .scrub import BlobSpec
@@ -42,7 +46,15 @@ from .tlspec import _TlSpecWriter
 
 PARTIAL_SENTINEL = "PARTIAL"
 REASON_SENTINEL = "REASON.txt"
-_BLOB_TENSOR_KEY = "data"
+
+
+def _weak_reference(value: Any) -> Any:
+    """Return a weak reference to ``value``, or ``None`` when it cannot hold one."""
+
+    try:
+        return weakref.ref(value)
+    except TypeError:
+        return None
 
 
 def next_blob_id(blob_index: int) -> str:
@@ -80,6 +92,7 @@ class BundleStreamWriter:
         strict: bool = True,
         include_custom_attributes: bool = True,
         include_buffer_values: bool = True,
+        payload_per_file: bool = False,
     ) -> None:
         """Create the temp bundle directory used for streaming writes.
 
@@ -92,13 +105,12 @@ class BundleStreamWriter:
             Final bundle directory path.
         strict:
             Streaming bundles are always strict. Passing ``False`` is rejected.
-        include_custom_attributes:
-            Whether harvested module attributes are persisted in the streamed
-            bundle (the Trace.save opt-out, mirrored for streaming -- R62).
-        include_buffer_values:
-            Whether captured pre-forward buffer values are persisted in the
-            streamed bundle (the Trace.save opt-out, mirrored for streaming --
-            R62 buffer extension).
+        include_custom_attributes, include_buffer_values:
+            Whether harvested module attributes and captured pre-forward buffer
+            values are persisted (the Trace.save opt-outs, mirrored -- R62).
+        payload_per_file:
+            Close and digest each payload's chunk as it is written, for readers
+            that consume entries synchronously (the fastlog recorder).
 
         Raises
         ------
@@ -111,6 +123,7 @@ class BundleStreamWriter:
 
         self.include_custom_attributes = include_custom_attributes
         self.include_buffer_values = include_buffer_values
+        self._payload_per_file = payload_per_file
         self.final_path = Path(path)
         reject_symlink_path(self.final_path, context="save target")
         if self.final_path.exists():
@@ -123,34 +136,32 @@ class BundleStreamWriter:
         self._finalized = False
         self._tensor_entries: list[TensorEntry] = []
         self._entries_by_blob_id: dict[str, TensorEntry] = {}
-        # blob_id -> position in ``_tensor_entries`` (r8 R29): ``relabel_blob``
-        # linear-scanned the entry list once per streamed payload, O(B^2)
-        # across a streamed save (~1.2e9 compares at 50k saved ops).
-        self._tensor_entry_indexes: dict[str, int] = {}
-        # Entry structures are worker-mutated when the async engine is active;
-        # every read/write of the entry maps and the id reservation set goes
-        # through this lock.
+        self._tensor_entry_indexes: dict[str, int] = {}  # r8 R29: no O(B^2) relabel scan
+        # Entry maps, tensor references and the id reservation set are
+        # worker-mutated when the async engine is active: guarded by this lock.
         self._entries_lock = threading.Lock()
         self._known_blob_ids: set[str] = set()
+        self._tensor_refs: dict[str, dict[str, Any]] = {}
+        # One chunk store per bundle (one key counter); its own lock because
+        # direct ``write_blob`` calls stay synchronous while the worker runs.
+        self._payload_store = PayloadStore(self.tmp_path)
+        self._store_lock = threading.Lock()
         self._async_engine: AsyncWriteEngine | None = None
-        # WT1 A-IV item 18 (lane A08): streamed bundles enter settlement. The
-        # postprocess step-18 finalize now STAGES the bundle (blobs +
-        # manifest, held scrubbed state) and the tmp->final publish happens
-        # no earlier than settlement, carrying the settled capture-outcome
-        # attestation into metadata.pkl. A capture that settles FAILED never
-        # publishes: the pending writer is aborted (PARTIAL debris).
+        # WT1 A-IV item 18: finalize STAGES the bundle (chunks closed, manifest
+        # base built, scrubbed state held) and the publish, which writes the
+        # record tables with the settled capture outcome, waits for settlement.
+        # A capture that settles FAILED never publishes (PARTIAL debris).
         self._staged_scrubbed_state: dict[str, Any] | None = None
+        self._staged_base_manifest: dict[str, Any] = {}
+        self._staged_payload_policy: dict[str, bool] = {}
+        self._staged_trace: Any = None
 
         try:
             self.tmp_path.parent.mkdir(parents=True, exist_ok=True)
             self.tmp_path.mkdir()
             self.blobs_path.mkdir()
-            # Permission parity with Trace.save (B8-10): mkdir honors the ambient
-            # umask, so under umask 002 the streaming bundle dir and its blobs/
-            # dir were left group-writable/readable while the core bundle
-            # writer tightens them to 0700. The rename at finalize preserves
-            # tmp_path's mode, so tightening here also tightens the published
-            # bundle directory.
+            # Permission parity with Trace.save (B8-10): tighten against the
+            # ambient umask; the publish rename preserves the mode.
             _restrict_mode(self.tmp_path, 0o700)
             _restrict_mode(self.blobs_path, 0o700)
         except OSError as exc:
@@ -254,17 +265,9 @@ class BundleStreamWriter:
             self.abort(reason)
             raise ArtifactError(reason) from exc
         except BaseException as exc:
-            # Safety-net catch-all mirroring bundle.py's ``save()`` handler
-            # (round-8 F3): a hand-enumerated except clause can always miss
-            # the next not-yet-seen failure shape (e.g. a bare ``KeyError``
-            # from ``safetensors.torch.save_file()`` for an allow-listed-but-
-            # actually-unwritable dtype, cert round 8 BLOCKER) or a
-            # KeyboardInterrupt/SystemExit/GeneratorExit unwinding mid-write.
-            # This guarantees the ``.tmp`` dir is always marked PARTIAL --
-            # and thus sweepable by ``cleanup_tmp()`` -- for any failure,
-            # known or not, while re-raising non-``Exception``
-            # ``BaseException``s unwrapped so control-flow semantics are
-            # preserved.
+            # Safety net (round-8 F3): any other failure (a bare KeyError from
+            # safetensors, a SystemExit mid-write) marks the ``.tmp`` dir PARTIAL;
+            # non-Exception BaseExceptions re-raise unwrapped.
             reason = f"Failed to write streaming blob_id={blob_id} for {label}: {exc}"
             self.abort(reason)
             if isinstance(exc, Exception):
@@ -353,51 +356,6 @@ class BundleStreamWriter:
             self.abort(reason)
             raise ArtifactError(reason) from (exc.__cause__ or exc)
 
-    def finalize(
-        self,
-        scrubbed_state: dict[str, Any],
-        blob_specs: list[BlobSpec],
-        unsupported: list[dict[str, str]],
-        *,
-        trace: Any,
-    ) -> Path:
-        """Finish the bundle: stage everything, then publish immediately.
-
-        Post-settlement callers only (the deferred grad-streaming tail): the
-        settled capture-outcome attestation is read off ``trace`` and
-        persisted. Pre-settlement finalization goes through
-        :meth:`stage_for_settlement` + :meth:`publish_staged` so the
-        tmp->final publish happens no earlier than settlement (WT1 A-IV
-        item 18).
-
-        Parameters
-        ----------
-        scrubbed_state:
-            Portable scrubbed metadata state.
-        blob_specs:
-            Remaining blob specs that were not already streamed during the pass.
-        unsupported:
-            Unsupported tensor records for the manifest.
-        trace:
-            Source ``Trace`` being streamed to disk.
-
-        Returns
-        -------
-        Path
-            Final bundle directory path.
-
-        Raises
-        ------
-        ArtifactError
-            If finalization fails.
-        """
-
-        from .._capture.outcome import outcome_for
-
-        self.stage_for_settlement(scrubbed_state, blob_specs, unsupported, trace=trace)
-        settled = outcome_for(trace)
-        return self.publish_staged(None if settled is None else settled.to_payload())
-
     def stage_for_settlement(
         self,
         scrubbed_state: dict[str, Any],
@@ -405,14 +363,17 @@ class BundleStreamWriter:
         unsupported: list[dict[str, str]],
         *,
         trace: Any,
+        payload_policy: dict[str, bool] | None = None,
     ) -> Path:
-        """Write remaining blobs and the manifest; hold the state for publish.
+        """Write remaining payloads, close the chunks, build the manifest; hold the state.
 
         The bundle stays in its temp directory: :meth:`publish_staged` writes
-        ``metadata.pkl`` (with the settled capture-outcome attestation
-        injected), fsyncs, and renames. A capture failure between staging and
-        settlement aborts the writer instead, so a FAILED capture never
-        leaves a publishable artifact (WT1 A-IV item 18).
+        the record tables (with the settled capture-outcome attestation
+        injected) and the 3.0 manifest, reloads them once, fsyncs, and
+        renames. A capture failure between staging and settlement aborts the
+        writer instead, so a FAILED capture never leaves a publishable
+        artifact (WT1 A-IV item 18). Until the publish, ``manifest.json``
+        holds the manifest base (no record tables yet).
 
         Parameters
         ----------
@@ -423,11 +384,13 @@ class BundleStreamWriter:
         unsupported:
             Unsupported tensor records for the manifest.
         trace:
-            Source ``Trace`` being streamed to disk. Used to write the same
-            unified ``.tlspec`` manifest fields (``kind``, ``model_signature``,
-            ``sites``, ``body_index``, ...) that ``trace.save()``
-            write, so streaming bundles are detected as ``"v2.0_unified"`` and
-            go through the same ``validate_tlspec()`` schema validation.
+            Source ``Trace`` being streamed to disk; feeds the same unified
+            manifest fields (``kind``, ``model_signature``, ``sites``, ...)
+            that ``trace.save()`` writes.
+        payload_policy:
+            Include flags the scrub used (``include_outs``, ``include_grads``,
+            ...); ``None`` derives them from the written payloads and the
+            scrubbed options.
 
         Returns
         -------
@@ -445,46 +408,60 @@ class BundleStreamWriter:
         try:
             for blob_id, tensor, kind, label in blob_specs:
                 if blob_id in self._entries_by_blob_id:
-                    # Every streamed blob a scrubbed ref reuses was filtered out of
-                    # ``blob_specs``, and scrub ids start past the stream's ids, so a
-                    # remaining spec with an already-written id is a collision: the
-                    # scrubbed ref would silently resolve to ANOTHER op's payload.
+                    # Streamed blobs a scrubbed ref reuses were filtered out and scrub
+                    # ids start past the stream's ids, so an already-written id here is
+                    # a collision: the ref would resolve to ANOTHER op's payload.
                     existing = self._entries_by_blob_id[blob_id]
                     raise ArtifactError(
                         f"Streaming bundle blob id {blob_id} for {label!r} collides with "
                         f"the blob already streamed for {existing.label!r}."
                     )
                 self.write_blob(blob_id, tensor, kind=kind, label=label)
-
+            self._seal_payload_chunks()
+            self._staged_payload_policy = self._resolve_payload_policy(
+                scrubbed_state, payload_policy
+            )
             self._write_manifest(scrubbed_state, unsupported, trace)
         except ArtifactError:
             raise
-        except (OSError, TypeError, ValueError, pickle.PickleError) as exc:
-            # See torchlens/_io/bundle.py's ``save()`` handler: ``TypeError``
-            # is included alongside ``pickle.PickleError`` because
-            # ``pickle.dump()`` raises a bare ``TypeError`` (not the
-            # ``PickleError`` subclass) for many live-resource objects.
+        except (OSError, TypeError, ValueError) as exc:
             reason = f"Failed to finalize streaming bundle at {self.tmp_path}: {exc}"
             self.abort(reason)
             raise ArtifactError(reason) from exc
         except BaseException as exc:
-            # Safety-net catch-all closing the same bug class as
-            # bundle.py's ``save()`` (round-8 F3): a hand-enumerated except
-            # tuple can always miss the next not-yet-discovered exception
-            # shape, or a KeyboardInterrupt/SystemExit/GeneratorExit
-            # unwinding mid-finalize.
-            # Guarantees the ``.tmp`` dir is always marked PARTIAL -- and
-            # thus sweepable by ``cleanup_tmp()`` -- for any failure, while
-            # re-raising non-``Exception`` ``BaseException``s unwrapped so
-            # KeyboardInterrupt/SystemExit/GeneratorExit control flow is
-            # preserved.
+            # Safety net (round-8 F3): any failure, known or not, marks the
+            # ``.tmp`` dir PARTIAL (sweepable by ``cleanup_tmp()``); non-Exception
+            # BaseExceptions re-raise unwrapped to keep control flow.
             reason = f"Failed to finalize streaming bundle at {self.tmp_path}: {exc}"
             self.abort(reason)
             if isinstance(exc, Exception):
                 raise ArtifactError(reason) from exc
             raise
         self._staged_scrubbed_state = scrubbed_state
+        self._staged_trace = _weak_reference(trace)
         return self.final_path
+
+    def _resolve_payload_policy(
+        self, scrubbed_state: dict[str, Any], payload_policy: dict[str, bool] | None
+    ) -> dict[str, bool]:
+        """Return the manifest payload policy of this bundle (contract flag set)."""
+
+        if payload_policy is None:
+            with self._entries_lock:
+                has_grads = any(entry.kind == "grad" for entry in self._tensor_entries)
+            payload_policy = {
+                "include_grads": has_grads,
+                "include_saved_args": scrubbed_state.get("_options_save_args") is True,
+                "include_rng_states": scrubbed_state.get("_options_save_rng") is True,
+            }
+        flags = ("include_grads", "include_saved_args", "include_rng_states")
+        return {
+            "include_outs": bool(payload_policy.get("include_outs", True)),
+            **{flag: bool(payload_policy.get(flag, False)) for flag in flags},
+            "include_buffer_values": bool(self.include_buffer_values),
+            "include_custom_attributes": bool(self.include_custom_attributes),
+            "structure_only": scrubbed_state.get("_options_structure_only") is True,
+        }
 
     @property
     def staged_for_settlement(self) -> bool:
@@ -497,33 +474,27 @@ class BundleStreamWriter:
         scrubbed_state: dict[str, Any],
         outcome_payload: dict[str, Any] | None,
     ) -> None:
-        """Write ``metadata.pkl`` with the settled outcome attestation injected."""
+        """Write the record tables and 3.0 manifest with the settled outcome; reload once."""
 
         try:
             scrubbed_state["_capture_outcome"] = outcome_payload
-            from ._portability_preflight import preflight_metadata_portability
-            from .bundle import _RenameAwareUnpickler
-
-            # B3R4-R21-2: canonical container bytes (set/frozenset members
-            # sorted); persisted metadata must not vary with PYTHONHASHSEED.
-            # Dumped once through the ``dump_canonical_metadata`` seam.
-            metadata_buffer = io.BytesIO()
-            dump_canonical_metadata(scrubbed_state, metadata_buffer)
-            metadata_bytes = metadata_buffer.getvalue()
-            # Write/read symmetry (AUD-CODE 2.20): dry-run exactly these bytes
-            # through the loader's restricted unpickler before writing.
-            preflight_metadata_portability(
-                scrubbed_state,
-                unpickler_factory=_RenameAwareUnpickler,
-                bundle_path=self.tmp_path,
-                data=metadata_bytes,
+            write_trace_envelope(
+                self.tmp_path,
+                base_manifest=self._staged_base_manifest,
+                scrubbed_state=scrubbed_state,
+                tensor_refs=self._tensor_refs,
+                codecs=self._payload_store.codecs,
+                save_level="portable",
+                payload_policy=self._staged_payload_policy,
             )
-            with (self.tmp_path / "metadata.pkl").open("wb") as handle:
-                handle.write(metadata_bytes)
-            _restrict_mode(self.tmp_path / "metadata.pkl", 0o600)
+            for path in sorted(self.tmp_path.rglob("*")):
+                _restrict_mode(path, 0o700 if path.is_dir() else 0o600)
+            # Write/read symmetry (late.21): the staged directory reads back
+            # through one JSON parse plus the typed decode before it publishes.
+            preflight_reload(self.tmp_path)
         except ArtifactError:
             raise
-        except (OSError, TypeError, ValueError, pickle.PickleError) as exc:
+        except (OSError, TypeError, ValueError) as exc:
             reason = f"Failed to finalize streaming bundle at {self.tmp_path}: {exc}"
             self.abort(reason)
             raise ArtifactError(reason) from exc
@@ -533,6 +504,23 @@ class BundleStreamWriter:
             if isinstance(exc, Exception):
                 raise ArtifactError(reason) from exc
             raise
+
+    def _refresh_trace_manifest_digest(self) -> None:
+        """Point the staged trace's manifest digest at the published manifest.
+
+        Staging may hand the trace a digest of the manifest base before a
+        deferred publish rewrites ``manifest.json`` with the record tables.
+        """
+
+        trace = self._staged_trace() if self._staged_trace is not None else None
+        self._staged_trace = None
+        if trace is None or getattr(trace, "_source_bundle_path", None) != self.final_path:
+            return
+        setattr(
+            trace,
+            "_source_bundle_manifest_sha256",
+            sha256_file(self.final_path / "manifest.json"),
+        )
 
     def publish_staged(self, outcome_payload: dict[str, Any] | None) -> Path:
         """Publish the staged bundle with its settled capture-outcome attestation.
@@ -577,11 +565,9 @@ class BundleStreamWriter:
         finally:
             self._staged_scrubbed_state = None
 
-        # Crash-durability before publish: fsync every written blob/sidecar and
-        # the staged directories so a power/OS crash after the rename below
-        # cannot publish a final-named bundle holding zero-length/partial files
-        # with no PARTIAL sentinel (cleanup_tmp would never sweep it). Mirrors
-        # the Trace.save writer (_io/bundle.py:568-586).
+        # Crash-durability before publish: fsync every written file and the
+        # staged directories so a crash after the rename cannot publish a
+        # final-named bundle holding partial files with no PARTIAL sentinel.
         try:
             fsync_tree(self.tmp_path)
         except OSError as exc:
@@ -589,13 +575,8 @@ class BundleStreamWriter:
             self.abort(reason)
             raise ArtifactError(reason) from exc
 
-        # Re-check target absence at finalize, not just at __init__ (R59 TOCTOU):
-        # a streaming writer never overwrites, but a concurrent writer could have
-        # created ``final_path`` after the start-of-stream check. A bare rename
-        # would then replace an empty concurrent target or surface a confusing
-        # ENOTEMPTY; refuse it cleanly instead. (The narrow residual window
-        # between this check and the rename cannot be closed without an atomic
-        # exclusive-directory create, matching the other writers.)
+        # Re-check target absence at publish (R59 TOCTOU): a concurrent writer
+        # could have created ``final_path`` after the start-of-stream check.
         if self.final_path.exists():
             reason = f"Bundle path already exists: {self.final_path}"
             self.abort(reason)
@@ -611,6 +592,7 @@ class BundleStreamWriter:
 
         self._closed = True
         self._finalized = True
+        self._refresh_trace_manifest_digest()
         return self.final_path
 
     def abort(self, reason: str) -> None:
@@ -636,6 +618,9 @@ class BundleStreamWriter:
     def relabel_blob(self, blob_id: str, label: str) -> None:
         """Update the manifest label for an already-written blob.
 
+        The chunk key is opaque, so a relabel edits the entry only; the
+        record cell that names the payload carries the final label.
+
         Parameters
         ----------
         blob_id:
@@ -649,27 +634,7 @@ class BundleStreamWriter:
             entry = self._entries_by_blob_id.get(blob_id)
         if entry is None:
             return
-        updated_entry = TensorEntry(
-            blob_id=entry.blob_id,
-            kind=entry.kind,
-            label=label,
-            relative_path=entry.relative_path,
-            backend=entry.backend,
-            shape=entry.shape,
-            dtype=entry.dtype,
-            device_at_save=entry.device_at_save,
-            layout=entry.layout,
-            bytes=entry.bytes,
-            sha256=entry.sha256,
-            requires_grad=entry.requires_grad,
-            logical_backend=entry.logical_backend,
-            codec=entry.codec,
-            logical_dtype=entry.logical_dtype,
-            logical_device=entry.logical_device,
-            transport_backend=entry.transport_backend,
-            transport_dtype=entry.transport_dtype,
-            codec_metadata=entry.codec_metadata,
-        )
+        updated_entry = dataclasses.replace(entry, label=label)
         with self._entries_lock:
             self._entries_by_blob_id[blob_id] = updated_entry
             entry_index = self._tensor_entry_indexes.get(blob_id)
@@ -701,6 +666,43 @@ class BundleStreamWriter:
                 raise ArtifactError(f"Streaming bundle is missing blob_id={blob_id}.")
             return self._entries_by_blob_id[blob_id]
 
+    def get_tensor_reference(self, blob_id: str) -> dict[str, Any]:
+        """Return the tensor reference fields (chunk ``blob``, ``key``, ...) of one blob id.
+
+        Parameters
+        ----------
+        blob_id:
+            Blob identifier to look up.
+
+        Returns
+        -------
+        dict[str, Any]
+            A copy of the reference the record tables carry for this payload.
+
+        Raises
+        ------
+        ArtifactError
+            If the blob id is unknown (raised by :meth:`get_entry`).
+        """
+
+        self.get_entry(blob_id)
+        with self._entries_lock:
+            return dict(self._tensor_refs[blob_id])
+
+    def _seal_payload_chunks(self) -> None:
+        """Close every open chunk and stamp each entry with its chunk's digest."""
+
+        with self._store_lock:
+            self._payload_store.close()
+        digests: dict[str, str] = {}
+        with self._entries_lock:
+            for index, entry in enumerate(self._tensor_entries):
+                if entry.relative_path not in digests:
+                    digests[entry.relative_path] = sha256_file(self.tmp_path / entry.relative_path)
+                sealed = dataclasses.replace(entry, sha256=digests[entry.relative_path])
+                self._tensor_entries[index] = sealed
+                self._entries_by_blob_id[entry.blob_id] = sealed
+
     def _write_tensor_blob(
         self,
         *,
@@ -709,19 +711,11 @@ class BundleStreamWriter:
         kind: str,
         label: str,
     ) -> TensorEntry:
-        """Write one supported tensor blob and return its manifest entry."""
+        """Queue one supported tensor into the open chunk and return its manifest entry."""
 
-        with pause_logging():
-            contiguous_tensor = tensor.resolve_conj().resolve_neg().contiguous()
-            if contiguous_tensor.device.type != "cpu":
-                contiguous_tensor = contiguous_tensor.cpu()
         return self._write_prepared_blob(
             blob_id=blob_id,
-            prepared=_PreparedPayload(
-                payload=contiguous_tensor,
-                device_at_save=str(tensor.device),
-                requires_grad=bool(tensor.requires_grad),
-            ),
+            prepared=self._prepare_deferred_snapshot(tensor),
             kind=kind,
             label=label,
         )
@@ -734,11 +728,12 @@ class BundleStreamWriter:
         kind: str,
         label: str,
     ) -> TensorEntry:
-        """Serialize one prepared payload to ``blobs/`` and build its entry.
+        """Queue one prepared payload into the open chunk and build its entry.
 
-        Worker-thread safe by construction: a CPU-contiguous payload reaches
-        safetensors' raw-pointer serialization without invoking any wrapped
-        torch function, and the sha256 hash is pure hashlib.
+        Worker-thread safe: the payload is a private CPU-contiguous tensor, so
+        queueing and writing it run no wrapped torch function. ``sha256`` is the
+        chunk digest, set at staging (:meth:`_seal_payload_chunks`) or at once
+        when each payload gets its own file.
 
         Parameters
         ----------
@@ -757,22 +752,27 @@ class BundleStreamWriter:
             Recorded manifest entry.
         """
 
-        payload = prepared.payload
-        relative_path = Path("blobs") / f"{blob_id}.safetensors"
-        blob_path = self.tmp_path / relative_path
-        save_file({_BLOB_TENSOR_KEY: payload}, str(blob_path))
+        payload, reference = prepared.payload, prepared.reference
+        digest = ""
+        with self._store_lock:
+            blob, key = self._payload_store.submit(payload, codec=TORCH_CODEC)
+            if self._payload_per_file:
+                self._payload_store.writer(TORCH_CODEC).flush()
+                digest = sha256_file(self.tmp_path / blob)
+        with self._entries_lock:
+            self._tensor_refs[blob_id] = {"blob": blob, "key": key, **reference}
         return TensorEntry(
             blob_id=blob_id,
             kind=kind,
             label=label,
-            relative_path=relative_path.as_posix(),
+            relative_path=blob,
             backend="safetensors",
-            shape=[int(dim) for dim in payload.shape],
-            dtype=str(payload.dtype).replace("torch.", ""),
+            shape=list(reference["shape"]),  # the origin tensor's (complex stays complex)
+            dtype=reference["dtype"],
             device_at_save=prepared.device_at_save,
             layout=str(payload.layout).replace("torch.", ""),
             bytes=int(payload.numel() * payload.element_size()),
-            sha256=sha256_file(blob_path),
+            sha256=digest,
             requires_grad=prepared.requires_grad,
         )
 
@@ -784,8 +784,9 @@ class BundleStreamWriter:
         in-place mutation of the source tensor (or of storage it aliases)
         must never reach the artifact. Whenever the resolve/contiguous chain
         made no copy, the result still aliases the caller's storage and is
-        cloned; non-CPU payloads move to CPU here so the worker never runs a
-        wrapped torch op.
+        cloned (``payloads.host_tensor``); non-CPU payloads move to CPU here
+        so the worker never runs a wrapped torch op. Both write paths use it:
+        a queued chunk holds the payload until the chunk is written.
 
         Parameters
         ----------
@@ -800,15 +801,13 @@ class BundleStreamWriter:
         """
 
         with pause_logging():
-            snapshot = tensor.resolve_conj().resolve_neg().contiguous()
-            if snapshot.device.type != "cpu":
-                snapshot = snapshot.cpu()
-            elif snapshot is tensor:
-                snapshot = snapshot.clone()
+            snapshot = host_tensor(tensor)
+            reference = tensor_reference(tensor, blob=None, key=None)
         return _PreparedPayload(
             payload=snapshot,
             device_at_save=str(tensor.device),
             requires_grad=bool(tensor.requires_grad),
+            reference=reference,
         )
 
     def _validate_blob_submission(
@@ -928,7 +927,11 @@ class BundleStreamWriter:
         unsupported: list[dict[str, str]],
         trace: Any,
     ) -> None:
-        """Build the final manifest for the streamed bundle and write it as ``manifest.json``."""
+        """Build the manifest base of the streamed bundle; hold it and write ``manifest.json``.
+
+        The publish adds the 3.0 envelope fields (records, files, payload
+        index, policy) on top of this base.
+        """
 
         tensor_entries = list(self._tensor_entries)
         n_out_blobs = sum(1 for entry in tensor_entries if entry.kind == "out")
@@ -936,11 +939,8 @@ class BundleStreamWriter:
         n_auxiliary_blobs = len(tensor_entries) - n_out_blobs - n_grad_blobs
         layer_list = scrubbed_state.get("_layer_list", [])
         n_layers = len(layer_list) if isinstance(layer_list, list) else 0
-        # Disclose the harvested module-attribute channel (R62): the documented invariant is
-        # that EVERY save writes a custom_attributes_disclosure entry, and the streaming path
-        # honors the same opt-out and emits the same embedding warning as Trace.save (the
-        # reopened hf_token class: a canary token used to ship in the streamed bundle with
-        # zero warnings and no way to withhold it).
+        # Disclose the harvested module-attribute and buffer channels (R62): every save
+        # writes both disclosures and honors the same opt-outs and warnings as Trace.save.
         from .bundle import (
             _buffer_values_disclosure,
             _custom_attributes_disclosure,
@@ -973,12 +973,12 @@ class BundleStreamWriter:
             custom_attributes_disclosure=disclosure,
             buffer_values_disclosure=buffer_disclosure,
         )
-        _TlSpecWriter.write_trace_manifest(
-            path=self.tmp_path / "manifest.json",
+        self._staged_base_manifest = _TlSpecWriter.build_trace_manifest(
             trace=trace,
             legacy_manifest=legacy_manifest,
             save_level="portable",
         )
+        _TlSpecWriter.write_json(self.tmp_path / "manifest.json", self._staged_base_manifest)
         _restrict_mode(self.tmp_path / "manifest.json", 0o600)
 
     def _ensure_writable(self) -> None:

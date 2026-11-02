@@ -1540,9 +1540,8 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
     from .._capture.outcome import outcome_for
     from ..intervention.injection import refuse_injection_logged_stream_finalize
 
-    # F44: the streamed writer stages its own bundle and never passes the
-    # analysis save door that appends the injected family; refusing here
-    # keeps a streamed artifact from silently dropping recorded computation.
+    # F44: the streamed writer never passes the analysis save door that appends the
+    # injected family; refusing keeps the artifact from dropping recorded computation.
     refuse_injection_logged_stream_finalize(self)
     try:
         scrubbed_state, blob_specs, unsupported_tensor_records = _scrub_streamed_trace(self, writer)
@@ -1554,6 +1553,7 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
             blob_specs=blob_specs,
             unsupported=unsupported_tensor_records,
             trace=self,
+            payload_policy=_streamed_payload_flags(self, writer),
         )
         settled = outcome_for(self)
         if settled is not None:
@@ -1578,6 +1578,19 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
     self._defer_streaming_bundle_finalization = False
 
 
+def _streamed_payload_flags(self: "Trace", writer: BundleStreamWriter) -> dict[str, Any]:
+    """Return the include flags a streamed save scrubs with (and records as its policy)."""
+
+    return {
+        "include_outs": True,
+        "include_grads": _has_retained_gradient_payloads(self),
+        "include_saved_args": self._options_save_args,
+        "include_rng_states": self._options_save_rng,
+        "include_custom_attributes": getattr(writer, "include_custom_attributes", True),
+        "include_buffer_values": getattr(writer, "include_buffer_values", True),
+    }
+
+
 def _scrub_streamed_trace(
     self: "Trace", writer: BundleStreamWriter
 ) -> tuple[dict[str, Any], list[BlobSpec], list[dict[str, str]]]:
@@ -1600,12 +1613,7 @@ def _scrub_streamed_trace(
 
     return scrub_for_save(
         self,
-        include_outs=True,
-        include_grads=_has_retained_gradient_payloads(self),
-        include_saved_args=self._options_save_args,
-        include_rng_states=self._options_save_rng,
-        include_custom_attributes=getattr(writer, "include_custom_attributes", True),
-        include_buffer_values=getattr(writer, "include_buffer_values", True),
+        **_streamed_payload_flags(self, writer),
         # Scrub ids start past every id the capture streamed: a tensor field with
         # no streamed blob (a synthetic output row, an orphan payload) otherwise
         # takes an id the stream already wrote once an op streamed during capture
@@ -1677,10 +1685,8 @@ def _reuse_streamed_blob_ids(
         raise ArtifactError(
             "Streaming finalize expected scrubbed_state['_layer_list'] to be a list."
         )
-    # The scrubbed layers are a 1:1 scrub of trace._layer_list. If they ever
-    # diverge, pairing them positionally would silently finalize only the
-    # shorter prefix -- writing a bundle that looks complete but is missing
-    # blobs for every layer past the truncation point.
+    # The scrubbed layers are a 1:1 scrub of trace._layer_list; pairing diverged lists
+    # positionally would silently drop the blobs of every layer past the shorter one.
     if len(scrubbed_layers) != len(trace._layer_list):
         raise ArtifactError(
             "Streaming finalize expected one scrubbed layer per live layer, got "
@@ -1689,12 +1695,7 @@ def _reuse_streamed_blob_ids(
 
     skipped_blob_ids: set[str] = set()
     for live_layer, scrubbed_layer in zip(trace._layer_list, scrubbed_layers, strict=True):
-        # One lazy full-schema snapshot per layer (r8 R29): the old loop
-        # rebuilt the ~200-300-field portable state dict on EVERY field
-        # iteration and BEFORE the pending short-circuit, so every layer of
-        # every streamed save paid 4 full dict builds to read one key. Each
-        # field key is read once and the four keys are distinct, so the
-        # snapshot cannot go stale across this layer's own setattrs.
+        # One lazy snapshot per layer (r8 R29); the four keys are distinct, so it never goes stale.
         scrubbed_items: dict[str, Any] | None = None
         for tensor_field, pending_field in (
             ("out", "_pending_blob_id"),
@@ -1800,10 +1801,8 @@ def _attach_streamed_tensor_refs(
         raise ArtifactError(
             "Streaming finalize expected scrubbed_state['_layer_list'] to be a list."
         )
-    # The scrubbed layers are a 1:1 scrub of trace._layer_list. If they ever
-    # diverge, pairing them positionally would silently finalize only the
-    # shorter prefix -- writing a bundle that looks complete but is missing
-    # blobs for every layer past the truncation point.
+    # The scrubbed layers are a 1:1 scrub of trace._layer_list; pairing diverged lists
+    # positionally would silently drop the blobs of every layer past the shorter one.
     if len(scrubbed_layers) != len(trace._layer_list):
         raise ArtifactError(
             "Streaming finalize expected one scrubbed layer per live layer, got "
@@ -1831,6 +1830,7 @@ def _attach_streamed_tensor_refs(
                     relative_path=manifest_entry.relative_path,
                     kind=cast(Literal["out", "grad"], kind),
                     expected_sha256=manifest_entry.sha256,
+                    key=writer.get_tensor_reference(tensor_blob.blob_id)["key"],
                 ),
             )
 

@@ -109,6 +109,9 @@ def test_streaming_writes_blobs_before_postprocess(
     when postprocess begins (they land by the finalize drain barrier).
     """
 
+    # A one-byte chunk cap closes each payload's chunk as the next one arrives,
+    # so chunk files exist on disk before postprocess starts.
+    monkeypatch.setenv("TORCHLENS_PAYLOAD_CHUNK_BYTES", "1")
     bundle_path = tmp_path / "stream_bundle.tl"
     observed: dict[str, object] = {}
     original_add_output_layers = graph_traversal_module._add_output_layers
@@ -264,16 +267,16 @@ def test_streaming_is_always_strict_for_sparse_tensors(tmp_path: Path) -> None:
 def test_streaming_finalize_baseexception_marks_partial_and_is_sweepable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A BaseException-only failure mid-``finalize()`` still leaves a sweepable ``.tmp`` dir.
+    """A BaseException-only failure while writing the envelope leaves a sweepable ``.tmp`` dir.
 
     Regression test for a gap left by round-8 F3: ``bundle.py``'s ``save()``
     got an ``except BaseException`` safety net (closing a bug class where a
     not-yet-enumerated exception shape mid-write left the ``.tmp`` bundle
     dir un-marked and un-sweepable), but the sibling streaming writer,
-    ``BundleStreamWriter.finalize()``, never received the same net -- it
-    only caught ``(OSError, TypeError, ValueError, pickle.PickleError)``.
-    A ``KeyboardInterrupt``/``SystemExit``/``GeneratorExit`` raised mid-
-    ``pickle.dump()`` inside ``finalize()`` is not an ``Exception`` subclass,
+    the streaming finalization, never received the same net -- it only
+    caught a narrow tuple of ``Exception`` subclasses. A
+    ``KeyboardInterrupt``/``SystemExit``/``GeneratorExit`` raised while the
+    records are written is not an ``Exception`` subclass,
     so it is not caught by that narrow tuple, and (before this fix) it also
     was not caught by ``user_funcs.py``'s outer ``except Exception`` guard --
     it propagated all the way out of ``tl.trace()`` uncaught, correctly, but
@@ -292,10 +295,8 @@ def test_streaming_finalize_baseexception_marks_partial_and_is_sweepable(
     def _raise_keyboard_interrupt(*args: Any, **kwargs: Any) -> None:
         raise KeyboardInterrupt
 
-    # ``finalize()`` writes metadata.pkl through ``dump_canonical_metadata()``
-    # (B3R4-R21-2 canonical container bytes), driving a ``pickle._Pickler``
-    # subclass -- patching bare ``pickle.dump`` would no longer intercept it.
-    monkeypatch.setattr(streaming_module, "dump_canonical_metadata", _raise_keyboard_interrupt)
+    # Publication writes the 3.0 records and manifest through ``write_trace_envelope``.
+    monkeypatch.setattr(streaming_module, "write_trace_envelope", _raise_keyboard_interrupt)
 
     with pytest.raises(KeyboardInterrupt):
         tl.trace(
@@ -359,9 +360,9 @@ def test_streaming_write_blob_baseexception_marks_partial_and_is_sweepable(
 ) -> None:
     """A BaseException-only failure mid-``write_blob()`` also leaves a sweepable ``.tmp`` dir.
 
-    Sibling to the ``finalize()`` regression test above:
+    Sibling to the envelope-write regression test above:
     ``BundleStreamWriter.write_blob()`` only wrapped ``_write_tensor_blob()``
-    (which calls ``safetensors.torch.save_file()`` directly -- the same call
+    (which once called ``safetensors.torch.save_file()`` directly -- the same call
     site whose raw ``KeyError`` for ``complex128`` was the round-8 BLOCKER in
     the non-streaming path) in a narrow ``except OSError``. A
     ``SystemExit`` raised mid-write previously propagated out of
@@ -585,7 +586,13 @@ def test_streaming_bundle_permissions_are_tight(tmp_path: Path) -> None:
     finally:
         os.umask(old)
 
-    for rel in [Path("."), Path("blobs"), Path("manifest.json"), Path("metadata.pkl")]:
+    for rel in [
+        Path("."),
+        Path("blobs"),
+        Path("records"),
+        Path("manifest.json"),
+        Path("records/trace.json"),
+    ]:
         target = bundle_path / rel
         mode = stat.S_IMODE(target.stat().st_mode)
         assert not (mode & stat.S_IWGRP), f"{rel} group-writable: {oct(mode)}"
