@@ -25,7 +25,7 @@ def test_self_referencing_value_refuses_typed() -> None:
     loop.append(loop)
     with pytest.raises(ArtifactError, match="self-referencing") as caught:
         ValueEncoder().encode(loop, "trace[0].annotations")
-    assert caught.value.code == "metadata_value_unportable"
+    assert caught.value.fields["code"] == "metadata_value_unportable"
 
 
 def test_unknown_payload_codec_refuses_typed(tmp_path: Path) -> None:
@@ -33,7 +33,7 @@ def test_unknown_payload_codec_refuses_typed(tmp_path: Path) -> None:
 
     with pytest.raises(ArtifactError, match="Unknown payload codec") as caught:
         ChunkWriter(tmp_path, codec="pickle_v0")
-    assert caught.value.code == "metadata_value_unportable"
+    assert caught.value.fields["code"] == "metadata_value_unportable"
     assert not any(tmp_path.iterdir())
 
 
