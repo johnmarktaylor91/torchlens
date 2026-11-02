@@ -269,7 +269,9 @@ def test_classics_smoke_model_records_and_validates() -> None:
     trace = tl.trace(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(aten_ops=True, layers_to_save="all"),
+        # save_args keeps the replay arguments; without it the per-op replay
+        # reports the whole model as a region it cannot replay, switch or not.
+        capture=tl.options.CaptureOptions(aten_ops=True, layers_to_save="all", save_args=True),
     )
     assert trace.has_aten_ops is True
     assert trace.aten_ops
