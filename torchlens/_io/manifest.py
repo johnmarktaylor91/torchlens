@@ -124,6 +124,9 @@ class TensorEntry:
         Optional physical transport dtype string.
     codec_metadata:
         Optional best-effort JSON-ready codec metadata.
+    key:
+        Key of the tensor inside a packed safetensors chunk (3.0 saved format,
+        ``blobs/<codec>-<nnnn>.safetensors``); ``None`` for a one-tensor blob.
     """
 
     blob_id: str
@@ -145,6 +148,7 @@ class TensorEntry:
     transport_backend: str | None = None
     transport_dtype: str | None = None
     codec_metadata: dict[str, Any] | None = None
+    key: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> TensorEntry:
@@ -210,6 +214,7 @@ class TensorEntry:
                 "logical_device",
                 "transport_backend",
                 "transport_dtype",
+                "key",
             )
         }
         codec_metadata = data.get("codec_metadata")

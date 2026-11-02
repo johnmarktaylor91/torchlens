@@ -38,16 +38,17 @@ faster (section 12). About 16,450 lines of `torchlens/_io/` leave or shrink to a
 
 ## 1. The layer
 
-One package, `torchlens/_io/format3/`. Eight modules plus `__init__`, every one under the
-800-line file cap (`scripts/checks/file_cap.py`, no new allowlist row). Eight is the smallest count that keeps each under the cap and gives the three
+One package, `torchlens/_io/format3/`. Nine modules plus `__init__`, every one under the
+800-line file cap (`scripts/checks/file_cap.py`, no new allowlist row). Nine is the smallest count that keeps each under the cap and gives the three
 build streams disjoint write territories (writer: `writer.py`, `payloads.py`, `values.py`,
-`schema.py`; reader: `reader.py`, `validate.py`; runnable: `runnable.py`).
+`schema.py`; reader: `decode.py`, `reader.py`, `validate.py`; runnable: `runnable.py`).
 
 | Module | Holds | Budget (lines) | Stream |
 | --- | --- | ---: | --- |
 | `contract.py` | constants (exists, contract stream): envelope names, tags, codecs, refusal table | 250 | contract (landed) |
 | `schema.py` | per-record schema derived at import from `STORAGE_BINDINGS` (`_data_classes/_schema_bindings.py`), field annotations and the writer contract's `component_specs`; nested-family sub-schemas (section 9); schema digest | 600 | writer |
 | `values.py` | the typed-value codec: Python value to tagged JSON and back, both directions in one module so tags stay symmetric; dtype table; disclosure builder | 450 | writer |
+| `decode.py` | the decoder half of the value codec: tagged JSON back to Python values through the closed vocabulary, field and name checks per tag, `record` construction; split from `values.py` because the encoder and its tables fill that module's budget | 400 | reader |
 | `payloads.py` | safetensors chunk writer and reader with opaque keys; `LazyActivationRef` rebuilt on (chunk, key) | 450 | writer |
 | `writer.py` | `write_trace`, `write_bundle`, `write_intervention_recipe`: include-flag resolution (reuses `save_policy.py`), privacy and barcode policies carried over from `scrub.py`, record-table emission, manifest, reload check, atomic publish | 750 | writer |
 | `recipe.py` | the intervention recipe (section 8): rule and value encoding with callable placeholders at rule level and in edit arguments, recipe tensors on the shared key counter, typed rebinding at load; `write_intervention_recipe` and the trace writer call it | 700 | writer |
