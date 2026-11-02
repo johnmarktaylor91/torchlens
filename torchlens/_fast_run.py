@@ -6,7 +6,7 @@ import sys
 import threading
 import time
 import weakref
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager, nullcontext
 from typing import Any, cast
 
@@ -1465,6 +1465,8 @@ class _RoutedForward(_SessionForward):
 
     The base records the module's own ``forward`` as ``__wrapped__``.
     """
+
+    __wrapped__: Callable[..., Any]
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Pass a ``Module.__call__`` call through; route a direct call."""
