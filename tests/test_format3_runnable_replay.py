@@ -79,6 +79,23 @@ class _ReluModel(nn.Module):
         return self.fc2(torch.relu(self.fc1(value)))
 
 
+class _TiedModel(nn.Module):
+    """An embedding whose weight the output projection shares (tied storage)."""
+
+    def __init__(self) -> None:
+        """Build the embedding and tie the projection to it."""
+
+        super().__init__()
+        self.embed = nn.Embedding(5, 3)
+        self.head = nn.Linear(3, 5, bias=False)
+        self.head.weight = self.embed.weight
+
+    def forward(self, value: torch.Tensor) -> torch.Tensor:
+        """Embed the ids and project back onto the vocabulary."""
+
+        return self.head(self.embed(value))
+
+
 def _writer_built() -> bool:
     """Return whether this checkout's 3.0 trace writer door is built."""
 
@@ -227,6 +244,13 @@ def test_toy_state_model_replays_like_live(tmp_path: Path) -> None:
     """Weights, a persistent and a non-persistent buffer replay element for element."""
 
     _assert_replays_like_live(_StateModel().eval(), torch.randn(2, 3), tmp_path, "state model")
+
+
+def test_tied_weights_replay_like_live(tmp_path: Path) -> None:
+    """Weights sharing one storage write as separate safetensors members and replay."""
+
+    model = _TiedModel().eval()
+    _assert_replays_like_live(model, torch.tensor([[0, 3, 4]]), tmp_path, "tied model")
 
 
 def test_archived_activations_round_trip_and_attest(tmp_path: Path) -> None:

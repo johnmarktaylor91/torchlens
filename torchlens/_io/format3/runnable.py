@@ -36,10 +36,36 @@ from pathlib import Path
 from typing import Any, NoReturn, cast
 
 import torch
+from safetensors.torch import load_file, save_file
 
+from ..._runnable import (
+    RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
+    RUNNABLE_CALL_RECIPE_VERSION,
+    RUNNABLE_CALLABLE_REF_SCHEMA_VERSION,
+    RUNNABLE_INITIALIZER_POLICY_VERSION,
+    RUNNABLE_TLSPEC_SCHEMA_VERSION,
+    WITNESS_FAMILY_REGISTRY_VERSION,
+    ActivationPayloadLayerDescriptor,
+    ArchivedActivation,
+    RunProvider,
+)
+from ..._runnable.state import (
+    bind_embedded_nonpersistent_buffers,
+    bind_embedded_trace_state,
+    runnable_tensor_byte_digest,
+)
+from ..._utils.hashing import sha256_file
+from .. import bundle as tlspec_bundle
 from .._json import read_bounded
 from ..format_errors import ArtifactError
 from ..paths import reject_symlink_path
+from ..runnable import (
+    require_sparse_run_descriptor,
+    sparse_descriptor_to_json,
+    with_activation_payload,
+    with_weight_payload,
+)
+from ..runnable_load import attach_sparse_run_readiness
 from .contract import REFUSAL_CODES, RUNNABLE_DIR
 
 #: Index file of the runnable component, relative to ``runnable/``.
@@ -114,15 +140,6 @@ def component_versions() -> dict[str, Any]:
         The runnable rows of the writer contract envelope, by component name.
     """
 
-    from ..._runnable import (
-        RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
-        RUNNABLE_CALL_RECIPE_VERSION,
-        RUNNABLE_CALLABLE_REF_SCHEMA_VERSION,
-        RUNNABLE_INITIALIZER_POLICY_VERSION,
-        RUNNABLE_TLSPEC_SCHEMA_VERSION,
-        WITNESS_FAMILY_REGISTRY_VERSION,
-    )
-
     return {
         "nonpersistent_buffer_family": "runnable_nonpersistent_buffer_v1",
         "runnable_activation_payload": RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
@@ -166,6 +183,28 @@ def _host_tensor(tensor: torch.Tensor) -> torch.Tensor:
     return tensor.detach().resolve_conj().resolve_neg().contiguous().cpu()
 
 
+def _unshared_host_tensors(
+    members: Sequence[tuple[str, str, torch.Tensor]],
+) -> dict[str, torch.Tensor]:
+    """Return host tensors keyed by member key, each with storage of its own.
+
+    Tied weights and view activations share storage; safetensors refuses
+    shared storage, so every tensor after the first on a storage is copied.
+    """
+
+    host: dict[str, torch.Tensor] = {}
+    seen_storages: set[int] = set()
+    for _, key, tensor in members:
+        prepared = _host_tensor(tensor)
+        storage = prepared.untyped_storage().data_ptr()
+        if storage in seen_storages:
+            prepared = prepared.clone()
+        else:
+            seen_storages.add(storage)
+        host[key] = prepared
+    return host
+
+
 def _member_record(name: str, key: str, file_name: str, tensor: torch.Tensor) -> dict[str, Any]:
     """Build one family member: its name plus a contract tensor reference."""
 
@@ -202,12 +241,8 @@ def _write_family(
         ``(name, key, tensor)`` per member, in index order.
     """
 
-    from safetensors.torch import save_file
-
-    from ..._utils.hashing import sha256_file
-
     file_name = FAMILY_FILES[family]
-    host = {key: _host_tensor(tensor) for _, key, tensor in members}
+    host = _unshared_host_tensors(members)
     target = component_dir / file_name
     save_file(host, str(target))
     os.chmod(target, 0o600)
@@ -263,15 +298,6 @@ def write_runnable(
         ``bundle_save_failed`` when the component directory already exists;
         the descriptor producer's own typed refusals otherwise.
     """
-
-    from ..._utils.hashing import sha256_file
-    from .. import bundle as tlspec_bundle
-    from ..runnable import (
-        require_sparse_run_descriptor,
-        sparse_descriptor_to_json,
-        with_activation_payload,
-        with_weight_payload,
-    )
 
     component_dir = Path(path) / RUNNABLE_DIR
     if component_dir.exists() or component_dir.is_symlink():
@@ -362,8 +388,6 @@ def _require_mapping(value: Any, where: str, keys: frozenset[str]) -> Mapping[st
 def _checked_file(component_dir: Path, name: Any, expected_sha: Any, where: str) -> Path:
     """Resolve one component file by its fixed name and verify its sha256."""
 
-    from ..._utils.hashing import sha256_file
-
     allowed = {DESCRIPTOR_FILE, *FAMILY_FILES.values()}
     if not isinstance(name, str) or name not in allowed or not isinstance(expected_sha, str):
         _refuse(
@@ -405,8 +429,6 @@ def _read_family(
     component_dir: Path, family: str, entry: Any, map_location: str | torch.device
 ) -> dict[str, torch.Tensor]:
     """Validate one family entry, load its file and return ``{member name: tensor}``."""
-
-    from safetensors.torch import load_file
 
     record = _require_mapping(entry, f"family {family!r}", _FAMILY_KEYS)
     if record["file"] != FAMILY_FILES[family]:
@@ -572,8 +594,6 @@ def attach_runnable(
         The non-executing readiness report attached to ``trace``.
     """
 
-    from ..runnable_load import attach_sparse_run_readiness
-
     component = load_runnable(path, map_location=map_location)
     if component is None:
         return attach_sparse_run_readiness(trace, None)
@@ -584,8 +604,6 @@ def attach_runnable(
 
 def _family_disposition(trace: Any, present: bool) -> str:
     """Return ``bind``, ``skip`` or ``error`` for one family (the r39 corr2_3 rule)."""
-
-    from ..._runnable import RunProvider
 
     if trace._sparse_run_descriptor is not None:
         return "bind"
@@ -627,8 +645,6 @@ def bind_runnable_families(trace: Any, families: Mapping[str, Mapping[str, torch
     StateBindingError
         When a value violates its slot contract.
     """
-
-    from ..._runnable.state import bind_embedded_nonpersistent_buffers, bind_embedded_trace_state
 
     expected_schema = {
         "state_dict": "state_dict_v1",
@@ -675,9 +691,6 @@ def bind_runnable_families(trace: Any, families: Mapping[str, Mapping[str, torch
 
 def _bind_activations(trace: Any, declared: Any, values: Mapping[str, torch.Tensor]) -> None:
     """Bind the inspection-only activation family, checking each member's digest."""
-
-    from ..._runnable import ActivationPayloadLayerDescriptor, ArchivedActivation
-    from ..._runnable.state import runnable_tensor_byte_digest
 
     if not isinstance(declared, ActivationPayloadLayerDescriptor):
         _refuse(
