@@ -14,6 +14,9 @@ from .._errors import ArgumentTypeError
 from .._io import ArtifactError, JaxPayloadLoadHint, PayloadLoadHints, _json
 from .._io.bundle import cleanup_tmp, load as _load
 from .._io.format3 import contract as _format3_contract
+from .._io.format3.reader import (  # noqa: F401  (validate_tlspec's 3.0 door)
+    validate_artifact as _validate_format3_artifact,
+)
 from .._io.sidecar import (
     AnalysisOnlySidecar,
     SidecarFamily,

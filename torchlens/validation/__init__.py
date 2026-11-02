@@ -58,7 +58,7 @@ def validate_tlspec(
         If the artifact is a portable ModelLog bundle of torchlens 2.16.
     """
 
-    from ..io import detect_tlspec_format, inspect_tlspec
+    from ..io import _validate_format3_artifact, detect_tlspec_format, inspect_tlspec
 
     tlspec_path = Path(path)
     if not tlspec_path.exists():
@@ -95,6 +95,11 @@ def validate_tlspec(
         from .._io._pre3_module_paths import modellog_216_error
 
         raise modellog_216_error(str(tlspec_path), code="artifact_version_below_floor")
+    if tlspec_format == "v3":
+        # The 3.0 envelope: the manifest schema, the version window and every
+        # listed file's digest, the same validators ``tl.load`` runs first.
+        _validate_format3_artifact(tlspec_path)
+        return
     if tlspec_format != "v2.0_unified":
         raise ValueError(f"Unrecognized TorchLens .tlspec format at {tlspec_path}.")
 

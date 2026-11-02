@@ -18,6 +18,7 @@ import enum
 import math
 import re
 from collections.abc import Callable, Mapping
+from functools import cache
 from typing import Any, Final
 
 import torch
@@ -55,6 +56,36 @@ INT_TEXT_LIMIT: Final = 4300
 MAX_CELL_DEPTH: Final = 64
 #: Device strings the format accepts: a lowercase type with an optional index.
 DEVICE_TEXT: Final = re.compile(r"[a-z_]+(:\d{1,3})?")
+#: Dtypes a safetensors chunk can hold (a closed vocabulary; quantized, bit-packed and
+#: sub-byte dtypes are in torch's table but have no storable element). Complex tensors are
+#: written as their real view with the ``complex`` flag.
+STORABLE_DTYPES: Final[frozenset[str]] = frozenset(
+    {
+        "bool",
+        "uint8",
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "uint16",
+        "uint32",
+        "uint64",
+        "float16",
+        "bfloat16",
+        "float32",
+        "float64",
+        "float8_e4m3fn",
+        "float8_e5m2",
+        "float8_e4m3fnuz",
+        "float8_e5m2fnuz",
+        "complex32",
+        "complex64",
+        "complex128",
+    }
+)
+#: The most elements one tensor reference may declare (2**48: a petabyte of float32).
+#: A shape bomb declares more and refuses before any allocation.
+MAX_TENSOR_NUMEL: Final = 1 << 48
 _RECORD_KINDS: Final = frozenset(name for name, _, _ in RECORD_INDEX)
 _INT_TEXT = re.compile(r"-?[0-9]+")
 _DOTTED_NAME = re.compile(r"[A-Za-z_][\w.]{0,255}")
@@ -416,3 +447,10 @@ def decode_value(data: Any, *, schema: Any = None, at: str = "value") -> Any:
 
     del schema
     return Decoder(lambda fields, _at: dict(fields)).decode(data, at=at)
+
+
+@cache
+def _element_size(dtype_name: str) -> int:
+    """Return the storage bytes of one element of a storable dtype."""
+
+    return torch.empty((), dtype=dtype_table()[dtype_name]).element_size()

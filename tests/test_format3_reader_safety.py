@@ -370,7 +370,9 @@ def test_duplicate_dict_pairs_refuse(saved, tmp_path, tripwires):
     _refuses(_with_cell(saved, tmp_path / "duppair", cell), tripwires)
 
 
-def test_duplicate_blob_key_across_two_cells_refuses(saved, tmp_path, tripwires):
+def test_blob_key_redeclared_differently_across_two_cells_refuses(saved, tmp_path, tripwires):
+    # One stored tensor may sit in two cells; a second reference declaring
+    # another shape for the same (chunk, key) is a forgery and refuses.
     copy = copy_artifact(saved, tmp_path / "dupblob")
     payload = read_record(copy, "op")
     ref = next(
@@ -384,7 +386,9 @@ def test_duplicate_blob_key_across_two_cells_refuses(saved, tmp_path, tripwires)
     )
     if ref is None:
         pytest.skip("portable level wrote no tensor payload")
-    set_cell(copy, "op", first_column(copy, "op"), 0, dict(ref))
+    redeclared = dict(ref)
+    redeclared["shape"] = [1, *ref["shape"]]
+    set_cell(copy, "op", first_column(copy, "op"), 0, redeclared)
     _refuses(copy, tripwires)
 
 
