@@ -1314,7 +1314,7 @@ class Trace(TraceLike):
         _SiteTable
             Ordered table of matching layer-pass records.
         """
-        return _trace_views.resolve_sites(
+        return _trace_views.resolve_site_table(
             self, selector=selector, strict=strict, max_fanout=max_fanout
         )
 

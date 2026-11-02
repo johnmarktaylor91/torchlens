@@ -648,7 +648,9 @@ def uncalled_modules(trace: Trace) -> _CallableList:
     return _CallableList(sorted(registered - called))
 
 
-def resolve_sites(trace: Trace, selector: Any, *, strict: bool = False, max_fanout: int = 8) -> Any:
+def resolve_site_table(
+    trace: Trace, selector: Any, *, strict: bool = False, max_fanout: int = 8
+) -> Any:
     """Resolve the record-grain site table for internal planning (private).
 
     The public door is ``trace[selector]``: a set-naming selector returns a

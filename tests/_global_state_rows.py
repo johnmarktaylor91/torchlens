@@ -1206,7 +1206,6 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/compat/torchshow.py", "__all__"),
         ("torchlens/conformance/__init__.py", "__all__"),
         ("torchlens/_data_classes/__init__.py", "__all__"),
-        ("torchlens/_data_classes/_trace_intervention.py", "__all__"),
         ("torchlens/_data_classes/_trace_stack.py", "__all__"),
         ("torchlens/_data_classes/aten_op.py", "__all__"),
         ("torchlens/_data_classes/container.py", "__all__"),

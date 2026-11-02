@@ -12,10 +12,6 @@ from .._errors import InvalidArgumentError, PayloadUnavailableError
 if TYPE_CHECKING:
     from .trace import Trace
 
-    _TraceMixinBase = Trace
-else:
-    _TraceMixinBase = object
-
 
 @dataclass(frozen=True)
 class StackedActivations:

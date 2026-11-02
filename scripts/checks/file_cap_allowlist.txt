@@ -86,7 +86,12 @@ torchlens/_data_classes/_trace_fork.py::build_fork	178
 torchlens/_data_classes/_trace_inventory.py::build_bill_of_materials	90
 torchlens/_data_classes/_trace_inventory.py::build_sites_table	92
 torchlens/_data_classes/_trace_rehydrate.py::rehydrate_trace_core	97
+torchlens/_data_classes/_trace_removal.py::batch_remove_log_entries	67
+torchlens/_data_classes/_trace_rerun_state.py::refresh_rerun_op_from	61
+torchlens/_data_classes/_trace_rerun_state.py::replace_state_from	74
 torchlens/_data_classes/_trace_stack.py::stack_traces	68
+torchlens/_data_classes/_trace_state_io.py::trace_getstate	111
+torchlens/_data_classes/_trace_state_io.py::trace_setstate	334
 torchlens/_data_classes/cleanup.py	1081
 torchlens/_data_classes/cleanup.py::_scrub_conditional_fields_after_removal	72
 torchlens/_data_classes/cleanup.py::cleanup	137
@@ -112,6 +117,7 @@ torchlens/_data_classes/param.py	1083
 torchlens/_data_classes/param.py::Param.__init__	75
 torchlens/_data_classes/trace.py	3734
 torchlens/_data_classes/trace.py::Trace.__init__	366
+torchlens/_data_classes/trace.py::Trace.draw	107
 torchlens/_data_classes/trace.py::Trace.save	83
 torchlens/_data_substrate/artifact.py::ArtifactWriter.commit_shard	67
 torchlens/_data_substrate/artifact.py::read_trusted_rows	73

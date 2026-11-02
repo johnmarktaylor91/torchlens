@@ -23,7 +23,7 @@ from .._capture.outcome import (
 from .._capture.projectors import RefreshProjector
 from .._capture.structure_only import require_structure_only_capability
 from .._data_classes._staged_spec import _staged_user_entries
-from .._data_classes._trace_validation import _USE_STORED_TRANSFORM
+from .._data_classes.trace import _USE_STORED_TRANSFORM
 from .._deprecations import MISSING, MissingType
 from .._errors import InvalidArgumentError, KeywordConflictError, RecordBindingError
 from .._fast_run import run_fast_live_trace, run_fast_loaded_trace, try_guarded_fast_rerun
