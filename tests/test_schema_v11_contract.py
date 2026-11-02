@@ -32,7 +32,6 @@ V11_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
         "short_layer_label": "keep",
     },
     "param": {"grad_memory": "keep"},
-    "_output_slot": "drop",
     "trace": {
         # Private storage behind the removed public Trace names: the capture
         # pipeline, the accessors and save/load still read these stores.
@@ -128,6 +127,7 @@ V11_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
         "_options_structure_only": "keep",
         "_options_verbose": "keep",
         "_orphan_records": "blob_recursive",
+        "_output_slot": "drop",
         "_param_logs": "keep",
         "_parent_run": "drop",
         "_provenance_backend": "keep",

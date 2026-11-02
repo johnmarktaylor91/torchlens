@@ -163,8 +163,11 @@ def refuse_removed_keywords(owner: str, removed: Mapping[str, str]) -> Callable[
     """
 
     def decorate(init: _Init) -> _Init:
+        """Wrap ``init`` so every keyword is checked against ``removed`` first."""
+
         @functools.wraps(init)
         def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+            """Refuse a removed keyword with its remedy, then run the real ``__init__``."""
             for name in kwargs:
                 refuse_removed_member(owner, name, removed)
             return init(self, *args, **kwargs)
