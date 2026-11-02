@@ -137,7 +137,14 @@ def _descendants(trace: tl.Trace, label: str) -> set[str]:
             if child_label not in seen:
                 seen.add(child_label)
                 frontier.append(child_label)
-    return {site_row_key(trace[name]) for name in seen}
+    keys: set[str] = set()
+    for name in seen:
+        node = trace[name]
+        try:
+            keys.add(site_row_key(node))
+        except InvalidArgumentError:  # a multi-pass Layer: one row key per pass
+            keys.update(site_row_key(op) for op in node.ops)
+    return keys
 
 
 def _compare_fork(model: nn.Module, x: torch.Tensor) -> tuple[tl.Trace, str, dict[str, float]]:
