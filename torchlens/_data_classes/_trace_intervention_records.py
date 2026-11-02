@@ -1,16 +1,23 @@
-"""Envelope fields of one ``do()`` intervention event.
+"""Intervention spec state and history records of a ``Trace`` (L1).
 
-``TraceInterventionMixin._record_do_intervention_event`` writes the ONE
-InterventionEvent envelope of a ``do()`` transaction; these helpers build the
+``intervention._trace_edits.record_do_intervention_event`` writes the ONE
+InterventionEvent envelope of a ``do()`` transaction; the helpers here build the
 parts that need no intervention-layer import: the edit names and selection
 rendering of a non-spec input, and the ``extra`` disclosures (staged-only,
 gradient-plan keys and the selection-batch slots). ``_DoTransaction`` is the
-transaction identity both the mixin and the gradient-site plan mint.
+transaction identity both the ``do`` door and the gradient-site plan mint. The
+record-side state helpers (the mutable spec, its revision and staleness marks,
+the ``state_history`` operation records) live here as functions taking the
+trace first; ``Trace`` keeps thin methods for them.
 """
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any, NamedTuple
+
+from .._trace_state import TraceState
+from ._trace_grad_sites import refresh_armed_annotation
 
 if TYPE_CHECKING:
     from .trace import Trace
@@ -125,3 +132,93 @@ def do_event_extra(
             },
         }
     return extra
+
+
+def history_site_payload(site: Any) -> Any:
+    """Return a stable site payload for ``state_history`` records.
+
+    Parameters
+    ----------
+    site:
+        Original selector-like site payload supplied to a mutator.
+
+    Returns
+    -------
+    Any
+        Plain layer labels for direct label targets, otherwise a stable
+        repr-style string for human-readable history records.
+    """
+
+    if isinstance(site, str):
+        return site
+    selector_kind = getattr(site, "selector_kind", None)
+    selector_value = getattr(site, "selector_value", None)
+    if selector_kind == "label" and isinstance(selector_value, str):
+        return selector_value
+    return repr(site)
+
+
+def record_operation(trace: Trace, op: str, **payload: Any) -> None:
+    """Append a structured operation record to ``state_history``.
+
+    Parameters
+    ----------
+    trace:
+        The trace whose ``state_history`` receives the record.
+    op:
+        Operation name.
+    **payload:
+        Operation-specific metadata.
+
+    Returns
+    -------
+    None
+        The history list is mutated in place.
+    """
+
+    trace.state_history.append(
+        {
+            "op": op,
+            "spec_revision": trace._spec_revision,
+            "timestamp": time.monotonic(),
+            **payload,
+        }
+    )
+
+
+def recipe_is_clean(trace: Trace) -> bool:
+    """Return whether propagated outs match the current spec revision.
+
+    Returns
+    -------
+    bool
+        ``True`` when the current out recipe revision equals the
+        mutable intervention spec revision.
+    """
+
+    return trace._spec_revision == trace._out_recipe_revision
+
+
+def mark_intervention_spec_mutated(trace: Trace, *, outs_stale: bool = True) -> None:
+    """Invalidate cached frozen views and mark the spec stale.
+
+    ``outs_stale=False`` is for gradient-only recipe changes: they edit
+    nothing the forward recorded, so a trace whose outs matched its recipe
+    keeps that state and stays current.
+
+    Returns
+    -------
+    None
+        This model log is mutated in place.
+    """
+
+    was_clean = recipe_is_clean(trace)
+    trace._spec_revision += 1
+    trace.__dict__.pop("recipe", None)
+    trace.__dict__.pop("_frozen_intervention_spec", None)
+    trace.__dict__.pop("_cached_frozen_intervention_spec", None)
+    refresh_armed_annotation(trace)
+    if not outs_stale and was_clean:
+        trace._out_recipe_revision = trace._spec_revision
+        return
+    trace.state = TraceState.SPEC_STALE

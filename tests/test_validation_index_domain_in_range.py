@@ -12,6 +12,8 @@ corrupted saved index or output still fails validation.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 import torch
 import torch.nn.functional as F
@@ -223,6 +225,33 @@ def _assert_index_edges_proven_in_domain(
         decision == "validated" or (decision == "exempted" and reason in allowed_exemptions)
         for _, decision, reason in record["verdicts"]
     ), record["verdicts"]
+
+
+@pytest.mark.parametrize(
+    ("func_name", "kwarg"),
+    [("gather", "index"), ("index_select", "index"), ("embedding", "indices")],
+)
+def test_index_slot_is_recognised_under_its_kwarg_spelling(func_name: str, kwarg: str) -> None:
+    """A parent passed by keyword occupies the index slot exactly like a positional one.
+
+    The kwarg branch of ``_parent_is_index_domain_arg`` was reachable only through
+    model-dependent heavy tests; this pins it directly so a falsy return is caught.
+    """
+    by_kwarg = SimpleNamespace(
+        func_name=func_name,
+        parent_arg_positions={"args": {}, "kwargs": {kwarg: "idx_label"}},
+    )
+    assert _parent_is_index_domain_arg(by_kwarg, "idx_label") is True
+    assert _parent_is_index_domain_arg(by_kwarg, "other_label") is False
+    by_position = SimpleNamespace(
+        func_name=func_name,
+        parent_arg_positions={"args": {_INDEX_DOMAIN_ARG_SPECS[func_name][0]: "idx_label"}},
+    )
+    assert _parent_is_index_domain_arg(by_position, "idx_label") is True
+    unregistered = SimpleNamespace(
+        func_name="relu", parent_arg_positions={"kwargs": {kwarg: "idx_label"}}
+    )
+    assert _parent_is_index_domain_arg(unregistered, "idx_label") is False
 
 
 def test_gather_index_edge_is_proven_in_domain(replay_record) -> None:

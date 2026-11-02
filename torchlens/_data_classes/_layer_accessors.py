@@ -2,11 +2,10 @@
 
 Split out of ``layer.py`` under the R43 file-size ratchet (the ``_layer_spec.py``
 precedent). The accessors are a self-contained lookup surface: this module
-never imports ``layer.py`` at module level (the one shared helper,
-``_layer_log_to_row``, is imported inside ``LayerAccessor.to_pandas``), so the
-split introduces no import cycle. ``layer.py`` re-exports both names, keeping
-every historical import site (``from .layer import OpAccessor``) and pickle
-qualname resolution working.
+never imports ``layer.py`` (the one shared helper, ``_layer_log_to_row``,
+lives in ``_layer_views.py``), so the split introduces no import cycle.
+``layer.py`` re-exports both names, keeping every historical import site
+(``from .layer import OpAccessor``) and pickle qualname resolution working.
 """
 
 import weakref
@@ -18,6 +17,7 @@ from .._constants import LAYER_LOG_FIELD_ORDER
 from .._errors import AmbiguousOpLookupError
 from .._io import FieldPolicy
 from ._accessor_base import Accessor, attach_source_honesty
+from ._layer_views import _layer_log_to_row
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -337,8 +337,6 @@ class LayerAccessor(Accessor["Layer"]):
             raise ImportError(
                 "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
             ) from e
-        from .layer import _layer_log_to_row
-
         if not self._list:
             return pd.DataFrame(columns=LAYER_LOG_FIELD_ORDER)
         rows = [_layer_log_to_row(ll) for ll in self._list]

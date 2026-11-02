@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from .._io._field_policy import FieldPolicy
 from .._ir.refs import DtypeRef
 from ._accessor_base import Accessor
+
+if TYPE_CHECKING:
+    from .trace import Trace
 
 
 @dataclass(frozen=True)
@@ -136,3 +139,13 @@ class IntermediateDerivedGradAccessor(Accessor[IntermediateDerivedGradRecord]):
             if record.provenance.get("status") == "exact"
         }
         super().__init__(exact_records)
+
+
+def set_intermediate_derived_grads(trace: Trace, records: IntermediateDerivedGradAccessor) -> None:
+    """Install backend-derived intermediate grad records on ``trace``.
+
+    Backends call this instead of writing the private storage directly, so
+    the records stay owned by the Trace (``trace.autograd.intermediate_derived_grads``).
+    """
+
+    trace._autograd_intermediate_derived_grads = records

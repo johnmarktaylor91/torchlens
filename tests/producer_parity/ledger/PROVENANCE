@@ -3555,3 +3555,91 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: b46153d5309da0430f4bb41e2b6759e708fbfdcc (dirty)
 recorded: 2026-11-01T21:31:04.687325+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: record-a: Trace stats bodies moved to _trace_views/report._trace_facts/_trace_collapse/_trace_tables; field read sites re-keyed, none added
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6d6333c1c94548d367e5189a39f3464c6b27d896 (clean)
+recorded: 2026-11-01T21:46:30.357713+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: intervention bodies moved to function modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2676c36aaf2b6b9ef2ac5d82e7a44958c7958435
+recorded: 2026-11-01T22:02:38.358653+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: intervention bodies moved to function modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2676c36aaf2b6b9ef2ac5d82e7a44958c7958435
+recorded: 2026-11-01T22:02:44.095654+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: record-e: Op bodies moved to function modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 48d07761bb2f2eac71530e9011c4be1c064d6c87 (dirty)
+recorded: 2026-11-01T22:07:20.605840+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: record-f: Layer bodies moved to _layer_views and receptive_field/_layer_fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 95cb3f0be5193efef806c7b5aa09d7c6071bd29f (clean)
+recorded: 2026-11-01T21:57:35.968076+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: record-f: Layer bodies moved to _layer_views and receptive_field/_layer_fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 95cb3f0be5193efef806c7b5aa09d7c6071bd29f (clean)
+recorded: 2026-11-01T21:57:39.185346+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: record-g: Bundle read sites moved verbatim from bundle/__init__.py into the bundle function modules (DESIGN 5.8); no producer or consumer added
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 4290f9504a226c095fc6c191eab6fb07bdeaa309 (dirty)
+recorded: 2026-11-01T22:05:48.080925+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: exemption table declares a kind field on ExemptionRow; the static scan records the ambiguous site
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: dbe337fac2e4edc2a5711179729f0558a5e9f1f1 (dirty)
+recorded: 2026-11-01T22:44:31.357038+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: exemption table declares a kind field on ExemptionRow; the static scan records the ambiguous site
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: dbe337fac2e4edc2a5711179729f0558a5e9f1f1 (dirty)
+recorded: 2026-11-01T22:44:37.889208+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-L batch L regen on c4e6f60b89a14f417fa9f345c2aade2667132347
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c4e6f60b89a14f417fa9f345c2aade2667132347 (dirty)
+recorded: 2026-11-01T23:49:15.588032+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-L batch L regen on c4e6f60b89a14f417fa9f345c2aade2667132347
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c4e6f60b89a14f417fa9f345c2aade2667132347 (dirty)
+recorded: 2026-11-01T23:49:21.414123+00:00

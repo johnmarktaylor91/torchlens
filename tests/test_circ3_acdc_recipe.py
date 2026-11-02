@@ -2,11 +2,10 @@
 
 The page's fences run top to bottom in one namespace, each ``RESULT``
 compared with its ``# recipe-test`` header (the recipe-page convention of
-``tests/test_recipe_pages_executed.py``). Then: every edge decision is a
-closed ledger entry whose verdict is ``supports`` (kept) or ``refutes``
-(pruned); the head-knockout ``sweep_sites`` entry carries ``not_assessed``;
-and the pruning loop re-run here without the ledger prunes exactly the same
-edges, in the same order, to the same KL. Stand-in: the page's two-layer
+``tests/test_recipe_pages_executed.py``). Then: every tested edge has exactly
+one decision row reading ``kept`` or ``pruned``; and the pruning loop re-run
+here without the page's record prunes exactly the same edges, in the same
+order, to the same KL. Stand-in: the page's two-layer
 GPT-2 with random weights, walking its last two receivers (13 edge tests).
 """
 
@@ -56,15 +55,15 @@ def page(tmp_path_factory) -> dict[str, Any]:
     return namespace
 
 
-def test_every_decision_is_a_closed_ledger_verdict(page) -> None:
-    entries = page["led"].entries()
-    first, *decisions = entries.values()
-    assert first.verdict["token"] == "not_assessed"
-    assert first.steps, "the sweep_sites material step lands in the first entry"
-    assert len(decisions) == len(page["tested"]) == 13
-    assert all(entry.status == "closed" for entry in decisions)
-    assert {entry.verdict["token"] for entry in decisions} <= {"supports", "refutes"}
-    assert all(entry.observations for entry in decisions)
+def test_every_tested_edge_has_one_decision_row(page) -> None:
+    decisions = page["decisions"]
+    assert [row["edge"] for row in decisions] == page["tested"]
+    assert len(decisions) == 13
+    assert {row["decision"] for row in decisions} <= {"kept", "pruned"}
+    for row in decisions:
+        assert row["change"] == row["kl_after"] - row["kl_before"]
+        assert (row["decision"] == "pruned") == (row["change"] < page["tau"])
+    assert [row["edge"] for row in decisions if row["decision"] == "kept"] == page["kept"]
 
 
 def test_the_kept_set_reproduces_the_loops_own_pruning(page) -> None:

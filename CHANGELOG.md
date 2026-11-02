@@ -5,6 +5,12 @@
 
 ### Behavior changes
 
+- **draw**: `trace.draw(show_containers=...)` takes four settings: `False` (default), `"labels"`,
+  `"collapsed"` and `"nodes"`. `"auto"` is gone (it drew exactly what `"collapsed"` draws and chose
+  nothing) and so is `"cluster"` (it drew `"labels"` plus a dotted box around an op-returned tuple,
+  which `"nodes"` also draws); both refuse `visualization_show_containers_invalid` with the
+  replacement named. The `overview` lens now pins `"collapsed"`. Each setting is documented in
+  `docs/containers.md`.
 - **fastlog**: the `Recording.enrich` step `"param_addresses"` is gone. It never produced an
   enrichment (capture records carry no `parent_param_addresses` field, so it always refused);
   the accepted steps are `"module_path_strings"` and `"all-feasible"`, and any other name

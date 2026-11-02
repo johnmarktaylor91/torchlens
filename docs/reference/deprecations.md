@@ -190,3 +190,22 @@ The site, not a keyword or a gradient-only helper, says which tensor an edit app
 | `FireRecord.direction`, `TapRecord.direction`, `HookContext.direction` | `.signal` | removed |
 | `Edit.kind`, `Edit.direction` | `Edit.signal`; `Rule.signal` (derived) | removed |
 | `HookContext.ctx`, `HookContext.run_ctx` | `HookContext.state`, `HookContext.run_state` | removed |
+
+## Experiment Ledger
+
+The opt-in semantic record (hypothesis, observations, verdicts in a
+`.tlledger` file) was removed on 1 Nov 2026. The Bundle is the record that
+stays: `torchlens.experiment.sweep_sites` returns one whose per-candidate
+effect table (`bundle.effects()`) and operation chronology (`bundle.history`)
+persist with the artifact. Each old spelling raises the typed
+`facade_redirect` refusal naming that record; there is no alias.
+
+| Old name | New name | Status |
+| --- | --- | --- |
+| `tl.experiment.ledger(path, hypothesis=, metric=)` | your own record beside the Bundle (`bundle.effects()`, `bundle.history`) | removed |
+| `tl.experiment.ExperimentLedger` | none (the Bundle is the record) | removed |
+| `tl.experiment.LedgerEntry` | none | removed |
+| `tl.experiment.active_ledger()` | none | removed |
+| `tl.experiment.read_ledger(path)` | `tl.load(path).effects()` on the saved Bundle | removed |
+| MCP `torchlens_ledger_overview` / `torchlens_ledger_entry` / `torchlens_ledger_evidence` | `torchlens_overview` on the saved Bundle artifact | removed |
+| `ledger(on_record_error=)` and the `ledger_*` refusal and warning codes | none | removed |
