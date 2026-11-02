@@ -14,12 +14,14 @@ from __future__ import annotations
 
 import warnings
 
+import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
 from torchlens.backends.torch._completeness_dispatch_names import _is_buffer_state_view_dispatch
 from torchlens.backends.torch.escape_detection import ExpectedOriginalToken
+from torchlens.validation._completeness_backstop import completeness_backstop_counts
 
 
 class _LazyAtInit(nn.Module):
@@ -53,11 +55,17 @@ def _validate(model: nn.Module, x: torch.Tensor) -> bool:
         return bool(tl.validate(model, x, scope="forward"))
 
 
-def test_lazy_module_first_called_inside_capture_validates() -> None:
+def test_lazy_module_first_called_inside_capture_balances_the_census() -> None:
+    # ``tl.validate`` needs a state snapshot, which a never-run lazy module refuses
+    # (torch cannot detach an uninitialized parameter); the census is checked on
+    # the capture itself.
     torch.manual_seed(0)
-    assert _validate(_LazyAtInit(), torch.randn(2, 4)) is True
+    trace = tl.trace(_LazyAtInit(), torch.randn(2, 4))
+    dispatch, captured = completeness_backstop_counts(trace)
+    assert dispatch == captured
 
 
+@pytest.mark.smoke
 def test_lazy_module_built_inside_forward_validates() -> None:
     torch.manual_seed(0)
     assert _validate(_LazyInForward(), torch.randn(2, 4)) is True

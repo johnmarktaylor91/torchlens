@@ -138,7 +138,7 @@ from .escape_detection import (
 )
 from .param_mutation import (
     frozen_parameter_receiver_context as _frozen_parameter_receiver_context,
-    is_prepared_parameter_receiver as _is_prepared_parameter_receiver,
+    is_mutated_parameter_receiver as _is_mutated_parameter_receiver,
     parameter_mutation_output_for_logging as _parameter_mutation_output_for_logging,
     receiver_kwarg_as_positional as _receiver_kwarg_as_positional,
 )
@@ -1569,10 +1569,10 @@ def torch_func_decorator(
         # too: a live intervention replacing its output must be copied into the
         # Parameter (``_apply_inplace_replacement_to_mutated_storage``) so later
         # reads see it, as for any labeled in-place receiver.
-        mutates_prepared_parameter = (
+        mutates_parameter_receiver = (
             was_inplace
             and not is_storage_rebinding_setter
-            and _is_prepared_parameter_receiver(trace, args[0])
+            and _is_mutated_parameter_receiver(trace, args[0])
         )
         # The internal identity-forcing decorator (_state._decorated_identity)
         # exists precisely to MINT a distinct logged tensor at module boundaries
@@ -1765,7 +1765,7 @@ def torch_func_decorator(
                     if isinstance(return_value, torch.Tensor):
                         set_tensor_label(return_value, out_label)
                         _register_inplace_live_grad_hook(trace, return_value, out_label)
-            elif mutates_prepared_parameter and not force_distinct_return:
+            elif mutates_parameter_receiver and not force_distinct_return:
                 # Unhooked, or a live intervention whose replacement was copied
                 # into the Parameter: either way the Parameter now holds the
                 # logged op's output, so later reads bind to that op.
@@ -1859,7 +1859,7 @@ def torch_func_decorator(
         if is_barcode_transparent and enclosing_barcode:
             trace._wrapper_runtime_ws.current_func_barcode = enclosing_barcode
 
-        if out_orig is not out_before_hooks and not mutates_prepared_parameter:
+        if out_orig is not out_before_hooks and not mutates_parameter_receiver:
             return out_orig
         if force_distinct_return:
             return out_orig

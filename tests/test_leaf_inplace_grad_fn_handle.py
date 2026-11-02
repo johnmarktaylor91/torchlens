@@ -49,9 +49,9 @@ class InplaceOnNonLeaf(nn.Module):
         return h * 2.0
 
 
-def _layer(trace: tl.Trace, prefix: str) -> tl.Layer:
-    matches = [layer for layer in trace.layer_list if layer.layer_label.startswith(prefix)]
-    assert matches, [layer.layer_label for layer in trace.layer_list]
+def _layer(trace: tl.Trace, prefix: str) -> tl.Op:
+    matches = [op for op in trace.ops if op.label.startswith(prefix)]
+    assert matches, [op.label for op in trace.ops]
     return matches[0]
 
 

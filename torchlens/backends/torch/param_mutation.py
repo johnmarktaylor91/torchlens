@@ -85,6 +85,36 @@ def is_prepared_parameter_receiver(trace: Any, value: Any) -> bool:
     return not getattr(trace._param_logs[meta.param_address], "_lazy_at_prep", False)
 
 
+def is_mutated_parameter_receiver(trace: Any, value: Any) -> bool:
+    """Return whether an in-place write to ``value`` becomes a Parameter's provenance.
+
+    True for a prepared Parameter initialized at prep (its reads after the write
+    bind to the mutation op) and for a Parameter the forward itself created: a
+    module built inside ``forward`` initializes its Parameters with in-place
+    writes (``uniform_`` family) that are their only origin, so the live Parameter
+    takes the op's label and the later read is attributed instead of orphaning
+    the initializer ops. A prepared lazy Parameter's in-forward materialization
+    stays out (see ``is_prepared_parameter_receiver``).
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace carrying the current-session parameter registry.
+    value:
+        Receiver of an in-place call.
+
+    Returns
+    -------
+    bool
+        ``True`` for an initialized-at-prep or forward-created Parameter.
+    """
+
+    if not isinstance(value, torch.nn.Parameter):
+        return False
+    lazy_at_prep = _prepared_parameter_lazy_flag(trace, value)
+    return lazy_at_prep is None or not lazy_at_prep
+
+
 @contextmanager
 def _frozen_receiver_flag(receiver: torch.nn.Parameter) -> Iterator[None]:
     """Run one in-place call with a frozen Parameter's own ``requires_grad=False``.
