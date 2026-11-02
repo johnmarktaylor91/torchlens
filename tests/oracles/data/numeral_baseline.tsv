@@ -1301,7 +1301,6 @@ docs-md	docs/maintainers/where.md	225
 docs-md	docs/maintainers/where.md	226
 docs-md	docs/maintainers/where.md	2268
 docs-md	docs/maintainers/where.md	228
-docs-md	docs/maintainers/where.md	2280
 docs-md	docs/maintainers/where.md	229
 docs-md	docs/maintainers/where.md	23
 docs-md	docs/maintainers/where.md	230
@@ -1554,7 +1553,6 @@ docs-md	docs/maintainers/where.md	448
 docs-md	docs/maintainers/where.md	451
 docs-md	docs/maintainers/where.md	452
 docs-md	docs/maintainers/where.md	454
-docs-md	docs/maintainers/where.md	455
 docs-md	docs/maintainers/where.md	4553
 docs-md	docs/maintainers/where.md	4571
 docs-md	docs/maintainers/where.md	459
@@ -1809,7 +1807,6 @@ docs-md	docs/maintainers/where.md	797
 docs-md	docs/maintainers/where.md	798
 docs-md	docs/maintainers/where.md	80
 docs-md	docs/maintainers/where.md	801
-docs-md	docs/maintainers/where.md	8013
 docs-md	docs/maintainers/where.md	804
 docs-md	docs/maintainers/where.md	81
 docs-md	docs/maintainers/where.md	810
@@ -1863,7 +1860,6 @@ docs-md	docs/maintainers/where.md	942
 docs-md	docs/maintainers/where.md	9432
 docs-md	docs/maintainers/where.md	946
 docs-md	docs/maintainers/where.md	947
-docs-md	docs/maintainers/where.md	948
 docs-md	docs/maintainers/where.md	95
 docs-md	docs/maintainers/where.md	950
 docs-md	docs/maintainers/where.md	953
@@ -1872,7 +1868,6 @@ docs-md	docs/maintainers/where.md	956
 docs-md	docs/maintainers/where.md	957
 docs-md	docs/maintainers/where.md	96
 docs-md	docs/maintainers/where.md	960
-docs-md	docs/maintainers/where.md	964
 docs-md	docs/maintainers/where.md	97
 docs-md	docs/maintainers/where.md	971
 docs-md	docs/maintainers/where.md	974
@@ -2859,8 +2854,6 @@ docs-md	docs/reference/error_refusal_contract.md	65536
 docs-md	docs/reference/error_refusal_contract.md	657
 docs-md	docs/reference/error_refusal_contract.md	7.3
 docs-md	docs/reference/error_refusal_contract.md	90
-docs-md	docs/reference/experiment_ledger.md	144
-docs-md	docs/reference/experiment_ledger.md	50
 docs-md	docs/reference/export.md	0.1.32
 docs-md	docs/reference/export.md	10
 docs-md	docs/reference/export.md	5000
@@ -5944,7 +5937,6 @@ package-docstrings	torchlens/bridge/lit/_runtime.py	64.
 package-docstrings	torchlens/bridge/lit/_sites.py	10
 package-docstrings	torchlens/bridge/lit/_sites.py	11
 package-docstrings	torchlens/bridge/lit/_sites.py	12
-package-docstrings	torchlens/bridge/mcp.py	11
 package-docstrings	torchlens/bridge/mcp.py	2.0
 package-docstrings	torchlens/bridge/mcp.py	3.1
 package-docstrings	torchlens/bridge/mcp.py	3.12,
@@ -6129,16 +6121,10 @@ package-docstrings	torchlens/distributed/_recognizer.py	5.2
 package-docstrings	torchlens/errors/episode.py	40
 package-docstrings	torchlens/errors/runnable.py	051
 package-docstrings	torchlens/errors/runnable.py	18
-package-docstrings	torchlens/experiment/__init__.py	11
-package-docstrings	torchlens/experiment/__init__.py	35
 package-docstrings	torchlens/experiment/_engine.py	256
 package-docstrings	torchlens/experiment/_engine.py	3.1
 package-docstrings	torchlens/experiment/_engine.py	36
 package-docstrings	torchlens/experiment/_head_sugar.py	36
-package-docstrings	torchlens/experiment/_ledger.py	10
-package-docstrings	torchlens/experiment/_ledger.py	256
-package-docstrings	torchlens/experiment/_reader.py	11
-package-docstrings	torchlens/experiment/_reader.py	50
 package-docstrings	torchlens/export/__init__.py	11
 package-docstrings	torchlens/export/__init__.py	16,
 package-docstrings	torchlens/export/__init__.py	17
@@ -8070,7 +8056,6 @@ test-docstrings	tests/test_layer_sites.py	41
 test-docstrings	tests/test_layer_sites.py	42
 test-docstrings	tests/test_ledger_exp_head_oracle.py	12
 test-docstrings	tests/test_ledger_exp_head_oracle.py	36
-test-docstrings	tests/test_ledger_exp_ledger.py	11
 test-docstrings	tests/test_leverage_div_honesty.py	16
 test-docstrings	tests/test_lit_bridge_contract.py	10
 test-docstrings	tests/test_lit_bridge_contract.py	12

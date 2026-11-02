@@ -1116,8 +1116,6 @@ torchlens/experiment/_engine.py	964
 torchlens/experiment/_engine.py::_resolve_candidate	80
 torchlens/experiment/_engine.py::sweep_sites	138
 torchlens/experiment/_head_sugar.py::head_ablation_candidates	75
-torchlens/experiment/_ledger.py	948
-torchlens/experiment/_ledger.py::ExperimentLedger.__init__	92
 torchlens/experimental/dagua/_bridge.py	933
 torchlens/experimental/dagua/_bridge.py::_torchlens_layout_config	61
 torchlens/experimental/dagua/_bridge.py::trace_to_dagua_graph	145
