@@ -24,7 +24,7 @@ from torchlens._ir.selector_eval import evaluate
 from torchlens._utils.tensor_utils import sparse_component_tensors, sparse_with_values
 from torchlens.backends.torch.buffer_writes import _whole_storage_uint8
 from torchlens.backends.torch.rescue import _state_bytes_equal
-from torchlens.errors import TraceCaptureError
+from torchlens.errors import ArtifactError, TraceCaptureError
 from torchlens.intervention.errors import LiveModeLabelError
 from torchlens.intervention.hooks import live_selector_matches_site
 from torchlens.types import FailureOrigin
@@ -216,3 +216,12 @@ def test_sparse_buffer_model_validates() -> None:
     torch.manual_seed(0)
     model = _SparseAdjacency().eval()
     assert tl.validate(model, [torch.randn(3, 4)], scope="forward", seed=0)
+
+
+def test_portable_save_of_a_sparse_buffer_refuses_with_a_code(tmp_path) -> None:
+    trace = tl.trace(_SparseAdjacency().eval(), [torch.randn(3, 4)])
+    with pytest.raises(ArtifactError) as info:
+        trace.save(tmp_path / "sparse.tlspec", level="portable")
+    assert info.value.fields["code"] == "artifact_tensor_unsupported"
+    assert "sparse_coo layout" in str(info.value)
+    assert info.value.fields["remedy"]

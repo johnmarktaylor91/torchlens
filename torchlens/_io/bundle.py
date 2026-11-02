@@ -721,7 +721,14 @@ def save(
                 )
                 if blob_spec.logical_backend != "torch":
                     raise BackendPayloadUnsupportedError(error_text)
-                raise ArtifactError(error_text)
+                raise ArtifactError(
+                    error_text,
+                    code="artifact_tensor_unsupported",
+                    remedy="save at level='audit', or make the tensor dense and strided",
+                    label=blob_spec.label,
+                    kind=blob_spec.kind,
+                    reason=decision.text,
+                )
             unsupported_tensors.append(
                 {"label": blob_spec.label, "kind": blob_spec.kind, "reason": decision.text}
             )

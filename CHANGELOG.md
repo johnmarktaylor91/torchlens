@@ -425,6 +425,8 @@
   model's own code raised, `capture_internal_error` when the innermost attributable frame was
   TorchLens's. `LiveModeLabelError` defaults to `label_selector_not_live`, so a live selector
   naming a finalized postprocess label refuses with a code from every raise site.
+  A strict portable save that meets a tensor the codec cannot store (a sparse buffer, for one)
+  refuses with `artifact_tensor_unsupported` instead of an uncoded `ArtifactError`.
 - **capture**: call-site chains no longer include TorchLens's own frames when the package is
   imported through a relative `sys.path` entry such as `PYTHONPATH=.`; those frames had merged
   distinct call sites into false loops. The TorchLens-frame test now compares normalised file
