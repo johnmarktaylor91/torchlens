@@ -50,7 +50,7 @@ def test_a_changed_contract_changes_the_page(tmp_path: Path) -> None:
     record["persisted_field_names"].append("zz_added_by_test")
     record["field_policies"]["zz_added_by_test"] = "keep"
     record["field_tiers"]["zz_added_by_test"] = "fact"
-    changed = tmp_path / "writer_contract_v11.json"
+    changed = tmp_path / persisted_fields.CONTRACT.name
     changed.write_text(json.dumps(document), encoding="utf-8")
     rendered = persisted_fields.render(contract_path=changed)
     assert rendered != PAGE.read_text(encoding="utf-8")

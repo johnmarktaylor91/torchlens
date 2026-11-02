@@ -1,8 +1,8 @@
-"""Field-admission gate for the v11 writer contract.
+"""Field-admission gate for the frozen v11 writer contract.
 
-Every field the v11 contract of record carries over v10 (persisted or DROP)
-must be registered here under its policy. An unregistered new persisted field
-fails this test, so a field never reaches the stored shape by accident.
+The v11 contract stays byte-frozen beside the current one. Every field it
+carries over v10 (persisted or DROP) is registered here under its policy, so a
+field never reached the stored shape by accident.
 """
 
 from __future__ import annotations
@@ -245,12 +245,14 @@ def test_v11_admissions_name_only_real_additions() -> None:
 
 
 def test_v11_reader_floor_is_the_v11_stamp() -> None:
-    """The v11 contract reads only stamp 11: the floor moved with the contract."""
+    """The frozen v11 contract read only stamp 11: the floor moved with the contract.
 
-    from torchlens._io import MIN_TLSPEC_VERSION, TLSPEC_VERSION
+    The live floor is pinned by the current contract's own gate
+    (``tests/test_schema_v12_contract.py``) and ``tests/test_rehydration_floor.py``.
+    """
 
-    assert MIN_TLSPEC_VERSION == TLSPEC_VERSION == 11
     v11 = json.loads(V11_CONTRACT.read_text(encoding="utf-8"))
     v10 = json.loads(V10_CONTRACT.read_text(encoding="utf-8"))
-    assert v11["contract"]["min_tlspec_version"] == 11
+    assert v11["contract"]["tlspec_version"] == 11, "v11 stays frozen"
+    assert v11["contract"]["min_tlspec_version"] == 11, "v11 stays frozen"
     assert v10["contract"]["min_tlspec_version"] == 6, "v10 stays frozen"

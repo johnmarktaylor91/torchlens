@@ -27,8 +27,8 @@ def _simple_model_and_input() -> tuple[torch.nn.Module, torch.Tensor]:
 def test_io_format_version_and_floor() -> None:
     """The coordinated tlspec v11 bump stamps 11 and reads only stamp 11."""
 
-    assert TLSPEC_VERSION == 11
-    assert MIN_TLSPEC_VERSION == 11
+    assert TLSPEC_VERSION == 12
+    assert MIN_TLSPEC_VERSION == 12
 
 
 def test_pre_floor_module_call_state_refuses_typed() -> None:

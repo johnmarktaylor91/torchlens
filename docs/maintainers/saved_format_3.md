@@ -8,7 +8,7 @@ constants it names live in `torchlens/_io/format3/contract.py`, and
 `docs/maintainers/persisted_fields.md`. Until the three doors land, the functions in
 `torchlens/_io/format3/` refuse typed and name the module that fills each.
 
-What the format replaces: the `metadata.pkl` of the tlspec 11 writer (a restricted-unpickler
+What the format replaces: the `metadata.pkl` of the pickle writer (a restricted-unpickler
 payload) and its inline-tensor pickle reduction. What it keeps: the record contracts and keys of
 `persisted_fields.md`, the save levels and payload flags of `torchlens/_io/save_policy.py`, the
 safetensors payload codecs, the writer identity stamp and the writer contract digest.
@@ -129,7 +129,7 @@ payload column but its tensor references carry no blob (section 3).
 
 ### Keys and values the format adds
 
-The tlspec bump that ships with the format adds, so that a loaded trace equals the live one:
+The tlspec 12 bump that ships with the format adds, so that a loaded trace equals the live one:
 
 - `op.is_constant` (boolean, required at every level, fact): set by the shared constants rule for
   closure constants and literal producers, following `is_buffer`; the Paddle and tinygrad
@@ -148,9 +148,10 @@ The tlspec bump that ships with the format adds, so that a loaded trace equals t
   bucket outside the pipeline keeps its stage name as a snake_case key; the writer contract pins
   the full key set.
 
-Until that bump lands, `contract.PLANNED_KEYS` names the added keys and the pin test asserts
-they are absent from the page; the writer lane adds the bindings, regenerates the page, bumps
-`contract.RECORD_CONTRACT_VERSION` and empties `PLANNED_KEYS` in one change.
+Both op keys are in the tlspec 12 bindings and on the page (the op record has 176 keys), so
+`contract.PLANNED_KEYS` is empty. A key a later contract plans goes there first; the pin test
+asserts it is absent from the page until the change that adds its binding, regenerates the page
+and bumps `contract.RECORD_CONTRACT_VERSION` also removes it from the plan.
 
 ## 3. Tensor references
 
@@ -313,7 +314,7 @@ A portable save of a tiny CNN (`conv2d`, `relu`, `linear`), excerpts:
              "op": {"path": "records/op.json", "rows": 3, "sha256": "...", "bytes": 19042}, "...": {}},
  "files": {"records/op.json": {"sha256": "...", "bytes": 19042},
            "blobs/out-0001.safetensors": {"sha256": "...", "bytes": 102592}, "...": {}}}
-// records/op.json (three columns of 174)
+// records/op.json (three columns of 176)
 {"record": "op", "tlspec_version": 12, "rows": 3,
  "columns": {"label": ["conv2d_1_1", "relu_1_2", "linear_1_3"],
              "is_constant": [false, false, false],

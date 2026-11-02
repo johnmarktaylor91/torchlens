@@ -66,7 +66,7 @@ def test_floor_error_is_typed_and_public() -> None:
 
     assert issubclass(ArtifactTooOldError, ArtifactError)
     assert tl.errors.ArtifactTooOldError is ArtifactTooOldError
-    assert MIN_TLSPEC_VERSION == TLSPEC_VERSION == 11
+    assert MIN_TLSPEC_VERSION == TLSPEC_VERSION == 12
 
 
 def test_current_artifacts_load_clean(tmp_path: Path) -> None:
