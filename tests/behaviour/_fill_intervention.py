@@ -271,15 +271,36 @@ def _merge_intervene(cell: Cell, recipe: Any) -> None:
     cell.trace_kwargs["on_zero_fire"] = "error"
 
 
+def _scale_target(cell: Cell) -> str | None:
+    """Return the function the intervene row scales: the most common non-view float function.
+
+    View and indexing functions (``_VIEW_FUNCS``) are skipped: their outputs are
+    often coordinates or offsets the model indexes with (PointNet++'s ball
+    query halves its point coordinates and indexes out of range, finding F13),
+    so scaling them tests the model's own forward rather than the recipe. A
+    model whose floating-point ops are all views falls back to the most common
+    floating-point function.
+    """
+
+    from tests.behaviour.harness import execution_order
+
+    counts = Counter(
+        op.func_name
+        for op in execution_order(cell.facts.plain)
+        if _is_float(op.dtype) and op.func_name not in _VIEW_FUNCS | {"identity"}
+    )
+    return counts.most_common(1)[0][0] if counts else cell.facts.common_float_func
+
+
 def _float_target_labels(cell: Cell, trace: Any) -> set[str]:
     """Return the labels of the floating-point ops of the intervene row's function."""
 
-    target = cell.facts.common_float_func
+    target = _scale_target(cell)
     return {op.label for op in trace.ops if op.func_name == target and _is_float(op.dtype)}
 
 
 def _prepare_intervene(cell: Cell) -> None:
-    """Scale the floating-point ops of the most common floating-point function.
+    """Scale the floating-point ops of the most common non-view floating-point function.
 
     ``tl.func(name)`` matches every op of that name, integer ones included, and
     ``tl.scale`` on an integer tensor is a typed dtype refusal; the integer ops
@@ -288,7 +309,7 @@ def _prepare_intervene(cell: Cell) -> None:
     label does not exist yet while the forward runs).
     """
 
-    target = cell.facts.common_float_func
+    target = _scale_target(cell)
     if target is None:
         _not_applicable("no floating-point op to scale")
     plain = cell.facts.plain
