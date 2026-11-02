@@ -300,6 +300,17 @@ def _placeholders_in(data: Any) -> list[dict[str, Any]]:
     return found
 
 
+def _builtin_helpers(rules: list[dict[str, Any]], version: Any) -> list[dict[str, Any]]:
+    """Return one helper entry per distinct built-in edit name the rules use."""
+
+    helpers = {
+        rule["edit"]["name"]: {"name": rule["edit"]["name"], "version": version}
+        for rule in rules
+        if rule["edit"]["portability"] == "builtin"
+    }
+    return list(helpers.values())
+
+
 def build_recipe(
     spec: Any,
     *,
@@ -341,11 +352,6 @@ def build_recipe(
         _value_rule(i, value_spec, encoder)
         for i, value_spec in enumerate(getattr(spec, "target_value_specs", ()))
     ]
-    helpers = {
-        rule["edit"]["name"]: {"name": rule["edit"]["name"], "version": helper_registry_version}
-        for rule in rules
-        if rule["edit"]["portability"] == "builtin"
-    }
     executable = save_level != _AUDIT_LEVEL and not encoder.placeholders and not encoder.disclosures
     recipe = {
         "format": RECIPE_FORMAT,
@@ -357,7 +363,7 @@ def build_recipe(
         "append_state": ValueEncoder().encode(dict(append_state), "append_state"),
         "rules": rules,
         "values": values,
-        "helpers": list(helpers.values()),
+        "helpers": _builtin_helpers(rules, helper_registry_version),
         "function_registry_keys": [dict(entry) for entry in function_registry_keys],
     }
     return recipe, list(encoder.disclosures)

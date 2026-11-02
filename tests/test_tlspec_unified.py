@@ -15,7 +15,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io import TLSPEC_VERSION, ArtifactError
-from torchlens._io.tlspec import _TlSpecWriter
+from torchlens._io._tlspec_identity import _backend_runtime
 from torchlens.errors import BackendPayloadUnsupportedError
 from torchlens.intervention.types import Edit, FireRecord, InterventionSpec
 from torchlens.options import CaptureOptions
@@ -1158,7 +1158,7 @@ def test_unknown_backend_runtime_version_serializes_as_null() -> None:
         backend_runtime_device_summary={},
     )
 
-    runtime = _TlSpecWriter._backend_runtime(source, backend_name="mlx")
+    runtime = _backend_runtime(source, backend_name="mlx")
 
     assert runtime["version"] is None
     assert '"version": null' in json.dumps(runtime)
