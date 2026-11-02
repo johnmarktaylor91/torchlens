@@ -33,7 +33,7 @@ pytest config excludes `rare` tests via `addopts = -m 'not rare'`.
 pytest tests/test_toy_models.py            # single file — targeted suites ARE the per-step gate
 pytest tests/test_toy_models.py::test_name # single test
 python scripts/smoke_ci_parity.py -n 4     # commit-level gate: smoke in CI's pinned enforcing environment
-pytest tests/ -m smoke -n 4                # quick smoke in your own venv (~1.4k tests; not the gate)
+pytest tests/ -m smoke -n 4                # quick smoke in your own venv (~1.5k tests; not the gate)
 pytest tests/ -m "not rare and not slow and not heavy" -x --tb=short  # mid backstop
 pytest tests/ -m "not rare and not slow"   # phase-boundary backstop (keeps rare excluded)
 pytest tests/                              # default suite excluding rare
@@ -47,7 +47,7 @@ Run memory-heavy real-world tests sequentially. Optional dependency tests should
 
 | Marker | Meaning |
 | --- | --- |
-| `smoke` | Critical-path checks, <5s each (measured); the commit-level gate, not per-step. A coverage-chosen set of about 1,400 tests, capped at `SMOKE_TIER_SIZE_CEILING` (1,500) in `tests/conftest.py`. |
+| `smoke` | Critical-path checks, <5s each (measured); the commit-level gate, not per-step. A coverage-chosen set of about 1,480 tests, capped at `SMOKE_TIER_SIZE_CEILING` (1,500) in `tests/conftest.py`. |
 | `smoke_cells` | `smoke_cells("test_x[a]", ...)` on a function, class or module applies `smoke` to exactly the named items, so a parametrized family keeps one or two representative smoke cells. |
 | `heavy` | Mid-cost (5-20s) tests, excluded from smoke and the mid backstop. |
 | `slow` | Long-running (>20s) real-world tests. |
