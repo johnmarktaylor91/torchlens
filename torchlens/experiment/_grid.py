@@ -378,6 +378,8 @@ class _Plan:
 
     @property
     def cell_count(self) -> int:
+        """The number of cells in the full grid, refused cells included."""
+
         return math.prod(len(values) for values in self.names.values())
 
 
@@ -448,6 +450,8 @@ def _hole(cell_id: str, where: Any, edit: Any) -> _Candidate:
 
 
 def _unresolved_text(cell_id: str, sites: list[tuple[str, Any]], exc: BaseException) -> str:
+    """The refusal text for a cell whose sites resolve to nothing on the baseline."""
+
     values = ", ".join(f"{name}={value!r}" for name, value in sites)
     return (
         f"{_UNRESOLVED}: cell {cell_id!r} ({values}) resolves to no site on the baseline; "
@@ -456,6 +460,8 @@ def _unresolved_text(cell_id: str, sites: list[tuple[str, Any]], exc: BaseExcept
 
 
 def _with_edit(candidate: _Candidate, edit: Any) -> _Candidate:
+    """A copy of ``candidate`` carrying this cell's edit."""
+
     from dataclasses import replace
 
     return replace(candidate, edit=edit)
