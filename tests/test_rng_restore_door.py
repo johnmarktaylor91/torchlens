@@ -159,10 +159,14 @@ def test_trace_method_validation_returns_the_callers_streams() -> None:
     leaves the caller's streams where they were."""
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU(), nn.Linear(3, 2))
     x = torch.randn(2, 4)
-    trace = tl.trace(model, x)
-    ground_truth = model(x)
+    # Replay needs the saved activations and arguments; a default capture
+    # keeps neither and reports an unverified status instead of a verdict.
+    trace = tl.trace(
+        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True)
+    )
+    ground_truth = model(x).detach().clone()
     _seed_all(11)
     expected = _draw()
     _seed_all(11)
-    assert trace.validate_forward_pass([ground_truth])
+    assert trace.validate_forward_pass([ground_truth]) is True
     assert _draw() == expected
