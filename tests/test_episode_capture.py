@@ -26,7 +26,12 @@ from torchlens._capture._episode_ledger import (
     row_status_for_recording_status,
     write_episode_ledger,
 )
-from torchlens.errors import EpisodeDeclarationError, EpisodeLedgerError, TorchLensWarning
+from torchlens.errors import (
+    EpisodeDeclarationError,
+    EpisodeLedgerError,
+    TorchLensWarning,
+    TraceCaptureError,
+)
 from torchlens.options import EpisodeOptions
 
 
@@ -358,9 +363,10 @@ def test_failed_episode_attaches_partial_ledger():
     stepped = BombAtStep(bomb_call=3)
     runner = GreedyRunner(stepped, 5)
     spec = EpisodeOptions(stepped_module=stepped, num_steps=5)
-    with pytest.raises(RuntimeError, match="injected step failure") as excinfo:
+    with pytest.raises(TraceCaptureError, match="injected step failure") as excinfo:
         tl.trace(runner, _prompt(), episode=spec)
-    partial = tl._partial.from_failed_capture(excinfo.value)
+    assert isinstance(excinfo.value.__cause__, RuntimeError)
+    partial = excinfo.value.partial_trace
     payload = partial.trace.annotations.get("episode")
     assert payload is not None
     ledger = EpisodeLedger.from_payload(payload)

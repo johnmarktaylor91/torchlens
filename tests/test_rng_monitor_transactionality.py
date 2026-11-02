@@ -372,7 +372,7 @@ def test_rng_monitor_verdict_is_prestamped_fail_closed(monkeypatch):
             torch.randn(1, 4),
             capture=tl.options.CaptureOptions(replayable=True),
         )
-    partial = getattr(excinfo.value, "partial_log", None)
+    partial = getattr(excinfo.value, "partial_trace", None)
     assert partial is not None, "the failed capture must still expose its partial trace"
     runnable = partial.trace._runnable
     assert runnable.rng_monitor_uncertain is True

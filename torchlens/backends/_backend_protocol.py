@@ -131,6 +131,11 @@ VALIDATION_REASONS: frozenset[str] = frozenset(
         "effectful_region",
         "perturbation_insensitive",
         "dtype_tolerance_exceeded",
+        # Structural failures (per-op or trace-level, ``phase="metadata"``):
+        # an op the checker cannot classify, and capture records that
+        # disagree with each other.
+        "op_unclassified",
+        "capture_inconsistent",
     }
 )
 

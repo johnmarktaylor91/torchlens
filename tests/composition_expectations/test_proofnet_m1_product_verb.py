@@ -253,7 +253,7 @@ def m1_products(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     try:
         tl.trace(_Boom(), example)
     except Exception as exc:  # noqa: BLE001 - the partial product IS the payload
-        products["partial_trace"] = exc.partial_log
+        products["partial_trace"] = exc.partial_trace
     trace = products["trace_live"]
     products["trace_slice"] = trace.between([trace.layer_labels[0]], [trace.layer_labels[-1]])
     products["bundle"] = tl.sweep(

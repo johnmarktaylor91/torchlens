@@ -29,6 +29,7 @@ from torchlens.backends.torch.wrappers import (
     wrap_torch,
     wrapped,
 )
+from torchlens.errors import TraceCaptureError
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -326,8 +327,9 @@ class TestToggleState:
     def test_toggle_off_after_exception(self):
         """After an exception in forward, toggle must be off."""
         model = ErrorModel()
-        with pytest.raises(RuntimeError, match="intentional error"):
+        with pytest.raises(TraceCaptureError, match="intentional error") as _tce_info:
             trace_fn(model, torch.randn(5))
+        assert isinstance(_tce_info.value.__cause__, RuntimeError)
         assert _state._logging_enabled is False
         assert _state._active_trace is None
 
@@ -354,9 +356,10 @@ class TestToggleState:
         """requires_grad must be restored even when forward raises."""
         model = TwoLayerModel()
         orig_grads = {n: p.requires_grad for n, p in model.named_parameters()}
-        with pytest.raises(RuntimeError):
+        with pytest.raises(TraceCaptureError) as _tce_info2:
             # Force an error by passing wrong shape
             trace_fn(model, torch.randn(0))
+        assert isinstance(_tce_info2.value.__cause__, RuntimeError)
         for name, param in model.named_parameters():
             assert param.requires_grad == orig_grads[name], f"{name} requires_grad changed"
 
@@ -584,8 +587,9 @@ class TestPermanentModelPrep:
                 raise RuntimeError("boom")
 
         model = FailAfterLinear()
-        with pytest.raises(RuntimeError):
+        with pytest.raises(TraceCaptureError) as _tce_info3:
             trace_fn(model, torch.randn(5))
+        assert isinstance(_tce_info3.value.__cause__, RuntimeError)
 
         for module in model.modules():
             assert not hasattr(module, "tl_source_trace")
@@ -1118,8 +1122,9 @@ class TestSignalSafety:
         old_handler = signal.signal(signal.SIGALRM, alarm_handler)
         try:
             model = AlarmModel()
-            with pytest.raises(TimeoutError):
+            with pytest.raises(TraceCaptureError) as _tce_info:
                 trace_fn(model, torch.randn(5))
+            assert isinstance(_tce_info.value.__cause__, TimeoutError)
 
             # Toggle MUST be off
             assert _state._logging_enabled is False

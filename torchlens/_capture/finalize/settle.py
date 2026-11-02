@@ -365,7 +365,7 @@ def _scrub_failed_capture_transients(self: "Trace") -> None:
     INPUT tensors) and postprocess replaces the mutable ``capture_events``
     alias with the payload-free ``_capture_events`` home. A failed or
     interrupted forward reached neither, so the trace escaping on
-    ``exc.partial_log`` pickled the user's input tensors through an
+    ``exc.partial_trace`` pickled the user's input tensors through an
     undeclared attribute and retained every activation payload and grad_fn
     handle of the failed run (GB-class on real models).
 
@@ -391,7 +391,7 @@ def _scrub_failed_capture_transients(self: "Trace") -> None:
     from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
 
     # A failed forward may leave in-flight cpu_async D2H copies whose
-    # pinned host buffers escape on ``exc.partial_log`` (R36-1): fence them
+    # pinned host buffers escape on ``exc.partial_trace`` (R36-1): fence them
     # before anything reads the partial's payloads.
     synchronize_pending_cpu_async_copies()
     self.__dict__.pop("_output_attribution_input_tensors", None)

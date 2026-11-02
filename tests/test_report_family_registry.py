@@ -22,6 +22,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
+from torchlens.errors import TraceCaptureError
 from torchlens.report._factcore import factcore
 from torchlens.report._registry import (
     SURFACE_REGISTRY,
@@ -76,8 +77,9 @@ def partial_trace():
     with pytest.warns(Warning):
         try:
             tl.trace(Boom(), torch.randn(2, 4))
-        except RuntimeError as exc:
-            return tl._partial.from_failed_capture(exc)
+        except TraceCaptureError as exc:
+            assert isinstance(exc.__cause__, RuntimeError)
+            return exc.partial_trace
     raise AssertionError("the planted failure did not raise")
 
 

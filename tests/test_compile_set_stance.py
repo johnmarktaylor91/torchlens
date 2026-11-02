@@ -35,6 +35,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import _capture_state_helpers
 from torchlens._utils import _torch_compat
+from torchlens.errors import TraceCaptureError
 
 pytestmark = [pytest.mark.heavy]
 
@@ -411,8 +412,9 @@ def test_failed_capture_restores_force_eager_stance() -> None:
             raise RuntimeError("injected stance-scope failure")
 
     x = torch.randn(2, 4)
-    with pytest.raises(RuntimeError, match="injected stance-scope failure"):
+    with pytest.raises(TraceCaptureError, match="injected stance-scope failure") as _tce_info:
         tl.trace(_CompiledThenRaise(), x)
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
     assert compile_events == [], "the stance must compile zero graphs"
 
     compiled_free(x)

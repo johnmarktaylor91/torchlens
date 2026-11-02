@@ -105,8 +105,16 @@
   and `self_forward_backward_flops` (one convention). The count is saved with the pass
   (a private persisted record on `BackwardPass`), so a loaded trace reads it; a pass that raised has
   no count. All DOCUMENTED-UNSTABLE. `tl.report.backward_estimate(trace)` stays hypothetical.
-  Trace-side failed captures expose `exc.partial_log`, recoverable with
-  `tl._partial.from_failed_capture(exc)`.
+  A forward that raises during capture raises `tl.errors.TraceCaptureError` (a
+  `CaptureError`) chained `from` the forward's exception; the partial capture is on
+  `exc.partial_trace` and the outcome's `FailureOrigin` on `exc.origin`:
+  ```python
+  try:
+      tl.trace(model, x)
+  except tl.errors.TraceCaptureError as exc:
+      original = exc.__cause__  # the forward's own exception, traceback intact
+      print(exc.partial_trace.narrate(last=20))
+  ```
 - **A default `tl.trace` is a pure observer** (U40.1, AGT-2360; `carry_state`,
   `Module.attribute_writes` and `torchlens.types.AttributeWrite` DOCUMENTED-UNSTABLE): buffers
   (persistent and non-persistent), every module's `training` flag, the global random states and
@@ -227,7 +235,7 @@
   escalation — `episode_feed_break_exogenous`/`episode_join_declared_crossing`; ops/
   values/graph/per-segment reads unaffected); `EpisodeOptions(on_feed_break="refuse")` is
   the built FORK-4 arm (b) (settlement raises typed with the product on
-  `exc.partial_log`); `EpisodeOptions(feed="closed")` is the strict arm (undeclared
+  `exc.partial_trace`); `EpisodeOptions(feed="closed")` is the strict arm (undeclared
   crossing halts at the NEXT step entry — one-step detection latency —
   `episode_feed_closed_violation`; declared crossing stops before entry,
   `episode_declared_crossing_stop`); `EpisodeOptions(crossings=(k,...))` declares

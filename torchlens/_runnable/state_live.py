@@ -384,7 +384,7 @@ def capture_observer_bracket(
     advances exactly as one direct ``model(x)`` would. Both record what the
     forward wrote to plain attributes on the trace's ``Module`` records
     (``Module.attribute_writes``). The caller sets ``handle.trace`` to the
-    captured trace (a failure's ``partial_log`` is picked up from the
+    captured trace (a failure's ``partial_trace`` is picked up from the
     exception), so payloads that alias a restored buffer keep their
     forward-time values. ``on_failure`` runs after the restore when the capture
     raises (the failed-capture preparation release), before the exception
@@ -413,7 +413,9 @@ def capture_observer_bracket(
         with _attribute_rewind(snapshot.attrs):
             yield handle
     except BaseException as exc:
-        restore_capture_observer_state(snapshot, handle.trace or getattr(exc, "partial_log", None))
+        restore_capture_observer_state(
+            snapshot, handle.trace or getattr(exc, "partial_trace", None)
+        )
         if on_failure is not None:
             on_failure()
         raise

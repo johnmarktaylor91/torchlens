@@ -125,9 +125,9 @@ def record(
     on_predicate_error, storage, streaming, seed:
         Fastlog recording options.
     on_forward_error:
-        Controls failed-forward handling. ``"raise"`` preserves the historical
-        behavior, ``"attach_partial"`` attaches ``exc.partial_recording`` and
-        re-raises, and ``"return_partial"`` returns a failed partial Recording.
+        Controls failed-forward handling: ``"raise"`` raises the capture's
+        ``TraceCaptureError``, ``"attach_partial"`` also attaches the failed partial
+        Recording to it as ``partial_recording``, ``"return_partial"`` returns it.
         With ``return_output=True``, the returned output is ``None`` because no
         valid model output exists on failure.
     intervene:

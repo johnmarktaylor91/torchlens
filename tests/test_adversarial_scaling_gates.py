@@ -49,7 +49,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes._layer_sites import layer_site_key
-from torchlens.errors import CaptureAttemptFailedWarning
+from torchlens.errors import CaptureAttemptFailedWarning, TraceCaptureError
 
 N_STREAMS = 300
 N_PASSES = 300
@@ -406,8 +406,9 @@ def test_depth_overflow_fails_clean_and_restores() -> None:
         model(inputs)
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            with pytest.raises(RecursionError):
+            with pytest.raises(TraceCaptureError) as _tce_info:
                 tl.trace(model, inputs)
+            assert isinstance(_tce_info.value.__cause__, RecursionError)
     finally:
         sys.setrecursionlimit(original_limit)
     assert any(isinstance(w.message, CaptureAttemptFailedWarning) for w in caught), (

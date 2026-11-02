@@ -263,8 +263,10 @@ Key entry points:
   failed partial `Recording`. Failed partials set `status="partial_error"`, `is_failed=True`,
   string-only error metadata, `num_committed_ops`, and best-effort `last_event_*` fields.
   user-op failures exclude the failing call; TL-side capture failures may include a
-  skipped/partial current-call event. Trace failed captures separately expose
-  `exc.partial_log`, recoverable with `tl._partial.from_failed_capture(exc)`.
+  skipped/partial current-call event. A forward exception during any capture door raises
+  `tl.errors.TraceCaptureError` chained `from` it (the forward's exception is never mutated),
+  carrying `.partial_trace` and `.origin` (the outcome's `FailureOrigin`); TorchLens's own
+  errors propagate as themselves and carry `.partial_trace` too.
 - Every capture product carries one settled typed outcome: `Trace.outcome` /
   `Recording.outcome` / `PartialTrace.outcome` return a frozen `CaptureOutcome`
   (COMPLETE / STOPPED / ABORTED_NONFINITE / FAILED+phase / UNATTESTED / UNKNOWN),

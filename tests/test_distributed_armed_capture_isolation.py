@@ -32,6 +32,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._capture.outcome import classify_failure_origin
 from torchlens.distributed import _lifecycle
+from torchlens.errors import TraceCaptureError
 from torchlens.types import FailureOrigin
 
 
@@ -81,6 +82,7 @@ def test_user_op_failure_classifies_user_op_while_armed() -> None:
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             return torch.matmul(x, torch.ones(7, 7))
 
-    with pytest.raises(RuntimeError) as excinfo:
+    with pytest.raises(TraceCaptureError) as excinfo:
         tl.trace(ShapeMismatch(), torch.ones(1, 3))
+    assert isinstance(excinfo.value.__cause__, RuntimeError)
     assert classify_failure_origin(excinfo.value) is FailureOrigin.USER_OP

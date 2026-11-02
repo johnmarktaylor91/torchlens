@@ -27,6 +27,7 @@ from torchlens._capture_state_helpers import (
     unwrap_compiled_submodules,
 )
 from torchlens._utils._torch_compat import get_dynamo_optimized_module_type
+from torchlens.errors import TraceCaptureError
 
 
 class _Tiny(nn.Module):
@@ -359,8 +360,9 @@ def test_compiled_submodule_restored_after_forward_exception(parent_raises: bool
     else:
         model = _ParentWithChild(compiled_child)
 
-    with pytest.raises(RuntimeError, match="forward failure"):
+    with pytest.raises(TraceCaptureError, match="forward failure") as _tce_info:
         tl.trace(model, torch.randn(2, 4), capture=tl.options.CaptureOptions(layers_to_save="none"))
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
     assert model.child is compiled_child
 

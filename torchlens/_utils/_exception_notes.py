@@ -33,3 +33,52 @@ def annotate_guarded(exc: BaseException, note: str, *, stacklevel: int = 3) -> N
         add_note(note)
     else:  # Python 3.10: no PEP 678 notes -- surface via warning.
         warnings.warn(note, RuntimeWarning, stacklevel=stacklevel)
+
+
+_PENDING_FAILURE_NOTES_KEY = "_pending_failure_notes"
+"""Capture-session slot holding notes for the error the capture door raises."""
+
+
+def defer_failure_note(session: object, exc: BaseException, note: str) -> None:
+    """Queue ``note`` for the error a failing capture door raises.
+
+    A note written while the forward's exception unwinds must not mutate that
+    exception: the capture door wraps it in a ``TraceCaptureError`` (or lets a
+    TorchLens error propagate) and moves queued notes onto the raised error.
+    Without a capture session to hold the queue, ``exc`` is annotated directly.
+
+    Parameters
+    ----------
+    session:
+        Active capture session (the ``Trace`` being captured), or ``None``.
+    exc:
+        The in-flight exception the note describes.
+    note:
+        Note text.
+    """
+
+    slots = getattr(session, "__dict__", None)
+    if not isinstance(slots, dict):
+        annotate_guarded(exc, note)
+        return
+    slots.setdefault(_PENDING_FAILURE_NOTES_KEY, []).append(note)
+
+
+def pop_failure_notes(session: object) -> tuple[str, ...]:
+    """Remove and return the notes queued on ``session`` by :func:`defer_failure_note`.
+
+    Parameters
+    ----------
+    session:
+        Capture session whose queue is drained.
+
+    Returns
+    -------
+    tuple[str, ...]
+        Queued notes in arrival order (empty when none).
+    """
+
+    slots = getattr(session, "__dict__", None)
+    if not isinstance(slots, dict):
+        return ()
+    return tuple(slots.pop(_PENDING_FAILURE_NOTES_KEY, ()))

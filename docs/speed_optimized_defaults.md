@@ -72,8 +72,8 @@ on `recorder.recording`. Failed partials set `status="partial_error"`, `failed=T
 include a skipped/partial current-call event. Failed partials reject `Recording.to_trace()` and
 `Recording.backward()`.
 
-Full `tl.trace(...)` failures expose a separate honest partial as `exc.partial_log`; retrieve it
-with `tl._partial.from_failed_capture(exc)`.
+Full `tl.trace(...)` failures raise `tl.errors.TraceCaptureError` (chained `from` the forward's
+exception) with a separate honest partial on `exc.partial_trace`.
 
 ## Final-Label Saves
 

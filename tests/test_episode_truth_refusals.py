@@ -1,5 +1,5 @@
 """Episode honesty refusals (lane F40a): pre-execution intervene refusal,
-declared-step cost ceiling, partial_log on settlement refusals, and the
+declared-step cost ceiling, partial_trace on settlement refusals, and the
 discoverability seam (capture_kind / episode step access)."""
 
 from __future__ import annotations
@@ -13,7 +13,6 @@ from torchlens._capture._episode_ledger import (
     EPISODE_DECLARED_STEP_CEILING,
     resolve_episode_declaration,
 )
-from torchlens._partial import from_failed_capture
 from torchlens.errors.episode import EpisodeDeclarationError, EpisodeLedgerError
 from torchlens.options import EpisodeOptions
 from torchlens.types import PartialTrace
@@ -163,15 +162,13 @@ def test_entry_refusal_via_trace_keeps_root_unexecuted():
 def _assert_settlement_refusal_keeps_product(excinfo: pytest.ExceptionInfo) -> None:
     """Shared assertions: settlement refusals carry the settled product."""
 
-    partial = getattr(excinfo.value, "partial_log", None)
+    partial = getattr(excinfo.value, "partial_trace", None)
     assert isinstance(partial, PartialTrace)
     assert partial.trace is not None
     assert len(partial.trace._layer_list) > 0
-    recovered = from_failed_capture(excinfo.value)
-    assert recovered is partial
 
 
-def test_settlement_count_mismatch_carries_partial_log():
+def test_settlement_count_mismatch_carries_partial_trace():
     """episode_ledger_incoherent at settlement keeps the settled product."""
 
     model = _Greedy()

@@ -442,7 +442,7 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanReport:
         fields = exc.fields
         if "op" not in fields or "layer" not in fields:
             raise
-        partial = getattr(exc, "partial_log", None)
+        partial = getattr(exc, "partial_trace", None)
         partial_trace = getattr(partial, "trace", None)
         finalized = bool(
             partial_trace is not None
