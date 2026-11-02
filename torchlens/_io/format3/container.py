@@ -22,14 +22,14 @@ import os
 import re
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, Literal, NoReturn
+from typing import Any, Literal
 
 from ..._utils.hashing import sha256_file
 from .._json import read_bounded
 from ..bundle_metadata import _load_gated_member_relations
-from ..format_errors import ArtifactError
 from ..paths import reject_symlink_path
 from .contract import MANIFEST_FILE, REFUSAL_CODES
+from .runnable_families import refuse as _refuse
 
 #: Index file of a bundle artifact, at its root.
 BUNDLE_INDEX_FILE = "bundle.json"
@@ -45,12 +45,6 @@ MEMBER_REFERENCE_KEYS: tuple[str, ...] = ("name", "path", "manifest_sha256")
 
 #: A member writer: ``(trace, member_dir, level) -> None``.
 MemberWriter = Callable[[Any, Path, str], None]
-
-
-def _refuse(situation: str, message: str, remedy: str) -> NoReturn:
-    """Raise the contract's typed refusal for one situation."""
-
-    raise ArtifactError(message, code=REFUSAL_CODES[situation], remedy=remedy)
 
 
 def member_relative_path(index: int, name: str) -> str:
