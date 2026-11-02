@@ -966,6 +966,7 @@ def _build_lazy_tensor_ref(
         logical_device=entry.logical_device,
         codec_metadata=entry.codec_metadata,
         payload_hints=payload_hints,
+        entry_key=entry.entry_key,
     )
 
 

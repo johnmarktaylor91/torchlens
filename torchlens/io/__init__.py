@@ -58,15 +58,19 @@ def detect_tlspec_format(path: str | Path) -> str:
     Returns
     -------
     str
-        One of ``"v2.0_unified"``, ``"v2.16_intervention_with_kind"``,
-        ``"v2.16_intervention"``, ``"v2.16_modellog_portable"``, or
-        ``"unknown"``.
+        One of ``"v3"`` (the 3.0 saved format), ``"v2.0_unified"``,
+        ``"v2.16_intervention_with_kind"``, ``"v2.16_intervention"``,
+        ``"v2.16_modellog_portable"``, or ``"unknown"``.
     """
 
     tlspec_path = Path(path)
     _reject_symlinked_metadata_path(tlspec_path)
     manifest = _read_json_object_if_present(tlspec_path / "manifest.json")
     if manifest is not None:
+        from .._io.format3 import contract as format3_contract
+
+        if manifest.get("format") == format3_contract.FORMAT_NAME:
+            return "v3"
         has_kind = "kind" in manifest
         has_tlspec_version = "tlspec_version" in manifest
         if has_tlspec_version and has_kind:

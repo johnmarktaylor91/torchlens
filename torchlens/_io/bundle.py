@@ -60,7 +60,7 @@ from ._durability import fsync_dir, fsync_tree
 from ._pickle_prescan import OpcodeCeilingExceeded
 from ._portability_preflight import preflight_metadata_portability
 from ._pre3_module_paths import modellog_216_error
-from ._root_manifest import NOT_ROUTED, load_by_root_manifest
+from ._root_manifest import NOT_ROUTED, _read_root_manifest, load_by_root_manifest
 from ._safe_unpickle import SafeBundleUnpickler
 from ._save_gates import (
     _refuse_edge_intervened_save,
@@ -1293,6 +1293,41 @@ def load(
     ...
 
 
+def _is_format3_root(bundle_path: Path) -> bool:
+    """Return whether the directory's root manifest names the 3.0 saved format."""
+
+    from .format3 import contract as format3_contract
+
+    candidate = _read_root_manifest(bundle_path)
+    return candidate is not None and candidate.get("format") == format3_contract.FORMAT_NAME
+
+
+def _load_format3(
+    bundle_path: Path,
+    *,
+    lazy: bool,
+    map_location: str | torch.device,
+    materialize_nested: bool,
+    payload_hints: PayloadLoadHints | None,
+) -> Trace | Bundle | InterventionSpec:
+    """Dispatch a 3.0 artifact to the format3 reader door its manifest ``kind`` names."""
+
+    from .format3 import reader as format3_reader
+
+    kind = format3_reader.read_manifest(bundle_path)["kind"]
+    if kind == "intervention":
+        return cast("InterventionSpec", format3_reader.load_intervention_recipe(bundle_path))
+    options = {
+        "lazy": lazy,
+        "map_location": map_location,
+        "materialize_nested": materialize_nested,
+        "payload_hints": payload_hints,
+    }
+    if kind == "bundle":
+        return cast("Bundle", format3_reader.load_bundle(bundle_path, **options))
+    return cast("Trace", format3_reader.load_trace(bundle_path, **options))
+
+
 def load(
     path: str | Path,
     *,
@@ -1384,6 +1419,16 @@ def load(
         routed = load_by_root_manifest(bundle_path)
         if routed is not NOT_ROUTED:
             return routed
+        if _is_format3_root(bundle_path):
+            # 3.0 saved format: JSON record tables plus safetensors chunks; the
+            # reader never touches the pickle path below.
+            return _load_format3(
+                bundle_path,
+                lazy=lazy,
+                map_location=map_location,
+                materialize_nested=materialize_nested,
+                payload_hints=payload_hints,
+            )
         from ..io import detect_tlspec_format
 
         tlspec_format = detect_tlspec_format(bundle_path)
