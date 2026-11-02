@@ -24,7 +24,14 @@ from ..._utils._torch_compat import HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
 from ..._utils.tensor_leaves import iter_tensors
 from ..._utils.tensor_utils import safe_copy
 from ._completeness_origins import internal_scalar_read
-from ._tl import NO_USER_GRAD_FN, get_param_meta, mutated_parameter_label
+from ._tl import (
+    NO_USER_GRAD_FN,
+    get_param_meta,
+    get_tensor_label,
+    mutated_parameter_label,
+    set_tensor_label,
+    storage_alias_index_key,
+)
 
 
 def is_unregistered_parameter(trace: Any, value: Any) -> bool:
@@ -140,6 +147,50 @@ def same_object_logging_copy(out_orig: Any) -> Any:
                 NO_USER_GRAD_FN if live_user_grad_fn is None else live_user_grad_fn
             )
     return logged
+
+
+def adopt_minted_parameter_label(trace: Any, param: Any, sources: tuple[Any, ...]) -> None:
+    """Give a forward-created Parameter the label of the tensor it was minted from.
+
+    ``nn.Parameter(data)`` (``Tensor._make_subclass``) returns a new Parameter
+    object on ``data``'s storage carrying none of ``data``'s TorchLens metadata,
+    and a lazy module's ``materialize`` rebinds its pending slot's ``.data`` to a
+    fresh allocation the same way. Inside the captured pass that tensor is a
+    logged factory output (``torch.empty`` in ``nn.Linear.__init__``), so the
+    Parameter adopts its label: the Parameter's first read or in-place
+    initializer binds to the op that produced the storage instead of consuming
+    unattributed data. A prepared Parameter never qualifies.
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace.
+    param:
+        The Parameter the call returned or rebound.
+    sources:
+        Call arguments; the first labeled plain tensor on ``param``'s storage is
+        the origin.
+    """
+
+    if not is_unregistered_parameter(trace, param) or mutated_parameter_label(param) is not None:
+        return
+    for source in sources:
+        if isinstance(source, torch.Tensor) and not isinstance(source, torch.nn.Parameter):
+            label = get_tensor_label(source)
+            if label is not None and _same_storage(source, param):
+                set_tensor_label(param, label)
+                return
+
+
+def _same_storage(a: torch.Tensor, b: torch.Tensor) -> bool:
+    """Return whether two tensors are on one storage (unreadable storage fails closed)."""
+
+    try:
+        key_a = storage_alias_index_key(a.untyped_storage())
+        key_b = storage_alias_index_key(b.untyped_storage())
+    except (RuntimeError, ValueError, AttributeError):
+        return False
+    return key_a is not None and key_a == key_b
 
 
 def receiver_mutation_label(args: tuple[Any, ...]) -> str | None:

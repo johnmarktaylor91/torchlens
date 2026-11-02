@@ -135,6 +135,7 @@ from .escape_detection import (
     reset_detector_tables,
 )
 from .param_mutation import (
+    adopt_minted_parameter_label as _adopt_minted_parameter_label,
     frozen_parameter_receiver_context as _frozen_parameter_receiver_context,
     is_mutated_parameter_receiver as _is_mutated_parameter_receiver,
     nested_write_relabeled_receiver as _nested_write_relabeled_receiver,
@@ -1286,7 +1287,11 @@ def torch_func_decorator(
         # registers at the module-entry gate); pass the call through
         # unlogged, mirroring the functorch/dynamo region guards above.
         if args and isinstance(args[0], torch.Tensor) and _is_uninitialized_param(args[0]):
-            return func(*args, **kwargs)
+            result = func(*args, **kwargs)
+            # A forward-created lazy slot rebinds to its logged allocation: adopt it.
+            if is_storage_rebinding_setter and len(args) >= 2:
+                _adopt_minted_parameter_label(trace, args[0], (args[1],))
+            return result
 
         # Usage stats: count every decorated function call during logging.
         if _state._collect_usage_stats:
@@ -1531,6 +1536,9 @@ def torch_func_decorator(
             autocast_state=autocast_state,
         )
         is_bottom_level_func = trace._wrapper_runtime_ws.current_func_barcode == func_call_barcode
+        if isinstance(out_orig, torch.nn.Parameter):
+            # ``Parameter(data)`` minted in the pass is unlogged; it adopts data's label.
+            _adopt_minted_parameter_label(trace, out_orig, args)
 
         # __setitem__, zero_, __delitem__ modify in-place and return None;
         # treat the first arg (the modified tensor) as the output. Mutating

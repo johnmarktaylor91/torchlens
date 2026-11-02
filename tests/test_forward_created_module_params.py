@@ -42,6 +42,12 @@ def test_forward_created_parameters_bind_to_their_initializer_ops() -> None:
     # ``kaiming_uniform_`` and ``init.uniform_`` calls record no second op.
     initializer_funcs = [op.func_name for op in trace.ops if op.func_name.endswith("uniform_")]
     assert initializer_funcs == ["uniform_", "uniform_"]
+    # Each write's receiver is the Parameter minted on ``torch.empty``'s storage
+    # inside the pass, so the allocation is the write's one parent.
+    for op in trace.ops:
+        if op.func_name == "uniform_":
+            assert [by_label[p.split(":")[0]].func_name for p in op.parents] == ["empty"]
+            assert not op.unattributed_tensor_args
 
 
 @pytest.mark.smoke
