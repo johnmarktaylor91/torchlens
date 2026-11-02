@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1350 modules, 629216 lines, 0 modules without a docstring.
+84 packages, 1350 modules, 629208 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -29,7 +29,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observability` | Observability substrates. | 21 | 7920 |
 | `torchlens._observe` | Observe kit: memory truth + diagnostics substrates. | 6 | 1507 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 500 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 29 | 17123 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 29 | 17122 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 2188 |
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 2 | 473 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14711 |
@@ -88,7 +88,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1389 |
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 18 | 5789 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3712 |
-| `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 33 | 13890 |
+| `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 33 | 13883 |
 | `torchlens.stats` | Streaming statistics for out aggregation (real subpackage; item 18). | 16 | 6303 |
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 4862 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 14 | 4571 |
@@ -581,7 +581,7 @@ Partial capture helpers for failed TorchLens forward ops. (1 modules, 500 lines)
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (29 modules, 17123 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (29 modules, 17122 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -612,7 +612,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (2
 | `labeling` | Steps 8-11: Label mapping, final info logging, renaming, cleanup, and lookup keys. | 1114 |
 | `loop_detection` | Step 7: Adapt Trace state to the backend-neutral recurrence grouper. | 673 |
 | `loop_grouping_adapter` | Backend-neutral recurrence grouping model and service. | 2592 |
-| `saved_summary` | Shared saved-output summary helpers. | 193 |
+| `saved_summary` | Shared saved-output summary helpers. | 192 |
 | `source_provenance` | Provenance disclosure and source variable names for the postprocess pipeline. | 136 |
 
 ### `torchlens._quickstart`
@@ -1832,7 +1832,7 @@ Import-clean representation geometry helpers (real subpackage; item 18). (8 modu
 
 ### `torchlens.report`
 
-Reports that describe a completed trace: summary, cost, profile, FLOPs and health. (33 modules, 13890 lines)
+Reports that describe a completed trace: summary, cost, profile, FLOPs and health. (33 modules, 13883 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1867,7 +1867,7 @@ Reports that describe a completed trace: summary, cost, profile, FLOPs and healt
 | `_summary_render` | The rebuilt summary renderer (summary /3.6/3.13). | 516 |
 | `_summary_report` | The detached immutable summary report layer (summary memo item 10). | 530 |
 | `_summary_result` | Rebuilt summary result assembly (summary memo item 12, 3.7/3.8). | 379 |
-| `_trace_facts` | Trace fact functions reached from the records through ''_data_classes._doors.report''. | 213 |
+| `_trace_facts` | Trace fact functions reached from the records through ''_data_classes._doors.report''. | 206 |
 | `_trace_summary` | Trace summary, HTML repr and first-nonfinite functions (record rebuild destination). | 169 |
 
 ### `torchlens.stats`

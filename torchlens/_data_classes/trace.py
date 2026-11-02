@@ -2064,7 +2064,6 @@ class Trace(TraceLike):
     @property
     def provenance(self) -> "TraceProvenance":
         """How, when and from what this Trace was captured."""
-
         return TraceProvenance(self)
 
     @property
@@ -2087,8 +2086,9 @@ class Trace(TraceLike):
     @property
     def _cost_forward_peak_memory_pair(self) -> "dict[str, Any] | None":
         """Session-time (live, resident) forward peak pair with backend named."""
+        from .._capture.peak_memory import read_peak_pair  # report/ may not read peaks
 
-        return _doors.report()._trace_facts.cost_forward_peak_memory_pair(self)
+        return read_peak_pair(self)
 
     @property
     def _layers_recurrent(self) -> "LayerAccessor":
