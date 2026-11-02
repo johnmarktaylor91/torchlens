@@ -15,7 +15,11 @@ import torch
 from torch.utils.weak import WeakIdKeyDictionary
 
 from ... import _state
-from ._completeness_origins import internal_scalar_read
+from ._internal_read import internal_scalar_read
+from ._storage_overlap import (
+    _storage_overlap_byte_interval,
+    _strided_views_share_storage_elements,
+)
 from ._tl import (
     active_label_session_token,
     get_tensor_label,
@@ -47,6 +51,24 @@ def view_mutation_propagation_enabled(trace: Any) -> bool:
     )
 
 
+def _alias_shares_elements(mutated: torch.Tensor, alias: torch.Tensor, storage_ptr: Any) -> bool:
+    """Return whether ``alias`` provably shares storage elements with ``mutated``.
+
+    Element-exact where provable (round-31 M4): interleaved element-disjoint
+    views must not inherit the mutation edge. A probe failure reads as no.
+    """
+
+    try:
+        if (
+            storage_alias_index_key(alias.untyped_storage()) != storage_ptr
+            or alias.device != mutated.device
+        ):
+            return False
+        return bool(_strided_views_share_storage_elements(mutated, alias))
+    except Exception:
+        return False
+
+
 def overlapping_labeled_aliases(
     mutated: torch.Tensor, exclude_label: str | None
 ) -> list[tuple[torch.Tensor, str]]:
@@ -67,11 +89,6 @@ def overlapping_labeled_aliases(
     list[tuple[torch.Tensor, str]]
         ``(alias, alias_label)`` pairs, in session index order.
     """
-
-    from ._storage_overlap import (
-        _storage_overlap_byte_interval,
-        _strided_views_share_storage_elements,
-    )
 
     try:
         # Meta-safe key (D20): data_ptr() reads 0 for EVERY meta storage.
@@ -101,18 +118,7 @@ def overlapping_labeled_aliases(
         alias_label = get_tensor_label(alias)
         if alias_label is None or alias_label == exclude_label:
             continue
-        try:
-            if (
-                storage_alias_index_key(alias.untyped_storage()) != storage_ptr
-                or alias.device != mutated.device
-            ):
-                continue
-            # Element-exact where provable (round-31 M4): interleaved
-            # element-disjoint views must not inherit the mutation edge.
-            shares_elements = _strided_views_share_storage_elements(mutated, alias)
-        except Exception:
-            continue
-        if shares_elements:
+        if _alias_shares_elements(mutated, alias, storage_ptr):
             seen.add(id(alias))
             found.append((alias, alias_label))
     return found
