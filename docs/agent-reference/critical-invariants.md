@@ -29,10 +29,10 @@
     `tlspec_version` < 11 was saved by torchlens 2.x and refuses to load with the one typed
     `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`); no alias list,
     retired-key pop or legacy spelling adapter remains on any record class. Legacy 2.16
-    intervention specs remain loadable (the floor covers Trace rehydration only). Save dry-runs `metadata.pkl`
-    through the loader's default-deny unpickler and refuses unportable values typed
-    (`annotation_value_unportable` / `metadata_value_unportable`); load anchors manifest facts
-    to the pickled state (`bundle_manifest_metadata_mismatch`) and validates graph structure,
+    intervention specs remain loadable (the floor covers Trace rehydration only). Save writes typed JSON with no
+    pickle: a value with no typed encoding is stringified with a manifest disclosure, a value
+    with no 3.0 form at all refuses typed (`metadata_value_unportable`), and the reload check
+    parses and decodes the written records before publish; load validates graph structure,
     edge carriers, and TorchLens-owned annotation families.
 9b. tlspec v9 (C07 coordinated schema write): the audit grammar admits per-site
     `source`, PARAM rows/recipes, and the EVENT envelope row kind (+ optional

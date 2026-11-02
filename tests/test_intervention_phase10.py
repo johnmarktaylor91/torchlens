@@ -149,8 +149,18 @@ def test_audit_save_load_and_compat(tmp_path: Path) -> None:
     assert compat.has_identical_target_resolution is True
 
 
-def test_live_forward_records_persist_in_saved_intervention_spec(tmp_path: Path) -> None:
-    """Live forward hook records survive intervention spec save/load."""
+def _saved_fire_records(trace: Any) -> list[Any]:
+    """Return the FireRecords a trace carries per op (``Op.edits``)."""
+
+    return [record for op in trace.ops for record in (op.edits or ())]
+
+
+def test_live_forward_records_persist_in_saved_trace(tmp_path: Path) -> None:
+    """Live forward hook records survive trace save/load on the ops that fired.
+
+    The 3.0 recipe holds rules, not fires (design section 8); a saved trace
+    carries its FireRecords per op, so the round trip goes through the trace.
+    """
 
     log = tl.trace(
         _ReluModel(),
@@ -162,15 +172,15 @@ def test_live_forward_records_persist_in_saved_intervention_spec(tmp_path: Path)
     )
     path = tmp_path / "forward_records.tlspec"
 
-    assert log._intervention_spec.records
+    assert _saved_fire_records(log)
 
-    log.save_intervention(path, level="portable")
-    spec = load_intervention_spec(path, trust_custom_callables=True)
+    log.save(path, level="portable")
+    records = _saved_fire_records(tl.load(path))
 
-    assert spec.records
-    assert all(isinstance(record, FireRecord) for record in spec.records)
-    assert any(record.signal == "forward" for record in spec.records)
-    assert any(record.replaced is True for record in spec.records)
+    assert records
+    assert all(isinstance(record, FireRecord) for record in records)
+    assert any(record.signal == "forward" for record in records)
+    assert any(record.replaced is True for record in records)
 
 
 def test_predicate_intervention_spec_round_trip_preserves_targets_and_hooks(
@@ -197,8 +207,8 @@ def test_predicate_intervention_spec_round_trip_preserves_targets_and_hooks(
     assert spec.hook_specs[0].helper is not None
 
 
-def test_container_path_fire_records_save_at_default_level(tmp_path: Path) -> None:
-    """Tuple-output FireRecord container paths save and load at the default level."""
+def test_container_path_fire_records_survive_trace_save(tmp_path: Path) -> None:
+    """Tuple-output FireRecord container paths survive a default-level trace save."""
 
     log = tl.trace(
         _ChunkModel(),
@@ -210,10 +220,9 @@ def test_container_path_fire_records_save_at_default_level(tmp_path: Path) -> No
     )
     path = tmp_path / "chunk_intervention.tlspec"
 
-    log.save_intervention(path)
-    spec = load_intervention_spec(path)
+    log.save(path)
 
-    assert {record.container_path for record in spec.records} == {
+    assert {record.container_path for record in _saved_fire_records(tl.load(path))} == {
         (TupleIndex(0),),
         (TupleIndex(1),),
     }
@@ -455,8 +464,8 @@ def test_loaded_helper_import_ref_preserves_identity_and_executes_lazily(
 
 
 @pytest.mark.smoke
-def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path) -> None:
-    """Live backward hook records survive intervention spec save/load."""
+def test_live_backward_records_persist_in_saved_trace(tmp_path: Path) -> None:
+    """Live backward hook records survive trace save/load on the ops that fired."""
 
     x = torch.randn(2, 3, requires_grad=True)
     log = tl.trace(
@@ -468,10 +477,12 @@ def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_records.tlspec"
 
-    log.save_intervention(path, level="portable")
-    spec = load_intervention_spec(path, trust_custom_callables=True)
+    log.save(path, level="portable")
+    loaded = tl.load(path)
 
-    backward_records = [record for record in spec.records if record.signal == "backward"]
+    backward_records = [
+        record for record in _saved_fire_records(loaded) if record.signal == "backward"
+    ]
     assert backward_records
     assert backward_records[0].backward_pass_number == 1
     assert backward_records[0].call_index == 1
