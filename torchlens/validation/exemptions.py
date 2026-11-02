@@ -67,7 +67,9 @@ from ._norm_zero_weight_proof import (
 from ._operand_value_proofs import operand_value_proof_decision
 from ._replay_warnings import replay_warnings_ignored
 from ._sdpa_value_proofs import sdpa_value_proof_decision
-from ._structural_slot_checks import (
+from ._structural_slot_checks import (  # noqa: F401  (the table resolves these through globals())
+    check_expand_pinned_size_exempt,
+    check_packed_rnn_batch_sizes_exempt,
     setitem_bool_mask_at_index_slot,
 )
 from ._value_predicates import (
