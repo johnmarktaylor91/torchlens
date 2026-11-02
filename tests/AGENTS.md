@@ -107,12 +107,15 @@ unmarked unless it covers a critical path nothing in smoke reaches; the size cei
 tier from regrowing. The tier holds 1,474 tests (`tests/tiers/collection.json`, collected
 2026-11-02; per-tier counts, wall estimates and the collect commands are there).
 
-`scripts/smoke_ci_parity.py` passes `pytest` only the test files whose source spells
-`mark.smoke` or `mark.smoke_cells` (`python scripts/tier_durations.py files --tier smoke`
-prints the list); whole-tree collection otherwise costs 3-4 minutes. Spell smoke marks in the
-test file itself, never through an imported alias:
-`tests/test_marker_lint.py::test_smoke_file_list_never_hides_a_smoke_test` fails any session in
-which a smoke item sits in a file that list would skip.
+Smoke runs collect only the smoke file list, the test files whose source spells `mark.smoke`
+or `mark.smoke_cells`: under `-m smoke` `tests/_tiers_plugin.py` skips every other test module
+before import (`TORCHLENS_SMOKE_PREFILTER=0` turns the skip off). `python
+scripts/tier_durations.py files --tier smoke` prints the list, recomputed from the tree on every
+call, so nothing needs regenerating. Measured 2026-11-02 on a 4-core Linux worker: smoke
+collection took about 40-45 s against about 60-65 s for the whole tree. Spell smoke marks in the
+test file itself, never through an imported alias or a hook: the tiers plugin fails any session
+that collects a smoke item from a file off the list, and the `tier-durations` check of
+`scripts/checks/run_all.py` fails a helper module under `tests/` that applies the mark.
 
 Byte goldens enforce only in the pinned environment (python 3.10, torch 2.13.0), so the
 commit-level gate is `python scripts/smoke_ci_parity.py [-n N]`, not a plain
