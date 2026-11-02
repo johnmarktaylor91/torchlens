@@ -575,15 +575,6 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         ),
     ),
     Exemption(
-        code="norm_centered_input_running_var",
-        tier="posthoc",
-        contract="C2 perturbation sensitivity",
-        proof="torchlens.validation._saved_value_proofs:_batch_norm_centered_input_decision",
-        refuses=(
-            "training mode, any element where input differs from running_mean, a non-finite output, and a perturbed parent other than running_var alone (input, running_mean, weight and bias still move the output)"
-        ),
-    ),
-    Exemption(
         code="pow_zero_exponent",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
@@ -612,31 +603,6 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         refuses=(
             "an index component addressing a dim of size 2 or more, a boolean mask component, and a perturbed parent at the destination or value slot"
         ),
-    ),
-    Exemption(
-        code="scatter_reduce_excluded_destination",
-        tier="posthoc",
-        contract="C2 perturbation sensitivity",
-        proof="torchlens.validation._saved_value_proofs:scatter_reduce_excluded_destination_decision",
-        refuses=(
-            "include_self=True (the default), an index that leaves any destination slot along dim unreached, and a perturbed src or index parent"
-        ),
-    ),
-    Exemption(
-        code="empty_split_chunk",
-        tier="posthoc",
-        contract="C2 perturbation sensitivity",
-        proof="torchlens.validation._saved_value_proofs:_empty_split_chunk_decision",
-        refuses=(
-            "a non-empty chunk, tensor-valued split sizes, and a perturbed parent outside the input slot"
-        ),
-    ),
-    Exemption(
-        code="empty_matmul_product",
-        tier="posthoc",
-        contract="C2 perturbation sensitivity",
-        proof="torchlens.validation._saved_value_proofs:_empty_matmul_product_decision",
-        refuses=("a non-empty product, a parent in both operand slots, and a non-tensor operand"),
     ),
 )
 

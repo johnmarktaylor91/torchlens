@@ -1968,10 +1968,7 @@ def _posthoc_overwrite_decision(
         _perturbed_parent_is_uninitialized_setitem_dest(layer, layers_to_perturb)
     ):
         return PosthocPerturbDecision(True, "uninitialized_destination_overwrite")
-    # Imported here: ``_saved_value_proofs`` imports ``PosthocPerturbDecision`` from this module.
-    from ._saved_value_proofs import scatter_reduce_excluded_destination_decision
-
-    return scatter_reduce_excluded_destination_decision(layer, layers_to_perturb, args)
+    return PosthocPerturbDecision(False, "not_overwrite")
 
 
 def _posthoc_value_proof_decision(

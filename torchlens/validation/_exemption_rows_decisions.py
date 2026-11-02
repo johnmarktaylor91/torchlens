@@ -507,20 +507,11 @@ _DECISION_ROWS: tuple[ExemptionRow, ...] = (
         "disjunction_saturated",
         ("posthoc", _C2),
         _SAVED + "_disjunction_decision",
-        "one operand of a bool or whose saved partner is True everywhere",
+        "one operand of an in-place bool or whose saved partner is True everywhere "
+        "(the out-of-place spellings are or_absorbing_true_operand)",
         (
-            _SAVED_TESTS + "test_or_with_all_true_operand_exempts_the_other_operand",
-            _SAVED_TESTS + "test_or_with_false_operand_and_the_true_operand_itself_still_fail",
-        ),
-    ),
-    _decision(
-        "norm_centered_input_running_var",
-        ("posthoc", _C2),
-        _SAVED + "_batch_norm_centered_input_decision",
-        "the running_var of an eval-mode batch norm whose saved input minus running_mean is exactly zero",
-        (
-            _SAVED_TESTS + "test_eval_batch_norm_on_running_mean_exempts_running_var",
-            _SAVED_TESTS + "test_running_var_of_uncentered_input_and_running_mean_still_fail",
+            _SAVED_TESTS + "test_inplace_or_with_all_true_destination_exempts_the_other_operand",
+            _SAVED_TESTS + "test_inplace_or_with_false_destination_still_fails_when_frozen",
         ),
     ),
     _decision(
@@ -551,36 +542,6 @@ _DECISION_ROWS: tuple[ExemptionRow, ...] = (
         (
             _SAVED_TESTS + "test_index_into_size_one_dim_is_exempt",
             _SAVED_TESTS + "test_index_into_wider_dim_still_fails_when_frozen",
-        ),
-    ),
-    _decision(
-        "scatter_reduce_excluded_destination",
-        ("posthoc", _C2),
-        _SAVED + "scatter_reduce_excluded_destination_decision",
-        "a scatter_reduce destination that include_self=False never reads because the index covers it fully",
-        (
-            _SAVED_TESTS + "test_scatter_reduce_excluding_fully_covered_destination_is_exempt",
-            _SAVED_TESTS + "test_scatter_reduce_destination_still_fails_when_it_is_read",
-        ),
-    ),
-    _decision(
-        "empty_split_chunk",
-        ("posthoc", _C2),
-        _SAVED + "_empty_split_chunk_decision",
-        "the input of a split whose output chunk is empty by its integer sizes",
-        (
-            _SAVED_TESTS + "test_empty_split_chunk_is_exempt",
-            _SAVED_TESTS + "test_nonempty_split_chunk_still_fails_when_frozen",
-        ),
-    ),
-    _decision(
-        "empty_matmul_product",
-        ("posthoc", _C2),
-        _SAVED + "_empty_matmul_product_decision",
-        "a non-empty operand of a matrix product whose result has zero elements",
-        (
-            _SAVED_TESTS + "test_empty_matmul_product_exempts_its_nonempty_operand",
-            _SAVED_TESTS + "test_nonempty_matmul_product_still_fails_when_frozen",
         ),
     ),
 )

@@ -318,7 +318,7 @@ def test_direct_trace_validate_forward_pass_fails_all_nan_outputs() -> None:
             save_grads=False,
             save_args=True,
             seed=0,
-            save_rng_states=True,
+            save_rng=True,
         )
     try:
         with warnings.catch_warnings():

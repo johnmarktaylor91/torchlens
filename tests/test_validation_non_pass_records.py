@@ -44,7 +44,7 @@ def _capture(model: nn.Module, x: torch.Tensor) -> Any:
         save_grads=False,
         save_args=True,
         seed=0,
-        save_rng_states=True,
+        save_rng=True,
     )
 
 

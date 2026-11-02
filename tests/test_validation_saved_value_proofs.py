@@ -167,7 +167,34 @@ def test_or_with_all_true_operand_exempts_the_other_operand() -> None:
     assert _validates(_OrTrue(True), torch.randn(3, 4))
     trace = _capture(_OrTrue(True), torch.randn(3, 4))
     op = _op(trace, {"__or__"})
-    assert _decision(trace, op, _arg_parent(op, 0)) == ("exempted", "disjunction_saturated")
+    assert _decision(trace, op, _arg_parent(op, 0)) == ("exempted", "or_absorbing_true_operand")
+
+
+class _OrTrueInplace(nn.Module):
+    """``logical_or_`` into a clone of the all-True operand: the in-place spelling."""
+
+    def __init__(self, other_all_true: bool) -> None:
+        super().__init__()
+        self.other_all_true = other_all_true
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        s = x.sum(-1)
+        a = s > 1e9
+        b = s > -1e9 if self.other_all_true else s > 2e9
+        return x + b.clone().logical_or_(a).unsqueeze(-1)
+
+
+def test_inplace_or_with_all_true_destination_exempts_the_other_operand() -> None:
+    assert _validates(_OrTrueInplace(True), torch.randn(3, 4))
+    trace = _capture(_OrTrueInplace(True), torch.randn(3, 4))
+    op = _op(trace, {"logical_or_"})
+    assert _decision(trace, op, _arg_parent(op, 1)) == ("exempted", "disjunction_saturated")
+
+
+def test_inplace_or_with_false_destination_still_fails_when_frozen() -> None:
+    trace = _capture(_OrTrueInplace(False), torch.randn(3, 4))
+    op = _op(trace, {"logical_or_"})
+    _assert_frozen_edge_fails(trace, op, _arg_parent(op, 1))
 
 
 def test_or_with_false_operand_and_the_true_operand_itself_still_fail() -> None:
@@ -198,7 +225,7 @@ def test_einsum_zero_operand_exempts_its_sibling() -> None:
     trace = _capture(_Einsum(True), torch.randn(4, 3))
     op = _op(trace, {"einsum"})
     decision = _decision(trace, op, _parent_from(trace, op, "__add__"))
-    assert decision == ("exempted", "multiplicative_zero_annihilator")
+    assert decision == ("exempted", "einsum_zero_operand")
 
 
 def test_einsum_zero_operand_itself_and_nonzero_sibling_still_fail() -> None:
@@ -228,7 +255,7 @@ def test_eval_batch_norm_on_running_mean_exempts_running_var() -> None:
     trace = _capture(_CenteredBatchNorm(True), torch.randn(3, 4))
     op = _op(trace, {"batch_norm"})
     decision = _decision(trace, op, _arg_parent(op, 4))
-    assert decision == ("exempted", "norm_centered_input_running_var")
+    assert decision == ("exempted", "batch_norm_input_at_running_mean")
 
 
 def test_running_var_of_uncentered_input_and_running_mean_still_fail() -> None:
@@ -426,7 +453,7 @@ def test_scatter_reduce_excluding_fully_covered_destination_is_exempt() -> None:
     trace = _capture(_ScatterReduce(_FULL_COVER, False), torch.randn(6, 4))
     op = _op(trace, {"scatter_reduce_"})
     decision = _decision(trace, op, _arg_parent(op, 0))
-    assert decision == ("exempted", "scatter_reduce_excluded_destination")
+    assert decision == ("exempted", "scatter_reduce_destination_overwritten")
 
 
 @pytest.mark.parametrize(
@@ -463,7 +490,7 @@ def test_empty_split_chunk_is_exempt() -> None:
     assert _validates(_SplitEmptyChunk(), torch.randn(2, 4))
     trace = _capture(_SplitEmptyChunk(), torch.randn(2, 4))
     op = _op(trace, _SPLIT_NAMES, empty=True)
-    assert _decision(trace, op, _arg_parent(op, 0)) == ("exempted", "empty_split_chunk")
+    assert _decision(trace, op, _arg_parent(op, 0)) == ("exempted", "empty_output_no_elements")
 
 
 def test_nonempty_split_chunk_still_fails_when_frozen() -> None:
@@ -493,7 +520,7 @@ def test_empty_matmul_product_exempts_its_nonempty_operand() -> None:
     assert _validates(_EmptyKeyScores(0), torch.randn(2, 3, 4))
     trace = _capture(_EmptyKeyScores(0), torch.randn(2, 3, 4))
     op = _op(trace, {"bmm"})
-    assert _decision(trace, op, _arg_parent(op, 0)) == ("exempted", "empty_matmul_product")
+    assert _decision(trace, op, _arg_parent(op, 0)) == ("exempted", "empty_output_no_elements")
 
 
 def test_nonempty_matmul_product_still_fails_when_frozen() -> None:
