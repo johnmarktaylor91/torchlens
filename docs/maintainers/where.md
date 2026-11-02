@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1355 modules, 629177 lines, 0 modules without a docstring.
+84 packages, 1355 modules, 629174 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 66 | 31470 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 66 | 31467 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1237 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -100,7 +100,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (66 modules, 31470 lines)
+TorchLens - extract outs and metadata from PyTorch models. (66 modules, 31467 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -129,7 +129,7 @@ TorchLens - extract outs and metadata from PyTorch models. (66 modules, 31470 li
 | `_fast_live_plans` | Collection plans and direct-call routes for the guarded fast live run. | 664 |
 | `_fast_live_steer` | Steered, shape-varying support for the guarded fast live engine. | 644 |
 | `_fast_live_until` | Early stop (''until='') for the guarded fast live run. | 208 |
-| `_fast_run` | Explicit guarded fast paths for repeated static-model execution. | 1532 |
+| `_fast_run` | Explicit guarded fast paths for repeated static-model execution. | 1529 |
 | `_fast_sparse_state` | Cached-state safety analysis for the guarded fast sparse engine. | 297 |
 | `_input_coerce` | Duck-typed ergonomic input coercion for TorchLens entry points. | 401 |
 | `_input_walk` | Single-sourced model-input boundary traversal ( Cluster Y, the normative dispatch). | 1627 |

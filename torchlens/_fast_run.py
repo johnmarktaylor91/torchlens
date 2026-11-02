@@ -1461,12 +1461,9 @@ def build_direct_forward_routes(
 
 
 class _RoutedForward(_SessionForward):
-    """A per-run ``forward`` that runs the session hook work on a direct call only.
+    """A per-run ``forward`` that runs the session hook work on a direct call only."""
 
-    The base records the module's own ``forward`` as ``__wrapped__``.
-    """
-
-    __wrapped__: Callable[..., Any]
+    __wrapped__: Callable[..., Any]  # the base's record of the module's own forward
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Pass a ``Module.__call__`` call through; route a direct call."""
