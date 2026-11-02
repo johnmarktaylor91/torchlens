@@ -1041,7 +1041,7 @@ torchlens/bridge/shap.py::explain	68
 torchlens/bridge/transformers.py	804
 torchlens/bridge/transformers.py::_resolve_image_preprocessing	62
 torchlens/bridge/transformers.py::trace_text	67
-torchlens/bundle/__init__.py	1509
+torchlens/bundle/__init__.py	1502
 torchlens/bundle/_alternatives.py::_bundle_add_alternative	63
 torchlens/bundle/_compare_gate.py::require_comparable	143
 torchlens/bundle/_lineage.py::validate_member_construction	77
@@ -1245,7 +1245,7 @@ torchlens/intervention/stochastic.py::resample_rows_from.factory._hook	88
 torchlens/intervention/stochastic.py::sample_from	73
 torchlens/intervention/stochastic.py::set_direction_mean	144
 torchlens/intervention/sweep.py::sweep	177
-torchlens/intervention/types.py	861
+torchlens/intervention/types.py	859
 torchlens/inventory.py::SiteInventory.resolve	71
 torchlens/inventory.py::sites_of_trace	65
 torchlens/io/__init__.py::detect_tlspec_format	67

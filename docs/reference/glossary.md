@@ -568,7 +568,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `tl.intervention.Rule` with `target` (the selector or predicate) and `edit` (the helper or
   callable). `Rule.signal` is a read-only property derived from the target, never a field and
   never saved: `"backward"` for a gradient site (`tl.grad(...)`) or a node selector, `"forward"`
-  for an activation site, `"both"` for a union of the two. `Recipe.merge(*others)`
+  for an activation site, `"both"` for a union of the two. The site decides the pass: `Rule`
+  has no `direction` field, and `Rule(..., direction=...)` (or the old third positional
+  value) refuses `intervention_direction_invalid`. `Recipe.merge(*others)`
   (also `recipe_a & recipe_b`) returns one `tl.Recipe` joining the clauses; a duplicate clause
   refuses `spec_rules_duplicate`.
 
