@@ -78,8 +78,6 @@ from .runnable_families import (
 
 #: Descriptor file of the runnable component.
 DESCRIPTOR_PATH = f"{RUNNABLE_DIR}/descriptor.json"
-#: Non-persistent buffer file of the runnable component.
-BUFFERS_PATH = f"{RUNNABLE_DIR}/buffers.safetensors"
 #: Families: manifest key to (file stem under ``runnable/``, chunked, bound family name).
 FAMILIES: dict[str, tuple[str, bool, str]] = {
     "state_dict": ("state_dict", True, "state_dict"),
