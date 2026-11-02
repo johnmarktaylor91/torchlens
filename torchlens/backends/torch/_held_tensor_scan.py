@@ -16,6 +16,8 @@ from typing import Any
 import torch
 from torch import nn
 
+from ._held_plain_holders import iter_plain_holder_tensors
+
 _HELD_SCAN_MAX_DEPTH = 4
 """Container levels below a module attribute that the held-tensor scan descends.
 
@@ -312,4 +314,8 @@ def iter_module_held_plain_tensors(
                         yield name, item
                 elif _is_enterable(item) and id(item) not in scan.entered:
                     yield from scan.walk(item, name, 2)
+        else:
+            # A plain object's direct public tensor attributes (a distributions
+            # prior, a diffusers scheduler); never containers inside it.
+            yield from iter_plain_holder_tensors(scan, attr_name, attr_val)
     scan.finish()
