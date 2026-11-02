@@ -534,10 +534,12 @@ def _gradient_influence(
         target.label: torch.zeros(shapes[target.label], dtype=torch.bool) for target in targets
     }
     cross_batch = dict.fromkeys(shapes, False)
-    for probe_index, (seed_op, unit) in enumerate(probes):
-        for target_index, target in enumerate(targets):
-            last = probe_index == len(probes) - 1 and target_index == len(targets) - 1
-            support, crossed = _probe_pair(seed_op, unit, target, node.direction, retain=not last)
+    # Every probe retains the autograd graph: freeing it on the last probe
+    # would make the next gradient query on the same trace fail, and the
+    # saved tensors live as long as the armed trace does anyway.
+    for seed_op, unit in probes:
+        for target in targets:
+            support, crossed = _probe_pair(seed_op, unit, target, node.direction)
             if tuple(support.shape) != shapes[target.label]:
                 raise _unresolvable(
                     "mask_shape_mismatch",
@@ -566,7 +568,7 @@ def _gradient_influence(
 
 
 def _probe_pair(
-    seed_op: Any, unit: tuple[int, ...], target: Any, direction: str, *, retain: bool
+    seed_op: Any, unit: tuple[int, ...], target: Any, direction: str
 ) -> tuple[torch.Tensor, bool]:
     """Run one per-unit autograd probe between a seed unit and a target site."""
 
@@ -575,9 +577,9 @@ def _probe_pair(
         support[unit] = True
         return support, False
     if direction == "projective":
-        result = projective_gradient_for_unit(seed_op, unit, target=target, retain_graph=retain)
+        result = projective_gradient_for_unit(seed_op, unit, target=target, retain_graph=True)
     else:
-        result = gradient_for_unit(seed_op, unit, source=target, retain_graph=retain)
+        result = gradient_for_unit(seed_op, unit, source=target, retain_graph=True)
     if not isinstance(result, GradReceptiveField):
         raise RuntimeError("a single-endpoint probe returned a mapping (internal invariant).")
     return result.support_mask.bool(), bool(result.cross_batch_influence)
