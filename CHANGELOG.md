@@ -1,6 +1,95 @@
 # CHANGELOG
 
 
+## v2.37.0 (2026-11-02)
+
+### Features
+
+- **validation**: Report a degenerate forward as `degenerate_forward`
+  ([`92b8598`](https://github.com/johnmarktaylor91/torchlens/commit/92b859834fd4d1c58da87efa711ee4a99edbfda4),
+  [`4b5bf2f`](https://github.com/johnmarktaylor91/torchlens/commit/4b5bf2f073f9068bfa253eaf9c5dac758a2dc8f4),
+  [`193e8f3`](https://github.com/johnmarktaylor91/torchlens/commit/193e8f36685559182fb59d09462c4be89221d0ec))
+
+A forward whose final outputs are entirely NaN or infinite, or whose gradient is identically zero,
+  cannot show that its recorded graph matches the computation. Validation now fails it with the
+  `degenerate_forward` label (kinds `non_finite_output` and `zero_gradient`) instead of a misleading
+  perturbation failure, and `Trace.validate_forward_pass` runs the same check.
+
+- **capture**: Record an autograd.Function that leaves torch as one boundary op
+  ([`debb6944`](https://github.com/johnmarktaylor91/torchlens/commit/debb6944a1b8d014b905f25d5b488cb9e6b2c746),
+  [`8ae4a2f`](https://github.com/johnmarktaylor91/torchlens/commit/8ae4a2f5ab1981e8712b69e996654a71e3b50cba))
+
+A custom torch.autograd.Function whose forward hands its tensors to another library (a numpy or
+  dlpack round trip, as DGL does) is now logged as one op that replays through the Function's own
+  apply, with a `foreign_kernel_boundary` warning, instead of failing the completeness check. An
+  ordinary custom Function is unchanged, and a plain round trip outside a Function still fails.
+
+### Bug Fixes
+
+- **validation and capture**: Validate real models that failed on 2.36.x
+  ([merge `ac4e653`](https://github.com/johnmarktaylor91/torchlens/commit/ac4e6536811d1cde6c40a8838cfbab34acaff855))
+
+About forty fixes found by running validation over the Model Menagerie's hardest models. Capture
+  now keeps the op behind `Tensor.__index__` slice bounds, binds in-place writes through views and
+  `x[idx] += y` to the right base version, treats tensors held on plain objects of a module as
+  buffers, keeps a collapsed Function's argument provenance, patches module-level references to
+  wrapped torch callables (`from torch import cat` style), and no longer fails on an unhashable
+  non-tensor argument or a string positional input. Validation proves more inputs inert after
+  perturbation instead of failing them (saved zero values, unit-base exponents, single-key
+  attention, all-True boolean masks, empty matrix products, broadcast set-item overwrites, pinned
+  expand sizes, packed RNN batch sizes), keeps Parameter and grad-tracked inputs as leaves in its
+  input copies, replays autograd.grad against the unperturbed input, and records a typed failure for
+  every forward that does not pass. Receptive and projective field queries accept empty inputs and
+  walk deep graphs without recursion.
+
+
+## v2.36.3 (2026-10-31)
+
+### Bug Fixes
+
+- **io**: Write metadata tensors through a TorchLens-owned reduction
+  ([`0370e28`](https://github.com/johnmarktaylor91/torchlens/commit/0370e2869d67ff19e9e1b71e4043c7393806b7ef))
+
+Plain tensors stored in saved metadata (annotation values, such as those logged with
+  tl.observers.log_value, and small raw inputs and outputs under the default
+  save_raw_input="small") are now written as raw bytes with dtype, shape, requires_grad and device,
+  and rebuilt on load with strict checks. A file saved by 2.36.2 or earlier whose metadata embeds
+  such a tensor no longer loads and refuses with a typed error naming the remedy: re-run the capture
+  with this release and save again, or load the file with the release that wrote it, replace the
+  tensors in trace.annotations with plain values, set trace.save_raw_input = False and
+  trace.save_raw_output = False, and save. Files without a metadata tensor are unaffected.
+
+- **io**: Give the embedded-tensor load refusal a remedy this release can follow
+  ([`503d63a`](https://github.com/johnmarktaylor91/torchlens/commit/503d63a8dd96161fd37405eb1adb018d803867b0))
+
+The refusal for such a file names the file shape and the two remedies above, instead of asking
+  for a re-save with the release that cannot read the file.
+
+- **io**: Build the inline-tensor dtype table on first load, without probe warnings
+  ([`e195733`](https://github.com/johnmarktaylor91/torchlens/commit/e195733e5dbbd818d51137d670c53bd072007930))
+
+The table was built at import by allocating one element of each torch dtype, and torch warns for
+  some of them, so the first capture of a session showed two UserWarnings. It is now built on the
+  first load that needs it, with those warnings kept to the probe.
+
+- **streaming**: Number save-time blobs past the capture stream's ids
+  ([`ae83806`](https://github.com/johnmarktaylor91/torchlens/commit/ae838062d7b868be8d59d33d0016399f3f186e45))
+
+With storage=tl.to_disk, an op streamed during capture and then pruned as an orphan shifted the
+  save-time blob numbering, so the model output could silently read another op's tensor, live and
+  after tl.load. Save-time ids now start past the stream's ids, and a colliding id is refused
+  instead of skipped.
+
+- **capture**: Identify TorchLens frames by normalised filename so code context does not depend on the import path
+  ([`647ff3b`](https://github.com/johnmarktaylor91/torchlens/commit/647ff3b83164eeaefc3318b90040d8310dd3abdb))
+
+When torchlens was imported through a relative sys.path entry such as PYTHONPATH=., TorchLens's
+  own frames leaked into every op's code context. Frame filters now compare normalised filenames.
+
+- **capture**: Key the package-frame memo by filename, since equal code objects can come from different files
+  ([`a96dac2`](https://github.com/johnmarktaylor91/torchlens/commit/a96dac21fc56881c3efd2cc202122fe46c63c4e5))
+
+
 ## v2.34.1 (2026-08-10)
 
 ### Bug Fixes
