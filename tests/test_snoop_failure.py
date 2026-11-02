@@ -17,6 +17,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens.errors import TraceCaptureError
 from torchlens.options import NarrationOptions
 
 
@@ -41,12 +42,13 @@ def _crash_tail(sink: io.StringIO) -> list[str]:
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        with pytest.raises(RuntimeError):
+        with pytest.raises(TraceCaptureError) as excinfo:
             tl.trace(
                 ShapeCrash(),
                 torch.randn(2, 4),
                 narrate=NarrationOptions(sites=True, sink=sink),
             )
+        assert isinstance(excinfo.value.__cause__, RuntimeError)
     return [line for line in sink.getvalue().split("\n") if line]
 
 
@@ -82,12 +84,13 @@ def test_on_error_only_narrates_nothing_until_failure() -> None:
     tail_sink = io.StringIO()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        with pytest.raises(RuntimeError):
+        with pytest.raises(TraceCaptureError) as _tce_info:
             tl.trace(
                 ShapeCrash(),
                 torch.randn(2, 4),
                 narrate=NarrationOptions(sites=True, sink=tail_sink, on_error_only=True),
             )
+        assert isinstance(_tce_info.value.__cause__, RuntimeError)
     assert "!! forward failed" in tail_sink.getvalue()
 
 
@@ -107,7 +110,8 @@ def test_record_tier_disposition_trio_flushes_the_tail() -> None:
                     narrate=NarrationOptions(sites=True, sink=sink),
                     on_forward_error=mode,
                 )
-        except RuntimeError as exc:
+        except TraceCaptureError as exc:
+            assert isinstance(exc.__cause__, RuntimeError)
             assert mode in ("raise", "attach_partial")
             if mode == "attach_partial":
                 assert getattr(exc, "partial_recording", None) is not None
@@ -124,9 +128,10 @@ def test_partial_narrate_works_with_echo_off() -> None:
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        with pytest.raises(RuntimeError) as excinfo:
+        with pytest.raises(TraceCaptureError) as excinfo:
             tl.trace(ShapeCrash(), torch.randn(2, 4))
-    rendered = excinfo.value.partial_log.narrate(20)
+        assert isinstance(excinfo.value.__cause__, RuntimeError)
+    rendered = excinfo.value.partial_trace.narrate(20)
     assert "!! forward failed: RuntimeError" in rendered
     assert "relu" in rendered
     assert "the raising call is not in the record" in rendered
@@ -184,12 +189,13 @@ def test_double_fault_original_exception_wins() -> None:
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        with pytest.raises(RuntimeError) as excinfo:
+        with pytest.raises(TraceCaptureError) as excinfo:
             tl.trace(
                 ShapeCrash(),
                 torch.randn(2, 4),
                 narrate=NarrationOptions(sites=True, sink=broken),
             )
+        assert isinstance(excinfo.value.__cause__, RuntimeError)
     assert "normalized_shape" in str(excinfo.value)
 
 

@@ -10,6 +10,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes import FuncCallLocation
+from torchlens.errors import TraceCaptureError
 
 
 class TinyReportModel(nn.Module):
@@ -123,9 +124,10 @@ def test_explain_json_form_is_removed() -> None:
 def test_explain_and_audit_diagnose_real_partial_failure() -> None:
     """Partial reports name recorded last-op and captured exception evidence."""
 
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(TraceCaptureError) as exc_info:
         tl.trace(FailingShapeModel(), torch.randn(2, 4))
-    partial = tl._partial.from_failed_capture(exc_info.value)
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
+    partial = exc_info.value.partial_trace
     last = partial.raw_layers[-1]
     last_label = str(getattr(last, "_label_raw"))
 
@@ -137,13 +139,13 @@ def test_explain_and_audit_diagnose_real_partial_failure() -> None:
     assert last_label in text
     assert "RuntimeError" in text
     assert "mat1 and mat2 shapes cannot be multiplied" in text
-    assert str(exc_info.value) in text
+    assert str(exc_info.value.__cause__) in text
     assert "Failing boundary: forward at" in text
     assert audit == partial.audit()
     failure = next(
         finding for finding in audit.findings if finding.check == "partial_capture_exception"
     )
-    assert failure.message == f"RuntimeError: {exc_info.value}"
+    assert failure.message == f"RuntimeError: {exc_info.value.__cause__}"
     assert failure.ops == (last_label,)
     assert all("may" not in finding.message.lower() for finding in audit.findings)
 
@@ -361,9 +363,10 @@ def test_explain_max_tokens_large_budget_returns_full_report() -> None:
 def test_explain_max_tokens_never_drops_partial_failure_evidence() -> None:
     """Partial-capture reports keep every failure fact under any budget."""
 
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(TraceCaptureError) as exc_info:
         tl.trace(FailingShapeModel(), torch.randn(2, 4))
-    partial = tl._partial.from_failed_capture(exc_info.value)
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
+    partial = exc_info.value.partial_trace
 
     text = partial.explain(max_tokens=1)
     assert "This is a partial capture" in text

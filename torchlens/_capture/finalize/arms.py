@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 from ..._quantities import Duration
 from ..._utils._exception_notes import annotate_guarded
 from ..._utils.display import _vprint, user_stacklevel
+from .._trace_capture_error import failed_forward_error
 from ..outcome import (
     CapturePhase,
     StopSignalSwallowedError,
@@ -332,7 +333,8 @@ def finalize_failed(result: ForwardResult) -> NoReturn:
     Order (pinned): ``count_committed_ops``; nonfinite-prefix finalization when
     postprocess; recorder seal then ``cleanup_failed_forward_session`` (a
     raising seal never skips cleanup); ``settle_failed`` and the transient
-    scrub in ``finally``; the primary exception re-raises.
+    scrub in ``finally``; a ``TraceCaptureError`` chained from a non-TorchLens
+    forward exception (or the TorchLens error itself) re-raises.
 
     Parameters
     ----------
@@ -357,8 +359,14 @@ def finalize_failed(result: ForwardResult) -> NoReturn:
         maybe_finalize_nonfinite_prefix(
             trace, result.backend, e, result.model, list(result.input_tensors)
         )
+    # The door raises one typed TraceCaptureError for a non-TorchLens
+    # forward exception (chained ``from e``; ``e`` itself is never
+    # mutated) and TorchLens's own errors as themselves. Built BEFORE the
+    # cleanup so the message can read the capture frontier, and handed to
+    # the backend so the partial capture and every note ride it.
+    escaping = failed_forward_error(trace, cast(Exception, e), committed_ops)
     try:
-        _cleanup_failed_session(result, e)
+        _cleanup_failed_session(result, escaping)
     finally:
         # Guaranteed settlement: a cleanup double-fault still stamps the
         # terminal outcome before the (original or secondary) exception
@@ -368,11 +376,17 @@ def finalize_failed(result: ForwardResult) -> NoReturn:
         # or the payload-bearing event stream).
         settle_failed(trace, result.session, e, num_committed_ops=committed_ops)
         _scrub_failed_capture_transients(trace)
-    raise e
+    if escaping is e:
+        raise e
+    raise escaping from e
 
 
 def _cleanup_failed_session(result: ForwardResult, e: BaseException) -> None:
-    """Seal the recorder projection and clean the failed session; note a double fault on ``e``."""
+    """Seal the recorder projection and clean the failed session; note a double fault on ``e``.
+
+    ``e`` is the exception the door is about to raise: a ``TraceCaptureError``
+    wrapping the forward's exception, or a TorchLens error as itself.
+    """
     trace, backend, capture_session = result.trace, result.backend, result.session
     # The seal runs FIRST (it reads live capture state that cleanup
     # strips) but must not be able to SKIP cleanup: a raising seal used
@@ -392,7 +406,7 @@ def _cleanup_failed_session(result: ForwardResult, e: BaseException) -> None:
         # propagate. An ordinary seal/cleanup double-fault used to
         # escape INSTEAD of ``raise e`` -- the settled CaptureOutcome
         # named the primary while the escaping exception was the
-        # secondary and carried no partial_log. Mirror the interrupt
+        # secondary and carried no partial trace. Mirror the interrupt
         # arm: attach the secondary as a note and re-raise the primary.
         # A BaseException secondary (Ctrl-C during cleanup) keeps
         # escaping -- interrupts always win (B8-23 doctrine).

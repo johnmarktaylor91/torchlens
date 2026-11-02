@@ -21,6 +21,7 @@ from torchlens._observe._device_memory import (
     device_memory_samples,
     flat_field_projection,
 )
+from torchlens.errors import TraceCaptureError
 
 
 class _ScriptedProvider:
@@ -240,13 +241,14 @@ def test_oom_settles_an_attempted_call_row(monkeypatch) -> None:
             y = torch.tanh(x)  # a committed op precedes the OOM
             return torch.sigmoid(y.as_subclass(_OomOnSigmoid))
 
-    with pytest.raises(torch.cuda.OutOfMemoryError) as excinfo:
+    with pytest.raises(TraceCaptureError) as excinfo:
         tl.trace(
             _OomModel(),
             torch.randn(2, 4),
             capture=tl.options.CaptureOptions(track_device_memory=True),
         )
-    partial = tl._partial.from_failed_capture(excinfo.value)
+    assert isinstance(excinfo.value.__cause__, torch.cuda.OutOfMemoryError)
+    partial = excinfo.value.partial_trace
     samples = device_memory_samples(partial.trace)
     attempted = [label for label in samples if label.startswith("attempted:")]
     assert attempted, f"no attempted-call row settled: {sorted(samples)}"

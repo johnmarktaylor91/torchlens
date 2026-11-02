@@ -28,6 +28,7 @@ from torchlens._capture.outcome import (
     require_capture_capability,
     resolve_loaded_outcome,
 )
+from torchlens.errors import TraceCaptureError
 
 # ---------------------------------------------------------------------------
 # Vocabulary + record
@@ -337,8 +338,13 @@ def test_origin_user_forward_failure_classifies_user_op() -> None:
 
     try:
         tl.trace(Exploding(), torch.ones(1, 3))
-    except RuntimeError as exc:
+    except TraceCaptureError as exc:
+        assert isinstance(exc.__cause__, RuntimeError)
+        assert exc.origin is FailureOrigin.USER_OP
         assert classify_failure_origin(exc) is FailureOrigin.USER_OP
+        assert "The model's own code raised this error" in str(exc)
+    else:
+        pytest.fail("the failing forward did not raise")
 
 
 def test_origin_c_backed_op_failure_classifies_user_op() -> None:
@@ -350,9 +356,13 @@ def test_origin_c_backed_op_failure_classifies_user_op() -> None:
 
     try:
         tl.trace(ShapeMismatch(), torch.ones(1, 3))
-    except RuntimeError as exc:
+    except TraceCaptureError as exc:
+        assert isinstance(exc.__cause__, RuntimeError)
         origin = classify_failure_origin(exc)
         assert origin is FailureOrigin.USER_OP, origin
+        assert exc.origin is FailureOrigin.USER_OP
+    else:
+        pytest.fail("the failing forward did not raise")
 
 
 def test_origin_torchlens_frame_classifies_torchlens() -> None:

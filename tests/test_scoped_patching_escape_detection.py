@@ -32,6 +32,7 @@ from torchlens.backends.torch.wrappers import (
     unwrap_torch,
     wrap_torch,
 )
+from torchlens.errors import TraceCaptureError
 from torchlens.options import CaptureOptions
 
 
@@ -147,8 +148,8 @@ def test_builtin_holder_attacks_are_rebound_or_shadow_reported(holder_kind: str)
     assert isinstance(error, RuntimeError)
     assert len(reports) == 1
     assert "relu" in reports[0]
-    assert hasattr(error, "partial_log")
-    assert error.partial_log.trace.escape_diagnostics
+    assert hasattr(error, "partial_trace")
+    assert error.partial_trace.trace.escape_diagnostics
 
 
 def test_raw_python_functional_and_partial_emit_shadow_reports() -> None:
@@ -518,8 +519,9 @@ def test_external_profile_hook_is_chained_and_restored_on_success_and_error() ->
     try:
         tl.trace(Clean(), torch.randn(3))
         assert sys.getprofile() is prior
-        with pytest.raises(ValueError, match="profile restoration probe"):
+        with pytest.raises(TraceCaptureError, match="profile restoration probe") as _tce_info:
             tl.trace(Failing(), torch.randn(3))
+        assert isinstance(_tce_info.value.__cause__, ValueError)
         assert sys.getprofile() is prior
         assert calls > 0
     finally:

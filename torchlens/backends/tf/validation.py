@@ -84,7 +84,7 @@ _LITERAL_PRODUCER_OPS = frozenset({"Fill"})
 
 #: Validation decision reasons this backend emits. All are members of the
 #: closed ``VALIDATION_REASONS`` list in ``backends/_backend_protocol.py``
-#: except the two structural ones, which are requested additions to it.
+#: (``replay_match`` is the validated-decision spelling, not a failure reason).
 _REASON_REPLAYED = "replay_match"
 _REASON_REPLAY_MISMATCH = "replay_mismatch"
 _REASON_PERTURBATION = "perturbation_insensitive"

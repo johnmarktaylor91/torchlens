@@ -26,6 +26,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._utils.rng import host_nondeterminism_monitor
 from torchlens._utils.rng.monitor_state import _skip_retired_hooks
+from torchlens.errors import TraceCaptureError
 
 _HELD_LOCALTIME = time.localtime  # pre-window held alias (module import time)
 
@@ -288,8 +289,9 @@ def test_failed_capture_restores_user_global_rng_streams() -> None:
     np.random.seed(626)
     torch.manual_seed(939)
     before = _global_rng_fingerprint()
-    with pytest.raises(RuntimeError, match="injected forward failure"):
+    with pytest.raises(TraceCaptureError, match="injected forward failure") as _tce_info:
         tl.trace(model, torch.ones(2, 3), capture=tl.options.CaptureOptions(seed=77))
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
     assert _global_rng_fingerprint() == before, (
         "failed capture leaked the seeded RNG engines to the user"
     )

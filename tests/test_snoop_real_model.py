@@ -16,6 +16,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens.errors import TraceCaptureError
 from torchlens.options import NarrationOptions
 
 transformers = pytest.importorskip("transformers")
@@ -94,7 +95,7 @@ def test_gpt2_position_overflow_crash_narrates_post_hoc() -> None:
         warnings.simplefilter("ignore")
         with pytest.raises(Exception) as excinfo:
             tl.trace(model, too_long)
-    partial = getattr(excinfo.value, "partial_log", None)
+    partial = getattr(excinfo.value, "partial_trace", None)
     assert partial is not None
     rendered = partial.narrate(20)
     assert "!! forward failed" in rendered
@@ -162,7 +163,7 @@ def test_resnet18_incompatible_add_crash_trio() -> None:
     torch.manual_seed(0)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        with pytest.raises(RuntimeError) as excinfo:
+        with pytest.raises(TraceCaptureError) as excinfo:
             tl.record(
                 BadHead(),
                 torch.randn(1, 3, 224, 224),
@@ -170,6 +171,7 @@ def test_resnet18_incompatible_add_crash_trio() -> None:
                 narrate=NarrationOptions(sites=True, sink=sink),
                 on_forward_error="attach_partial",
             )
+        assert isinstance(excinfo.value.__cause__, RuntimeError)
     transcript = sink.getvalue()
     assert "!! forward failed: RuntimeError" in transcript
     assert "attempted call=" in transcript

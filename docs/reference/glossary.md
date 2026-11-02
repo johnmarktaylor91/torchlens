@@ -77,8 +77,9 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 
 **PartialTrace**
 : A recoverable prefix of a failed `tl.trace(...)` capture. A raised capture exception may expose
-  `exc.partial_log`; recover it with `tl._partial.from_failed_capture(exc)`. A partial trace is not
-  silently treated as complete.
+  `exc.partial_trace`: a forward that raises during capture raises `TraceCaptureError` carrying
+  it, and TorchLens's own errors carry it too. A partial trace is not silently treated as
+  complete.
 
 **Failed partial Recording**
 : A `Recording` with `status="partial_error"` and `is_failed=True`. Use
@@ -1470,7 +1471,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Container registration**
 : `tl.types.register_container` registers a custom container type (flatten/unflatten pair) for
   capture and reconstruction. `tl.types.Container` is the computed view over a captured Python
-  output container.
+  output container. The container surface is stable: `tl.types.Container`, `Op.container`,
+  the `input_at` and `output_at` selectors, `tl.types.register_container`, `Container.reconstruct`,
+  `Trace.reconstruct_output`, `show_containers` (including `"nodes"`) and the
+  `capture_container_structure` option (see [Containers](../containers.md)).
 
 **Capture-product bases**
 : `tl.types.TraceLike` is the shared base for uncooked and cooked capture projections.
@@ -1736,7 +1740,14 @@ backends guide (`docs/backends.md`) carries the maturity table and links one pag
   `ValidationStatus.decisions[*]["reason"]` and the status reason counts: `replay_mismatch`,
   `parent_payload_missing`, `no_replayable_function`, `constant_producer_leaf`,
   `constant_parent_payload`, `user_intervention_replacement`, `effectful_region`,
-  `perturbation_insensitive`, `dtype_tolerance_exceeded`. `constant_producer_leaf`: replay reads a
+  `perturbation_insensitive`, `dtype_tolerance_exceeded`, `op_unclassified`,
+  `capture_inconsistent`. `op_unclassified`: an op the checker cannot classify (outside every
+  classification table, or an initializer that contaminated the forward), recorded as a failed
+  `metadata`-phase decision on that op. `capture_inconsistent`: capture records that disagree with
+  each other (a callback self-consistency failure, an equation or op count mismatch, a replay kind
+  that differs from the captured kind, a region boundary check), recorded as a failed
+  `metadata`-phase decision on the op or, for a trace-wide disagreement, on `"<trace>"`.
+  `constant_producer_leaf`: replay reads a
   constant's saved payload because there is no function to re-execute it from (counted as
   exempted; a parentless op that does have a replayable function is still replayed and a mismatch
   still fails). `constant_parent_payload`: perturbation skips a constant parent, and the consumer
@@ -3828,6 +3839,7 @@ The sections above describe each surface in depth.
 | `tl.errors.ReplayValueMismatchError` | A recomputed selected activation differed from its archived bytes |
 | `tl.errors.SidecarError` | Raised for sidecar-family registration and payload refusals |
 | `tl.errors.TensorSubclassUnsupportedError` | A strict Tensor subclass could not be constructed while a mode was active here |
+| `tl.errors.TraceCaptureError` | Raised by every capture door when the forward raises a non-TorchLens exception; a `CaptureError` chained `from` the original (`exc.__cause__`, traceback intact, never mutated). `TraceCaptureError.partial_trace`: the `PartialTrace` captured before the failure (or `None`); `TraceCaptureError.origin`: the outcome's `FailureOrigin`. `fields` carries `cause_type`, `last_captured_op` and `num_captured_ops`. TorchLens's own errors propagate unwrapped and carry `partial_trace` too |
 | `tl.errors.TraceMutationWarning` | First root-log mutation; Trace mutators operate in place |
 | `tl.errors.TransformContractError` | Raised when a transform spec, chain, or plan violates its contract |
 | `tl.errors.UserTransformError` | Raised when activation_transform or grad_transform raises |

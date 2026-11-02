@@ -1606,21 +1606,21 @@ def write_episode_ledger(trace: Any, resolved: ResolvedEpisode) -> EpisodeLedger
     ------
     EpisodeCaptureError
         Every settlement refusal (ledger incoherence, token-derivation
-        refusals) carries the settled product on ``exc.partial_log``
+        refusals) carries the settled product on ``exc.partial_trace``
         (lane F40a): the capture already ran and postprocessed, so the
         refusal names the declaration mismatch WITHOUT discarding the
-        product -- recover it with ``tl._partial.from_failed_capture(exc)``.
+        product.
     """
 
     try:
         return _write_settled_episode_ledger(trace, resolved)
     except Exception as exc:
-        _attach_settlement_partial_log(exc, trace)
+        _attach_settlement_partial_trace(exc, trace)
         raise
 
 
-def _attach_settlement_partial_log(exc: BaseException, trace: Any) -> None:
-    """Attach the settled product to a settlement refusal as ``partial_log``.
+def _attach_settlement_partial_trace(exc: BaseException, trace: Any) -> None:
+    """Attach the settled product to a settlement refusal as ``partial_trace``.
 
     Best-effort and idempotent: an exception that already carries a partial
     product keeps it, and an exception that rejects attribute assignment
@@ -1629,12 +1629,12 @@ def _attach_settlement_partial_log(exc: BaseException, trace: Any) -> None:
 
     if not isinstance(exc, EpisodeCaptureError):
         return
-    if getattr(exc, "partial_log", None) is not None:
+    if getattr(exc, "partial_trace", None) is not None:
         return
     from .._partial import PartialTrace
 
     try:
-        exc.partial_log = PartialTrace(trace=trace, original_exception=exc)  # type: ignore[attr-defined]
+        exc.partial_trace = PartialTrace(trace=trace, original_exception=exc)  # type: ignore[attr-defined]
     except Exception:  # noqa: BLE001 - never mask the settlement refusal
         return
 
@@ -1744,7 +1744,7 @@ def _write_settled_episode_ledger(trace: Any, resolved: ResolvedEpisode) -> Epis
     stamp_episode_steps(trace, calls)
 
     # Strict/refuse arms fire AFTER the ledger is attached, so the raised
-    # refusal's exc.partial_log carries the product WITH its measured
+    # refusal's exc.partial_trace carries the product WITH its measured
     # envelope (recoverable partial evidence, nothing discarded).
     if join_envelope is not None:
         _raise_settled_break_arm(resolved, header, join_envelope)

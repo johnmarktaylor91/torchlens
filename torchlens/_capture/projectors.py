@@ -448,7 +448,7 @@ class RefreshProjector:
 
         detail_suffix = "" if detail is None else f" Detail: {detail}."
         error = ValueError(f"{_GRAPH_CHANGE_MESSAGE}{detail_suffix}")
-        error.partial_log = PartialTrace(refreshed, error)  # type: ignore[attr-defined]
+        error.partial_trace = PartialTrace(refreshed, error)  # type: ignore[attr-defined]
         # H3 marker: the live provider identifies the generic graph-change arm by
         # this attribute (never by message text) and routes it through the shared
         # divergence-policy spine. The D18 buffer-sink arms are already typed and
@@ -480,7 +480,7 @@ class RefreshProjector:
             code=RunnableErrorCode.BUFFER_SINK_ROUTING_MUTABLE.value,
             detection_stage="refresh_buffer_sink_routing",
         )
-        error.partial_log = PartialTrace(refreshed, error)  # type: ignore[attr-defined]
+        error.partial_trace = PartialTrace(refreshed, error)  # type: ignore[attr-defined]
         return error
 
     @staticmethod

@@ -24,7 +24,7 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeGuard, cast
 
-from .._errors import InvalidArgumentError
+from .._errors import InvalidArgumentError, original_exception
 from ..errors import CaptureError
 from ._outcome_payload import (
     _OUTCOME_PAYLOAD_KEYS,  # noqa: F401 -- test-visible re-export
@@ -194,14 +194,15 @@ def _qualified_type_name(exc: BaseException) -> str:
 def classify_failure_origin(exc: BaseException) -> FailureOrigin:
     """Classify one terminal exception's origin (diagnostic only).
 
-    Walks the traceback from the innermost frame outward. The innermost
-    attributable frame wins: user code -> USER_OP; a torchlens frame ->
-    TORCHLENS, except the wrapper trampoline, the completeness-witness
-    redispatch and the declined-protocol re-offer (each executing the user's op) -> USER_OP. Interrupts classify INTERRUPT; no traceback or nothing
-    attributable -> UNKNOWN. Misclassification is capability-safe by
-    construction -- origin never steers a gate.
+    A :class:`~torchlens.errors.TraceCaptureError` classifies as its ``__cause__``. Walks the
+    traceback from the innermost frame outward; the innermost attributable frame wins: user
+    code -> USER_OP; a torchlens frame -> TORCHLENS, except the wrapper trampoline, the
+    completeness-witness redispatch and the declined-protocol re-offer (each executing the
+    user's op) -> USER_OP. Interrupts classify INTERRUPT; no traceback or nothing attributable
+    -> UNKNOWN. Misclassification is capability-safe by construction -- origin never steers a gate.
     """
 
+    exc = original_exception(exc)
     if isinstance(exc, (KeyboardInterrupt, SystemExit)):
         return FailureOrigin.INTERRUPT
     if isinstance(exc, StopSignalSwallowedError):

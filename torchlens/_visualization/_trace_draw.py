@@ -98,7 +98,7 @@ def draw(  # noqa: PLR0913 - mirrors the ratified public grammar of Trace.draw
     for_paper: bool = False,
     return_graph: bool = False,
     order_siblings: bool = True,
-    show_containers: Literal[False, "labels", "cluster", "collapsed", "auto", "nodes"] = False,
+    show_containers: Literal[False, "labels", "collapsed", "nodes"] = False,
     container_max_inline: int = 12,
     show_input_transform_summary: bool = False,
     show_orphans: bool = False,  # Invariants support flipping this; owner visual review pending.

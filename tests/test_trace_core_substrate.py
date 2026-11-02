@@ -900,7 +900,7 @@ def test_loaded_partial_capture_stays_staging() -> None:
     with mock.patch.object(finalization, "_build_module_logs", side_effect=RuntimeError("boom")):
         with pytest.raises(Exception) as exc_info:
             tl.trace(model, torch.randn(1, 3))
-    partial = tl._partial.from_failed_capture(exc_info.value)
+    partial = exc_info.value.partial_trace
     assert partial is not None
     source = partial.trace
     assert source.__dict__.get("_tracing_finished") is False

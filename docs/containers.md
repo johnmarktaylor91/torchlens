@@ -1,6 +1,6 @@
 # Containers
 
-TorchLens records input and output container structure for supported Python containers and exposes it as a lightweight runtime view through `torchlens.types.Container`, `torchlens.types.register_container`, and the `capture_container_structure` option.
+TorchLens records input and output container structure for supported Python containers and exposes it as a lightweight runtime view. The public names in this guide are stable: `torchlens.types.Container`, `op.container`, the `input_at` and `output_at` selectors, `torchlens.types.register_container`, `Container.reconstruct`, `Trace.reconstruct_output`, `show_containers` (including `"nodes"`) and the `capture_container_structure` option.
 
 ## Runtime View
 
