@@ -256,7 +256,7 @@ def _geometric_influence(
         statuses: list[ReceptiveFieldStatus] = []
         for seed_op, entry in seeds:
             mask, pair_relation, pair_statuses = _geometric_pair(
-                trace, seed_op, entry._mask, target, shape, node.direction
+                trace, seed_op, entry._mask, target, node.direction
             )
             folded = _mask_union(folded, mask)
             relation = _join_relation(relation, pair_relation)
@@ -271,11 +271,11 @@ def _geometric_pair(
     seed_op: Any,
     mask: _Mask,
     target: Any,
-    shape: tuple[int, ...],
     direction: str,
 ) -> tuple[_Mask, str, tuple[ReceptiveFieldStatus, ...]]:
     """Propagate one seed site's mask to one target site (geometric)."""
 
+    shape = _site_shape(target)
     if target is seed_op:
         return mask, "exact", (ReceptiveFieldStatus.EXACT,)
     pair = _pair_descriptor(trace, seed_op, target, direction)
@@ -324,14 +324,14 @@ def _pair_descriptor(trace: Any, seed_op: Any, target: Any, direction: str) -> A
         if descriptor is None:
             return None
         return descriptor, lambda sets, memo: box_for_units(
-            solution, seed_op, sets, input_op=target, memo=memo
+            solution, seed_op, sets, far=target, memo=memo
         )
     solution = _engine.solve_from(trace, target)
     descriptor = _descriptor_for(solution.per_op.get(seed_op.label), target.label)
     if descriptor is None:
         return None
     return descriptor, lambda sets, memo: box_for_units(
-        solution, seed_op, sets, source=target, memo=memo
+        solution, seed_op, sets, far=target, memo=memo
     )
 
 

@@ -97,13 +97,12 @@ def _index_set_box(
     descriptor: ReceptiveField,
     initial: _AxisSets,
     terminals: tuple[_TerminalState, ...],
-    *,
-    clip: bool,
 ) -> _IndexSetBox:
     """Fold a set query's terminals into the hull box plus the propagated sets.
 
     No terminal (no live path from the seed block) is an ``empty`` box, not an
-    error: for a set query "nothing reached" is an answer.
+    error: for a set query "nothing reached" is an answer. Bounds are always
+    clipped to the captured extents (the influence engine's only need).
     """
     assert descriptor.axes is not None
     corner = tuple(
@@ -119,7 +118,7 @@ def _index_set_box(
                 exact=True,
             ),
         )
-    box = _build_box(op, descriptor, corner, terminals, clip=clip)
+    box = _build_box(op, descriptor, corner, terminals, clip=True)
     clipped_sets = tuple(
         _union_optional(terminal.clipped[axis] for terminal in terminals) for axis in range(rank)
     )
@@ -131,27 +130,25 @@ def box_for_units(
     op: Op,
     seed: _AxisSets,
     *,
-    input_op: Op | str | None = None,
-    source: Op | None = None,
-    clip: bool = True,
+    far: Op | str | None = None,
     memo: _WalkMemo | None = None,
 ) -> _IndexSetBox:
     """Compute the receptive hull of an axis-aligned block of target units.
 
     The set sibling of ``_query.box_for_unit``: same solution, same
     descriptor selection and validation, same reverse walk, one seed block
-    instead of one coordinate. ``memo`` lets the rectangles of one query share
-    the walk memo.
+    instead of one coordinate. ``far`` is the far endpoint (a model input or
+    io role, as ``input_op=`` there, or an interior source operation, as
+    ``source=``; the descriptor selection is one and the same). ``memo``
+    lets the rectangles of one query share the walk memo.
     """
-    if input_op is not None and source is not None:
-        raise TypeError("input and source cannot be supplied together.")
     descriptors = solution.per_op.get(op.label)
     if not descriptors:
-        endpoint = source.label if source is not None else op.label
+        endpoint = far.label if far is not None and not isinstance(far, str) else op.label
         raise ReceptiveFieldError(
             f"No receptive-field solution is available from {endpoint} to {op.label}."
         )
-    descriptor = _select_descriptor(descriptors, source if source is not None else input_op)
+    descriptor = _select_descriptor(descriptors, far)
     _validate_descriptor_for_query(descriptor)
     initial = _seed_axis_sets(op, descriptor, seed)
     operations, by_reference = _query_graph(op.source_trace, solution)
@@ -171,7 +168,7 @@ def box_for_units(
             True,
             {} if memo is None else memo,
         )
-    return _index_set_box(op, descriptor, initial, terminals, clip=clip)
+    return _index_set_box(op, descriptor, initial, terminals)
 
 
 def box_for_source_units(
@@ -180,7 +177,6 @@ def box_for_source_units(
     seed: _AxisSets,
     *,
     target: Op | str | None = None,
-    clip: bool = True,
     memo: _WalkMemo | None = None,
 ) -> _IndexSetBox:
     """Compute the projective support of an axis-aligned block of source units.
@@ -210,7 +206,7 @@ def box_for_source_units(
         terminals = _walk_to_target(
             op, initial, target_label, active, by_reference, True, {} if memo is None else memo
         )
-    result = _index_set_box(op, descriptor, initial, terminals, clip=clip)
+    result = _index_set_box(op, descriptor, initial, terminals)
     box = replace(
         result.box, direction=ReceptiveFieldDirection.PROJECTIVE, unit_shape=tuple(op.shape)
     )
