@@ -17,7 +17,7 @@ import pytest
 
 from torchlens._data_classes.field_policy import StorageKind
 from torchlens._io import save_policy, writer_contract
-from torchlens._io.format3 import contract, reader, runnable, writer
+from torchlens._io.format3 import contract, reader, writer
 from torchlens._io.format_errors import ArtifactError
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -133,13 +133,11 @@ def test_phase_timing_keys_are_the_pipeline_step_names() -> None:
         (lambda: writer.write_trace(None, "x"), "bundle_save_failed"),
         (lambda: writer.write_bundle(None, "x"), "bundle_save_failed"),
         (lambda: writer.write_intervention_recipe(None, "x"), "bundle_save_failed"),
-        (lambda: runnable.write_runnable(None, "x"), "bundle_save_failed"),
         (lambda: reader.read_manifest("x"), "bundle_load_failed"),
         (lambda: reader.validate_artifact("x"), "bundle_load_failed"),
         (lambda: reader.load_trace("x"), "bundle_load_failed"),
         (lambda: reader.load_bundle("x"), "bundle_load_failed"),
         (lambda: reader.load_intervention_recipe("x"), "bundle_load_failed"),
-        (lambda: runnable.load_runnable("x"), "bundle_load_failed"),
     ],
     ids=lambda value: value if isinstance(value, str) else "door",
 )
