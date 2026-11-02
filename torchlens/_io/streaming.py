@@ -364,6 +364,7 @@ class BundleStreamWriter:
         *,
         trace: Any,
         payload_policy: dict[str, bool] | None = None,
+        record_pairs: list[tuple[Any, Any]] | None = None,
     ) -> Path:
         """Write remaining payloads, close the chunks, build the manifest; hold the state.
 
@@ -391,6 +392,8 @@ class BundleStreamWriter:
             Include flags the scrub used (``include_outs``, ``include_grads``,
             ...); ``None`` derives them from the written payloads and the
             scrubbed options.
+        record_pairs:
+            ``(scrubbed copy, live record)`` pairs from the scrub (live cells).
 
         Returns
         -------
@@ -408,9 +411,8 @@ class BundleStreamWriter:
         try:
             for blob_id, tensor, kind, label in blob_specs:
                 if blob_id in self._entries_by_blob_id:
-                    # Streamed blobs a scrubbed ref reuses were filtered out and scrub
-                    # ids start past the stream's ids, so an already-written id here is
-                    # a collision: the ref would resolve to ANOTHER op's payload.
+                    # Reused blobs were filtered and scrub ids start past the stream's, so
+                    # an already-written id would resolve to ANOTHER op's payload.
                     existing = self._entries_by_blob_id[blob_id]
                     raise ArtifactError(
                         f"Streaming bundle blob id {blob_id} for {label!r} collides with "
@@ -429,14 +431,13 @@ class BundleStreamWriter:
             self.abort(reason)
             raise ArtifactError(reason) from exc
         except BaseException as exc:
-            # Safety net (round-8 F3): any failure, known or not, marks the
-            # ``.tmp`` dir PARTIAL (sweepable by ``cleanup_tmp()``); non-Exception
-            # BaseExceptions re-raise unwrapped to keep control flow.
+            # Safety net (round-8 F3): any failure marks the ``.tmp`` dir PARTIAL.
             reason = f"Failed to finalize streaming bundle at {self.tmp_path}: {exc}"
             self.abort(reason)
             if isinstance(exc, Exception):
                 raise ArtifactError(reason) from exc
             raise
+        self._staged_record_pairs = [*(record_pairs or ()), (scrubbed_state, trace)]
         self._staged_scrubbed_state = scrubbed_state
         self._staged_trace = _weak_reference(trace)
         return self.final_path
@@ -482,14 +483,12 @@ class BundleStreamWriter:
             write_trace_envelope(
                 self.tmp_path,
                 base_manifest=self._staged_base_manifest,
-                tables=TraceTables(scrubbed_state, self._tensor_refs),
+                tables=TraceTables(scrubbed_state, self._tensor_refs, self._staged_record_pairs),
                 envelope=EnvelopeSpec("trace", "portable", payload_policy=policy, codecs=codecs),
             )
             for path in sorted(self.tmp_path.rglob("*")):
                 _restrict_mode(path, 0o700 if path.is_dir() else 0o600)
-            # Write/read symmetry (late.21): the staged directory reads back
-            # through one JSON parse plus the typed decode before it publishes.
-            preflight_reload(self.tmp_path)
+            preflight_reload(self.tmp_path)  # late.21: one JSON parse plus the typed decode
         except ArtifactError:
             raise
         except (OSError, TypeError, ValueError) as exc:
@@ -561,7 +560,7 @@ class BundleStreamWriter:
         try:
             self._write_staged_metadata(scrubbed_state, outcome_payload)
         finally:
-            self._staged_scrubbed_state = None
+            self._staged_scrubbed_state, self._staged_record_pairs = None, []
 
         # Crash-durability before publish: fsync every written file and the
         # staged directories so a crash after the rename cannot publish a

@@ -40,6 +40,7 @@ from .._data_classes.module import Module, ModuleCall
 from .._data_classes.prehook import ModuleInputSnapshot, PreHookEffect
 from .._io import ArtifactError, BlobRef
 from .._io.accessor_rebuild import rebuild_trace_accessors
+from .._io.format3.writer import settle_live_side
 from .._io.lazy import LazyActivationRef
 from .._io.scrub import BlobSpec
 from .._io.streaming import BundleStreamWriter
@@ -1505,18 +1506,12 @@ def _set_tracing_finished(self: "Trace") -> None:
 def _finalize_streamed_bundle(self: "Trace") -> None:
     """Step 18: Finalize any in-progress streamed tensor bundle.
 
-    Streamed bundles ENTER SETTLEMENT (WT1 A-IV item 18, lane A08): an
-    UNSETTLED trace (the ordinary step-18 call, which runs before
-    ``settle_completed``) only STAGES the bundle -- blobs and manifest land in
-    the temp directory and the writer stays on ``self._out_writer`` -- and the
-    tmp->final publish happens at the settlement seam in
-    ``_capture/trace.py``, carrying the settled capture-outcome attestation.
-    A SETTLED trace (the deferred grad-streaming tail in
-    ``backends/torch/backward.py``) stages and publishes in one pass.
-    Historical behavior published here unconditionally, so a live COMPLETE
-    capture loaded UNATTESTED (no attestation existed yet to persist) and a
-    postprocess failure AFTER this step left a published artifact the N1
-    export gate would refuse.
+    Streamed bundles ENTER SETTLEMENT (WT1 A-IV item 18): an UNSETTLED trace (the
+    step-18 call, before ``settle_completed``) only STAGES the bundle in the temp
+    directory, and the publish happens at the settlement seam in ``_capture/trace.py``
+    with the settled capture-outcome attestation. A SETTLED trace (the deferred
+    grad-streaming tail in ``backends/torch/backward.py``) stages and publishes in one
+    pass. Live records pair with their scrubbed copies so live cells match ``save()``.
 
     Parameters
     ----------
@@ -1536,11 +1531,14 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
     from .._capture.outcome import outcome_for
     from ..intervention.injection import refuse_injection_logged_stream_finalize
 
-    # F44: the streamed writer never passes the analysis save door that appends the
-    # injected family; refusing keeps the artifact from dropping recorded computation.
+    # F44: the streamed writer skips the save door that appends the injected family.
     refuse_injection_logged_stream_finalize(self)
+    settle_live_side(self)
+    record_pairs: list[tuple[Any, Any]] = []
     try:
-        scrubbed_state, blob_specs, unsupported_tensor_records = _scrub_streamed_trace(self, writer)
+        scrubbed_state, blob_specs, unsupported_tensor_records = _scrub_streamed_trace(
+            self, writer, record_pairs
+        )
         scrubbed_state, blob_specs = _reuse_streamed_blob_ids(
             self, scrubbed_state=scrubbed_state, blob_specs=blob_specs, writer=writer
         )
@@ -1550,6 +1548,7 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
             unsupported=unsupported_tensor_records,
             trace=self,
             payload_policy=_streamed_payload_flags(self, writer),
+            record_pairs=record_pairs,
         )
         settled = outcome_for(self)
         if settled is not None:
@@ -1588,7 +1587,7 @@ def _streamed_payload_flags(self: "Trace", writer: BundleStreamWriter) -> dict[s
 
 
 def _scrub_streamed_trace(
-    self: "Trace", writer: BundleStreamWriter
+    self: "Trace", writer: BundleStreamWriter, record_pairs: list[tuple[Any, Any]]
 ) -> tuple[dict[str, Any], list[BlobSpec], list[dict[str, str]]]:
     """Scrub a streamed trace for staging, numbering its blobs past the stream's ids.
 
@@ -1598,6 +1597,8 @@ def _scrub_streamed_trace(
         Model log whose streamed bundle is being finalized.
     writer:
         The capture's streaming bundle writer.
+    record_pairs:
+        Filled with ``(scrubbed copy, live record)`` pairs for the writer's live cells.
 
     Returns
     -------
@@ -1610,10 +1611,9 @@ def _scrub_streamed_trace(
     return scrub_for_save(
         self,
         **_streamed_payload_flags(self, writer),
-        # Scrub ids start past every id the capture streamed: a tensor field with
-        # no streamed blob (a synthetic output row, an orphan payload) otherwise
-        # takes an id the stream already wrote once an op streamed during capture
-        # was pruned, and its ref silently resolves to that op's payload.
+        record_pairs=record_pairs,
+        # Scrub ids start past every streamed id: else a blobless tensor field takes an id
+        # a pruned streamed op already wrote, and its ref resolves to that op's payload.
         blob_id_floor=writer._issued_blob_count(),
     )
 
