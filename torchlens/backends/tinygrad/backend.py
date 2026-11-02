@@ -467,8 +467,7 @@ class TinygradBackend:
         args = self._normalize_input_args(input_args)
         module_tree = discover_tinygrad_module_tree(model)
         use_object_module = _resolve_tinygrad_module_identity_mode(
-            cast(str | None, module_identity_mode),
-            module_tree,
+            cast(str | None, module_identity_mode), module_tree
         )
         self._reject_unsupported_options(
             layers_to_save=layers_to_save,
@@ -528,8 +527,7 @@ class TinygradBackend:
                 "tinygrad expression instead.",
                 code="input_mutation_unsupported",
             )
-        outputs = tuple(self._tensor_leaves(output))
-        if not outputs:
+        if not (outputs := tuple(self._tensor_leaves(output))):
             raise BackendUnsupportedError(
                 "tinygrad backend preview requires at least one tinygrad Tensor output.",
                 code="tensor_output_required",
@@ -1290,8 +1288,7 @@ class TinygradBackend:
                 code="live_payloads_required",
             )
         input_argnums = _normalize_tinygrad_input_grad_argnums(
-            grad_options.input_grad_argnums,
-            len(args),
+            grad_options.input_grad_argnums, len(args)
         )
         leaves = _differentiated_input_leaves(self, args, input_argnums)
         if not leaves and not grad_options.intermediate_grads:
@@ -1393,13 +1390,10 @@ class TinygradBackend:
             op for op in trace._layer_list if op.has_saved_activation and not op.is_input
         )
         trace_signatures = _tinygrad_trace_op_signatures(
-            selected_ops,
-            getattr(trace, "tinygrad_uop_captures", ()),
+            selected_ops, getattr(trace, "tinygrad_uop_captures", ())
         )
         live_candidates = _tinygrad_live_intermediate_candidates(
-            backend=self,
-            outputs=outputs,
-            observed_tensors=observed_tensors,
+            backend=self, outputs=outputs, observed_tensors=observed_tensors
         )
         cast(Any, loss).backward()
         if not _tinygrad_outputs_close(self, derived_output, captured_output):
