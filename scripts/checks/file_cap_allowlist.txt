@@ -1031,7 +1031,6 @@ torchlens/bridge/inseq.py::attribute	68
 torchlens/bridge/lit/__init__.py::model	108
 torchlens/bridge/lit/_adapters.py	1045
 torchlens/bridge/lit/_adapters.py::_TorchLensLitModel._salience_values	77
-torchlens/bridge/mcp.py::_build_server	65
 torchlens/bridge/profiler.py::_assign_op_types	68
 torchlens/bridge/profiler.py::join	93
 torchlens/bridge/pyreft.py::read	88
@@ -1042,7 +1041,7 @@ torchlens/bridge/shap.py::explain	68
 torchlens/bridge/transformers.py	804
 torchlens/bridge/transformers.py::_resolve_image_preprocessing	62
 torchlens/bridge/transformers.py::trace_text	67
-torchlens/bundle/__init__.py	1509
+torchlens/bundle/__init__.py	1502
 torchlens/bundle/_alternatives.py::_bundle_add_alternative	63
 torchlens/bundle/_compare_gate.py::require_comparable	143
 torchlens/bundle/_lineage.py::validate_member_construction	77
@@ -1051,7 +1050,7 @@ torchlens/bundle/_provenance.py::bundle_why	96
 torchlens/bundle/_relation_carriage.py::_bundle_derive_episode_status	77
 torchlens/bundle/_relation_carriage.py::_bundle_relate	64
 torchlens/bundle/_token_spans.py::find_token_spans	69
-torchlens/bundle/_vary.py::bundle_vary	121
+torchlens/bundle/_vary.py::bundle_vary	98
 torchlens/callbacks/lightning.py::_LayerProfilerCallbackMixin._trace_batch	66
 torchlens/checks/_audit.py::_row_findings	133
 torchlens/checks/_audit.py::param_health	86
@@ -1112,9 +1111,8 @@ torchlens/distributed/_lifecycle.py	882
 torchlens/distributed/_lifecycle.py::_install_lifecycle_wraps	67
 torchlens/distributed/_lifecycle.py::_seed_group_locked	80
 torchlens/distributed/_lifecycle.py::maybe_auto_arm	68
-torchlens/experiment/_engine.py	964
-torchlens/experiment/_engine.py::_resolve_candidate	80
-torchlens/experiment/_engine.py::sweep_sites	138
+torchlens/experiment/_engine.py	929
+torchlens/experiment/_engine.py::sweep_sites	84
 torchlens/experiment/_head_sugar.py::head_ablation_candidates	75
 torchlens/experimental/dagua/_bridge.py	933
 torchlens/experimental/dagua/_bridge.py::_torchlens_layout_config	61
@@ -1247,7 +1245,7 @@ torchlens/intervention/stochastic.py::resample_rows_from.factory._hook	88
 torchlens/intervention/stochastic.py::sample_from	73
 torchlens/intervention/stochastic.py::set_direction_mean	144
 torchlens/intervention/sweep.py::sweep	177
-torchlens/intervention/types.py	861
+torchlens/intervention/types.py	859
 torchlens/inventory.py::SiteInventory.resolve	71
 torchlens/inventory.py::sites_of_trace	65
 torchlens/io/__init__.py::detect_tlspec_format	67
