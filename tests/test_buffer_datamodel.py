@@ -511,16 +511,19 @@ def test_buffer_write_models_validate_and_expose_entities(
             model_factory(), x.clone(), random_seed=123, validate_metadata=True
         )
 
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
     if isinstance(model, DataCopyWrite):
-        # `.data.copy_` writes through a detached `.data` view, which severs graph
-        # provenance for the copy target; TorchLens deliberately warns about the
-        # unattributed argument (postprocess `_warn_unattributed_tensor_args`).
-        # Expect that documented warning here instead of letting the warning-hygiene
-        # filter promote a known `.data` limitation to a fatal error.
-        with pytest.warns(UserWarning, match="no graph/source provenance"):
-            trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
-    else:
-        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_arg_values=True))
+        # `.data.copy_` writes through the detached `.data` alias; storage-alias
+        # label propagation advances the buffer to the copy, so the later read of
+        # `b` binds to it and no unattributed-argument warning is raised (the
+        # runnable data-alias ceiling is pinned in test_tlspec_runnable_r25_producer).
+        copy_op = next(op for op in trace.ops if op.func_name == "copy_")
+        add_op = next(op for op in trace.ops if op.func_name == "__add__")
+        assert copy_op.unattributed_tensor_args == ()
+        # The read of ``b`` after the write is the buffer's post-write version
+        # node, whose parent is the copy.
+        buffer_read = next(label for label in add_op.parents if label.startswith("buffer"))
+        assert copy_op.layer_label in trace.layer_dict_all_keys[buffer_read].parents
     for address, overwrite_count in expected_overwrites.items():
         assert address in trace.buffers
         buffer = trace.buffers[address]

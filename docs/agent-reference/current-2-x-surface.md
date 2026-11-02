@@ -469,7 +469,10 @@
   `"mode_rescue_rerun"`, session-time `trace.rescue_rerun`). Primary captures are NEVER mode-armed
   (fused-path observer effect). Protocol-invisible constructors that no mode can see (derived
   per build: `from_numpy`, `from_dlpack`, `frombuffer`, `Tensor.as_subclass`, `Tensor._make_subclass`) keep targeted module-attr patching
-  (`backends/torch/belt.py`). Residuals declared, typed, never silent: worker-thread stale refs
+  (`backends/torch/belt.py`); the same wrap-time module sweep also patches a module-global stale
+  reference to ANY wrapped torch callable (`from torch import bmm` bound before the first wrap),
+  reversed at `unwrap_torch()`, so mode-free captures such as forward validation see the op.
+  Residuals declared, typed, never silent: worker-thread stale refs
   (modes are thread-local) and de-moded `handle_torch_function` composite interiors disclose
   `"escape_rescue_unrecovered"`; an authoritative witness/detector/dynamo verdict stays in place,
   and a witness-VERIFIED capture suppresses the rescue. The former

@@ -218,7 +218,7 @@ def _reexecute_edge_boundary(
     spliced, failure = _splice_edge_substitution_args(trace, target_op, entries, input_args)
     if spliced is None:
         return failure if failure is not None else ValidationCheckResult.unverified("unknown")
-    recomputed = _execute_func_with_restored_state(target_op, spliced, [], target_op.label, False)
+    recomputed = _execute_func_with_restored_state(target_op, spliced, [], False)
     saved_output = _saved_out_payload(target_op)
     if recomputed is None or saved_output is None:
         return ValidationCheckResult.unverified("edge_boundary_replay_unavailable")

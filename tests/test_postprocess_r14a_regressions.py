@@ -60,9 +60,9 @@ class _ConditionalBuildTrace:
         }
         self.layer_list = [
             _make_layer_stub("gt_1_3:1", "gt_1_3", terminal_conditional_id=0),
-            _make_layer_stub("then_1:1", "then_1"),
+            _make_layer_stub("then_1:1", "then_1", branch_stack=[(0, "then")]),
             _make_layer_stub("gt_1_3:2", "gt_1_3", terminal_conditional_id=1),
-            _make_layer_stub("then_2:1", "then_2"),
+            _make_layer_stub("then_2:1", "then_2", branch_stack=[(1, "then")]),
         ]
         self.layer_dict_all_keys = {
             "gt_1_3": SimpleNamespace(
@@ -112,6 +112,7 @@ def _make_layer_stub(
     label: str,
     layer_label: str,
     terminal_conditional_id: int | None = None,
+    branch_stack: list[tuple[int, str]] | None = None,
 ) -> SimpleNamespace:
     """Create a minimal layer-like object for conditional finalization tests.
 
@@ -123,6 +124,8 @@ def _make_layer_stub(
         Pass-stripped layer label.
     terminal_conditional_id:
         Dense conditional-event id for terminal bool ops.
+    branch_stack:
+        The op's per-pass ``conditional_branch_stack`` (arm entries it runs inside).
 
     Returns
     -------
@@ -136,6 +139,7 @@ def _make_layer_stub(
         in_conditionals=[],
         terminal_conditional_id=terminal_conditional_id,
         terminal_bool_for=None,
+        conditional_branch_stack=list(branch_stack or []),
         parents=[],
         has_output_descendant=True,
     )

@@ -63,6 +63,10 @@ from ._index_domain import (
     index_domain_single_entry_values,
     layer_has_index_domain_parent,
 )
+from ._non_pass_record import (
+    finish_validation_status as _finish_validation_status,
+    record_replay_exception as _record_replay_exception,
+)
 from ._replay_device import align_output_to_saved_device, align_parent_to_slot_device
 from ._replay_grad_fidelity import _copy_validation_args, _deep_clone_tensors  # noqa: F401
 from ._source_provenance import check_source_provenance
@@ -746,12 +750,17 @@ def _comparator_self_test() -> None:
     from .._state import pause_logging
 
     with pause_logging():
-        base = torch.tensor([1.0, -2.0, 0.0, 0.5])
-        unequal = torch.tensor([1.0, -2.0, 0.0, 0.75])
-        nan_pair = torch.tensor([float("nan"), 1.0])
-        nan_vs_number = torch.tensor([0.25, 1.0])
-        neg_zero = torch.tensor([-0.0, 1.0])
-        pos_zero = torch.tensor([0.0, 1.0])
+        # Every sentinel is pinned to float32, the dtype whose band the pairs
+        # below derive: a model that calls ``torch.set_default_dtype(float64)``
+        # would otherwise build float64 sentinels, judge the fp32-derived accept
+        # pair against the far tighter float64 band, and refuse a healthy judge.
+        fp32 = torch.float32
+        base = torch.tensor([1.0, -2.0, 0.0, 0.5], dtype=fp32)
+        unequal = torch.tensor([1.0, -2.0, 0.0, 0.75], dtype=fp32)
+        nan_pair = torch.tensor([float("nan"), 1.0], dtype=fp32)
+        nan_vs_number = torch.tensor([0.25, 1.0], dtype=fp32)
+        neg_zero = torch.tensor([-0.0, 1.0], dtype=fp32)
+        pos_zero = torch.tensor([0.0, 1.0], dtype=fp32)
         # R74r6-F1: bound the EFFECTIVE fp32 band from BOTH sides, not just
         # non-vacuity. The loosest sentinel above is a 1/3 relative gap, so
         # any rtol below 0.333 used to pass -- a 5,461x-loosened band ran
@@ -767,7 +776,7 @@ def _comparator_self_test() -> None:
         # surface a poisoned/corrupted band lives in and must not be able to
         # move its own tripwire. (Headroom walk-out is pinned separately by
         # tests/test_replay_tolerance_dtype_tripwire.py's literal pins.)
-        band_probe = torch.tensor([1.0, -1.0, 0.5, 2.0])
+        band_probe = torch.tensor([1.0, -1.0, 0.5, 2.0], dtype=fp32)
         fp32_replay_rtol = derive_float_tolerances(
             torch.float32, _ACCUMULATING_REPLAY_ULP_HEADROOM
         )[0]
@@ -904,9 +913,7 @@ def validate_saved_outs(
             decision="failed",
             reason=dispatch_count_result.reason,
         )
-        status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
-        setattr(self, "_validation_replay_status", status)
-        return status
+        return _finish_validation_status(self, decision_recorder)
     if dispatch_count_result.decision == "validated":
         # Positive census coverage is part of the verdict record: a passed
         # status now carries auditable evidence the dispatch census matched.
@@ -979,9 +986,7 @@ def validate_saved_outs(
                 decision="failed",
                 reason="output_count_mismatch",
             )
-            status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
-            setattr(self, "_validation_replay_status", status)
-            return status
+            return _finish_validation_status(self, decision_recorder)
         output_label_counts: dict[str, int] = defaultdict(int)
         for i, output_layer_label in enumerate(self.output_layers):
             output_layer = _resolve_output_entry_for_index(
@@ -1005,9 +1010,7 @@ def validate_saved_outs(
                     decision="failed",
                     reason="output_missing",
                 )
-                status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
-                setattr(self, "_validation_replay_status", status)
-                return status
+                return _finish_validation_status(self, decision_recorder)
             if not _ground_truth_output_matches_saved(
                 output_layer.out, ground_truth_output_tensors[i]
             ):
@@ -1034,9 +1037,7 @@ def validate_saved_outs(
                     decision="failed",
                     reason="ground_truth_mismatch",
                 )
-                status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
-                setattr(self, "_validation_replay_status", status)
-                return status
+                return _finish_validation_status(self, decision_recorder)
             decision_recorder.record(
                 op_label=output_layer_label,
                 func_name=getattr(output_layer, "func_name", None),
@@ -1080,9 +1081,7 @@ def validate_saved_outs(
             decision_recorder,
         )
         if parents_valid.failed:
-            status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
-            setattr(self, "_validation_replay_status", status)
-            return status
+            return _finish_validation_status(self, decision_recorder)
 
     # Completeness check: BFS must visit every op in the graph, counted at
     # PASS-QUALIFIED grain. Counting bare layer labels let a phantom extra
@@ -1114,9 +1113,7 @@ def validate_saved_outs(
             decision="failed",
             reason="bfs_incomplete",
         )
-        status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
-        setattr(self, "_validation_replay_status", status)
-        return status
+        return _finish_validation_status(self, decision_recorder)
 
     # Metadata invariant checks (after out validation ops)
     if validate_metadata:
@@ -1151,9 +1148,7 @@ def validate_saved_outs(
             raise
     # Source-less tensor args replay fine from saved args; a gap records a failure here.
     check_source_provenance(self, decision_recorder, verbose)
-    status = decision_recorder.as_status(backend=str(getattr(self, "backend", "torch")))
-    setattr(self, "_validation_replay_status", status)
-    return status
+    return _finish_validation_status(self, decision_recorder)
 
 
 def validate_parents_of_saved_layer(
@@ -2570,8 +2565,8 @@ def _execute_func_with_restored_state(
     layer: Op,
     input_args: dict[str, Any],
     layers_to_perturb: list[str],
-    layer_label: str,
     verbose: bool,
+    exception_sink: list[Exception] | None = None,
 ) -> Any:
     """Execute a layer's function with restored RNG and autocast state.
 
@@ -2583,7 +2578,8 @@ def _execute_func_with_restored_state(
     The caller treats ``None`` as a failed replay execution for normal replay
     and an unverified perturbation execution exception for perturbation replay.
 
-    Returns the recomputed output tensor, or None on exception.
+    Returns the recomputed output tensor, or None on exception; the exception
+    is appended to ``exception_sink`` when one is given.
     """
     layer_func = layer.func
 
@@ -2595,10 +2591,12 @@ def _execute_func_with_restored_state(
         # Broad catch: perturbed values can trigger any exception (shape
         # mismatch, index OOB, dtype error, etc.).  Returning None lets the
         # caller decide whether this is acceptable.
+        if exception_sink is not None:
+            exception_sink.append(e)
         if verbose:
             print(
                 f"Perturbation of {layers_to_perturb} for layer "
-                f"{layer_label} caused {type(e).__name__}: {e}"
+                f"{layer.label} caused {type(e).__name__}: {e}"
             )
         return None
 
@@ -3183,8 +3181,13 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     if input_args is None:
         return ValidationCheckResult.unverified(unverified_reason or "missing_saved_args")
 
+    replay_exceptions: list[Exception] = []
     recomputed_output = _execute_func_with_restored_state(
-        layer, input_args, layers_to_perturb, layer_to_validate_parents_for_label, verbose
+        layer,
+        input_args,
+        layers_to_perturb,
+        verbose,
+        replay_exceptions,
     )
 
     # A perturbed execution that RAISES proves the op read the perturbed value
@@ -3204,7 +3207,11 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
             if retry_args is None:
                 break
             recomputed_output = _execute_func_with_restored_state(
-                layer, retry_args, layers_to_perturb, layer_to_validate_parents_for_label, verbose
+                layer,
+                retry_args,
+                layers_to_perturb,
+                verbose,
+                replay_exceptions,
             )
             if recomputed_output is not None:
                 input_args = retry_args
@@ -3238,6 +3245,9 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
             return ValidationCheckResult.failed_result("replay_execution_exception")
         # Perturbed execution raised -- the perturbed values caused an invalid
         # input (e.g., wrong shape). It is unverified, not a pass.
+        _record_replay_exception(
+            self, layer_to_validate_parents_for_label, layers_to_perturb, replay_exceptions
+        )
         return ValidationCheckResult.unverified("perturbation_execution_exception")
 
     matches_saved = tensor_nanequal(recomputed_output, saved_output, allow_tolerance=True)
@@ -3271,7 +3281,6 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
                     layer,
                     snapshot_args,
                     layers_to_perturb,
-                    layer_to_validate_parents_for_label,
                     verbose,
                 )
                 if snapshot_args is not None
@@ -3350,7 +3359,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
             if retry_args is None:
                 break
             retry_output = _execute_func_with_restored_state(
-                layer, retry_args, layers_to_perturb, layer_to_validate_parents_for_label, verbose
+                layer, retry_args, layers_to_perturb, verbose
             )
             if retry_output is not None and not tensor_nanequal(
                 retry_output, layer.out, allow_tolerance=False
@@ -3366,23 +3375,16 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
             return ValidationCheckResult.exempted("ulp_swamped_perturbation")
         # A genuine perturbation-insensitivity failure: the output did not
         # change when a parent's value was perturbed and no posthoc excuse applied.
-        from .diagnostics import (
-            CHECK_PERTURBATION,
-            ValidationFailure,
-            record_validation_failure,
-        )
+        # A degenerate forward (all non-finite output, identically zero
+        # autograd.grad gradient) is recorded under its own check; it fails
+        # exactly the same way.
+        from ._degenerate_forward import perturbation_insensitive_failure
+        from .diagnostics import record_validation_failure
 
         record_validation_failure(
             self,
-            ValidationFailure(
-                check=CHECK_PERTURBATION,
-                op_label=layer_to_validate_parents_for_label,
-                func_name=getattr(layer, "func_name", None),
-                message=(
-                    "output insensitive to perturbing parent(s) "
-                    f"{layers_to_perturb}; the parent does not influence this op's value"
-                ),
-                extra={"perturbed_parents": list(layers_to_perturb)},
+            perturbation_insensitive_failure(
+                layer, layer_to_validate_parents_for_label, list(layers_to_perturb)
             ),
         )
         return ValidationCheckResult.failed_result("perturbation_insensitive")
@@ -4247,6 +4249,11 @@ def _perturb_domain_sensitive_parent_values(
         complement = _bernoulli_complement_probabilities(layer, parent_values)
         if complement is not None:
             return complement
+    if layer.func_name in {"__pow__", "pow"} and _pow_zero_base_exponent_parent(
+        layer, parent_label
+    ):
+        # ``0 ** e`` is 0 for every e > 0; only an exponent of 0 or below moves it.
+        return _finite_fill_distinct_from(parent_values, 0.0, -1.0)
     if not _parent_label_occupies_arg_position(layer, parent_label, 0):
         return None
     if layer.func_name == "log":
@@ -4677,6 +4684,20 @@ def _finite_fill_distinct_from(
     if torch.equal(candidate, tensor):
         return torch.full_like(tensor, fallback)
     return candidate
+
+
+def _pow_zero_base_exponent_parent(layer: Op, parent_label: str) -> bool:
+    """Return whether ``parent_label`` is only the exponent of a power whose saved base is zero."""
+
+    saved_args = cast(Sequence[Any], getattr(layer, "saved_args", ()) or ())
+    if len(saved_args) < 2 or _parent_label_occupies_arg_position(layer, parent_label, 0):
+        return False
+    if not _parent_label_occupies_arg_position(layer, parent_label, 1):
+        return False
+    base = saved_args[0]
+    if isinstance(base, torch.Tensor):
+        return base.numel() > 0 and bool(torch.all(torch.eq(base, 0)).item())
+    return isinstance(base, (int, float)) and not isinstance(base, bool) and base == 0
 
 
 def _pow_exponent(layer: Op) -> Any:

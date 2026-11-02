@@ -507,8 +507,10 @@ _completeness_witness_mode: str = "off"
 OFF BY DEFAULT (AUD-HONESTY H4): a plain ``tl.trace()`` never arms the aten-dispatch
 census, so ``Trace.capture_verified`` stays ``None`` (NOT RECORDED -- never a clean
 bill) and host escapes only the census can see (``from_numpy``/``as_tensor``/
-``from_dlpack`` round-trips, numpy-backed ``autograd.Function`` forwards, in-forward
-storage writes) leave no ceiling. The ``tl.validate`` paths flip it to ``"shadow"``
+``from_dlpack`` round-trips in a plain forward, in-forward storage writes) leave no
+ceiling. A numpy- or dlpack-backed ``autograd.Function`` forward is the one such
+round trip captured on every path: the ``_function_boundary`` backend module records it
+as one ``autogradfunction`` boundary op whose interior the census owns. The ``tl.validate`` paths flip it to ``"shadow"``
 for their own run, and ``wrap_torch(completeness_witness=True)`` arms it for every
 capture; only an armed census can produce ``capture_verified=True``. Flipping the
 default on is a maintainer fork (cost + observer-effect trade), not a lane decision.
@@ -1160,6 +1162,20 @@ def diagnostic_observer_armed() -> bool:
         or _runnable_ledger_armed
         or _aten_recording_armed
     )
+
+
+def completeness_witness_is_shadow() -> bool:
+    """Return whether the opt-in user-op completeness census is armed.
+
+    Returns
+    -------
+    bool
+        ``True`` under ``wrap_torch(completeness_witness=True)`` or a
+        ``tl.validate`` census pass, when a boundary emitter hides TorchLens
+        bookkeeping dispatches from the census with ``pause_logging``.
+    """
+
+    return _completeness_witness_mode == "shadow"
 
 
 def active_capture() -> "tuple[Trace | None, bool]":

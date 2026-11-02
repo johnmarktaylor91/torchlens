@@ -121,7 +121,11 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `<module>.<attr>`, `<module>.<attr>.<index>`, or `<module>.<attr>[<key>]` with one
   `[<index>]`/`[<key>]` per nested level, e.g. `attn.attention_bias_cache['cpu']`. The key
   is its `repr` with `.`, `:` and `%` percent-escaped, so the last `.` always separates the
-  owning module; keys that print alike get `#2`, `#3`, ...
+  owning module; keys that print alike get `#2`, `#3`, ... A public tensor attribute of a
+  plain (non-Module) object the module holds, such as a `torch.distributions` prior or a
+  diffusers scheduler built in `__init__`, is a buffer too, addressed
+  `<module>.<attr>[<name>]` (e.g. `vae.prior[scale]`); only the object's own attributes are
+  read, not containers inside it.
 
 **GradFn**
 : A first-class live backward-autograd node captured during backward logging. Portable artifacts
@@ -455,7 +459,9 @@ attribution-target alias. See the [attribution reference](attribution.md).
   `tl.head` selects one attention head; `tl.facet` selects a semantic facet view;
   `tl.func_transform` selects `torch.func` and `torch.autograd` transform boundary ops
   (including `autogradgrad`, an in-forward `torch.autograd.grad` call, with
-  `transform_kind="autograd.grad"`); `tl.output` selects model outputs, and
+  `transform_kind="autograd.grad"`, and `autogradfunction`, a custom `autograd.Function`
+  whose forward left torch through a numpy or dlpack round trip, with
+  `transform_kind="autograd.Function"`); `tl.output` selects model outputs, and
   `tl.output_at` / `tl.input_at` select a nested output or model-input path.
 
 **Temporal composition**

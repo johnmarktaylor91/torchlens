@@ -15,7 +15,7 @@ import torch
 import torchlens as tl
 from torchlens import trace
 from torchlens.io import log_model_metadata
-from torchlens.validation import validate_forward_pass
+from torchlens.validation import last_validation_failure, validate_forward_pass
 from torchlens.visualization import show_model_graph
 
 VIS_OUTPUT_DIR = opj(os.environ["TORCHLENS_TEST_OUTPUTS_DIR"], "visualizations")
@@ -23,6 +23,18 @@ VIS_OUTPUT_DIR = opj(os.environ["TORCHLENS_TEST_OUTPUTS_DIR"], "visualizations")
 # =============================================================================
 # Simple operations
 # =============================================================================
+
+
+def _assert_degenerate_forward(model: torch.nn.Module, x: torch.Tensor) -> None:
+    """Assert validation fails as degenerate: every final output element is non-finite.
+
+    Used where the NaN or inf is intrinsic to the model: no affine input change
+    ``c + s * x`` (c in [-25, 25], s in {1, 0.1, 0.01}) makes the output finite.
+    """
+
+    assert not validate_forward_pass(model, x)
+    failure = last_validation_failure()
+    assert failure is not None and failure.check == "degenerate_forward", failure
 
 
 @pytest.mark.heavy
@@ -724,7 +736,7 @@ def test_repeated_module(default_input1):
 @pytest.mark.heavy
 def test_nested_modules(default_input1):
     model = example_models.NestedModules()
-    assert validate_forward_pass(model, default_input1)
+    _assert_degenerate_forward(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -796,7 +808,11 @@ def test_orphan_tensors(default_input1):
 
 def test_simple_loop_no_param(default_input1):
     model = example_models.SimpleLoopNoParam()
-    assert validate_forward_pass(model, default_input1)
+    # The fixture input drives log() of negatives, so every output is NaN and the
+    # forward must fail as degenerate. Inputs near 20.25 keep every log argument
+    # positive through the loop: same graph, finite output, so loop replay stays covered.
+    _assert_degenerate_forward(model, default_input1)
+    assert validate_forward_pass(model, 20.25 + 0.1 * default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -867,7 +883,7 @@ def test_repeated_op_type_in_loop(default_input1):
 @pytest.mark.heavy
 def test_varying_loop_noparam1(default_input1):
     model = example_models.VaryingLoopNoParam1()
-    assert validate_forward_pass(model, default_input1)
+    _assert_degenerate_forward(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -891,7 +907,7 @@ def test_varying_loop_noparam1(default_input1):
 @pytest.mark.heavy
 def test_varying_loop_noparam2(default_input1):
     model = example_models.VaryingLoopNoParam2()
-    assert validate_forward_pass(model, default_input1)
+    _assert_degenerate_forward(model, default_input1)
     show_model_graph(
         model,
         default_input1,
@@ -1121,7 +1137,7 @@ def test_recurrent_params_simple(input_2d):
 
 def test_recurrent_params_complex(input_2d):
     model = example_models.RecurrentParamsComplex()
-    assert validate_forward_pass(model, input_2d)
+    _assert_degenerate_forward(model, input_2d)
     show_model_graph(
         model,
         input_2d,
@@ -1633,7 +1649,7 @@ def test_ubermodel3(input_2d):
 
 def test_ubermodel4(input_2d):
     model = example_models.UberModel4()
-    assert validate_forward_pass(model, input_2d)
+    _assert_degenerate_forward(model, input_2d)
     show_model_graph(
         model,
         input_2d,

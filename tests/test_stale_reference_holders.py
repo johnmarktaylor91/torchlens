@@ -15,8 +15,9 @@ Preparation first rebinds the holder shapes it can reach (attributes,
 ``functools.partial``, closures, default arguments, exact builtin containers,
 namedtuples) to the wrappers for the capture's duration and restores the
 user's objects afterwards, so those captures take ONE forward with no warning.
-Holders it cannot rebind (a module global, a custom object) keep the
-disclosure plus the rescue forward.
+A module global is patched earlier, by the wrap-time module sweep (reversed at
+``unwrap_torch()``), so it also takes one forward. Holders neither reaches (a
+custom object) keep the disclosure plus the rescue forward.
 """
 
 from __future__ import annotations
@@ -202,8 +203,9 @@ _HOLDERS: dict[str, Callable[[types.SimpleNamespace], nn.Module]] = {
     "module_global": _module_global_module,
     "custom_object": lambda env: _BoxHolder(env.gelu),
 }
-# Holders the pre-capture rebind cannot reach: these keep the rescue path.
-_UNREBINDABLE = frozenset({"module_global", "custom_object"})
+# Holders neither the pre-capture rebind nor the wrap-time module sweep reaches:
+# these keep the rescue path.
+_UNREBINDABLE = frozenset({"custom_object"})
 
 
 @pytest.mark.parametrize("holder", sorted(set(_HOLDERS) - _UNREBINDABLE))

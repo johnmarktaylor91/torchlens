@@ -337,7 +337,9 @@ class TraceValidationMixin(_TraceMixinBase):
         Returns
         -------
         bool or ValidationReplayStatus
-            ``True`` if validation succeeds. Loaded non-torch traces whose
+            ``True`` if validation succeeds. A torch replay that passes on final
+            outputs whose every element is non-finite returns ``False`` with a
+            ``degenerate_forward`` failure recorded. Loaded non-torch traces whose
             runtime replay captures were stripped return an explicit
             unavailable status instead of a pass/fail bool.
         """
@@ -374,6 +376,16 @@ class TraceValidationMixin(_TraceMixinBase):
             if isinstance(validation_result, ValidationReplayStatus):
                 setattr(self, "_validation_replay_status", validation_result)
                 if validation_result.state in {"passed", "failed"}:
+                    # A pass on entirely non-finite final outputs proves nothing:
+                    # fail it as a degenerate forward (tightening only).
+                    from ..validation._degenerate_forward import (
+                        fail_if_final_outputs_non_finite,
+                    )
+
+                    if validation_result.passed and fail_if_final_outputs_non_finite(
+                        self, ground_truth_output_tensors
+                    ):
+                        return False
                     return validation_result.passed
         return validation_result
 

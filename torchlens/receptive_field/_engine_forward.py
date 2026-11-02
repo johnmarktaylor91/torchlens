@@ -13,6 +13,7 @@ from ._engine import (
     _concatenation_offsets,
     _geometry_memo,
     _graph_revision,
+    _has_zero_extent,
     _merge_states,
     _operation_is_live,
     _passthrough_axis_map,
@@ -152,7 +153,8 @@ def _solve_projective_uncached(
             continue
         branches: dict[str, list[_InputState]] = defaultdict(list)
         target = target_by_label.get(op.label)
-        if target is not None:
+        # An empty target has no units: nothing projects into it.
+        if target is not None and not _has_zero_extent(target):
             seed = _seed_target(target)
             branches[seed.io_role].append(seed)
 

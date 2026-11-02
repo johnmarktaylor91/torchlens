@@ -571,4 +571,14 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
         "while an accelerate offload hook exists, deleted at uninstall for the "
         "same reason as _offload_hook_shims"
     ),
+    # --- Foreign-kernel boundary (backends/torch/_function_boundary.py) ------
+    "_foreign_kernel_interior_labels": (
+        "torch capture: raw labels of the ops logged inside a collapsed "
+        "autograd.Function.apply, consumed and popped by postprocess step 3 "
+        "(_remove_foreign_kernel_interiors) so only the boundary op survives"
+    ),
+    "_foreign_kernel_warned": (
+        "torch capture: Function classes already disclosed by the "
+        "foreign_kernel_boundary warning in this capture (once per class)"
+    ),
 }

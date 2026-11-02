@@ -49,7 +49,11 @@ from .options import (
     merge_visualization_options,
     visualization_to_render_kwargs,
 )
-from .utils.arg_handling import normalize_input_args, safe_copy_input_tree
+from .utils.arg_handling import (
+    leaf_preserving_input_copies,
+    normalize_input_args,
+    safe_copy_input_tree,
+)
 from .utils.display import warn_parallel
 from .utils.hashing import compute_graph_shape_hash
 from .utils.introspection import get_vars_of_type_from_obj
@@ -1273,6 +1277,7 @@ def _refuse_validation_precondition(
     return False
 
 
+@leaf_preserving_input_copies()
 def _validate_forward_pass_torch(
     model: nn.Module | Callable[..., Any],
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
@@ -1287,6 +1292,11 @@ def _validate_forward_pass_torch(
     _trace_observer: Callable[[Trace | None], None] | None = None,
 ) -> bool:
     """Validate that saved outs faithfully reproduce the model's output.
+
+    Every input copy validation makes (its own and the capture's) keeps a
+    grad-tracked leaf input a leaf (:func:`leaf_preserving_input_copies`, applied
+    as this function's decorator), so a model that sets ``requires_grad`` on its
+    input validates like it runs.
 
     **How it works:**
 

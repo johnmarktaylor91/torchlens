@@ -266,10 +266,7 @@ def _solve_uncached(
 
     for op in _topological_operations(operations, by_reference):
         if seed_predicate(op):
-            seed = _seed_input(op)
-            states_by_op[op.label] = {
-                seed.io_role: _BranchState(state=seed, geometry_neutral=False)
-            }
+            states_by_op[op.label] = _seed_branches(op)
             continue
 
         parents = tuple(by_reference[label] for label in op.parents if label in by_reference)
@@ -323,6 +320,19 @@ def _solve_uncached(
         per_op=MappingProxyType(per_op),
         states=MappingProxyType(flattened_states),
     )
+
+
+def _seed_branches(op: Op) -> dict[str, _BranchState]:
+    """Return the seed branch of one input operation; an empty input seeds none.
+
+    An empty input has no units, so it influences nothing and no descriptor
+    names it.
+    """
+
+    if _has_zero_extent(op):
+        return {}
+    seed = _seed_input(op)
+    return {seed.io_role: _BranchState(state=seed, geometry_neutral=False)}
 
 
 def _seed_input(op: Op) -> _InputState:
@@ -1631,6 +1641,17 @@ def _operation_is_live(op: Op) -> bool:
     """Return whether an operation has not been cleared by trace removal."""
 
     return isinstance(getattr(op, "label", None), str)
+
+
+def _has_zero_extent(op: Op) -> bool:
+    """Return whether an operation's output is an empty tensor (some extent is zero).
+
+    An empty endpoint has no units, so it has an empty receptive (or projective)
+    field: no geometry is seeded from it and no descriptor names it.
+    """
+
+    shape = op.shape
+    return shape is not None and any(int(extent) == 0 for extent in shape)
 
 
 __all__: list[str] = []

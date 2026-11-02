@@ -165,6 +165,11 @@ def _unattributed_tensor_arg_positions(
             or any(has_input_rooted_tensor(value) for value in kwargs.values())
         )
     )
+    if unsafe_receiver_with_graph_rhs:
+        # Local import: this function is rebound into ``ops``'s globals.
+        from ._view_writeback import data_alias_write_reaches_base
+
+        unsafe_receiver_with_graph_rhs = not data_alias_write_reaches_base(trace, args[0])
 
     def child_slot(slot: tuple[str, Any] | None, inner_key: Any) -> tuple[str, Any] | None:
         """Return the recorder slot key for a container member, or ``None`` past depth 2."""
@@ -186,11 +191,13 @@ def _unattributed_tensor_arg_positions(
 
         if isinstance(value, torch.Tensor):
             # A ``.data`` getter now has a canonical detach graph node, but a
-            # subsequent receiver mutation still writes through an alias whose
-            # effect is not connected to the returned base tensor in the sparse
-            # graph. Preserve the provenance warning for that unsafe lvalue
-            # position when an input-derived RHS would otherwise appear fully
-            # represented, while the independent data-alias witness ceilings replay.
+            # subsequent receiver mutation writes through an alias whose effect
+            # reaches the base tensor in the graph only through storage-alias
+            # label propagation (default captures, a labeled base sharing the
+            # receiver's elements). Where it does not, preserve the provenance
+            # warning for that unsafe lvalue position when an input-derived RHS
+            # would otherwise appear fully represented, while the independent
+            # data-alias witness ceilings replay.
             unsafe_data_alias_receiver = path == "arg0" and unsafe_receiver_with_graph_rhs
             # ``t.data = rhs`` (round-31 M6, r28 reconcile): the setter is
             # logged as the canonical single-argument ``detach(rhs)`` call, so

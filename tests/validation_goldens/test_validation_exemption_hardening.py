@@ -820,6 +820,26 @@ def _first_op_with_func(trace: Any, func_name: str) -> Any:
     return next(layer for layer in trace.layer_list if layer.func_name == func_name)
 
 
+def _assert_only_degenerate_final_outputs(trace: Any, result: Any) -> None:
+    """Assert every op check passed and only the all-non-finite output guard failed the run.
+
+    Parameters
+    ----------
+    trace:
+        Validated TorchLens trace.
+    result:
+        Return value of ``trace.validate_forward_pass``.
+    """
+
+    assert result is False
+    status = trace.validation_replay_status
+    assert status.failed_node_count == 0
+    assert not any(decision["decision"] == "failed" for decision in status.decisions)
+    failure = get_validation_failure(trace)
+    assert failure is not None and failure.check == "degenerate_forward"
+    assert failure.extra["scope"] == "final_outputs"
+
+
 def _first_output(trace: Any) -> torch.Tensor:
     """Return a detached copy of the trace output.
 
@@ -1794,7 +1814,11 @@ def test_corrupted_piecewise_constant_wrong_edges_still_fail() -> None:
 
 
 def test_all_inf_legitimate_ops_validate_or_exempt_with_proof() -> None:
-    """All-inf legitimate ops should not false-fail after boundary perturbation."""
+    """All-inf legitimate ops should not false-fail after boundary perturbation.
+
+    Every op validates or is exempted with proof; the run itself fails as a
+    degenerate forward because every output element is infinite.
+    """
 
     cases = (
         (ExpOverflowModel(), torch.full((2,), 100.0, dtype=torch.float32)),
@@ -1811,8 +1835,8 @@ def test_all_inf_legitimate_ops_validate_or_exempt_with_proof() -> None:
 
         result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
-        assert result is True
-        assert trace.validation_replay_status.failed_node_count == 0
+        # No op false-fails; the run still fails because its output is all inf.
+        _assert_only_degenerate_final_outputs(trace, result)
 
 
 def test_max_finite_selection_data_parents_perturb_distinctly() -> None:
@@ -1911,8 +1935,8 @@ def test_output_bookkeeping_projection_is_structural() -> None:
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
-    assert result is True
-    assert trace.validation_replay_status.failed_node_count == 0
+    # No op false-fails; the run still fails because its output is all NaN.
+    _assert_only_degenerate_final_outputs(trace, result)
 
 
 def test_structural_arg_exemption_covers_keyword_parent_positions() -> None:

@@ -292,3 +292,74 @@ def test_unrecorded_tensor_beside_a_recorded_grad_still_fails_source_provenance(
     assert failure is not None and failure.check == "source_provenance"
     assert list(failure.extra.get("reasons", [])) == ["unattributed_tensor_args"]
     assert failure.op_label is not None and failure.op_label.startswith("add")
+
+
+class _GradOfInputsLinearInEach(nn.Module):
+    """Energy linear in each of two forward inputs, differentiated against both.
+
+    Mirrors an energy/force/dipole head: ``force = W^T ef`` does not read ``cart``
+    and ``dipole = lin(cart)`` does not read ``ef``, so each gradient's own input
+    can influence it only through the derivative, never through its value.
+    """
+
+    def __init__(self, zero_head: bool = False) -> None:
+        super().__init__()
+        self.lin = nn.Linear(3, 3)
+        if zero_head:
+            nn.init.zeros_(self.lin.weight)
+
+    def forward(self, cart: torch.Tensor, ef: torch.Tensor) -> tuple[torch.Tensor, ...]:
+        cart.requires_grad = True
+        ef.requires_grad = True
+        energy = (self.lin(cart) * ef).sum()
+        force, dipole = torch.autograd.grad(energy, (cart, ef), create_graph=True)
+        return energy, dipole, -force
+
+
+def _perturbation_decisions(model: nn.Module, *inputs: torch.Tensor) -> dict[str, Any]:
+    """Return each autograd.grad op's perturbation decision per parent edge."""
+
+    results: dict[str, Any] = {}
+
+    def check(trace: Any) -> None:
+        for op in _grad_ops(trace):
+            for parent in op.parents:
+                results[f"{op.label}<-{parent}"] = (
+                    validation_core._check_whether_func_on_saved_parents_yields_saved_tensor(
+                        trace, op.label, perturb=True, layers_to_perturb=[parent]
+                    )
+                )
+
+    with _tampered_validation(check):
+        _validate(model, *inputs)
+    return results
+
+
+def test_grad_against_an_input_it_does_not_read_still_sees_that_input() -> None:
+    """Perturbing an ``inputs`` slot reaches a gradient linear in that input."""
+
+    torch.manual_seed(0)
+    decisions = _perturbation_decisions(
+        _GradOfInputsLinearInEach(), torch.randn(2, 3), torch.randn(2, 3)
+    )
+    assert {edge for edge in decisions if "<-input" in edge}
+    assert {edge: r.decision for edge, r in decisions.items()} == dict.fromkeys(
+        decisions, "validated"
+    )
+    torch.manual_seed(0)
+    assert _validate(_GradOfInputsLinearInEach(), torch.randn(2, 3), torch.randn(2, 3)) is True
+
+
+def test_identically_zero_grad_still_fails_its_input_perturbation() -> None:
+    """A zero weight leaves every gradient zero; the input edge still fails, recorded."""
+
+    torch.manual_seed(0)
+    model = _GradOfInputsLinearInEach(zero_head=True)
+    decisions = _perturbation_decisions(model, torch.randn(2, 3), torch.randn(2, 3))
+    failed = {edge: r.reason for edge, r in decisions.items() if r.failed}
+    assert failed and set(failed.values()) == {"perturbation_insensitive"}
+    torch.manual_seed(0)
+    assert _validate(model, torch.randn(2, 3), torch.randn(2, 3)) is False
+    failure = last_validation_failure()
+    assert failure is not None and failure.check == "perturbation"
+    assert failure.op_label is not None and failure.op_label.startswith("autogradgrad")
