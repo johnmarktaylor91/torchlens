@@ -347,6 +347,10 @@ jobs:
           uv pip check
 
       - name: Run the repository checks
+        # Strict: the dev extra declares import-linter, so a skipped check here
+        # means the environment lost a tool and must fail, not pass silently.
+        env:
+          TORCHLENS_CHECKS_STRICT: "1"
         run: python scripts/checks/run_all.py
 
   packaging:
