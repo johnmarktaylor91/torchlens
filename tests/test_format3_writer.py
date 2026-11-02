@@ -37,6 +37,7 @@ from torchlens._io.format3.contract import (
     TYPED_VALUE_KEY,
     TYPED_VALUE_TAGS,
 )
+from torchlens._io.format3.recipe import RECIPE_FORMAT, RECIPE_FORMAT_VERSION
 from torchlens._io.format3.values import decode_value
 from torchlens._io.writer_contract import writer_contract_digest
 from torchlens._postprocess._pipeline import PIPELINE
@@ -548,14 +549,15 @@ def test_intervened_example_envelope(tmp_path: Path) -> None:
         if flag
     ]
     assert edited and all(label.startswith("relu") for label in edited)
-    if not (root / INTERVENTION_FILE).exists():
-        pytest.skip("intervention.json is written by the recipe writer, not on this branch yet")
+    assert INTERVENTION_FILE in _manifest(root)["files"]
     recipe = _load_json(root / INTERVENTION_FILE)
-    assert recipe["format"] == "torchlens.intervention_recipe"
-    assert recipe["format_version"] == FORMAT_MAJOR
+    assert recipe["format"] == RECIPE_FORMAT
+    assert recipe["format_version"] == RECIPE_FORMAT_VERSION
     assert recipe["executable"] is True
     assert [rule["edit"]["name"] for rule in recipe["rules"]] == ["scale"]
     assert _manifest(root)["intervention"]["executable"] is True
+    assert _manifest(root)["intervention"]["file"] == INTERVENTION_FILE
+    format_writer.reload_check(root)
 
 
 def test_bundle_envelope(saved: dict[str, Path]) -> None:
