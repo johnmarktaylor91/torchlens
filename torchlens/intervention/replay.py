@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 import warnings
 from collections import OrderedDict
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -64,6 +64,7 @@ from ._replay_values import (
     _clone_tensors_in,
     _is_inplace_none_return,
     _looks_like_template_dict,
+    rollback_snapshot,
 )
 from .audit import _hook_name, _replay_fire_record
 from .edge_substitution import require_depth1_arg_path
@@ -207,57 +208,6 @@ def push(
             origins,
             hook_entries=hook_entries,
             strict=replay_options.strict,
-            preserve_origins=False,
-        )
-
-
-def push_from_handles(
-    trace: Trace,
-    handle_ids: Iterable[str],
-    *,
-    strict: bool,
-) -> Trace:
-    """Push one transaction's freshly attached hooks downstream.
-
-    ``do()`` attaches its edit as sticky hooks and then propagates. The
-    origins of that propagation are the sites THOSE hooks target; every
-    other rule the trace carries (a capture-time recipe, an earlier
-    ``attach_hooks``) still fires wherever the cone re-executes its site,
-    but does not open a cone of its own. Treating every stored rule as an
-    origin re-executed sites nowhere downstream of the edit; an in-place
-    parameter write re-executed that way reads the parameter's live
-    (already written) value and so changes outside the edit's cone.
-
-    Parameters
-    ----------
-    trace:
-        Model log to mutate in place.
-    handle_ids:
-        Sticky-hook handle ids this transaction attached.
-    strict:
-        Whether divergence warnings should raise.
-
-    Returns
-    -------
-    Trace
-        The same model log, mutated in place.
-    """
-
-    wanted = frozenset(handle_ids)
-    _preflight_log(trace)
-    _refuse_armed_gradient_rules(trace, None)
-    _warn_if_direct_writes_will_be_overlaid(trace)
-    hook_entries = _normalize_replay_hooks(trace, None)
-    own_entries = [entry for entry in hook_entries if entry.metadata.get("sticky_handle") in wanted]
-    origins = _origin_sites_for_hooks(trace, own_entries, strict=strict)
-    if not origins:
-        raise ReplayPreconditionError("push requires at least one hook target")
-    with changed_param_scope(False):
-        return _run_replay(
-            trace,
-            origins,
-            hook_entries=hook_entries,
-            strict=strict,
             preserve_origins=False,
         )
 
@@ -1410,26 +1360,7 @@ def _commit_replay_updates(
         for label, tensor in pending_updates.items():
             site = log._layer_dict_all_keys[label]
             _record_capture_digest(site, known_digests, new_digests)
-            # Every field ``_apply_out_update`` (through
-            # ``_set_saved_out_metadata``) or the record replacement below
-            # writes, under its live name: the rollback sets them back
-            # verbatim, so a stale key here would turn the error it unwinds
-            # into a bare ``AttributeError``.
-            snapshots[label] = {
-                "out": site.out,
-                "transformed_out": site.transformed_out,
-                "shape": site.shape,
-                "transformed_out_shape": site.transformed_out_shape,
-                "dtype": site.dtype,
-                "dtype_ref": site.dtype_ref,
-                "device_ref": site.device_ref,
-                "transformed_out_dtype": site.transformed_out_dtype,
-                "activation_memory": site.activation_memory,
-                "transformed_activation_memory": site.transformed_activation_memory,
-                "has_saved_activation": site.has_saved_activation,
-                "edits": list(site.edits),
-                "is_edited": site.is_edited,
-            }
+            snapshots[label] = rollback_snapshot(site)
             _apply_out_update(site, tensor)
             new_records = list(pending_records.get(label, ()))
             if new_records:
@@ -1868,7 +1799,6 @@ __all__ = [
     "cone_of_effect",
     "push",
     "push_from",
-    "push_from_handles",
     "_reconstruct_args_from_template",
     "_replay_container_path",
     "_slice_output_by_path",
