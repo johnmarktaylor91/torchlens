@@ -20,6 +20,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
+from torchlens.bundle._aligned_sites import site_row_key
 from torchlens.bundle._deltas import _distance_value
 from torchlens.intervention._topology.topology import (
     _preferential_topological_order,
@@ -126,6 +127,7 @@ def _first_interior_op(trace: tl.Trace) -> str:
 
 
 def _descendants(trace: tl.Trace, label: str) -> set[str]:
+    """Row keys of every op downstream of ``label`` (an op label or a row key)."""
     seen: set[str] = set()
     frontier = [label]
     while frontier:
@@ -135,17 +137,18 @@ def _descendants(trace: tl.Trace, label: str) -> set[str]:
             if child_label not in seen:
                 seen.add(child_label)
                 frontier.append(child_label)
-    return seen
+    return {site_row_key(trace[name]) for name in seen}
 
 
 def _compare_fork(model: nn.Module, x: torch.Tensor) -> tuple[tl.Trace, str, dict[str, float]]:
+    """Zero one interior op on a fork and compare; returns the edited site's ROW KEY."""
     trace = _trace(model, x)
     label = _first_interior_op(trace)
     fork = trace.fork()
     fork.do(tl.label(label), tl.zero_ablate())
     pair = tl.Bundle({"base": trace, "edited": fork}, baseline="base")
     rows = dict(pair.compare("base", "edited", metric="relative_l2"))
-    return trace, label, rows
+    return trace, site_row_key(trace[label]), rows
 
 
 # --- F5: a recurrent member is not a cyclic supergraph -------------------------

@@ -85,8 +85,10 @@ def test_set_on_a_pass_qualified_label_applies_on_rerun() -> None:
 
 
 def test_substring_selector_on_a_final_label_still_refuses_live() -> None:
-    model, x, trace, tanh_labels = _recurrent_case()
-    layer_label = tanh_labels[0].rsplit(":", 1)[0]
+    model, x, trace, _tanh_labels = _recurrent_case()
+    gate = next(op for op in trace.ops if op.func_name == "sigmoid")
+    assert gate.num_passes == 1
+    layer_label = str(gate.layer_label)
     with pytest.raises(LiveModeLabelError):
         trace.fork().do(
             tl.intervention.label_contains(layer_label),
