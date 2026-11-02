@@ -541,6 +541,11 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG": True,
         "HAS_ATTENTION_CAUSAL_BIAS": tc.HAS_ATTENTION_CAUSAL_BIAS,
         "HAS_EXPANDED_WEIGHTS_CONV_PICKER": True,
+        # The lazy-module materialization allowlist (UninitializedTensorMixin)
+        # exists across the supported range; the site-9 identity shim hands it
+        # the ledger original for a wrapped Tensor method -- hardcoded True as
+        # a tripwire.
+        "HAS_LAZY_MODULE_PROTOCOL_ALLOWLIST": True,
         # Declined-protocol redispatch skips torch's disabled-handler sentinel,
         # present across the supported range.
         "HAS_DISABLED_TORCH_FUNCTION_IMPL": True,
