@@ -371,7 +371,7 @@ Cross-record (needs more than one cell) stays procedural in `validate.py`, run a
 tables are decoded and before accessors are rebuilt: `_validate_site_keys` (site keys name
 existing ops), `_validate_checkpoint_windows` (ordering across ops), `_validate_audit_sites`,
 `_validate_audit_edges`, `_validate_audit_params`, `_validate_event_chain`,
-`_validate_structure_only_coherence` (M-C2), `_validate_kernel_relations`,
+`_validate_structure_only_coherence`, `_validate_kernel_relations`,
 `_validate_graph_structure`, `_validate_edge_carriers` and `_validate_edge_entry` (targets
 exist), `_validate_injection_provenance` and `check_injection_provenance_row`,
 `_validate_structure_evidence` and `_validate_evidence_facts`, `_validate_root_entry_point`,
@@ -500,10 +500,10 @@ Shares measured by the perf profile (one Linux host, cold, median of 3) at base;
 load: restricted unpickler 2.7 of 7.6 and 9.9 of 26, rehydrate walk 3.4 and 12.3.
 
 Replacement costs: the encode walk is one pass over record cells (the scrub walk already does
-one; fused, S4), emitting JSON through the C `json` encoder (about 0.3 s per 50 MB); the
+one; the two fuse), emitting JSON through the C `json` encoder (about 0.3 s per 50 MB); the
 reload check is one C parse plus the typed decode (the same decoder the reader runs, about
 40 percent of today's rehydrate walk because it builds records from rows by a per-record plan
-instead of a generic setstate, S6); blob fsyncs fall to one per chunk.
+instead of a generic setstate); blob fsyncs fall to one per chunk.
 
 | Row | save ms now | expected | load ms now | expected |
 | --- | ---: | ---: | ---: | ---: |
@@ -618,5 +618,5 @@ and live-side keys, io.2 settle-at-save, `PHASE_TIMING_KEY_SOURCE`, the 2.x refu
    reads the regenerated goldens.
 3. Runnable stream: `format3/runnable.py`, carrier pointers in `_io/runnable.py` and
    `runnable_load.py`, the state chunk writer; depends on 1 for `payloads.py`.
-4. The names.1 rename (`backward_pass_index` to `backward_pass_number`) lands with the
+4. The names ruling's rename (`backward_pass_index` to `backward_pass_number`) lands with the
    names rename stream; whichever of it and the writer stream lands second rebases the column name.
