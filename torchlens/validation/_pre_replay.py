@@ -17,6 +17,7 @@ ledger). One structural proof and one typed refusal live here:
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ..backends.torch._foreign_data import FOREIGN_DATA_REPLAY_REASON, is_unresolved_foreign_data
@@ -29,22 +30,25 @@ if TYPE_CHECKING:
 Predicate = Callable[["Op"], bool]
 
 
+@dataclass(frozen=True)
+class CoreBindings:
+    """What ``core`` hands down: its result type and the intervention-replacement predicate."""
+
+    result_type: Any
+    """``ValidationCheckResult``."""
+    is_intervention_replacement: Predicate
+    """``core._is_intentional_intervention_replacement`` (reads the backward-flow ledger)."""
+
+
 def pre_replay_verdict(
-    result_type: Any,
-    is_intervention_replacement: Predicate,
-    trace: Any,
-    layer: Op,
-    op_label: str,
-    perturb: bool,
+    core: CoreBindings, trace: Any, layer: Op, op_label: str, perturb: bool
 ) -> Any | None:
     """Return the replay check's verdict when ``layer`` must not be replayed, else ``None``.
 
     Parameters
     ----------
-    result_type:
-        ``ValidationCheckResult`` (passed in: this module sits below ``core``).
-    is_intervention_replacement:
-        ``core._is_intentional_intervention_replacement`` (reads the backward-flow ledger).
+    core:
+        The result type and replacement predicate ``core`` binds.
     trace:
         Trace being validated.
     layer:
@@ -55,8 +59,9 @@ def pre_replay_verdict(
         Whether this is a perturbation attempt rather than a replay.
     """
 
+    result_type = core.result_type
     if layer.func is None:
-        if _is_provable_functionless_source_or_boundary(is_intervention_replacement, layer):
+        if _is_provable_functionless_source_or_boundary(core.is_intervention_replacement, layer):
             return result_type.exempted("functionless_source_or_boundary")
         return result_type.failed_result("functionless_computational_op")
     if is_unresolved_foreign_data(layer.func):

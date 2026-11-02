@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1344 modules, 625190 lines, 0 modules without a docstring.
+84 packages, 1344 modules, 625195 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -59,7 +59,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6380 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8498 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 6 | 3892 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 100 | 51991 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 100 | 51986 |
 | `torchlens.bridge` | External-tool bridge namespace. | 25 | 8013 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2700 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 24 | 7995 |
@@ -93,7 +93,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 4862 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 14 | 4571 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 5811 |
-| `torchlens.validation` | Validation subpackage for saved outs, backward capture, and invariants. | 55 | 27685 |
+| `torchlens.validation` | Validation subpackage for saved outs, backward capture, and invariants. | 55 | 27695 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 8 | 4085 |
 
 ## Modules by package
@@ -1189,7 +1189,7 @@ tinygrad backend preview. (6 modules, 3892 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (100 modules, 51991 lines)
+Torch backend implementation package for TorchLens capture. (100 modules, 51986 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1215,7 +1215,7 @@ Torch backend implementation package for TorchLens capture. (100 modules, 51991 
 | `_escape_detection_fields` | Field table copying escape/completeness diagnostics from a trace onto a fastlog recording. | 33 |
 | `_failed_session` | Torch stopped and failed forward-session cleanup for the FINALIZE stage. | 228 |
 | `_fire_timing` | Per-fire backward timing helpers (L9 ; split under the size ratchet). | 145 |
-| `_foreign_data` | Foreign data round trips in plain forward code: departures, re-entries, replay. | 445 |
+| `_foreign_data` | Foreign data round trips in plain forward code: departures, re-entries, replay. | 440 |
 | `_function_boundary` | Foreign-kernel boundary for ''torch.autograd.Function'' forwards that leave torch. | 707 |
 | `_grad_fn_orders` | Resolve GradFn ''order'' values from creators, roots and known topology. | 182 |
 | `_grad_fn_source` | Best-effort source metadata for autograd grad-fn classes. | 115 |
@@ -1955,7 +1955,7 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved outs, backward capture, and invariants. (55 modules, 27685 lines)
+Validation subpackage for saved outs, backward capture, and invariants. (55 modules, 27695 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1992,7 +1992,7 @@ Validation subpackage for saved outs, backward capture, and invariants. (55 modu
 | `_norm_zero_weight_proof` | Value proof for a normalization input annihilated by an all-zero affine weight. | 146 |
 | `_operand_value_proofs` | Value proofs for calls whose perturbed operand provably cannot reach the output. | 476 |
 | `_output_walk` | Validation-owned independent output-tensor traversal ( R74/75-1). | 89 |
-| `_pre_replay` | Pre-replay verdicts: ops validation settles before any replay is attempted. | 143 |
+| `_pre_replay` | Pre-replay verdicts: ops validation settles before any replay is attempted. | 148 |
 | `_pristine` | Pristine-torch context for wrap-state-independent validation oracles. | 130 |
 | `_reduction_depth` | Per-output accumulation depth of a replayed op (band-C eligibility input). | 407 |
 | `_replay_device` | Device alignment for replay when saved payloads live off the op's device. | 207 |
@@ -2009,7 +2009,7 @@ Validation subpackage for saved outs, backward capture, and invariants. (55 modu
 | `_value_predicates` | Saved-value predicates used by the posthoc value-proof decisions. | 193 |
 | `backward` | Validation helpers for backward-pass grad capture. | 821 |
 | `consolidated` | Consolidated validation entry point for TorchLens 2.0. | 689 |
-| `core` | Core validation logic for verifying saved outs. | 4656 |
+| `core` | Core validation logic for verifying saved outs. | 4661 |
 | `diagnostics` | Structured replay-failure diagnostics for forward validation. | 513 |
 | `exemptions` | Validation exemption registries for perturbation and forward-replay checks. | 2980 |
 | `invariants` | Metadata invariant checks for ''Trace'' and its sub-objects. | 477 |

@@ -65,7 +65,11 @@ from ._index_domain import (
     index_domain_single_entry_values,
     layer_has_index_domain_parent,
 )
-from ._pre_replay import _is_provable_functionless_source_or_boundary, pre_replay_verdict
+from ._pre_replay import (
+    CoreBindings,
+    _is_provable_functionless_source_or_boundary,
+    pre_replay_verdict,
+)
 from ._reduction_depth import _op_reduction_depth
 from ._replay_device import (
     align_output_to_saved_device,
@@ -1354,7 +1358,8 @@ def _is_intentional_intervention_replacement(layer: "Op") -> bool:
 
 
 _PRE_REPLAY_VERDICT = functools.partial(
-    pre_replay_verdict, ValidationCheckResult, _is_intentional_intervention_replacement
+    pre_replay_verdict,
+    CoreBindings(ValidationCheckResult, _is_intentional_intervention_replacement),
 )
 """The pre-replay early exits with this module's result type and replacement predicate."""
 

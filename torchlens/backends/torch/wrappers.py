@@ -1618,7 +1618,7 @@ def torch_func_decorator(
         else:
             capture_func, capture_func_name = canonical_capture_callable
         host_entry = (
-            resolve_host_entry(trace, func_name, args, kwargs, out_orig, _set_transform_metadata)
+            resolve_host_entry(trace, func_name, (args, kwargs), out_orig, _set_transform_metadata)
             if is_host_constructor and not arg_tensorlike
             else None
         )

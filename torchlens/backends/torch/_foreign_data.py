@@ -378,13 +378,12 @@ def _compatible(departure: Departure, host_argument: Any) -> bool:
     return departure.kind == TOLIST_EXPORT_FUNC_NAME
 
 
+HostCall = tuple[tuple[Any, ...], dict[str, Any]]
+"""A host constructor's ``(args, kwargs)``."""
+
+
 def resolve_host_entry(
-    trace: Any,
-    func_name: str,
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
-    out: Any,
-    mark: MetadataSetter,
+    trace: Any, func_name: str, call: HostCall, out: Any, mark: MetadataSetter
 ) -> HostEntry | None:
     """Resolve a parentless host constructor call against the departure journal.
 
@@ -394,8 +393,8 @@ def resolve_host_entry(
         Active capture trace.
     func_name:
         The constructor's func name (one of :data:`HOST_CONSTRUCTOR_FUNC_NAMES`).
-    args, kwargs:
-        The call's arguments (no captured tensor among them).
+    call:
+        The call's ``(args, kwargs)`` (no captured tensor among them).
     out:
         The tensor the constructor returned.
     mark:
@@ -410,19 +409,15 @@ def resolve_host_entry(
     if not isinstance(out, torch.Tensor):
         return None
     with _state.pause_logging():
-        return _resolve_paused(trace, func_name, args, kwargs, out, mark)
+        return _resolve_paused(trace, func_name, call, out, mark)
 
 
 def _resolve_paused(
-    trace: Any,
-    func_name: str,
-    args: tuple[Any, ...],
-    kwargs: dict[str, Any],
-    out: torch.Tensor,
-    mark: MetadataSetter,
+    trace: Any, func_name: str, call: HostCall, out: torch.Tensor, mark: MetadataSetter
 ) -> HostEntry | None:
     """Match ``out`` against the journal; the matching's own torch work is never logged."""
 
+    args, kwargs = call
     host_argument = args[0] if args else kwargs.get("data", kwargs.get("obj"))
     journal = departures(trace)
     if not journal:
