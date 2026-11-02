@@ -684,7 +684,7 @@ class AtenOpsUnavailableError(_ActionableErrorMixin, CaptureError, RuntimeError)
             _actionable_message(problem, remedy),
             code=code,
             remedy=remedy,
-            **context,
+            **cast(dict[str, Any], context),
         )
 
 
