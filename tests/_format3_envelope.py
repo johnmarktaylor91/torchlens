@@ -20,6 +20,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io.format3 import contract
+from torchlens.options import CaptureOptions
 
 MANIFEST = contract.MANIFEST_FILE
 
@@ -35,7 +36,7 @@ def tiny_input() -> torch.Tensor:
 
 
 def tiny_trace() -> Any:
-    return tl.trace(tiny_model(), tiny_input(), replayable=True)
+    return tl.trace(tiny_model(), tiny_input(), capture=CaptureOptions(replayable=True))
 
 
 def save_tiny(root: Path, level: str = "portable") -> Any:

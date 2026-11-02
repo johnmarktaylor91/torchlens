@@ -210,37 +210,49 @@ class TensorRefSink:
     def add(self, ref: Mapping[str, Any], at: str) -> Any:
         shape = ref["shape"]
         if not isinstance(shape, list) or not all(is_int(d) and d >= 0 for d in shape):
-            raise cell_error(at, "tensor shape must be an array of non-negative integers")
+            raise cell_error(
+                at, "tensor shape must be an array of non-negative integers", code=CELL_CODE
+            )
         if len(shape) > 64:
-            raise cell_error(at, "tensor shape has more than 64 dimensions")
+            raise cell_error(at, "tensor shape has more than 64 dimensions", code=CELL_CODE)
         device = ref["device"]
         if not isinstance(device, str) or not DEVICE_TEXT.fullmatch(device):
-            raise cell_error(at, f"tensor device {device!r} is not a device string")
+            raise cell_error(at, f"tensor device {device!r} is not a device string", code=CELL_CODE)
         is_complex = ref.get("complex", False)
         if not isinstance(ref["requires_grad"], bool) or not isinstance(is_complex, bool):
-            raise cell_error(at, "tensor requires_grad and complex must be booleans")
+            raise cell_error(
+                at, "tensor requires_grad and complex must be booleans", code=CELL_CODE
+            )
         codec_id, codec_metadata = _split_codec(ref["codec"], at=at)
         if codec_id not in self._codecs:
-            raise cell_error(at, f"tensor codec {codec_id!r} is not among the manifest's codecs")
+            raise cell_error(
+                at, f"tensor codec {codec_id!r} is not among the manifest's codecs", code=CELL_CODE
+            )
         dtype_name = ref["dtype"]
         if not isinstance(dtype_name, str) or dtype_name not in dtype_table():
-            raise cell_error(at, f"tensor dtype {dtype_name!r} is outside the dtype table")
+            raise cell_error(
+                at, f"tensor dtype {dtype_name!r} is outside the dtype table", code=CELL_CODE
+            )
         blob, key = ref.get("blob"), ref.get("key")
         if blob is None and key is None:
             self.structure_only_refs += 1
             return None
         if not isinstance(blob, str) or not _BLOB_PATH.fullmatch(blob):
             raise cell_error(
-                at, f"tensor blob {blob!r} is not a blobs/<codec>-<nnnn>.safetensors path"
+                at,
+                f"tensor blob {blob!r} is not a blobs/<codec>-<nnnn>.safetensors path",
+                code=CELL_CODE,
             )
         if not isinstance(key, str) or not _BLOB_KEY.fullmatch(key):
-            raise cell_error(at, f"tensor key {key!r} is not an opaque t<k> key")
+            raise cell_error(at, f"tensor key {key!r} is not an opaque t<k> key", code=CELL_CODE)
         listed = self._files.get(blob)
         if not isinstance(listed, Mapping):
-            raise cell_error(at, f"tensor blob {blob} is not listed in the manifest's files")
+            raise cell_error(
+                at, f"tensor blob {blob} is not listed in the manifest's files", code=CELL_CODE
+            )
         blob_id = f"{blob}#{key}"
         if blob_id in self.entries:
-            raise cell_error(at, f"tensor {blob_id} is referenced twice")
+            raise cell_error(at, f"tensor {blob_id} is referenced twice", code=CELL_CODE)
         kind = _tensor_kind(at)
         backend = "torch" if codec_id == _TORCH_CODEC else "numpy"
         self.entries[blob_id] = {
@@ -272,9 +284,9 @@ def _split_codec(codec: Any, *, at: str) -> tuple[str, dict[str, Any] | None]:
     if isinstance(codec, dict) and isinstance(codec.get("id"), str):
         metadata = {key: value for key, value in codec.items() if key != "id"}
         if any(isinstance(v, dict) and contract.TYPED_VALUE_KEY in v for v in metadata.values()):
-            raise cell_error(at, "tensor codec hints must be plain JSON")
+            raise cell_error(at, "tensor codec hints must be plain JSON", code=CELL_CODE)
         return codec["id"], metadata or None
-    raise cell_error(at, "tensor codec must be a codec id or {id, ...hints}")
+    raise cell_error(at, "tensor codec must be a codec id or {id, ...hints}", code=CELL_CODE)
 
 
 def _tensor_kind(at: str) -> str:
@@ -373,9 +385,13 @@ class DecodedArtifact:
     def _lookup(self, reference: RowRef, at: str) -> Any:
         rows = self.objects.get(reference.record)
         if rows is None:
-            raise cell_error(at, f"references the {reference.record} table, which is absent")
+            raise cell_error(
+                at, f"references the {reference.record} table, which is absent", code=CELL_CODE
+            )
         if not 0 <= reference.row < len(rows):
-            raise cell_error(at, f"row {reference.row} is outside the {reference.record} table")
+            raise cell_error(
+                at, f"row {reference.row} is outside the {reference.record} table", code=CELL_CODE
+            )
         return rows[reference.row]
 
     # -- construction -------------------------------------------------------

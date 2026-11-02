@@ -1428,7 +1428,9 @@ def _finish_format3_recipe(
         try:
             selector = _spec_codec._target_spec_from_json(rule.selector)
         except (KeyError, TypeError, ValueError) as exc:
-            raise _recipe_rule_error(artifact.root, rule, f"selector is malformed: {exc}") from exc
+            raise _recipe_rule_error(
+                artifact.root, rule, f"selector is malformed: {exc}", code=_RECIPE_CODE
+            ) from exc
         edit = _recipe_edit(rule, artifact, intervention_types.Edit, helpers.rebuild_builtin_helper)
         metadata = {
             **rule.metadata,
@@ -1453,12 +1455,15 @@ def _finish_format3_recipe(
     return spec
 
 
-def _recipe_rule_error(root: Path, rule: DecodedRule, detail: str) -> ArtifactError:
+_RECIPE_CODE = format3_contract.REFUSAL_CODES["record_file_corrupt"]
+
+
+def _recipe_rule_error(root: Path, rule: DecodedRule, detail: str, *, code: str) -> ArtifactError:
     return ArtifactError(
         f"Artifact {root / format3_contract.INTERVENTION_FILE} rule {rule.position} {detail}.",
         remedy="re-save the trace with trace.save(); the recipe file was edited",
         file_path=str(root),
-        code=format3_contract.REFUSAL_CODES["record_file_corrupt"],
+        code=code,
     )
 
 
@@ -1495,7 +1500,7 @@ def _recipe_edit(
         rebuilt = rebuild_builtin_helper(fields["name"], args, kwargs)
     except Exception as exc:  # the registry's typed refusal names the unknown builtin
         raise _recipe_rule_error(
-            artifact.root, rule, f"built-in edit cannot be rebuilt: {exc}"
+            artifact.root, rule, f"built-in edit cannot be rebuilt: {exc}", code=_RECIPE_CODE
         ) from exc
     return dataclasses.replace(rebuilt, **extras)
 
