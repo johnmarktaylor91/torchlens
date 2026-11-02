@@ -129,7 +129,7 @@ torchlens/_data_classes/module.py	2723
 torchlens/_data_classes/module.py::Module.__init__	210
 torchlens/_data_classes/module.py::ModuleCall.__init__	129
 torchlens/_data_classes/module.py::ModuleCall.__setstate__	61
-torchlens/_data_classes/op.py	4699
+torchlens/_data_classes/op.py	4694
 torchlens/_data_classes/op.py::Op.__getattribute__	96
 torchlens/_data_classes/op.py::Op.__init__	96
 torchlens/_data_classes/op.py::Op._log_tensor_grad	104
@@ -138,10 +138,10 @@ torchlens/_data_classes/op.py::_pool_container_cells	88
 torchlens/_data_classes/op.py::_pool_container_members	74
 torchlens/_data_classes/param.py	1083
 torchlens/_data_classes/param.py::Param.__init__	75
-torchlens/_data_classes/trace.py	3910
+torchlens/_data_classes/trace.py	3864
 torchlens/_data_classes/trace.py::Trace.__getstate__	111
 torchlens/_data_classes/trace.py::Trace.__init__	366
-torchlens/_data_classes/trace.py::Trace.__setstate__	336
+torchlens/_data_classes/trace.py::Trace.__setstate__	284
 torchlens/_data_classes/trace.py::Trace._refresh_rerun_op_from	63
 torchlens/_data_classes/trace.py::Trace.replace_state_from	76
 torchlens/_data_classes/trace.py::Trace.save	83
