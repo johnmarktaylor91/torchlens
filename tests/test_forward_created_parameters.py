@@ -212,10 +212,10 @@ def test_lazy_module_built_in_forward_registers_its_parameters_with_provenance()
     x = _x()
     trace = _trace_without_provenance_warning(LazyBuiltInForward().eval(), x)
 
-    assert "lazy.weight" in trace.param_logs and "lazy.bias" in trace.param_logs
-    assert tuple(trace.param_logs["lazy.weight"].shape) == (4, WIDTH)
-    assert tuple(trace.param_logs["lazy.bias"].shape) == (4,)
-    assert trace.param_logs["lazy.weight"].num_params == 4 * WIDTH
+    assert "lazy.weight" in trace.params and "lazy.bias" in trace.params
+    assert tuple(trace.params["lazy.weight"].shape) == (4, WIDTH)
+    assert tuple(trace.params["lazy.bias"].shape) == (4,)
+    assert trace.params["lazy.weight"].num_params == 4 * WIDTH
     linear = _op_consuming(trace, "lazy.weight")
     assert linear.type == "linear"
     assert {p.address for p in linear.params} == {"lazy.weight", "lazy.bias"}
@@ -248,8 +248,8 @@ def test_lazy_module_recreated_in_forward_replaces_the_prep_slot_and_validates()
 
     # The slot preparation registered held a pending parameter the forward displaced; the
     # record now names the live object with its real geometry.
-    assert tuple(trace.param_logs["lazy.weight"].shape) == (4, WIDTH)
-    assert trace.param_logs["lazy.weight"].num_params == 4 * WIDTH
+    assert tuple(trace.params["lazy.weight"].shape) == (4, WIDTH)
+    assert trace.params["lazy.weight"].num_params == 4 * WIDTH
     assert {p.address for p in _op_consuming(trace, "lazy.weight").params} == {
         "lazy.weight",
         "lazy.bias",
@@ -268,7 +268,7 @@ def test_lazy_module_registered_at_prep_records_no_creation_advisory() -> None:
     model = LazyAtPrep().eval()
     trace = _trace_without_provenance_warning(model, x)
     assert _creation_rows(trace) == []
-    assert tuple(trace.param_logs["lazy.weight"].shape) == (4, WIDTH)
+    assert tuple(trace.params["lazy.weight"].shape) == (4, WIDTH)
     _assert_validates(model, x)
 
 
@@ -286,7 +286,7 @@ def test_lazy_parameters_outside_the_model_tree_gain_no_provenance(
     x = _x()
     with pytest.warns(UserWarning, match=PROVENANCE_WARNING):
         trace = tl.trace(build().eval(), [x])
-    assert {pl.address for pl in trace.param_logs} == {"pre.weight", "pre.bias"}
+    assert {pl.address for pl in trace.params} == {"pre.weight", "pre.bias"}
     assert _creation_rows(trace) == []
     _assert_fails_at(build().eval(), x, CHECK_SOURCE_PROVENANCE)
 
@@ -298,7 +298,7 @@ def test_parameter_built_from_a_captured_value_gains_no_provenance() -> None:
     x = _x()
     with pytest.warns(UserWarning, match=PROVENANCE_WARNING):
         trace = tl.trace(CapturedValueAttachedAsParameter().eval(), [x])
-    assert "p" not in trace.param_logs
+    assert "p" not in trace.params
     assert _creation_rows(trace) == []
     # The source-less argument fails whichever provenance check reaches it first.
     _assert_fails_at(

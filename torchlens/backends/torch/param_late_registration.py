@@ -9,7 +9,7 @@ through ``F.linear`` with no session provenance. This is the parameter twin of
 ``buffer_writes.resolve_or_late_index_buffer_address``: reached only when a wrapped call
 consumes a Parameter the wrapper watched torch materialize from a pending slot during this
 forward, it registers the parameter through the same session registry preparation uses
-(``set_param_meta``, ``trace.param_logs``, the session inventory) and discloses the creation
+(``set_param_meta``, ``trace._param_logs``, the session inventory) and discloses the creation
 as a ``parameter_created_in_forward`` capture advisory.
 
 The carve-out is narrow on purpose (r77 F1: a fresh in-forward ``nn.Parameter`` or a foreign
@@ -113,13 +113,15 @@ def _live_tree_addresses(model: nn.Module, param: torch.Tensor) -> list[str]:
 
 
 def _force_requires_grad_like_prep(trace: Trace, param: nn.Parameter) -> None:
-    """Force ``requires_grad`` on exactly the terms preparation uses for a prepped Parameter."""
+    """Set ``requires_grad`` on exactly the terms preparation uses for a prepped Parameter.
 
-    if (
-        param.is_leaf
-        and not getattr(trace, "backward_ready", False)
-        and (torch.is_floating_point(param) or torch.is_complex(param))
-    ):
+    A plain capture never changes the flag; only a capture inside
+    ``model_prep.frozen_parameter_gradients()`` sets it on a frozen floating leaf.
+    """
+
+    from .model_prep import _forces_frozen_parameter_gradients
+
+    if _forces_frozen_parameter_gradients(trace, param):
         param.requires_grad = True
 
 
@@ -129,7 +131,7 @@ def _has_optimizer_like_prep(trace: Trace) -> bool | None:
     A parameter created inside forward cannot belong to an optimizer built before it.
     """
 
-    for existing in trace.param_logs:
+    for existing in trace._param_logs:
         return None if existing.has_optimizer is None else False
     return None
 
@@ -221,10 +223,10 @@ def late_register_forward_created_parameter(trace: Trace, param: torch.Tensor) -
         if alias_module not in param_log.all_module_addresses:
             param_log.all_module_addresses.append(alias_module)
 
-    existing: dict[str, Param] = dict(trace.param_logs._dict)
+    existing: dict[str, Param] = dict(trace._param_logs._dict)
     displaced = existing.get(address)
     existing[address] = param_log
-    trace.param_logs = ParamAccessor(existing)
+    trace._param_logs = ParamAccessor(existing)
     trace._param_log_by_pid[id(param)] = address
     trace._session_param_inventory.append(param)
 
