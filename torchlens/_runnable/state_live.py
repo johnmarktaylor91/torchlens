@@ -27,6 +27,7 @@ from .._capture_attr_observer import (
 )
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._storage_bindings import rebind_if_moved, record_storage_binding
+from .._utils.tensor_utils import sparse_component_tensors
 from .state import (
     LiveDeclaredStateSnapshot,
     declared_slot_unchanged,
@@ -97,21 +98,32 @@ def _unalias_trace_payloads(trace: Any, changed: list[torch.Tensor]) -> None:
     if not is_live_trace(trace):
         # A PartialTrace (failed capture) or husked trace holds no layer payloads.
         return
-    storages = {
-        (tensor.device, tensor.untyped_storage().data_ptr())
-        for tensor in changed
-        if not tensor.is_meta
-    }
+    storages = {key for tensor in changed for key in _storage_keys(tensor)}
     for layer in trace._layer_list or ():
         fields = dict(state_items(layer))
         for field_name in ("out", "transformed_out"):
             value = fields.get(field_name)
-            if (
-                isinstance(value, torch.Tensor)
-                and not value.is_meta
-                and (value.device, value.untyped_storage().data_ptr()) in storages
-            ):
+            if isinstance(value, torch.Tensor) and not storages.isdisjoint(_storage_keys(value)):
                 layer._internal_set(field_name, value.detach().clone())
+
+
+def _storage_keys(tensor: torch.Tensor) -> set[tuple[torch.device, int]]:
+    """Return the (device, storage pointer) keys a tensor's bytes live under.
+
+    A sparse tensor has no storage of its own; its bytes are those of its index
+    and value components, so writing a sparse buffer back touches each of them.
+    Meta tensors and layouts without a known decomposition have no keys.
+    """
+
+    if tensor.is_meta:
+        return set()
+    if tensor.layout is torch.strided:
+        return {(tensor.device, tensor.untyped_storage().data_ptr())}
+    try:
+        parts = sparse_component_tensors(tensor)
+    except ValueError:
+        return set()
+    return {(part.device, part.untyped_storage().data_ptr()) for part in parts}
 
 
 def restore_live_declared_state(snapshot: LiveDeclaredStateSnapshot, trace: Any = None) -> None:

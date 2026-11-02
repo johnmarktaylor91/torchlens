@@ -23,6 +23,7 @@ from torchlens._constants import ORIG_TORCH_FUNCS
 from torchlens._ir.selector_eval import evaluate
 from torchlens._utils.tensor_utils import sparse_component_tensors
 from torchlens.backends.torch.buffer_writes import _whole_storage_uint8
+from torchlens.backends.torch.rescue import _state_bytes_equal
 from torchlens.errors import TraceCaptureError
 from torchlens.intervention.errors import LiveModeLabelError
 from torchlens.intervention.hooks import live_selector_matches_site
@@ -97,7 +98,7 @@ def test_torchlens_frame_raising_carries_capture_internal_error() -> None:
     error = excinfo.value
     assert error.fields["code"] == "capture_internal_error"
     assert error.origin is FailureOrigin.TORCHLENS
-    assert isinstance(error.__cause__, NotImplementedError)
+    assert isinstance(error.__cause__, ValueError)
 
 
 def test_trace_capture_error_defaults_to_forward_raised() -> None:
@@ -178,3 +179,20 @@ def test_sparse_component_tensors_per_layout() -> None:
     assert len(sparse_component_tensors(dense.to_sparse_csc())) == 3
     with pytest.raises(ValueError, match="no known component decomposition"):
         sparse_component_tensors(dense)
+
+
+def test_state_bytes_equal_reads_sparse_components() -> None:
+    sparse = (torch.eye(3) + torch.diag(torch.ones(2), 1)).to_sparse()
+    clone = sparse.detach().clone()
+    assert _state_bytes_equal(sparse, clone)
+    sparse._values().mul_(2)
+    assert not _state_bytes_equal(sparse, clone)
+    assert not _state_bytes_equal(sparse, clone.to_sparse_csr())
+
+
+def test_sparse_buffer_is_left_as_the_forward_left_it() -> None:
+    model = _SparseAdjacency().eval()
+    before = model.adjacency.detach().clone()
+    tl.trace(model, [torch.randn(3, 4)])
+    assert model.adjacency.layout is torch.sparse_coo
+    torch.testing.assert_close(model.adjacency.to_dense(), before.to_dense())
