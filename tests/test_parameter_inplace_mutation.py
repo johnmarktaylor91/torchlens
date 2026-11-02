@@ -360,8 +360,8 @@ _GRAD_OPERAND_OP = {"positional": "add", "keyword": "add", "nested": "indexput"}
 def test_frozen_parameter_with_grad_operand_captures_like_eager(spelling: str) -> None:
     """Eager makes the frozen Parameter a non-leaf; capture now does the same.
 
-    The call runs tracked with the receiver's own (frozen) ``requires_grad``, so
-    autograd accepts it exactly as in eager. The Parameter ends as eager leaves
+    Capture never changes the receiver's (frozen) ``requires_grad``, so autograd
+    accepts the call exactly as in eager. The Parameter ends as eager leaves
     it (a non-leaf requiring grad), and the op is logged like any other
     Parameter mutation. A later capture of the same model still works, as a
     later eager forward does.

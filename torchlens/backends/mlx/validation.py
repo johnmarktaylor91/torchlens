@@ -34,8 +34,8 @@ PERTURBATION_UNPROVED = "unproved"
 #: Local cause -> reason code from ``VALIDATION_REASONS`` (SPEC 4.3), coded
 #: once. Every per-op decision and every count key reads from this table.
 MLX_VALIDATION_REASONS: dict[str, str] = {
-    "coverage": "replay_mismatch",
-    "parents_inconsistent": "replay_mismatch",
+    "coverage": "replay_coverage_incomplete",
+    "parents_inconsistent": "declared_parents_inconsistent",
     "arity": "replay_mismatch",
     "value_mismatch": "replay_mismatch",
     "payload_missing": "parent_payload_missing",

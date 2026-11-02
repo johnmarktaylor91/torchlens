@@ -1188,6 +1188,21 @@ _BUILTIN_EXCEPTION_ROOTS = frozenset(
 # current: a stale entry (class deleted or later registered) fails the gate
 # just like a missing one.
 _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
+    # Metadata unpickler pre-scan control flow: private signals between the dry run and
+    # the load path, never raised to a caller (the load path catches both and either runs
+    # the pure-Python machine or refuses with the boundary's UnpicklingError).
+    "torchlens._io._pickle_prescan.StreamNeedsInterpreter": (
+        "private hand-off from the pre-scan to the pure-Python machine; caught by "
+        "SafeBundleUnpickler.load, never escapes"
+    ),
+    "torchlens._io._pickle_prescan._NotStatic": (
+        "private signal that a construction's arguments are only known at run time; "
+        "caught inside the pre-scan, never escapes"
+    ),
+    "torchlens._io._pickle_prescan._StopDryRun": (
+        "private signal that the policy refused a global; caught inside the pre-scan, "
+        "the refusal itself is re-raised by the real run"
+    ),
     # Changed-parameter replay refusal: a private ReplayPreconditionError subclass
     # whose only job is carrying prose plus the coded fields (callers catch the base).
     "torchlens.intervention._param_fingerprint.ParamChangedSinceCaptureError": (

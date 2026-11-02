@@ -17,9 +17,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .._constants import _is_suffixed_raw_label
+from .._constants import _RAW_LABEL_SUFFIX, _is_suffixed_raw_label
 
 if TYPE_CHECKING:
+    from .op import Op
     from .trace import Trace
 
 __all__: list[str] = []
@@ -109,3 +110,70 @@ def final_to_raw_layer(trace: Trace, layer_label: str) -> str | None:
     """Return the raw label behind the final lookup label ``layer_label``, or ``None``."""
 
     return trace._final_to_raw_layer_labels.get(layer_label)
+
+
+def fx_label(fx_qualpath: str | None, fx_call_index: int | None) -> str | None:
+    """Return a torch.fx-style label for an op when module context is available."""
+
+    if fx_qualpath is None:
+        return None
+    return f"{fx_qualpath.replace('.', '_')}_{fx_call_index}"
+
+
+def public_raw_label(label_raw: object) -> str:
+    """Return the public raw ordinal label without the raw-label suffix.
+
+    Returns
+    -------
+    str
+        Realtime ordinal identity for an op before equivalent-op grouping.
+    """
+
+    label = label_raw
+    if isinstance(label, str) and label.endswith(_RAW_LABEL_SUFFIX):
+        return label[: -len(_RAW_LABEL_SUFFIX)]
+    return str(label)
+
+
+def own_label_spellings(op: Op) -> set[str]:
+    """Return every spelling a relation list may use for THIS op.
+
+    On a finished trace a parent's ``children`` (or a child's ``parents``)
+    may record this op under either its bare ``layer_label`` or -- on a
+    multi-pass layer -- its pass-qualified ``layer_label:pass`` spelling,
+    so self-exclusion in ``siblings``/``co_parents`` must cover BOTH
+    (excluding only the bare spelling appended the op itself on every
+    multi-pass layer). Unfinished traces still use raw labels.
+    """
+
+    _finished_trace = op._source_trace_or_none()
+    _finished = op._tracing_finished or (
+        _finished_trace is not None and _finished_trace._tracing_finished
+    )
+    if not _finished:
+        return {op._label_raw}
+    spellings = {op.layer_label}
+    pass_index = op.pass_number
+    if isinstance(pass_index, int):
+        spellings.add(f"{op.layer_label}:{pass_index}")
+    return spellings
+
+
+def streaming_label(op: Op) -> str:
+    """Best available label for sink/writer callbacks during or after postprocess.
+
+    Returns
+    -------
+    str
+        Pass-qualified label when available, otherwise the current layer label.
+    """
+
+    for candidate in (
+        op.label,
+        op.layer_label,
+        op._layer_label_raw,
+        op._label_raw,
+    ):
+        if candidate is not None:
+            return str(candidate)
+    return "<unknown>"

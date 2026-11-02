@@ -6,9 +6,9 @@ removing each incoming edge (patching it to its value on a corrupted
 input); keep the removal when the metric moves by less than a threshold
 `tau`. TorchLens does not ship a circuit-search loop. It enumerates the
 edges (`torchlens.mechinterp.component_graph`), executes each patch
-(`torchlens.mechinterp.patch_edges`, edge substitution on the replay engine) and
-records each decision (`torchlens.experiment.ledger`); the loop and every prune
-decision are yours, and live on this page.
+(`torchlens.mechinterp.patch_edges`, edge substitution on the replay engine);
+the loop, every prune decision and their record are yours, and live on this
+page.
 
 Why each edge test goes through edge substitution and not `sweep_sites`:
 `sweep_sites` applies one edit at every candidate site, but the value an
@@ -77,20 +77,14 @@ RESULT = (len(graph.edges), len(edges), circuit_kl([])) == (57, 46, 0.0)
 
 ## The head-knockout pass (`sweep_sites`, reported beside the circuit)
 
-Arm the ledger first, so the sweep lands in its first entry as one material
-step. Each candidate zero-ablates one head's value vectors on a real
-forward.
+Each candidate zero-ablates one head's value vectors on a real forward. The
+sweep's Bundle is its own record: the per-candidate effect table and the
+operation chronology persist with it.
 
 ```python
 # recipe-test: tool=transformers expected=True
-from torchlens.experiment import head_ablation_candidates, ledger, sweep_sites
+from torchlens.experiment import head_ablation_candidates, sweep_sites
 
-led = ledger(
-    "acdc_ledger.jsonl",
-    question="Which edges of the stand-in carry its next-token prediction?",
-    hypothesis="A sparse subgraph keeps the KL to the full model below tau",
-    metric="KL(full || circuit) at the last position, batch mean",
-)
 candidates = {}
 for layer in range(2):
     plan = head_ablation_candidates(clean, f"transformer.h.{layer}.attn", heads=2)
@@ -107,9 +101,6 @@ knockout = sweep_sites(
 knockout_kl = {row.candidate_id: round(row.value, 4) for row in knockout.effects().rows
                if row.candidate_id != "__baseline__"}
 print(knockout_kl)
-led.observe(f"head knockout KL: {knockout_kl}")
-led.verdict("not_assessed", text="reported beside the ACDC circuit; not a pruning input")
-led.close_entry()
 RESULT = sorted(knockout_kl) == ["a0.h0", "a0.h1", "a1.h0", "a1.h1"]
 ```
 
@@ -117,9 +108,9 @@ RESULT = sorted(knockout_kl) == ["a0.h0", "a0.h1", "a1.h0", "a1.h1"]
 
 Receivers in reverse topological order (`logits` first; here only the last
 two), each receiver's senders latest first; bias edges are skipped, since a bias is the same on
-both inputs and patching it changes nothing. Every test opens one ledger
-entry, records the observed KL change and sets the verdict: `refutes` (the
-edge is not needed: pruned) or `supports` (kept).
+both inputs and patching it changes nothing. Every test appends one decision
+row with the observed KL change and the decision: `pruned` (the edge is not
+needed) or `kept`.
 
 ```python
 # recipe-test: tool=transformers expected=True
@@ -128,6 +119,7 @@ pruned = []
 current = circuit_kl(pruned)
 walk = [graph.receivers["logits"], graph.receivers["m1"]]  # full walk: reversed(graph.receivers)
 tested = []
+decisions = []  # the record: one row per edge test, written by the loop
 for receiver in walk:
     for sender in reversed(receiver.senders):
         if sender.kind == "bias":
@@ -135,22 +127,12 @@ for receiver in walk:
         edge = graph.edges[f"{sender.name}->{receiver.name}"]
         tested.append(edge.name)
         trial = circuit_kl(pruned + [edge])
-        led.open_entry(
-            question=f"Is {edge.name} needed?",
-            hypothesis=f"{edge.name} carries part of the prediction",
-            metric="KL(full || circuit) change when the edge is patched",
-        )
         change = trial - current
-        led.observe(f"KL {current:.6f} -> {trial:.6f}", value=change)
+        decisions.append({"edge": edge.name, "kl_before": current, "kl_after": trial,
+                          "change": change, "decision": "pruned" if change < tau else "kept"})
         if change < tau:
             pruned.append(edge)
             current = trial
-            led.verdict("refutes", text=f"pruned: the KL change is below tau={tau}",
-                        basis=[f"KL change {change:.6f}"])
-        else:
-            led.verdict("supports", text=f"kept: the KL change reaches tau={tau}",
-                        basis=[f"KL change {change:.6f}"])
-        led.close_entry()
 
 pruned_names = {e.name for e in pruned}
 kept = [name for name in tested if name not in pruned_names]
@@ -176,26 +158,30 @@ cases on GPT-2 small.
 
 ## The record
 
-Every decision is a closed ledger entry with a verdict, and the kept set is
-exactly the edges whose verdict is `supports`. Re-running the circuit the
-ledger describes (its `refutes` edges patched, in ledger order) in one call
-reproduces the loop's last KL exactly.
+The loop writes its own record: one row per edge test with the KL before and
+after the patch, the change and the decision, and the kept set is exactly the
+edges whose row reads `kept`. Re-running the circuit the record describes
+(its `pruned` edges patched, in record order) in one call reproduces the
+loop's last KL exactly. Save the rows next to the head-knockout Bundle
+(`knockout.save(...)`) and the experiment is reproducible from files.
 
 ```python
 # recipe-test: tool=transformers expected=True
-decisions = [entry for entry in led.entries().values() if (entry.question or "").startswith("Is ")]
-verdicts = [(entry.question[3:-8], entry.verdict["token"]) for entry in decisions]
-from_ledger_kept = [name for name, token in verdicts if token == "supports"]
-from_ledger_pruned = [graph.edges[name] for name, token in verdicts if token == "refutes"]
-led.close()
-again = circuit_kl(from_ledger_pruned)
-print(len(decisions), sorted(from_ledger_kept) == sorted(kept), again == current)
-RESULT = (len(decisions), sorted(from_ledger_kept) == sorted(kept), again == current) == (13, True, True)
+import json
+from pathlib import Path
+
+Path("acdc_decisions.json").write_text(json.dumps(decisions, indent=1))
+record = json.loads(Path("acdc_decisions.json").read_text())
+from_record_kept = [row["edge"] for row in record if row["decision"] == "kept"]
+from_record_pruned = [graph.edges[row["edge"]] for row in record if row["decision"] == "pruned"]
+again = circuit_kl(from_record_pruned)
+print(len(record), sorted(from_record_kept) == sorted(kept), again == current)
+RESULT = (len(record), sorted(from_record_kept) == sorted(kept), again == current) == (13, True, True)
 ```
 
 Printed output on CPU (float64): filled in from the page's test run.
 
 The page's test (`tests/test_circ3_acdc_recipe.py`) runs these fences in
-order, re-runs the pruning loop independently of the ledger and checks that
-it prunes the same edges, and checks that every decision entry carries a
-verdict.
+order, re-runs the pruning loop independently of the record and checks that
+it prunes the same edges, and checks that every tested edge has exactly one
+decision row.

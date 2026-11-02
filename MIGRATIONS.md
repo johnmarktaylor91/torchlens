@@ -327,7 +327,8 @@ The MCP server's `load_overview` and `agent_dump` tools are REMOVED
 `load_overview`), `torchlens_dump` (was `agent_dump`), `torchlens_explain`,
 `torchlens_query_sites`, `torchlens_payload_stats`, `torchlens_compare`,
 `torchlens_schema`, and the ledger family
-(`torchlens_ledger_overview`/`_entry`/`_evidence`). Separately,
+(`torchlens_ledger_overview`/`_entry`/`_evidence`; removed with the experiment
+ledger on 1 Nov 2026, see `docs/reference/deprecations.md`). Separately,
 `import torchlens` no longer imports torch (deferred to first use) -- import
 order can no longer be used to force torch initialization.
 

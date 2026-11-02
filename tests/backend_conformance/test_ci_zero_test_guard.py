@@ -87,6 +87,42 @@ def test_legs_mode_checks_every_declared_leg(tmp_path: Path) -> None:
     assert run_legs(empty).returncode == 1
 
 
+def test_tier_floor_reads_half_the_artifact_count(tmp_path: Path) -> None:
+    """``tier:<name>`` resolves to half the collection artifact's count, red-capably."""
+
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("check_ci_executed_tests", _GUARD)
+    assert spec is not None and spec.loader is not None
+    guard = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = guard
+    spec.loader.exec_module(guard)
+
+    artifact = tmp_path / "collection.json"
+    artifact.write_text('{"tiers": {"smoke": {"count": 1001}}}', encoding="utf-8")
+    assert guard.resolve_floor("tier:smoke", artifact) == 500
+    assert guard.resolve_floor("710", artifact) == 710
+    with pytest.raises(SystemExit, match="cannot read tier 'mid'"):
+        guard.resolve_floor("tier:mid", artifact)
+    # The committed artifact backs the smoke legs' floor.
+    assert guard.resolve_floor("tier:smoke") > 0
+
+    legs = tmp_path / "junit"
+    legs.mkdir()
+    floor = guard.resolve_floor("tier:smoke")
+    _write_junit(legs / "smoke.xml", tests=floor, skipped=0)
+    (legs / "legs.floor").write_text("smoke.xml tier:smoke 0.15\n", encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, str(_GUARD), "--legs", str(legs)], capture_output=True, text=True
+    )
+    assert result.returncode == 0
+    _write_junit(legs / "smoke.xml", tests=floor - 1, skipped=0)
+    result = subprocess.run(
+        [sys.executable, str(_GUARD), "--legs", str(legs)], capture_output=True, text=True
+    )
+    assert result.returncode == 1 and f"floor {floor}" in result.stderr
+
+
 def test_guard_passes_executed_suite(tmp_path: Path) -> None:
     """A suite with executed tests above the floor passes."""
 

@@ -18,7 +18,7 @@ from .._literals import (
     VisRendererLiteral,
 )
 
-ShowContainersLiteral = Literal[False, "labels", "cluster", "collapsed", "auto", "nodes"]
+ShowContainersLiteral = Literal[False, "labels", "collapsed", "nodes"]
 
 
 @dataclass(frozen=True)
