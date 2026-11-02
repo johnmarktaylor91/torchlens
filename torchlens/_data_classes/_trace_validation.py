@@ -41,6 +41,18 @@ from .op import Op
 _USE_STORED_TRANSFORM = object()
 
 
+def _stateful_run_warning_was_emitted(trace: Any) -> bool:
+    """Whether ``trace`` already carried its once-only stateful-run warning."""
+
+    return bool(trace.__dict__.get("_stateful_run_warning_emitted", False))
+
+
+def _mark_stateful_run_warning_emitted(trace: Any) -> None:
+    """Record on ``trace`` that its once-only stateful-run warning was emitted."""
+
+    trace.__dict__["_stateful_run_warning_emitted"] = True
+
+
 def _materialize_layer_mirrors_for_removed(
     trace: "Trace",
     removed_entries: Iterable[Op],

@@ -23,7 +23,11 @@ from .._capture.outcome import (
 from .._capture.projectors import RefreshProjector
 from .._capture.structure_only import require_structure_only_capability
 from .._data_classes._staged_spec import _staged_user_entries
-from .._data_classes._trace_validation import _USE_STORED_TRANSFORM
+from .._data_classes._trace_validation import (
+    _USE_STORED_TRANSFORM,
+    _mark_stateful_run_warning_emitted,
+    _stateful_run_warning_was_emitted,
+)
 from .._deprecations import MISSING, MissingType
 from .._errors import InvalidArgumentError, KeywordConflictError, RecordBindingError
 from .._fast_run import run_fast_live_trace, run_fast_loaded_trace, try_guarded_fast_rerun
@@ -119,7 +123,7 @@ def _warn_stateful_live_run_once(trace: Any, model: nn.Module) -> None:
         Live model that is about to be re-executed.
     """
 
-    if trace.__dict__.get("_stateful_run_warning_emitted", False):
+    if _stateful_run_warning_was_emitted(trace):
         return
     if not model.training:
         return
@@ -148,7 +152,7 @@ def _warn_stateful_live_run_once(trace: Any, model: nn.Module) -> None:
         # 4: this helper, run(), the thin Trace.run shell, then the caller's site.
         stacklevel=4,
     )
-    trace.__dict__["_stateful_run_warning_emitted"] = True
+    _mark_stateful_run_warning_emitted(trace)
 
 
 def _warn_pending_value_edits_on_new_input_run(
