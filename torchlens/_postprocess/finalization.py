@@ -1228,8 +1228,7 @@ def _build_layer_logs(self: "Trace") -> None:
 
     for pass_log in self._layer_list:
         no_call_label = pass_log.layer_label
-        # The shared constants rule's stamp (backends.2): backends that run
-        # ``apply_constants_rule`` have set it already; torch eager is stamped here.
+        # backends.2 constants stamp: rule-running backends set it; torch eager is stamped here.
         pass_log.is_constant = bool(pass_log.is_constant) or is_constant_op(pass_log)
 
         if no_call_label not in layer_logs:
@@ -1271,11 +1270,8 @@ def _build_layer_logs(self: "Trace") -> None:
         for pass_log in layer_log.ops.values():
             linked_labels = []
             for param_log in pass_log._param_logs:
-                # Tied/shared parameters expose every aliasing address through
-                # ``all_addresses`` (the primary is ``param_log.address`` == all_addresses[0]).
-                # Emit ``primary -> alias`` for each additional address that shares the
-                # underlying tensor storage. (Co-occurrence of distinct tensors in one op
-                # is tracked separately by ``co_parent_params`` and is NOT tying.)
+                # Tied parameters list every aliasing address in ``all_addresses`` (primary
+                # first); co-occurring distinct tensors (``co_parent_params``) are not tying.
                 for alias_address in getattr(param_log, "all_addresses", []):
                     if alias_address == param_log.address:
                         continue
