@@ -1,6 +1,6 @@
 """``bundle.vary(mapping)`` — one explicit edit or identity PER member (F03 item 5).
 
-The teachable law (ledger memo Decision 2): **do = one edit to all members;
+The teachable law: **do = one edit to all members;
 vary = one explicit edit or identity per member; both take the same spec
 objects.** Broadcast-versus-vary is the scientific content of the call, and
 a silently unedited member is the single most expensive quiet asymmetry an
@@ -214,14 +214,6 @@ def bundle_vary(
         )
     lowered = _normalize_values(assignments)
 
-    # Emission (item 9b): ONE material step per vary call, started BEFORE
-    # material work; per-member outcomes live in the MATERIAL record (the
-    # chronology row), never as per-member ledger steps. Unarmed = zero rows.
-    from ..experiment._ledger import active_ledger
-
-    armed = active_ledger()
-    step_id = armed.begin_step("vary") if armed is not None else None
-
     # ---- material phase (no rollback claimed) ----------------------------
     outcomes, spec_digests, failure = _apply_member_specs(bundle, lowered)
 
@@ -242,21 +234,6 @@ def bundle_vary(
         anchor["operation_id"] = operation.operation_id
         bundle._member_construction[name] = anchor
 
-    if armed is not None and step_id is not None:
-        from ..experiment._ledger import EvidenceRef
-
-        armed.end_step(
-            step_id,
-            outcome="completed" if failure is None else "partial_failure",
-            refs=[
-                EvidenceRef(
-                    kind="bundle",
-                    uri=f"live://{bundle.id}",
-                    object_id=f"{bundle.id}:{operation.operation_id}",
-                )
-            ],
-            material_result=bundle,
-        )
     if failure is not None:
         failed_member, original = failure
         raise BundleExperimentError(

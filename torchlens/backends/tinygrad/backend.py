@@ -1296,7 +1296,7 @@ class TinygradBackend:
         snapshots = _snapshot_tinygrad_grads(self, leaves)
         try:
             if grad_options.intermediate_grads:
-                from ..._data_classes._trace_stats import set_intermediate_derived_grads
+                from ..._data_classes.derived_grad import set_intermediate_derived_grads
 
                 set_intermediate_derived_grads(
                     trace,

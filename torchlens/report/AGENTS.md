@@ -28,6 +28,11 @@ Reporting helpers over finished captures and observer metadata (`tl.report`).
   substrate: FactCore (params/compute/memory/counts/identity), the canonical
   compute aggregation (the ONE reader of raw per-op compute fields), and the
   three-state health facts. Every summary/profile number is a projection.
+- `_trace_facts.py` — bodies of the `Trace` fact properties and methods
+  (`factcore`, `health_facts`, `nonfinite_verdict`, FLOP/MAC rollups,
+  `profile`, `explain`, `bill_of_materials`, `capabilities`, episode facts) as
+  `f(trace, ...)` functions, reached from the record through
+  `_data_classes._doors.report()`.
 - `_summary_report.py` — `SummaryReport(str)`: the detached typed result
   `summary()` returns (rows/totals/capture + the F08 result API:
   `render`/`print`/`details`/`to_pandas`/`to_markdown`/`to_html` + scalar

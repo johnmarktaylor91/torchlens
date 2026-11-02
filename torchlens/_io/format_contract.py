@@ -191,7 +191,7 @@ def _major_version(version: Any) -> int | None:
     return int(head) if head.isdigit() else None
 
 
-def raise_if_saved_by_older_major(saved_version: Any, path: str) -> None:
+def raise_if_saved_by_older_major(saved_version: Any, path: str, *, running_version: str) -> None:
     """Refuse an artifact that an earlier major release of torchlens saved.
 
     A major release does not read the files an earlier major release wrote: the
@@ -207,6 +207,9 @@ def raise_if_saved_by_older_major(saved_version: Any, path: str) -> None:
         The manifest's raw ``torchlens_version`` value.
     path:
         Artifact path for the structured fields.
+    running_version:
+        The running release's ``torchlens.__version__``; passed in so this
+        contract module never imports the package that imports it.
 
     Raises
     ------
@@ -214,15 +217,13 @@ def raise_if_saved_by_older_major(saved_version: Any, path: str) -> None:
         When the saving release's major version is below the running one.
     """
 
-    import torchlens
-
-    running = _major_version(torchlens.__version__)
+    running = _major_version(running_version)
     saved = _major_version(saved_version)
     if running is None or saved is None or saved >= running:
         return
     remedy = (
         f"load it with torchlens {saved}.x (pip install 'torchlens<{running}'), or "
-        f"capture the model again with torchlens {torchlens.__version__} and save that."
+        f"capture the model again with torchlens {running_version} and save that."
     )
     raise ArtifactTooOldError(
         f"This artifact was saved by torchlens {saved_version}; torchlens {running}.x "

@@ -1,19 +1,19 @@
-"""Trace intervention mixin.
+"""Trace intervention mixin: the thin shell of the intervention verbs.
 
-The fork itself is the M11 copy-on-write builder in ``_trace_fork``;
-this mixin owns the public intervention surface (set/attach/detach/do/
-fork dispatch, spec management, history records).
+Every method forwards to a function taking the trace first. The bodies live in
+``torchlens.intervention._trace_edits`` (``do``, ``set``, ``remove``,
+``clear_edits``, ``save_intervention`` and their helpers), ``_trace_selection_edits``
+(selection-kind ``do``), ``_trace_hooks`` (``attach_hooks``, ``clear_hooks``),
+reached through the ``_doors.intervention`` door, and in the L1 modules
+``_trace_intervention_records`` (spec state and history records) and
+``_fork_lineage`` (the fork verb). The COW fork builder itself is
+``_trace_fork.build_fork``.
 """
 
-import copy
-import sys
-import time
-import uuid
-import warnings
 from collections.abc import Callable
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import torch
 from torch import nn
@@ -24,39 +24,15 @@ if TYPE_CHECKING:
     _TraceMixinBase = Trace
 else:
     _TraceMixinBase = object
-from .._errors import InvalidArgumentError
-from .._trace_state import TraceState
-from ..intervention.types import (
-    FrozenInterventionSpec,
-    InterventionSpec,
-    TargetSpec,
-)
-from ..options import InterventionOptions, ReplayOptions, merge_intervention_options
-from ._trace_fork import (
-    _STREAM_DERIVED_GUARD_FIELDS,
-    _ForkMemo,
-    _memoized_deep_copy,
-    build_fork,
-)
-from ._trace_grad_sites import (
-    _SignalDoRequest,
-    armed_edits,
-    armed_summary_line,
-    do_signal_plan,
-    live_backward_graph_available,
-    refresh_armed_annotation,
-    refuse_invalid_do_loss,
-    settle_armed_gradient_edits,
-    signal_plan,
-    sticky_hook_entry,
-)
-from ._trace_intervention_records import (
-    _DoTransaction,
-    _edit_identity,
-    do_event_edit_names,
-    do_event_extra,
-)
+from ..intervention.types import FrozenInterventionSpec, InterventionSpec, TargetSpec
+from ..options import InterventionOptions
+from . import _doors, _fork_lineage, _trace_intervention_records
+from ._trace_fork import _STREAM_DERIVED_GUARD_FIELDS, _ForkMemo, _memoized_deep_copy, build_fork
+from ._trace_grad_sites import armed_edits, armed_summary_line, settle_armed_gradient_edits
+from ._trace_intervention_records import _DoTransaction
 
+# The re-exports stay until the fold removes this module: the torch backward door
+# reads ``settle_armed_gradient_edits`` from here by name, and tests import the rest.
 __all__ = [
     "_STREAM_DERIVED_GUARD_FIELDS",
     "TraceInterventionMixin",
@@ -64,44 +40,6 @@ __all__ = [
     "_memoized_deep_copy",
     "settle_armed_gradient_edits",
 ]
-
-
-def _prepare_do(
-    hooks_or_site: Any,
-    value_or_hook: Any,
-    intervention: InterventionOptions | None,
-    loss: Any,
-) -> tuple[Any, InterventionOptions, Any]:
-    """Lower a ``find_sites`` table, merge the options, split the plan, refuse a bad loss.
-
-    Parameters
-    ----------
-    hooks_or_site:
-        The ``do`` input (a ``find_sites`` table is lowered to its site labels).
-    value_or_hook:
-        Optional hook for the ``(site, hook)`` input shape.
-    intervention:
-        The caller's grouped intervention options.
-    loss:
-        The ``loss=`` argument, refused before any mutation when invalid.
-
-    Returns
-    -------
-    tuple[Any, InterventionOptions, Any]
-        The lowered input, the merged options and the gradient-site plan
-        (``None`` when no site addresses the backward pass).
-    """
-
-    if type(hooks_or_site).__name__ == "_SiteTable":
-        # find_sites() output is a first-class address (the zero-match refusal
-        # recommends it): lower it to the exact resolved site labels.
-        from .._ir.selector_eval import normalize_selector_like
-
-        hooks_or_site = normalize_selector_like(hooks_or_site, lifecycle="live")
-    intervention_options = merge_intervention_options(intervention=intervention)
-    plan = signal_plan(hooks_or_site, value_or_hook)
-    refuse_invalid_do_loss(loss, plan)
-    return hooks_or_site, intervention_options, plan
 
 
 class TraceInterventionMixin(_TraceMixinBase):
@@ -119,9 +57,7 @@ class TraceInterventionMixin(_TraceMixinBase):
         naming lane F44). Spelling DOCUMENTED-UNSTABLE.
         """
 
-        from ..intervention.injection import injected_ops
-
-        return injected_ops(self)
+        return _doors.intervention()._trace_edits.injected_ops(self)
 
     @property
     def model_ops(self: "Trace") -> tuple[Any, ...]:
@@ -158,16 +94,8 @@ class TraceInterventionMixin(_TraceMixinBase):
             Whether an existing destination may be replaced.
         """
 
-        from .._runnable import refuse_poisoned_trace
-        from ..intervention.save import save_intervention
-
-        refuse_poisoned_trace(self, "intervention export")
-        save_intervention(
-            self,
-            path,
-            level=level,
-            allow_direct_writes=allow_direct_writes,
-            overwrite=overwrite,
+        return _doors.intervention()._trace_edits.save_intervention(
+            self, path, level=level, allow_direct_writes=allow_direct_writes, overwrite=overwrite
         )
 
     @cached_property
@@ -183,28 +111,9 @@ class TraceInterventionMixin(_TraceMixinBase):
         return self._ensure_intervention_spec().freeze()
 
     def _history_site_payload(self: "Trace", site: Any) -> Any:
-        """Return a stable site payload for ``state_history`` records.
+        """Forward to ``_trace_intervention_records.history_site_payload``."""
 
-        Parameters
-        ----------
-        site:
-            Original selector-like site payload supplied to a mutator.
-
-        Returns
-        -------
-        Any
-            Plain layer labels for direct label targets, otherwise a stable
-            repr-style string for human-readable history records.
-        """
-
-        del self
-        if isinstance(site, str):
-            return site
-        selector_kind = getattr(site, "selector_kind", None)
-        selector_value = getattr(site, "selector_value", None)
-        if selector_kind == "label" and isinstance(selector_value, str):
-            return selector_value
-        return repr(site)
+        return _trace_intervention_records.history_site_payload(site)
 
     def set(
         self: "Trace",
@@ -239,84 +148,9 @@ class TraceInterventionMixin(_TraceMixinBase):
             This model log, with a stale intervention recipe.
         """
 
-        self._warn_if_root_mutation(confirm_mutation=confirm_mutation)
-        if direction not in {"forward", "backward", "both"}:
-            raise InvalidArgumentError(
-                "set(..., direction=...) must be 'forward', 'backward', or 'both'; "
-                f"received {direction!r}",
-                code="intervention_direction_invalid",
-                remedy="pass direction='forward', 'backward', or 'both'",
-                argument="direction",
-            )
-        if direction in {"backward", "both"}:
-            # Gradients are addressed as sites now; ``set`` (removed by wave D)
-            # keeps only its activation path rather than a second gradient door.
-            raise InvalidArgumentError(
-                f"set(..., direction={direction!r}) no longer edits gradients: a gradient "
-                "is addressed as a site, tl.grad(site)",
-                code="intervention_direction_invalid",
-                remedy="trace.do(tl.grad(site), edit, model=model, inputs=x, loss=fn), or "
-                "trace.attach_hooks(tl.grad(site), edit) then trace.backward(loss)",
-                argument="direction",
-            )
-        from ..intervention.hooks import is_facet_target
-
-        if is_facet_target(site):
-
-            def _facet_replacement_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
-                """Return a static or callable facet replacement slice.
-
-                Parameters
-                ----------
-                out:
-                    Facet slice supplied by the facet hook wrapper.
-                ctx:
-                    Hook context supplied by TorchLens.
-
-                Returns
-                -------
-                torch.Tensor
-                    Replacement facet slice.
-                """
-
-                del ctx
-                if callable(value):
-                    return cast(torch.Tensor, value(out))
-                return cast(torch.Tensor, value)
-
-            self.attach_hooks(
-                site,
-                _facet_replacement_hook,
-                strict=strict,
-                confirm_mutation=True,
-            )
-            self._record_operation(
-                "set",
-                site=self._history_site_payload(site),
-                value_kind=type(value).__name__,
-                strict=strict,
-                callable=callable(value),
-                facet_scatter=True,
-                direction="forward",
-            )
-            return self
-        self._validate_intervention_site(site, strict=strict)
-        metadata = {"created_by": "set_callable_one_shot"} if callable(value) else {}
-        self._ensure_intervention_spec().add_set(
-            self._target_spec_from_site(site, strict=strict),
-            value,
-            metadata=metadata,
+        return _doors.intervention()._trace_edits.set_site(
+            self, site, value, direction=direction, strict=strict, confirm_mutation=confirm_mutation
         )
-        self._mark_intervention_spec_mutated()
-        self._record_operation(
-            "set",
-            site=self._history_site_payload(site),
-            value_kind=type(value).__name__,
-            strict=strict,
-            callable=callable(value),
-            direction="forward",
-        )
-        return self
 
     def attach_hooks(
         self: "Trace",
@@ -362,123 +196,20 @@ class TraceInterventionMixin(_TraceMixinBase):
             Scoped removable hook handle.
         """
 
-        self._warn_if_root_mutation(confirm_mutation=confirm_mutation)
-        from ..intervention.errors import HookSignatureError
-        from ..intervention.handles import HookHandle
-        from ..intervention.hooks import normalize_hook_plan
-        from ..intervention.spec import (
-            Recipe as PublicInterventionSpec,
-            entries_from_spec,
-        )
-
-        if isinstance(hooks_or_site, PublicInterventionSpec):
-            # C03 spec door: the ONE immutable spec is accepted unchanged.
-            # Its rules already carry site and action, so extra call
-            # arguments have nothing sound to bind to.
-            if hook is not None or extra_hooks:
-                raise InvalidArgumentError(
-                    "attach_hooks(spec) takes the InterventionSpec alone: its "
-                    "rules already carry the site and action, so extra hook "
-                    "arguments have nothing to bind to",
-                    code="spec_door_extra_arguments",
-                    remedy="pass only the spec (build clauses with tl.when and "
-                    "merge them), or use the (site, hook) call shape without a spec",
-                    argument="hooks_or_site",
-                )
-            entries = entries_from_spec(hooks_or_site, door="attach_hooks")
-        elif extra_hooks:
-            if hook is None:
-                raise HookSignatureError("extra hooks require an initial hook argument.")
-            entries = normalize_hook_plan(
-                [(hooks_or_site, hook_like) for hook_like in (hook, *extra_hooks)],
-                allow_replay_only_site_targets=True,
-            )
-        else:
-            entries = normalize_hook_plan(
-                hooks_or_site,
-                hook,
-                allow_replay_only_site_targets=True,
-            )
-        from ..intervention.hooks import expand_facet_hook_entries
-
-        entries = expand_facet_hook_entries(self, entries)
-        self._refuse_chunked_batch_coupling(entries)
-        for entry in entries:
-            self._validate_intervention_site(entry.site_target, strict=strict)
-        spec = self._ensure_intervention_spec()
-        handle_ids: list[str] = []
-        arming_group = f"arm-{uuid.uuid4().hex}"
-        gradient_entries = 0
-        for entry in entries:
-            handle_id = f"hook-{uuid.uuid4().hex}"
-            handle_ids.append(handle_id)
-            metadata, stored_hook, is_gradient = sticky_hook_entry(entry, arming_group)
-            gradient_entries += int(is_gradient)
-            spec.add_hook(
-                self._target_spec_from_site(entry.site_target, strict=strict),
-                stored_hook,
-                helper=entry.helper_spec,
-                handle=handle_id,
-                metadata=metadata,
-                prepend=prepend,
-            )
-        if gradient_entries == len(entries):
-            # Gradient rules edit nothing the forward recorded, so the saved
-            # activations stay current: bump the recipe revision without
-            # marking the outs stale.
-            self._mark_intervention_spec_mutated(outs_stale=False)
-        else:
-            self._mark_intervention_spec_mutated()
-        history: dict[str, Any] = {}
-        if gradient_entries and not live_backward_graph_available(self):
-            history["armed_for"] = "next_rerun"
-        self._record_operation(
-            "attach_hooks",
-            hook_count=len(entries),
-            sites=tuple(self._history_site_payload(entry.site_target) for entry in entries),
+        return _doors.intervention()._trace_hooks.attach_hooks(
+            self,
+            hooks_or_site,
+            hook,
+            *extra_hooks,
             strict=strict,
             prepend=prepend,
-            handles=tuple(handle_ids),
-            **history,
+            confirm_mutation=confirm_mutation,
         )
-        self._last_hook_handle_ids = tuple(handle_ids)
-        return HookHandle(self, tuple(handle_ids), confirm_mutation=confirm_mutation)
 
     def _refuse_chunked_batch_coupling(self: "Trace", entries: list[Any]) -> None:
-        """Refuse batch-coherent edits on a chunked-forward capture (D34).
+        """Forward to ``_doors.intervention()._trace_edits.refuse_chunked_batch_coupling``."""
 
-        The capture door already refuses ``chunk_size`` with ``hooks=`` /
-        ``intervene=``; the surviving hole is a batch-coherent helper applied
-        in REPLAY to a trace whose capture ran in forward chunks: the hook
-        would see one CHUNK and permute or average it as if it were the whole
-        batch -- a silently wrong experiment. Whole-batch visibility is not
-        provable from the chunk metadata in v1, so the guard refuses typed.
-        An ordinary (unchunked) minibatch is a real batch and stays legal.
-
-        Parameters
-        ----------
-        entries:
-            Normalized hook entries about to attach.
-        """
-
-        if not self._options_chunk_size:
-            return
-        for entry in entries:
-            helper = getattr(entry, "helper_spec", None)
-            if helper is None:
-                continue
-            if dict(helper.metadata).get("batch_coherent"):
-                raise InvalidArgumentError(
-                    f"edit {helper.name!r} reads or exchanges the WHOLE "
-                    "batch at fire time, but this trace was captured in forward "
-                    "chunks (chunked_forward=True): each fire would see one "
-                    "chunk and treat it as the full batch",
-                    code="chunked_replay_batch_coupling",
-                    remedy="re-capture without chunk_size for whole-batch "
-                    "edits, or apply a per-row edit (resample_rows_from) whose "
-                    "value never couples rows",
-                    argument="hooks_or_site",
-                )
+        return _doors.intervention()._trace_edits.refuse_chunked_batch_coupling(self, entries)
 
     def remove(self: "Trace") -> None:
         """Remove the most recent legacy-returned hook attachment.
@@ -490,9 +221,7 @@ class TraceInterventionMixin(_TraceMixinBase):
             are detached.
         """
 
-        for handle_id in self._last_hook_handle_ids:
-            self.clear_edits(handle=handle_id, confirm_mutation=True)
-        self._last_hook_handle_ids = ()
+        return _doors.intervention()._trace_edits.remove(self)
 
     def __enter__(self: "Trace") -> "Trace":
         """Enter a legacy scoped hook attachment.
@@ -549,40 +278,9 @@ class TraceInterventionMixin(_TraceMixinBase):
             This model log, with a stale recipe if hooks were removed.
         """
 
-        self._warn_if_root_mutation(confirm_mutation=confirm_mutation)
-        from ..intervention.errors import SpecMutationError
-
-        if site is None and handle is None:
-            if strict:
-                raise SpecMutationError("clear_edits requires a site or handle in strict mode.")
-            return self
-
-        target_spec = None
-        if site is not None:
-            self._validate_intervention_site(site, strict=strict)
-            target_spec = self._target_spec_from_site(site, strict=strict)
-
-        handle_values = (
-            tuple(getattr(handle, "handle_ids", (str(handle),))) if handle is not None else (None,)
+        return _doors.intervention()._trace_edits.clear_edits(
+            self, site, handle, strict=strict, confirm_mutation=confirm_mutation
         )
-        removed = 0
-        for handle_value in handle_values:
-            removed += self._ensure_intervention_spec().remove_hook(
-                site_target=target_spec,
-                handle=handle_value,
-            )
-        if removed == 0 and strict:
-            raise SpecMutationError("clear_edits did not match any sticky hooks.")
-        if removed > 0:
-            self._mark_intervention_spec_mutated()
-        self._record_operation(
-            "detach_hooks",
-            site=self._history_site_payload(site) if site is not None else None,
-            handle=str(handle) if handle is not None else None,
-            removed=removed,
-            strict=strict,
-        )
-        return self
 
     def clear_hooks(self: "Trace", *, confirm_mutation: bool = False) -> "Trace":
         """Clear all sticky hooks from the current intervention spec.
@@ -599,50 +297,24 @@ class TraceInterventionMixin(_TraceMixinBase):
             This model log with hook specs cleared and marked stale.
         """
 
-        self._warn_if_root_mutation(confirm_mutation=confirm_mutation)
-        self._ensure_intervention_spec().clear()
-        self._mark_intervention_spec_mutated()
-        self._record_operation("clear_hooks")
-        return self
+        return _doors.intervention()._trace_hooks.clear_hooks(
+            self, confirm_mutation=confirm_mutation
+        )
 
     @property
     def _graph_edges(self: "Trace") -> tuple[Any, ...]:
-        """Return this trace's dataflow edge family (finalized edge views).
+        """Forward to ``_doors.intervention()._trace_edits.graph_edges``."""
 
-        One ``EdgeUseRecord`` per parent->child occurrence (parallel edges
-        first-class), in execution order; rows are the identity-stable
-        provenance records themselves (immutable finalized views). Requires
-        an ``replayable`` capture — otherwise refuses typed
-        (``edge_provenance_unavailable``). DOCUMENTED-UNSTABLE spelling
-        pending naming-session ratification.
-        """
-
-        from .._selection.selection import _trace_edge_records
-
-        return _trace_edge_records(self)
+        return _doors.intervention()._trace_edits.graph_edges(self)
 
     def _settle_selection_do(
         self: "Trace", txn: "_DoTransaction", selected_engine: str, mutation_kind: str
     ) -> None:
-        """Record a leaf-site selection edit and quarantine episode evidence.
+        """Forward to ``_doors.intervention()._trace_edits.settle_selection_do``."""
 
-        Selection edits propagate (or deliberately do not) inside the
-        mutation step; no hook targets exist to push. A non-staged edit
-        perturbed this product's values, so inherited episode step evidence
-        no longer describes it (lane F42).
-        """
-
-        staged_only = selected_engine == "set_only" and mutation_kind not in (
-            "selection_replayed",
-            "selection_set",
+        return _doors.intervention()._trace_edits.settle_selection_do(
+            self, txn, selected_engine, mutation_kind
         )
-        self._record_do_intervention_event(txn, status=None, staged_only=staged_only)
-        if not staged_only:
-            from .._capture._episode_coupling import (
-                quarantine_episode_after_perturbed_replay,
-            )
-
-            quarantine_episode_after_perturbed_replay(self)
 
     def do(
         self: "Trace",
@@ -694,15 +366,15 @@ class TraceInterventionMixin(_TraceMixinBase):
             a gradient plan rerun, the new trace holding the armed edits.
         """
 
-        hooks_or_site, options, plan = _prepare_do(hooks_or_site, value_or_hook, intervention, loss)
-        from ..intervention._param_fingerprint import changed_param_scope
-
-        with changed_param_scope(options.allow_changed_params):
-            if plan is not None:
-                return do_signal_plan(self, plan, _SignalDoRequest(model, inputs, options, loss))
-            return self._do_with_options(
-                hooks_or_site, value_or_hook, model=model, x=inputs, intervention_options=options
-            )
+        return _doors.intervention()._trace_edits.do(
+            self,
+            hooks_or_site,
+            value_or_hook,
+            model=model,
+            inputs=inputs,
+            intervention=intervention,
+            loss=loss,
+        )
 
     def _do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges the options and enters the changed-parameter scope
         self: "Trace",
@@ -713,110 +385,16 @@ class TraceInterventionMixin(_TraceMixinBase):
         x: Any,
         intervention_options: InterventionOptions,
     ) -> "Trace":
-        """Run one ``do()`` transaction under its merged options.
+        """Forward to ``_doors.intervention()._trace_edits.do_with_options``."""
 
-        :meth:`do` enters the ``allow_changed_params`` scope around this call, so
-        every replay the transaction runs (push, push_from, selection and region
-        doors) sees one opt-in.
-
-        Parameters
-        ----------
-        hooks_or_site:
-            Mapping/list batch input or selector-like site.
-        value_or_hook:
-            Optional hook for the ``(site, hook)`` input shape.
-        model:
-            Model required when ``engine="rerun"``.
-        x:
-            Input required when ``engine="rerun"``.
-        intervention_options:
-            Merged ``InterventionOptions``.
-
-        Returns
-        -------
-        Trace
-            This model log after the selected propagation engine runs.
-        """
-
-        from ..intervention.errors import EngineDispatchError
-
-        engine_value = intervention_options.engine
-        confirm_mutation_value = intervention_options.confirm_mutation
-        strict_value = intervention_options.strict
-
-        if engine_value not in {"auto", "replay", "rerun", "set_only"}:
-            raise InvalidArgumentError(
-                "do(..., engine=...) must be 'auto', 'replay', 'rerun', or 'set_only'; "
-                f"received {engine_value!r}",
-                code="intervention_engine_invalid",
-                remedy="pass engine='auto', 'replay', 'rerun', or 'set_only'",
-                argument="engine",
-            )
-
-        selected_engine = self._select_do_engine(engine_value, model=model, x=x)
-        if selected_engine == "rerun":
-            if model is None:
-                raise EngineDispatchError("do(..., engine='rerun') requires model= and inputs=.")
-            self._validate_supplied_model_matches_capture(model)
-        # C03 fire-evidence rule: ONE transaction envelope per do() attempt,
-        # written on success, no-fire, AND failure -- intervention_audit is
-        # never empty after an attempt. The monotonic bound scopes exactly
-        # this transaction's FireRecords (the ONE builder stamps every one).
-        txn = _DoTransaction(
-            hooks_or_site=hooks_or_site,
-            value_or_hook=value_or_hook,
-            engine=selected_engine,
-            transaction_start=time.monotonic(),
-            audit_rows_before=len(self.intervention_audit),
+        return _doors.intervention()._trace_edits.do_with_options(
+            self,
+            hooks_or_site,
+            value_or_hook,
+            model=model,
+            x=x,
+            intervention_options=intervention_options,
         )
-        try:
-            mutation_kind, attached_handles = self._apply_do_mutation(
-                hooks_or_site,
-                value_or_hook,
-                engine=selected_engine,
-                strict=strict_value,
-                confirm_mutation=confirm_mutation_value,
-            )
-        except BaseException as exc:
-            self._record_do_intervention_event(txn, status="error", error=repr(exc))
-            raise
-        self._record_operation(
-            "do",
-            mutation_kind=mutation_kind,
-            engine=selected_engine,
-            requested_engine=engine_value,
-            model_supplied=model is not None,
-            x_supplied=x is not None,
-            strict=strict_value,
-        )
-
-        if (
-            mutation_kind in ("selection_replayed", "selection_set", "region_replayed")
-            or selected_engine == "set_only"
-        ):
-            self._settle_selection_do(txn, selected_engine, mutation_kind)
-            return self
-        try:
-            if selected_engine == "replay":
-                result = self.push(replay=ReplayOptions(strict=strict_value))
-            else:
-                assert model is not None
-                result = self.run(model, x, replay=ReplayOptions(strict=strict_value))
-        except BaseException as exc:
-            # A failed do() must not leave its sticky hooks attached: the
-            # next push would silently re-fire them (contamination). Detach
-            # exactly the hooks THIS call attached, then re-raise.
-            for handle_id in attached_handles:
-                self.clear_edits(handle=handle_id, confirm_mutation=True)
-            self._record_do_intervention_event(txn, status="error", error=repr(exc))
-            raise
-        self._record_do_intervention_event(txn, status=None)
-        # Lane F42: the push/rerun replayed a perturbed cone -- inherited
-        # episode step evidence no longer describes the edited product.
-        from .._capture._episode_coupling import quarantine_episode_after_perturbed_replay
-
-        quarantine_episode_after_perturbed_replay(result)
-        return result
 
     @property
     def armed_edits(self: "Trace") -> tuple[Any, ...]:
@@ -844,88 +422,16 @@ class TraceInterventionMixin(_TraceMixinBase):
         extra_fields: dict[str, Any] | None = None,
         event_row: bool = False,
     ) -> dict[str, Any]:
-        """Write the ONE InterventionEvent envelope for one do() transaction.
+        """Forward to ``_doors.intervention()._trace_edits.record_do_intervention_event``."""
 
-        Parameters
-        ----------
-        txn:
-            The transaction identity minted at the do() door (WHERE/edit
-            arguments, selected engine, FireRecord time bound, and the
-            audit-row watermark).
-        status:
-            Explicit status (``"error"``), or ``None`` to derive
-            fired/no_fire from the transaction's FireRecords.
-        error:
-            Stringified failure for error rows.
-        staged_only:
-            Whether the edit was staged without any propagation attempt.
-        extra_fields:
-            Further envelope disclosures (the armed keys of a gradient plan).
-        event_row:
-            Write the canonical audit row as the ``EVENT`` envelope row (which
-            carries ``status``) instead of the ``ACT`` row: a gradient plan's
-            row must say ``"armed"`` in ``intervention_audit[-1]``.
-
-        Returns
-        -------
-        dict
-            The envelope row.
-        """
-
-        from ..intervention.audit import (
-            fire_records_since,
-            record_intervention_event,
-            rules_payload,
-            site_keys_for_labels,
-        )
-        from ..intervention.spec import Recipe as PublicInterventionSpec, _canonical_repr
-
-        hooks_or_site = txn.hooks_or_site
-        value_or_hook = txn.value_or_hook
-        engine = txn.engine
-        fires = fire_records_since(self, txn.transaction_start) if status != "error" else []
-        fired_labels = tuple(
-            dict.fromkeys(record.call_label or record.target_label for record in fires)
-        )
-        if isinstance(hooks_or_site, PublicInterventionSpec):
-            rules = rules_payload(hooks_or_site)
-            edit_names = tuple(str(rule["action"]) for rule in rules)
-            selection_repr = " | ".join(str(rule["where"]) for rule in rules)
-            fired_action_reprs = {
-                _canonical_repr(record.edit) for record in fires if record.edit is not None
-            }
-            zero_fire_rule_ids = tuple(
-                str(rule["rule_id"])
-                for rule in rules
-                if str(rule["action"]) not in fired_action_reprs
-            )
-        else:
-            rules = ()
-            edit_names, selection_repr = do_event_edit_names(self, hooks_or_site, value_or_hook)
-            zero_fire_rule_ids = ()
-        if status is None:
-            resolved_status = "fired" if fires else "no_fire"
-        else:
-            resolved_status = status
-        extra = do_event_extra(
-            self, hooks_or_site, staged_only=staged_only, extra_fields=extra_fields
-        )
-        return record_intervention_event(
+        return _doors.intervention()._trace_edits.record_do_intervention_event(
             self,
-            lane="set_only" if engine == "set_only" else engine,  # type: ignore[arg-type]
-            door="do",
-            edit_names=edit_names,
-            selection_repr=str(selection_repr),
-            status=resolved_status,  # type: ignore[arg-type]
-            fire_count=len(fires),
-            site_keys=site_keys_for_labels(self, fired_labels),
-            rules=rules,
-            zero_fire_rule_ids=zero_fire_rule_ids,
+            txn,
+            status=status,
             error=error,
-            extra=extra or None,
-            append_audit_row=not event_row
-            and len(self.intervention_audit) == txn.audit_rows_before,
-            audit_event_row=event_row,
+            staged_only=staged_only,
+            extra_fields=extra_fields,
+            event_row=event_row,
         )
 
     def fork(self: "Trace", name: str | None = None) -> "Trace":
@@ -950,97 +456,24 @@ class TraceInterventionMixin(_TraceMixinBase):
             Forked model log.
         """
 
-        fork = self._fork_trace(name=name)
-        self._record_operation("fork", source_id=id(self), name=fork.name)
-        return fork
+        return _fork_lineage.fork_trace(self, name)
 
     def _record_operation(self: "Trace", op: str, **payload: Any) -> None:
-        """Append a structured operation record to ``state_history``.
+        """Forward to ``_trace_intervention_records.record_operation``."""
 
-        Parameters
-        ----------
-        op:
-            Operation name.
-        **payload:
-            Operation-specific metadata.
-
-        Returns
-        -------
-        None
-            The history list is mutated in place.
-        """
-
-        self.state_history.append(
-            {
-                "op": op,
-                "spec_revision": self._spec_revision,
-                "timestamp": time.monotonic(),
-                **payload,
-            }
-        )
+        return _trace_intervention_records.record_operation(self, op, **payload)
 
     def _warn_if_root_mutation(self: "Trace", *, confirm_mutation: bool) -> None:
-        """Emit the once-per-root mutate-in-place warning when appropriate.
+        """Forward to ``_doors.intervention()._trace_edits.warn_if_root_mutation``."""
 
-        Parameters
-        ----------
-        confirm_mutation:
-            Whether the caller explicitly accepted in-place mutation.
-        """
-
-        if confirm_mutation or self._parent_run is not None or self._warned_mutate_in_place:
-            return
-        from ..intervention.errors import TraceMutationWarning
-        from ..options import suppress_mutate_warnings
-
-        if suppress_mutate_warnings.is_suppressed:
-            return
-        warnings.warn(
-            "TraceMutationWarning: Trace mutators modify root logs in place. "
-            "Use log.fork(...) for isolated edits or pass confirm_mutation=True.",
-            TraceMutationWarning,
-            stacklevel=3,
+        return _doors.intervention()._trace_edits.warn_if_root_mutation(
+            self, confirm_mutation=confirm_mutation
         )
-        self._warned_mutate_in_place = True
 
     def _select_do_engine(self: "Trace", engine: str, *, model: nn.Module | None, x: Any) -> str:
-        """Resolve the concrete ``do`` engine from caller arguments.
+        """Forward to ``_doors.intervention()._trace_edits.select_do_engine``."""
 
-        Parameters
-        ----------
-        engine:
-            Requested engine name.
-        model:
-            Optional model supplied for rerun.
-        x:
-            Optional input supplied for rerun.
-
-        Returns
-        -------
-        str
-            Concrete engine name.
-
-        Raises
-        ------
-        EngineDispatchError
-            If the engine cannot be inferred from an incomplete model/input pair.
-        """
-
-        from ..intervention.errors import EngineDispatchError
-
-        if engine != "auto":
-            if engine == "rerun" and (model is None or x is None):
-                raise EngineDispatchError(
-                    "do(..., engine='rerun') requires both model= and inputs=. "
-                    "Pass both, or use engine='replay' if full rerun is not intended."
-                )
-            return engine
-        if (model is None) != (x is None):
-            raise EngineDispatchError(
-                "do(engine='auto') needs both model= and inputs= for rerun, or neither for "
-                "replay. Pass both, or use engine='replay' if rerun is not intended."
-            )
-        return "rerun" if model is not None else "replay"
+        return _doors.intervention()._trace_edits.select_do_engine(self, engine, model=model, x=x)
 
     def _apply_do_mutation(
         self: "Trace",
@@ -1051,142 +484,28 @@ class TraceInterventionMixin(_TraceMixinBase):
         strict: bool,
         confirm_mutation: bool,
     ) -> tuple[str, tuple[str, ...]]:
-        """Apply the mutation part of ``do`` and report its kind.
+        """Forward to ``_doors.intervention()._trace_edits.apply_do_mutation``."""
 
-        Parameters
-        ----------
-        hooks_or_site:
-            Mapping/list batch input or selector-like site.
-        value_or_hook:
-            Optional value or hook.
-        engine:
-            Concrete engine selected by ``_select_do_engine``.
-        strict:
-            Whether selector checks should be strict.
-        confirm_mutation:
-            Whether root mutation warnings should be suppressed.
-
-        Returns
-        -------
-        tuple[str, tuple[str, ...]]
-            The mutation kind (``"set"``, ``"attach_hooks"``, or a
-            ``"selection_*"`` kind) and the sticky-hook handle ids THIS call
-            attached (for the caller's failure cleanup).
-        """
-
-        from .._selection.selection import Selection, Selector
-        from ..intervention.spec import Recipe as PublicInterventionSpec
-
-        if isinstance(hooks_or_site, PublicInterventionSpec):
-            # C03 spec door: do(spec) applies the whole immutable spec through
-            # the attach path (one preflight, all rules or none), then the
-            # caller's selected engine propagates.
-            if value_or_hook is not None:
-                raise InvalidArgumentError(
-                    "do(spec, edit) conflicts: the InterventionSpec already "
-                    "carries its actions, so a second edit argument has "
-                    "nothing to bind to",
-                    code="spec_door_extra_arguments",
-                    remedy="pass only the spec to do(), or use the "
-                    "(site, edit) call shape without a spec",
-                    argument="value_or_hook",
-                )
-            handle = self.attach_hooks(
-                hooks_or_site,
-                strict=strict,
-                confirm_mutation=confirm_mutation,
-            )
-            return "attach_hooks", tuple(handle.handle_ids)
-
-        # A RegionTarget (F01) is the region-as-a-unit door: the replay
-        # lowering substitutes the region's derived exit values without
-        # replaying the interior. Distinct from the TraceSlice lift below,
-        # which keeps its shipped member-site family semantics. sys.modules
-        # gate keeps ordinary do() free of the regions import.
-        regions_module = sys.modules.get("torchlens.intervention.regions")
-        if regions_module is not None and isinstance(hooks_or_site, regions_module.RegionTarget):
-            self._warn_if_root_mutation(confirm_mutation=confirm_mutation)
-            return (
-                regions_module.apply_region_do(
-                    self, hooks_or_site, value_or_hook, engine=engine, strict=strict
-                ),
-                (),
-            )
-        # A TraceSlice targets its member family: lift it to the whole-site
-        # QUERY (re-resolved on THIS trace by site name, so a slice built on
-        # the source log addresses the same sites on a fork). sys.modules
-        # gate keeps ordinary do() free of any slice import.
-        slice_module = sys.modules.get("torchlens._trace_slice")
-        if slice_module is not None and isinstance(hooks_or_site, slice_module.TraceSlice):
-            hooks_or_site = hooks_or_site.__selection__()
-        if self._is_selection_batch(hooks_or_site):
-            self._warn_if_root_mutation(confirm_mutation=confirm_mutation)
-            if value_or_hook is not None:
-                raise InvalidArgumentError(
-                    "do([(selection, edit), ...], edit) conflicts: the batch "
-                    "pairs already carry their edits, so a second edit "
-                    "argument has nothing to bind to",
-                    code="selection_batch_pair_invalid",
-                    remedy="pass only the (selection, edit) pair list",
-                    argument="value_or_hook",
-                )
-            return self._apply_selection_batch_do(hooks_or_site, engine=engine, strict=strict)
-        if isinstance(hooks_or_site, (Selector, Selection)):
-            self._warn_if_root_mutation(confirm_mutation=confirm_mutation)
-            return self._apply_selection_do(
-                hooks_or_site,
-                value_or_hook,
-                engine=engine,
-                strict=strict,
-            )
-        if value_or_hook is not None and (engine == "set_only" or not callable(value_or_hook)):
-            self.set(
-                hooks_or_site,
-                value_or_hook,
-                strict=strict,
-                confirm_mutation=confirm_mutation,
-            )
-            return "set", ()
-        handle = self.attach_hooks(
+        return _doors.intervention()._trace_edits.apply_do_mutation(
+            self,
             hooks_or_site,
             value_or_hook,
+            engine=engine,
             strict=strict,
             confirm_mutation=confirm_mutation,
         )
-        return "attach_hooks", tuple(handle.handle_ids)
 
     @staticmethod
     def _is_selection_batch(value: Any) -> bool:
-        """Whether a ``do()`` input is a selection-batch pair list (D33).
+        """Forward to ``_doors.intervention()._trace_selection_edits.is_selection_batch``."""
 
-        A non-empty list/tuple of 2-item pairs with at least one explicit
-        ``Selection``/``ResolvedSelection``/``TraceSlice`` in a pair's first
-        slot. Legacy ``(site, hook)`` pair lists (selector sites) keep the
-        shipped door untouched.
-        """
-
-        if not isinstance(value, (list, tuple)) or not value:
-            return False
-        if not all(isinstance(item, (list, tuple)) and len(item) == 2 for item in value):
-            return False
-        from .._selection.selection import Selection, Selector
-
-        slice_module = sys.modules.get("torchlens._trace_slice")
-        slice_type = slice_module.TraceSlice if slice_module is not None else ()
-        return any(isinstance(item[0], (Selector, Selection, slice_type)) for item in value)
+        return _doors.intervention()._trace_selection_edits.is_selection_batch(value)
 
     @staticmethod
     def _selection_batch_kind(selection: Any) -> str:
-        """The selection kind (``ACT``/``PARAM``/``EDGE``) of one batch pair's target."""
+        """Forward to ``_doors.intervention()._trace_selection_edits.selection_batch_kind``."""
 
-        from .._selection.selection import Selection, Selector, _lift
-
-        slice_module = sys.modules.get("torchlens._trace_slice")
-        if slice_module is not None and isinstance(selection, slice_module.TraceSlice):
-            selection = selection.__selection__()
-        if not isinstance(selection, (Selector, Selection)):
-            return "ACT"
-        return str(getattr(_lift(selection), "kind", "ACT"))
+        return _doors.intervention()._trace_selection_edits.selection_batch_kind(selection)
 
     def _apply_selection_batch_do(
         self: "Trace",
@@ -1195,96 +514,20 @@ class TraceInterventionMixin(_TraceMixinBase):
         engine: str,
         strict: bool,
     ) -> tuple[str, tuple[str, ...]]:
-        """Apply a selection-batch ``do([(selection, edit), ...])`` (D33, v1).
+        """Forward to ``_doors.intervention()._trace_selection_edits.apply_selection_batch_do``."""
 
-        ONE atomic transaction: every pair resolves and derives its masked
-        edit first, ALL hooks attach together (a refused site mid-plan
-        detaches everything already attached), the per-pair ACT audit rows
-        append only after every attachment succeeded, and the caller's single
-        engine pass propagates the whole batch in ONE replay. Donor sharing
-        across clauses is plan OBJECT identity (D8): one ``SamplingPlan``
-        reused in several pairs carries one content-digest ``donor_group_id``;
-        distinct equal-content plan objects are disambiguated here by the
-        batch normalizer (``assign_batch_donor_groups``,
-        clause-selection-keyed suffixes; ``per_firing`` never suffixed)
-        so kwargs coincidence never shares a group
-        while a rerun of the same declared batch still reproduces its draws.
-
-        Scope: ACT selections on interior sites. A batch that also carries
-        PARAM or EDGE selections runs through ``_apply_cross_kind_batch_do``
-        (ordered doors under one rollback journal; replay engine only). Leaf
-        sites (inputs/buffers) commit-then-propagate per site and cannot join
-        one hook transaction yet.
-
-        Returns
-        -------
-        tuple[str, tuple[str, ...]]
-            ``("selection_hooks", attached_handle_ids)``, or
-            ``("selection_replayed", attached_handle_ids)`` for a cross-kind
-            batch, which has already propagated.
-        """
-
-        from .._selection.selection import Selection, Selector, _lift
-
-        slice_module = sys.modules.get("torchlens._trace_slice")
-        slice_type = slice_module.TraceSlice if slice_module is not None else ()
-        normalized: list[tuple[Any, Any]] = []
-        kinds: list[str] = []
-        for index, (selection, edit) in enumerate(pairs):
-            if isinstance(selection, slice_type):
-                selection = selection.__selection__()
-            if not isinstance(selection, (Selector, Selection)):
-                raise InvalidArgumentError(
-                    f"selection-batch do() pair {index} carries a "
-                    f"{type(selection).__name__} target; a batch mixing "
-                    "Selections with legacy selector sites would run two "
-                    "different engines under one call",
-                    code="selection_batch_pair_invalid",
-                    remedy="make every pair's first slot a Selection (lift "
-                    "producers with .__selection__()), or use the legacy "
-                    "(site, hook) list without Selections",
-                    argument="hooks_or_site",
-                )
-            lifted = _lift(selection)
-            kind = getattr(lifted, "kind", "ACT")
-            kinds.append(kind)
-            normalized.append((selection, edit))
-        from ..intervention.stochastic import assign_batch_donor_groups
-
-        normalized = assign_batch_donor_groups(normalized)
-        if any(kind != "ACT" for kind in kinds):
-            return self._apply_cross_kind_batch_do(normalized, kinds, engine=engine, strict=strict)
-        plans = [
-            self._batch_act_plan(index, selection, edit)
-            for index, (selection, edit) in enumerate(normalized)
-        ]
-        all_hook_items = [item for _resolved, plan, _audit in plans for item in plan]
-        attached = self._attach_selection_plan_hooks(all_hook_items, strict=strict)
-        for _resolved, _plan, audit in plans:
-            self.intervention_audit.append(audit)
-        return "selection_hooks", attached
+        return _doors.intervention()._trace_selection_edits.apply_selection_batch_do(
+            self, pairs, engine=engine, strict=strict
+        )
 
     def _batch_act_plan(
         self: "Trace", index: int, selection: Any, edit: Any
     ) -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
-        """Resolve one ACT batch pair to its hook plan, refusing leaf sites typed."""
+        """Forward to ``_doors.intervention()._trace_selection_edits.batch_act_plan``."""
 
-        from .._selection.do_plan import build_selection_do_plan
-
-        resolved, plan, audit = build_selection_do_plan(self, selection, edit)
-        leaf_sites = [item["op"].label for item in plan if item["is_leaf"]]
-        if leaf_sites:
-            raise InvalidArgumentError(
-                f"selection-batch do() pair {index} addresses leaf sites "
-                f"{leaf_sites!r} (inputs/buffers): leaf edits commit and "
-                "propagate per site and cannot join one hook transaction "
-                "in v1",
-                code="selection_batch_leaf_unsupported",
-                remedy="apply leaf-site edits through single-selection "
-                "do() calls; batch interior sites only",
-                argument="hooks_or_site",
-            )
-        return resolved, plan, audit
+        return _doors.intervention()._trace_selection_edits.batch_act_plan(
+            self, index, selection, edit
+        )
 
     def _apply_cross_kind_batch_do(
         self: "Trace",
@@ -1294,64 +537,11 @@ class TraceInterventionMixin(_TraceMixinBase):
         engine: str,
         strict: bool,
     ) -> tuple[str, tuple[str, ...]]:
-        """Apply a batch mixing ACT with PARAM/EDGE selections as ONE transaction.
+        """Forward to ``_doors.intervention()._trace_selection_edits.apply_cross_kind_batch_do``."""
 
-        Pairs run in order exactly as one ``do()`` per pair would: each run of
-        consecutive ACT pairs attaches together and pushes once, and each
-        PARAM or EDGE pair goes through its own door, which stages and
-        replays. Every ACT plan resolves before anything changes. A journal
-        of everything replay and the doors write (per-op saved outs and
-        metadata, fire records, tier-(ii) stores; the run context, state,
-        audit rows and operation history) is taken first; if any pair
-        refuses, this batch's hooks detach and the journal is restored, so the
-        trace is as before the call apart from the one error envelope
-        ``do()`` records. PARAM and EDGE edits ship on replay only, so other
-        engines refuse before anything runs.
-        """
-
-        from ..intervention._replay_context import journal_replay_state, restore_replay_state
-
-        if engine != "replay":
-            mixed = ", ".join(f"pair {index}: {kind}" for index, kind in enumerate(kinds))
-            raise InvalidArgumentError(
-                f"this selection-batch do() mixes kinds [{mixed}] on engine "
-                f"{engine!r}; PARAM and EDGE edits apply on the replay engine "
-                "only, so the batch cannot run as one transaction there",
-                code="selection_batch_cross_kind",
-                remedy="pass intervention=tl.options.InterventionOptions(engine='replay'), "
-                "or apply the ACT pairs in their own do() call on this engine",
-                argument="hooks_or_site",
-            )
-        steps: list[tuple[str, Any]] = []
-        for index, ((selection, edit), kind) in enumerate(zip(pairs, kinds, strict=True)):
-            if kind != "ACT":
-                steps.append((kind, (selection, edit)))
-            elif steps and steps[-1][0] == "ACT":
-                steps[-1][1].append(self._batch_act_plan(index, selection, edit))
-            else:
-                steps.append(("ACT", [self._batch_act_plan(index, selection, edit)]))
-        journal = journal_replay_state(self)
-        attached: list[str] = []
-        try:
-            for kind, step in steps:
-                if kind == "ACT":
-                    items = [item for _resolved, plan, _audit in step for item in plan]
-                    attached.extend(self._attach_selection_plan_hooks(items, strict=strict))
-                    self.intervention_audit.extend(audit for _resolved, _plan, audit in step)
-                    self.push(replay=ReplayOptions(strict=strict))
-                    continue
-                mutation_kind, handles = self._apply_selection_do(
-                    *step, engine=engine, strict=strict
-                )
-                attached.extend(handles)
-                if mutation_kind == "selection_hooks":
-                    self.push(replay=ReplayOptions(strict=strict))
-        except BaseException:
-            for handle_id in attached:
-                self.clear_edits(handle=handle_id, confirm_mutation=True)
-            restore_replay_state(self, journal)
-            raise
-        return "selection_replayed", tuple(attached)
+        return _doors.intervention()._trace_selection_edits.apply_cross_kind_batch_do(
+            self, pairs, kinds, engine=engine, strict=strict
+        )
 
     def _apply_selection_do(
         self: "Trace",
@@ -1361,86 +551,11 @@ class TraceInterventionMixin(_TraceMixinBase):
         engine: str,
         strict: bool,
     ) -> tuple[str, tuple[str, ...]]:
-        """Apply a Selection-targeted edit under the mask-application contract.
+        """Forward to ``_doors.intervention()._trace_selection_edits.apply_selection_do``."""
 
-        The selection resolves against this trace. Interior sites (sites with
-        a replayable func) get the edit attached to the hook plan with the
-        engine-owned edit-then-scatter wrapper (element masks) or unchanged
-        (whole-site short-circuit). LEAF sites (inputs/buffers; no func to
-        replay) get the edited value computed NOW from the saved value under
-        the same scatter contract, committed transactionally, and propagated
-        with origin-preserving replay. An audit record (query repr + resolve
-        digest + per-site relations) is appended to ``intervention_audit``.
-        Empty resolutions attach nothing (emptiness is disclosure, never an
-        error).
-
-        Returns
-        -------
-        tuple[str, tuple[str, ...]]
-            The mutation kind -- ``"selection_hooks"`` (interior sites;
-            caller runs the engine), ``"selection_replayed"`` (leaf sites
-            already propagated), or ``"selection_set"`` (leaf values
-            committed without propagation) -- plus the sticky-hook handle
-            ids attached for the hook kind (empty otherwise).
-        """
-        from .._selection.do_plan import build_selection_do_plan
-        from .._selection.selection import _lift
-        from ..intervention.errors import EngineDispatchError
-
-        lifted = _lift(selection)
-        if lifted is not None and lifted.kind == "EDGE":
-            return (
-                self._apply_selection_edge_do(
-                    selection, lifted, edit, engine=engine, strict=strict
-                ),
-                (),
-            )
-        if lifted is not None and lifted.kind == "PARAM":
-            from ..intervention.param_substitution import buffer_operand_selection
-
-            buffer_units = buffer_operand_selection(self, lifted)
-            if buffer_units is None:
-                return (
-                    self._apply_selection_param_do(
-                        selection, lifted, edit, engine=engine, strict=strict
-                    ),
-                    (),
-                )
-            selection = buffer_units
-            lifted = _lift(selection)
-        resolved, plan, audit = build_selection_do_plan(self, selection, edit)
-        leaf_items = [item for item in plan if item["is_leaf"]]
-        hook_items = [item for item in plan if not item["is_leaf"]]
-        if leaf_items and hook_items:
-            raise EngineDispatchError(
-                "a selection plan mixing leaf sites (inputs/buffers) and interior "
-                "sites cannot propagate as ONE replay transaction in v1: interior "
-                "recomputation reads captured consumed values, so the leaf edit "
-                "would be silently discarded at the interior site. Split the "
-                "selection by site class."
-            )
-        if not plan:
-            self.intervention_audit.append(audit)
-            return "selection_replayed", ()
-        if leaf_items:
-            if engine not in ("replay", "set_only"):
-                raise EngineDispatchError(
-                    "leaf-site selection edits (inputs/buffers) ride the replay "
-                    "engine (or set_only); for rerun, pass the modified input as inputs=."
-                )
-            self._apply_leaf_selection_edits(leaf_items)
-            if engine == "replay":
-                from ..intervention.replay import push_from
-
-                for item in leaf_items:
-                    push_from(self, item["op"], replay=ReplayOptions(strict=strict))
-                self.intervention_audit.append(audit)
-                return "selection_replayed", ()
-            self.intervention_audit.append(audit)
-            return "selection_set", ()
-        attached = self._attach_selection_plan_hooks(hook_items, strict=strict)
-        self.intervention_audit.append(audit)
-        return "selection_hooks", attached
+        return _doors.intervention()._trace_selection_edits.apply_selection_do(
+            self, selection, edit, engine=engine, strict=strict
+        )
 
     def _attach_selection_plan_hooks(
         self: "Trace",
@@ -1448,40 +563,11 @@ class TraceInterventionMixin(_TraceMixinBase):
         *,
         strict: bool,
     ) -> tuple[str, ...]:
-        """Attach one selection plan's hooks transactionally.
+        """Forward to ``_doors.intervention()._trace_selection_edits.attach_selection_plan_hooks``."""
 
-        A refused site mid-plan must not leave earlier sites armed: on any
-        failure the hooks this plan already attached are detached before the
-        exception propagates. Returns the attached handle ids.
-        """
-
-        from .._selection.selectors import label as label_selector
-
-        attached: list[str] = []
-        try:
-            for item in hook_items:
-                handle = self.attach_hooks(
-                    label_selector(item["op"].label),
-                    item["edit"],
-                    strict=strict,
-                    confirm_mutation=True,
-                )
-                attached.extend(handle.handle_ids)
-        except BaseException:
-            for handle_id in attached:
-                self.clear_edits(handle=handle_id, confirm_mutation=True)
-            raise
-        # These sticky hooks are the do() plan's edit-then-scatter residue of an
-        # edit applied NOW (the caller propagates and appends the audit record),
-        # not user-staged future-run material, so the run(inputs=...) staged-spec
-        # honesty gate must skip them: a value-edited fork gets the
-        # PendingValueEditsWarning disclosure at the run door, never a refusal.
-        attached_ids = set(attached)
-        for hook_spec in self._ensure_intervention_spec().hook_specs:
-            if hook_spec.handle in attached_ids:
-                hook_spec.metadata["selection_do_engine_owned"] = True
-        self._mark_intervention_spec_mutated()
-        return tuple(attached)
+        return _doors.intervention()._trace_selection_edits.attach_selection_plan_hooks(
+            self, hook_items, strict=strict
+        )
 
     def _apply_selection_edge_do(
         self: "Trace",
@@ -1492,41 +578,11 @@ class TraceInterventionMixin(_TraceMixinBase):
         engine: str,
         strict: bool,
     ) -> str:
-        """Apply one EDGE-kind selection edit through the edge-substitution path."""
+        """Forward to ``_doors.intervention()._trace_selection_edits.apply_selection_edge_do``."""
 
-        from torchlens._selection.errors import SelectionError
-
-        from .._selection.selection import Selection
-
-        if edit is None:
-            raise ValueError(
-                "do(selection, edit) requires an edit: pass an Edit/Edit, "
-                "a hook callable, or a replacement tensor."
-            )
-        if isinstance(lifted, Selection):
-            if lifted._trace is not self:
-                raise SelectionError(
-                    "the resolved edge selection is bound to a different trace.",
-                    code="selection_trace_mismatch",
-                )
-            resolved_edges = lifted
-        else:
-            resolved_edges = lifted._resolve(self)
-        from ..intervention.edge_substitution import apply_edge_substitution_do
-
-        payload = apply_edge_substitution_do(
-            self, resolved_edges, edit, engine=engine, strict=strict
+        return _doors.intervention()._trace_selection_edits.apply_selection_edge_do(
+            self, selection, lifted, edit, engine=engine, strict=strict
         )
-        self.intervention_audit.append(
-            {
-                "kind": "EDGE",
-                "selection_repr": repr(selection),
-                "resolve_digest": resolved_edges.digest,
-                "edit": _edit_identity(edit, "value"),
-                **payload,
-            }
-        )
-        return "selection_replayed"
 
     def _apply_selection_param_do(
         self: "Trace",
@@ -1537,209 +593,25 @@ class TraceInterventionMixin(_TraceMixinBase):
         engine: str,
         strict: bool,
     ) -> str:
-        """Apply one PARAM-kind selection edit through parameter substitution.
+        """Forward to ``_doors.intervention()._trace_selection_edits.apply_selection_param_do``."""
 
-        The edit is applied "as if" the parameter were changed: every
-        consumption of the parameter is substituted at its derived occurrence
-        address on the replay engine, and the live parameter object is never
-        written (decided 2026-08-17, superseding the D3 typed-refusal
-        default on the replay path; rerun/set_only keep refusing typed).
-        """
-
-        from torchlens._selection.errors import SelectionError
-
-        from .._selection.selection import Selection
-
-        if edit is None:
-            raise ValueError(
-                "do(selection, edit) requires an edit: pass an Edit/Edit, "
-                "a hook callable, or a replacement tensor."
-            )
-        if isinstance(lifted, Selection):
-            if lifted._trace is not self:
-                raise SelectionError(
-                    "the resolved parameter selection is bound to a different trace.",
-                    code="selection_trace_mismatch",
-                )
-            resolved_params = lifted
-        else:
-            resolved_params = lifted._resolve(self)
-        from ..intervention.param_substitution import apply_param_substitution_do
-
-        payload = apply_param_substitution_do(
-            self, resolved_params, edit, engine=engine, strict=strict
+        return _doors.intervention()._trace_selection_edits.apply_selection_param_do(
+            self, selection, lifted, edit, engine=engine, strict=strict
         )
-        self.intervention_audit.append(
-            {
-                "kind": "PARAM",
-                "selection_repr": repr(selection),
-                "resolve_digest": resolved_params.digest,
-                "edit": _edit_identity(edit, "value"),
-                **payload,
-            }
-        )
-        return "selection_replayed"
 
     def _apply_leaf_selection_edits(self: "Trace", leaf_items: list[dict[str, Any]]) -> None:
-        """Compute + commit leaf-site edited values under the scatter contract.
+        """Forward to ``_doors.intervention()._trace_selection_edits.apply_leaf_selection_edits``."""
 
-        The edit hook computes its full replacement from the SAVED leaf value
-        (helpers stay mask-oblivious); the engine wrapper scatters selected
-        elements onto a fresh tensor. Commit rides the transactional replay
-        commit helper (snapshot + rollback), minting FireRecords so
-        disclosure matches the hook path.
-        """
-
-        from .._selection.selection import _apply_invalid
-        from ..intervention.audit import build_fire_record
-        from ..intervention.hooks import make_hook_context
-        from ..intervention.replay import _commit_replay_updates, _replay_site_key
-        from ..intervention.types import Edit
-
-        pending_updates: dict[str, torch.Tensor] = {}
-        pending_records: dict[str, list[Any]] = {}
-        for item in leaf_items:
-            op = item["op"]
-            derived = item["edit"]
-            saved = op.out
-            if not isinstance(saved, torch.Tensor):
-                raise _apply_invalid(
-                    "not_maskable",
-                    f"leaf site {op.label!r} has no saved tensor value to edit.",
-                    site=op.label,
-                )
-            if isinstance(derived, Edit):
-                if derived.factory is None:
-                    raise _apply_invalid(
-                        "not_maskable",
-                        f"edit {derived.name!r} has no runtime factory.",
-                        site=op.label,
-                    )
-                hook_callable = derived.factory()
-                helper_spec: Edit | None = derived
-                helper_name = derived.name
-            else:
-                hook_callable = derived
-                helper_spec = None
-                helper_name = getattr(derived, "__name__", "hook")
-            context = make_hook_context(
-                name=helper_name,
-                timing="post",
-                signal="forward",
-                op=op,
-                run_context={},
-                args=(saved,),
-                kwargs={},
-            )
-            applied = hook_callable(saved, ctx=context)
-            if not isinstance(applied, torch.Tensor):
-                raise _apply_invalid(
-                    "not_maskable",
-                    f"edit at leaf site {op.label!r} produced a non-tensor "
-                    f"({type(applied).__name__}).",
-                    site=op.label,
-                )
-            pending_updates[_replay_site_key(op)] = applied
-            pending_records[_replay_site_key(op)] = [
-                build_fire_record(
-                    target_label=op.layer_label,
-                    call_label=op.label,
-                    func_call_id=op.func_call_id,
-                    container_path=tuple(op.container_path or ()),
-                    engine="replay",
-                    edit=helper_spec,
-                    site_label=op.layer_label,
-                    timing="post",
-                    signal="forward",
-                    edit_name=helper_name,
-                    run_ctx=getattr(context, "run_state", None),
-                    replaced=applied is not saved,
-                )
-            ]
-        _commit_replay_updates(self, pending_updates, pending_records)
+        return _doors.intervention()._trace_selection_edits.apply_leaf_selection_edits(
+            self, leaf_items
+        )
 
     def _validate_supplied_model_matches_capture(self: "Trace", model: nn.Module) -> None:
-        """Validate rerun model evidence against the captured source model.
+        """Forward to ``_doors.intervention()._trace_edits.validate_supplied_model_matches_capture``."""
 
-        Parameters
-        ----------
-        model:
-            Candidate model for rerun.
-
-        Raises
-        ------
-        ModelMismatchError
-            Fail-closed on the root entry-point fact (absent fact or a
-            non-``module_call`` root, F41), then if available class or
-            weight-fingerprint evidence differs.
-        """
-
-        from .._capture_state_helpers import _fingerprint_model_weights, _qualname_for_model
-        from ..intervention.errors import ModelMismatchError
-
-        # The root entry-point fact joins this gate FAIL-CLOSED: it is written
-        # unconditionally on every capture, so absence (a legacy artifact)
-        # refuses, and a non-module_call root refuses rather than re-running
-        # ``forward`` under a capture of another entry point (``owner`` for a
-        # capture of ``owner.generate`` would pass the class+weights checks and
-        # run ``__call__`` under a report that can say verified). Bound-method
-        # captures refuse rerun/append; never widened past the ruling.
-        root_fact = self._provenance_root_entry_point
-        if root_fact is None:
-            raise ModelMismatchError(
-                "rerun/append identity gate is fail-closed on the root "
-                "entry-point fact, and this trace carries none (a legacy "
-                "artifact saved before the fact was written unconditionally). "
-                "The gate cannot prove the supplied model is the captured "
-                "entry point. Remedy: re-capture with a current TorchLens "
-                "(every capture writes Trace.provenance.root_entry_point), or use the "
-                "replay engine, which re-executes recorded ops and needs no "
-                "live model",
-                code="root_entry_point_unavailable",
-            )
-        root_kind = str(root_fact).partition(":")[0]
-        if root_kind != "module_call":
-            bound_hint = (
-                "this capture's root is the bound method "
-                f"{str(root_fact).partition(':')[2]!r}, and re-running a "
-                "supplied module would execute forward/__call__ -- a "
-                "DIFFERENT entry point -- under a report that could claim "
-                "fidelity. Bound-method captures refuse rerun/append in this "
-                "release (interim posture, foldA D11). "
-                if root_kind == "bound_method"
-                else (
-                    f"this capture's root entry point is {root_fact!r}, which "
-                    "rerun cannot re-execute (rerun runs the supplied "
-                    "module's forward). "
-                )
-            )
-            raise ModelMismatchError(
-                "rerun/append cannot re-execute this capture's entry point: "
-                + bound_hint
-                + "Remedy: use the replay engine (re-executes recorded ops, "
-                "no live model), or re-capture from the plain module root "
-                "(tl.trace(model, ...)) if module-forward rerun is what you "
-                "want",
-                code="rerun_entry_point_unsupported",
-                root_entry_point=str(root_fact),
-            )
-
-        expected_class = self._source_class_qualname
-        actual_class = _qualname_for_model(model)
-        if expected_class is not None and actual_class != expected_class:
-            raise ModelMismatchError(
-                "Supplied model class does not match captured model class: "
-                f"expected {expected_class!r}, got {actual_class!r}."
-            )
-
-        expected_fingerprint = self._provenance_param_hash_quick
-        if expected_fingerprint is None:
-            return
-        actual_fingerprint = _fingerprint_model_weights(model)
-        if actual_fingerprint != expected_fingerprint:
-            raise ModelMismatchError(
-                "Supplied model weight fingerprint does not match captured model weights."
-            )
+        return _doors.intervention()._trace_edits.validate_supplied_model_matches_capture(
+            self, model
+        )
 
     def _fork_trace(
         self: "Trace",
@@ -1763,143 +635,40 @@ class TraceInterventionMixin(_TraceMixinBase):
         return build_fork(self, name=name)
 
     def _next_fork_name(self: "Trace") -> str:
-        """Return a deterministic default fork name for this parent log."""
+        """Forward to ``_fork_lineage.next_fork_name``."""
 
-        base_name = self.name or "trace"
-        fork_count = sum(
-            1
-            for record in self.state_history
-            if isinstance(record, dict) and record.get("op") == "fork"
-        )
-        return f"{base_name}_fork_{fork_count + 1}"
+        return _fork_lineage.next_fork_name(self)
 
     def _rebind_fork_owner_refs(self: "Trace") -> None:
-        """Rebind weak owner references on child objects to this trace.
+        """Forward to ``_fork_lineage.rebind_fork_owner_refs``."""
 
-        Used by the fork builder and by the rerun-refresh paths, which
-        replace record state wholesale and must re-point every child's
-        owner reference (and drop stale facet caches) afterwards.
-        """
-
-        for layer_pass in self._layer_list:
-            layer_pass.source_trace = self
-            del layer_pass.facets
-        for layer_log in self._layer_logs.values():
-            layer_log.source_trace = self
-        for module_log in self.modules:
-            module_log._source_trace = self
-            module_log.__dict__.pop("_facets_cache", None)
-            for module_call in module_log.calls.values():
-                module_call._source_trace = self
+        return _fork_lineage.rebind_fork_owner_refs(self)
 
     def _recipe_is_clean(self: "Trace") -> bool:
-        """Return whether propagated outs match the current spec revision.
+        """Forward to ``_trace_intervention_records.recipe_is_clean``."""
 
-        Returns
-        -------
-        bool
-            ``True`` when the current out recipe revision equals the
-            mutable intervention spec revision.
-        """
-
-        return self._spec_revision == self._out_recipe_revision
+        return _trace_intervention_records.recipe_is_clean(self)
 
     def _ensure_intervention_spec(self: "Trace") -> InterventionSpec:
-        """Return the mutable intervention spec, creating one if needed.
+        """Forward to ``intervention._trace_edits.ensure_intervention_spec``."""
 
-        Returns
-        -------
-        InterventionSpec
-            Mutable intervention recipe owned by this log.
-        """
-
-        if self._intervention_spec is None:
-            self._intervention_spec = InterventionSpec()
-        return self._intervention_spec
+        return _doors.intervention()._trace_edits.ensure_intervention_spec(self)
 
     def _mark_intervention_spec_mutated(self: "Trace", *, outs_stale: bool = True) -> None:
-        """Invalidate cached frozen views and mark the spec stale.
+        """Forward to ``_trace_intervention_records.mark_intervention_spec_mutated``."""
 
-        ``outs_stale=False`` is for gradient-only recipe changes: they edit
-        nothing the forward recorded, so a trace whose outs matched its recipe
-        keeps that state and stays current.
-
-        Returns
-        -------
-        None
-            This model log is mutated in place.
-        """
-
-        was_clean = self._recipe_is_clean()
-        self._spec_revision += 1
-        self.__dict__.pop("recipe", None)
-        self.__dict__.pop("_frozen_intervention_spec", None)
-        self.__dict__.pop("_cached_frozen_intervention_spec", None)
-        refresh_armed_annotation(self)
-        if not outs_stale and was_clean:
-            self._out_recipe_revision = self._spec_revision
-            return
-        self.state = TraceState.SPEC_STALE
+        return _trace_intervention_records.mark_intervention_spec_mutated(
+            self, outs_stale=outs_stale
+        )
 
     def _validate_intervention_site(self: "Trace", site: Any, *, strict: bool) -> None:
-        """Validate that a mutator site resolves on this log.
+        """Forward to ``_doors.intervention()._trace_edits.validate_intervention_site``."""
 
-        Parameters
-        ----------
-        site:
-            Selector-like target to validate.
-        strict:
-            Whether selector resolution should be strict.
-
-        Returns
-        -------
-        None
-            Raises when the site cannot resolve.
-        """
-
-        from ..intervention.spec import addresses_autograd_nodes
-
-        # Autograd-node sites resolve against grad_fn records, which exist
-        # only after a backward pass; gradient (tl.grad) sites resolve their
-        # inner selector against the forward ops like any activation site.
-        if addresses_autograd_nodes(site):
-            return
-        max_fanout = max(1, len(self._layer_list))
-        self._resolve_sites(site, strict=strict, max_fanout=max_fanout)
+        return _doors.intervention()._trace_edits.validate_intervention_site(
+            self, site, strict=strict
+        )
 
     def _target_spec_from_site(self: "Trace", site: Any, *, strict: bool) -> TargetSpec:
-        """Convert a selector-like site to a mutable target spec.
+        """Forward to ``_doors.intervention()._trace_edits.target_spec_from_site``."""
 
-        Parameters
-        ----------
-        site:
-            Selector-like target, target spec, or layer pass.
-        strict:
-            Whether the resulting target should carry strict resolution.
-
-        Returns
-        -------
-        TargetSpec
-            Mutable target spec stored in the intervention recipe.
-        """
-
-        from ..intervention.hooks import lower_record_site_target
-
-        if isinstance(site, TargetSpec):
-            target = copy.copy(site)
-            target.strict = strict or target.strict
-            return target
-        # An ``Op``/``Layer`` RECORD lowers to its PASS-QUALIFIED label
-        # selector(s) first (AUD-CODE 4.10, W051-REPLAY out-of-fence item 2):
-        # an ``Op`` is exactly its own pass (``site.label``, never the bare
-        # ``layer_label`` = the LAST pass of a multi-pass layer); a multi-pass
-        # ``Layer`` is the explicit all-passes composite. Selector-likes pass
-        # through unchanged.
-        site = lower_record_site_target(site)
-        if hasattr(site, "to_target_spec"):
-            target = site.to_target_spec()
-            target.strict = strict or target.strict
-            return cast("TargetSpec", target)
-        if hasattr(site, "layer_label"):
-            return TargetSpec("label", str(site.layer_label), strict=strict)
-        return TargetSpec("label", site, strict=strict)
+        return _doors.intervention()._trace_edits.target_spec_from_site(self, site, strict=strict)
