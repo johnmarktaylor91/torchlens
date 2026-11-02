@@ -417,10 +417,10 @@
   reads `status.state == "passed"` on a plain torch module.
 
   Each backend ships a measured scorecard (`torchlens/backends/<name>/scorecard.json`, checked by
-  `python -m torchlens.conformance.scorecard --backend <name> --check` in its CI leg);
+  `python -m tests.conformance.scorecard --backend <name> --check` in its CI leg);
   `tl.report.doctor()` shows it as the `backend_scorecard:<name>` row;
-  `torchlens.conformance.graduation_report(name)` returns the
-  advisory six-item `GraduationReport`. Per-backend pages: `docs/backends/<name>.md`.
+  `python -m tests.conformance.scorecard --backend <name> --graduation` prints the
+  advisory six-item graduation report. Per-backend pages: `docs/backends/<name>.md`.
 - TensorFlow is available as `backend="tf"` / `backend="tensorflow"` for the Keras-3 / TF>=2.16
   preview when `keras.backend.backend() == "tensorflow"`. The shipped path is eager live capture
   with `op_callbacks` as the primary mechanism: real values, real taken-branch control flow,
@@ -1298,14 +1298,8 @@
   `plugins` (entry-point discovery that NEVER executes third-party code at discovery; kill
   switch). The compatibility window and `tl.migrate` left with the 2.x saved-file readers:
   a file saved by torchlens 2.x refuses at `tl.load` with one typed error.
-  `torchlens.conformance` holds the C0-C2 packs, plus the preview-backend
-  scorecard (DOCUMENTED-UNSTABLE): `preview_scorecard`, `PreviewScorecard`
-  (v2: `maturity`, `framework_requirement`, `capabilities`, `roster_groups`,
-  `graduation`), `ScorecardCell`, `PREVIEW_BACKENDS`, `graduation_report`
-  (`GraduationReport`, `GraduationItem`), `RosterModel.expected_op_kinds`
-  (the op-inventory check that fails when a backend silently drops an op) and the
-  protocol roster fields `RosterModel.expected_intermediates`,
-  `RosterModel.has_constants`, `RosterModel.random_init` and `RosterModel.group`.
+  `tests/conformance/` (a test-side harness, not shipped in the wheel) holds the C0-C2 packs and the
+  preview-backend scorecard builder; the shipped records stay in `torchlens/backends/<name>/scorecard.json`.
 - LIVE NARRATION (F28; DOCUMENTED-UNSTABLE): `narrate=` on `tl.trace`/`tl.record`
   streams compact per-op narration (the torchsnooper niche on the capture
   substrate, 3-4x cheaper than settrace); `torchlens._snoop` owns

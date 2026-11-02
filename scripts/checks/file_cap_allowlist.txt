@@ -1068,7 +1068,7 @@ torchlens/compat/_report.py::_accelerate_offload_row	65
 torchlens/compat/_report.py::_fp8_dtype_row	82
 torchlens/compat/_report.py::_mechanical_belt_row	70
 torchlens/compat/_report.py::_torch_compile_row	111
-torchlens/conformance/__init__.py::run_conformance	102
+tests/conformance/__init__.py::run_conformance	102
 torchlens/dataset_extraction.py::_validate_run_options	90
 torchlens/dataset_extraction.py::extract_dataset	294
 torchlens/dataset_extraction.py::relabel_extraction	85

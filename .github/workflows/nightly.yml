@@ -830,7 +830,7 @@ jobs:
 
       - name: Restore the ${{ matrix.backend }} ecosystem weights cache
         # Pretrained checkpoints for the ecosystem roster rows
-        # (torchlens/conformance/_rosters/<backend>.py, group `ecosystem`),
+        # (tests/conformance/_rosters/<backend>.py, group `ecosystem`),
         # keyed on the roster file so a changed row refetches its weights.
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -839,7 +839,7 @@ jobs:
             ~/.keras
             ~/.cache/paddle
             ~/.cache/tinygrad
-          key: conformance-weights-${{ matrix.backend }}-${{ hashFiles(format('torchlens/conformance/_rosters/{0}.py', matrix.backend)) }}-v1
+          key: conformance-weights-${{ matrix.backend }}-${{ hashFiles(format('tests/conformance/_rosters/{0}.py', matrix.backend)) }}-v1
 
       - name: Run the ${{ matrix.backend }} ecosystem roster
         # The networked conformance run: with TORCHLENS_CONFORMANCE_ECOSYSTEM=1
@@ -854,7 +854,7 @@ jobs:
           BACKEND: ${{ matrix.backend }}
         run: |
           mkdir -p "${{ runner.temp }}/ecosystem"
-          python -m torchlens.conformance.scorecard --backend "$BACKEND" \
+          python -m tests.conformance.scorecard --backend "$BACKEND" \
             > "${{ runner.temp }}/ecosystem/scorecard-$BACKEND.json"
 
       - name: Upload the ${{ matrix.backend }} ecosystem scorecard

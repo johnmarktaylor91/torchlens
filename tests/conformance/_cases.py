@@ -126,7 +126,7 @@ def _op_inventory_case(trace: Any, model: RosterModel) -> CaseResult:
 def _failure_detail(exc: Exception) -> str:
     """Failure detail; a typed backend refusal is tagged ``unsupported[<code>]``."""
 
-    from ..backends.registry import BackendUnsupportedError
+    from torchlens.backends.registry import BackendUnsupportedError
 
     text = str(exc)[:300]
     if isinstance(exc, BackendUnsupportedError):

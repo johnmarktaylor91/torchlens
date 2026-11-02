@@ -4,7 +4,7 @@ Six ``GraduationItem`` rows turn the maintainer's bar for a stable backend
 into predicates over the backend's scorecard, the torch reference scorecard
 and the repository. The report is advisory: it never changes ``maturity``
 (only a recorded maintainer decision does), it is embedded in the scorecard
-record, and ``python -m torchlens.conformance.scorecard --backend <b>
+record, and ``python -m tests.conformance.scorecard --backend <b>
 --graduation`` prints it.
 """
 

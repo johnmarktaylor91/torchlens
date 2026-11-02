@@ -15,9 +15,9 @@ from typing import Any
 
 import pytest
 
+from tests.conformance._graduation import GraduationItem
+from tests.conformance._scorecard import PreviewScorecard, shipped_scorecard
 from torchlens.backends.registry import get_backend_spec, registered_backend_specs
-from torchlens.conformance._graduation import GraduationItem
-from torchlens.conformance._scorecard import PreviewScorecard, shipped_scorecard
 
 #: The graduation item ids (SPEC section 5), in report order.
 GRADUATION_ITEM_IDS: tuple[str, ...] = ("G1", "G2", "G3", "G4", "G5", "G6")

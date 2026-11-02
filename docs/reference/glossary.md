@@ -1776,20 +1776,7 @@ backends guide (`docs/backends.md`) carries the maturity table and links one pag
   suggestion names the install extra when the framework is absent, otherwise the first failed
   cell.
 
-**torchlens.conformance.graduation_report(backend)**
-: Returns a `GraduationReport(backend, items)` of six `GraduationItem(id, met, detail)` rows
-  computed from the backend's shipped scorecard, the repository and the registry;
-  `GraduationReport.met` is true when all six are met. Advisory: it never changes `maturity`.
-  The items: G1 the backend passes the conformance suite torch passes, every unsupported
-  capability a typed refusal; G2 replay validation works on it, including after load; G3 at least
-  two pretrained families from the backend's own ecosystem are captured and validated; G4 a
-  per-change CI leg installs the pinned framework version inside a stated range; G5 its docs page
-  has a runnable tutorial and a can and cannot table equal to the scorecard's capability summary;
-  G6 its spellings are frozen: no unstable marker in the backend package and a glossary entry for
-  every public name. The report is embedded in the scorecard record and printed by
-  `python -m torchlens.conformance.scorecard --backend <name> --graduation`.
-
-**`python -m torchlens.conformance.scorecard --backend <name>`**
+**`python -m tests.conformance.scorecard --backend <name>`**
 : Computes the backend's scorecard. `--write` writes the shipped record
   (`torchlens/backends/<name>/scorecard.json`, in the wheel), `--check` recomputes and exits
   nonzero when the shipped record differs (the backend's pinned CI leg runs it, so the record is a
@@ -3201,53 +3188,6 @@ deprecation shim owed*
 **Trace.cost.total_backward_memory**
 : Bytes of the gradient payloads the trace retains, counted once per storage: a payload that is a
   view charges its whole base storage, an expanded gradient its smaller storage.
-**torchlens.conformance.preview_scorecard(backend, *, workdir=None)** — *unstable — no deprecation shim owed*
-: Runs the full C0-C2 conformance packs for one preview backend (`jax`, `tf`,
-  `mlx`, `tinygrad`, `paddle`; `torch` scores the reference as a baseline) on
-  that backend's own config-built roster (a function root and a module or
-  object root) and returns a `PreviewScorecard`. Every case the runner defines
-  for the roster is one cell in exactly one state: `passed` (executed, its
-  independent oracle matched: output parity against a direct run compared as
-  arrays, a repeat with the same op count, a distinct equal reload), `failed`,
-  `unsupported` (a typed `BackendUnsupportedError`) or `not_run` (framework not
-  importable, with the install remedy, or not reached after an earlier failure
-  for the same model). All cells stay in the denominator. A scorecard is never
-  a claim: toy inputs earn nothing, and it carries no claim string. The
-  backends `run_conformance` and `resolve_adapter` accept are the same set
-  (`torchlens.conformance.PREVIEW_BACKENDS` plus `torch` and `fake`); an absent
-  framework yields named skips, never an error. A roster row that declares
-  `RosterModel.expected_op_kinds` (`RosterModel(..., expected_op_kinds=...)`; its independent op inventory: every
-  `Op.func_name` one forward performs, in order, derived from the model
-  definition) also runs `c1_op_inventory_complete`, so output parity can never
-  pass with an op missing or extra; every preview roster row declares one.
-
-**torchlens.conformance.PreviewScorecard** — *unstable — no deprecation shim owed*
-: The frozen canonical scorecard (`scorecard_version`
-  "torchlens.conformance.preview_scorecard.v2"): `backend`,
-  `framework_version` (`""` when absent), `suite_version`,
-  `torchlens_version`, `cells` (`ScorecardCell` rows of `tier`, `case_id`,
-  `family`, `state`, `detail`), `counts` (cells per state plus `denominator`),
-  `highest_tier` (highest tier whose every cell passed, cumulative from C0, or
-  `""`), `maturity` (the backend's launch label), `framework_requirement`
-  (the backend's `FrameworkRequirement` as strings), `capabilities` (the
-  capability summary: flag to `supported`, `unsupported` or `untested`),
-  `roster_groups` (roster rows per group, `config_built` and `ecosystem`),
-  `graduation` (the six graduation items) and `sha256` over the canonical bytes
-  with that field excluded. `to_canonical_json()` renders the attested bytes
-  (sorted keys, compact, ASCII). The record each backend ships is
-  `torchlens/backends/<name>/scorecard.json`.
-
-**RosterModel protocol fields** — *unstable — no deprecation shim owed*
-: `RosterModel.expected_intermediates` (op kind to the value or values a NumPy
-  computation from the row's own definition expects; read by
-  `c1_intermediates_match`), `RosterModel.has_constants` (the row's forward
-  reads a closure constant or a literal producer; enables
-  `c1_constant_parents_recorded`), `RosterModel.random_init` (the row builds
-  random-init layers; enables `c1_rng_consumed_once` on lazy backends) and
-  `RosterModel.group` (`config_built`, the small per-change models that earn no
-  claim, or `ecosystem`, pinned pretrained families from the backend's own
-  ecosystem that run only when `TORCHLENS_CONFORMANCE_ECOSYSTEM=1` or their
-  weights are cached).
 
 **trace.ops counting (`len(trace.ops)`)** — *unstable — no deprecation shim owed*
 : `len`, iteration, integer indexing, `keys()`/`values()`/`items()` and
@@ -3791,9 +3731,6 @@ The sections above describe each surface in depth.
 | `tl.backends.REFUSAL_CODES` | Closed registry of backend refusal codes (`exc.code` of `BackendUnsupportedError`) |
 | `tl.backends.VALIDATION_REASONS` | Closed list of per-op validation decision reasons every backend's `validate` uses |
 | `tl.clip_norm` | Neutral edit that rescales a tensor (on `tl.grad(site)`, the gradient) to at most `max_norm` in `norm_type` norm |
-| `tl.conformance.GraduationItem` | One graduation check: `id` (`G1` to `G6`), `met`, `detail` |
-| `tl.conformance.GraduationReport` | The six graduation items for one backend; advisory, never changes `maturity` |
-| `tl.conformance.graduation_report` | Compute a backend's graduation report from its shipped scorecard |
 | `tl.debug.BackwardNanReport` | Result of `tl.debug.bisect_nan_backward`: the backward pass walked, the earliest provable non-finite birth and the full transition ledger |
 | `tl.debug.BisectNanReport` | Result of `tl.debug.bisect_nan` |
 | `tl.debug.BisectPrecisionReport` | Result of `tl.debug.bisect_precision` |
@@ -3983,7 +3920,6 @@ The sections above describe each surface in depth.
 | `ClipLedgerSnapshot.has_constancy_hint` | Whether the clip ledger saw a constant clipping pattern worth hinting |
 | `CloseReport.is_disabled` | Whether the watcher was disabled |
 | `CloseReport.is_final_sample_forced` | Whether close forced a final sample |
-| `ConformanceReport.is_claim_eligible` | `True` only when the pretrained-family floor is met; toys earn nothing regardless of pass rate |
 | `CostTreeRow.num_unknown_ops` | Directly-owned ops with no cost rule |
 | `DeterminismReport.first_problem` | Project the first divergence into the shared vocabulary |
 | `DiagnosticFinding.check_name` | Check name (`"nonfinite"`, `"dtype_regime"`, `"layout"` or `"confinement"`) |
@@ -4048,8 +3984,6 @@ The sections above describe each surface in depth.
 | `GradReceptiveField.unit_shape` | Shape of the target unit |
 | `GradReceptiveField.warnings` | Warnings raised while measuring |
 | `GradRecordContext.pass_number` | Pass number of the op whose gradient is recorded |
-| `GraduationItem.met` | Whether this graduation check holds |
-| `GraduationReport.met` | Whether all six graduation items hold |
 | `GridCell.candidate_id` | The cell id: the comma-joined value names in axis order, also the retained member's name |
 | `GridCell.coords` | Axis name to value name for this cell |
 | `GridCell.error` | The refusal (`grid_cell_unresolved`, `grid_cell_multi_site`) or failure text; None otherwise |
@@ -4126,11 +4060,6 @@ The sections above describe each surface in depth.
 | `PreprocessingComparison.unknown_fields` | Names of every uncomparable field, in field order |
 | `PreprocessingComparison.unknown_reasons` | Deduplicated reasons behind every unknown field, in field order |
 | `PreprocessingComparison.verdict` | `"verified"` / `"mismatch"` / `"unknown"` |
-| `PreviewScorecard.capabilities` | Capability summary: flag to `supported`, `unsupported` or `untested` |
-| `PreviewScorecard.framework_requirement` | The backend's `FrameworkRequirement`, as strings |
-| `PreviewScorecard.graduation` | The six graduation items embedded in the record |
-| `PreviewScorecard.maturity` | The backend's launch label when the record was computed |
-| `PreviewScorecard.roster_groups` | Roster rows per group (`config_built`, `ecosystem`) |
 | `ProfileReport.has_rescue_rerun` | Whether the profile needed a rescue rerun |
 | `ProfileReport.is_structure_only` | Whether the profiled capture kept structure only |
 | `ReceptiveField.axis_roles` | Axis layout of the input grid: per-axis kinds, windowed axes and their provenance |
@@ -4145,11 +4074,6 @@ The sections above describe each surface in depth.
 | `RecordContext.pass_number` | Pass number of the recorded op |
 | `Recording.num_predicate_failure_overflows` | Predicate failures beyond the kept list (counted, not stored) |
 | `RooflineRow.is_cache_resident_hint` | Whether the row's working set likely fits in cache (a hint, not a measurement) |
-| `RosterModel.builder` | Zero-arg factory returning `(model, example_input)` |
-| `RosterModel.expected_intermediates` | Op kind to the NumPy-computed values `c1_intermediates_match` compares |
-| `RosterModel.group` | `config_built` (per-change toy rows) or `ecosystem` (pinned pretrained families) |
-| `RosterModel.has_constants` | The row reads a closure constant or literal producer (`c1_constant_parents_recorded`) |
-| `RosterModel.random_init` | The row builds random-init layers (`c1_rng_consumed_once`) |
 | `Rule.action_repr` | Canonical rendering of the action over its current tensor content |
 | `Rule.address_class` | How the rule addresses its sites (value-dependent by default) |
 | `Rule.decision` | The rule's normalized decision, or `None` |
@@ -5174,20 +5098,15 @@ alphabetical order.
 | `address=` | keyword of `tl.in_module`: the module address whose contained sites the selector matches |
 | `axes=` | keyword of `tl.experiment.sweep_grid`: axis name -> values (a list or a mapping of value name -> value), in declaration order |
 | `breakdown_k=` | keyword of `tl.report.flops`: how many rows the breakdown lists |
-| `builder=` | field of `RosterModel`: zero-argument factory returning `(model, example_input)` |
 | `captured_bytes=` | field and constructor keyword of `MemoryFacts`, `SummaryTotals` |
 | `captured_saved_ops=` | field and constructor keyword of `MemoryFacts` |
 | `degradations=` | field and constructor keyword of `MergeReport` |
 | `edit_axis=` | field and constructor keyword of `SweepGrid`: the axis holding edits, None when edit= served every cell |
-| `expected_intermediates=` | field of `RosterModel`: NumPy-computed intermediate values per op kind |
 | `facet_functions=` | constructor keyword of `Trace`: the session facet functions; never saved |
 | `fire_record=` | field and constructor keyword of `GradFnCall` |
 | `flops_attributions=` | field and constructor keyword of `BackwardStatus` |
-| `framework_requirement=` | field and constructor keyword of `PreviewScorecard` |
-| `graduation=` | field and constructor keyword of `PreviewScorecard` |
 | `has_carried_state=` | field and constructor keyword of `RunReport` |
 | `has_constancy_hint=` | field and constructor keyword of `ClipLedgerSnapshot` |
-| `has_constants=` | field of `RosterModel`: the row reads a closure constant or literal producer |
 | `has_identical_target_resolution=` | field and constructor keyword of `SpecCompat` |
 | `has_intervention=` | field and constructor keyword of `NarrationEvent` |
 | `has_rescue_rerun=` | field and constructor keyword of `ProfileReport` |
@@ -5202,7 +5121,6 @@ alphabetical order.
 | `is_available=` | field and constructor keyword of `CapabilityRow`, `ValidationStatus` |
 | `is_cache_resident_hint=` | field and constructor keyword of `RooflineRow` |
 | `is_capture_verified=` | field and constructor keyword of `ProfileReport` |
-| `is_claim_eligible=` | field and constructor keyword of `ConformanceReport` |
 | `is_complete=` | field and constructor keyword of `InterventionValidationReport` |
 | `is_consistent=` | field and constructor keyword of `InterventionValidationReport` |
 | `is_constant=` | field and constructor keyword of `ScanRow` |
@@ -5225,7 +5143,6 @@ alphabetical order.
 | `loss=` | keyword of `Trace.do` and `tl.sweep`: a callable of the returned trace whose scalar result the door runs `backward` on |
 | `max_cells=` | keyword of `tl.experiment.sweep_grid`: guard on the product of the axis lengths (`grid_too_large`) |
 | `member_name=` | field and constructor keyword of `GridCell`: the retained member's name, None when the cell holds no member |
-| `met=` | field and constructor keyword of `GraduationItem` |
 | `min_stimuli=` | keyword of the `tl.repgeom` geometry functions (`classical_mds`, `effective_dimensionality`, `scree`): fewest stimuli accepted |
 | `num_audited_ops=` | field and constructor keyword of `DTypeRangeReport` |
 | `num_backward_passes=` | field and constructor keyword of `BackwardStatus`, `BackwardStyleInventory` |
@@ -5255,11 +5172,9 @@ alphabetical order.
 | `param_names=` | field and constructor keyword of `CheckFinding` |
 | `peak_bytes_per_s=` | field and constructor keyword of `MachineBalance` |
 | `peak_flops_per_s=` | field and constructor keyword of `MachineBalance` |
-| `random_init=` | field of `RosterModel`: the row builds random-init layers |
 | `retained_bytes=` | field and constructor keyword of `MemoryFacts`, `SummaryTotals` |
 | `retained_lazy_ops=` | field and constructor keyword of `MemoryFacts` |
 | `retained_present_ops=` | field and constructor keyword of `MemoryFacts` |
-| `roster_groups=` | field and constructor keyword of `PreviewScorecard` |
 | `run_state=` | field and constructor keyword of `HookContext`: the run-scoped scratch dict (`ctx.run_state`) |
 | `serve=` | keyword of `tl.export.netron`: open the exported graph in a local viewer |
 | `signal=` | keyword of `tl.observers.span` (`"forward"`, `"backward"` or `"both"`) and `torchlens._visualization.show_bundle_graph` (`"forward"` or `"backward"`) |

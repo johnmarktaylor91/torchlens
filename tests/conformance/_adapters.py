@@ -6,7 +6,7 @@ adapter wraps the public capture surface; the reserved ``"fake"`` adapter
 ships SWITCHABLE PLANTS -- deliberate defects, each of which must fail the
 intended check for the intended code (the anti-vacuity mechanism all three
 labs derived independently). Toy models are the smoke pack and mutation
-substrate ONLY; they emit no claim (see ``torchlens.conformance``).
+substrate ONLY; they emit no claim (see ``tests.conformance``).
 """
 
 from __future__ import annotations
@@ -18,10 +18,9 @@ from typing import Any
 
 import torchlens as tl
 from torchlens._io._json import read_bounded
-
-from ..backends.registry import BackendUnsupportedError, get_backend_spec
-from ..backends.torch import _torch_ops_calls
-from ..errors import ConfigurationError
+from torchlens.backends.registry import BackendUnsupportedError, get_backend_spec
+from torchlens.backends.torch import _torch_ops_calls
+from torchlens.errors import ConfigurationError
 
 __tl_layer__ = "L9"
 
@@ -38,7 +37,7 @@ FAKE_PLANTS: tuple[str, ...] = (
     "tamper_tripwire",
     "shared_adapter_assumption",
     # protocol-era plants (SPEC 4.2): each fails exactly the cell named in
-    # ``torchlens.conformance._protocol_cases.PLANT_INTENDED_CELL``.
+    # ``tests.conformance._protocol_cases.PLANT_INTENDED_CELL``.
     "untyped_refusal",
     "bare_bool_validation",
     "missing_constant_payload",

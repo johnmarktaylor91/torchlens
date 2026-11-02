@@ -258,7 +258,7 @@ def test_pr_backend_protocol_job_gates_floor_and_scorecard() -> None:
     assert 'pytest tests/ -m "$MARKER and not slow"' in runs
     assert "scripts/check_ci_executed_tests.py --legs" in runs
     assert "$EXECUTED_FLOOR" in runs
-    assert 'python -m torchlens.conformance.scorecard --backend "$BACKEND" --check' in runs
+    assert 'python -m tests.conformance.scorecard --backend "$BACKEND" --check' in runs
     gated = [step for step in job["steps"] if "if" in step]
     assert all("steps.changes.outputs.run == 'true'" in str(step["if"]) for step in gated)
 
@@ -268,7 +268,7 @@ def test_torch_scorecard_is_checked_in_its_pinned_smoke_row() -> None:
 
     job = _workflow(_PR_WORKFLOW)["jobs"]["smoke"]
     runs = [str(step.get("run", "")) for step in job["steps"]]
-    assert "python -m torchlens.conformance.scorecard --backend torch --check" in runs
+    assert "python -m tests.conformance.scorecard --backend torch --check" in runs
 
 
 def test_nightly_runs_the_ecosystem_rosters() -> None:
@@ -281,7 +281,7 @@ def test_nightly_runs_the_ecosystem_rosters() -> None:
         if step.get("env", {}).get("TORCHLENS_CONFORMANCE_ECOSYSTEM") == "1"
     ]
     assert len(ecosystem) == 1
-    assert "torchlens.conformance.scorecard --backend" in ecosystem[0]["run"]
+    assert "tests.conformance.scorecard --backend" in ecosystem[0]["run"]
     assert any(str(step.get("uses", "")).startswith("actions/cache@") for step in job["steps"])
 
 
@@ -291,7 +291,7 @@ def test_nightly_runs_the_ecosystem_rosters() -> None:
         ("torchlens/backends/registry.py", set(PREVIEW_BACKENDS)),
         ("torchlens/backends/_finalize.py", set(PREVIEW_BACKENDS)),
         ("torchlens/backends/_protocols/tf.py", set(PREVIEW_BACKENDS)),
-        ("torchlens/conformance/_cases.py", set(PREVIEW_BACKENDS)),
+        ("tests/conformance/_cases.py", set(PREVIEW_BACKENDS)),
         ("torchlens/compat/_report.py", set(PREVIEW_BACKENDS)),
         ("tests/backend_conformance/test_preview_tf.py", set(PREVIEW_BACKENDS)),
         ("pyproject.toml", set(PREVIEW_BACKENDS)),

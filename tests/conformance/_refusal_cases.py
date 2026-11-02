@@ -21,10 +21,10 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 import torchlens as tl
+from torchlens.backends._backend_protocol import refusal_code_for_capability
+from torchlens.backends.registry import BackendUnsupportedError
+from torchlens.options import CaptureOptions, StorageOptions
 
-from ..backends._backend_protocol import refusal_code_for_capability
-from ..backends.registry import BackendUnsupportedError
-from ..options import CaptureOptions, StorageOptions
 from ._adapters import RosterModel
 from ._cases import CaseResult, _failed, _passed
 from ._protocol_cases import (

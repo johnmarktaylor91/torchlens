@@ -66,8 +66,8 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
 | `torchlens.checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 11 | 3824 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.x. | 5 | 2017 |
-| `torchlens.conformance` | ''torchlens.conformance'': the capture conformance suite (MEMO 4, B4). | 11 | 4269 |
-| `torchlens.conformance._rosters` | Per-backend conformance rosters; one module per backend. | 8 | 3623 |
+| `tests.conformance` | ''tests.conformance'': the capture conformance suite (MEMO 4, B4). | 11 | 4269 |
+| `tests.conformance._rosters` | Per-backend conformance rosters; one module per backend. | 8 | 3623 |
 | `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 22 | 9542 |
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 2214 |
 | `torchlens.errors` | Public TorchLens exception classes. | 4 | 1028 |
@@ -1410,13 +1410,13 @@ Compatibility adapters for TorchLens 2.x. (5 modules, 2017 lines)
 | `torchextractor` | Small torchextractor-compatible facade backed by TorchLens. | 72 |
 | `torchshow` | Thin optional adapter for the ''torchshow'' visualization package. | 58 |
 
-### `torchlens.conformance`
+### `tests.conformance`
 
-''torchlens.conformance'': the capture conformance suite (MEMO 4, B4). (11 modules, 4269 lines)
+''tests.conformance'': the capture conformance suite (MEMO 4, B4). (11 modules, 4269 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | ''torchlens.conformance'': the capture conformance suite (MEMO 4, B4). | 361 |
+| `__init__` | ''tests.conformance'': the capture conformance suite (MEMO 4, B4). | 361 |
 | `_adapters` | Provider adapters for the conformance runner (MEMO 4.1/4.2, B4). | 467 |
 | `_c0_protocol_cases` | The protocol-level tier-0 conformance cells for one registered backend. | 143 |
 | `_cases` | Tiered conformance cases: provider API / real capture / durable. | 471 |
@@ -1426,9 +1426,9 @@ Compatibility adapters for TorchLens 2.x. (5 modules, 2017 lines)
 | `_refusal_cases` | Refusal cells: every False capability flag and every foreign trace option refuses typed. | 279 |
 | `_scorecard` | Preview scorecards (ecosystem MEMO section 4, build item B4; SPEC 4.5 v2). | 659 |
 | `_validation_cells` | Validation cells of the preview-backend conformance suite. | 177 |
-| `scorecard` | ''python -m torchlens.conformance.scorecard'': compute, write, check or grade a scorecard. | 126 |
+| `scorecard` | ''python -m tests.conformance.scorecard'': compute, write, check or grade a scorecard. | 126 |
 
-### `torchlens.conformance._rosters`
+### `tests.conformance._rosters`
 
 Per-backend conformance rosters; one module per backend. (8 modules, 3623 lines)
 

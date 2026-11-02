@@ -195,7 +195,7 @@ def adapter_protocol(adapter: Any) -> Any | None:
 def false_capability_flags(protocol: Any) -> tuple[str, ...]:
     """Refusable capability flags the backend declares False, in table order."""
 
-    from ..backends._backend_protocol import REFUSABLE_CAPABILITY_FLAGS
+    from torchlens.backends._backend_protocol import REFUSABLE_CAPABILITY_FLAGS
 
     table = protocol.capabilities()
     return tuple(flag for flag in REFUSABLE_CAPABILITY_FLAGS if getattr(table, flag, None) is False)
@@ -204,7 +204,7 @@ def false_capability_flags(protocol: Any) -> tuple[str, ...]:
 def foreign_trace_options(protocol: Any) -> tuple[str, ...]:
     """Public trace options the backend does not implement, in spine order."""
 
-    from ..backends.registry import PUBLIC_OPTION_SPINE_TRACE_OPTIONS
+    from torchlens.backends.registry import PUBLIC_OPTION_SPINE_TRACE_OPTIONS
 
     implemented = set(protocol.trace_options())
     return tuple(
@@ -297,7 +297,7 @@ def _tolerance_for(array: Any) -> tuple[float, float] | None:
 
     import numpy as np
 
-    from ..backends._validation_shared import float_replay_tolerances
+    from torchlens.backends._validation_shared import float_replay_tolerances
 
     kind = np.asarray(array).dtype.kind
     if kind == "f":

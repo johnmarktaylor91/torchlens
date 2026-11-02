@@ -1,11 +1,11 @@
-"""``python -m torchlens.conformance.scorecard``: compute, write, check or grade a scorecard.
+"""``python -m tests.conformance.scorecard``: compute, write, check or grade a scorecard.
 
 Usage::
 
-    python -m torchlens.conformance.scorecard --backend tf              # print the record
-    python -m torchlens.conformance.scorecard --backend tf --write      # write the shipped file
-    python -m torchlens.conformance.scorecard --backend tf --check      # compare with the shipped file
-    python -m torchlens.conformance.scorecard --backend tf --graduation # print the six items
+    python -m tests.conformance.scorecard --backend tf              # print the record
+    python -m tests.conformance.scorecard --backend tf --write      # write the shipped file
+    python -m tests.conformance.scorecard --backend tf --check      # compare with the shipped file
+    python -m tests.conformance.scorecard --backend tf --graduation # print the six items
 
 ``--write`` and ``--check`` belong to the backend's pinned CI leg: the
 shipped record (``torchlens/backends/<backend>/scorecard.json``) is a tested
@@ -39,7 +39,7 @@ def _parser() -> argparse.ArgumentParser:
     """The command-line parser."""
 
     parser = argparse.ArgumentParser(
-        prog="python -m torchlens.conformance.scorecard",
+        prog="python -m tests.conformance.scorecard",
         description="Compute, write, check or grade one backend's conformance scorecard.",
     )
     parser.add_argument("--backend", required=True, help="registered backend name")

@@ -17,14 +17,14 @@ from typing import Any
 import pytest
 import torch
 
-from torchlens.conformance import (
+from tests.conformance import (
     CLAIM_MIN_PRETRAINED_FAMILIES,
     ConformanceReport,
     RosterModel,
     claim_string,
     run_conformance,
 )
-from torchlens.conformance._adapters import FAKE_PLANTS, resolve_adapter
+from tests.conformance._adapters import FAKE_PLANTS, resolve_adapter
 from torchlens.errors import ConfigurationError
 
 
@@ -124,7 +124,7 @@ _PLANT_INTENDED_CELL = {
 def test_plant_table_covers_the_closed_set() -> None:
     """This table plus the protocol-era table (``_protocol_cases``) is the closed set."""
 
-    from torchlens.conformance._protocol_cases import PLANT_INTENDED_CELL
+    from tests.conformance._protocol_cases import PLANT_INTENDED_CELL
 
     assert set(_PLANT_INTENDED_CELL).isdisjoint(PLANT_INTENDED_CELL)
     assert set(_PLANT_INTENDED_CELL) | set(PLANT_INTENDED_CELL) == set(FAKE_PLANTS)
@@ -248,7 +248,7 @@ def test_c2_claim_spelling(tmp_path: Path) -> None:
 def test_attestation_digest_recomputes_over_canonical_bytes() -> None:
     """The SHA-256 attests the digest-free canonical form, third-party checkable."""
 
-    from torchlens.conformance import _canonical_report_json
+    from tests.conformance import _canonical_report_json
 
     report = run_conformance("fake", tiers=("C0",))
     recomputed = hashlib.sha256(

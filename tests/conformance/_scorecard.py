@@ -21,7 +21,7 @@ its inputs are toys, it carries no claim string, and the word the claim
 grammar reserves is redacted from any provider detail it records.
 
 The shipped record is ``torchlens/backends/<backend>/scorecard.json``, written
-and checked by ``python -m torchlens.conformance.scorecard`` on the pinned CI
+and checked by ``python -m tests.conformance.scorecard`` on the pinned CI
 leg; ``tl.report.doctor()`` reads it without running any framework.
 
 Every spelling is DOCUMENTED-UNSTABLE pending naming-session ratification.
@@ -32,10 +32,16 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, fields as dataclass_fields, replace
 from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
+
+from torchlens.backends._scorecard_rows import (
+    read_shipped_scorecard,
+    shipped_scorecard_path as product_shipped_scorecard_path,
+)
+from torchlens.backends.registry import registered_backend_specs
 
 from ._adapters import RosterModel, resolve_adapter
 from ._cases import TIER_C0, TIER_C1, TIER_C2, UNSUPPORTED_DETAIL_PREFIX
@@ -234,7 +240,7 @@ def scorecard_from_json(text: str) -> PreviewScorecard:
         The record; its ``sha256`` is the stored digest, not recomputed.
     """
 
-    from .._io import _json
+    from torchlens._io import _json
 
     data = _json.loads_bounded(text)
     cells = tuple(
@@ -279,7 +285,7 @@ def scorecard_from_json(text: str) -> PreviewScorecard:
 def shipped_scorecard_path(backend: str) -> Path:
     """Where the backend's shipped record lives inside the installed package."""
 
-    return Path(__file__).resolve().parent.parent / "backends" / backend / SCORECARD_FILENAME
+    return product_shipped_scorecard_path(backend)
 
 
 def shipped_scorecard(backend: str) -> PreviewScorecard | None:
@@ -421,7 +427,7 @@ def capability_summary(protocol: Any | None, cells: tuple[ScorecardCell, ...]) -
         One entry per refusable capability flag.
     """
 
-    from ..backends._backend_protocol import REFUSABLE_CAPABILITY_FLAGS
+    from torchlens.backends._backend_protocol import REFUSABLE_CAPABILITY_FLAGS
 
     if protocol is None:
         return {}
@@ -657,3 +663,38 @@ def _cells_by_key(payload: dict[str, Any]) -> dict[tuple[str, str, str], dict[st
 
     cells = cast("list[dict[str, Any]]", payload.get("cells", []))
     return {(c["tier"], c["case_id"], c["family"]): c for c in cells}
+
+
+def scorecard_from_record(record: dict[str, Any]) -> PreviewScorecard:
+    """Rebuild a ``PreviewScorecard`` from a shipped record.
+
+    Only fields the dataclass declares are passed, so a record written by a
+    later scorecard version (extra keys) still loads; cells become
+    ``ScorecardCell`` rows.
+    """
+
+    known = {field.name for field in dataclass_fields(PreviewScorecard)}
+    payload = {key: value for key, value in record.items() if key in known}
+    cell_fields = {field.name for field in dataclass_fields(ScorecardCell)}
+    payload["cells"] = tuple(
+        ScorecardCell(**{key: value for key, value in cell.items() if key in cell_fields})
+        for cell in record.get("cells", ())
+        if isinstance(cell, dict)
+    )
+    payload.setdefault("counts", {})
+    payload.setdefault("highest_tier", "")
+    for name in ("scorecard_version", "backend", "framework_version", "suite_version"):
+        payload.setdefault(name, "")
+    payload.setdefault("torchlens_version", "")
+    return PreviewScorecard(**payload)
+
+
+def backend_scorecards() -> tuple[PreviewScorecard, ...]:
+    """The shipped records of every registered backend that has one."""
+
+    cards = []
+    for spec in registered_backend_specs():
+        record = read_shipped_scorecard(spec.name)
+        if record is not None:
+            cards.append(scorecard_from_record(record))
+    return tuple(cards)

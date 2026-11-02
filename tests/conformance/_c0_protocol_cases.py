@@ -1,7 +1,7 @@
 """The protocol-level tier-0 conformance cells for one registered backend.
 
 Extracted from ``_protocol_cases`` so that module stays under the file cap; the
-spellings stay importable from ``torchlens.conformance._protocol_cases``.
+spellings stay importable from ``tests.conformance._protocol_cases``.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ C0_PROTOCOL_CASES: tuple[str, ...] = (
 def registered_protocol_spec(backend: str) -> Any | None:
     """The registered spec for ``backend`` when it carries a protocol factory, else ``None``."""
 
-    from ..backends.registry import UnknownBackendError, get_backend_spec
+    from torchlens.backends.registry import UnknownBackendError, get_backend_spec
 
     try:
         spec = get_backend_spec(backend)
@@ -49,7 +49,7 @@ def run_c0_protocol_cases(backend: str) -> list[CaseResult]:
         registered protocol (its slots do not exist).
     """
 
-    from ..backends._backend_protocol import REFUSAL_CODES, protocol_problems
+    from torchlens.backends._backend_protocol import REFUSAL_CODES, protocol_problems
 
     spec = registered_protocol_spec(backend)
     if spec is None:
@@ -108,7 +108,7 @@ def _refusal_codes_cell(candidate: Any, registry: frozenset[str]) -> CaseResult:
 def _capability_table_cell(candidate: Any) -> CaseResult:
     """Every ``BackendCapabilities`` field holds a value of its declared kind."""
 
-    from ..backends.registry import BackendCapabilities
+    from torchlens.backends.registry import BackendCapabilities
 
     try:
         table = candidate.capabilities()

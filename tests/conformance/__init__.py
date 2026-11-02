@@ -1,4 +1,4 @@
-"""``torchlens.conformance``: the capture conformance suite (MEMO 4, B4).
+"""``tests.conformance``: the capture conformance suite (MEMO 4, B4).
 
 Ships in the base wheel; real framework/checkpoint packs stay behind extras.
 The claim grammar is closed (MEMO 4.2):
@@ -14,7 +14,7 @@ mutation substrate only, and the RUNNER enforces that no string containing
 detail a tweet drops. A C1/C2 claim requires at least TWO pinned pretrained
 model families with checkpoint evidence. Four anti-vacuity mechanisms ship:
 planted defects (the reserved ``"fake"`` provider,
-``torchlens.conformance._adapters.FAKE_PLANTS``), executed-count floors,
+``tests.conformance._adapters.FAKE_PLANTS``), executed-count floors,
 named skips (a skip fails the requested cell), and canonical report bytes
 attested with SHA-256. "Verified by TorchLens" is reserved for
 TorchLens-controlled CI; third parties may claim "self-tested" only with
@@ -32,7 +32,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..errors import ConfigurationError
+from torchlens.errors import ConfigurationError
+
 from ._adapters import RosterModel, default_roster, resolve_adapter
 from ._cases import CaseResult, run_c0_cases, run_c1_cases, run_c2_cases
 from ._graduation import GraduationItem, GraduationReport, graduation_report
@@ -148,7 +149,7 @@ def _environment_receipt() -> dict[str, str]:
 
     from importlib import metadata as _metadata
 
-    from .. import __version__
+    from torchlens import __version__
 
     return {
         "torchlens_version": __version__,

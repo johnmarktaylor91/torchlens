@@ -12,7 +12,7 @@ function root and a module or object root), built lazily so naming the
 backend never imports its framework. An absent framework is reported by
 :meth:`unavailable_reason`; the runner turns every model case into a named
 skip, which fails the requested cell. Toys earn nothing: these rosters can
-never reach a C1/C2 claim (see ``torchlens.conformance``).
+never reach a C1/C2 claim (see ``tests.conformance``).
 
 Every spelling is DOCUMENTED-UNSTABLE pending naming-session ratification.
 """
@@ -27,8 +27,8 @@ from pathlib import Path
 from typing import Any
 
 import torchlens as tl
+from torchlens.backends.registry import get_backend_spec
 
-from ..backends.registry import get_backend_spec
 from ._adapters import RosterModel
 from ._rosters.jax import roster as _jax_roster
 from ._rosters.mlx import roster as _mlx_roster
@@ -110,19 +110,19 @@ def framework_unavailable_reason(framework: PreviewFramework) -> str | None:
 
 
 def _roster_jax() -> tuple[RosterModel, ...]:
-    """The JAX packet's roster (``torchlens.conformance._rosters.jax``)."""
+    """The JAX packet's roster (``tests.conformance._rosters.jax``)."""
 
     return _jax_roster()
 
 
 def _roster_tf() -> tuple[RosterModel, ...]:
-    """The TensorFlow packet's roster (``torchlens.conformance._rosters.tf``)."""
+    """The TensorFlow packet's roster (``tests.conformance._rosters.tf``)."""
 
     return _tf_roster()
 
 
 def _roster_mlx() -> tuple[RosterModel, ...]:
-    """The MLX packet's roster (``torchlens.conformance._rosters.mlx``)."""
+    """The MLX packet's roster (``tests.conformance._rosters.mlx``)."""
 
     return _mlx_roster()
 
@@ -340,7 +340,7 @@ _TINYGRAD_INVENTORIES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
 
 
 def _roster_paddle() -> tuple[RosterModel, ...]:
-    """The Paddle packet's roster (``torchlens.conformance._rosters.paddle``)."""
+    """The Paddle packet's roster (``tests.conformance._rosters.paddle``)."""
 
     return _paddle_roster()
 

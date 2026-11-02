@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..backends._backend_protocol import VALIDATION_REASONS
-from ..options import CaptureOptions
+from torchlens.backends._backend_protocol import VALIDATION_REASONS
+from torchlens.options import CaptureOptions
 
 
 def _is_input(op: Any) -> bool:
