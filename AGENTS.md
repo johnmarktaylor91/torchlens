@@ -133,7 +133,7 @@ Byte goldens enforce only in the pinned environment (python 3.10, torch 2.13.0) 
 outside it and outside CI, so only the script's answer equals CI's (`tests/AGENTS.md`, "The smoke tier").
 
 Tiers by cost (every tier's count: `tests/tiers/collection.json`): `smoke` selects
-~1.5k tests (1,482/37,032 collect-only, measured 2026-11-01),
+~1.5k tests (1,474/39,361 collect-only, measured 2026-11-02),
 a coverage-chosen subset of the former ~9.9k-test tier (see `tests/AGENTS.md`, "The smoke
 tier"). The instrumented smoke wall measurement (measured 2026-10-02, one 4-core Linux worker,
 serial, 4 torch threads) took 186s (~3 min), collection included; `-n 4` with one thread
