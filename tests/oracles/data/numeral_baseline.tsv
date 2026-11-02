@@ -1,4 +1,5 @@
 corpus	file	numeral
+docs-md	AGENTS.md	1,474
 docs-md	AGENTS.md	1,500
 docs-md	AGENTS.md	1.5
 docs-md	AGENTS.md	10
@@ -9,6 +10,7 @@ docs-md	AGENTS.md	186
 docs-md	AGENTS.md	2.0
 docs-md	AGENTS.md	2.1
 docs-md	AGENTS.md	2.13.0
+docs-md	AGENTS.md	2.15
 docs-md	AGENTS.md	20
 docs-md	AGENTS.md	2026
 docs-md	AGENTS.md	236
@@ -16,6 +18,7 @@ docs-md	AGENTS.md	26.04
 docs-md	AGENTS.md	28
 docs-md	AGENTS.md	3.10,
 docs-md	AGENTS.md	32
+docs-md	AGENTS.md	39,361
 docs-md	AGENTS.md	5.5
 docs-md	AGENTS.md	9.9
 docs-md	AGENTS.md	91
@@ -46,6 +49,7 @@ docs-md	README.md	1_1
 docs-md	README.md	1_2
 docs-md	README.md	2.0
 docs-md	README.md	2.1
+docs-md	README.md	2.15.0
 docs-md	README.md	2.2
 docs-md	README.md	2.5
 docs-md	README.md	2.6
@@ -1130,7 +1134,7 @@ docs-md	docs/maintainers/where.md	1329
 docs-md	docs/maintainers/where.md	133
 docs-md	docs/maintainers/where.md	134
 docs-md	docs/maintainers/where.md	1342
-docs-md	docs/maintainers/where.md	1349
+docs-md	docs/maintainers/where.md	1348
 docs-md	docs/maintainers/where.md	135
 docs-md	docs/maintainers/where.md	136
 docs-md	docs/maintainers/where.md	1361
@@ -1168,6 +1172,7 @@ docs-md	docs/maintainers/where.md	1496
 docs-md	docs/maintainers/where.md	1498
 docs-md	docs/maintainers/where.md	15
 docs-md	docs/maintainers/where.md	15,
+docs-md	docs/maintainers/where.md	1502
 docs-md	docs/maintainers/where.md	1507
 docs-md	docs/maintainers/where.md	151
 docs-md	docs/maintainers/where.md	1510
@@ -1445,7 +1450,7 @@ docs-md	docs/maintainers/where.md	338
 docs-md	docs/maintainers/where.md	34
 docs-md	docs/maintainers/where.md	340
 docs-md	docs/maintainers/where.md	341
-docs-md	docs/maintainers/where.md	34140
+docs-md	docs/maintainers/where.md	34180
 docs-md	docs/maintainers/where.md	343
 docs-md	docs/maintainers/where.md	344
 docs-md	docs/maintainers/where.md	345
@@ -1714,7 +1719,7 @@ docs-md	docs/maintainers/where.md	624
 docs-md	docs/maintainers/where.md	625
 docs-md	docs/maintainers/where.md	627
 docs-md	docs/maintainers/where.md	628
-docs-md	docs/maintainers/where.md	628614
+docs-md	docs/maintainers/where.md	628575
 docs-md	docs/maintainers/where.md	6299
 docs-md	docs/maintainers/where.md	63
 docs-md	docs/maintainers/where.md	630
@@ -1824,6 +1829,7 @@ docs-md	docs/maintainers/where.md	784
 docs-md	docs/maintainers/where.md	786
 docs-md	docs/maintainers/where.md	790
 docs-md	docs/maintainers/where.md	7920
+docs-md	docs/maintainers/where.md	794
 docs-md	docs/maintainers/where.md	797
 docs-md	docs/maintainers/where.md	798
 docs-md	docs/maintainers/where.md	80
@@ -1837,10 +1843,10 @@ docs-md	docs/maintainers/where.md	816
 docs-md	docs/maintainers/where.md	82
 docs-md	docs/maintainers/where.md	820
 docs-md	docs/maintainers/where.md	821
+docs-md	docs/maintainers/where.md	8244
 docs-md	docs/maintainers/where.md	83
 docs-md	docs/maintainers/where.md	830
 docs-md	docs/maintainers/where.md	832
-docs-md	docs/maintainers/where.md	8323
 docs-md	docs/maintainers/where.md	834
 docs-md	docs/maintainers/where.md	837
 docs-md	docs/maintainers/where.md	839
@@ -1851,6 +1857,7 @@ docs-md	docs/maintainers/where.md	847
 docs-md	docs/maintainers/where.md	8476
 docs-md	docs/maintainers/where.md	8498
 docs-md	docs/maintainers/where.md	85
+docs-md	docs/maintainers/where.md	859
 docs-md	docs/maintainers/where.md	86
 docs-md	docs/maintainers/where.md	860
 docs-md	docs/maintainers/where.md	8628
@@ -3030,6 +3037,7 @@ docs-md	docs/reference/limitations.md	10
 docs-md	docs/reference/limitations.md	16
 docs-md	docs/reference/limitations.md	18
 docs-md	docs/reference/limitations.md	2,000,
+docs-md	docs/reference/limitations.md	2.15.0
 docs-md	docs/reference/limitations.md	2.6,
 docs-md	docs/reference/limitations.md	20
 docs-md	docs/reference/limitations.md	2000
