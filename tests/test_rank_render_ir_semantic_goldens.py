@@ -145,4 +145,17 @@ def test_rank_render_ir_semantic_golden(tmp_path: Path) -> None:
     golden_path = require_env_golden(
         _GOLDEN.parent, _GOLDEN.name, _UPDATE_ENV, extra_packages=_EMITTER_PACKAGES
     )
+    if not golden_path.exists():
+        # require_env_golden returns a missing path only under the explicit
+        # first-run record opt-in: write the baseline, then SKIP.
+        golden_path.write_text(
+            json.dumps(_semantic_record(source), indent=1, sort_keys=True) + "\n"
+        )
+        write_provenance(
+            golden_path.parent,
+            "tests/test_rank_render_ir_semantic_goldens.py",
+            _UPDATE_ENV,
+            require_update_reason(_UPDATE_ENV),
+        )
+        pytest.skip(f"recorded first-run rank-render-ir golden for this environment: {golden_path}")
     assert _semantic_record(source) == json.loads(golden_path.read_text())
