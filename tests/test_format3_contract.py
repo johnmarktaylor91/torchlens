@@ -10,6 +10,7 @@ and prove each stub door refuses typed with its code and a remedy.
 
 from __future__ import annotations
 
+import importlib
 import re
 from pathlib import Path
 
@@ -121,7 +122,7 @@ def test_phase_timing_keys_are_the_pipeline_step_names() -> None:
     """The timing key source resolves to the pipeline, whose step names are unique."""
 
     module_path, _, attribute = contract.PHASE_TIMING_KEY_SOURCE.rpartition(".")
-    pipeline = getattr(pytest.importorskip(module_path), attribute)
+    pipeline = getattr(importlib.import_module(module_path), attribute)
     names = [step.name for step in pipeline]
     assert names and len(set(names)) == len(names)
     assert all(re.fullmatch(r"[a-z][a-z0-9_]*", name) for name in names)
