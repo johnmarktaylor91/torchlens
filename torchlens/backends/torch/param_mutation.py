@@ -116,7 +116,6 @@ def is_mutated_parameter_receiver(trace: Any, value: Any) -> bool:
     return lazy_at_prep is None or not lazy_at_prep
 
 
-@contextmanager
 def same_object_logging_copy(out_orig: Any) -> Any:
     """Return the distinct tensor a same-object return is logged against.
 
@@ -168,6 +167,7 @@ def nested_write_relabeled_receiver(receiver: Any, label_before: str | None) -> 
     return label_now is not None and label_now != label_before
 
 
+@contextmanager
 def _frozen_receiver_flag(receiver: torch.nn.Parameter) -> Iterator[None]:
     """Run one in-place call with a frozen Parameter's own ``requires_grad=False``.
 
