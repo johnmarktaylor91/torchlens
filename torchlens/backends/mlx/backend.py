@@ -986,7 +986,8 @@ class MLXBackend:
                     "the derived-gradient replay re-runs the model without the "
                     "intervention surface, so its output-divergence oracle would "
                     "always refuse. Capture the intervened trace and the derived "
-                    "gradients in separate calls."
+                    "gradients in separate calls.",
+                    code="intervention_with_derived_grads_unsupported",
                 )
         transform_type = _mlx_traced_transform_type(self.mx)
         if transform_type is not None and type(model) is transform_type:
@@ -994,7 +995,8 @@ class MLXBackend:
                 "MLX capture entry is an mx.compile/mx.grad/mx.vmap traced-transform "
                 "wrapper. Traced replays bypass the eager capture surface, so logging "
                 "them would silently under-capture. Trace the eager mlx.nn.Module or "
-                "plain Python callable instead of its compiled/transformed wrapper."
+                "plain Python callable instead of its compiled/transformed wrapper.",
+                code="traced_transform_entry_unsupported",
             )
         compiled_attribute_paths = _find_mlx_compiled_attributes(model, transform_type)
         module_tree = discover_mlx_module_tree(model)
@@ -1787,7 +1789,8 @@ class MLXBackend:
         if not self.is_tensor(replacement):
             raise BackendUnsupportedError(
                 f"MLX intervention {plan.applier.identity!r} returned "
-                f"{type(replacement).__name__}; hooks must return an mx.array."
+                f"{type(replacement).__name__}; hooks must return an mx.array.",
+                code="intervention_result_invalid",
             )
         if self._shape(replacement) != self._shape(leaf) or self._dtype(replacement) != self._dtype(
             leaf
@@ -1797,7 +1800,8 @@ class MLXBackend:
                 f"from shape={self._shape(leaf)} dtype={self._dtype(leaf)} to "
                 f"shape={self._shape(replacement)} dtype={self._dtype(replacement)}; "
                 "the MLX preview supports shape- and dtype-preserving "
-                "interventions only."
+                "interventions only.",
+                code="intervention_result_invalid",
             )
         return replacement
 

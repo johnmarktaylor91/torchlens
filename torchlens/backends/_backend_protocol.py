@@ -114,30 +114,90 @@ REFUSAL_CODES: frozenset[str] = frozenset(
         "wrappers_removed_before_capture",
         "unwrap_during_active_capture",
         "release_during_active_capture",
+        # backend-specific refusals, one per cause
+        "runtime_mode_unsupported",
+        "inplace_op_unsupported",
+        "input_mutation_unsupported",
+        "tensor_output_required",
+        "tinygrad_input_required",
+        "live_payloads_required",
+        "mid_capture_execution_unsupported",
+        "traced_transform_entry_unsupported",
+        "intervention_with_derived_grads_unsupported",
+        "intervention_result_invalid",
     }
 )
 
-#: Closed list of per-op validation decision reasons. ``validate`` on every
-#: backend names one of these for each op it did not replay-verify, and the
-#: suite checks membership (the list is a superset of what torch uses today).
-VALIDATION_REASONS: frozenset[str] = frozenset(
-    {
-        "replay_mismatch",
-        "parent_payload_missing",
-        "no_replayable_function",
-        "constant_producer_leaf",
-        "constant_parent_payload",
-        "user_intervention_replacement",
-        "effectful_region",
-        "perturbation_insensitive",
-        "dtype_tolerance_exceeded",
-        # Structural failures (per-op or trace-level, ``phase="metadata"``):
-        # an op the checker cannot classify, and capture records that
-        # disagree with each other.
-        "op_unclassified",
-        "capture_inconsistent",
-    }
-)
+#: Per-op validation decision reasons, each with its definition. Every
+#: backend's ``validate`` names one of these for each op it did not
+#: replay-verify (``decisions[*]["reason"]`` and the status reason counts).
+#: One word per failure: a backend whose cause matches a definition uses that
+#: name; a genuinely different cause gets its own row.
+_VALIDATION_REASON_DEFINITIONS: dict[str, str] = {
+    "replay_mismatch": (
+        "re-executing the op from its saved inputs did not reproduce its saved output"
+    ),
+    "parent_payload_missing": (
+        "a payload the replay needs is absent: the op's own saved output, or the saved "
+        "output of a parent it reads"
+    ),
+    "no_replayable_function": (
+        "no callable can re-execute the op: capture recorded none for a computational "
+        "op, or the preview backend could not reconstruct or re-invoke the saved call"
+    ),
+    "constant_producer_leaf": "a recorded constant: a leaf with a saved payload and nothing upstream",
+    "constant_parent_payload": (
+        "the op's only value parents are recorded constants, so no perturbation applies"
+    ),
+    "user_intervention_replacement": (
+        "the op's output is a user intervention's replacement, which has no traceable "
+        "function to replay"
+    ),
+    "effectful_region": "the op sits in a side-effecting region the backend cannot replay",
+    "perturbation_insensitive": (
+        "replay matched, but perturbing a parent did not change the output, so the "
+        "dependency is not proven"
+    ),
+    "dtype_tolerance_exceeded": "the replayed output differs beyond the dtype's tolerance band",
+    # Structural failures (per-op or trace-level, ``phase="metadata"``).
+    "op_unclassified": "an op the checker cannot classify (outside every replay category)",
+    "capture_inconsistent": "capture records that disagree with each other",
+    # torch's own reasons.
+    "arg_logging_mismatch": (
+        "the op's logged parent-argument positions disagree with its data parents, or a "
+        "parent's saved output disagrees with the argument snapshot at its logged position"
+    ),
+    "missing_saved_args": (
+        "the op's argument snapshots (saved args, or the child-version snapshots replay "
+        "needs) were not captured, so its call cannot be rebuilt"
+    ),
+    "dispatch_op_count_mismatch": (
+        "the number of dispatcher-level ops seen during replay differs from the count capture "
+        "recorded"
+    ),
+    "bfs_incomplete": (
+        "the saved-output walk from the outputs back to the inputs did not reach every op"
+    ),
+    "metadata_invariant_exception": "a trace metadata invariant check raised",
+    "replay_execution_exception": "the op's recorded function raised while re-executing it",
+    "unattributed_tensor_arg": (
+        "a tensor argument of the op equals no recorded parent's payload and is not a known "
+        "source, so its producer is unattributed"
+    ),
+    "dropped_parent_edge_witness": (
+        "the completeness witness shows a parent edge capture dropped: a value the op read "
+        "matches an op that is not listed as its parent"
+    ),
+    # MLX's own reasons.
+    "declared_parents_inconsistent": (
+        "the op's declared parents disagree with the arrays its saved call reads"
+    ),
+    "replay_coverage_incomplete": "the replay did not cover every captured op",
+}
+
+#: Closed list of per-op validation decision reasons (the keys of the table
+#: above). The suite checks membership.
+VALIDATION_REASONS: frozenset[str] = frozenset(_VALIDATION_REASON_DEFINITIONS)
 
 #: ``BackendCapabilities`` field -> the refusal code its ``False`` value owes
 #: (the suite's ``c1_refusal_<flag>`` cells). Keep in step with the dataclass.

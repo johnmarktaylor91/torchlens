@@ -86,4 +86,6 @@ reason from the shared closed list: `replay_mismatch`, `parent_payload_missing`,
 `constant_producer_leaf` (a constant leaf or a literal producer: replayed when a function
 exists, exempted from perturbation because it has no tensor parent) and
 `constant_parent_payload` (a consumer whose dependency was proven by perturbing a constant
-parent). A failed status names the first offending op in its message.
+parent), `declared_parents_inconsistent` (an op's declared parents disagree with the arrays its
+saved call reads) and `replay_coverage_incomplete` (the replay did not cover every captured
+op). A failed status names the first offending op in its message.

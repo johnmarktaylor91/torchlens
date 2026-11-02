@@ -1730,6 +1730,16 @@ backends guide (`docs/backends.md`) carries the maturity table and links one pag
   | `constant_unrealizable` | a closure or literal constant has no readable buffer; the message names the constant op |
   | `rng_state_in_graph` | the forward graph carries lazy random-number state that a per-op evaluation would re-evaluate, on a backend without realize-once capture |
   | `unwrapped_op_in_capture` | a wrapper backend met an output or intermediate with no captured producer and the caller asked for a refusal; without that request the trace is marked `capture_verified=False` with this code as `provenance.verification_reason` and a warning |
+  | `runtime_mode_unsupported` | Paddle runs outside dygraph mode, or in PIR mode |
+  | `inplace_op_unsupported` | an in-place or global-state Paddle op runs inside the forward |
+  | `input_mutation_unsupported` | the traced tinygrad callable mutates an input (`Tensor.assign`, `Tensor.replace`, setitem) |
+  | `tensor_output_required` | the traced tinygrad callable returns no tinygrad Tensor |
+  | `tinygrad_input_required` | no positional input of the tinygrad call is a tinygrad Tensor |
+  | `live_payloads_required` | tinygrad replay validation or derived gradients were asked of an audit-only trace, which has no live realized-copy payloads |
+  | `mid_capture_execution_unsupported` | the traced tinygrad callable realizes a tensor or runs a `TinyJit` function during capture |
+  | `traced_transform_entry_unsupported` | the MLX capture entry is an `mx.compile`, `mx.grad` or `mx.vmap` wrapper rather than the eager module or callable |
+  | `intervention_with_derived_grads_unsupported` | MLX `grad_options=` combined with `intervene=` or `halt=` in one call |
+  | `intervention_result_invalid` | an MLX intervention returned something other than an `mx.array`, or changed the output's shape or dtype |
 
   Codes the backends already raised before the registry (`value_dependent_branch_unsupported`,
   `followed_by_unsupported`, `torchscript_boundary` and the rest) are members too; the frozenset is
@@ -1737,11 +1747,26 @@ backends guide (`docs/backends.md`) carries the maturity table and links one pag
 
 **tl.backends.VALIDATION_REASONS** (validation decision reasons)
 : The closed list of per-op decision reasons a backend's `validate` uses in
-  `ValidationStatus.decisions[*]["reason"]` and the status reason counts: `replay_mismatch`,
-  `parent_payload_missing`, `no_replayable_function`, `constant_producer_leaf`,
-  `constant_parent_payload`, `user_intervention_replacement`, `effectful_region`,
-  `perturbation_insensitive`, `dtype_tolerance_exceeded`, `op_unclassified`,
-  `capture_inconsistent`. `op_unclassified`: an op the checker cannot classify (outside every
+  `ValidationStatus.decisions[*]["reason"]` and the status reason counts. One word per failure: a
+  backend whose cause matches a definition uses that name, and a different cause has its own entry.
+  Shared: `replay_mismatch` (re-executing the op from its saved inputs did not reproduce its saved
+  output), `parent_payload_missing` (a payload the replay needs is absent: the op's own saved output
+  or a parent's), `no_replayable_function` (no callable can re-execute the op: none was recorded for
+  a computational op, or a preview backend could not rebuild or re-invoke the saved call),
+  `constant_producer_leaf`, `constant_parent_payload`, `user_intervention_replacement`,
+  `effectful_region`, `perturbation_insensitive`, `dtype_tolerance_exceeded`, `op_unclassified`,
+  `capture_inconsistent`. Torch's own: `arg_logging_mismatch` (the logged parent-argument positions
+  disagree with the data parents, or a parent's saved output disagrees with the argument snapshot at
+  its logged position), `missing_saved_args` (the argument snapshots replay needs were not
+  captured), `dispatch_op_count_mismatch` (replay saw a different number of dispatcher-level ops
+  than capture recorded), `bfs_incomplete` (the walk from outputs back to inputs did not reach every
+  op), `metadata_invariant_exception` (a metadata invariant check raised),
+  `replay_execution_exception` (the recorded function raised on re-execution),
+  `unattributed_tensor_arg` (a tensor argument matches no recorded parent and no known source),
+  `dropped_parent_edge_witness` (the completeness witness shows a parent edge capture dropped).
+  MLX's own: `declared_parents_inconsistent` (an op's declared parents disagree with the arrays its
+  saved call reads), `replay_coverage_incomplete` (the replay did not cover every captured op).
+  `op_unclassified`: an op the checker cannot classify (outside every
   classification table, or an initializer that contaminated the forward), recorded as a failed
   `metadata`-phase decision on that op. `capture_inconsistent`: capture records that disagree with
   each other (a callback self-consistency failure, an equation or op count mismatch, a replay kind
