@@ -807,7 +807,7 @@ torchlens/backends/mlx/backend.py::MLXBackend.emit_mlx_operation	173
 torchlens/backends/mlx/backend.py::MLXBackend.validate_trace	67
 torchlens/backends/mlx/backend.py::_find_mlx_compiled_attributes	84
 torchlens/backends/mlx/interventions.py::_resolve_helper_applier	63
-torchlens/backends/mlx/model_prep.py::discover_mlx_module_tree	82
+torchlens/backends/mlx/model_prep.py::discover_mlx_module_tree	68
 torchlens/backends/mlx/wrappers.py::_MLXWrapperRegistry._wrap_installed	83
 torchlens/backends/mlx/wrappers.py::_MLXWrapperRegistry.wrap_attr	70
 torchlens/backends/paddle/backend.py	2766
@@ -854,7 +854,7 @@ torchlens/backends/tf/validation.py::validate_tf_trace_detailed	80
 torchlens/backends/tinygrad/backend.py	3201
 torchlens/backends/tinygrad/backend.py::TinygradBackend._append_event	176
 torchlens/backends/tinygrad/backend.py::TinygradBackend._attach_derived_grads	90
-torchlens/backends/tinygrad/backend.py::TinygradBackend._derive_intermediate_grads_no_realize	77
+torchlens/backends/tinygrad/backend.py::TinygradBackend._derive_intermediate_grads_no_realize	74
 torchlens/backends/tinygrad/backend.py::TinygradBackend._emit_uop_graph	83
 torchlens/backends/tinygrad/backend.py::TinygradBackend._mark_output_events	61
 torchlens/backends/tinygrad/backend.py::TinygradBackend._replay_uop_from_trace_graph	80
