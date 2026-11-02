@@ -44,13 +44,10 @@ from ._literals import (
 from ._record_type import record_type
 from ._robustness import check_model_and_input_variants
 from ._save_budget import SaveBudgetOption
-from ._utils.arg_handling import (
-    leaf_preserving_input_copies,
-    normalize_input_args,
-    safe_copy_input_tree,
-)
+from ._utils.arg_handling import normalize_input_args, safe_copy_input_tree
 from ._utils.display import warn_parallel
 from ._utils.hashing import compute_graph_shape_hash
+from ._utils.input_leaves import leaf_preserving_input_copies
 from ._utils.introspection import get_vars_of_type_from_obj
 from ._utils.rng import set_random_seed
 from ._validation_state_snapshot import (
@@ -1319,11 +1316,6 @@ def _validate_forward_pass_torch(
 ) -> bool:
     """Validate that saved outs faithfully reproduce the model's output.
 
-    Every input copy validation makes (its own and the capture's) keeps a
-    grad-tracked leaf input a leaf (:func:`leaf_preserving_input_copies`, applied
-    as this function's decorator), so a model that sets ``requires_grad`` on its
-    input validates like it runs.
-
     **How it works:**
 
     1. Run model.forward() on PRISTINE torch to get ground-truth output
@@ -1336,15 +1328,13 @@ def _validate_forward_pass_torch(
     2. Run ``trace`` with ``save_args=True`` and ``layers_to_save='all'``
        to capture every out and its creating function's arguments.
     3. Call ``Trace.validate_forward_pass`` which replays the forward pass
-       layer-by-layer from saved outs, checking that the output matches
-       ground truth.  It also injects random outs and verifies the output
-       changes (proving the saved outs are actually used, not just ignored).
+       layer-by-layer from saved outs, checking that the output matches ground
+       truth, and injects random outs to verify the output changes (the saved outs are used).
     4. If ``validate_metadata=True``, run comprehensive invariant checks on all
        metadata cross-references (graph edges, module containment, labels, etc.).
 
-    **Why save_args=True is required:**  The validation replay re-executes
-    each function using its saved non-tensor arguments (e.g., stride, padding for
-    conv2d).  Without them, replay cannot reconstruct the correct computation.
+    **Why save_args=True is required:**  The validation replay re-executes each
+    function using its saved non-tensor arguments (e.g., stride, padding for conv2d).
 
     Parameters
     ----------

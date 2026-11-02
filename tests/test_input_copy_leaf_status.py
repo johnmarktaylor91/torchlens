@@ -21,11 +21,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._capture_state_helpers import _move_tensors_to_device
-from torchlens._utils.arg_handling import (
-    INPUT_WAS_PARAMETER_ATTR,
-    leaf_preserving_input_copies,
-    safe_copy_input_tree,
-)
+from torchlens._utils.arg_handling import INPUT_WAS_PARAMETER_ATTR, safe_copy_input_tree
+from torchlens._utils.input_leaves import leaf_preserving_input_copies
 
 
 class _SetsRequiresGradOnInput(nn.Module):

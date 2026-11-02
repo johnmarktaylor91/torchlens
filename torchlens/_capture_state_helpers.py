@@ -39,6 +39,7 @@ from ._utils._torch_compat import (
     get_fsdp_wrapper_type,
     is_dynamo_compiled_callable,
 )
+from ._utils.input_leaves import move_input_tensor
 from ._utils.tensor_leaves import iter_tensors
 from ._validation_state_snapshot import describe_copy_failure, warn_copy_failed
 
@@ -2091,10 +2092,8 @@ def _move_tensors_to_device_inner(
         Subtree to move.
     device:
         Target device.
-    _depth:
-        Internal recursion depth (callers must not supply this).
-    _in_progress:
-        Internal path-scoped ancestor-id set (callers must not supply this).
+    _depth, _in_progress:
+        Internal recursion depth and path-scoped ancestor-id set (callers must not supply these).
     """
 
     import dataclasses as _dataclasses
@@ -2109,7 +2108,6 @@ def _move_tensors_to_device_inner(
         raise_input_tree_depth_refusal,
     )
     from torchlens._ir.container import get_registered_container
-    from torchlens._utils.arg_handling import move_input_tensor
 
     if isinstance(obj, torch.Tensor):
         target = torch.device(device) if not isinstance(device, torch.device) else device
