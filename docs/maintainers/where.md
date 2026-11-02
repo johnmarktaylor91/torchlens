@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1359 modules, 631540 lines, 0 modules without a docstring.
+85 packages, 1359 modules, 631539 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -22,7 +22,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10552 |
-| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 52 | 35429 |
+| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 52 | 35428 |
 | `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 10 | 3335 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 21 | 10962 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5849 |
@@ -409,7 +409,7 @@ Extraction v2 runtime (extract memo items 4-19). (19 modules, 10552 lines)
 
 ### `torchlens._io`
 
-Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (52 modules, 35429 lines)
+Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (52 modules, 35428 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -460,7 +460,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 | `sidecar` | Namespaced typed SIDECAR families: out-of-tree persistence at L1. | 387 |
 | `state_contract` | The persisted-state contract service (ecosystem MEMO 3.3, megaplan P05). | 399 |
 | `state_keys` | Narrow class-method shadow filter for portable ''__setstate__'' loads. | 307 |
-| `streaming` | Streaming bundle writer used during forward-pass out capture. | 996 |
+| `streaming` | Streaming bundle writer used during forward-pass out capture. | 995 |
 | `streaming_async` | Bounded single-worker write pipeline behind the async streaming bundle writer. | 236 |
 | `tensor_policy` | Compatibility checks for tensors saved into portable bundles. | 163 |
 | `tlspec` | Unified ''.tlspec'' manifest writer helpers. | 753 |

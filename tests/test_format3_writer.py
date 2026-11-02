@@ -323,6 +323,31 @@ def test_accessor_edge_columns_are_id_arrays(saved: dict[str, Path], column: str
     assert any(cell for cell in cells), cells
 
 
+def test_streamed_save_writes_the_live_cells(tmp_path: Path) -> None:
+    """A streamed save writes the live cells ``trace.save()`` writes.
+
+    Arg expressions, row-ref accessor edges and the capture-outcome record come from
+    the live records paired with their scrubbed copies, on both save paths.
+    """
+
+    streamed_root, saved_root = tmp_path / "streamed", tmp_path / "saved"
+    storage = tl.options.StorageOptions(path=streamed_root, async_writes=False)
+    trace = tl.trace(_TinyCNN().eval(), _input(), streaming=storage)
+    try:
+        trace.save(saved_root)
+        streamed, saved = _records(streamed_root), _records(saved_root)
+        expressions = streamed["op"]["columns"]["arg_expressions"]
+        assert any(expressions), expressions
+        assert expressions == saved["op"]["columns"]["arg_expressions"]
+        for kind, name in _ACCESSOR_EDGE_COLUMNS:
+            cells = streamed[kind]["columns"][name]
+            assert all(isinstance(cell, list) and _id_array_cell_ok(cell) for cell in cells)
+        outcome = streamed["trace"]["fields"]["_capture_outcome"]
+        assert outcome == saved["trace"]["fields"]["_capture_outcome"], outcome
+    finally:
+        trace.cleanup()
+
+
 @pytest.mark.parametrize("label", (*_TRACE_LABELS, "bundle"))
 def test_no_pickle_at_any_level(saved: dict[str, Path], label: str) -> None:
     root = saved[label]
