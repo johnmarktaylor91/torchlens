@@ -698,7 +698,6 @@ docs-md	docs/agent-reference/current-2-x-surface.md	64
 docs-md	docs/agent-reference/current-2-x-surface.md	64,
 docs-md	docs/agent-reference/current-2-x-surface.md	657
 docs-md	docs/agent-reference/current-2-x-surface.md	79
-docs-md	docs/agent-reference/current-2-x-surface.md	83
 docs-md	docs/agent-reference/current-2-x-surface.md	873
 docs-md	docs/agent-reference/current-2-x-surface.md	9.2.2
 docs-md	docs/agent-reference/current-2-x-surface.md	921,
@@ -735,7 +734,6 @@ docs-md	docs/agent-reference/package/public-surface.md	2.16
 docs-md	docs/agent-reference/package/public-surface.md	37
 docs-md	docs/agent-reference/package/public-surface.md	39
 docs-md	docs/agent-reference/package/public-surface.md	42
-docs-md	docs/agent-reference/package/public-surface.md	83
 docs-md	docs/agent-reference/package/subpackages.md	10
 docs-md	docs/agent-reference/package/subpackages.md	11
 docs-md	docs/agent-reference/package/subpackages.md	11,
@@ -850,7 +848,6 @@ docs-md	docs/for-ai-agents.md	2020
 docs-md	docs/for-ai-agents.md	25,000
 docs-md	docs/for-ai-agents.md	4,000
 docs-md	docs/for-ai-agents.md	64
-docs-md	docs/for-ai-agents.md	83
 docs-md	docs/gradient_contract.md	64
 docs-md	docs/guides/fast_paths.md	0.17
 docs-md	docs/guides/fast_paths.md	0.18
@@ -1127,7 +1124,6 @@ docs-md	docs/maintainers/where.md	13,
 docs-md	docs/maintainers/where.md	130
 docs-md	docs/maintainers/where.md	1304
 docs-md	docs/maintainers/where.md	1306
-docs-md	docs/maintainers/where.md	1312
 docs-md	docs/maintainers/where.md	132
 docs-md	docs/maintainers/where.md	1324
 docs-md	docs/maintainers/where.md	1329
@@ -1214,7 +1210,6 @@ docs-md	docs/maintainers/where.md	17
 docs-md	docs/maintainers/where.md	170
 docs-md	docs/maintainers/where.md	171
 docs-md	docs/maintainers/where.md	17123
-docs-md	docs/maintainers/where.md	1713
 docs-md	docs/maintainers/where.md	172
 docs-md	docs/maintainers/where.md	173
 docs-md	docs/maintainers/where.md	1731
@@ -1428,7 +1423,6 @@ docs-md	docs/maintainers/where.md	311
 docs-md	docs/maintainers/where.md	313
 docs-md	docs/maintainers/where.md	314
 docs-md	docs/maintainers/where.md	315
-docs-md	docs/maintainers/where.md	31532
 docs-md	docs/maintainers/where.md	317
 docs-md	docs/maintainers/where.md	318
 docs-md	docs/maintainers/where.md	319
@@ -1520,7 +1514,6 @@ docs-md	docs/maintainers/where.md	4.4
 docs-md	docs/maintainers/where.md	4.5
 docs-md	docs/maintainers/where.md	4.7
 docs-md	docs/maintainers/where.md	40
-docs-md	docs/maintainers/where.md	400
 docs-md	docs/maintainers/where.md	401
 docs-md	docs/maintainers/where.md	402
 docs-md	docs/maintainers/where.md	403
@@ -1886,7 +1879,6 @@ docs-md	docs/maintainers/where.md	93
 docs-md	docs/maintainers/where.md	933
 docs-md	docs/maintainers/where.md	94
 docs-md	docs/maintainers/where.md	942
-docs-md	docs/maintainers/where.md	9432
 docs-md	docs/maintainers/where.md	946
 docs-md	docs/maintainers/where.md	947
 docs-md	docs/maintainers/where.md	95
@@ -2086,7 +2078,6 @@ docs-md	docs/migration/scoped_detached_patching.md	27
 docs-md	docs/migration/v2.0_api_changes.md	2.0
 docs-md	docs/migration/v2.0_api_changes.md	2026
 docs-md	docs/migration/v2.0_api_changes.md	42
-docs-md	docs/migration/v2.0_api_changes.md	83
 docs-md	docs/monitor_training.md	10
 docs-md	docs/monitor_training.md	100
 docs-md	docs/monitor_training.md	125

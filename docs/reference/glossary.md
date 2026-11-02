@@ -1106,6 +1106,16 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   regex pattern) select ops by their public labels. `tl.where` filters a table with a
   predicate callable.
 
+**tl.all_sites** — *unstable — no deprecation shim owed*
+: `tl.all_sites()` is the universal selector: `trace[tl.all_sites()]` selects every op of the
+  trace as a whole site, the same result as `trace[tl.label_matches(".*")]` (it stores that
+  kind and pattern, so it matches, binds and persists the same way; a saved spec reloads as
+  `tl.label_matches(".*")`). It composes with `|`, `&`, `-` and `~` like any selector.
+  `tl.all_sites() - region` is the complement of a region in the whole trace; the graph
+  producers and `trace.subgraph` read it as the sites outside `region`, because a site whose
+  element mask is empty seeds nothing. Resolution refuses typed (`non_tensor_site` /
+  `no_index_space`) when some op has no output index space, rather than dropping it.
+
 **Structural selectors**
 : `tl.func` / `tl.module` / `tl.in_module(address)` select by callable or module context
   (`in_module` only builds a selector; whether one record lies in a module is read on the
@@ -2193,7 +2203,8 @@ deprecation shim owed (do/Selection spellings slate-ratified subject to D7)*
   `(N sites, M elements)`. The former `SiteTable` (`resolve_sites`, `.first`, `.where`) folded into it:
   `selection[0]` and `trace[selector & other]` spell those. TWO-LEVEL DENOTATION:
   (touched-site family, selected-element set); zero-mask entries are retained
-  first-class; `.is_empty`/`__bool__` are ELEMENT-level; `bool()` on the QUERY
+  first-class (`len()` and iteration count them; the graph producers and
+  `trace.subgraph` do not seed from them); `.is_empty`/`__bool__` are ELEMENT-level; `bool()` on the QUERY
   type refuses typed (`selection_bool_ambiguous`). Anything region-shaped
   implements `__selection__`; `Site.mask` returns a FRESH materialization
   (mutation cannot alter the selection). Masks are exact AS SETS; producer
@@ -2274,8 +2285,14 @@ no deprecation shim owed*
   error). Operands are site label strings (a bare layer label on a
   multi-pass layer is the all-passes Layer spelling), `Op`/`Layer` handles,
   or any ACT selection; `between` endpoints also accept lists of regions.
-  Element masks never shrink a graph region (a touched site is a touched
-  node — family semantics). Membership is a structural fact about THIS
+  A seed or endpoint site that carries at least one selected element counts
+  as its whole node (a partial mask never shrinks a graph region). A site
+  whose element mask is EMPTY seeds nothing: `x - y` keeps every site `x`
+  touched, with an empty mask where `y` removed all of it, and those sites
+  are not part of the region the closure grows from, so
+  `tl.neighborhood(tl.all_sites() - region, ...)` grows from the sites
+  outside `region`. `trace.subgraph(selection)` takes the same member set.
+  Membership is a structural fact about THIS
   capture, so entries are whole-site masks with
   `provenance.relation="exact"`. PARAM/EDGE operands refuse
   `selection_kind_incompatible`; unknown sites refuse `site_not_in_trace`;
