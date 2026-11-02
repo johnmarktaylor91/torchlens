@@ -17,12 +17,14 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Iterator, Mapping
+from functools import cache
 from pathlib import Path
 from typing import Any, Final
 
 import torch
 
 from ..._data_classes._state_adapter import state_new, state_restore
+from ..._data_classes.field_policy import StorageKind
 from ..format_contract import BlobRef
 from ..recipe_reader import read_recipe
 from ..state_contract import governed_artifact_load
@@ -36,6 +38,7 @@ from .decode import (
     build_component,
     cell_error,
 )
+from .schema import record_schema
 from .validate import (
     BELOW_FLOOR,
     TLSPEC_KEY,
@@ -404,7 +407,7 @@ class DecodedArtifact:
                 for obj, row in zip(
                     self.objects.get(kind, ()), self.tables.get(kind, ()), strict=True
                 ):
-                    _restore_record(obj, row, version=self.version)
+                    _restore_record(obj, row, version=self.version, computed=computed_columns(kind))
 
     def trace_state(self, accessor_cls: type) -> dict[str, Any]:
         """The scrubbed-state-shaped dict the existing rehydrate path restores.
@@ -451,8 +454,25 @@ class DecodedArtifact:
         return manifest
 
 
-def _restore_record(obj: Any, row: Mapping[str, Any], *, version: int) -> None:
-    state = dict(row)
+@cache
+def computed_columns(kind: str) -> frozenset[str]:
+    """Columns the writer fills from a read-only property; loaded objects recompute them."""
+
+    return frozenset(
+        name
+        for name, column in record_schema(kind).items()
+        if column.storage == StorageKind.COMPUTED.value
+    )
+
+
+def _restore_record(
+    obj: Any, row: Mapping[str, Any], *, version: int, computed: frozenset[str] = frozenset()
+) -> None:
+    # A COMPUTED column (``Param.is_quantized``, ``module_name``, ...) is written
+    # from the live property so the file reads whole; the object owns no slot for
+    # it, and installing it would shadow the property with dead state the
+    # rehydrate walk then cannot assign. The 2.x pickle state never carried it.
+    state = {name: value for name, value in row.items() if name not in computed}
     state[TLSPEC_KEY] = version
     setstate = getattr(type(obj), "__setstate__", None)
     if setstate is not None and setstate is not getattr(object, "__setstate__", None):

@@ -26,7 +26,7 @@ from collections.abc import Collection, Iterable, Mapping, Set
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast, overload
+from typing import TYPE_CHECKING, Any, Final, Literal, NamedTuple, cast, overload
 
 import torch
 from safetensors import SafetensorError
@@ -60,7 +60,7 @@ from ._artifact_anchors import check_manifest_metadata_anchors, persisted_anchor
 from ._durability import fsync_dir, fsync_tree
 from ._pickle_prescan import OpcodeCeilingExceeded
 from ._pre3_module_paths import modellog_216_error
-from ._root_manifest import NOT_ROUTED, _read_root_manifest, load_by_root_manifest
+from ._root_manifest import NOT_ROUTED, load_by_root_manifest
 from ._safe_unpickle import SafeBundleUnpickler
 from ._save_gates import (
     _refuse_edge_intervened_save,
@@ -1315,11 +1315,25 @@ def load(
     ...
 
 
-def _is_format3_root(bundle_path: Path) -> bool:
-    """Return whether the directory's root manifest names the 3.0 saved format."""
+#: Root files only a 2.x artifact carries; a directory holding one keeps the 2.x
+#: path until that path is deleted. ``spec.json`` is the v2.16 intervention root.
+_PRE3_ROOT_FILES: Final = (*format3_reader.PRE3_ROOT_MARKERS, "spec.json")
 
-    candidate = _read_root_manifest(bundle_path)
-    return candidate is not None and candidate.get("format") == format3_contract.FORMAT_NAME
+
+def _is_format3_root(bundle_path: Path) -> bool:
+    """Return whether the directory is read by the 3.0 reader.
+
+    Every root ``manifest.json`` without a 2.x root file beside it is the 3.0
+    reader's: it alone decides whether the manifest names the format, and a
+    manifest missing or corrupting the ``format`` key refuses typed there
+    (``artifact_version_below_floor`` or ``manifest_schema_invalid``) instead
+    of falling into the 2.x manifest parser.
+    """
+
+    manifest_path = bundle_path / format3_contract.MANIFEST_FILE
+    if not (manifest_path.exists() or manifest_path.is_symlink()):
+        return False
+    return not any((bundle_path / name).exists() for name in _PRE3_ROOT_FILES)
 
 
 def _load_format3(

@@ -211,11 +211,11 @@ def test_tag_outside_the_vocabulary_refuses(saved, tmp_path, tripwires, tag):
 
 def test_pickle_bytes_inside_a_bytes_cell_stay_bytes(saved, tmp_path, tripwires):
     import base64
-    import pickle
 
     import torchlens as tl
 
-    payload = pickle.dumps(os.system)  # a GLOBAL os.system stream, as data
+    # A hand-written protocol-0 stream: GLOBAL os.system, one argument, REDUCE.
+    payload = b"cos\nsystem\n(S'touch " + str(tripwires["marker"]).encode() + b"'\ntR."
     cell = _tagged("bytes", base64=base64.b64encode(payload).decode(), bytes=len(payload))
     copy = _with_cell(saved, tmp_path / "pbytes", cell)
     try:
