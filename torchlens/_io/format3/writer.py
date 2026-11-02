@@ -1,233 +1,342 @@
-"""The 3.0 writer: a trace or bundle to typed JSON records plus safetensors blobs.
+"""The 3.0 writer: a trace or bundle to typed JSON record tables plus safetensors chunks.
 
-Contract: ``docs/maintainers/saved_format_3.md`` (envelope, records, tensor
-references, unencodable values, the intervention recipe, refusals).
+Contract: ``docs/maintainers/saved_format_3.md``; design:
+``docs/maintainers/saved_format_3_design.md`` (sections 2, 3, 5, 6, 8, 9).
 
 ``Trace.save`` keeps its one chokepoint (``torchlens._io.bundle.save``): the
 entry refusals, the save gates, the level and payload-flag resolution, the
-scrub, the blob writes and the atomic publish are unchanged. Where that
-chokepoint used to pickle the scrubbed state it now calls
-:func:`write_trace_envelope`, which encodes the state into one JSON table per
-record kind (``records/<kind>.json``), writes any tensor the scrub left inline
-into ``blobs/inline.safetensors``, digests every file and writes the 3.0
-``manifest.json``. No pickle file is written at any level. The save preflight
-(reload every save once) runs the 3.0 reader's ``validate_artifact`` on the
-staged directory before it is published.
+scrub and the atomic publish are unchanged. Payload tensors go into chunked
+safetensors files through :class:`~torchlens._io.format3.payloads.PayloadStore`;
+where the chokepoint used to pickle the scrubbed state it now calls
+:func:`write_trace_envelope`, which lays the state out as one table per record
+kind (``records/<kind>.json``: the trace as one object, every other kind
+columnar, rows in live container order), digests every file and writes the
+3.0 ``manifest.json``. No pickle file is written at any level. The reload
+check (late.21) re-reads the written tables through the bounded JSON reader
+and the typed decoder before the publish.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+from collections import deque
 from collections.abc import Mapping, Sequence
+from functools import cache
+from importlib import import_module
 from pathlib import Path
 from typing import Any
 
 import torch
-from safetensors.torch import save_file
 
+from ..._data_classes._state_adapter import state_items
 from .. import _json
+from ..field_registry import RECORD_CONTRACT_CLASSES
 from ..format_errors import ArtifactError
-from ..manifest import TensorEntry
 from ..writer_contract import writer_contract_digest
 from . import reader as _reader
-from ._encode import StateEncoder
 from .contract import (
-    BLOBS_DIR,
     FORMAT_MAJOR,
     FORMAT_NAME,
     MANIFEST_FILE,
-    PAYLOAD_CODEC_IDS,
     RECORD_CONTRACT_VERSION,
     RECORD_INDEX,
     RECORDS_DIR,
     refuse_writer_not_built,
 )
+from .schema import level_columns, record_schema
+from .values import ValueEncoder, decode_value, object_state, record_type_table, tagged
 
-#: Tensor key inside every payload blob file (one tensor per file).
-BLOB_TENSOR_KEY = "data"
-#: File that holds tensors the scrub left inline in the metadata.
-INLINE_BLOB_FILE = f"{BLOBS_DIR}/inline.safetensors"
 #: Root files the digest table leaves out: the manifest itself and the
 #: staging sentinel that comes off right before publish.
 _UNDIGESTED_ROOT_FILES = frozenset({MANIFEST_FILE, "PARTIAL"})
 #: Prefix of the unbuilt-door refusal message (``contract.refuse_*_not_built``).
 _UNBUILT_DOOR_PREFIX = "The 3.0 saved-format door "
+#: Trace state keys that hold each record kind in live container order; rows
+#: found only by reference follow in discovery order.
+_SEED_KEYS: tuple[tuple[str, str], ...] = (
+    ("_layer_list", "op"),
+    ("_layer_logs", "layer"),
+    ("_module_logs", "module"),
+    ("_param_logs", "param"),
+    ("_grad_fn_logs", "grad_fn"),
+    ("_backward_pass_logs", "backward_pass"),
+)
+#: Disclosure paths listed in the manifest (the full list is in the cells).
+_DISCLOSURE_PATHS_SHOWN = 16
+#: Values the discovery walk never descends into.
+_LEAF_TYPES = (str, bytes, bytearray, int, float, complex, bool, type(None), torch.Tensor)
 
 
-def tensor_reference_fields(entry: TensorEntry) -> dict[str, Any]:
-    """Return the tensor reference fields of one written blob entry.
-
-    Parameters
-    ----------
-    entry:
-        Manifest entry of a written payload blob.
-
-    Returns
-    -------
-    dict[str, Any]
-        ``contract.TENSOR_REFERENCE_FIELDS`` values for the reference object.
-    """
+@cache
+def _record_kinds_by_class() -> dict[type, str]:
+    """Return record class to record kind for the twelve record contracts."""
 
     return {
-        "blob": entry.relative_path,
-        "key": BLOB_TENSOR_KEY,
-        "dtype": entry.logical_dtype or entry.dtype,
-        "shape": list(entry.shape),
-        "device": entry.logical_device or entry.device_at_save,
-        "requires_grad": bool(entry.requires_grad),
-        "codec": entry.codec or PAYLOAD_CODEC_IDS[0],
-        "complex": False,
+        getattr(import_module(module), name): kind
+        for kind, (module, name) in RECORD_CONTRACT_CLASSES.items()
     }
 
 
-class _InlineTensorSink:
-    """Collect tensors the scrub left inline so they land in one blob file."""
+def record_kind_of(value: Any) -> str | None:
+    """Return the record kind of a record object, or ``None`` for any other value."""
 
-    def __init__(self) -> None:
-        self.tensors: dict[str, torch.Tensor] = {}
-
-    def add(self, tensor: torch.Tensor) -> dict[str, Any]:
-        """Store one inline tensor and return its reference fields."""
-
-        key = f"t{len(self.tensors):06d}"
-        host = tensor.detach().resolve_conj().resolve_neg().contiguous().cpu()
-        self.tensors[key] = host
-        return {
-            "blob": INLINE_BLOB_FILE,
-            "key": key,
-            "dtype": str(host.dtype).replace("torch.", ""),
-            "shape": [int(dim) for dim in host.shape],
-            "device": str(tensor.device),
-            "requires_grad": bool(tensor.requires_grad),
-            "codec": PAYLOAD_CODEC_IDS[0],
-            "complex": False,
-        }
-
-    def write(self, root: Path) -> None:
-        """Write the collected tensors (nothing when none were collected)."""
-
-        if self.tensors:
-            save_file(self.tensors, str(root / INLINE_BLOB_FILE))
+    kinds = _record_kinds_by_class()
+    kind = kinds.get(type(value))
+    if kind is not None:
+        return kind
+    for cls in type(value).__mro__[1:]:
+        if cls in kinds:
+            return kinds[cls]
+    return None
 
 
-def encode_state(
-    scrubbed_state: Mapping[str, Any], tensor_entries: Sequence[TensorEntry]
-) -> tuple[StateEncoder, _InlineTensorSink]:
-    """Encode scrubbed trace state into record tables.
+def _container_items(value: Any) -> list[Any]:
+    """Return the members of a container value (accessors expose ``_list``)."""
+
+    if isinstance(value, Mapping):
+        return list(value.values())
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return list(value)
+    listed = getattr(value, "_list", None)
+    return list(listed) if isinstance(listed, list) else []
+
+
+class RecordTables:
+    """The record objects of one scrubbed trace, one ordered row list per kind.
 
     Parameters
     ----------
-    scrubbed_state:
-        Scrubbed trace state from the save scrub.
-    tensor_entries:
-        Entries of every blob the save wrote.
+    state:
+        Scrubbed trace state.
+    """
+
+    def __init__(self, state: Mapping[str, Any]) -> None:
+        self.state = state
+        self.rows: dict[str, list[Any]] = {kind: [] for kind, _, _ in RECORD_INDEX}
+        self._index: dict[int, tuple[str, int]] = {}
+
+    def add(self, value: Any, kind: str) -> int:
+        """Register a record object once; return its row index."""
+
+        known = self._index.get(id(value))
+        if known is not None:
+            return known[1]
+        row = len(self.rows[kind])
+        self.rows[kind].append(value)
+        self._index[id(value)] = (kind, row)
+        return row
+
+    def discover(self) -> None:
+        """Seed the live containers, then register every record reachable by reference."""
+
+        for key, kind in _SEED_KEYS:
+            for item in _container_items(self.state.get(key)):
+                if record_kind_of(item) == kind:
+                    self.add(item, kind)
+        pending: deque[Any] = deque(self.state.values())
+        for rows in self.rows.values():
+            pending.extend(rows)
+        seen: set[int] = set()
+        while pending:
+            value = pending.popleft()
+            if isinstance(value, _LEAF_TYPES) or id(value) in seen:
+                continue
+            seen.add(id(value))
+            pending.extend(self._children(value))
+
+    def _children(self, value: Any) -> list[Any]:
+        """Register ``value`` if it is a record; return the values it holds."""
+
+        kind = record_kind_of(value)
+        if kind == "trace":
+            return []
+        if kind is not None:
+            self.add(value, kind)
+            return [item for _, item in state_items(value)]
+        if isinstance(value, Mapping):
+            return [*value.keys(), *value.values()]
+        if isinstance(value, (list, tuple, set, frozenset)):
+            return list(value)
+        if type(value).__module__.startswith("torchlens") and not isinstance(value, type):
+            try:
+                return list(object_state(value).values())
+            except (AttributeError, TypeError, ValueError):
+                return []
+        return []
+
+    def reference(self, value: Any) -> dict[str, Any] | None:
+        """Return the ``ref`` cell of a record object, or ``None`` for other values."""
+
+        kind = record_kind_of(value)
+        if kind is None:
+            return None
+        row = 0 if kind == "trace" else self.add(value, kind)
+        return tagged("ref", record=kind, row=row)
+
+
+def _cell(record: Any, state: Mapping[str, Any], column: str, storage: str) -> Any:
+    """Return one stored value of a record (computed keys are computed if absent)."""
+
+    if column in state:
+        return state[column]
+    if storage == "computed":
+        try:
+            return getattr(record, column)
+        except (AttributeError, LookupError, RuntimeError, TypeError, ValueError):
+            return None
+    return None
+
+
+def encode_tables(
+    state: Mapping[str, Any],
+    *,
+    encoder_factory: Any,
+    payload_policy: Mapping[str, bool],
+) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
+    """Lay out scrubbed trace state as the twelve record tables.
+
+    Parameters
+    ----------
+    state:
+        Scrubbed trace state.
+    encoder_factory:
+        Callable taking the ``ref`` resolver and returning a ``ValueEncoder``.
+    payload_policy:
+        Resolved include flags (decide the optional columns).
 
     Returns
     -------
-    tuple[StateEncoder, _InlineTensorSink]
-        The filled encoder (tables and disclosures) and the inline tensors.
+    tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]
+        Record file payloads by kind (kinds without rows omitted) and the
+        disclosures of values written as ``unencodable``.
     """
 
-    sink = _InlineTensorSink()
-    refs = {entry.blob_id: tensor_reference_fields(entry) for entry in tensor_entries}
-    encoder = StateEncoder(refs, inline_tensor=sink.add)
-    encoder.encode_trace_state(scrubbed_state)
-    return encoder, sink
+    tables = RecordTables(state)
+    tables.discover()
+    encoder: ValueEncoder = encoder_factory(tables.reference)
+    schema = record_schema("trace")
+    fields = {
+        name: encoder.encode(
+            state.get(name), f"trace.{name}", payload=schema[name].storage == "payload"
+        )
+        for name in level_columns("trace", payload_policy)
+    }
+    files: dict[str, dict[str, Any]] = {
+        "trace": {"record": "trace", "tlspec_version": RECORD_CONTRACT_VERSION, "fields": fields}
+    }
+    columns = _encode_record_rows(tables, encoder, payload_policy)
+    for kind, _, _ in RECORD_INDEX:
+        if kind != "trace" and tables.rows[kind]:
+            files[kind] = {
+                "record": kind,
+                "tlspec_version": RECORD_CONTRACT_VERSION,
+                "rows": len(tables.rows[kind]),
+                "columns": columns[kind],
+            }
+    return files, encoder.disclosures
 
 
-def _dump(value: Any) -> bytes:
+def _encode_record_rows(
+    tables: RecordTables, encoder: ValueEncoder, payload_policy: Mapping[str, bool]
+) -> dict[str, dict[str, list[Any]]]:
+    """Encode every row of every non-trace kind, column by column.
+
+    A cell may reference a record no container held; it gets the next row of
+    its table and is encoded on a later pass, so the loop runs until no new
+    rows appear.
+    """
+
+    names = {kind: level_columns(kind, payload_policy) for kind, _, _ in RECORD_INDEX}
+    columns = {kind: {name: [] for name in names[kind]} for kind in names}
+    done = dict.fromkeys(names, 0)
+    progressed = True
+    while progressed:
+        progressed = False
+        for kind in names:
+            if kind == "trace":
+                continue
+            schema = record_schema(kind)
+            while done[kind] < len(tables.rows[kind]):
+                row = done[kind]
+                record = tables.rows[kind][row]
+                state = dict(state_items(record))
+                for name in names[kind]:
+                    storage = schema[name].storage
+                    columns[kind][name].append(
+                        encoder.encode(
+                            _cell(record, state, name, storage),
+                            f"{kind}[{row}].{name}",
+                            payload=storage == "payload",
+                        )
+                    )
+                done[kind] += 1
+                progressed = True
+    return columns
+
+
+def _dump(value: Any, *, sort_keys: bool = False) -> bytes:
     """Return the canonical bytes of one JSON file of the artifact."""
 
-    return json.dumps(value, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode(
-        "utf-8"
+    text = json.dumps(
+        value, ensure_ascii=False, allow_nan=False, separators=(",", ":"), sort_keys=sort_keys
     )
+    return text.encode("utf-8")
 
 
-def _write_records(root: Path, encoder: StateEncoder) -> dict[str, dict[str, Any]]:
-    """Write one JSON file per non-empty record table; return the index."""
+def _digest(data: bytes) -> dict[str, Any]:
+    """Return the ``{sha256, bytes}`` entry of one file's content."""
 
-    (root / RECORDS_DIR).mkdir(exist_ok=True)
-    index: dict[str, dict[str, Any]] = {}
-    for kind, class_path, _ in RECORD_INDEX:
-        rows = encoder.tables[kind]
-        if not rows:
-            continue
-        relative = f"{RECORDS_DIR}/{kind}.json"
-        payload = {
-            "record": kind,
-            "class": class_path,
-            "tlspec_version": RECORD_CONTRACT_VERSION,
-            "rows": rows,
-        }
-        (root / relative).write_bytes(_dump(payload))
-        index[kind] = {"file": relative, "rows": len(rows)}
-    return index
+    return {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)}
 
 
-def _file_digests(root: Path) -> dict[str, str]:
-    """Return ``relative path -> sha256`` for every file except the manifest."""
-
-    digests: dict[str, str] = {}
-    for path in sorted(root.rglob("*")):
-        if not path.is_file() or path.parent == root and path.name in _UNDIGESTED_ROOT_FILES:
-            continue
-        digests[path.relative_to(root).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
-    return digests
-
-
-def write_trace_envelope(
-    root: Path,
-    *,
-    base_manifest: Mapping[str, Any],
-    scrubbed_state: Mapping[str, Any],
-    tensor_entries: Sequence[TensorEntry],
-    save_level: str,
-    payload_policy: Mapping[str, bool],
-    kind: str = "trace",
-) -> dict[str, Any]:
-    """Write the records, inline blob and 3.0 manifest of one staged trace.
+def write_record_files(root: Path, files: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+    """Write ``records/<kind>.json`` for every table; return the manifest index.
 
     Parameters
     ----------
     root:
-        Staged artifact directory (blobs already written under ``blobs/``).
-    base_manifest:
-        The unified manifest fields the save already builds (writer identity,
-        tensor entries, provenance, disclosures, sites, runnable descriptor).
-    scrubbed_state:
-        Scrubbed trace state.
-    tensor_entries:
-        Entries of every written payload blob.
-    save_level:
-        Resolved save level.
-    payload_policy:
-        Resolved payload flags (``include_outs`` and the rest).
-    kind:
-        Artifact kind recorded in the manifest.
+        Staged artifact directory.
+    files:
+        Record file payloads by kind.
 
     Returns
     -------
     dict[str, Any]
-        The manifest written to ``manifest.json``.
+        ``{record: {path, rows, sha256, bytes}}``.
     """
 
-    encoder, sink = encode_state(scrubbed_state, tensor_entries)
-    sink.write(root)
-    records = _write_records(root, encoder)
-    manifest: dict[str, Any] = dict(base_manifest)
-    manifest.update(
-        envelope_fields(
-            root,
-            kind=kind,
-            save_level=save_level,
-            payload_policy=payload_policy,
-            records=records,
-            unencodable=encoder.unencodable,
-        )
-    )
-    (root / MANIFEST_FILE).write_bytes(_dump(manifest))
-    return manifest
+    (root / RECORDS_DIR).mkdir(exist_ok=True)
+    index: dict[str, Any] = {}
+    for kind, payload in files.items():
+        relative = f"{RECORDS_DIR}/{kind}.json"
+        data = _dump(payload)
+        (root / relative).write_bytes(data)
+        rows = int(payload.get("rows", 1))
+        index[kind] = {"path": relative, "rows": rows, **_digest(data)}
+    return index
+
+
+def file_digests(root: Path) -> dict[str, dict[str, Any]]:
+    """Return ``{relpath: {sha256, bytes}}`` for every file except the manifest."""
+
+    digests: dict[str, dict[str, Any]] = {}
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() or path.parent == root and path.name in _UNDIGESTED_ROOT_FILES:
+            continue
+        digests[path.relative_to(root).as_posix()] = _digest(path.read_bytes())
+    return digests
+
+
+def disclosure_summary(disclosures: Sequence[Mapping[str, Any]]) -> dict[str, Any] | None:
+    """Return the manifest ``disclosures`` object, or ``None`` when there are none."""
+
+    if not disclosures:
+        return None
+    return {
+        "count": len(disclosures),
+        "first": [str(item["at"]) for item in disclosures[:_DISCLOSURE_PATHS_SHOWN]],
+    }
 
 
 def envelope_fields(
@@ -237,12 +346,13 @@ def envelope_fields(
     save_level: str,
     payload_policy: Mapping[str, bool],
     records: Mapping[str, Mapping[str, Any]],
-    unencodable: Sequence[Mapping[str, Any]],
+    codecs: Sequence[str],
+    disclosures: Sequence[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     """Return the 3.0 envelope fields of a staged artifact.
 
-    Call it last, after every other file is written: the ``files`` table
-    digests what is on disk.
+    Call it last, after every other file is written: ``files`` digests what
+    is on disk.
 
     Parameters
     ----------
@@ -255,34 +365,172 @@ def envelope_fields(
     payload_policy:
         Resolved payload flags.
     records:
-        Record table index (``kind -> {"file", "rows"}``).
-    unencodable:
-        Disclosures of values stringified because they had no typed encoding.
+        Record table index from :func:`write_record_files`.
+    codecs:
+        Codec ids that wrote at least one payload.
+    disclosures:
+        Values written as ``unencodable``.
 
     Returns
     -------
     dict[str, Any]
-        The envelope keys ``contract.MANIFEST_REQUIRED_FIELDS`` names beyond
-        the writer identity, plus the disclosure list.
+        The envelope keys of ``contract.MANIFEST_REQUIRED_FIELDS`` beyond the
+        writer identity, plus ``disclosures`` when there are any.
     """
 
-    return {
+    fields: dict[str, Any] = {
         "format": FORMAT_NAME,
         "format_version": FORMAT_MAJOR,
         "tlspec_version": RECORD_CONTRACT_VERSION,
         "kind": kind,
         "save_level": save_level,
-        "payload_policy": dict(payload_policy),
+        "payload_policy": {name: bool(flag) for name, flag in payload_policy.items()},
         "contract_digest": writer_contract_digest(),
-        "codecs": list(PAYLOAD_CODEC_IDS),
+        "codecs": list(codecs),
         "records": {name: dict(entry) for name, entry in records.items()},
-        "unencodable": [dict(item) for item in unencodable],
-        "files": _file_digests(root),
+        "files": file_digests(root),
+    }
+    summary = disclosure_summary(disclosures)
+    if summary is not None:
+        fields["disclosures"] = summary
+    return fields
+
+
+def payload_index(tensor_refs: Mapping[str, Mapping[str, Any]]) -> dict[str, dict[str, str]]:
+    """Return the manifest ``tensors`` index: blob id to its chunk file and key.
+
+    Parameters
+    ----------
+    tensor_refs:
+        Blob id to tensor reference fields of every stored payload.
+
+    Returns
+    -------
+    dict[str, dict[str, str]]
+        ``{blob_id: {"blob": chunk relpath, "key": "t<k>"}}`` in blob-id order.
+    """
+
+    return {
+        blob_id: {"blob": str(fields["blob"]), "key": str(fields["key"])}
+        for blob_id, fields in sorted(tensor_refs.items())
+        if "blob" in fields
     }
 
 
-def check_written_json(root: Path) -> None:
-    """Re-read every JSON file of a staged artifact through the bounded reader.
+def make_encoder_factory(tensor_refs: Mapping[str, Mapping[str, Any]]) -> Any:
+    """Return the encoder factory that resolves scrubbed blob references.
+
+    Parameters
+    ----------
+    tensor_refs:
+        Blob id to tensor reference fields for every payload the save stored.
+
+    Returns
+    -------
+    Callable
+        ``factory(record_ref) -> ValueEncoder``.
+    """
+
+    def tensor_ref(value: Any, at: str) -> dict[str, Any] | None:
+        blob_id = getattr(value, "blob_id", None)
+        if blob_id is None:
+            return None
+        fields = tensor_refs.get(str(blob_id))
+        if fields is None:
+            raise ArtifactError(
+                f"The scrubbed state references payload {blob_id!r} at {at}, but the save "
+                "stored no such payload.",
+                code="bundle_save_failed",
+                remedy="re-save; the payload selection and the metadata disagree",
+            )
+        return dict(fields)
+
+    def factory(record_ref: Any) -> ValueEncoder:
+        return ValueEncoder(record_ref=record_ref, tensor_ref=tensor_ref)
+
+    return factory
+
+
+def write_trace_envelope(
+    root: Path,
+    *,
+    base_manifest: Mapping[str, Any],
+    scrubbed_state: Mapping[str, Any],
+    tensor_refs: Mapping[str, Mapping[str, Any]],
+    codecs: Sequence[str],
+    save_level: str,
+    payload_policy: Mapping[str, bool],
+    kind: str = "trace",
+) -> dict[str, Any]:
+    """Write the record tables and 3.0 manifest of one staged trace.
+
+    Parameters
+    ----------
+    root:
+        Staged artifact directory (payload chunks already written).
+    base_manifest:
+        Manifest fields the save already builds (writer identity, backend,
+        model signature and fingerprint, sites, runnable descriptor).
+    scrubbed_state:
+        Scrubbed trace state.
+    tensor_refs:
+        Blob id to tensor reference fields of every stored payload.
+    codecs:
+        Codec ids that wrote at least one payload.
+    save_level:
+        Resolved save level.
+    payload_policy:
+        Resolved payload flags.
+    kind:
+        Artifact kind recorded in the manifest.
+
+    Returns
+    -------
+    dict[str, Any]
+        The manifest written to ``manifest.json``.
+    """
+
+    files, disclosures = encode_tables(
+        scrubbed_state,
+        encoder_factory=make_encoder_factory(tensor_refs),
+        payload_policy=payload_policy,
+    )
+    records = write_record_files(root, files)
+    manifest: dict[str, Any] = dict(base_manifest)
+    # The 2.x per-file tensor list becomes the blob-id index: the runnable
+    # descriptor and the weight tables name payloads by blob id.
+    manifest["tensors"] = payload_index(tensor_refs)
+    manifest.pop("tensor_entries", None)
+    manifest.update(
+        envelope_fields(
+            root,
+            kind=kind,
+            save_level=save_level,
+            payload_policy=payload_policy,
+            records=records,
+            codecs=codecs,
+            disclosures=disclosures,
+        )
+    )
+    (root / MANIFEST_FILE).write_bytes(_dump(manifest, sort_keys=True))
+    return manifest
+
+
+def _refuse_reload(detail: str) -> ArtifactError:
+    """Return the save refusal for a staged artifact that does not read back."""
+
+    return ArtifactError(
+        f"The 3.0 writer produced an artifact that does not read back: {detail}",
+        code="bundle_save_failed",
+        remedy="report this; the writer and the reader disagree",
+    )
+
+
+def reload_check(root: Path) -> None:
+    """Re-read every record table of a staged artifact and decode every cell.
+
+    One bounded JSON parse per file plus the typed decode: row counts, column
+    lengths and the manifest index must agree with what was written.
 
     Parameters
     ----------
@@ -292,27 +540,36 @@ def check_written_json(root: Path) -> None:
     Raises
     ------
     ArtifactError
-        ``bundle_save_failed`` when a written file would not read back.
+        ``bundle_save_failed`` when anything does not read back.
     """
 
-    for path in [root / MANIFEST_FILE, *sorted((root / RECORDS_DIR).glob("*.json"))]:
+    try:
+        manifest = _json.read_bounded(root / MANIFEST_FILE)
+    except (OSError, ValueError) as exc:
+        raise _refuse_reload(f"manifest.json: {exc}") from exc
+    for kind, entry in dict(manifest.get("records") or {}).items():
         try:
-            _json.read_bounded(path)
-        except (OSError, ValueError) as exc:
-            raise ArtifactError(
-                f"The 3.0 writer produced {path.name}, which does not read back: {exc}",
-                code="bundle_save_failed",
-                remedy="report this; the writer and the bounded reader disagree",
-            ) from exc
+            payload = _json.read_bounded(root / str(entry["path"]))
+        except (OSError, ValueError, KeyError) as exc:
+            raise _refuse_reload(f"records of {kind}: {exc}") from exc
+        if kind == "trace":
+            decode_value(payload.get("fields"), at="trace")
+            continue
+        rows = payload.get("rows")
+        if rows != entry.get("rows"):
+            raise _refuse_reload(f"{kind} has {rows} rows, the manifest says {entry.get('rows')}")
+        for name, cells in dict(payload.get("columns") or {}).items():
+            if not isinstance(cells, list) or len(cells) != rows:
+                raise _refuse_reload(f"column {kind}.{name} does not have {rows} cells")
+            decode_value(cells, at=f"{kind}.{name}")
 
 
 def preflight_reload(root: Path) -> None:
     """Reload a staged artifact once before it is published (late.21).
 
-    The writer re-reads its own JSON through the bounded reader, then the
-    3.0 reader validates every record against the contract. Until the reader
-    lane's ``validate_artifact`` is merged, its stub refusal is the only
-    refusal this step tolerates.
+    The writer's reload check runs first; then the 3.0 reader validates the
+    artifact. Until the reader lane's ``validate_artifact`` is merged, its stub
+    refusal is the only refusal this step tolerates.
 
     Parameters
     ----------
@@ -320,7 +577,7 @@ def preflight_reload(root: Path) -> None:
         Staged artifact directory.
     """
 
-    check_written_json(root)
+    reload_check(root)
     try:
         _reader.validate_artifact(root)
     except ArtifactError as exc:
@@ -392,3 +649,21 @@ def write_intervention_recipe(spec: Any, path: str | Path) -> None:
     """
 
     refuse_writer_not_built("write_intervention_recipe", "torchlens/_io/format3/writer.py")
+
+
+__all__ = [
+    "RecordTables",
+    "encode_tables",
+    "envelope_fields",
+    "file_digests",
+    "payload_index",
+    "preflight_reload",
+    "record_kind_of",
+    "record_type_table",
+    "reload_check",
+    "write_bundle",
+    "write_intervention_recipe",
+    "write_record_files",
+    "write_trace",
+    "write_trace_envelope",
+]

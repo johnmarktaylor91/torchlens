@@ -168,23 +168,33 @@ the record, row and column.
 | `tuple` | `items` | `tuple` |
 | `set`, `frozenset` | `items` (canonically sorted by the encoder) | `set`, `frozenset` |
 | `dict` | `items`: array of `[key, value]` pairs (used when any key is not a `str`, or a key equals `$tl`) | `dict` |
-| `bytes` | `b64` (up to 1 MiB) | `bytes` |
-| `float` | `text`: `nan`, `inf`, `-inf` | `float` |
-| `int` | `text`: decimal, used beyond 53 bits | `int` |
+| `bytes` | `base64`, `bytes` (length; up to 1 MiB) | `bytes` |
+| `float` | `v`: `nan`, `inf`, `-inf` | `float` |
+| `int` | `v`: decimal, used beyond 53 bits | `int` |
 | `complex` | `re`, `im` | `complex` |
 | `dtype` | `name` (torch dtype name without prefix; numpy dtype string for `numpy_safetensors_v1`) from the dtype table in `values.py` | `torch.dtype` or `numpy.dtype` |
-| `device` | `text` | `torch.device` |
+| `device` | `name` | `torch.device` |
 | `type` | `name` (dotted) | the dotted name string; the reader imports nothing. A field that needs the class object resolves it through the `record` table (none is known today; a builder that finds one files it) |
-| `enum` | `name` (TorchLens-owned enum class from the closed table), `value` | the enum member |
+| `enum` | `type` (TorchLens-owned enum class from the closed table), `name` (member name) | the enum member |
 | `record` | `type` (a class name from the closed allowlist), `fields` (object, encoded recursively by the class's sub-schema) | the TorchLens value object (`OpRef`, `FireRecord`, `Edit`, audit rows, `Duration`, `KernelLaunch`, ...) |
+| `ref` | `record` (record kind), `row` (index into that table) | the record object in that row; written where a live field holds a record object (op lists, accessors, call-location lists) |
 | `unencodable` | `UNENCODABLE_FIELDS`: `type`, `repr` (at most 256 chars), `repr_length`, `at` | the disclosure object itself (section 5) |
 | `callable_placeholder` | `CALLABLE_PLACEHOLDER_FIELDS`: `position`, `qualname`, `repr_length` | the placeholder object (section 8) |
 
 The `record` allowlist: the writer contract's `component_specs` table (50 classes at v11,
-`field_registry.component_spec_tables()`), not the restricted unpickler's TorchLens rows as
-`RECORD_TYPE_ALLOWLIST_SOURCE` says today. The two lists name the same value objects; the
-unpickler is deleted by this design (section 10), and the writer contract is already the digested
-source of every nested class the format may hold. Filed as an amendment (section 15).
+`field_registry.component_spec_tables()`) plus the value classes that declare no state spec of
+their own (unit quantities such as `Bytes` and `Duration`, `DtypeRef`, `DeviceRef`,
+`EdgeUseRecord`, `SourceText`, ...), listed beside the codec in `format3/values.py`; record
+classes are excluded (they are tables, reached by `ref`) and enums use `enum`. The component
+table alone is not enough: the writer found those value classes in persisted columns of a plain
+CNN trace. The unpickler is deleted by this design (section 10). Filed as an amendment
+(section 15).
+
+The `ref` tag: a live field that holds a record object rather than its label (the trace's op
+list and lookup dicts, `Layer.ops`, `Module.params`, `Op.code_context`, `GradFn.calls`,
+`BackwardPass.grad_fn_calls`) writes `{"$tl": "ref", "record": kind, "row": index}`. The
+schema cannot type these cells from annotations (most are unannotated), so the reference is
+tagged; the index points into the record table, whose rows are in live container order.
 
 Rules the decoder enforces and the encoder guarantees:
 

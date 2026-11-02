@@ -201,7 +201,8 @@ is one of `contract.TYPED_VALUE_TAGS`:
 | `dtype`, `device` | `{"$tl": "dtype", "name": "float32"}` | the torch object |
 | `type` | `{"$tl": "type", "name": "torch.nn.modules.conv.Conv2d"}` | the dotted name as a string; the reader imports nothing |
 | `enum` | `{"$tl": "enum", "type": "...", "name": "..."}` | a TorchLens-owned enum member; a user enum becomes `unencodable` |
-| `record` | `{"$tl": "record", "type": "...", "fields": {...}}` | a TorchLens value object (`OpRef`, `FireRecord`, `Edit`, the audit rows) whose type is on the record-type allowlist, the TorchLens rows of the former unpickler allowlist; any other type refuses |
+| `record` | `{"$tl": "record", "type": "...", "fields": {...}}` | a TorchLens value object (`OpRef`, `FireRecord`, `Edit`, the audit rows, unit quantities such as `Bytes`) whose type is on the record-type allowlist: the writer contract's component classes plus the value classes listed beside the codec in `format3/values.py`; any other type refuses |
+| `ref` | `{"$tl": "ref", "record": "op", "row": 17}` | row 17 of `records/op.json`: written where a live field holds a record object (an op list, an accessor, a call-location list) rather than its label |
 | `tensor` | section 3 | the tensor |
 | `unencodable` | below | a disclosure |
 | `callable_placeholder` | section 5 | an audit-only edit |

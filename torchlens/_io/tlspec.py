@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import re
 import shutil
 import uuid
 from hashlib import sha256
@@ -12,12 +13,10 @@ from pathlib import Path
 from typing import Any, Literal
 
 import torch
-from safetensors.torch import save_file
 
 from .. import __version__ as TORCHLENS_VERSION
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
-from .._utils.hashing import sha256_file
 from ..backends.registry import get_backend_spec
 from . import TLSPEC_VERSION, ArtifactError, refuse_bundle_exists
 from ._durability import _restrict_mode, fsync_dir, fsync_tree
@@ -30,6 +29,11 @@ from ._tlspec_json_helpers import (
 from .format3.writer import envelope_fields
 from .manifest import Manifest, TensorEntry, _runtime_python_version
 from .paths import reject_symlink_path
+
+BUNDLE_RELATIONS_FILE = "relations.json"
+"""Bundle member list and relation table (3.0 bundle layout)."""
+_MEMBER_SLUG_LIMIT = 64
+"""Characters of a member name kept in its directory name."""
 
 _PARTIAL_SENTINEL = "PARTIAL"
 """In-progress marker matching ``bundle.py``/``streaming.py``; ``cleanup_tmp``
@@ -78,6 +82,13 @@ def _safe_len(value: Any) -> int:
         return len(value)
     except TypeError:
         return 0
+
+
+def _member_slug(name: object) -> str:
+    """Return the filesystem-safe part of a member directory name."""
+
+    slug = re.sub(r"[^A-Za-z0-9_.-]", "_", str(name)).strip(".")
+    return slug[:_MEMBER_SLUG_LIMIT] or "member"
 
 
 class _TlSpecWriter:
@@ -291,7 +302,6 @@ class _TlSpecWriter:
         # deleted) so a failure during the final swap can restore it. It stays
         # ``None`` unless we actually move an existing target out of the way.
         backup_path: Path | None = None
-        body_filename = "body.safetensors"
         try:
             if target_path.exists() and not overwrite:
                 refuse_bundle_exists(target_path, overwritable=True)
@@ -302,7 +312,6 @@ class _TlSpecWriter:
             # removes without ``force=True``; the sentinel comes off right
             # before the durability fsync + publish swap.
             (tmp_path / _PARTIAL_SENTINEL).write_text("", encoding="utf-8")
-            save_file({}, str(tmp_path / body_filename))
             member_records = cls._write_bundle_members(bundle, tmp_path=tmp_path, save_level=level)
             bundle_metadata: dict[str, Any] = {
                 "members": member_records,
@@ -311,7 +320,7 @@ class _TlSpecWriter:
             cls._add_gated_member_relations(bundle, bundle_metadata)
             cls._add_lineage_sections(bundle, bundle_metadata)
             cls._add_preserved_sections(bundle, bundle_metadata)
-            cls.write_json(tmp_path / "bundle.json", bundle_metadata)
+            cls.write_json(tmp_path / BUNDLE_RELATIONS_FILE, bundle_metadata)
 
             manifest = cls.build_manifest(
                 kind="bundle",
@@ -321,18 +330,10 @@ class _TlSpecWriter:
                 spec_compat_info=None,
                 intervention_compat_metadata=None,
             )
-            manifest["body_index"] = [
-                {
-                    "filename": body_filename,
-                    "dtype": "none",
-                    "shape": [],
-                    "num_elements": 0,
-                    "intended_use": "bundle_marker",
-                    "sha256": sha256_file(tmp_path / body_filename),
-                }
-            ]
-            # 3.0 envelope (format.1): members are 3.0 trace artifacts; the
-            # container manifest carries the envelope and digests every file.
+            manifest.pop("body_index", None)
+            # 3.0 envelope: members are 3.0 trace artifacts under
+            # ``members/<index>-<name>/``; the container manifest carries the
+            # envelope and digests every file, members included.
             manifest.update(
                 envelope_fields(
                     tmp_path,
@@ -340,12 +341,11 @@ class _TlSpecWriter:
                     save_level=level,
                     payload_policy={},
                     records={},
-                    unencodable=(),
+                    codecs=(),
                 )
             )
             cls.write_json(tmp_path / TLSPEC_MANIFEST_FILENAME, manifest)
-            _restrict_mode(tmp_path / body_filename, 0o600)
-            _restrict_mode(tmp_path / "bundle.json", 0o600)
+            _restrict_mode(tmp_path / BUNDLE_RELATIONS_FILE, 0o600)
             _restrict_mode(tmp_path / TLSPEC_MANIFEST_FILENAME, 0o600)
             # Durability before publish: fsync every written file and
             # directory so a power/OS crash after the rename below cannot
@@ -498,7 +498,7 @@ class _TlSpecWriter:
         members_path.mkdir()
         records: list[dict[str, str]] = []
         for index, (name, trace) in enumerate(members.items()):
-            relative_path = Path("members") / f"{index:04d}.tlspec"
+            relative_path = Path("members") / f"{index:04d}-{_member_slug(name)}"
             trace.save(tmp_path / relative_path, level=save_level)
             records.append({"name": str(name), "path": relative_path.as_posix()})
         return records
