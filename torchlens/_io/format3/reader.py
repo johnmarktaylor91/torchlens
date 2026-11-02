@@ -484,8 +484,10 @@ class DecodedArtifact:
                 for row_number, (obj, row) in enumerate(
                     zip(self.objects.get(kind, ()), self.tables.get(kind, ()), strict=True)
                 ):
-                    row = self._rebuild_accessors(kind, row_number, row)
-                    _restore_record(obj, row, version=self.version, computed=computed_columns(kind))
+                    cells = self._rebuild_accessors(kind, row_number, row)
+                    _restore_record(
+                        obj, cells, version=self.version, computed=computed_columns(kind)
+                    )
 
     def _rebuild_accessors(
         self, kind: str, row_number: int, row: Mapping[str, Any]
