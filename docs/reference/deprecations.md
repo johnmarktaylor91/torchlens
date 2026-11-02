@@ -190,4 +190,5 @@ The site, not a keyword or a gradient-only helper, says which tensor an edit app
 | `show_bundle_graph(direction=)` | `show_bundle_graph(signal=)` | removed |
 | `FireRecord.direction`, `TapRecord.direction`, `HookContext.direction` | `.signal` | removed |
 | `Edit.kind`, `Edit.direction` | `Edit.signal`; `Rule.signal` (derived) | removed |
+| `Rule.direction`, `Rule(direction=)` | the target decides the pass: `Rule(tl.grad(site), edit)` for the gradient, `Rule(site, edit)` for the activation; `Rule.signal` (derived) | removed |
 | `HookContext.ctx`, `HookContext.run_ctx` | `HookContext.state`, `HookContext.run_state` | removed |

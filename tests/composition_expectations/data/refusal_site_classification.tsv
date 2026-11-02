@@ -155,6 +155,7 @@ torchlens._visualization.renderer_registry:require_renderer_capabilities:Unsuppo
 torchlens._selection.selectors:SiteSelector.__init__:ArgumentTypeError::1	CONTRACTED	site_selector_empty	C03 intervention substrate: typed + code + contract-doc row, classified in its own change
 torchlens._selection.selectors:SiteSelector.__init__:ArgumentTypeError::2	CONTRACTED	site_selector_key_conflict	C03 intervention substrate: typed + code + contract-doc row, classified in its own change
 torchlens._selection.selectors:SiteSelector.__init__:ArgumentTypeError::3	CONTRACTED	site_selector_key_invalid	C03 intervention substrate: typed + code + contract-doc row, classified in its own change
+torchlens.intervention.spec:Rule.__new__:InvalidArgumentError::1	CONTRACTED	intervention_direction_invalid	names.5 (JMT 2026-11-01): the removed Rule.direction field (keyword or third positional) refuses typed; the remedy names tl.grad(site)
 torchlens.intervention.spec:Rule.__post_init__:ArgumentTypeError::1	CONTRACTED	intervention_where_invalid	C03 intervention substrate: typed + code + contract-doc row, classified in its own change
 torchlens.intervention.spec:Recipe.__post_init__:ArgumentTypeError::1	CONTRACTED	intervention_rule_type_invalid	C03 intervention substrate: typed + code + contract-doc row, classified in its own change
 torchlens.intervention.spec:Recipe.__post_init__:InvalidArgumentError::1	CONTRACTED	spec_rules_duplicate	C03 intervention substrate: typed + code + contract-doc row, classified in its own change

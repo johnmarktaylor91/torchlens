@@ -5,6 +5,11 @@
 
 ### Behavior changes
 
+- **intervention**: `tl.intervention.Rule` has no `direction` field. The site decides the pass
+  (`Rule.signal`, derived): `Rule(site, edit)` edits the activation, `Rule(tl.grad(site), edit)`
+  the gradient, `Rule(tl.grad(site) | site, edit)` both. `Rule(..., direction=...)` and the old
+  third positional value refuse `intervention_direction_invalid`. Rule ids are unchanged.
+  `TapObserver.signal` and `tl.observers.tap(signal=)` stay.
 - **bundle**: `Bundle.measure_members` is gone. `Bundle.map(fn)` is the one per-member read: it
   returns `fn` over every live member keyed by name, and every effect-table candidate the bundle
   no longer holds (released, refused or failed) keyed by its candidate id with the value
