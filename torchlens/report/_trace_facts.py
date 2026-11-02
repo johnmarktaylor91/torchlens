@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from .._capture._episode_coupling import attest_coupling
 from .._capture._episode_ledger import capture_kind_for, episode_ledger_for
+from .._capture.peak_memory import read_peak_pair
 from .._capture_honesty import capture_advisories, poison_facts
 from .._data_classes._trace_inventory import build_bill_of_materials
 from .._quantities import Flops, Macs
@@ -66,6 +67,12 @@ def episode_coupling(trace: Trace) -> Any | None:
     """Body of ``Trace.episode_coupling``; the record keeps the thin spelling and docstring."""
 
     return attest_coupling(trace)
+
+
+def cost_forward_peak_memory_pair(trace: Trace) -> dict[str, Any] | None:
+    """Body of ``Trace._cost_forward_peak_memory_pair``; the record keeps the thin spelling and docstring."""
+
+    return read_peak_pair(trace)
 
 
 def cost_total_flops_forward(trace: Trace) -> Flops:
