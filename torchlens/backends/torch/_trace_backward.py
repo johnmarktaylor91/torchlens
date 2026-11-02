@@ -38,7 +38,7 @@ def _refuse_loaded_backward_capture(trace: Trace, entry_point: str) -> None:
     handles tied to its recorded forward, so ``log_backward`` used to hook
     whatever FOREIGN graph the caller's loss came from, half-mutate the trace
     (backward passes and grad_fns from an unrelated forward), and die with an
-    untyped ``AttributeError`` -- after which ``draw_backward`` silently
+    untyped ``AttributeError`` -- after which the backward drawing silently
     rendered that wrong graph. Refuse typed BEFORE any mutation.
     """
     try:

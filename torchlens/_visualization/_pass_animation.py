@@ -1,4 +1,4 @@
-"""The ``animate=`` picture: an HTML animation of the repeated ops at one site."""
+"""The ``trace.animate(site)`` picture: an HTML animation of the repeated ops at one site."""
 
 from __future__ import annotations
 
