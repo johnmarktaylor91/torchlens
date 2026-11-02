@@ -38,7 +38,11 @@ from torch import nn
 
 import torchlens as tl
 from tests.classics_corpus._loader import CorpusEntry, build_entry, corpus_entries
-from torchlens._io.format3 import runnable as runnable3, writer as writer3
+from torchlens._io.format3 import (
+    runnable as runnable3,
+    runnable_families,
+    writer as writer3,
+)
 from torchlens._io.format_errors import ArtifactError
 from torchlens.errors import RunnablePreflightError
 from torchlens.intervention.errors import EngineDispatchError
@@ -230,6 +234,8 @@ def test_descriptor_and_families_equal_the_tlspec11_save(tmp_path: Path) -> None
     descriptor = json.loads((artifact / "runnable" / "descriptor.json").read_text("utf-8"))
     assert descriptor == manifest["run"]
 
+    references = written.manifest.pop("state_dict_tensors")
+    buffer_references = written.manifest.pop("buffers_tensors")
     assert written.manifest == {
         "descriptor": "runnable/descriptor.json",
         **runnable3.manifest_versions(),
@@ -237,6 +243,17 @@ def test_descriptor_and_families_equal_the_tlspec11_save(tmp_path: Path) -> None
         "state_dict_family": "state_dict_v1",
         "buffers": "runnable/buffers.safetensors",
         "buffers_family": "runnable_nonpersistent_buffer_v1",
+    }
+    assert set(references) == set(model.state_dict())
+    assert buffer_references["scale"] == {
+        "$tl": "tensor",
+        "blob": "runnable/buffers.safetensors",
+        "key": buffer_references["scale"]["key"],
+        "dtype": "float32",
+        "shape": [4],
+        "device": "cpu",
+        "requires_grad": False,
+        "codec": "torch_safetensors_v1",
     }
     assert set(written.files) == {
         "runnable/descriptor.json",
@@ -249,11 +266,12 @@ def test_descriptor_and_families_equal_the_tlspec11_save(tmp_path: Path) -> None
         "state_dict-0001.safetensors",
     ]
     state = load_file(str(artifact / "runnable" / "state_dict-0001.safetensors"))
-    assert set(state) == set(model.state_dict())
+    assert set(state) == {reference["key"] for reference in references.values()}
     for name, tensor in model.state_dict().items():
-        torch.testing.assert_close(state[name], tensor, rtol=0, atol=0)
+        torch.testing.assert_close(state[references[name]["key"]], tensor, rtol=0, atol=0)
     buffers = load_file(str(artifact / "runnable" / "buffers.safetensors"))
-    torch.testing.assert_close(buffers["scale"], model.scale, rtol=0, atol=0)
+    scale_key = buffer_references["scale"]["key"]
+    torch.testing.assert_close(buffers[scale_key], model.scale, rtol=0, atol=0)
 
 
 def test_toy_state_model_replays_like_live(tmp_path: Path) -> None:
@@ -399,7 +417,7 @@ def test_component_round_trips_its_families(tmp_path: Path) -> None:
 def test_state_dict_chunks_at_the_limit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A state dict larger than the chunk limit spans numbered files and replays."""
 
-    monkeypatch.setattr(runnable3, "CHUNK_BYTES", 16)
+    monkeypatch.setattr(runnable_families, "CHUNK_BYTES", 16)
     artifact, written = _component(tmp_path)
     assert len(written.manifest["state_dict"]) == 3
     assert written.manifest["state_dict"][-1] == "runnable/state_dict-0003.safetensors"
@@ -459,8 +477,49 @@ def test_missing_family_file_refuses(tmp_path: Path) -> None:
         (lambda m, f: m.update(state_dict=["runnable/state_dict-0002.safetensors"]), "numbering"),
         (lambda m, f: m.update(state_dict=[]), "empty family"),
         (lambda m, f: f.pop("runnable/buffers.safetensors"), "no files row"),
+        (lambda m, f: m.pop("buffers_tensors"), "family without references"),
+        (lambda m, f: m.update(buffers_tensors={}), "empty references"),
+        (lambda m, f: _edit_reference(m, "blob", "runnable/buffers.safetensors"), "other file"),
+        (lambda m, f: _edit_reference(m, "codec", "pickle"), "codec"),
+        (lambda m, f: _edit_reference(m, "loader", "x"), "unknown reference key"),
+        (lambda m, f: _edit_reference(m, "complex", False), "complex false"),
     ],
 )
+def _edit_reference(manifest: dict[str, Any], key: str, value: Any) -> None:
+    """Set one field of the ``fc.weight`` tensor reference in a copied manifest."""
+
+    references = {name: dict(ref) for name, ref in manifest["state_dict_tensors"].items()}
+    references["fc.weight"][key] = value
+    manifest["state_dict_tensors"] = references
+
+
+@pytest.mark.parametrize(
+    ("edit", "where"),
+    [
+        (lambda m: _edit_reference(m, "dtype", "float64"), "dtype"),
+        (lambda m: _edit_reference(m, "shape", [3, 4]), "shape"),
+        (lambda m: _edit_reference(m, "key", "t99"), "absent key"),
+        (
+            lambda m: m.update(
+                state_dict_tensors={
+                    k: v for k, v in m["state_dict_tensors"].items() if k != "fc.bias"
+                }
+            ),
+            "unreferenced tensor",
+        ),
+    ],
+)
+def test_reference_disagreeing_with_its_file_refuses(tmp_path: Path, edit: Any, where: str) -> None:
+    """A tensor reference must name a present key with the recorded dtype and shape."""
+
+    artifact, written = _component(tmp_path)
+    manifest = dict(written.manifest)
+    edit(manifest)
+    assert _refusal_code(artifact, manifest, written.files) == (
+        "bundle_metadata_integrity_refused"
+    ), where
+
+
 def test_malformed_runnable_object_refuses(tmp_path: Path, edit: Any, where: str) -> None:
     """The manifest's runnable object is closed, versioned and names fixed files."""
 
@@ -471,7 +530,7 @@ def test_malformed_runnable_object_refuses(tmp_path: Path, edit: Any, where: str
 
 
 def test_missing_state_key_refuses_at_bind(tmp_path: Path) -> None:
-    """A state file rewritten without one tensor (rows updated) refuses at the bind."""
+    """A state family consistently stripped of one tensor refuses at the strict bind."""
 
     from safetensors.torch import load_file, save_file
 
@@ -487,16 +546,19 @@ def test_missing_state_key_refuses_at_bind(tmp_path: Path) -> None:
         warnings.simplefilter("ignore", UserWarning)
         written = runnable3.write_runnable(trace, artifact, include_weights=True)
     relative = "runnable/state_dict-0001.safetensors"
+    references = dict(written.manifest["state_dict_tensors"])
+    dropped = references.pop("fc.bias")
     state = load_file(str(artifact / relative))
-    state.pop("fc.bias")
+    state.pop(dropped["key"])
     save_file(state, str(artifact / relative))
     files = dict(written.files)
     files[relative] = {
         "sha256": sha256_file(artifact / relative),
         "bytes": (artifact / relative).stat().st_size,
     }
+    manifest = {**written.manifest, "state_dict_tensors": references}
     with pytest.raises(StateBindingError):
-        runnable3.attach_runnable(tl.load(records), artifact, written.manifest, files)
+        runnable3.attach_runnable(tl.load(records), artifact, manifest, files)
 
 
 @pytest.mark.skipif(os.name == "nt", reason="symlinks need privileges on Windows")
@@ -534,3 +596,19 @@ def test_component_directory_is_written_once(tmp_path: Path) -> None:
     with pytest.raises(ArtifactError) as info:
         runnable3.write_runnable(trace, artifact)
     assert info.value.fields["code"] == "bundle_save_failed"
+
+
+def test_complex_tensor_round_trips_as_its_real_view(tmp_path: Path) -> None:
+    """A complex tensor is stored as its real view and decoded back exactly."""
+
+    import itertools
+
+    value = torch.randn(3, dtype=torch.complex64)
+    files: dict[str, Any] = {}
+    (tmp_path / "runnable").mkdir()
+    paths, references = runnable_families.write_family(
+        tmp_path, "state_dict", [("w", value)], files, itertools.count(), chunked=True
+    )
+    assert references["w"]["complex"] is True and references["w"]["dtype"] == "complex64"
+    loaded = runnable_families.read_family(tmp_path, paths, references, files, "cpu")
+    torch.testing.assert_close(loaded["w"], value, rtol=0, atol=0)

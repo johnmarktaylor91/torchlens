@@ -9,11 +9,15 @@ runnable example of section 8. A runnable save adds one directory,
   manifest carried under ``run``. It holds the call recipe, the callables as
   callable registry records (a registry key per callable, never a callable
   object) and the initializer policy (``initializer_policy_version``).
-* ``state_dict-NNNN.safetensors``: the capture-time state dict, keyed by
-  canonical state name, packed into files of at most ``CHUNK_BYTES``.
-* ``buffers.safetensors``: the non-persistent buffer values, keyed by name.
-* ``activations-NNNN.safetensors``: the capture-selected activations, keyed by
-  the activation member's blob id (only when activations were archived).
+* ``state_dict-NNNN.safetensors``: the capture-time state dict, in files of
+  at most 256 MiB numbered from 0001.
+* ``buffers.safetensors``: the non-persistent buffer values.
+* ``activations-NNNN.safetensors``: the capture-selected activations (only
+  when activations were archived).
+
+Every tensor is one opaque key ``t<k>`` in one file; the manifest's
+``runnable`` object maps each state name, buffer name or activation blob id to
+a contract tensor reference (``runnable_families``).
 
 The writer door returns the manifest's ``runnable`` object (component versions
 and file paths) and the ``files`` rows (sha256 and byte length) for every file
@@ -26,15 +30,15 @@ attestation and path faithfulness checks prove exactly what they proved before.
 
 from __future__ import annotations
 
+import itertools
 import json
 import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, NoReturn, cast
+from typing import Any, cast
 
 import torch
-from safetensors.torch import load_file, save_file
 
 from ..._runnable import (
     RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
@@ -52,10 +56,8 @@ from ..._runnable.state import (
     bind_embedded_trace_state,
     runnable_tensor_byte_digest,
 )
-from ..._utils.hashing import sha256_file
 from .. import bundle as tlspec_bundle
 from .._json import read_bounded
-from ..format_errors import ArtifactError
 from ..paths import reject_symlink_path
 from ..runnable import (
     require_sparse_run_descriptor,
@@ -65,20 +67,24 @@ from ..runnable import (
 )
 from ..runnable_load import attach_sparse_run_readiness
 from .contract import REFUSAL_CODES, RUNNABLE_DIR
+from .runnable_families import (
+    ALTERED as _ALTERED,
+    checked_file,
+    file_row,
+    read_family,
+    refuse as _refuse,
+    write_family,
+)
 
 #: Descriptor file of the runnable component.
 DESCRIPTOR_PATH = f"{RUNNABLE_DIR}/descriptor.json"
 #: Non-persistent buffer file of the runnable component.
 BUFFERS_PATH = f"{RUNNABLE_DIR}/buffers.safetensors"
-#: Largest safetensors file a chunked family writes, in bytes (contract section 3).
-CHUNK_BYTES = 256 * 1024 * 1024
-#: Chunked families: manifest key to file stem under ``runnable/``.
-CHUNKED_FAMILIES: dict[str, str] = {"state_dict": "state_dict", "activations": "activations"}
-#: Manifest key of each family's payload schema.
-FAMILY_SCHEMA_KEYS: dict[str, str] = {
-    "state_dict": "state_dict_family",
-    "buffers": "buffers_family",
-    "activations": "activations_family",
+#: Families: manifest key to (file stem under ``runnable/``, chunked, bound family name).
+FAMILIES: dict[str, tuple[str, bool, str]] = {
+    "state_dict": ("state_dict", True, "state_dict"),
+    "buffers": ("buffers", False, "nonpersistent_buffers"),
+    "activations": ("activations", True, "activations"),
 }
 #: Required keys of the manifest's ``runnable`` object (versions plus the descriptor).
 _REQUIRED_KEYS = frozenset(
@@ -91,12 +97,10 @@ _REQUIRED_KEYS = frozenset(
         "witness_registry_version",
     }
 )
-#: Keys a present family adds to the ``runnable`` object.
-_FAMILY_KEYS = frozenset(FAMILY_SCHEMA_KEYS) | frozenset(FAMILY_SCHEMA_KEYS.values())
-#: Keys of one ``files`` row.
-_FILE_ROW_KEYS = frozenset({"sha256", "bytes"})
-#: Remedy for an altered component.
-_ALTERED = "save the trace again at level='runnable'; the runnable component was altered"
+#: Keys a present family adds to the ``runnable`` object: files, schema, tensor references.
+_FAMILY_KEYS = frozenset(
+    key for family in FAMILIES for key in (family, f"{family}_family", f"{family}_tensors")
+)
 
 
 @dataclass(frozen=True)
@@ -130,22 +134,6 @@ class RunnableComponent:
 
     descriptor: Mapping[str, Any]
     families: Mapping[str, Mapping[str, torch.Tensor]] = field(default_factory=dict)
-
-
-def _refuse(situation: str, message: str, remedy: str) -> NoReturn:
-    """Raise the contract's typed refusal for one situation.
-
-    Parameters
-    ----------
-    situation:
-        Key of ``REFUSAL_CODES``.
-    message:
-        What was refused and where.
-    remedy:
-        What the caller can do about it.
-    """
-
-    raise ArtifactError(message, code=REFUSAL_CODES[situation], remedy=remedy)
 
 
 def component_versions() -> dict[str, Any]:
@@ -194,34 +182,6 @@ def _write_private_text(path: Path, text: str) -> None:
     os.chmod(path, 0o600)
 
 
-def _host_tensor(tensor: torch.Tensor) -> torch.Tensor:
-    """Return the host-resident, contiguous, materialized bytes of one tensor."""
-
-    return tensor.detach().resolve_conj().resolve_neg().contiguous().cpu()
-
-
-def _unshared_host_tensors(
-    members: Sequence[tuple[str, str, torch.Tensor]],
-) -> dict[str, torch.Tensor]:
-    """Return host tensors keyed by member key, each with storage of its own.
-
-    Tied weights and view activations share storage; safetensors refuses
-    shared storage, so every tensor after the first on a storage is copied.
-    """
-
-    host: dict[str, torch.Tensor] = {}
-    seen_storages: set[int] = set()
-    for _, key, tensor in members:
-        prepared = _host_tensor(tensor)
-        storage = prepared.untyped_storage().data_ptr()
-        if storage in seen_storages:
-            prepared = prepared.clone()
-        else:
-            seen_storages.add(storage)
-        host[key] = prepared
-    return host
-
-
 def manifest_versions() -> dict[str, str]:
     """Return the version fields every manifest ``runnable`` object carries.
 
@@ -240,61 +200,8 @@ def manifest_versions() -> dict[str, str]:
     }
 
 
-def _file_row(root: Path, relative: str) -> dict[str, Any]:
-    """Return the manifest ``files`` row of one written file."""
-
-    target = root / relative
-    os.chmod(target, 0o600)
-    return {"sha256": sha256_file(target), "bytes": target.stat().st_size}
-
-
-def _chunked(
-    members: Sequence[tuple[str, torch.Tensor]],
-) -> list[list[tuple[str, torch.Tensor]]]:
-    """Split ``(key, tensor)`` members into chunks of at most ``CHUNK_BYTES``.
-
-    A tensor larger than the limit gets a chunk of its own.
-    """
-
-    chunks: list[list[tuple[str, torch.Tensor]]] = []
-    current: list[tuple[str, torch.Tensor]] = []
-    size = 0
-    for key, tensor in members:
-        nbytes = tensor.numel() * tensor.element_size()
-        if current and size + nbytes > CHUNK_BYTES:
-            chunks.append(current)
-            current, size = [], 0
-        current.append((key, tensor))
-        size += nbytes
-    if current:
-        chunks.append(current)
-    return chunks
-
-
-def _write_safetensors(
-    root: Path, relative: str, members: Sequence[tuple[str, torch.Tensor]]
-) -> dict[str, Any]:
-    """Write one safetensors file and return its ``files`` row."""
-
-    save_file(_unshared_host_tensors(members), str(root / relative))
-    return _file_row(root, relative)
-
-
-def _write_chunked(
-    root: Path, stem: str, members: Sequence[tuple[str, torch.Tensor]], files: dict[str, Any]
-) -> list[str]:
-    """Write one chunked family; record each file in ``files``; return the paths."""
-
-    paths: list[str] = []
-    for number, chunk in enumerate(_chunked(members), start=1):
-        relative = f"{RUNNABLE_DIR}/{stem}-{number:04d}.safetensors"
-        files[relative] = _write_safetensors(root, relative, chunk)
-        paths.append(relative)
-    return paths
-
-
 def _spec_members(specs: Sequence[Any], *, key_by_blob: bool) -> list[tuple[str, torch.Tensor]]:
-    """Turn tlspec blob specs into ``(key, tensor)`` members keyed by name or blob id."""
+    """Turn tlspec blob specs into ``(name, tensor)`` members named by state name or blob id."""
 
     return [(str(spec.blob_id) if key_by_blob else str(spec.label), spec.value) for spec in specs]
 
@@ -384,133 +291,24 @@ def write_runnable(
     _write_private_text(
         root / DESCRIPTOR_PATH, canonical_json_text(sparse_descriptor_to_json(descriptor))
     )
-    files: dict[str, dict[str, Any]] = {DESCRIPTOR_PATH: _file_row(root, DESCRIPTOR_PATH)}
+    files: dict[str, dict[str, Any]] = {DESCRIPTOR_PATH: file_row(root, DESCRIPTOR_PATH)}
     manifest: dict[str, Any] = {"descriptor": DESCRIPTOR_PATH, **manifest_versions()}
-    if weight_specs:
-        manifest["state_dict"] = _write_chunked(
-            root, "state_dict", _spec_members(weight_specs, key_by_blob=False), files
+    keys = itertools.count()
+    for family, specs, schema, key_by_blob in (
+        ("state_dict", weight_specs, layers.weights.schema, False),
+        ("buffers", buffer_specs, layers.nonpersistent_buffers.schema, False),
+        ("activations", activation_specs, layers.activations.schema, True),
+    ):
+        if not specs:
+            continue
+        stem, chunked, _bound = FAMILIES[family]
+        paths, references = write_family(
+            root, stem, _spec_members(specs, key_by_blob=key_by_blob), files, keys, chunked=chunked
         )
-        manifest["state_dict_family"] = str(layers.weights.schema)
-    if buffer_specs:
-        files[BUFFERS_PATH] = _write_safetensors(
-            root, BUFFERS_PATH, _spec_members(buffer_specs, key_by_blob=False)
-        )
-        manifest["buffers"] = BUFFERS_PATH
-        manifest["buffers_family"] = str(layers.nonpersistent_buffers.schema)
-    if activation_specs:
-        manifest["activations"] = _write_chunked(
-            root, "activations", _spec_members(activation_specs, key_by_blob=True), files
-        )
-        manifest["activations_family"] = str(layers.activations.schema)
+        manifest[family] = paths if chunked else paths[0]
+        manifest[f"{family}_family"] = str(schema)
+        manifest[f"{family}_tensors"] = references
     return RunnableWrite(manifest=manifest, files=files)
-
-
-def _checked_path(root: Path, relative: Any, allowed: str, files: Mapping[str, Any]) -> Path:
-    """Resolve one listed component file and verify it against its ``files`` row.
-
-    ``allowed`` is the exact path, or a ``{n}`` pattern for a chunk number.
-    """
-
-    if not isinstance(relative, str) or not _path_allowed(relative, allowed):
-        _refuse(
-            "manifest_invalid",
-            f"The runnable component names the file {relative!r}; it must be {allowed!r}.",
-            _ALTERED,
-        )
-    row = files.get(relative)
-    if not isinstance(row, Mapping) or set(row) != _FILE_ROW_KEYS:
-        _refuse(
-            "manifest_invalid",
-            f"The runnable component file {relative!r} has no sha256 and bytes row in the "
-            "manifest's files.",
-            _ALTERED,
-        )
-    target = root / relative
-    reject_symlink_path(
-        target, context="runnable component file", code=REFUSAL_CODES["symlink_path"]
-    )
-    if not target.is_file():
-        _refuse(
-            "blob_missing",
-            f"The runnable component file {target} is missing.",
-            "copy the whole artifact directory; the runnable component is incomplete",
-        )
-    if target.stat().st_size != row["bytes"] or sha256_file(target) != row["sha256"]:
-        _refuse(
-            "record_file_corrupt",
-            f"The runnable component file {target} does not match its sha256 and byte length.",
-            _ALTERED,
-        )
-    return target
-
-
-def _path_allowed(relative: str, allowed: str) -> bool:
-    """Return whether ``relative`` is ``allowed`` (a ``{n}`` stands for four digits)."""
-
-    if "{n}" not in allowed:
-        return relative == allowed
-    head, tail = allowed.split("{n}")
-    number = relative[len(head) : len(relative) - len(tail)]
-    return (
-        relative.startswith(head)
-        and relative.endswith(tail)
-        and len(number) == 4
-        and number.isdigit()
-    )
-
-
-def _read_safetensors(target: Path, map_location: str | torch.device) -> dict[str, torch.Tensor]:
-    """Load one safetensors file; refuse an unreadable one."""
-
-    try:
-        return load_file(str(target), device=str(map_location))
-    except (OSError, ValueError, RuntimeError) as exc:
-        _refuse(
-            "record_file_corrupt",
-            f"The runnable family file {target} is not a readable safetensors file "
-            f"({type(exc).__name__}).",
-            _ALTERED,
-        )
-
-
-def _read_family(
-    root: Path,
-    manifest: Mapping[str, Any],
-    family: str,
-    files: Mapping[str, Any],
-    map_location: str | torch.device,
-) -> dict[str, torch.Tensor] | None:
-    """Read one family's files into ``{key: tensor}``; ``None`` when it is absent."""
-
-    listed = manifest.get(family)
-    if listed is None:
-        return None
-    if family in CHUNKED_FAMILIES:
-        stem = CHUNKED_FAMILIES[family]
-        if not isinstance(listed, list) or not listed:
-            _refuse(
-                "manifest_invalid", f"The runnable {family!r} entry must list its files.", _ALTERED
-            )
-        expected = [f"{RUNNABLE_DIR}/{stem}-{n:04d}.safetensors" for n in range(1, len(listed) + 1)]
-        if listed != expected:
-            _refuse(
-                "manifest_invalid",
-                f"The runnable {family!r} files must be numbered from 0001 in order.",
-                _ALTERED,
-            )
-        paths = [
-            _checked_path(root, item, f"{RUNNABLE_DIR}/{stem}-{{n}}.safetensors", files)
-            for item in listed
-        ]
-    else:
-        paths = [_checked_path(root, listed, BUFFERS_PATH, files)]
-    values: dict[str, torch.Tensor] = {}
-    for target in paths:
-        chunk = _read_safetensors(target, map_location)
-        if set(chunk) & set(values):
-            _refuse("record_file_corrupt", f"The runnable {family!r} files repeat a key.", _ALTERED)
-        values.update(chunk)
-    return values
 
 
 def _checked_manifest(manifest: Any) -> Mapping[str, Any]:
@@ -522,13 +320,15 @@ def _checked_manifest(manifest: Any) -> Mapping[str, Any]:
         or not keys >= _REQUIRED_KEYS
         or not keys <= _REQUIRED_KEYS | _FAMILY_KEYS
         or any(
-            (family in keys) != (schema in keys) for family, schema in FAMILY_SCHEMA_KEYS.items()
+            len({family, f"{family}_family", f"{family}_tensors"} & keys) not in (0, 3)
+            for family in FAMILIES
         )
     ):
         _refuse(
             "manifest_invalid",
             "The manifest's runnable object must hold the descriptor, the five component "
-            f"versions and a schema beside each family file; found {sorted(keys)}.",
+            "versions and, per present family, its files, schema and tensor references; "
+            f"found {sorted(keys)}.",
             _ALTERED,
         )
     if manifest["descriptor"] != DESCRIPTOR_PATH:
@@ -543,6 +343,25 @@ def _checked_manifest(manifest: Any) -> Mapping[str, Any]:
             "load it with the TorchLens release that wrote it, or save the trace again",
         )
     return manifest
+
+
+def _family_paths(family: str, listed: Any) -> list[str]:
+    """Check one family's listed files against the fixed names and numbering."""
+
+    stem, chunked, _bound = FAMILIES[family]
+    if chunked:
+        count = len(listed) if isinstance(listed, list) else 0
+        expected: Any = [f"{RUNNABLE_DIR}/{stem}-{n:04d}.safetensors" for n in range(1, count + 1)]
+    else:
+        expected = f"{RUNNABLE_DIR}/{stem}.safetensors"
+    if not listed or listed != expected:
+        _refuse(
+            "manifest_invalid",
+            f"The runnable {family!r} files must be {expected!r} (chunks numbered from 0001); "
+            f"found {listed!r}.",
+            _ALTERED,
+        )
+    return list(listed) if chunked else [listed]
 
 
 def load_runnable(
@@ -592,13 +411,14 @@ def load_runnable(
             )
         return None
     checked = _checked_manifest(manifest)
-    descriptor_path = _checked_path(root, checked["descriptor"], DESCRIPTOR_PATH, files)
+    descriptor_path = checked_file(root, DESCRIPTOR_PATH, files)
     try:
         descriptor = read_bounded(descriptor_path)
     except (OSError, ValueError) as exc:
         _refuse(
             "record_file_corrupt",
-            f"The runnable descriptor {descriptor_path} is not readable JSON ({type(exc).__name__}).",
+            f"The runnable descriptor {descriptor_path} is not readable JSON "
+            f"({type(exc).__name__}).",
             _ALTERED,
         )
     if not isinstance(descriptor, Mapping):
@@ -607,15 +427,14 @@ def load_runnable(
             f"The runnable descriptor {descriptor_path} must be an object.",
             _ALTERED,
         )
-    families = {}
-    for family, bound_as in (
-        ("state_dict", "state_dict"),
-        ("buffers", "nonpersistent_buffers"),
-        ("activations", "activations"),
-    ):
-        values = _read_family(root, checked, family, files, map_location)
-        if values is not None:
-            families[bound_as] = values
+    families: dict[str, Mapping[str, torch.Tensor]] = {}
+    for family, (_stem, _chunked, bound_as) in FAMILIES.items():
+        if family not in checked:
+            continue
+        paths = _family_paths(family, checked[family])
+        families[bound_as] = read_family(
+            root, paths, checked[f"{family}_tensors"], files, map_location
+        )
     return RunnableComponent(descriptor=descriptor, families=families)
 
 
