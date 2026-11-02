@@ -106,7 +106,7 @@ TorchLens - extract outs and metadata from PyTorch models. (66 modules, 31554 li
 | --- | --- | ---: |
 | `__init__` | TorchLens - extract outs and metadata from PyTorch models. | 782 |
 | `__main__` | ''python -m torchlens'': the tiered read-only CLI (torchlens.agent.cli). | 15 |
-| `_architecture` | The layer map: one declared stratum per package/module ( item 1). | 263 |
+| `_architecture` | The layer map: one declared stratum per package/module ( item 1). | 262 |
 | `_call_fingerprint` | Native-forward twin of the capture-time ordered call fingerprint. | 159 |
 | `_capture_attr_observer` | Plain-attribute leg of the capture observer bracket. | 546 |
 | `_capture_fingerprint` | Capture-cache content fingerprints and instance-attribute key fragments. | 423 |
@@ -148,7 +148,7 @@ TorchLens - extract outs and metadata from PyTorch models. (66 modules, 31554 li
 | `_runnable_until` | Stop-frontier and dependency-closure arithmetic for ''run(until=...)''. | 95 |
 | `_save_budget` | Running budget for retained activation bytes, with a typed refusal. | 971 |
 | `_source_links` | Source-location link formatting helpers. | 110 |
-| `_state` | Global state for torchlens toggle-gated decoration. | 1395 |
+| `_state` | Global state for torchlens toggle-gated decoration. | 1394 |
 | `_storage_bindings` | Record and restore the storage binding of a parameter or buffer. | 162 |
 | `_surface` | SURFACE-table machinery: the root surface as machine-readable rows ( item 7). | 121 |
 | `_trace_selector_helpers` | Internal predicate and selector helpers for public trace capture. | 834 |
@@ -168,7 +168,7 @@ TorchLens - extract outs and metadata from PyTorch models. (66 modules, 31554 li
 | `fingerprint` | Provisional public structural-hash helpers. | 306 |
 | `inventory` | Site inventory: the audience's "what can I extract?" answer (tvscope B6). | 451 |
 | `observers` | User observer helpers for taps, scalar logs, and record spans. | 530 |
-| `options` | Grouped option dataclasses for public TorchLens APIs. | 1912 |
+| `options` | Grouped option dataclasses for public TorchLens APIs. | 1900 |
 | `types` | Public TorchLens type aliases and rarely used data classes. | 171 |
 
 ### `torchlens._autoroute`
@@ -244,7 +244,7 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 | `projections` | Fastlog projections over unified capture events. | 1597 |
 | `projectors` | Sibling projections over a sealed capture run core. | 1018 |
 | `run` | Forward-pass control for the RUN stage: ''run_and_log_inputs_through_model''. | 733 |
-| `run_entry` | Run entry for the RUN stage: one capture forward from slot claim to ''Trace''. | 637 |
+| `run_entry` | Run entry for the RUN stage: one capture forward from slot claim to ''Trace''. | 635 |
 | `salient_args` | Registry of salient argument extractors for common PyTorch operations. | 523 |
 | `session` | Run-owned capture state and legacy compatibility adapters. | 1283 |
 | `stages` | Private hand-off records between the four capture stages. | 190 |
@@ -312,7 +312,7 @@ Core data structures for representing a logged forward pass. (79 modules, 36620 
 | `_preprocessing_provenance` | Preprocessing provenance derivations that live WITH the record (tvscope). | 114 |
 | `_repr` | Shared record representation helpers. | 59 |
 | `_runtime_handles` | Shared runtime handle resolution for TorchLens records. | 77 |
-| `_schema_bindings` | GENERATED storage bindings for the declared record schema. DO NOT EDIT. | 1030 |
+| `_schema_bindings` | GENERATED storage bindings for the declared record schema. DO NOT EDIT. | 1029 |
 | `_site_key` | Structural site keys (''site_key_v1''): the portable bridging relation. | 256 |
 | `_staged_spec` | Staged intervention spec reads shared by the ''Trace.run'' door. | 28 |
 | `_state_adapter` | Class-agnostic live-state enumeration and restoration helpers. | 122 |
@@ -362,7 +362,7 @@ Core data structures for representing a logged forward pass. (79 modules, 36620 
 | `op` | Op: per-operation metadata for a single invocation of a layer. | 3640 |
 | `param` | Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters. | 1083 |
 | `prehook` | Public value objects for module forward-pre-hook input provenance. | 189 |
-| `trace` | Trace: the top-level container for a fully logged forward pass. | 3864 |
+| `trace` | Trace: the top-level container for a fully logged forward pass. | 3863 |
 
 ### `torchlens._data_substrate`
 

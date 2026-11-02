@@ -548,10 +548,9 @@ _runnable_ledger_armed: bool = False
 _aten_recording_armed: bool = False
 """Whether the r35 event-lifecycle ledger requires wrapper ownership tokens.
 
-Armed around a runnable-eligible (``replayable``) capture forward, and around
-an ``aten_ops=True`` capture, so the dispatch census can attribute raised /
-host-returning aten events to their exact wrapper owner even when both
-diagnostic shadow modes are off.
+Armed around a runnable-eligible (``replayable``) capture forward and around an
+``aten_ops=True`` capture, so the dispatch census can attribute raised / host-returning
+aten events to their exact wrapper owner even when both diagnostic shadow modes are off.
 """
 _prepared_models: weakref.WeakSet[Any] = weakref.WeakSet()
 """Models that have already been through ``_prepare_model_once()``.

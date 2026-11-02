@@ -3,8 +3,7 @@
 Regenerate with ``python tools/generate_record_schema.py``; a CI test
 (`tests/test_record_schema_bindings.py`) diffs this file against a fresh
 generation, so hand edits cannot survive. The declared axes live in
-``field_policy.StorageBinding``; classification policy lives in the
-generator.
+``field_policy.StorageBinding``; classification policy lives in the generator.
 """
 
 from __future__ import annotations

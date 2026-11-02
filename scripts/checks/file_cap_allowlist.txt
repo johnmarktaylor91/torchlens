@@ -116,7 +116,7 @@ torchlens/_data_classes/op.py::_pool_container_cells	88
 torchlens/_data_classes/op.py::_pool_container_members	74
 torchlens/_data_classes/param.py	1083
 torchlens/_data_classes/param.py::Param.__init__	75
-torchlens/_data_classes/trace.py	3864
+torchlens/_data_classes/trace.py	3863
 torchlens/_data_classes/trace.py::Trace.__getstate__	111
 torchlens/_data_classes/trace.py::Trace.__init__	366
 torchlens/_data_classes/trace.py::Trace.__setstate__	284
@@ -1288,7 +1288,7 @@ torchlens/neuro/_rdms.py::_source_mode	114
 torchlens/neuro/_rdms.py::_validated_matrix	77
 torchlens/neuro/_rdms.py::rdms	127
 torchlens/options.py	1900
-torchlens/options.py::CaptureOptions.__init__	203
+torchlens/options.py::CaptureOptions.__init__	193
 torchlens/options.py::VisualizationOptions.__init__	132
 torchlens/options.py::_merge_grouped_options	74
 torchlens/options.py::visualization_to_render_kwargs	65

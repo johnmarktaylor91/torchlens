@@ -1791,8 +1791,7 @@ class Trace(
         self.measure_python_peak_memory = measure_python_peak_memory
         self.distributed_witness = distributed_witness
         self.save_budget = save_budget
-        # Built once per capture; ``None`` when budgeting is disabled. Charged on
-        # the hot path by the activation-save paths in the torch backend.
+        # Built once per capture; ``None`` when budgeting is disabled; charged on the save hot path.
         self._save_budget_accountant = SaveBudget.from_option(save_budget)
         self.facet_functions = facet_functions
         self._options_on_nonfinite: bool = False

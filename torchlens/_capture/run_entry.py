@@ -296,8 +296,7 @@ def _run_model_and_save_specified_outs(
         grad_storage_path: Optional portable bundle directory for streaming grad save.
         retain_grads_in_memory: Whether streamed grads should remain in memory after
             backward finalization.
-        out_sink: Optional callback invoked with ``(label, tensor)`` for each
-            saved out.
+        out_sink: Optional callback invoked with ``(label, tensor)`` for each saved out.
         replayable: If True, capture replay-template metadata and mark the
             returned log as eligible for intervention mutators, replay, rerun, and
             intervention spec persistence.
@@ -322,8 +321,7 @@ def _run_model_and_save_specified_outs(
             change graph construction or saved payloads.
         measure_python_peak_memory: If True, fold a ``tracemalloc``
             Python-allocation peak into the CPU/MPS ``forward_peak_memory``
-            measurement. Off by default because the allocator hook taxes every
-            traced operation.
+            measurement. Off by default because the allocator hook taxes every traced operation.
         distributed_witness: Session-time witness level for collective boundary
             records captured under the distributed opt-in. ``"none"`` (default)
             records structure and correlation only; ``"digest"`` adds byte-exact
