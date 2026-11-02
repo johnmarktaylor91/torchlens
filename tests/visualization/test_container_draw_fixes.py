@@ -265,16 +265,16 @@ def test_nodes_mode_svg_draws_every_container_key(tmp_path: Path, row: str) -> N
 
 @needs_dot
 @pytest.mark.heavy
-def test_cluster_mode_draws_the_gpt2_split_box_with_sibling_ordering(tmp_path: Path) -> None:
+def test_nodes_mode_draws_the_gpt2_split_box_with_sibling_ordering(tmp_path: Path) -> None:
     """The split tuple's container box is drawn while sibling ordering is on (the default)."""
 
     trace = tl.trace(_tiny_gpt2(), torch.randint(0, 50, (1, 5)), capture=STRUCTURE)
-    source = _draw(trace, tmp_path, "gpt2_cluster", "cluster", fmt="svg")
-    svg = (tmp_path / "gpt2_cluster.svg").read_text()
+    source = _draw(trace, tmp_path, "gpt2_nodes_box", "nodes", fmt="svg")
+    svg = (tmp_path / "gpt2_nodes_box.svg").read_text()
 
     declared = set(re.findall(r"subgraph (cluster_container_\w+) \{", source))
     drawn = set(re.findall(r'class="cluster">\s*<title>(cluster_container_\w+)</title>', svg))
-    assert declared, "the cluster-mode DOT should declare the split tuple's container cluster"
+    assert declared, "the nodes-mode DOT should declare the split tuple's container cluster"
     assert drawn == declared
     assert "tl:sibling-order" in source
 

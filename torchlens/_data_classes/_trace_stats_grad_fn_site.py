@@ -2,9 +2,13 @@
 
 from collections import OrderedDict
 from collections.abc import Iterable, Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+from .._errors import InvalidArgumentError
 from .._quantities import Duration
+
+if TYPE_CHECKING:
+    from .trace import Trace
 
 
 def _grad_fn_site_key(
@@ -93,3 +97,32 @@ def _rollup_grad_fn_sites(
         )
         _accumulate_grad_fn_site_record(entry, grad_fn_record, fire_timings)
     return summary, any_op_backed, any_keyed
+
+
+def grad_fn_site_summary(trace: "Trace") -> "OrderedDict[str | None, dict[str, Any]]":
+    """Body of ``Trace.grad_fn_site_summary``; the record keeps the thin spelling and docstring."""
+
+    trace._sync_backward_projection_if_needed()
+    try:
+        fire_timings: OrderedDict[str, Duration | None] | None = trace.autograd.grad_fn_fire_timings
+    except InvalidArgumentError:
+        # Loaded/cleaned traces carry no runtime timing evidence; the
+        # count/coverage rollup still stands on the persisted records.
+        fire_timings = None
+    layer_lookup = {} if trace.__dict__.get("_tl_cleaned_up", False) else trace._layer_dict_all_keys
+    grad_fn_records = {} if trace.__dict__.get("_tl_cleaned_up", False) else trace._grad_fn_logs
+    summary, any_op_backed, any_keyed = _rollup_grad_fn_sites(
+        grad_fn_records.values(), layer_lookup, fire_timings
+    )
+    if any_op_backed and not any_keyed:
+        raise InvalidArgumentError(
+            "This trace's op-backed grad-fns carry no site keys: it was "
+            "captured/saved before site_key_v1 existed, so a per-site "
+            "backward rollup would be silently empty.",
+            code="site_key_unavailable",
+            remedy="re-capture with a current TorchLens to mint site keys",
+        )
+    for entry in summary.values():
+        entry["grad_fn_labels"] = tuple(sorted(entry["grad_fn_labels"]))
+        entry["pass_coverage"] = tuple(sorted(entry["pass_coverage"]))
+    return summary
