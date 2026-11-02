@@ -156,9 +156,13 @@ FILE --workers N`; `python scripts/tier_durations.py shards --count N --index I`
 duration-balanced shard of test files for a parallel gate. `pytest-xdist` ships in the
 `dev` extra: run `OMP_NUM_THREADS=1 pytest tests/ -m smoke -n N` with N equal to the cores you
 declared (never `-n auto`). Measured 2026-10-02 on a 32-core Linux worker: smoke took 5.5 min at
-`-n 8` against 28 min serial. Every worker collects the files it is given first (the whole
-tree takes about 100-140 s; `scripts/smoke_ci_parity.py` passes only the smoke-bearing
-files), so the gain shrinks below 4 workers.
+`-n 8` against 28 min serial. Every worker collects first, so the gain shrinks below 4 workers.
+Smoke runs collect only the smoke file list: under `-m smoke` the tiers plugin skips every test
+module off it before import, and `python scripts/tier_durations.py files --tier smoke` recomputes
+the list from the tree on every call, so nothing needs regenerating. Measured 2026-11-02 on a
+4-core Linux worker: smoke collection took about 40-45 s, serial or `-n 4`, against about 60-65 s
+for the whole tree; passing the listed files as arguments took 130-140 s, because pytest re-walks
+the directory for every file argument.
 
 Use `pytest.importorskip()` for optional migration dependencies. Keep tests
 deterministic and run documentation examples when they are meant to be executable.
