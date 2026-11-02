@@ -944,14 +944,6 @@
   "via_getattr": false
  },
  {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/_data_classes/_trace_validation.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
   "ambiguous": false,
   "field": "is_transform",
   "file": "torchlens/_data_classes/_trace_views.py",
@@ -974,14 +966,6 @@
   "has_default": false,
   "sites": 1,
   "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/_data_classes/_trace_viz.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
  },
  {
   "ambiguous": false,
@@ -7808,6 +7792,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/intervention/_trace_run.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "func_call_id",
   "file": "torchlens/intervention/_trace_selection_edits.py",
@@ -7837,9 +7829,6 @@
   "file": "torchlens/intervention/_trace_selection_edits.py",
   "has_default": false,
   "sites": 3,
-  "file": "torchlens/intervention/_trace_run.py",
-  "has_default": false,
-  "sites": 1,
   "via_getattr": false
  },
  {

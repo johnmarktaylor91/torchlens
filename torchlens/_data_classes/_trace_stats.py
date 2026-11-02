@@ -64,7 +64,6 @@ class TraceStatsMixin(_TraceMixinBase):
     @property
     def cost(self: "Trace") -> "TraceCost":
         """Compute, memory and timing totals of a Trace."""
-
         return TraceCost(self)
 
     @property
@@ -116,7 +115,6 @@ class TraceStatsMixin(_TraceMixinBase):
         (F20 brainpipe D-7; spelling DOCUMENTED-UNSTABLE). ``None`` on loaded
         artifacts, which never re-measure.
         """
-
         from .._capture.peak_memory import read_peak_pair
 
         return read_peak_pair(self)

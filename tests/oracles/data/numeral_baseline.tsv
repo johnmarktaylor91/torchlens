@@ -33,7 +33,6 @@ docs-md	README.md	1,256,6,6
 docs-md	README.md	1,3,224,224
 docs-md	README.md	1.0
 docs-md	README.md	1.4
-docs-md	README.md	10
 docs-md	README.md	10.1038
 docs-md	README.md	10_
 docs-md	README.md	13
@@ -828,6 +827,7 @@ docs-md	docs/buffers.md	1.0
 docs-md	docs/buffers.md	7,8,9,10
 docs-md	docs/conditional_attribution.md	3.10
 docs-md	docs/conditional_attribution.md	3.11
+docs-md	docs/containers.md	12
 docs-md	docs/containers.md	16
 docs-md	docs/facets.md	1.0
 docs-md	docs/facets.md	2023,
@@ -1005,6 +1005,7 @@ docs-md	docs/maintainers/persisted_fields.md	30
 docs-md	docs/maintainers/persisted_fields.md	31
 docs-md	docs/maintainers/persisted_fields.md	32
 docs-md	docs/maintainers/persisted_fields.md	34
+docs-md	docs/maintainers/persisted_fields.md	40
 docs-md	docs/maintainers/persisted_fields.md	44
 docs-md	docs/maintainers/persisted_fields.md	48576
 docs-md	docs/maintainers/persisted_fields.md	51
@@ -1084,14 +1085,12 @@ docs-md	docs/maintainers/where.md	1114
 docs-md	docs/maintainers/where.md	1121
 docs-md	docs/maintainers/where.md	1129
 docs-md	docs/maintainers/where.md	113
-docs-md	docs/maintainers/where.md	11395
 docs-md	docs/maintainers/where.md	114
 docs-md	docs/maintainers/where.md	1144
 docs-md	docs/maintainers/where.md	1145
 docs-md	docs/maintainers/where.md	1146
 docs-md	docs/maintainers/where.md	1149
 docs-md	docs/maintainers/where.md	115
-docs-md	docs/maintainers/where.md	116
 docs-md	docs/maintainers/where.md	117
 docs-md	docs/maintainers/where.md	1177
 docs-md	docs/maintainers/where.md	1178
@@ -1135,7 +1134,6 @@ docs-md	docs/maintainers/where.md	136
 docs-md	docs/maintainers/where.md	1361
 docs-md	docs/maintainers/where.md	137
 docs-md	docs/maintainers/where.md	1372
-docs-md	docs/maintainers/where.md	13741
 docs-md	docs/maintainers/where.md	1379
 docs-md	docs/maintainers/where.md	138
 docs-md	docs/maintainers/where.md	1380
@@ -1253,7 +1251,6 @@ docs-md	docs/maintainers/where.md	195
 docs-md	docs/maintainers/where.md	197
 docs-md	docs/maintainers/where.md	1970
 docs-md	docs/maintainers/where.md	198
-docs-md	docs/maintainers/where.md	1983
 docs-md	docs/maintainers/where.md	1984
 docs-md	docs/maintainers/where.md	1986
 docs-md	docs/maintainers/where.md	199
@@ -1364,7 +1361,6 @@ docs-md	docs/maintainers/where.md	274
 docs-md	docs/maintainers/where.md	275
 docs-md	docs/maintainers/where.md	2766
 docs-md	docs/maintainers/where.md	277
-docs-md	docs/maintainers/where.md	27740
 docs-md	docs/maintainers/where.md	278
 docs-md	docs/maintainers/where.md	279
 docs-md	docs/maintainers/where.md	28
@@ -1389,7 +1385,6 @@ docs-md	docs/maintainers/where.md	295
 docs-md	docs/maintainers/where.md	296
 docs-md	docs/maintainers/where.md	297
 docs-md	docs/maintainers/where.md	298
-docs-md	docs/maintainers/where.md	2980
 docs-md	docs/maintainers/where.md	299
 docs-md	docs/maintainers/where.md	3.0
 docs-md	docs/maintainers/where.md	3.1
@@ -1410,6 +1405,7 @@ docs-md	docs/maintainers/where.md	3005
 docs-md	docs/maintainers/where.md	301
 docs-md	docs/maintainers/where.md	302
 docs-md	docs/maintainers/where.md	303
+docs-md	docs/maintainers/where.md	305
 docs-md	docs/maintainers/where.md	306
 docs-md	docs/maintainers/where.md	307
 docs-md	docs/maintainers/where.md	308
@@ -1430,11 +1426,9 @@ docs-md	docs/maintainers/where.md	322
 docs-md	docs/maintainers/where.md	324
 docs-md	docs/maintainers/where.md	326
 docs-md	docs/maintainers/where.md	328
-docs-md	docs/maintainers/where.md	329
 docs-md	docs/maintainers/where.md	33
 docs-md	docs/maintainers/where.md	330
 docs-md	docs/maintainers/where.md	332
-docs-md	docs/maintainers/where.md	33296
 docs-md	docs/maintainers/where.md	333
 docs-md	docs/maintainers/where.md	334
 docs-md	docs/maintainers/where.md	335
@@ -1448,7 +1442,6 @@ docs-md	docs/maintainers/where.md	344
 docs-md	docs/maintainers/where.md	345
 docs-md	docs/maintainers/where.md	346
 docs-md	docs/maintainers/where.md	347
-docs-md	docs/maintainers/where.md	34773
 docs-md	docs/maintainers/where.md	348
 docs-md	docs/maintainers/where.md	349
 docs-md	docs/maintainers/where.md	35
@@ -1468,6 +1461,7 @@ docs-md	docs/maintainers/where.md	362
 docs-md	docs/maintainers/where.md	3623
 docs-md	docs/maintainers/where.md	363
 docs-md	docs/maintainers/where.md	364
+docs-md	docs/maintainers/where.md	3645
 docs-md	docs/maintainers/where.md	365
 docs-md	docs/maintainers/where.md	366
 docs-md	docs/maintainers/where.md	368
@@ -1493,7 +1487,6 @@ docs-md	docs/maintainers/where.md	3841
 docs-md	docs/maintainers/where.md	385
 docs-md	docs/maintainers/where.md	386
 docs-md	docs/maintainers/where.md	387
-docs-md	docs/maintainers/where.md	38902
 docs-md	docs/maintainers/where.md	3892
 docs-md	docs/maintainers/where.md	39
 docs-md	docs/maintainers/where.md	390
@@ -1535,7 +1528,6 @@ docs-md	docs/maintainers/where.md	420
 docs-md	docs/maintainers/where.md	421
 docs-md	docs/maintainers/where.md	422
 docs-md	docs/maintainers/where.md	423
-docs-md	docs/maintainers/where.md	42344
 docs-md	docs/maintainers/where.md	424
 docs-md	docs/maintainers/where.md	425
 docs-md	docs/maintainers/where.md	426
@@ -1547,7 +1539,6 @@ docs-md	docs/maintainers/where.md	429
 docs-md	docs/maintainers/where.md	43
 docs-md	docs/maintainers/where.md	430
 docs-md	docs/maintainers/where.md	435
-docs-md	docs/maintainers/where.md	4352
 docs-md	docs/maintainers/where.md	436
 docs-md	docs/maintainers/where.md	437
 docs-md	docs/maintainers/where.md	4371
@@ -1707,7 +1698,6 @@ docs-md	docs/maintainers/where.md	62
 docs-md	docs/maintainers/where.md	620
 docs-md	docs/maintainers/where.md	621
 docs-md	docs/maintainers/where.md	624
-docs-md	docs/maintainers/where.md	624895
 docs-md	docs/maintainers/where.md	625
 docs-md	docs/maintainers/where.md	627
 docs-md	docs/maintainers/where.md	628
@@ -1861,7 +1851,6 @@ docs-md	docs/maintainers/where.md	885
 docs-md	docs/maintainers/where.md	888
 docs-md	docs/maintainers/where.md	89
 docs-md	docs/maintainers/where.md	890
-docs-md	docs/maintainers/where.md	894
 docs-md	docs/maintainers/where.md	895
 docs-md	docs/maintainers/where.md	896
 docs-md	docs/maintainers/where.md	90
@@ -3967,6 +3956,10 @@ package-docstrings	torchlens/_data_classes/_op_dedup.py	20
 package-docstrings	torchlens/_data_classes/_op_dedup.py	256
 package-docstrings	torchlens/_data_classes/_op_dedup.py	32
 package-docstrings	torchlens/_data_classes/_op_dedup.py	35
+package-docstrings	torchlens/_data_classes/_op_relations.py	62
+package-docstrings	torchlens/_data_classes/_op_relations.py	742
+package-docstrings	torchlens/_data_classes/_op_save.py	34
+package-docstrings	torchlens/_data_classes/_op_save.py	35
 package-docstrings	torchlens/_data_classes/_op_transforms.py	43
 package-docstrings	torchlens/_data_classes/_site_key.py	0020
 package-docstrings	torchlens/_data_classes/_site_key.py	63
@@ -4047,6 +4040,7 @@ package-docstrings	torchlens/_data_classes/op.py	14
 package-docstrings	torchlens/_data_classes/op.py	15
 package-docstrings	torchlens/_data_classes/op.py	1_1
 package-docstrings	torchlens/_data_classes/op.py	21
+package-docstrings	torchlens/_data_classes/op.py	3.6
 package-docstrings	torchlens/_data_classes/op.py	52
 package-docstrings	torchlens/_data_classes/op.py	715
 package-docstrings	torchlens/_data_classes/param.py	10
@@ -4177,6 +4171,21 @@ package-docstrings	torchlens/_input_walk.py	69
 package-docstrings	torchlens/_input_walk.py	70
 package-docstrings	torchlens/_input_walk.py	71
 package-docstrings	torchlens/_io/__init__.py	3.2
+package-docstrings	torchlens/_io/_alloc_belt.py	1,681
+package-docstrings	torchlens/_io/_alloc_belt.py	1.7
+package-docstrings	torchlens/_io/_alloc_belt.py	16
+package-docstrings	torchlens/_io/_alloc_belt.py	16,000,000
+package-docstrings	torchlens/_io/_alloc_belt.py	18
+package-docstrings	torchlens/_io/_alloc_belt.py	2,000,000
+package-docstrings	torchlens/_io/_alloc_belt.py	48
+package-docstrings	torchlens/_io/_alloc_belt.py	49
+package-docstrings	torchlens/_io/_alloc_belt.py	49_
+package-docstrings	torchlens/_io/_alloc_belt.py	63
+package-docstrings	torchlens/_io/_alloc_belt.py	63_
+package-docstrings	torchlens/_io/_alloc_belt.py	65536
+package-docstrings	torchlens/_io/_alloc_belt.py	65536,
+package-docstrings	torchlens/_io/_alloc_belt.py	73
+package-docstrings	torchlens/_io/_alloc_belt.py	88
 package-docstrings	torchlens/_io/_artifact_anchors.py	3.0
 package-docstrings	torchlens/_io/_artifact_strings.py	0.13
 package-docstrings	torchlens/_io/_artifact_strings.py	54
@@ -6247,11 +6256,11 @@ package-docstrings	torchlens/intervention/_subspace_spec.py	64
 package-docstrings	torchlens/intervention/_trace_edits.py	34
 package-docstrings	torchlens/intervention/_trace_edits.py	41
 package-docstrings	torchlens/intervention/_trace_edits.py	42
+package-docstrings	torchlens/intervention/_trace_run.py	5.4
 package-docstrings	torchlens/intervention/_trace_selection_edits.py	17,
 package-docstrings	torchlens/intervention/_trace_selection_edits.py	2026
 package-docstrings	torchlens/intervention/_trace_selection_edits.py	33
 package-docstrings	torchlens/intervention/_trace_selection_edits.py	33,
-package-docstrings	torchlens/intervention/_trace_run.py	5.4
 package-docstrings	torchlens/intervention/audit.py	12
 package-docstrings	torchlens/intervention/audit.py	17
 package-docstrings	torchlens/intervention/binding.py	12

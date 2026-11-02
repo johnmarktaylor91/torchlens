@@ -251,7 +251,6 @@ class _LayerMirrorField:
 
     def __repr__(self) -> str:
         """Return a debugging repr naming the mirrored field."""
-
         return f"<Layer mirror descriptor {self._name!r}>"
 
     def __get__(self, layer: Any, objtype: Any = None) -> Any:
