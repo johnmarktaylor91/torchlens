@@ -360,7 +360,8 @@
   runs the SAME engine over named axes (`axes={"layer": {...}, "position":
   {...}}`, sites or at most one axis of edits, cells named by comma-joined
   value names) and returns a `SweepGrid`: float64 `values` shaped by the axes
-  with NaN for refused or failed cells; a zero-site or undeclared multi-site
+  with NaN for refused or failed cells, one `tl.experiment.GridCell` per cell
+  (`candidate_id`, `coords`, `status`, `value`, `error`, `member_name`); a zero-site or undeclared multi-site
   cell is a REFUSED cell (`grid_cell_unresolved` / `grid_cell_multi_site`)
   while the rest run, axis-shape mistakes refuse the whole grid, the axes
   ride in the operation's params and `bundle.effects().to_grid()` rebuilds

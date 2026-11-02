@@ -173,7 +173,7 @@ class SweepGrid:
         failed = len(self.failed)
         refused = len(self.refused)
         extra = f", refused={refused}" if refused else ""
-        retain = self.effects.table.retain_policy.strip("'\"")
+        retain = str(self.effects.table.retain_policy or "").strip("'\"")
         return (
             f"SweepGrid({shape}, measured={measured}, failed={failed}{extra}, "
             f"retain={retain}, lane={self.effects.table.lane})"
@@ -280,7 +280,8 @@ def _axis_kinds(axes: dict[str, list[tuple[str, Any]]]) -> dict[str, str]:
                 code="grid_axis_mixed",
                 axis=axis,
             )
-        kinds[axis] = next(iter(seen))
+        (kind,) = seen
+        kinds[axis] = str(kind)
     return kinds
 
 

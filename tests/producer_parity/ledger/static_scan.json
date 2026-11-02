@@ -7401,6 +7401,14 @@
  },
  {
   "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/experiment/_effects.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/experiment/_head_sugar.py",
   "has_default": false,

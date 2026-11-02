@@ -3699,7 +3699,6 @@ describe each surface in depth.
 ### Keywords
 | Spelling | Meaning |
 | --- | --- |
-| `axes=` | keyword of `tl.experiment.sweep_grid`: axis name -> values (a list or a mapping of value name -> value), in declaration order |
 | `axis_roles=` | field and constructor keyword of `ReceptiveField` |
 | `backward_pass_number=` | field and constructor keyword of `FireRecord`; keyword of `build_fire_record` |
 | `bin_edges=` | field and constructor keyword of `HistogramPoint` |
@@ -3731,7 +3730,6 @@ describe each surface in depth.
 | `is_magnitude_based=` | keyword of `tl.stats.TensorStats` |
 | `is_rescorable=` | keyword of `tl.attribution.ReadRow` |
 | `is_validated=` | keyword of `tl.mechinterp.LogitLens`, `tl.mechinterp.LogitLensPredictions` |
-| `max_cells=` | keyword of `tl.experiment.sweep_grid`: guard on the product of the axis lengths (`grid_too_large`) |
 | `module_pass_number=` | field and constructor keyword of `RecordContext` |
 | `mutation_version=` | keyword of `TensorInputObservation` |
 | `num_components=` | keyword of `tl.repgeom.classical_mds`, `tl.stats.PCA` and `tl.transforms.srp`: the number of components (output dimensions) to return |
@@ -5150,11 +5148,13 @@ alphabetical order.
 | Spelling | Meaning |
 | --- | --- |
 | `address=` | keyword of `tl.in_module`: the module address whose contained sites the selector matches |
+| `axes=` | keyword of `tl.experiment.sweep_grid`: axis name -> values (a list or a mapping of value name -> value), in declaration order |
 | `breakdown_k=` | keyword of `tl.report.flops`: how many rows the breakdown lists |
 | `builder=` | field of `RosterModel`: zero-argument factory returning `(model, example_input)` |
 | `captured_bytes=` | field and constructor keyword of `MemoryFacts`, `SummaryTotals` |
 | `captured_saved_ops=` | field and constructor keyword of `MemoryFacts` |
 | `degradations=` | field and constructor keyword of `MergeReport` |
+| `edit_axis=` | field and constructor keyword of `SweepGrid`: the axis holding edits, None when edit= served every cell |
 | `expected_intermediates=` | field of `RosterModel`: NumPy-computed intermediate values per op kind |
 | `facet_functions=` | constructor keyword of `Trace`: the session facet functions; never saved |
 | `fire_record=` | field and constructor keyword of `GradFnCall` |
@@ -5199,6 +5199,8 @@ alphabetical order.
 | `is_verified=` | field and constructor keyword of `CaptureFacts` |
 | `item_list=` | keyword of `tl.types.Accessor`: the ordered records |
 | `loss=` | keyword of `Trace.do` and `tl.sweep`: a callable of the returned trace whose scalar result the door runs `backward` on |
+| `max_cells=` | keyword of `tl.experiment.sweep_grid`: guard on the product of the axis lengths (`grid_too_large`) |
+| `member_name=` | field and constructor keyword of `GridCell`: the retained member's name, None when the cell holds no member |
 | `met=` | field and constructor keyword of `GraduationItem` |
 | `min_stimuli=` | keyword of the `tl.repgeom` geometry functions (`classical_mds`, `effective_dimensionality`, `scree`): fewest stimuli accepted |
 | `num_audited_ops=` | field and constructor keyword of `DTypeRangeReport` |

@@ -481,6 +481,19 @@ def test_grid_round_trips_through_save_and_load(tmp_path: Path) -> None:
     assert _code(excinfo) == "grid_axes_unavailable"
 
 
+def test_tampered_effect_table_refuses_grid_result_shape_mismatch() -> None:
+    import dataclasses
+
+    model, x, baseline = _tiny()
+    grid = _grid(baseline, model, x, axes={"site": _SITES}, edit=tl.zero_ablate())
+    table = grid.bundle._effect_tables[grid.history_id]
+    grid.bundle._effect_tables[grid.history_id] = dataclasses.replace(table, rows=table.rows[:-1])
+    with pytest.raises(BundleExperimentError) as excinfo:
+        grid.bundle.effects().to_grid()
+    assert _code(excinfo) == "grid_result_shape_mismatch"
+    assert excinfo.value.fields["rows"] == 1 and excinfo.value.fields["cells"] == 2
+
+
 def test_to_pandas_is_long_format_one_row_per_cell() -> None:
     pytest.importorskip("pandas")
     model, x, baseline = _tiny()
