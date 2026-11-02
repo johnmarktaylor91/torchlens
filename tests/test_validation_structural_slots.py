@@ -161,3 +161,58 @@ def test_masked_write_value_and_destination_still_fail_when_frozen() -> None:
         trace = _capture(_MaskedColumnWrite(), torch.randn(2, 4))
         op = _op(trace, "__setitem__")
         _assert_frozen_edge_fails(trace, op, op.parent_arg_positions["args"][slot])
+
+
+class _MaskedColumnScalarWrite(nn.Module):
+    """``out[:, mask] = 0.5``: a scalar value fits every mask, so the mask edge stays checked."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+        self.register_buffer("mask", torch.tensor([True, False, True, True]))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out = self.lin(x)
+        out[:, self.mask] = 0.5
+        return out * 2.0
+
+
+class _MaskedColumnBroadcastWrite(nn.Module):
+    """``out[:, mask] = v[:, :1]``: a size-1 value dim fits every mask count."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+        self.register_buffer("mask", torch.tensor([True, False, True, True]))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out = torch.zeros(2, 4)
+        out[:, self.mask] = self.lin(x)[:, :1]
+        return out * 2.0
+
+
+class _IndexedColumnWrite(nn.Module):
+    """``out[:, idx] = v`` with an integer index at the later slot: not a mask."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+        self.register_buffer("idx", torch.tensor([0, 2, 3]))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out = torch.zeros(2, 4)
+        out[:, self.idx] = self.lin(x)[:, :3]
+        return out * 2.0
+
+
+def test_mask_with_a_scalar_or_broadcast_value_still_fails_when_frozen() -> None:
+    for model in (_MaskedColumnScalarWrite(), _MaskedColumnBroadcastWrite()):
+        trace = _capture(model, torch.randn(2, 4))
+        op = _op(trace, "__setitem__")
+        _assert_frozen_edge_fails(trace, op, op.parent_arg_positions["args"][(1, 1)])
+
+
+def test_integer_index_at_a_later_slot_still_fails_when_frozen() -> None:
+    trace = _capture(_IndexedColumnWrite(), torch.randn(2, 4))
+    op = _op(trace, "__setitem__")
+    _assert_frozen_edge_fails(trace, op, op.parent_arg_positions["args"][(1, 1)])
