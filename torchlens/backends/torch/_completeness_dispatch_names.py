@@ -12,6 +12,7 @@ import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
 from ... import _state
+from ..._utils.tensor_utils import _is_uninitialized_lazy_tensor
 from ._tl import (
     get_tensor_label,
     get_tensor_meta,
@@ -356,11 +357,15 @@ def _is_buffer_state_view_dispatch(
     mutates: bool,
     args: tuple[Any, ...],
 ) -> bool:
-    """Return whether an aten dispatch is a ``.data``-accessor view on a registered buffer.
+    """Return whether an aten dispatch is a ``.data``-accessor view on module state.
 
     This flags the intrinsic, legitimately-uncaptured ``aten.detach`` a registered buffer's
-    ``.data`` property emits during a buffer WRITE (``self.b.data.copy_(x)``). The predicate is
-    intentionally strict on every axis so it can never mask a genuine untraced dispatch:
+    ``.data`` property emits during a buffer WRITE (``self.b.data.copy_(x)``), and the same
+    accessor view on a PENDING lazy slot: ``UninitializedParameter.materialize`` reads
+    ``self.data`` (device, dtype) through the wrapper's uninitialized pass-through, which
+    logs nothing because the slot has no storage to log (the materialized parameter
+    registers at the module-entry gate). The predicate is intentionally strict on every
+    axis so it can never mask a genuine untraced dispatch:
 
     * ``owner is None`` -- the dispatch has NO python-wrapper owner (a wrapped ``.detach()``
       call would be an accounted owner, not a gap; only the property-accessor path is unowned).
@@ -370,7 +375,10 @@ def _is_buffer_state_view_dispatch(
       op (``aten.add``/``aten.mul``/...) on the buffer is NOT in this set and stays unaccounted.
     * ``args[0]`` is a REGISTERED BUFFER whose stamp is SESSION-VALIDATED (r81:
       current-session object + live storage identity -- a stale or input-rebound
-      stamp is never credited as a benign state view).
+      stamp is never credited as a benign state view), or an UNINITIALIZED lazy
+      parameter/buffer (``torch.nn.parameter.is_lazy``): a slot with no storage, whose
+      view can carry no model value. Once materialized it is an ordinary parameter and
+      no longer qualifies.
 
     Parameters
     ----------
@@ -388,7 +396,8 @@ def _is_buffer_state_view_dispatch(
     Returns
     -------
     bool
-        ``True`` only for a ``.data``-accessor view dispatch on a registered buffer.
+        ``True`` only for a ``.data``-accessor view dispatch on a registered buffer or a
+        pending lazy slot.
     """
 
     if owner is not None or mutates:
@@ -398,10 +407,11 @@ def _is_buffer_state_view_dispatch(
     if not args:
         return False
     source = args[0]
-    return (
-        isinstance(source, torch.Tensor)
-        and session_validated_buffer_address(trace, source) is not None
-    )
+    if not isinstance(source, torch.Tensor):
+        return False
+    if _is_uninitialized_lazy_tensor(source):
+        return True
+    return session_validated_buffer_address(trace, source) is not None
 
 
 def _dispatch_callsite() -> _DispatchCallsite:
