@@ -34,6 +34,7 @@ from ._engine import (
     _refuse_duplicates,
     _resolve_candidate,
     _run_plan,
+    _SweepRun,
     _validate_sweep_entry,
 )
 
@@ -386,12 +387,15 @@ class _Plan:
 def _form_cells(
     baseline: Trace,
     axes: dict[str, list[tuple[str, Any]]],
-    kinds: dict[str, str],
     edit_axis: str | None,
     edit: Any,
     declared_multi: set[str],
 ) -> tuple[list[_Candidate], list[tuple[_Candidate, str]]]:
-    """Form and resolve every cell; holes become refused cells (ruled F6)."""
+    """Form and resolve every cell; holes become refused cells (ruled F6).
+
+    ``_edit_axis`` has already checked the axis kinds, so every axis other
+    than ``edit_axis`` is a site axis.
+    """
 
     from .._selection.errors import SiteResolutionError
 
@@ -400,9 +404,7 @@ def _form_cells(
     for combo in itertools.product(*[axes[axis] for axis in axes]):
         coords = dict(zip(axes, combo, strict=True))
         cell_id = ",".join(name for name, _ in combo)
-        sites = [
-            (name, value) for axis, (name, value) in coords.items() if kinds[axis] == _SITE_KIND
-        ]
+        sites = [(name, value) for axis, (name, value) in coords.items() if axis != edit_axis]
         cell_edit = coords[edit_axis][1] if edit_axis is not None else edit
         where = _combine_sites(cell_id, sites)
         try:
@@ -528,7 +530,7 @@ def _preflight_grid(
         )
     cell_ids = [",".join(combo) for combo in itertools.product(*names.values())]
     declared_multi = _declared_multi_ids([(cell_id, None) for cell_id in cell_ids], multi_site)
-    resolved, refused = _form_cells(baseline, values, kinds, edit_axis, edit, declared_multi)
+    resolved, refused = _form_cells(baseline, values, edit_axis, edit, declared_multi)
     _check_positions(baseline, resolved)
     _refuse_duplicates(resolved, replicates)
     edit_repr = f"axis:{edit_axis}" if edit_axis is not None else repr(edit)
@@ -579,10 +581,7 @@ def sweep_grid(
         replicates=replicates,
         max_cells=max_cells,
     )
-    bundle = _run_plan(
-        baseline,
-        plan.resolved,
-        plan.refused,
+    run = _SweepRun(
         attempted=plan.cell_count,
         metric=metric,
         retain=retain,
@@ -597,6 +596,7 @@ def sweep_grid(
             "cells": plan.cell_count,
         },
     )
+    bundle = _run_plan(baseline, plan.resolved, plan.refused, run)
     return grid_from_effects(bundle.effects(bundle.history[-1].operation_id))
 
 
