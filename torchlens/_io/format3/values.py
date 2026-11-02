@@ -503,20 +503,6 @@ def _is_tensor_payload(value: Any) -> bool:
     return isinstance(value, torch.Tensor) or type(value).__name__ == "BlobRef"
 
 
-def decode_value(data: Any, *, schema: Any = None, at: str = "value") -> Any:
-    """Decode one JSON cell through the strict decoder (``format3/decode.py``).
-
-    ``tensor`` cells come back as their reference fields and ``ref`` cells as
-    :class:`RowRef`; the table reader binds payloads and settles rows itself.
-    ``schema`` is reserved for the schema-directed families of design section 9.
-    """
-
-    from .decode import Decoder
-
-    del schema
-    return Decoder(lambda fields, _at: dict(fields)).decode(data, at=at)
-
-
 @cache
 def enum_table() -> dict[str, type[enum.Enum]]:
     """Return every TorchLens enum class reachable from the value-object modules."""

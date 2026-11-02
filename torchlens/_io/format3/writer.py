@@ -44,8 +44,9 @@ from .contract import (
     RECORDS_DIR,
     refuse_writer_not_built,
 )
+from .decode import decode_value
 from .schema import level_columns, record_schema
-from .values import ValueEncoder, decode_value, object_state, record_type_table, tagged
+from .values import ValueEncoder, object_state, record_type_table, tagged
 
 #: Root files the digest table leaves out: the manifest itself and the
 #: staging sentinel that comes off right before publish.

@@ -35,8 +35,10 @@ from safetensors.torch import load_file
 from torchlens.backends.registry import BackendPayloadUnsupportedError
 
 from .. import __version__ as TORCHLENS_VERSION
+from .._capture._episode_ledger_anchors import reanchor_loaded_episode_evidence
 from .._data_classes._state_adapter import state_items
 from .._data_classes._trace_missing_attrs import is_live_trace
+from .._data_classes.module import ModuleAccessor
 from .._data_classes.trace import Trace
 from .._errors import InvalidArgumentError
 from .._utils.display import user_stacklevel
@@ -65,6 +67,7 @@ from ._save_gates import (
     _refuse_shard_local_erasure,
     _save_bundle_via_container_door,
 )
+from .format3 import contract as format3_contract, reader as format3_reader
 from .format3.payloads import (
     NUMPY_CODEC,
     TORCH_CODEC,
@@ -86,7 +89,8 @@ from .payload_codec import (
     get_payload_codec,
     numpy_to_transport_tensor,
 )
-from .rehydrate import rehydrate_trace
+from .recipe_reader import DecodedRecipe, DecodedRule, read_recipe
+from .rehydrate import _build_lazy_tensor_ref, rehydrate_trace
 from .save_policy import _refuse_incoherent_structure_only_write, _resolve_include_flags
 from .scrub import BlobSpec, scrub_for_save
 from .state_keys import invalidate_static_class_attr_cache
@@ -1314,8 +1318,6 @@ def load(
 def _is_format3_root(bundle_path: Path) -> bool:
     """Return whether the directory's root manifest names the 3.0 saved format."""
 
-    from .format3 import contract as format3_contract
-
     candidate = _read_root_manifest(bundle_path)
     return candidate is not None and candidate.get("format") == format3_contract.FORMAT_NAME
 
@@ -1330,8 +1332,6 @@ def _load_format3(
 ) -> Trace | Bundle | InterventionSpec:
     """Dispatch a 3.0 artifact to the format3 reader door its manifest ``kind`` names."""
 
-    from .format3 import reader as format3_reader
-
     kind = format3_reader.read_manifest(bundle_path)["kind"]
     if kind == "intervention":
         return cast("InterventionSpec", format3_reader.load_intervention_recipe(bundle_path))
@@ -1344,6 +1344,192 @@ def _load_format3(
     if kind == "bundle":
         return cast("Bundle", format3_reader.load_bundle(bundle_path, **options))
     return cast("Trace", format3_reader.load_trace(bundle_path, **options))
+
+
+# ---------------------------------------------------------------------------
+# 3.0 saved format: the rehydration side of the reader doors
+# ---------------------------------------------------------------------------
+# ``format3/reader.py`` reads, decodes and validates below the record classes in
+# the import layering; the steps that need ``rehydrate_trace``, the accessors,
+# ``Bundle`` and the intervention types live here and are installed into the
+# reader's doors at import (``format3_reader.install_load_hooks`` below).
+
+
+def _finish_format3_trace(
+    artifact: format3_reader.DecodedArtifact,
+    *,
+    lazy: bool,
+    map_location: str | torch.device,
+    materialize_nested: bool,
+    payload_hints: PayloadLoadHints | None,
+) -> Trace:
+    """Rehydrate one decoded 3.0 trace artifact: tensors, accessors, provenance, recipe."""
+
+    root, manifest = artifact.root, artifact.manifest
+    state = artifact.trace_state(ModuleAccessor)
+    blobs_dir = (
+        resolve_bundle_blobs_dir(root) if (root / format3_contract.BLOBS_DIR).is_dir() else None
+    )
+    trace = rehydrate_trace(
+        state,
+        artifact.manifest_for_rehydrate(),
+        root,
+        lazy=lazy,
+        map_location=map_location,
+        materialize_nested=materialize_nested,
+        payload_hints=payload_hints,
+        resolved_blobs_dir=blobs_dir,
+        trace=artifact.objects["trace"][0],
+    )
+    from .runnable_load import attach_sparse_run_readiness
+
+    reanchor_loaded_episode_evidence(trace)
+    _reanchor_visualizer_paths(trace, root)
+    trace._loaded_from_bundle = True
+    trace._source_bundle_manifest_sha256 = sha256_file(root / format3_contract.MANIFEST_FILE)
+    trace._source_bundle_path = root
+    trace._source_bundle_created_at = manifest["created_at"]
+    trace._source_bundle_provenance = manifest.get("provenance")
+    attach_sparse_run_readiness(trace, None)
+    disclosures = manifest.get("disclosures")
+    if disclosures is not None:
+        format3_reader.attach_disclosure_advisory(trace, disclosures)
+    if format3_contract.INTERVENTION_FILE in manifest["files"]:
+        recipe = read_recipe(root, manifest, decoder=artifact.decoder)
+        trace._intervention_spec = _finish_format3_recipe(recipe, artifact)
+    return trace
+
+
+def _finish_format3_bundle(
+    members: list[tuple[str, Trace]], *, relations: Any, baseline: Any, root: Path
+) -> Bundle:
+    from ..bundle import Bundle
+
+    bundle = Bundle(members, relations=relations, baseline=baseline)
+    bundle._source_bundle_path = root
+    return bundle
+
+
+def _finish_format3_recipe(
+    recipe: DecodedRecipe, artifact: format3_reader.DecodedArtifact
+) -> InterventionSpec:
+    """Stage the decoded recipe on an ``InterventionSpec`` (design section 8).
+
+    Built-in edits are rebuilt through the helper registry; a rule carrying a
+    callable placeholder (rule level or inside its arguments) becomes an
+    audit-only ``Edit`` and the recipe's ``placeholders`` list names it, so
+    every rerun door refuses with ``run_intervention_spec_not_persisted``.
+    """
+
+    from ..intervention import _spec_codec, helpers, types as intervention_types
+
+    spec = intervention_types.InterventionSpec(metadata={})
+    for rule in recipe.rules:
+        try:
+            selector = _spec_codec._target_spec_from_json(rule.selector)
+        except (KeyError, TypeError, ValueError) as exc:
+            raise _recipe_rule_error(artifact.root, rule, f"selector is malformed: {exc}") from exc
+        edit = _recipe_edit(rule, artifact, intervention_types.Edit, helpers.rebuild_builtin_helper)
+        metadata = {
+            **rule.metadata,
+            "direction": rule.direction,
+            "rule_index": rule.position,
+            "loaded_from_recipe": True,
+        }
+        hook = edit.factory() if edit.factory is not None else edit
+        spec.add_hook(
+            selector, hook, helper=edit, handle=f"recipe-{rule.position}", metadata=metadata
+        )
+    placeholders = recipe.placeholders
+    spec.metadata["recipe"] = {
+        "executable": recipe.executable and not placeholders,
+        "spec_derived": recipe.spec_derived,
+        "append_state": recipe.append_state,
+        "helpers": recipe.helpers,
+        "function_registry_keys": recipe.function_registry_keys,
+        "helper_registry_version": recipe.helper_registry_version,
+        "placeholders": placeholders,
+    }
+    return spec
+
+
+def _recipe_rule_error(root: Path, rule: DecodedRule, detail: str) -> ArtifactError:
+    return ArtifactError(
+        f"Artifact {root / format3_contract.INTERVENTION_FILE} rule {rule.position} {detail}.",
+        remedy="re-save the trace with trace.save(); the recipe file was edited",
+        file_path=str(root),
+        code=format3_contract.REFUSAL_CODES["record_file_corrupt"],
+    )
+
+
+def _recipe_edit(
+    rule: DecodedRule,
+    artifact: format3_reader.DecodedArtifact,
+    edit_cls: Any,
+    rebuild_builtin_helper: Any,
+) -> Any:
+    fields = rule.edit
+    args = tuple(_recipe_materialize(fields["args"], artifact))
+    kwargs = dict(_recipe_materialize(fields["kwargs"], artifact))
+    extras: dict[str, Any] = {
+        "metadata": tuple(sorted(dict(fields.get("metadata") or {}).items())),
+        "signal": fields.get("signal"),
+        "is_batch_independent": bool(fields.get("is_batch_independent", False)),
+        "is_compatible_with_append": bool(fields.get("is_compatible_with_append", False)),
+        "selection_recipe": fields.get("selection_recipe"),
+    }
+    if rule.placeholders:
+        extras["metadata"] = (
+            *extras["metadata"],
+            ("executable", False),
+            ("placeholders", tuple(rule.placeholders)),
+        )
+        return edit_cls(
+            name=fields["name"],
+            args=args,
+            kwargs=tuple(kwargs.items()),
+            portability="callable_placeholder",
+            **extras,
+        )
+    try:
+        rebuilt = rebuild_builtin_helper(fields["name"], args, kwargs)
+    except Exception as exc:  # the registry's typed refusal names the unknown builtin
+        raise _recipe_rule_error(
+            artifact.root, rule, f"built-in edit cannot be rebuilt: {exc}"
+        ) from exc
+    return dataclasses.replace(rebuilt, **extras)
+
+
+def _recipe_materialize(value: Any, artifact: format3_reader.DecodedArtifact) -> Any:
+    """Replace the tensor references under ``value`` with tensors, eagerly, through the lazy layer."""
+
+    root = artifact.root
+    if isinstance(value, BlobRef):
+        ref = _build_lazy_tensor_ref(
+            value, dict(artifact.sink.entries), root, kind="out", payload_hints=None
+        )
+        if ref is None:
+            raise ArtifactError(
+                f"Artifact {root / format3_contract.INTERVENTION_FILE} tensor {value.blob_id} has no usable entry.",
+                remedy="re-save the trace with trace.save()",
+                file_path=str(root),
+                code=format3_contract.REFUSAL_CODES["record_file_corrupt"],
+            )
+        return ref.materialize(
+            map_location="cpu", resolved_blobs_dir=resolve_bundle_blobs_dir(root)
+        )
+    if isinstance(value, list):
+        return [_recipe_materialize(item, artifact) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_recipe_materialize(item, artifact) for item in value)
+    if isinstance(value, dict):
+        return {key: _recipe_materialize(item, artifact) for key, item in value.items()}
+    return value
+
+
+format3_reader.install_load_hooks(
+    trace=_finish_format3_trace, bundle=_finish_format3_bundle, recipe=_finish_format3_recipe
+)
 
 
 def load(
@@ -1669,8 +1855,6 @@ def _load_trace_payload(
     # output was an unmaterialized blob handle, so the episode ledger's
     # evidence anchor had nothing to compare. Payloads are attached now; the
     # load itself refutes a ledger re-minted over another execution.
-    from .._capture._episode_ledger_anchors import reanchor_loaded_episode_evidence
-
     reanchor_loaded_episode_evidence(trace)
     _reanchor_visualizer_paths(trace, bundle_path)
     setattr(trace, "_loaded_from_bundle", True)

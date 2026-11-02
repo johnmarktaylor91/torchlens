@@ -20,12 +20,16 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any, Final
 
+from ..._data_classes._schema_bindings import STORAGE_BINDINGS
+from ..._data_classes.field_policy import StorageKind
 from .._artifact_anchors import check_manifest_metadata_anchors
 from .._json import loads_bounded, read_bytes_bounded
+from .._pre3_module_paths import pre_3_artifact_error
 from ..field_registry import RECORD_CONTRACT_CLASSES
 from ..format_contract import TLSPEC_VERSION, above_ceiling_error
-from ..format_errors import ArtifactError, ArtifactTooOldError
+from ..format_errors import ArtifactError, ArtifactTooOldError, UnknownPersistedFieldError
 from ..paths import reject_symlink_path
+from ..state_contract import _unknown_field_remedy
 from . import contract
 
 __all__ = [
@@ -78,8 +82,6 @@ def symlink_guard(path: Path, context: str) -> None:
 
 
 def pre3_error(root: Path, observed: str, *, code: str) -> ArtifactTooOldError:
-    from .._pre3_module_paths import pre_3_artifact_error
-
     return pre_3_artifact_error(observed, path=str(root), code=code)
 
 
@@ -347,9 +349,6 @@ def read_record_table(root: Path, manifest: Mapping[str, Any], kind: str) -> lis
 
 
 def _unknown_columns(kind: str, names: Mapping[str, Any]) -> list[str]:
-    from ..._data_classes._schema_bindings import STORAGE_BINDINGS
-    from ..._data_classes.field_policy import StorageKind
-
     bindings = STORAGE_BINDINGS[_SCHEMA_KEY_BY_RECORD.get(kind, kind)]
     allowed_extra = _TRACE_TRANSPORT_COLUMNS if kind == "trace" else frozenset()
     unknown = []
@@ -357,7 +356,7 @@ def _unknown_columns(kind: str, names: Mapping[str, Any]) -> list[str]:
         if name in allowed_extra:
             continue
         binding = bindings.get(name)
-        if binding is None or binding.kind is StorageKind.RUNTIME or name == TLSPEC_KEY:
+        if binding is None or binding.kind is StorageKind.RUNTIME:
             unknown.append(name)
     return unknown
 
@@ -368,9 +367,6 @@ def refuse_unknown_columns(kind: str, names: Mapping[str, Any], *, declared_vers
     unknown = _unknown_columns(kind, names)
     if not unknown:
         return
-    from ..format_errors import UnknownPersistedFieldError
-    from ..state_contract import _unknown_field_remedy
-
     cls = record_class(kind)
     raise UnknownPersistedFieldError(
         f"{cls.__name__} record table carries {len(unknown)} column(s) unknown to this "

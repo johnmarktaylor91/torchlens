@@ -22,6 +22,7 @@ from typing import Any, Final
 
 import torch
 
+from ..._data_classes._state_adapter import state_new, state_restore
 from ..field_registry import component_spec_tables
 from ..format_errors import ArtifactError
 from .contract import (
@@ -349,8 +350,6 @@ def build_component(cls: type, fields: Mapping[str, Any], *, at: str = "value") 
     (``Edit`` rebuilds its builtin factory there) or the state adapter.
     """
 
-    from ..._data_classes._state_adapter import state_new, state_restore
-
     state = dict(fields)
     try:
         if dataclasses.is_dataclass(cls) or isinstance(getattr(cls, "_fields", None), tuple):
@@ -367,3 +366,15 @@ def build_component(cls: type, fields: Mapping[str, Any], *, at: str = "value") 
         setstate(obj, state)
         return obj
     return state_restore(obj, state)
+
+
+def decode_value(data: Any, *, schema: Any = None, at: str = "value") -> Any:
+    """Decode one tagged JSON value through the closed vocabulary (the encoder's inverse).
+
+    ``tensor`` cells come back as their reference fields and ``ref`` cells as
+    :class:`RowRef`; the table reader binds payloads and settles rows itself.
+    ``schema`` is reserved for the schema-directed families of design section 9.
+    """
+
+    del schema
+    return Decoder(lambda fields, _at: dict(fields)).decode(data, at=at)

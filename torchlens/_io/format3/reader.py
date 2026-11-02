@@ -15,17 +15,17 @@ here evaluates, unpickles or imports by a name from the file. Contract:
 
 from __future__ import annotations
 
-import hashlib
 import re
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 from typing import Any, Final
 
 import torch
 
+from ..._data_classes._state_adapter import state_new, state_restore
 from ..format_contract import BlobRef
-from ..paths import resolve_bundle_blobs_dir
 from ..recipe_reader import read_recipe
+from ..state_contract import governed_artifact_load
 from . import contract
 from .decode import (
     CELL_CODE,
@@ -40,6 +40,7 @@ from .validate import (
     BELOW_FLOOR,
     TLSPEC_KEY,
     artifact_error,
+    check_record_anchors,
     check_version_window,
     integrity_error,
     is_int,
@@ -50,15 +51,20 @@ from .validate import (
     record_class,
     refuse_unknown_columns,
     symlink_guard,
+    validate_records,
     verify_file_bytes,
 )
 from .values import RowRef, dtype_table
 
 __all__ = [
+    "DecodedArtifact",
+    "attach_disclosure_advisory",
+    "install_load_hooks",
     "load_bundle",
     "load_intervention_recipe",
     "load_trace",
     "read_manifest",
+    "read_tables",
     "validate_artifact",
 ]
 
@@ -284,7 +290,7 @@ def _tensor_kind(at: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-class _Artifact:
+class DecodedArtifact:
     """One trace artifact's decoded tables and the record objects built from them."""
 
     def __init__(self, root: Path, manifest: Mapping[str, Any]) -> None:
@@ -300,8 +306,6 @@ class _Artifact:
     # -- decode -------------------------------------------------------------
 
     def decode_tables(self) -> None:
-        from ..._data_classes._state_adapter import state_new
-
         for kind in self.manifest["records"]:
             raw_rows = read_record_table(self.root, self.manifest, kind)
             if raw_rows:
@@ -379,8 +383,6 @@ class _Artifact:
     def build_records(self) -> None:
         """Run each record's state hook, leaves first, under the governed load."""
 
-        from ..state_contract import governed_artifact_load
-
         with governed_artifact_load():
             for kind in LOAD_ORDER:
                 for obj, row in zip(
@@ -388,8 +390,12 @@ class _Artifact:
                 ):
                     _restore_record(obj, row, version=self.version)
 
-    def trace_state(self) -> dict[str, Any]:
-        """The scrubbed-state-shaped dict the existing rehydrate path restores."""
+    def trace_state(self, accessor_cls: type) -> dict[str, Any]:
+        """The scrubbed-state-shaped dict the existing rehydrate path restores.
+
+        ``accessor_cls`` is ``ModuleAccessor``, passed in by the rehydration
+        step because the record classes sit above this module.
+        """
 
         state = dict(self.tables["trace"][0])
         state[TLSPEC_KEY] = self.version
@@ -397,13 +403,11 @@ class _Artifact:
         if isinstance(accessor, Unencodable):
             accessor = None
         if accessor is None and "module" in self.objects:
-            accessor = self._module_accessor_state()
+            accessor = self._module_accessor_state(accessor_cls)
         state["_io_module_accessor_state"] = accessor
         return state
 
-    def _module_accessor_state(self) -> Any:
-        from ..._data_classes.module import ModuleAccessor
-
+    def _module_accessor_state(self, accessor_cls: type) -> Any:
         modules = self.objects["module"]
         module_dict = {
             row["address"]: obj for row, obj in zip(self.tables["module"], modules, strict=True)
@@ -414,7 +418,7 @@ class _Artifact:
             for row, obj in zip(self.tables.get("module_call", []), calls, strict=True)
         }
         return build_component(
-            ModuleAccessor,
+            accessor_cls,
             {
                 "_dict": module_dict,
                 "_list": list(modules),
@@ -432,8 +436,6 @@ class _Artifact:
 
 
 def _restore_record(obj: Any, row: Mapping[str, Any], *, version: int) -> None:
-    from ..._data_classes._state_adapter import state_restore
-
     state = dict(row)
     state[TLSPEC_KEY] = version
     setstate = getattr(type(obj), "__setstate__", None)
@@ -448,6 +450,43 @@ def _restore_record(obj: Any, row: Mapping[str, Any], *, version: int) -> None:
 # Doors
 # ---------------------------------------------------------------------------
 
+#: The rehydration step of each door, installed by ``torchlens._io.bundle`` (see
+#: :func:`install_load_hooks`). ``trace`` receives a :class:`DecodedArtifact` and
+#: the load options; ``bundle`` the loaded members, relations, baseline and root;
+#: ``recipe`` a decoded recipe and its artifact.
+_LOAD_HOOKS: dict[str, Callable[..., Any]] = {}
+_HOOK_KINDS: Final = frozenset({"trace", "bundle", "recipe"})
+
+
+def install_load_hooks(**hooks: Callable[..., Any]) -> None:
+    """Install the rehydration step of the ``trace``, ``bundle`` and ``recipe`` doors.
+
+    This module reads, decodes and validates; turning decoded tables into
+    ``Trace``, ``Bundle`` and ``InterventionSpec`` objects runs the record
+    classes' rehydrate path, which sits above the format package in the import
+    layering, so ``torchlens._io.bundle`` installs those steps when it is
+    imported (``import torchlens`` does). A door called without its step
+    refuses with ``bundle_load_failed`` after the artifact validation.
+    """
+
+    unknown = set(hooks) - _HOOK_KINDS
+    if unknown:
+        raise ValueError(f"unknown load hook(s): {sorted(unknown)}")
+    _LOAD_HOOKS.update(hooks)
+
+
+def _hook(kind: str, root: Path) -> Callable[..., Any]:
+    try:
+        return _LOAD_HOOKS[kind]
+    except KeyError:
+        raise artifact_error(
+            f"The 3.0 {kind} loader's rehydration step is not installed; {root} was validated "
+            "but not loaded.",
+            code=_CODES["blob_missing"],
+            remedy="import torchlens (its load door installs the step) and load again",
+            file_path=str(root),
+        ) from None
+
 
 def _require_kind(manifest: Mapping[str, Any], root: Path, expected: str) -> None:
     if manifest["kind"] != expected:
@@ -457,6 +496,25 @@ def _require_kind(manifest: Mapping[str, Any], root: Path, expected: str) -> Non
             remedy=f"load it with the {manifest['kind']} door or pass a {expected} artifact",
             file_path=str(root),
         )
+
+
+def read_tables(root: Path, manifest: Mapping[str, Any]) -> DecodedArtifact:
+    """Decode every record table, resolve every reference and run the state hooks.
+
+    The cross-record validators run between reference resolution and
+    construction; the record anchors of the manifest are checked against the
+    decoded trace row. Nothing here touches the rehydrate path.
+    """
+
+    artifact = DecodedArtifact(root, manifest)
+    artifact.decode_tables()
+    artifact.resolve_references()
+    validate_records(artifact.tables, manifest=manifest, root=root)
+    artifact.build_records()
+    layer_list = artifact.tables["trace"][0].get("_layer_list")
+    persisted_rows = len(layer_list) if isinstance(layer_list, list) else None
+    check_record_anchors(manifest, persisted_rows, root)
+    return artifact
 
 
 def load_trace(
@@ -471,69 +529,25 @@ def load_trace(
 
     Every record table is decoded and every reference resolved before any
     record's state hook runs; the hooks run under the governed load, so the
-    load validators run exactly as they do for in-process state.
+    load validators run exactly as they do for in-process state. The installed
+    ``trace`` step then rehydrates the trace (tensors through the lazy layer,
+    accessors, the recipe when ``intervention.json`` is listed).
     """
-
-    from ..rehydrate import rehydrate_trace
-    from .validate import check_record_anchors, validate_records
 
     root = Path(path)
     manifest = validate_artifact(root)
     _require_kind(manifest, root, "trace")
-    artifact = _Artifact(root, manifest)
-    artifact.decode_tables()
-    artifact.resolve_references()
-    validate_records(artifact.tables, manifest=manifest, root=root)
-    artifact.build_records()
-    state = artifact.trace_state()
-    layer_list = state.get("_layer_list")
-    persisted_rows = len(layer_list) if isinstance(layer_list, list) else None
-    blobs_dir = resolve_bundle_blobs_dir(root) if (root / contract.BLOBS_DIR).is_dir() else None
-    trace = rehydrate_trace(
-        state,
-        artifact.manifest_for_rehydrate(),
-        root,
+    artifact = read_tables(root, manifest)
+    return _hook("trace", root)(
+        artifact,
         lazy=lazy,
         map_location=map_location,
         materialize_nested=materialize_nested,
         payload_hints=payload_hints,
-        resolved_blobs_dir=blobs_dir,
-        trace=artifact.objects["trace"][0],
     )
-    check_record_anchors(manifest, persisted_rows, root)
-    _finish_loaded_trace(trace, root, manifest, artifact)
-    return trace
 
 
-def _finish_loaded_trace(
-    trace: Any, root: Path, manifest: Mapping[str, Any], artifact: _Artifact
-) -> None:
-    """The post-rehydrate steps every loaded trace gets (the 2.x path's, unchanged)."""
-
-    from ..._capture._episode_ledger_anchors import reanchor_loaded_episode_evidence
-    from ..bundle import _reanchor_visualizer_paths
-    from ..runnable_load import attach_sparse_run_readiness
-
-    reanchor_loaded_episode_evidence(trace)
-    _reanchor_visualizer_paths(trace, root)
-    trace._loaded_from_bundle = True
-    trace._source_bundle_manifest_sha256 = hashlib.sha256(
-        (root / contract.MANIFEST_FILE).read_bytes()
-    ).hexdigest()
-    trace._source_bundle_path = root
-    trace._source_bundle_created_at = manifest["created_at"]
-    trace._source_bundle_provenance = manifest.get("provenance")
-    attach_sparse_run_readiness(trace, None)
-    disclosures = manifest.get("disclosures")
-    if disclosures is not None:
-        _attach_advisory(trace, disclosures)
-    if contract.INTERVENTION_FILE in manifest["files"]:
-        trace._intervention_spec = read_recipe(
-            root, manifest, decoder=artifact.decoder, tensor_entries=artifact.sink.entries
-        )
-
-
-def _attach_advisory(trace: Any, disclosures: Mapping[str, Any]) -> None:
+def attach_disclosure_advisory(trace: Any, disclosures: Mapping[str, Any]) -> None:
     """Attach the ``unencodable_values_stringified`` advisory row (design section 5)."""
 
     annotations = getattr(trace, "annotations", None)
@@ -558,8 +572,6 @@ def _attach_advisory(trace: Any, disclosures: Mapping[str, Any]) -> None:
 def load_bundle(path: str | Path, **options: Any) -> Any:
     """Load one ``kind: bundle`` artifact: ``members/<index>-<name>/`` plus ``relations.json``."""
 
-    from ...bundle import Bundle
-
     root = Path(path)
     manifest = validate_artifact(root)
     _require_kind(manifest, root, "bundle")
@@ -579,9 +591,7 @@ def load_bundle(path: str | Path, **options: Any) -> Any:
             )
         relations = data.get("relations") or None
         baseline = data.get("baseline")
-    bundle = Bundle(members, relations=relations, baseline=baseline)
-    bundle._source_bundle_path = root
-    return bundle
+    return _hook("bundle", root)(members, relations=relations, baseline=baseline, root=root)
 
 
 def _iter_members(root: Path, manifest: Mapping[str, Any]) -> Iterator[tuple[str, Path]]:
@@ -613,7 +623,8 @@ def load_intervention_recipe(path: str | Path) -> Any:
 
     Built-in edits come back through the helper registry; a callable
     placeholder loads as an audit-only edit that every rerun door refuses
-    (``run_intervention_spec_not_persisted``). Grammar: ``_io/recipe_reader.py``.
+    (``run_intervention_spec_not_persisted``). Grammar: ``recipe_reader``;
+    object construction: the installed ``recipe`` step.
     """
 
     root = Path(path)
@@ -624,10 +635,9 @@ def load_intervention_recipe(path: str | Path) -> Any:
         raise artifact_error(
             f"Artifact {root} carries no intervention recipe.",
             code=_CODES["kind_mismatch"],
-            remedy="save the trace with a staged intervention, or save_intervention(...) the spec",
+            remedy="save the trace with its intervention spec, or load the trace itself",
             file_path=str(root),
         )
-    artifact = _Artifact(root, manifest)
-    return read_recipe(
-        root, manifest, decoder=artifact.decoder, tensor_entries=artifact.sink.entries
-    )
+    artifact = DecodedArtifact(root, manifest)
+    recipe = read_recipe(root, manifest, decoder=artifact.decoder)
+    return _hook("recipe", root)(recipe, artifact)
