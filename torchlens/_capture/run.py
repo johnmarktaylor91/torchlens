@@ -65,6 +65,7 @@ from ._forward_helpers import (
     _cleanup_forward_memory_once,
     _clear_saved_activation_dedup_caches,
     _forward_peak_memory_bracket,
+    _record_fused_attention_hold,
     _run_predicate_forward_with_root_frame,
     _stamp_host_rng_verdict,
     _structure_only_forward_boundary,
@@ -528,6 +529,7 @@ def _run_forward(self: "Trace", run: _RunState) -> Any:
     _vprint(self, f"Running {self._options_mode} forward pass...")
     with run.backend.active_logging(self):
         _warn_unlogged_dynamo_region(self, run.compiled_prep)
+        _record_fused_attention_hold(self, run.compiled_prep)
         _log_inputs(self, run)
         if self._options_mode == "predicate":
             with _structure_only_forward_boundary(self):
