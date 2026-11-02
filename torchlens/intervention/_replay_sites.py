@@ -100,6 +100,7 @@ def _keeps_captured_draw(
     *,
     pending_updates: Mapping[str, torch.Tensor],
     label_keys: Mapping[str, tuple[str, ...]],
+    log: Trace | None = None,
 ) -> bool:
     """Whether a stochastic call keeps its captured output instead of re-executing.
 
@@ -113,6 +114,13 @@ def _keeps_captured_draw(
     call whose arguments did change re-executes as well (its new draw is the
     disclosed stochastic-propagation behaviour).
 
+    "Changed" means the parent's replay VALUE differs from its captured
+    value. The cone over-approximates (a hooked member's call-group
+    siblings and their consumers are recomputed too), so a parent is often
+    recomputed to exactly the value the trace holds; that recomputation is
+    not a changed argument, and the draw keeps. Without ``log`` the check
+    degrades to presence in ``pending_updates``.
+
     Parameters
     ----------
     representative:
@@ -123,6 +131,8 @@ def _keeps_captured_draw(
         Values this replay has recomputed so far, by replay site key.
     label_keys:
         Label spelling to replay site keys.
+    log:
+        The trace being replayed, for the parents' captured values.
 
     Returns
     -------
@@ -140,7 +150,7 @@ def _keeps_captured_draw(
         # would apply it twice. The raw draw is only recoverable by
         # re-execution (seeded when RNG states were saved).
         return False
-    return not _any_parent_updated(representative, pending_updates, label_keys)
+    return not _any_parent_updated(representative, pending_updates, label_keys, log=log)
 
 
 def _edited_at_capture(site: Op) -> bool:
@@ -192,8 +202,10 @@ def _any_parent_updated(
     site: Op,
     pending_updates: Mapping[str, torch.Tensor],
     label_keys: Mapping[str, tuple[str, ...]],
+    *,
+    log: Trace | None = None,
 ) -> bool:
-    """Whether any parent of ``site`` was recomputed earlier in this replay.
+    """Whether any parent of ``site`` carries a changed value in this replay.
 
     Parameters
     ----------
@@ -203,18 +215,56 @@ def _any_parent_updated(
         Values this replay has recomputed so far, by replay site key.
     label_keys:
         Label spelling to replay site keys.
+    log:
+        The trace being replayed. When given, a pending parent whose replay
+        value equals its captured value does not count as updated; a parent
+        whose captured record cannot be found or compared does.
 
     Returns
     -------
     bool
-        True when a parent's replay key carries a pending update.
+        True when a parent's replay key carries a pending update whose value
+        differs from the captured one (or any pending update, without ``log``).
     """
 
     for parent in site.parents or ():
         for key in label_keys.get(parent, (parent,)):
-            if key in pending_updates:
+            if key not in pending_updates:
+                continue
+            if log is None or _pending_value_differs(log, key, pending_updates[key]):
                 return True
     return False
+
+
+def _pending_value_differs(log: Trace, key: str, pending: torch.Tensor) -> bool:
+    """Whether a staged replay value differs from the captured value at ``key``.
+
+    Parameters
+    ----------
+    log:
+        The trace being replayed.
+    key:
+        Replay site key (pass-qualified label) of the recomputed site.
+    pending:
+        The value this replay staged for that site.
+
+    Returns
+    -------
+    bool
+        False only when the captured record is found, holds a tensor of the
+        same shape and dtype, and compares equal element-wise.
+    """
+
+    captured = log._layer_dict_all_keys.get(key)
+    captured_out = getattr(captured, "out", None)
+    if not isinstance(captured_out, torch.Tensor) or not isinstance(pending, torch.Tensor):
+        return True
+    if captured_out.shape != pending.shape or captured_out.dtype != pending.dtype:
+        return True
+    try:
+        return not torch.equal(captured_out.detach(), pending.detach().to(captured_out.device))
+    except RuntimeError:
+        return True
 
 
 def _frontier_leaf(

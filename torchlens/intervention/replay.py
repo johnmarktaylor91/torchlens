@@ -1149,6 +1149,7 @@ def _replay_group_output(
         replay_group,
         pending_updates=state.pending_updates,
         label_keys=state.label_keys,
+        log=state.log,
     ):
         return representative.out.clone()
     return _execute_group_call(representative, args, kwargs, origins=state.origins)
