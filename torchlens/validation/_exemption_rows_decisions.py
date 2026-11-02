@@ -537,7 +537,7 @@ _DECISION_ROWS: tuple[ExemptionRow, ...] = (
         "sdpa_singleton_key",
         ("posthoc", _C2),
         _SAVED + "_sdpa_singleton_key_decision",
-        "the query, key or additive mask of scaled_dot_product_attention over exactly one key position",
+        "the additive float mask of scaled_dot_product_attention over exactly one key position with every softmax row well defined",
         (
             _SAVED_TESTS + "test_single_key_position_exempts_query_key_and_additive_mask",
             _SAVED_TESTS + "test_query_key_and_mask_of_longer_memory_and_lone_value_still_fail",

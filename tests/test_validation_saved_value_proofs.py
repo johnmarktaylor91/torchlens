@@ -37,7 +37,7 @@ def _capture(model: nn.Module, x: torch.Tensor) -> Any:
     return tl.trace(
         model.eval(),
         x,
-        capture=CaptureOptions(layers_to_save="all", save_args=True, random_seed=0),
+        capture=CaptureOptions(layers_to_save="all", save_args=True, seed=0),
     )
 
 
@@ -349,8 +349,9 @@ def test_single_key_position_exempts_query_key_and_additive_mask() -> None:
     assert _validates(_Attention(1), torch.randn(2, 3, 4))
     trace = _capture(_Attention(1), torch.randn(2, 3, 4))
     op = _op(trace, _SDPA)
-    for parent in (_arg_parent(op, 0), _arg_parent(op, 1), _mask_parent(op)):
-        assert _decision(trace, op, parent) == ("exempted", "sdpa_singleton_key")
+    assert _decision(trace, op, _arg_parent(op, 0)) == ("exempted", "sdpa_single_key_identity")
+    assert _decision(trace, op, _arg_parent(op, 1)) == ("exempted", "sdpa_single_key_key_edge")
+    assert _decision(trace, op, _mask_parent(op)) == ("exempted", "sdpa_singleton_key")
 
 
 def test_query_key_and_mask_of_longer_memory_and_lone_value_still_fail() -> None:

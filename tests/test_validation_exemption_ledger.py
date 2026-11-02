@@ -598,8 +598,10 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         contract="C2 perturbation sensitivity",
         proof="torchlens.validation._saved_value_proofs:_sdpa_singleton_key_decision",
         refuses=(
-            "two or more key positions, non-zero dropout, a non-finite output, a "
-            "perturbed value, and a bool mask (it can mask the lone key out)"
+            "two or more key positions, a perturbed query, key or value (the query and "
+            "key edges are the sdpa_single_key proofs), a bool mask, a non-finite query, "
+            "key or scale, non-zero dropout, a fully masked row, and an output that "
+            "differs from the value rows"
         ),
     ),
     Exemption(

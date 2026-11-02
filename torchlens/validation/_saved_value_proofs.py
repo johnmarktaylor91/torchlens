@@ -16,9 +16,9 @@ saved co-arguments, and returns non-exempt for anything else:
   ``running_var`` (``args[4]``) only scales a zero;
 - pow: the saved exponent is all zero, so the base (``args[0]``) is raised to 0,
   or the saved base is all one, so the exponent (``args[1]``) is irrelevant;
-- sdpa: there is one key position and no dropout, so its softmax weight is
-  exactly one whatever the query (``args[0]``), key (``args[1]``) or additive
-  float mask (``args[3]``) holds;
+- sdpa: there is one key position and every softmax row is well defined, so
+  the lone softmax weight is exactly one whatever the additive float mask
+  (``args[3]``) holds (the query and key edges are the ``_sdpa_value_proofs``);
 - ``__setitem__``: the perturbed parent is an integer index component that
   addresses a destination dim of size 1, where every valid index is position 0;
 - ``scatter_reduce``: ``include_self=False`` and the index covers every
@@ -40,6 +40,7 @@ import torch
 
 from .._data_classes.op import Op
 from ._destination_coverage import _scatter_index_fully_overwrites_dim
+from ._sdpa_value_proofs import _output_equals_value_rows, sdpa_softmax_rows_well_defined
 from ._value_predicates import _is_all_zero_value, _saved_output_all_finite
 from .exemptions import PosthocPerturbDecision
 
@@ -331,31 +332,34 @@ def _is_bool_mask(component: Any) -> bool:
 def _sdpa_singleton_key_decision(
     layer: Op, keys: set[Any], args: tuple[Any, ...]
 ) -> PosthocPerturbDecision:
-    """Exempt sdpa's query, key or additive mask when there is one key position.
+    """Exempt sdpa's additive float mask when there is one key position.
 
     Softmax over a single key position is exactly one for any finite score, so
-    with no dropout every query reads the lone value row whatever the query, key
-    or an additive float mask hold. A bool mask can mask the lone key out and is
-    never exempted; a masked-out lone key makes the output non-finite, which is
-    refused.
+    with every softmax row well defined (finite query and key, no dropout, a
+    finite scale and a mask that keeps the lone key in every row) and the saved
+    output equal to the value rows, an additive float mask cannot reach the
+    output. A bool mask can mask the lone key out and is never exempted. The
+    query and key edges of the same call are the ``sdpa_single_key_identity``
+    and ``sdpa_single_key_key_edge`` proofs, which carry the same precondition.
     """
 
-    if keys not in ({0}, {1}, {3}) or len(args) < 3 or not isinstance(args[1], torch.Tensor):
+    if keys != {3} or len(args) < 3 or not isinstance(args[1], torch.Tensor):
         return _NOT_PROVED
     kwargs = getattr(layer, "saved_kwargs", None) or {}
     mask = kwargs.get("attn_mask", args[3] if len(args) > 3 else None)
-    if keys == {3} and not (isinstance(mask, torch.Tensor) and mask.is_floating_point()):
+    if not (isinstance(mask, torch.Tensor) and mask.is_floating_point()):
         return _NOT_PROVED
-    dropout_p = kwargs.get("dropout_p", args[4] if len(args) > 4 else 0.0)
-    if args[1].ndim < 2 or args[1].shape[-2] != 1 or dropout_p != 0:
+    if args[1].ndim < 2 or args[1].shape[-2] != 1:
         return _NOT_PROVED
-    if not _saved_output_all_finite(layer):
+    if not sdpa_softmax_rows_well_defined(layer, args):
+        return _NOT_PROVED
+    if not _output_equals_value_rows(getattr(layer, "out", None), args[2]):
         return _NOT_PROVED
     return PosthocPerturbDecision(
         True,
         "sdpa_singleton_key",
-        "there is one key position, so its softmax weight is exactly one and the "
-        "query, key and additive mask values cannot reach the output",
+        "there is one key position and every softmax row is well defined, so its "
+        "softmax weight is exactly one and the additive mask values cannot reach the output",
     )
 
 

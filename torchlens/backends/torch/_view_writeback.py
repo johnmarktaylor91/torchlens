@@ -68,7 +68,10 @@ def overlapping_labeled_aliases(
         ``(alias, alias_label)`` pairs, in session index order.
     """
 
-    from .wrappers import _storage_overlap_byte_interval, _strided_views_share_storage_elements
+    from ._storage_overlap import (
+        _storage_overlap_byte_interval,
+        _strided_views_share_storage_elements,
+    )
 
     try:
         # Meta-safe key (D20): data_ptr() reads 0 for EVERY meta storage.

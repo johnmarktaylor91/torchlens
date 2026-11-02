@@ -18,7 +18,7 @@ from .._capture_state_helpers import unwrap_compiled_model
 from .._runnable import refuse_poisoned_trace
 from ..backends.registry import get_backend_spec
 from ..backends.torch._trace_backward import _refuse_stats_capture
-from ._degenerate_forward import fail_if_final_outputs_non_finite
+from . import _degenerate_forward
 from .invariants import check_metadata_invariants as _check_metadata_invariants_impl
 from .status import ValidationStatus
 
@@ -138,8 +138,11 @@ def validate_forward_pass(
             if validation_result.state in {"passed", "failed"}:
                 # A pass on entirely non-finite final outputs proves nothing:
                 # fail it as a degenerate forward (tightening only).
-                if validation_result.passed and fail_if_final_outputs_non_finite(
-                    trace, ground_truth_output_tensors
+                if (
+                    validation_result.passed
+                    and _degenerate_forward.fail_if_final_outputs_non_finite(
+                        trace, ground_truth_output_tensors
+                    )
                 ):
                     return False
                 return validation_result.passed
