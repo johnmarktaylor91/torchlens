@@ -698,6 +698,7 @@ docs-md	docs/agent-reference/current-2-x-surface.md	64
 docs-md	docs/agent-reference/current-2-x-surface.md	64,
 docs-md	docs/agent-reference/current-2-x-surface.md	657
 docs-md	docs/agent-reference/current-2-x-surface.md	79
+docs-md	docs/agent-reference/current-2-x-surface.md	84
 docs-md	docs/agent-reference/current-2-x-surface.md	873
 docs-md	docs/agent-reference/current-2-x-surface.md	9.2.2
 docs-md	docs/agent-reference/current-2-x-surface.md	921,
@@ -734,6 +735,7 @@ docs-md	docs/agent-reference/package/public-surface.md	2.16
 docs-md	docs/agent-reference/package/public-surface.md	37
 docs-md	docs/agent-reference/package/public-surface.md	39
 docs-md	docs/agent-reference/package/public-surface.md	42
+docs-md	docs/agent-reference/package/public-surface.md	84
 docs-md	docs/agent-reference/package/subpackages.md	10
 docs-md	docs/agent-reference/package/subpackages.md	11
 docs-md	docs/agent-reference/package/subpackages.md	11,
@@ -848,6 +850,7 @@ docs-md	docs/for-ai-agents.md	2020
 docs-md	docs/for-ai-agents.md	25,000
 docs-md	docs/for-ai-agents.md	4,000
 docs-md	docs/for-ai-agents.md	64
+docs-md	docs/for-ai-agents.md	84
 docs-md	docs/gradient_contract.md	64
 docs-md	docs/guides/fast_paths.md	0.17
 docs-md	docs/guides/fast_paths.md	0.18
@@ -1124,13 +1127,14 @@ docs-md	docs/maintainers/where.md	13,
 docs-md	docs/maintainers/where.md	130
 docs-md	docs/maintainers/where.md	1304
 docs-md	docs/maintainers/where.md	1306
+docs-md	docs/maintainers/where.md	1312
 docs-md	docs/maintainers/where.md	132
 docs-md	docs/maintainers/where.md	1324
 docs-md	docs/maintainers/where.md	1329
 docs-md	docs/maintainers/where.md	133
 docs-md	docs/maintainers/where.md	134
 docs-md	docs/maintainers/where.md	1342
-docs-md	docs/maintainers/where.md	1348
+docs-md	docs/maintainers/where.md	1349
 docs-md	docs/maintainers/where.md	135
 docs-md	docs/maintainers/where.md	136
 docs-md	docs/maintainers/where.md	1361
@@ -1210,6 +1214,7 @@ docs-md	docs/maintainers/where.md	17
 docs-md	docs/maintainers/where.md	170
 docs-md	docs/maintainers/where.md	171
 docs-md	docs/maintainers/where.md	17123
+docs-md	docs/maintainers/where.md	1713
 docs-md	docs/maintainers/where.md	172
 docs-md	docs/maintainers/where.md	173
 docs-md	docs/maintainers/where.md	1731
@@ -1380,7 +1385,7 @@ docs-md	docs/maintainers/where.md	285
 docs-md	docs/maintainers/where.md	286
 docs-md	docs/maintainers/where.md	287
 docs-md	docs/maintainers/where.md	288
-docs-md	docs/maintainers/where.md	28860
+docs-md	docs/maintainers/where.md	28862
 docs-md	docs/maintainers/where.md	289
 docs-md	docs/maintainers/where.md	29
 docs-md	docs/maintainers/where.md	290
@@ -1423,6 +1428,7 @@ docs-md	docs/maintainers/where.md	311
 docs-md	docs/maintainers/where.md	313
 docs-md	docs/maintainers/where.md	314
 docs-md	docs/maintainers/where.md	315
+docs-md	docs/maintainers/where.md	31535
 docs-md	docs/maintainers/where.md	317
 docs-md	docs/maintainers/where.md	318
 docs-md	docs/maintainers/where.md	319
@@ -1471,7 +1477,7 @@ docs-md	docs/maintainers/where.md	363
 docs-md	docs/maintainers/where.md	364
 docs-md	docs/maintainers/where.md	3645
 docs-md	docs/maintainers/where.md	365
-docs-md	docs/maintainers/where.md	36537
+docs-md	docs/maintainers/where.md	36542
 docs-md	docs/maintainers/where.md	366
 docs-md	docs/maintainers/where.md	368
 docs-md	docs/maintainers/where.md	369
@@ -1704,6 +1710,7 @@ docs-md	docs/maintainers/where.md	610
 docs-md	docs/maintainers/where.md	611
 docs-md	docs/maintainers/where.md	613
 docs-md	docs/maintainers/where.md	614
+docs-md	docs/maintainers/where.md	615
 docs-md	docs/maintainers/where.md	618
 docs-md	docs/maintainers/where.md	62
 docs-md	docs/maintainers/where.md	620
@@ -1712,7 +1719,7 @@ docs-md	docs/maintainers/where.md	624
 docs-md	docs/maintainers/where.md	625
 docs-md	docs/maintainers/where.md	627
 docs-md	docs/maintainers/where.md	628
-docs-md	docs/maintainers/where.md	628575
+docs-md	docs/maintainers/where.md	628656
 docs-md	docs/maintainers/where.md	6299
 docs-md	docs/maintainers/where.md	63
 docs-md	docs/maintainers/where.md	630
@@ -1883,6 +1890,7 @@ docs-md	docs/maintainers/where.md	946
 docs-md	docs/maintainers/where.md	947
 docs-md	docs/maintainers/where.md	95
 docs-md	docs/maintainers/where.md	950
+docs-md	docs/maintainers/where.md	9503
 docs-md	docs/maintainers/where.md	953
 docs-md	docs/maintainers/where.md	9542
 docs-md	docs/maintainers/where.md	955
@@ -2078,6 +2086,7 @@ docs-md	docs/migration/scoped_detached_patching.md	27
 docs-md	docs/migration/v2.0_api_changes.md	2.0
 docs-md	docs/migration/v2.0_api_changes.md	2026
 docs-md	docs/migration/v2.0_api_changes.md	42
+docs-md	docs/migration/v2.0_api_changes.md	84
 docs-md	docs/monitor_training.md	10
 docs-md	docs/monitor_training.md	100
 docs-md	docs/monitor_training.md	125
@@ -4851,6 +4860,8 @@ package-docstrings	torchlens/_selection/subspace.py	512
 package-docstrings	torchlens/_selection/subspace.py	64
 package-docstrings	torchlens/_selection/subspace.py	64.
 package-docstrings	torchlens/_selection/subspace.py	768
+package-docstrings	torchlens/_selection/universal.py	2026
+package-docstrings	torchlens/_selection/universal.py	31
 package-docstrings	torchlens/_selection/values.py	1.0
 package-docstrings	torchlens/_selection/values.py	64
 package-docstrings	torchlens/_selection/values.py	64,
@@ -7215,6 +7226,7 @@ test-docstrings	tests/test_api_surface.py	114
 test-docstrings	tests/test_api_surface.py	116.
 test-docstrings	tests/test_api_surface.py	19
 test-docstrings	tests/test_api_surface.py	2026
+test-docstrings	tests/test_api_surface.py	31
 test-docstrings	tests/test_api_surface.py	39
 test-docstrings	tests/test_api_surface.py	40
 test-docstrings	tests/test_api_surface.py	46
@@ -7232,6 +7244,7 @@ test-docstrings	tests/test_api_surface.py	76.
 test-docstrings	tests/test_api_surface.py	78.
 test-docstrings	tests/test_api_surface.py	79.
 test-docstrings	tests/test_api_surface.py	83.
+test-docstrings	tests/test_api_surface.py	84.
 test-docstrings	tests/test_api_surface.py	90.
 test-docstrings	tests/test_api_surface.py	92.
 test-docstrings	tests/test_api_surface.py	93.

@@ -513,7 +513,7 @@ torchlens/_trace_selector_helpers.py::_make_layers_to_save_predicate	76
 torchlens/_training_validation.py::validate_training_compatibility	69
 torchlens/_user_funcs.py::trace	245
 torchlens/_user_public_impls.py	1984
-torchlens/_user_public_impls.py::_validate_forward_pass_torch	526
+torchlens/_user_public_impls.py::_validate_forward_pass_torch	525
 torchlens/_user_public_impls.py::_warn_if_validation_trace_not_reproducible	138
 torchlens/_user_public_impls.py::draw_backward	79
 torchlens/_user_public_impls.py::draw_combined	68
@@ -522,7 +522,7 @@ torchlens/_user_public_impls.py::show_model_graph	121
 torchlens/_user_public_impls.py::summary	151
 torchlens/_user_public_impls.py::validate_backward_pass	71
 torchlens/_user_public_impls.py::validate_batch_of_models_and_inputs	82
-torchlens/_user_public_impls.py::validate_forward_pass	84
+torchlens/_user_public_impls.py::validate_forward_pass	83
 torchlens/_utils/_callable_safety.py	1635
 torchlens/_utils/_callable_safety.py::_pure_view	67
 torchlens/_utils/_callable_safety.py::is_inert_first_party_callable	63
