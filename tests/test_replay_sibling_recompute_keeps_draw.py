@@ -35,9 +35,11 @@ def test_fork_edit_on_a_call_group_member_keeps_the_sibling_fed_draw() -> None:
     x = torch.randn(3, 4)
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     draw, std = _single(trace, "randn_like"), _single(trace, "exp")
-    members = [op for op in trace.ops if op.func_name == "split"]
-    assert len(members) == 2
-    (hooked,) = [op for op in members if std.label not in op.children]
+    (h_label,) = std.parents
+    h = trace[h_label]
+    members = [op for op in trace.ops if op.func_call_id == h.func_call_id]
+    assert len(members) == 2, [op.label for op in members]
+    (hooked,) = [op for op in members if op.label != h.label]
 
     fork = trace.fork()
     fork.do(tl.label(hooked.label), tl.scale(0.5))
