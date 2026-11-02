@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import math
 import re
+import sys
 from collections.abc import Callable, Iterator, Mapping
 from functools import cache
 from pathlib import Path
@@ -32,9 +33,12 @@ from . import contract
 from .decode import (
     CELL_CODE,
     DEVICE_TEXT,
+    MAX_TENSOR_NUMEL,
+    STORABLE_DTYPES,
     Decoder,
     PendingRecord,
     Unencodable,
+    _element_size,
     build_component,
     cell_error,
 )
@@ -90,36 +94,6 @@ IDENTITY_FIELDS: Final[dict[str, str]] = {
     "aten_op": "label",
 }
 _BLOB_PATH = re.compile(r"blobs/[A-Za-z0-9_.-]+\.safetensors")
-#: Dtypes a safetensors chunk can hold (a closed vocabulary; quantized, bit-packed and
-#: sub-byte dtypes are in torch's table but have no storable element). Complex tensors are
-#: written as their real view with the ``complex`` flag.
-STORABLE_DTYPES: Final[frozenset[str]] = frozenset(
-    {
-        "bool",
-        "uint8",
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "uint16",
-        "uint32",
-        "uint64",
-        "float16",
-        "bfloat16",
-        "float32",
-        "float64",
-        "float8_e4m3fn",
-        "float8_e5m2",
-        "float8_e4m3fnuz",
-        "float8_e5m2fnuz",
-        "complex32",
-        "complex64",
-        "complex128",
-    }
-)
-#: The most elements one tensor reference may declare (2**48: a petabyte of float32).
-#: A shape bomb declares more and refuses before any allocation.
-MAX_TENSOR_NUMEL: Final = 1 << 48
 _BLOB_KEY = re.compile(r"t\d{1,12}")
 _TORCH_CODEC: Final = contract.PAYLOAD_CODEC_IDS[0]
 #: Construction order: a record's state hook runs after the records it holds.
@@ -136,6 +110,18 @@ LOAD_ORDER: Final[tuple[str, ...]] = (
     "layer",
     "buffer",
 )
+
+#: Accessor-valued persisted fields. The writer stores an accessor of records
+#: as the list of its member rows (``schema._edge_members``); the reader
+#: rebuilds the accessor from the members' own keys before the owner's state
+#: hook runs. Each entry names the member record kind, the member's key column
+#: and the accessor class, named in the member class's module (``None`` where the
+#: owner's state hook wraps a plain mapping itself).
+_ACCESSOR_COLUMNS: Final[dict[tuple[str, str], tuple[str, str, str | None]]] = {
+    ("module", "ops"): ("module_call", "call_index", None),
+    ("module", "params"): ("param", "address", "ParamAccessor"),
+    ("grad_fn", "calls"): ("grad_fn_call", "call_index", None),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -226,13 +212,6 @@ def validate_artifact(path: str | Path) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-@cache
-def _element_size(dtype_name: str) -> int:
-    """Return the storage bytes of one element of a storable dtype."""
-
-    return torch.empty((), dtype=dtype_table()[dtype_name]).element_size()
-
-
 class TensorRefSink:
     """Collects the tensor cells a decode meets, as ``BlobRef`` markers plus lazy-layer entries.
 
@@ -242,7 +221,7 @@ class TensorRefSink:
     unchanged. A structure-only cell (no ``blob`` and no ``key``) decodes to
     ``None`` and is counted. Every field is checked against the manifest: the
     codec must be listed, the chunk must be in ``files``, the key must be an
-    opaque ``t<k>`` and no (chunk, key) may be referenced twice.
+    opaque ``t<k>``; a (chunk, key) referenced twice must be declared identically.
     """
 
     def __init__(self, *, codecs: tuple[str, ...], files: Mapping[str, Mapping[str, Any]]) -> None:
@@ -319,8 +298,25 @@ class TensorRefSink:
                 code=CELL_CODE,
             )
         blob_id = f"{blob}#{key}"
-        if blob_id in self.entries:
-            raise cell_error(at, f"tensor {blob_id} is referenced twice", code=CELL_CODE)
+        declaration = (list(shape), dtype_name, device, ref["requires_grad"], codec_id)
+        seen = self.entries.get(blob_id)
+        if seen is not None:
+            # One stored tensor may sit in several cells (an argument the op also
+            # keeps as a buffer); the second reference must declare the same tensor.
+            earlier = (
+                seen["shape"],
+                seen["dtype"],
+                seen["device_at_save"],
+                seen["requires_grad"],
+                seen["codec"],
+            )
+            if earlier != declaration:
+                raise cell_error(
+                    at,
+                    f"tensor {blob_id} is declared differently at {seen['label']}",
+                    code=CELL_CODE,
+                )
+            return BlobRef(blob_id, seen["kind"])
         kind = _tensor_kind(at)
         backend = "torch" if codec_id == _TORCH_CODEC else "numpy"
         self.entries[blob_id] = {
@@ -469,10 +465,49 @@ class DecodedArtifact:
 
         with governed_artifact_load():
             for kind in LOAD_ORDER:
-                for obj, row in zip(
-                    self.objects.get(kind, ()), self.tables.get(kind, ()), strict=True
+                for row_number, (obj, row) in enumerate(
+                    zip(self.objects.get(kind, ()), self.tables.get(kind, ()), strict=True)
                 ):
+                    row = self._rebuild_accessors(kind, row_number, row)
                     _restore_record(obj, row, version=self.version, computed=computed_columns(kind))
+
+    def _rebuild_accessors(
+        self, kind: str, row_number: int, row: Mapping[str, Any]
+    ) -> Mapping[str, Any]:
+        """Return ``row`` with each flattened accessor column rebuilt from its member rows."""
+
+        rebuilt: dict[str, Any] | None = None
+        for (owner, column), (member_kind, key, build) in _ACCESSOR_COLUMNS.items():
+            if owner != kind or row.get(column) is None:
+                continue
+            at = f"{kind}[{row_number}].{column}"
+            members = row[column]
+            if not isinstance(members, list):
+                raise cell_error(at, f"must list {member_kind} rows", code=CELL_CODE)
+            member_rows = self.tables.get(member_kind, ())
+            position = {
+                id(obj): index for index, obj in enumerate(self.objects.get(member_kind, ()))
+            }
+            keyed: dict[Any, Any] = {}
+            for member in members:
+                index = position.get(id(member))
+                if index is None:
+                    raise cell_error(at, f"a member is not a {member_kind} row", code=CELL_CODE)
+                member_key = member_rows[index].get(key)
+                if isinstance(member_key, bool) or not isinstance(member_key, (int, str)):
+                    raise cell_error(
+                        at, f"member {member_kind}[{index}].{key} is not a key", code=CELL_CODE
+                    )
+                if member_key in keyed:
+                    raise cell_error(at, f"member key {member_key!r} repeats", code=CELL_CODE)
+                keyed[member_key] = member
+            if rebuilt is None:
+                rebuilt = dict(row)
+            # The accessor class lives beside its member class; resolving it there
+            # keeps the reader out of the record classes' import cycle.
+            member_module = sys.modules[record_class(member_kind).__module__]
+            rebuilt[column] = keyed if build is None else getattr(member_module, build)(keyed)
+        return row if rebuilt is None else rebuilt
 
     def trace_state(self, accessor_cls: type) -> dict[str, Any]:
         """The scrubbed-state-shaped dict the existing rehydrate path restores.

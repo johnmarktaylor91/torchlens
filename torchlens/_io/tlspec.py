@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import platform
 import re
 import shutil
 import uuid
@@ -502,6 +503,7 @@ class _TlSpecWriter:
             "torchlens_version": TORCHLENS_VERSION,
             "python_version": _runtime_python_version(),
             "torch_version": torch.__version__,
+            "platform": f"{platform.system().lower()}-{platform.machine().lower()}",
             "schema_version": TLSPEC_SCHEMA_VERSION,
             "model_signature": model_signature,
             "model_fingerprint": _model_fingerprint(source, model_signature, kind=kind),
