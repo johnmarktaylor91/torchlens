@@ -16,6 +16,7 @@ from __future__ import annotations
 import enum
 import importlib
 import io
+import json
 import pickle
 from pathlib import Path
 from typing import Any
@@ -209,6 +210,15 @@ def _tiny_trace() -> Any:
 
 
 @pytest.mark.smoke
+def _record_bytes(root: Path) -> dict[str, bytes]:
+    """Return the bytes of every record table a saved artifact's manifest names."""
+
+    manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+    return {
+        kind: (root / entry["path"]).read_bytes() for kind, entry in manifest["records"].items()
+    }
+
+
 def test_trace_saved_under_by_name_enum_reduce_round_trips(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -221,9 +231,10 @@ def test_trace_saved_under_by_name_enum_reduce_round_trips(
     forced = tmp_path / "forced.tlspec"
     trace.save(forced)
 
-    forced_bytes = (forced / "metadata.pkl").read_bytes()
-    assert forced_bytes == (plain / "metadata.pkl").read_bytes()
-    assert ("builtins", "getattr") not in _load_recording(forced_bytes)[1]
+    # The 3.0 envelope encodes Enum members as typed JSON values, so how the
+    # interpreter reduces them for pickle cannot reach the record bytes.
+    assert _record_bytes(forced) == _record_bytes(plain)
+    assert not list(forced.rglob("*.pkl"))
     loaded = tl.load(forced)
     assert isinstance(loaded, tl.Trace)
 

@@ -271,8 +271,10 @@ def test_persisted_equivalence_keys_preserve_outindex_suffix(tmp_path: Path) -> 
     the dict rebuild silently kept only the last group.
     """
 
-    import pickle
+    import json
     import re
+
+    from torchlens._io.format3.values import decode_value
 
     trace = tl.trace(
         _NestedMultiOutputParamModel().eval(),
@@ -285,8 +287,13 @@ def test_persisted_equivalence_keys_preserve_outindex_suffix(tmp_path: Path) -> 
 
     spec = tmp_path / "lstm_outindex.tlspec"
     trace.save(str(spec))
-    persisted = pickle.loads((spec / "metadata.pkl").read_bytes()).get(
-        "_graph_op_equivalence_classes"
+    manifest = json.loads((spec / "manifest.json").read_text(encoding="utf-8"))
+    trace_table = json.loads(
+        (spec / manifest["records"]["trace"]["path"]).read_text(encoding="utf-8")
+    )
+    persisted = decode_value(
+        trace_table["fields"].get("_graph_op_equivalence_classes"),
+        at="trace._graph_op_equivalence_classes",
     )
     assert persisted is not None
 
