@@ -1446,6 +1446,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Save / load**
 : `Trace.save` persists a `Trace` into a portable `.tlspec` directory bundle at a chosen
   level; `tl.load` loads a `.tlspec` object with eager tensor materialization.
+  3.0 format: see [saved_format_3.md](../maintainers/saved_format_3.md).
   The staged intervention spec is session-only: `Trace.save` keeps the intervened
   values and their per-op provenance, and every legacy rerun door of a loaded intervened trace
   (`run(model, x)` plain, append or chunked, a fork's `run`, `do(engine="rerun")`, and an edit
