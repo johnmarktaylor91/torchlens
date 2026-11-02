@@ -28,7 +28,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.intervention.selectors import RegexSelector
+from torchlens._selection.selectors import RegexSelector
 
 _DIRECTIONS = ("upstream", "downstream", "both")
 
