@@ -640,7 +640,7 @@ def test_predicate_rerun_names_a_changed_steer_as_the_cause() -> None:
 
 
 def test_set_label_rerun_applies_the_set_value_and_leaves_the_source_staged(mlp) -> None:
-    """``set(label, value)`` + rerun applies the value on new inputs; the source trace is untouched."""
+    """``set(label, value)`` + rerun applies the value on new inputs and leaves the spec staged."""
 
     model, x, x2 = mlp
     trace = tl.trace(model, x)
@@ -648,12 +648,11 @@ def test_set_label_rerun_applies_the_set_value_and_leaves_the_source_staged(mlp)
     value = torch.full_like(trace[label].out, 0.3)
     trace.set(label, value, confirm_mutation=True)
     staged = _staged(trace)
-    readout = trace.output_ops[0].out.clone()
     result = trace.run(model, x2)
-    assert result is not trace
-    assert torch.equal(result[label].out, value)
+    assert result is trace
+    assert result.last_run["engine"] in {"rerun", "guarded_fast"}
+    assert torch.equal(trace[label].out, value)
     assert _staged(trace) == staged
-    assert torch.equal(trace.output_ops[0].out, readout)
 
 
 # ---------------------------------------------------------------------------
