@@ -71,6 +71,7 @@ def rehydrate_trace(
     materialize_nested: bool,
     payload_hints: PayloadLoadHints | Mapping[str, Any] | None = None,
     resolved_blobs_dir: Path | None = None,
+    trace: Any = None,
 ) -> Trace:
     """Restore a scrubbed portable ``Trace`` state.
 
@@ -108,7 +109,7 @@ def rehydrate_trace(
     module_accessor_state = state_for_load.pop("_io_module_accessor_state", None)
     portable_key_order = tuple(state_for_load)
 
-    trace = Trace.__new__(Trace)
+    trace = Trace.__new__(Trace) if trace is None else trace
     # The root Trace state is governed artifact bytes: arm the unknown-field
     # partition (state contract, MEMO 3.3) around its ``__setstate__`` exactly
     # like the metadata unpickler arms it for nested records.
@@ -966,7 +967,7 @@ def _build_lazy_tensor_ref(
         logical_device=entry.logical_device,
         codec_metadata=entry.codec_metadata,
         payload_hints=payload_hints,
-        entry_key=entry.entry_key,
+        key=entry.key,
     )
 
 

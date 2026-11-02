@@ -62,15 +62,20 @@
     field of the window, each admitted by the v10 field registry
     (`tests/test_schema_v10_contract_and_goldens.py::V10_FIELD_ADMISSIONS`) before its writer
     lands, so no further bump follows; the writer contract states the floor release as
-    `3.0.0`, the first tlspec-11 writer (v9 and v10 keep their frozen texts);
+    `3.0.0`, the first 3.0 writer (v9, v10 and v11 keep their frozen texts);
     `reserved_vocabularies.step_scores` reserves the
     generation step-score names, credited to inseq. Contract of record
     `torchlens/schemas/writer_contract_v10.json`; the v9 contract stays frozen beside it.
-9e. tlspec v11 (persisted-field rename write; current): stored keys follow the decided public
+9e. tlspec v11 (persisted-field rename write): stored keys follow the decided public
     names (for example `Op.is_edited`, `Trace.is_replayable`, `Trace.name`), with no alias and
     no old-key reader, so a v10 file refuses rather than loading under new names. Contract of
     record `torchlens/schemas/writer_contract_v11.json`; the v10 contract stays frozen beside it
     (`tests/test_schema_v10_contract_and_goldens.py::V10_CONTRACT_SHA256`).
+9f. tlspec v12 (3.0 columnar records; current): `Op.is_constant` (stamped by the shared
+    constants rule) and `Op.arg_expressions` persist on the op record, admitted by
+    `tests/test_schema_v12_contract.py::V12_FIELD_ADMISSIONS`; the reader floor moves to 12 with
+    the contract. Contract of record `torchlens/schemas/writer_contract_v12.json`; the v11
+    contract stays frozen beside it.
 10. `backward_ready=True` rejects contradictory detaching/disk-save settings and preserves user
     `requires_grad` choices.
 10a. `inference_only=True` wraps forward capture in `torch.no_grad()` for forward-only analysis

@@ -15,7 +15,7 @@ written here once so ``backend.py`` only calls them:
   is classified as a closure constant (``BUFFER``) or a literal producer
   (``CONST``). The classification is recorded as the annotation
   ``tinygrad_constant_kind``; the shared rule in ``backends/_constants.py``
-  reads it to set ``is_constant_layer`` and relabel closure constants. Until
+  reads it to stamp ``Op.is_constant`` and relabel closure constants. Until
   that rule lands the recorded ``func_name`` stays the observed tinygrad name
   so the pinned op inventories hold: flip
   :data:`CLOSURE_CONSTANT_FUNC_NAME` to ``"constant"`` in one edit then.

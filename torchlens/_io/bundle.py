@@ -10,8 +10,8 @@ by partial saves. The bundle format is intentionally a plain directory with
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import glob
-import io
 import json
 import os
 import pickle
@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast, overload
 
 import torch
 from safetensors import SafetensorError
-from safetensors.torch import load_file, save_file
+from safetensors.torch import load_file
 
 from torchlens.backends.registry import BackendPayloadUnsupportedError
 
@@ -55,10 +55,8 @@ from . import (
     refuse_missing_blobs,
 )
 from ._artifact_anchors import check_manifest_metadata_anchors, persisted_anchor_facts
-from ._canonical_pickle import dump_canonical_metadata
 from ._durability import fsync_dir, fsync_tree
 from ._pickle_prescan import OpcodeCeilingExceeded
-from ._portability_preflight import preflight_metadata_portability
 from ._pre3_module_paths import modellog_216_error
 from ._root_manifest import NOT_ROUTED, _read_root_manifest, load_by_root_manifest
 from ._safe_unpickle import SafeBundleUnpickler
@@ -67,6 +65,14 @@ from ._save_gates import (
     _refuse_shard_local_erasure,
     _save_bundle_via_container_door,
 )
+from .format3.payloads import (
+    NUMPY_CODEC,
+    TORCH_CODEC,
+    PayloadStore,
+    host_tensor,
+    tensor_reference,
+)
+from .format3.writer import preflight_reload, settle_live_side, write_trace_envelope
 from .lazy import LazyActivationRef
 from .manifest import Manifest, Provenance, TensorEntry, enforce_version_policy
 from .paths import (
@@ -638,6 +644,7 @@ def save(
         _restrict_mode(tmp_path, 0o700)
         _restrict_mode(tmp_path / "blobs", 0o700)
 
+        settle_live_side(trace)
         scrubbed_state, blob_specs, scrub_unsupported_tensors = _scrub_trace_for_bundle(
             trace,
             include_outs=include_outs,
@@ -702,6 +709,8 @@ def save(
                 "be saved without a backend payload codec."
             )
 
+        payload_store = PayloadStore(tmp_path)
+        tensor_refs: dict[str, dict[str, Any]] = {}
         tensor_entries: list[TensorEntry] = []
         unsupported_tensors: list[dict[str, str]] = list(scrub_unsupported_tensors)
         skipped_blob_ids: set[str] = set()
@@ -711,7 +720,12 @@ def save(
             decision = codec.validate_for_save(blob_spec.value, strict=strict)
             if isinstance(decision, Ok):
                 tensor_entries.append(
-                    _write_payload_blob(tmp_path=tmp_path, blob_spec=blob_spec, codec=codec)
+                    _write_payload_blob(
+                        store=payload_store,
+                        tensor_refs=tensor_refs,
+                        blob_spec=blob_spec,
+                        codec=codec,
+                    )
                 )
                 continue
             if isinstance(decision, FailReason):
@@ -736,11 +750,15 @@ def save(
             )
             tensor_entries.append(
                 _fast_copy_tensor_blob(
-                    tmp_path=tmp_path,
+                    store=payload_store,
+                    tensor_refs=tensor_refs,
                     fast_copy_spec=fast_copy_spec,
                     manifest_index=manifest_index,
                 )
             )
+
+        payload_store.close()
+        tensor_entries = _seal_tensor_entries(tmp_path, tensor_entries)
 
         if skipped_blob_ids:
             _apply_skipped_blobs_to_scrubbed_state(scrubbed_state, skipped_blob_ids)
@@ -771,35 +789,35 @@ def save(
         )
         _warn_custom_attribute_embedding(custom_attributes_disclosure)
         _warn_buffer_value_embedding(buffer_values_disclosure)
-        _TlSpecWriter.write_trace_manifest(
-            path=tmp_path / "manifest.json",
-            trace=trace,
-            legacy_manifest=manifest,
-            save_level=save_level,
-            sparse_run=sparse_run_json,
+        # 3.0 saved format (format.1): the scrubbed state is written as typed
+        # JSON record tables beside the safetensors blobs; no pickle file is
+        # written at any level. The staged directory is reloaded once (the
+        # save preflight, late.21) before the publish below.
+        write_trace_envelope(
+            tmp_path,
+            base_manifest=_TlSpecWriter.build_trace_manifest(
+                trace=trace,
+                legacy_manifest=manifest,
+                save_level=save_level,
+                sparse_run=sparse_run_json,
+                scrubbed_state=scrubbed_state,
+            ),
             scrubbed_state=scrubbed_state,
+            tensor_refs=tensor_refs,
+            codecs=payload_store.codecs,
+            save_level=save_level,
+            payload_policy={
+                "include_outs": bool(include_outs),
+                "include_grads": bool(include_grads),
+                "include_saved_args": bool(include_saved_args),
+                "include_rng_states": bool(include_rng_states),
+                "include_buffer_values": bool(include_buffer_values),
+                "include_custom_attributes": bool(include_custom_attributes),
+                "structure_only": scrubbed_state.get("_options_structure_only") is True,
+            },
         )
-        _restrict_mode(tmp_path / "manifest.json", 0o600)
-        # B3R4-R21-2: canonical container bytes (set/frozenset members
-        # sorted), so persisted metadata does not vary with PYTHONHASHSEED.
-        # Dumped ONCE through the ``dump_canonical_metadata`` seam (interrupt /
-        # poisoned-write tests hook it): the canonical pickler is pure Python,
-        # so a second dump for the preflight doubled the dominant save cost.
-        metadata_buffer = io.BytesIO()
-        dump_canonical_metadata(scrubbed_state, metadata_buffer)
-        metadata_bytes = metadata_buffer.getvalue()
-        # Write/read symmetry (AUD-CODE 2.20): exactly these bytes are dry-run
-        # through the loader's restricted unpickler FIRST; an unportable value
-        # refuses typed, naming its key path, and nothing is written.
-        preflight_metadata_portability(
-            scrubbed_state,
-            unpickler_factory=_RenameAwareUnpickler,
-            bundle_path=bundle_path,
-            data=metadata_bytes,
-        )
-        with (tmp_path / "metadata.pkl").open("wb") as handle:
-            handle.write(metadata_bytes)
-        _restrict_mode(tmp_path / "metadata.pkl", 0o600)
+        _restrict_tree_modes(tmp_path)
+        preflight_reload(tmp_path)
 
         # Durability before publish: fsync every written blob/sidecar and the
         # bundle directories so a power/OS crash after the rename below cannot
@@ -2860,22 +2878,25 @@ def _apply_visualization_save_policy(
         scrubbed_layer.visualizer_path = f"visualizers/{destination_name}"
 
 
-def _write_tensor_blob(
+def _submit_tensor_payload(
     *,
-    tmp_path: Path,
+    store: PayloadStore,
+    tensor_refs: dict[str, dict[str, Any]],
     blob_id: str,
     tensor: torch.Tensor,
     kind: str,
     label: str,
 ) -> TensorEntry:
-    """Write one supported tensor blob and build its manifest entry.
+    """Queue one torch tensor payload into the artifact's chunk files.
 
     Parameters
     ----------
-    tmp_path:
-        Temporary bundle directory root.
+    store:
+        Chunk store of the staged artifact (``blobs/<codec>-<nnnn>.safetensors``).
+    tensor_refs:
+        Blob id to tensor reference fields; this payload's entry is added.
     blob_id:
-        Opaque blob identifier.
+        Opaque blob identifier the scrubbed state references.
     tensor:
         Tensor payload to persist.
     kind:
@@ -2886,42 +2907,44 @@ def _write_tensor_blob(
     Returns
     -------
     TensorEntry
-        Manifest tensor entry for the written blob.
+        Manifest tensor entry; ``sha256`` is filled by ``_seal_tensor_entries``
+        once the chunk is on disk.
     """
 
-    # Blobs are host bytes: ``.cpu()`` moves cuda/mps payloads (no-op on CPU).
-    contiguous_tensor = tensor.resolve_conj().resolve_neg().contiguous().cpu()
-    relative_path = Path("blobs") / f"{blob_id}.safetensors"
-    blob_path = tmp_path / relative_path
-    save_file({_BLOB_TENSOR_KEY: contiguous_tensor}, str(blob_path))
+    host = host_tensor(tensor)
+    blob, key = store.submit(host, codec=TORCH_CODEC)
+    tensor_refs[blob_id] = tensor_reference(tensor, blob=blob, key=key)
     return TensorEntry(
         blob_id=blob_id,
         kind=kind,
         label=label,
-        relative_path=relative_path.as_posix(),
+        relative_path=blob,
         backend="safetensors",
-        shape=[int(dim) for dim in contiguous_tensor.shape],
-        dtype=str(contiguous_tensor.dtype).replace("torch.", ""),
+        shape=[int(dim) for dim in tensor.shape],
+        dtype=str(tensor.dtype).replace("torch.", ""),
         device_at_save=str(tensor.device),
-        layout=str(contiguous_tensor.layout).replace("torch.", ""),
-        bytes=int(contiguous_tensor.numel() * contiguous_tensor.element_size()),
-        sha256=sha256_file(blob_path),
+        layout=str(tensor.layout).replace("torch.", ""),
+        bytes=int(host.numel() * host.element_size()),
+        sha256="",
         requires_grad=bool(tensor.requires_grad),
     )
 
 
 def _write_payload_blob(
     *,
-    tmp_path: Path,
+    store: PayloadStore,
+    tensor_refs: dict[str, dict[str, Any]],
     blob_spec: BlobSpec,
     codec: PayloadCodec,
 ) -> TensorEntry:
-    """Write one codec-supported payload blob and build its manifest entry.
+    """Queue one codec-supported payload into the artifact's chunk files.
 
     Parameters
     ----------
-    tmp_path:
-        Temporary bundle directory root.
+    store:
+        Chunk store of the staged artifact.
+    tensor_refs:
+        Blob id to tensor reference fields; this payload's entry is added.
     blob_spec:
         Logical payload selected during scrub.
     codec:
@@ -2930,12 +2953,13 @@ def _write_payload_blob(
     Returns
     -------
     TensorEntry
-        Manifest tensor entry for the written blob.
+        Manifest tensor entry for the queued payload.
     """
 
     if blob_spec.logical_backend == "torch" and isinstance(blob_spec.value, torch.Tensor):
-        return _write_tensor_blob(
-            tmp_path=tmp_path,
+        return _submit_tensor_payload(
+            store=store,
+            tensor_refs=tensor_refs,
             blob_id=blob_spec.blob_id,
             tensor=blob_spec.value,
             kind=blob_spec.kind,
@@ -2943,26 +2967,57 @@ def _write_payload_blob(
         )
 
     encoded = codec.to_numpy(blob_spec.value)
-    transport_tensor = numpy_to_transport_tensor(encoded.array)
-    relative_path = Path("blobs") / f"{blob_spec.blob_id}.safetensors"
-    blob_path = tmp_path / relative_path
-    save_file({_BLOB_TENSOR_KEY: transport_tensor}, str(blob_path))
+    transport_tensor = numpy_to_transport_tensor(encoded.array).contiguous()
+    blob, key = store.submit(transport_tensor, codec=NUMPY_CODEC)
     manifest_fields = codec.manifest_fields(blob_spec.value, encoded)
+    reference = tensor_reference(
+        transport_tensor,
+        blob=blob,
+        key=key,
+        codec={"id": NUMPY_CODEC, **manifest_fields},
+    )
+    reference["device"] = encoded.logical_device
+    tensor_refs[blob_spec.blob_id] = reference
     return TensorEntry(
         blob_id=blob_spec.blob_id,
         kind=blob_spec.kind,
         label=blob_spec.label,
-        relative_path=relative_path.as_posix(),
+        relative_path=blob,
         backend="safetensors",
         shape=[int(dim) for dim in transport_tensor.shape],
         dtype=str(transport_tensor.dtype).replace("torch.", ""),
         device_at_save=encoded.logical_device,
         layout=str(transport_tensor.layout).replace("torch.", ""),
         bytes=int(transport_tensor.numel() * transport_tensor.element_size()),
-        sha256=sha256_file(blob_path),
+        sha256="",
         requires_grad=False,
         **manifest_fields,
     )
+
+
+def _seal_tensor_entries(tmp_path: Path, entries: list[TensorEntry]) -> list[TensorEntry]:
+    """Fill each entry's ``sha256`` with the digest of its closed chunk file.
+
+    Parameters
+    ----------
+    tmp_path:
+        Staged artifact directory.
+    entries:
+        Entries queued while the chunks were open.
+
+    Returns
+    -------
+    list[TensorEntry]
+        The entries with chunk digests, in the same order.
+    """
+
+    digests: dict[str, str] = {}
+    sealed: list[TensorEntry] = []
+    for entry in entries:
+        if entry.relative_path not in digests:
+            digests[entry.relative_path] = sha256_file(tmp_path / entry.relative_path)
+        sealed.append(dataclasses.replace(entry, sha256=digests[entry.relative_path]))
+    return sealed
 
 
 def _attach_fast_copy_specs(
@@ -3165,16 +3220,23 @@ def _load_and_verify_fast_copy_source(
 
 def _fast_copy_tensor_blob(
     *,
-    tmp_path: Path,
+    store: PayloadStore,
+    tensor_refs: dict[str, dict[str, Any]],
     fast_copy_spec: _FastCopySpec,
     manifest_index: dict[str, TensorEntry],
 ) -> TensorEntry:
-    """Copy one lazily-backed tensor blob into a new bundle without decoding it.
+    """Carry one lazily-backed tensor from its source artifact into the new one.
+
+    The source blob is digest-checked, read by key and queued into the new
+    artifact's chunk files (3.0 chunks hold many tensors, so a whole-file copy
+    no longer applies).
 
     Parameters
     ----------
-    tmp_path:
-        Temporary destination bundle directory.
+    store:
+        Chunk store of the staged artifact.
+    tensor_refs:
+        Blob id to tensor reference fields; this payload's entry is added.
     fast_copy_spec:
         Fast-copy instruction for the destination field.
     manifest_index:
@@ -3205,29 +3267,23 @@ def _fast_copy_tensor_blob(
             f"{fast_copy_spec.source_ref.expected_sha256} got {observed_sha256}"
         )
 
-    relative_path = Path("blobs") / f"{fast_copy_spec.blob_id}.safetensors"
-    destination_blob_path = tmp_path / relative_path
-    shutil.copy2(source_blob_path, destination_blob_path)
-    return TensorEntry(
+    source_tensor = _load_safetensors_file(source_blob_path, "cpu").get(_BLOB_TENSOR_KEY)
+    if not isinstance(source_tensor, torch.Tensor):
+        raise ArtifactError(f"Tensor blob {source_blob_path} lacks {_BLOB_TENSOR_KEY!r}.")
+    host = source_tensor.contiguous()
+    blob, key = store.submit(host, codec=TORCH_CODEC)
+    reference = tensor_reference(host, blob=blob, key=key)
+    reference.update(
+        device=source_entry.device_at_save, requires_grad=bool(source_entry.requires_grad)
+    )
+    tensor_refs[fast_copy_spec.blob_id] = reference
+    return dataclasses.replace(
+        source_entry,
         blob_id=fast_copy_spec.blob_id,
         kind=fast_copy_spec.kind,
         label=fast_copy_spec.label,
-        relative_path=relative_path.as_posix(),
-        backend=source_entry.backend,
-        shape=list(source_entry.shape),
-        dtype=source_entry.dtype,
-        device_at_save=source_entry.device_at_save,
-        layout=source_entry.layout,
-        bytes=source_entry.bytes,
-        sha256=source_entry.sha256,
-        requires_grad=source_entry.requires_grad,
-        logical_backend=source_entry.logical_backend,
-        codec=source_entry.codec,
-        logical_dtype=source_entry.logical_dtype,
-        logical_device=source_entry.logical_device,
-        transport_backend=source_entry.transport_backend,
-        transport_dtype=source_entry.transport_dtype,
-        codec_metadata=source_entry.codec_metadata,
+        relative_path=blob,
+        sha256="",
     )
 
 
@@ -4310,6 +4366,19 @@ def _reanchor_visualizer_paths(trace: Trace, bundle_path: Path) -> None:
             layer.visualizer_path = None
             continue
         layer.visualizer_path = str(candidate)
+
+
+def _restrict_tree_modes(root: Path) -> None:
+    """Tighten every directory (0700) and file (0600) the 3.0 envelope wrote.
+
+    Parameters
+    ----------
+    root:
+        Staged artifact directory.
+    """
+
+    for path in root.rglob("*"):
+        _restrict_mode(path, 0o700 if path.is_dir() else 0o600)
 
 
 def _restrict_mode(path: Path, mode: int) -> None:

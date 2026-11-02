@@ -499,6 +499,7 @@ STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
         "min_distance_to_output": StorageBinding(StorageKind.INTERNED),
         "max_distance_to_output": StorageBinding(StorageKind.INTERNED),
         "is_buffer": StorageBinding(StorageKind.INTERNED),
+        "is_constant": StorageBinding(StorageKind.INTERNED),
         "address": StorageBinding(StorageKind.INTERNED),
         "buffer_pass": StorageBinding(StorageKind.INTERNED),
         "buffer_source": StorageBinding(StorageKind.INTERNED),

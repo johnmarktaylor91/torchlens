@@ -489,7 +489,7 @@ def test_v11_bundle_with_spans_round_trips(tmp_path: Path, model: _TinyLM) -> No
     bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN], label="critique")
     bundle.save(tmp_path / "harness.tlspec")
     manifest = json.loads((tmp_path / "harness.tlspec" / "manifest.json").read_text())
-    assert manifest["tlspec_version"] == 11
+    assert manifest["tlspec_version"] == 12
     loaded = tl.load(tmp_path / "harness.tlspec")
     assert loaded.relations == bundle.relations
     assert loaded.relations[0].params["basis"] == "verified", "re-verified at load"

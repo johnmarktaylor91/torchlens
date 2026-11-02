@@ -134,6 +134,7 @@ class DiskStorageBackend:
             options.streaming.path,
             include_custom_attributes=options.streaming.include_custom_attributes,
             include_buffer_values=options.streaming.include_buffer_values,
+            payload_per_file=True,  # index lines carry each blob's digest as it lands
         )
         # Directories first, so mid-recording contents are already unreachable
         # to other users; finalize() tightens the files it writes.

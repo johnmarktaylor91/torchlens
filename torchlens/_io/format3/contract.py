@@ -24,10 +24,10 @@ FORMAT_MAJOR: Final = 3
 #: The record contract (tlspec) version the constants below are pinned to.
 #: The writer lane bumps it together with the added keys and the generated
 #: field page; the pin test compares it with the page header.
-RECORD_CONTRACT_VERSION: Final = 11
+RECORD_CONTRACT_VERSION: Final = 12
 #: Lowest record contract version the 3.0 reader accepts. Nothing older than
 #: the format itself is readable; a 2.x artifact refuses at the manifest.
-RECORD_CONTRACT_FLOOR: Final = 11
+RECORD_CONTRACT_FLOOR: Final = 12
 
 #: Manifest file name at the artifact root; everything else is indexed from it.
 MANIFEST_FILE: Final = "manifest.json"
@@ -75,10 +75,10 @@ SAVE_LEVELS: Final[tuple[str, ...]] = (
 )
 
 #: The twelve record kinds in page order: (record, class path, persisted keys).
-#: The key counts are the tlspec 11 numbers of the generated field page.
+#: The key counts are the tlspec 12 numbers of the generated field page.
 RECORD_INDEX: Final[tuple[tuple[str, str, int], ...]] = (
     ("trace", "torchlens._data_classes.trace.Trace", 183),
-    ("op", "torchlens._data_classes.op.Op", 174),
+    ("op", "torchlens._data_classes.op.Op", 176),
     ("layer", "torchlens._data_classes.layer.Layer", 92),
     ("aten_op", "torchlens._data_classes.aten_op.AtenOp", 32),
     ("backward_pass", "torchlens._data_classes.backward_pass.BackwardPass", 20),
@@ -93,13 +93,10 @@ RECORD_INDEX: Final[tuple[tuple[str, str, int], ...]] = (
 #: Persisted keys across the twelve records at ``RECORD_CONTRACT_VERSION``.
 PERSISTED_KEY_COUNT: Final = sum(count for _, _, count in RECORD_INDEX)
 
-#: Keys the writer lane adds with the format, per record, so loaded equals
-#: live and constants carry their own flag. They are absent from the tlspec 11
-#: page; the writer lane adds them to the bindings and regenerates the page,
-#: and the pin test then expects ``PERSISTED_KEY_COUNT`` to include them.
-PLANNED_KEYS: Final[dict[str, tuple[str, ...]]] = {
-    "op": ("arg_expressions", "is_constant"),
-}
+#: Keys a later contract adds, per record, before they reach the bindings and
+#: the generated page; a key leaves the plan in the change that persists it.
+#: Empty at tlspec 12: ``op.arg_expressions`` and ``op.is_constant`` landed.
+PLANNED_KEYS: Final[dict[str, tuple[str, ...]]] = {}
 #: Persisted keys whose VALUE the writer settles on the live side so a loaded
 #: trace equals the live one: today the portable scrub drops these values and
 #: the loader settles the grouping policy after the fact.
@@ -144,13 +141,17 @@ TYPED_VALUE_TAGS: Final[tuple[str, ...]] = (
     "type",
     "enum",
     "record",
+    "ref",
     "unencodable",
     "callable_placeholder",
 )
-#: Where the ``record`` tag's type allowlist comes from: the TorchLens rows of
-#: the restricted unpickler's class allowlist (value objects such as ``OpRef``,
-#: ``FireRecord`` and ``Edit``); a ``record`` object of any other type refuses.
-RECORD_TYPE_ALLOWLIST_SOURCE: Final = "torchlens._io._safe_unpickle"
+#: Where the ``record`` tag's type allowlist comes from: the writer contract's
+#: ``component_specs`` classes (``field_registry.component_spec_tables``) plus
+#: the value classes listed beside the codec in ``format3/values.py``
+#: (quantities, dtype and device refs, ...); a ``record`` object of any other
+#: type refuses. ``ref`` cells point at a row of another record table
+#: (``{"record": kind, "row": index}``) where a live field holds a record object.
+RECORD_TYPE_ALLOWLIST_SOURCE: Final = "torchlens._io.field_registry.component_spec_tables"
 #: Fields of a tensor reference object (tag ``tensor``). ``blob`` and ``key``
 #: are absent in a structure-only artifact; ``complex`` marks a tensor stored
 #: as its real view.

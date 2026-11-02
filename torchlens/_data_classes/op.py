@@ -179,6 +179,7 @@ _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_pending_grad_blob_id": None,
     "_pending_transformed_grad_blob_id": None,
     "annotations": {},
+    "is_constant": False,
     "autograd_memory": None,
     "num_autograd_tensors": None,
     "bytes_delta_at_call": None,
@@ -1356,6 +1357,7 @@ class Op(_SelectionOperand):
         min_distance_to_output: Any
         max_distance_to_output: Any
         is_buffer: Any
+        is_constant: bool
         address: Any
         buffer_pass: Any
         buffer_source: Any
@@ -1478,7 +1480,7 @@ class Op(_SelectionOperand):
         "func_qualname": FieldPolicy.KEEP,
         "code_context": FieldPolicy.KEEP,
         "var_names": FieldPolicy.KEEP,
-        ARG_EXPRESSIONS_FIELD: FieldPolicy.DROP,
+        ARG_EXPRESSIONS_FIELD: FieldPolicy.KEEP,
         "func_duration": FieldPolicy.KEEP,
         "flops_forward": FieldPolicy.KEEP,
         "flops_backward": FieldPolicy.KEEP,
@@ -1563,6 +1565,7 @@ class Op(_SelectionOperand):
         "max_distance_to_output": FieldPolicy.KEEP,
         "io_role": FieldPolicy.KEEP,
         "is_buffer": FieldPolicy.KEEP,
+        "is_constant": FieldPolicy.KEEP,
         "address": FieldPolicy.KEEP,
         "buffer_pass": FieldPolicy.KEEP,
         "buffer_source": FieldPolicy.KEEP,

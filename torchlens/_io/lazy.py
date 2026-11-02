@@ -3,7 +3,10 @@
 This module defines the lightweight references attached to lazy-loaded
 outs and grads. Each ref stores the bundle path, tensor metadata,
 and expected checksum so materialization can open a blob file on demand,
-verify integrity, return a tensor, and close the file immediately.
+verify integrity, return a tensor, and close the file immediately. A ref with
+a ``key`` names one tensor inside a 3.0 payload chunk
+(``blobs/<codec>-<nnnn>.safetensors``): the chunk digest is verified once per
+file version and the key is read by offset with ``safetensors.safe_open``.
 """
 
 from __future__ import annotations
@@ -11,6 +14,7 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from functools import lru_cache
 from hashlib import sha256
 from pathlib import Path
 from typing import Any, Literal
@@ -25,11 +29,6 @@ from .paths import resolve_bundle_blob_path
 from .payload_codec import materialize_transport_tensor
 
 _INLINE_LOAD_MAX_BYTES = 500 * 1024 * 1024
-#: Packed chunks (3.0 saved format) whose SHA-256 this process already verified:
-#: (path, file identity) -> digest. A 256 MiB chunk shared by thousands of tensors
-#: is hashed once per load, and re-hashed when its identity changes.
-_VERIFIED_CHUNKS: dict[tuple[str, tuple[int, int, int, int]], str] = {}
-_VERIFIED_CHUNKS_LIMIT = 4096
 _TORCH_BACKEND_NAME = "torch"
 
 
@@ -59,19 +58,25 @@ def _file_identity(stat_result: os.stat_result) -> tuple[int, int, int, int]:
     )
 
 
-def _remember_verified_chunk(
-    blob_path: Path, digest: str, *, identity: tuple[int, int, int, int] | None = None
-) -> None:
-    """Record a chunk's verified digest against its current file identity (bounded)."""
+@lru_cache(maxsize=64)
+def _chunk_digest(path: str, identity: tuple[int, int, int, int]) -> str:
+    """Return the sha256 of one payload chunk, computed once per file version.
 
-    if identity is None:
-        try:
-            identity = _file_identity(blob_path.stat())
-        except OSError:
-            return
-    if len(_VERIFIED_CHUNKS) >= _VERIFIED_CHUNKS_LIMIT:
-        _VERIFIED_CHUNKS.clear()
-    _VERIFIED_CHUNKS[(str(blob_path), identity)] = digest
+    Parameters
+    ----------
+    path:
+        Absolute chunk path.
+    identity:
+        :func:`_file_identity` of the chunk; a rewrite or replace changes it
+        and so misses the cache.
+
+    Returns
+    -------
+    str
+        Hex digest of the chunk file.
+    """
+
+    return sha256_file(path)
 
 
 @dataclass(frozen=True)
@@ -110,9 +115,9 @@ class LazyActivationRef:
         Optional JSON-ready codec metadata.
     payload_hints:
         Optional backend payload hints captured from lazy load.
-    entry_key:
-        Key of the tensor inside a packed safetensors chunk (3.0 saved format);
-        ``None`` for a one-tensor blob, which must then hold exactly one tensor.
+    key:
+        Tensor key inside a multi-tensor payload chunk, or ``None`` when the
+        blob file holds exactly one tensor.
     """
 
     blob_id: str
@@ -130,7 +135,7 @@ class LazyActivationRef:
     logical_device: str | None = None
     codec_metadata: dict[str, Any] | None = None
     payload_hints: PayloadLoadHints | Mapping[str, Any] | None = None
-    entry_key: str | None = None
+    key: str | None = None
 
     def blob_path(self, *, resolved_blobs_dir: Path | None = None) -> Path:
         """Return the absolute path to the referenced blob file.
@@ -152,60 +157,6 @@ class LazyActivationRef:
             self.relative_path,
             resolved_blobs_dir=resolved_blobs_dir,
         )
-
-    def _read_packed_tensor(self, blob_path: Path, map_location: Any) -> Any:
-        """Read one key of a large packed chunk, hashing the chunk once per process.
-
-        The whole chunk is verified against ``expected_sha256`` before any key
-        is read; the digest is remembered against the file's identity so the
-        next tensor of the same chunk skips the hash, and a changed identity
-        (rename-replace or in-place rewrite) hashes again.
-        """
-
-        try:
-            identity = _file_identity(blob_path.stat())
-        except OSError as exc:
-            raise ArtifactError(
-                f"Failed to access blob at {blob_path}.", code="bundle_load_failed"
-            ) from exc
-        cached = _VERIFIED_CHUNKS.get((str(blob_path), identity))
-        if cached is None:
-            cached = sha256_file(blob_path)
-            try:
-                post_identity = _file_identity(blob_path.stat())
-            except OSError as exc:
-                raise ArtifactError(
-                    f"Failed to access blob at {blob_path}.", code="bundle_load_failed"
-                ) from exc
-            if post_identity != identity:
-                raise ArtifactError(
-                    f"blob at {blob_path} changed between integrity check and load.",
-                    code="bundle_load_failed",
-                )
-            _remember_verified_chunk(blob_path, cached, identity=identity)
-        if cached != self.expected_sha256:
-            raise ArtifactError(
-                f"blob at {blob_path} sha256 mismatch; expected {self.expected_sha256} got {cached}",
-                code="bundle_load_failed",
-            )
-        device = str(map_location) if self.logical_backend == _TORCH_BACKEND_NAME else "cpu"
-        try:
-            with safe_open(str(blob_path), framework="pt", device=device) as handle:
-                if self.entry_key not in handle.keys():
-                    raise ArtifactError(
-                        f"blob at {blob_path} carries no tensor under key {self.entry_key!r}.",
-                        code="bundle_load_failed",
-                    )
-                return handle.get_tensor(self.entry_key)
-        except ImportError as exc:
-            raise ArtifactError(
-                "Portable bundle load requires the safetensors backend. Install safetensors>=0.4.",
-                code="bundle_load_failed",
-            ) from exc
-        except (OSError, SafetensorError, ValueError) as exc:
-            raise ArtifactError(
-                f"Failed to materialize blob at {blob_path}.", code="bundle_load_failed"
-            ) from exc
 
     def materialize(
         self,
@@ -239,6 +190,11 @@ class LazyActivationRef:
         """
 
         blob_path = self.blob_path(resolved_blobs_dir=resolved_blobs_dir)
+        if self.key is not None:
+            tensor = self._read_chunk_key(blob_path, self.key, map_location)
+            if self.dtype.is_complex and not tensor.is_complex():
+                tensor = torch.view_as_complex(tensor)  # chunks store complex as its real view
+            return self._to_payload(tensor, map_location, payload_hints)
 
         try:
             blob_size = blob_path.stat().st_size
@@ -271,8 +227,6 @@ class LazyActivationRef:
                     f"got {observed_sha256}"
                 )
 
-            if self.entry_key is not None:
-                _remember_verified_chunk(blob_path, observed_sha256)
             try:
                 tensor_map = load(blob_bytes)
             except ImportError as exc:
@@ -281,8 +235,6 @@ class LazyActivationRef:
                 ) from exc
             except (OSError, SafetensorError, ValueError) as exc:
                 raise ArtifactError(f"Failed to materialize blob at {blob_path}.") from exc
-        elif self.entry_key is not None:
-            tensor_map = {self.entry_key: self._read_packed_tensor(blob_path, map_location)}
         else:
             # Large blobs are stream-hashed and memory-mapped for load to keep
             # peak memory bounded (IO-S9), which unavoidably means two reads of
@@ -323,16 +275,18 @@ class LazyActivationRef:
             except (OSError, SafetensorError, ValueError) as exc:
                 raise ArtifactError(f"Failed to materialize blob at {blob_path}.") from exc
 
-        if self.entry_key is not None:
-            if self.entry_key not in tensor_map:
-                raise ArtifactError(
-                    f"blob at {blob_path} carries no tensor under key {self.entry_key!r}."
-                )
-            tensor = tensor_map[self.entry_key]
-        else:
-            if len(tensor_map) != 1:
-                raise ArtifactError(f"Expected a single tensor in blob file {blob_path}.")
-            tensor = next(iter(tensor_map.values()))
+        if len(tensor_map) != 1:
+            raise ArtifactError(f"Expected a single tensor in blob file {blob_path}.")
+        return self._to_payload(next(iter(tensor_map.values())), map_location, payload_hints)
+
+    def _to_payload(
+        self,
+        tensor: torch.Tensor,
+        map_location: Any,
+        payload_hints: PayloadLoadHints | Mapping[str, Any] | None,
+    ) -> Any:
+        """Convert a stored transport tensor into the logical payload of this ref."""
+
         effective_hints = self.payload_hints if payload_hints is None else payload_hints
         payload = materialize_transport_tensor(
             tensor,
@@ -343,3 +297,48 @@ class LazyActivationRef:
         if self.requires_grad and isinstance(payload, torch.Tensor):
             payload.requires_grad_(True)
         return payload
+
+    def _read_chunk_key(self, blob_path: Path, key: str, map_location: Any) -> torch.Tensor:
+        """Read one key of a payload chunk after verifying the chunk digest.
+
+        Parameters
+        ----------
+        blob_path:
+            Absolute chunk path.
+        key:
+            Tensor key inside the chunk.
+        map_location:
+            Requested device (torch payloads only; backend payloads read on CPU).
+
+        Returns
+        -------
+        torch.Tensor
+            The stored transport tensor.
+
+        Raises
+        ------
+        ArtifactError
+            If the chunk is missing or unreadable, the key is absent, the digest
+            differs from the manifest, or the file changed while it was read.
+        """
+
+        device = str(map_location) if self.logical_backend == _TORCH_BACKEND_NAME else "cpu"
+        tensor: torch.Tensor | None = None
+        try:
+            identity = _file_identity(blob_path.stat())
+            observed_sha256 = _chunk_digest(str(blob_path), identity)
+            if observed_sha256 == self.expected_sha256:
+                with safe_open(str(blob_path), framework="pt", device=device) as handle:
+                    tensor = handle.get_tensor(key)
+                if _file_identity(blob_path.stat()) != identity:
+                    observed_sha256 = "a file that changed while it was read"
+        except (OSError, SafetensorError, ValueError) as exc:
+            raise ArtifactError(
+                f"Failed to materialize key {key!r} of blob {blob_path}: {exc}"
+            ) from exc
+        if tensor is None or observed_sha256 != self.expected_sha256:
+            raise ArtifactError(
+                f"blob at {blob_path} sha256 mismatch; expected {self.expected_sha256} "
+                f"got {observed_sha256}"
+            )
+        return tensor

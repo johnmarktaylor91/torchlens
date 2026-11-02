@@ -80,14 +80,16 @@ __tl_layer__ = "L1"
 # v11 (3.0 persisted record shape): every stored key follows its decided
 # public name (renames, removals and private stored fields in one bump); the
 # v10 contract of record stays frozen byte-for-byte beside the v11 one.
-TLSPEC_VERSION = 11
+# v12 (3.0 columnar records): ``Op.is_constant`` and ``Op.arg_expressions`` join the
+# op record; the v11 contract of record stays frozen byte-for-byte beside the v12 one.
+TLSPEC_VERSION = 12
 
 # Rehydration floor: this release reads only its own format. Every stamp below
 # the current one was written by torchlens 2.x and refuses with the one error in
 # ``_pre3_module_paths``. ``MIN_TORCHLENS_VERSION_TEXT`` is the floor release
-# text stamped into the writer contract (the first tlspec-11 writer); it is never
-# matched against a manifest. The frozen v9 and v10 contracts keep their texts.
-MIN_TLSPEC_VERSION = 11
+# text stamped into the writer contract (the first 3.0 writer); it is never
+# matched against a manifest. The frozen v9, v10 and v11 contracts keep their texts.
+MIN_TLSPEC_VERSION = 12
 MIN_TORCHLENS_VERSION_TEXT = "3.0.0"
 
 # Reserved generation step-score vocabulary, credited to inseq: the

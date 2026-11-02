@@ -4552,6 +4552,7 @@ alphabetical order.
 | `Op.is_buffer` | Stored flag marking this Op as a buffer boundary; `is_buffer_source` exposes it |
 | `Op.is_buffer_source` | Whether this Op represents a buffer boundary (overwrites a buffer) |
 | `Op.is_compute_op` | Whether this Op executed a torch function rather than being a boundary sentinel |
+| `Op.is_constant` | Whether this Op is a constant, a closure constant or a literal producer, stamped by the shared constants rule |
 | `Op.is_final_output` | Whether this Op is a final model output |
 | `Op.is_in_conditional` | Whether this Op participates in any conditional role |
 | `Op.is_in_conditional_body` | Whether this Op sits inside the body of a conditional arm |

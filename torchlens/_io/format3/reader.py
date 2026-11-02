@@ -18,16 +18,24 @@ from __future__ import annotations
 import hashlib
 import re
 from collections.abc import Iterator, Mapping
-from dataclasses import replace
 from pathlib import Path
-from typing import Any, Final, cast
+from typing import Any, Final
 
 import torch
 
 from ..format_contract import BlobRef
-from ..format_errors import ArtifactError
 from ..paths import resolve_bundle_blobs_dir
+from ..recipe_reader import read_recipe
 from . import contract
+from .decode import (
+    CELL_CODE,
+    DEVICE_TEXT,
+    Decoder,
+    PendingRecord,
+    Unencodable,
+    build_component,
+    cell_error,
+)
 from .validate import (
     BELOW_FLOOR,
     TLSPEC_KEY,
@@ -44,15 +52,7 @@ from .validate import (
     symlink_guard,
     verify_file_bytes,
 )
-from .values import (
-    CELL_CODE,
-    CallablePlaceholder,
-    Decoder,
-    PendingRecord,
-    TensorRefSink,
-    build_component,
-    cell_error,
-)
+from .values import RowRef, dtype_table
 
 __all__ = [
     "load_bundle",
@@ -67,8 +67,8 @@ _CORRUPT: Final = _CODES["record_file_corrupt"]
 #: Root entries that mark an artifact written by torchlens 2.x (pickle carrier).
 PRE3_ROOT_MARKERS: Final[tuple[str, ...]] = ("metadata.pkl", "bundle.json")
 _MEMBER_DIR = re.compile(r"^members/(\d+)-([A-Za-z0-9_.-]+)$")
-#: The string a record of each kind is addressed by (design section 3); kinds absent here
-#: are referenced by row index only.
+#: The column whose string identifies a row of each kind; a repeat refuses. Records are
+#: referenced by ``ref`` cells (design section 4), never by these strings.
 IDENTITY_FIELDS: Final[dict[str, str]] = {
     "op": "label",
     "layer": "layer_label",
@@ -79,42 +79,9 @@ IDENTITY_FIELDS: Final[dict[str, str]] = {
     "grad_fn": "label",
     "aten_op": "label",
 }
-#: Persisted fields whose live value holds record objects: field -> target record kind.
-REFERENCE_FIELDS: Final[dict[str, dict[str, str]]] = {
-    "trace": {
-        "_layer_list": "op",
-        "_layer_dict_main_keys": "op",
-        "_layer_dict_all_keys": "op",
-        "_orphan_logs": "op",
-        "_layer_logs": "layer",
-        "_grad_fn_logs": "grad_fn",
-        "_backward_pass_logs": "backward_pass",
-        "_source_frames": "func_call_location",
-    },
-    "op": {"_param_logs": "param", "code_context": "func_call_location"},
-    "layer": {"_param_logs": "param"},
-    "buffer": {"versions": "op"},
-    "grad_fn": {"calls": "grad_fn_call"},
-    "backward_pass": {"grad_fn_calls": "grad_fn_call"},
-    "module_call": {"code_context": "func_call_location"},
-}
-#: The same for the nested value objects (by bare class name) that hold records.
-COMPONENT_REFERENCE_FIELDS: Final[dict[str, dict[str, str]]] = {
-    "ParamAccessor": {"_dict": "param", "_list": "param"},
-    "ModuleCallAccessor": {"_dict": "module_call", "_list": "module_call"},
-    "ModuleAccessor": {
-        "_dict": "module",
-        "_list": "module",
-        "_alias_dict": "module",
-        "_pass_dict": "module_call",
-    },
-    "OpAccessor": {"_dict": "op", "_list": "op"},
-    "LayerAccessor": {"_dict": "layer", "_list": "layer"},
-    "GradFnCallAccessor": {"_dict": "grad_fn_call", "_list": "grad_fn_call"},
-    "HookInfo": {"source_location": "func_call_location"},
-    "_PrimitiveOpProfile": {"primitive_ops": "aten_op"},
-    "GradientRecord": {"owner": "op"},
-}
+_BLOB_PATH = re.compile(r"blobs/[A-Za-z0-9_.-]+\.safetensors")
+_BLOB_KEY = re.compile(r"t\d{1,12}")
+_TORCH_CODEC: Final = contract.PAYLOAD_CODEC_IDS[0]
 #: Construction order: a record's state hook runs after the records it holds.
 LOAD_ORDER: Final[tuple[str, ...]] = (
     "func_call_location",
@@ -212,6 +179,107 @@ def validate_artifact(path: str | Path) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Tensor references
+# ---------------------------------------------------------------------------
+
+
+class TensorRefSink:
+    """Collects the tensor cells a decode meets, as ``BlobRef`` markers plus lazy-layer entries.
+
+    The reader hands the entries to the existing rehydrate path as the
+    manifest's tensor index (blob id to entry), so eager and lazy
+    materialization run through ``LazyActivationRef`` on (chunk, key)
+    unchanged. A structure-only cell (no ``blob`` and no ``key``) decodes to
+    ``None`` and is counted. Every field is checked against the manifest: the
+    codec must be listed, the chunk must be in ``files``, the key must be an
+    opaque ``t<k>`` and no (chunk, key) may be referenced twice.
+    """
+
+    def __init__(self, *, codecs: tuple[str, ...], files: Mapping[str, Mapping[str, Any]]) -> None:
+        self.entries: dict[str, dict[str, Any]] = {}
+        self.structure_only_refs = 0
+        self._codecs = codecs
+        self._files = files
+
+    def add(self, ref: Mapping[str, Any], at: str) -> Any:
+        shape = ref["shape"]
+        if not isinstance(shape, list) or not all(is_int(d) and d >= 0 for d in shape):
+            raise cell_error(at, "tensor shape must be an array of non-negative integers")
+        if len(shape) > 64:
+            raise cell_error(at, "tensor shape has more than 64 dimensions")
+        device = ref["device"]
+        if not isinstance(device, str) or not DEVICE_TEXT.fullmatch(device):
+            raise cell_error(at, f"tensor device {device!r} is not a device string")
+        is_complex = ref.get("complex", False)
+        if not isinstance(ref["requires_grad"], bool) or not isinstance(is_complex, bool):
+            raise cell_error(at, "tensor requires_grad and complex must be booleans")
+        codec_id, codec_metadata = _split_codec(ref["codec"], at=at)
+        if codec_id not in self._codecs:
+            raise cell_error(at, f"tensor codec {codec_id!r} is not among the manifest's codecs")
+        dtype_name = ref["dtype"]
+        if not isinstance(dtype_name, str) or dtype_name not in dtype_table():
+            raise cell_error(at, f"tensor dtype {dtype_name!r} is outside the dtype table")
+        blob, key = ref.get("blob"), ref.get("key")
+        if blob is None and key is None:
+            self.structure_only_refs += 1
+            return None
+        if not isinstance(blob, str) or not _BLOB_PATH.fullmatch(blob):
+            raise cell_error(
+                at, f"tensor blob {blob!r} is not a blobs/<codec>-<nnnn>.safetensors path"
+            )
+        if not isinstance(key, str) or not _BLOB_KEY.fullmatch(key):
+            raise cell_error(at, f"tensor key {key!r} is not an opaque t<k> key")
+        listed = self._files.get(blob)
+        if not isinstance(listed, Mapping):
+            raise cell_error(at, f"tensor blob {blob} is not listed in the manifest's files")
+        blob_id = f"{blob}#{key}"
+        if blob_id in self.entries:
+            raise cell_error(at, f"tensor {blob_id} is referenced twice")
+        kind = _tensor_kind(at)
+        backend = "torch" if codec_id == _TORCH_CODEC else "numpy"
+        self.entries[blob_id] = {
+            "blob_id": blob_id,
+            "kind": kind,
+            "label": at,
+            "relative_path": blob,
+            "key": key,
+            "backend": backend,
+            "shape": list(shape),
+            "dtype": dtype_name,
+            "device_at_save": device,
+            "layout": "strided",
+            "bytes": listed["bytes"],
+            "sha256": listed["sha256"],
+            "requires_grad": ref["requires_grad"],
+            "logical_backend": backend,
+            "codec": codec_id,
+            "codec_metadata": codec_metadata,
+        }
+        return BlobRef(blob_id, kind)
+
+
+def _split_codec(codec: Any, *, at: str) -> tuple[str, dict[str, Any] | None]:
+    """Return the codec id and the backend hints of a tensor cell's ``codec`` field."""
+
+    if isinstance(codec, str):
+        return codec, None
+    if isinstance(codec, dict) and isinstance(codec.get("id"), str):
+        metadata = {key: value for key, value in codec.items() if key != "id"}
+        if any(isinstance(v, dict) and contract.TYPED_VALUE_KEY in v for v in metadata.values()):
+            raise cell_error(at, "tensor codec hints must be plain JSON")
+        return codec["id"], metadata or None
+    raise cell_error(at, "tensor codec must be a codec id or {id, ...hints}")
+
+
+def _tensor_kind(at: str) -> str:
+    """The lazy-layer kind of a tensor cell: ``grad`` under a gradient column, else ``out``."""
+
+    column = at.split(".", 1)[1] if "." in at else at
+    head = re.split(r"[.\[{<]", column, maxsplit=1)[0]
+    return "grad" if "grad" in head else "out"
+
+
+# ---------------------------------------------------------------------------
 # Record tables
 # ---------------------------------------------------------------------------
 
@@ -224,7 +292,7 @@ class _Artifact:
         self.manifest = manifest
         self.version: int = manifest[TLSPEC_KEY]
         self.sink = TensorRefSink(codecs=tuple(manifest["codecs"]), files=manifest["files"])
-        self.decoder = Decoder(self.sink, defer_records=True)
+        self.decoder = Decoder(self.sink.add, defer_records=True)
         self.tables: dict[str, list[dict[str, Any]]] = {}
         self.objects: dict[str, list[Any]] = {}
         self.identities: dict[str, dict[str, int]] = {}
@@ -248,6 +316,7 @@ class _Artifact:
             cls = record_class(kind)
             self.objects[kind] = [state_new(cls) for _ in raw_rows]
             self._index_identities(kind)
+        self.objects["trace"] = [state_new(record_class("trace"))]
 
     def _index_identities(self, kind: str) -> None:
         field = IDENTITY_FIELDS.get(kind)
@@ -274,59 +343,36 @@ class _Artifact:
     # -- references ---------------------------------------------------------
 
     def resolve_references(self) -> None:
+        """Settle every ``ref`` cell to its record object and build the pending value objects."""
+
         for kind, rows in self.tables.items():
-            targets = REFERENCE_FIELDS.get(kind, {})
             for row_number, row in enumerate(rows):
                 for name in list(row):
-                    at = f"{kind}[{row_number}].{name}"
-                    row[name] = self._settle(row[name], at, targets.get(name))
+                    row[name] = self._settle(row[name], f"{kind}[{row_number}].{name}")
 
-    def _settle(self, value: Any, at: str, target: str | None) -> Any:
-        """Resolve references under ``value`` and build its pending value objects."""
-
+    def _settle(self, value: Any, at: str) -> Any:
+        if isinstance(value, RowRef):
+            return self._lookup(value, at)
         if isinstance(value, PendingRecord):
-            fields = COMPONENT_REFERENCE_FIELDS.get(value.cls.__name__, {})
-            settled = {
-                name: self._settle(item, f"{at}.{name}", fields.get(name))
-                for name, item in value.fields.items()
-            }
-            return build_component(value.cls, settled)
+            fields = {k: self._settle(v, f"{at}.{k}") for k, v in value.fields.items()}
+            return build_component(value.cls, fields, at=at)
         if isinstance(value, list):
-            return [self._settle(item, f"{at}[{i}]", target) for i, item in enumerate(value)]
+            return [self._settle(item, f"{at}[{i}]") for i, item in enumerate(value)]
         if isinstance(value, tuple):
-            return tuple(self._settle(item, f"{at}[{i}]", target) for i, item in enumerate(value))
+            return tuple(self._settle(item, f"{at}[{i}]") for i, item in enumerate(value))
         if isinstance(value, (set, frozenset)):
-            return type(value)(self._settle(item, at, target) for item in value)
+            return type(value)(self._settle(item, at) for item in value)
         if isinstance(value, dict):
-            return {key: self._settle(item, f"{at}.{key}", target) for key, item in value.items()}
-        if target is None or value is None:
-            return value
-        return self._lookup(value, at, target)
+            return {key: self._settle(item, f"{at}.{key}") for key, item in value.items()}
+        return value
 
-    def _lookup(self, reference: Any, at: str, target: str) -> Any:
-        rows = self.objects.get(target)
+    def _lookup(self, reference: RowRef, at: str) -> Any:
+        rows = self.objects.get(reference.record)
         if rows is None:
-            raise cell_error(
-                at,
-                f"references the {target} table, which the artifact does not carry",
-                code=CELL_CODE,
-            )
-        if is_int(reference):
-            if 0 <= reference < len(rows):
-                return rows[reference]
-            raise cell_error(
-                at, f"row index {reference} is outside the {target} table", code=CELL_CODE
-            )
-        if isinstance(reference, str):
-            index = self.identities.get(target, {}).get(reference)
-            if index is not None:
-                return rows[index]
-            raise cell_error(
-                at, f"{reference!r} names no row of the {target} table", code=CELL_CODE
-            )
-        raise cell_error(
-            at, f"a {type(reference).__name__} is not a {target} reference", code=CELL_CODE
-        )
+            raise cell_error(at, f"references the {reference.record} table, which is absent")
+        if not 0 <= reference.row < len(rows):
+            raise cell_error(at, f"row {reference.row} is outside the {reference.record} table")
+        return rows[reference.row]
 
     # -- construction -------------------------------------------------------
 
@@ -348,6 +394,8 @@ class _Artifact:
         state = dict(self.tables["trace"][0])
         state[TLSPEC_KEY] = self.version
         accessor = state.pop("_io_module_accessor_state", None)
+        if isinstance(accessor, Unencodable):
+            accessor = None
         if accessor is None and "module" in self.objects:
             accessor = self._module_accessor_state()
         state["_io_module_accessor_state"] = accessor
@@ -376,7 +424,11 @@ class _Artifact:
         )
 
     def manifest_for_rehydrate(self) -> dict[str, Any]:
-        return {**self.manifest, "tensors": list(self.sink.entries.values())}
+        """The manifest as the rehydrate path reads it: the tensor index from the cells."""
+
+        manifest = {"backend": "torch", **self.manifest}
+        manifest["tensors"] = list(self.sink.entries.values())
+        return manifest
 
 
 def _restore_record(obj: Any, row: Mapping[str, Any], *, version: int) -> None:
@@ -446,6 +498,7 @@ def load_trace(
         materialize_nested=materialize_nested,
         payload_hints=payload_hints,
         resolved_blobs_dir=blobs_dir,
+        trace=artifact.objects["trace"][0],
     )
     check_record_anchors(manifest, persisted_rows, root)
     _finish_loaded_trace(trace, root, manifest, artifact)
@@ -475,7 +528,9 @@ def _finish_loaded_trace(
     if disclosures is not None:
         _attach_advisory(trace, disclosures)
     if contract.INTERVENTION_FILE in manifest["files"]:
-        trace._intervention_spec = _read_recipe(root, manifest, artifact)
+        trace._intervention_spec = read_recipe(
+            root, manifest, decoder=artifact.decoder, tensor_entries=artifact.sink.entries
+        )
 
 
 def _attach_advisory(trace: Any, disclosures: Mapping[str, Any]) -> None:
@@ -553,33 +608,12 @@ def _iter_members(root: Path, manifest: Mapping[str, Any]) -> Iterator[tuple[str
         yield found[index], member_root
 
 
-# ---------------------------------------------------------------------------
-# The intervention recipe (design section 8)
-# ---------------------------------------------------------------------------
-
-_RECIPE_FORMAT: Final = "torchlens.intervention_recipe"
-_RECIPE_KEYS: Final = frozenset(
-    {
-        "format", "format_version", "helper_registry_version", "save_level", "executable",
-        "spec_derived", "append_state", "rules", "helpers", "function_registry_keys",
-    }
-)  # fmt: skip
-_RULE_KEYS: Final = frozenset({"index", "direction", "selector", "edit", "metadata"})
-_EDIT_KEYS: Final = frozenset(
-    {
-        "name", "args", "kwargs", "portability", "signal", "is_batch_independent",
-        "is_compatible_with_append", "metadata", "selection_recipe", "callable",
-    }
-)  # fmt: skip
-
-
 def load_intervention_recipe(path: str | Path) -> Any:
     """Load the intervention recipe (``intervention.json``) of a trace or intervention artifact.
 
-    Built-in edits come back through the helper registry (their factories
-    rebuilt from name, args and kwargs); a callable placeholder loads as an
-    audit-only edit and the recipe's ``placeholders`` list names it, so every
-    rerun door refuses with ``run_intervention_spec_not_persisted``.
+    Built-in edits come back through the helper registry; a callable
+    placeholder loads as an audit-only edit that every rerun door refuses
+    (``run_intervention_spec_not_persisted``). Grammar: ``_io/recipe_reader.py``.
     """
 
     root = Path(path)
@@ -593,162 +627,7 @@ def load_intervention_recipe(path: str | Path) -> Any:
             remedy="save the trace with a staged intervention, or save_intervention(...) the spec",
             file_path=str(root),
         )
-    return _read_recipe(root, manifest, _Artifact(root, manifest))
-
-
-def _recipe_error(root: Path, detail: str, *, code: str) -> ArtifactError:
-    return integrity_error(root / contract.INTERVENTION_FILE, detail, code=code)
-
-
-def _read_recipe(root: Path, manifest: Mapping[str, Any], artifact: _Artifact) -> Any:
-    from ...intervention.types import InterventionSpec
-
-    target = root / contract.INTERVENTION_FILE
-    data, raw = read_json_file(target, code=_CORRUPT, what="recipe")
-    listed = manifest["files"][contract.INTERVENTION_FILE]
-    if len(raw) != listed["bytes"] or hashlib.sha256(raw).hexdigest() != listed["sha256"]:
-        raise _recipe_error(root, "bytes differ from the manifest's digest", code=_CORRUPT)
-    if not isinstance(data, dict) or set(data) != _RECIPE_KEYS:
-        raise _recipe_error(
-            root, f"the recipe carries exactly {sorted(_RECIPE_KEYS)}", code=_CORRUPT
-        )
-    if data["format"] != _RECIPE_FORMAT or data["format_version"] != contract.FORMAT_MAJOR:
-        raise _recipe_error(root, f"format must be {_RECIPE_FORMAT} version 3", code=_CORRUPT)
-    if not isinstance(data["rules"], list) or not isinstance(data["executable"], bool):
-        raise _recipe_error(root, "rules must be an array, executable a boolean", code=_CORRUPT)
-    if data["save_level"] not in contract.SAVE_LEVELS or not isinstance(data["append_state"], dict):
-        raise _recipe_error(root, "save_level unknown or append_state not an object", code=_CORRUPT)
-    spec = InterventionSpec(metadata={})
-    placeholders: list[tuple[int | str, str]] = []
-    for position, rule in enumerate(data["rules"]):
-        placeholders.extend(_restore_rule(spec, rule, position, artifact, root))
-    spec.metadata["recipe"] = {
-        "executable": data["executable"] and not placeholders,
-        "spec_derived": data["spec_derived"],
-        "append_state": data["append_state"],
-        "helpers": data["helpers"],
-        "function_registry_keys": data["function_registry_keys"],
-        "helper_registry_version": data["helper_registry_version"],
-        "placeholders": placeholders,
-    }
-    return spec
-
-
-def _restore_rule(
-    spec: Any, rule: Any, position: int, artifact: _Artifact, root: Path
-) -> list[tuple[int | str, str]]:
-    """Stage one rule on ``spec`` as a sticky hook; return the placeholders it carries."""
-
-    if not isinstance(rule, dict) or set(rule) != _RULE_KEYS or rule["index"] != position:
-        raise _recipe_error(root, f"rule {position} must carry {sorted(_RULE_KEYS)}", code=_CORRUPT)
-    if rule["direction"] not in ("forward", "backward") or not isinstance(rule["metadata"], dict):
-        raise _recipe_error(root, f"rule {position} direction or metadata mistyped", code=_CORRUPT)
-    selector = _decode_selector(rule["selector"], root, position)
-    edit, found = _decode_edit(rule["edit"], artifact, root, position)
-    metadata = {
-        **artifact.decoder.decode(rule["metadata"], at=f"recipe.rules[{position}].metadata"),
-        "direction": rule["direction"],
-        "rule_index": position,
-        "loaded_from_recipe": True,
-    }
-    hook = edit.factory() if edit.factory is not None else edit
-    spec.add_hook(selector, hook, helper=edit, handle=f"recipe-{position}", metadata=metadata)
-    return found
-
-
-def _decode_selector(selector: Any, root: Path, position: int) -> Any:
-    from ...intervention._spec_codec import _target_spec_from_json
-
-    if not isinstance(selector, dict) or not isinstance(selector.get("selector_kind"), str):
-        raise _recipe_error(
-            root, f"rule {position} selector is not a selector object", code=_CORRUPT
-        )
-    try:
-        return _target_spec_from_json(selector)
-    except (KeyError, TypeError, ValueError) as exc:
-        raise _recipe_error(
-            root, f"rule {position} selector is malformed: {exc}", code=_CORRUPT
-        ) from exc
-
-
-def _decode_edit(
-    edit: Any, artifact: _Artifact, root: Path, position: int
-) -> tuple[Any, list[tuple[int | str, str]]]:
-    """Rebuild a built-in edit through the helper registry; a placeholder loads audit-only."""
-
-    from ...intervention.helpers import rebuild_builtin_helper
-    from ...intervention.types import Edit
-
-    if not isinstance(edit, dict) or not set(edit) <= _EDIT_KEYS or "name" not in edit:
-        raise _recipe_error(root, f"rule {position} edit is not an edit object", code=_CORRUPT)
-    at = f"recipe.rules[{position}].edit"
-    fields = {key: artifact.decoder.decode(value, at=f"{at}.{key}") for key, value in edit.items()}
-    name, portability = fields["name"], fields.get("portability", "builtin")
-    if not isinstance(name, str) or portability not in ("builtin", "callable_placeholder"):
-        raise _recipe_error(
-            root, f"rule {position} edit name or portability unknown", code=_CORRUPT
-        )
-    args = tuple(_materialize(fields.get("args", ()), artifact, root))
-    kwargs = dict(_materialize(fields.get("kwargs", {}), artifact, root))
-    found = [
-        (p.position, p.qualname) for p in _placeholders_in((args, kwargs, fields.get("callable")))
-    ]
-    if portability == "callable_placeholder" and not found:
-        raise _recipe_error(
-            root, f"rule {position} placeholder edit lacks its callable", code=_CORRUPT
-        )
-    extras: dict[str, Any] = {
-        "metadata": tuple(sorted(dict(fields.get("metadata") or {}).items())),
-        "signal": fields.get("signal"),
-        "is_batch_independent": bool(fields.get("is_batch_independent", False)),
-        "is_compatible_with_append": bool(fields.get("is_compatible_with_append", False)),
-        "selection_recipe": fields.get("selection_recipe"),
-    }
-    if found:
-        extras["metadata"] = (
-            *extras["metadata"],
-            ("executable", False),
-            ("placeholders", tuple(found)),
-        )
-        audit = Edit(name=name, args=args, kwargs=tuple(kwargs.items()), portability=cast(Any, "callable_placeholder"), **extras)  # fmt: skip
-        return audit, found
-    try:
-        rebuilt = rebuild_builtin_helper(name, args, kwargs)
-    except Exception as exc:  # the registry's typed refusal names the unknown builtin
-        raise _recipe_error(
-            root, f"rule {position} built-in edit cannot be rebuilt: {exc}", code=_CORRUPT
-        ) from exc
-    return replace(rebuilt, **extras), found
-
-
-def _placeholders_in(value: Any) -> Iterator[CallablePlaceholder]:
-    if isinstance(value, CallablePlaceholder):
-        yield value
-    elif isinstance(value, (list, tuple, set, frozenset)):
-        for item in value:
-            yield from _placeholders_in(item)
-    elif isinstance(value, dict):
-        for item in value.values():
-            yield from _placeholders_in(item)
-
-
-def _materialize(value: Any, artifact: _Artifact, root: Path) -> Any:
-    """Replace the tensor references under ``value`` with tensors, eagerly, through the lazy layer."""
-
-    from ..rehydrate import _build_lazy_tensor_ref
-
-    if isinstance(value, BlobRef):
-        index = {entry["blob_id"]: entry for entry in artifact.sink.entries.values()}
-        ref = _build_lazy_tensor_ref(value, index, root, kind="out", payload_hints=None)
-        if ref is None:
-            raise _recipe_error(root, f"tensor {value.blob_id} has no usable entry", code=_CORRUPT)
-        return ref.materialize(
-            map_location="cpu", resolved_blobs_dir=resolve_bundle_blobs_dir(root)
-        )
-    if isinstance(value, list):
-        return [_materialize(item, artifact, root) for item in value]
-    if isinstance(value, tuple):
-        return tuple(_materialize(item, artifact, root) for item in value)
-    if isinstance(value, dict):
-        return {key: _materialize(item, artifact, root) for key, item in value.items()}
-    return value
+    artifact = _Artifact(root, manifest)
+    return read_recipe(
+        root, manifest, decoder=artifact.decoder, tensor_entries=artifact.sink.entries
+    )
