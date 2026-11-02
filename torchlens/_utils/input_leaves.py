@@ -20,7 +20,6 @@ from typing import cast
 
 import torch
 
-from .._state import pause_logging
 from .tensor_utils import _clone_tensor_payload, _copy_tensor_payload
 
 INPUT_WAS_PARAMETER_ATTR = "_torchlens_input_was_parameter"
@@ -113,6 +112,10 @@ def _clone_input_tensor_payload(arg: torch.Tensor) -> torch.Tensor:
     """
 
     if isinstance(arg, torch.nn.Parameter):
+        # Deferred as in the pre-split module: ``_state`` sits above ``_utils`` in the
+        # layer map, so an eager import here would be an upward inversion.
+        from .._state import pause_logging
+
         detach_leaf = _PRESERVE_LEAF_INPUT_COPIES.get() and arg.is_leaf and arg.requires_grad
         with pause_logging():
             cloned = _copy_tensor_payload(arg, detach_tensor=detach_leaf, save_mode="copy")
