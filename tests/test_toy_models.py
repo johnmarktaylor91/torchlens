@@ -1658,10 +1658,12 @@ def test_ubermodel3(input_2d):
 
 def test_ubermodel4(input_2d):
     model = example_models.UberModel4()
-    # Random init feeds log a negative; identity fc1 (bias 0) and identity fc2 (bias 15)
-    # keep the log argument in [5, 13] for all inputs in [0, 1].
+    # Random init feeds log a negative. Identity fc1 (bias -2) and identity fc2 (bias 15)
+    # keep the log argument at or above 5 for inputs in [0, 1] and the value entering the
+    # final tanh below 2, where float32 tanh still moves under a perturbation (at bias 0
+    # it reaches 12 and tanh saturates to exactly 1).
     _assert_degenerate_forward(model, input_2d)
-    assert validate_forward_pass(_with_identity_weights(model, 0.0, 15.0), input_2d)
+    assert validate_forward_pass(_with_identity_weights(model, -2.0, 15.0), input_2d)
     show_model_graph(
         model,
         input_2d,
