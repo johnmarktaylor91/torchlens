@@ -256,7 +256,7 @@ def _expect_edit_marks(
         f"{what}: ops marked replaced {sorted(marked_after)[:8]} != "
         f"{sorted(marked_before | {label})[:8]}",
     )
-    names = [getattr(record, "helper_name", None) for record in edited[label].interventions or ()]
+    names = [record.edit_name for record in edited[label].edits or ()]
     cell.expect(helper in names, f"{what}: no {helper!r} fire record on {label}; found {names}")
 
 
@@ -327,27 +327,32 @@ def _prepare_intervene(cell: Cell) -> None:
 def _fire_facts(op: Any) -> list[tuple[Any, ...]]:
     return [
         (
-            getattr(record, "helper_name", None),
-            getattr(record, "site_label", None),
-            getattr(record, "timing", None),
-            getattr(record, "signal", None),
-            getattr(record, "replaced", None),
-            getattr(record, "engine", None),
+            record.edit_name,
+            record.site_label,
+            record.timing,
+            record.signal,
+            record.replaced,
+            record.engine,
         )
-        for record in op.interventions or ()
+        for record in op.edits or ()
     ]
 
 
 def _rule_facts(recipe: Any) -> list[tuple[str, Any]]:
-    """Return the comparable content of a frozen recipe: its targets, helper and fire count."""
+    """Return the comparable content of a recipe.
+
+    A frozen recipe (``trace.recipe``) compares by its targets, edit and fire
+    count; a staged ``Recipe`` (``tl.when(...)``, ``BoundModel.recipe``) carries
+    none of those and compares by its digest.
+    """
 
     if recipe is None:
         return []
-    helper = getattr(getattr(recipe, "helper", None), "helper_name", None)
-    targets = [repr(target) for target in getattr(recipe, "targets", ())]
-    return [(target, helper) for target in targets] + [
-        ("records", len(getattr(recipe, "records", ())))
-    ]
+    if isinstance(recipe, tl.Recipe):
+        return [("digest", recipe.digest())]
+    edit = recipe.helper.name if recipe.helper is not None else None
+    targets = [repr(target) for target in recipe.targets]
+    return [(target, edit) for target in targets] + [("records", len(recipe.records))]
 
 
 def _self_hook_outputs(cell: Cell, trace: Any, labels: set[str]) -> set[str]:
@@ -370,7 +375,7 @@ def _self_hook_outputs(cell: Cell, trace: Any, labels: set[str]) -> set[str]:
 def _recipe_is_empty(recipe: Any) -> bool:
     """Return whether a frozen recipe carries no targets and no fire records."""
 
-    return not getattr(recipe, "targets", ()) and not getattr(recipe, "records", ())
+    return not recipe.targets and not recipe.records
 
 
 def _after_intervene(cell: Cell) -> None:
@@ -458,10 +463,10 @@ def _expect_loaded_replay(cell: Cell, loaded: Any, before: list[Any] | None) -> 
 # --- claimed rows: fork_do ----------------------------------------------------
 
 
-def _prepare_intervention_ready(cell: Cell) -> None:
+def _prepare_replayable(cell: Cell) -> None:
     if cell.facts.single_pass_float_label is None:
         _not_applicable("no single-pass floating-point op to edit")
-    cell.capture_fields["intervention_ready"] = True
+    cell.capture_fields["replayable"] = True
 
 
 def _halve_on_fork(cell: Cell, trace: Any, what: str, label: str | None = None) -> None:
@@ -549,7 +554,8 @@ def _expect_bind_report(cell: Cell) -> None:
         bound(*cell.positional_inputs(cell.fresh_inputs()))
     report = bound.last_report
     cell.expect(report is not None, "the bound call left no last_report")
-    cell.expect(not getattr(report, "zero_fire_rule_ids", ()), "the bound rule fired at zero sites")
+    if report is not None:
+        cell.expect(not report.zero_fire_rule_ids, "the bound rule fired at zero sites")
 
 
 # --- new row: hooks -----------------------------------------------------------
@@ -771,7 +777,7 @@ def _after_edit_chain(cell: Cell) -> None:
         _same(noisy_a[label].out, noisy_b[label].out),
         f"add_noise(seed=3) at {label} did not reproduce across two forks",
     )
-    seeds = [getattr(record, "seed", None) for record in noisy_a[label].interventions or ()]
+    seeds = [record.seed for record in noisy_a[label].edits or ()]
     cell.expect(3 in seeds, f"the add_noise fire record at {label} does not carry seed 3: {seeds}")
     leaf = _leaf_site(trace)
     if leaf is not None:
@@ -791,7 +797,7 @@ def extend_features(rows: tuple[Feature, ...]) -> tuple[Feature, ...]:
     fills = {
         "intervene": {"prepare": _prepare_intervene, "after": _after_intervene},
         "fork_do": {"after": _after_fork_do},
-        "bundle": {"prepare": _prepare_intervention_ready, "after": _after_bundle},
+        "bundle": {"prepare": _prepare_replayable, "after": _after_bundle},
     }
     filled = tuple(
         replace(row, after=_after_bind_with(row.after))
@@ -817,7 +823,7 @@ def extend_features(rows: tuple[Feature, ...]) -> tuple[Feature, ...]:
             MEDIUM,
             "Mean ablation on a fork (tl.mean_ablate: self, axis, Population)",
             requires=float_only,
-            prepare=_prepare_intervention_ready,
+            prepare=_prepare_replayable,
             after=_after_mean_ablate,
         ),
         Feature(
@@ -825,7 +831,7 @@ def extend_features(rows: tuple[Feature, ...]) -> tuple[Feature, ...]:
             MEDIUM,
             "Steering on a fork (tl.steer direction, strength)",
             requires=float_only,
-            prepare=_prepare_intervention_ready,
+            prepare=_prepare_replayable,
             after=_after_steer,
         ),
         Feature(
@@ -833,7 +839,7 @@ def extend_features(rows: tuple[Feature, ...]) -> tuple[Feature, ...]:
             MEDIUM,
             "Ordered, view-site and seeded edits on a fork (do twice, add_noise)",
             requires=float_only,
-            prepare=_prepare_intervention_ready,
+            prepare=_prepare_replayable,
             after=_after_edit_chain,
         ),
     )
