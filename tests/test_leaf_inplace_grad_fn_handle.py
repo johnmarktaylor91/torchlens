@@ -50,8 +50,8 @@ class InplaceOnNonLeaf(nn.Module):
 
 
 def _layer(trace: tl.Trace, prefix: str) -> tl.Layer:
-    matches = [layer for layer in trace.layer_list if layer.layer_label.startswith(prefix)]
-    assert matches, [layer.layer_label for layer in trace.layer_list]
+    matches = [layer for layer in trace.layers if layer.layer_label.startswith(prefix)]
+    assert matches, [layer.layer_label for layer in trace.layers]
     return matches[0]
 
 
