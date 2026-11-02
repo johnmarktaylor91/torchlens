@@ -21,7 +21,7 @@ from ._call_fingerprint import (
     install_module_token_hooks,
     module_fingerprint_address,
 )
-from ._capture_state_helpers import hold_fused_attention_fastpath_off
+from ._capture._fused_attention_hold import hold_fused_attention_fastpath_off
 from ._data_classes._trace_accessors import boundary_label_rows
 from ._fast_live_plans import (
     DirectForwardRoute,

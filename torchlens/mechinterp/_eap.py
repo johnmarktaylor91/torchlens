@@ -30,6 +30,7 @@ from typing import Any
 
 import torch
 
+from ..backends.torch.frozen_parameter_gradients import frozen_parameter_gradients
 from ._edge_patch import _head_spec
 from ._edges import ComponentGraph, ComponentReceiver, component_graph
 from ._errors import refuse
@@ -109,7 +110,6 @@ def _capture(model: Any, inputs: Any, *, intervene: Any = None) -> Any:
     """
 
     from .._user_funcs import trace as capture_trace
-    from ..backends.torch.model_prep import frozen_parameter_gradients
 
     with torch.enable_grad(), frozen_parameter_gradients():
         return capture_trace(model, inputs, intervene=intervene)

@@ -211,7 +211,7 @@ def test_fully_frozen_model_captures_and_validates_without_autograd() -> None:
 def test_gradient_analysis_scope_builds_a_path_through_frozen_weights() -> None:
     """Only an analysis that backpropagates through its own capture flips frozen flags."""
 
-    from torchlens.backends.torch.model_prep import frozen_parameter_gradients
+    from torchlens.backends.torch.frozen_parameter_gradients import frozen_parameter_gradients
     from torchlens.mechinterp._eap import _capture
 
     model, x = _model_and_input()

@@ -18,15 +18,16 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._capture._fused_attention_hold import hold_fused_attention_fastpath_off
 from torchlens._capture_honesty import (
     ADVISORY_FUSED_ATTENTION_FASTPATH_HELD,
     capture_advisories,
 )
-from torchlens._capture_state_helpers import hold_fused_attention_fastpath_off
 from torchlens._utils._torch_compat import (
     get_mha_fastpath_enabled,
     get_mha_fastpath_switch_support,
 )
+from torchlens.errors import TraceCaptureError
 from torchlens.validation import last_validation_failure
 
 WIDTH = 8
@@ -141,7 +142,7 @@ def test_switch_is_restored_after_capture_and_after_a_failing_forward() -> None:
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             raise RuntimeError("boom")
 
-    with pytest.raises(RuntimeError, match="boom"):
+    with pytest.raises(TraceCaptureError, match="boom"):
         tl.trace(Boom().eval(), [x])
     assert get_mha_fastpath_enabled() == before
 

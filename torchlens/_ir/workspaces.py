@@ -175,6 +175,6 @@ class WrapperRuntimeWorkspace:
     #: materialization calls the wrapper passed through during this forward, keyed by
     #: object identity; the identity survives torch's in-place ``__class__`` swap, so the
     #: materialized Parameter is recognized when a wrapped call first consumes it
-    #: (``backends/torch/param_late_registration``). ``None`` until the first such call,
+    #: (``backends/torch/param_mutation``). ``None`` until the first such call,
     #: so the hot path pays one attribute read.
     materialized_lazy_slots: Any = None

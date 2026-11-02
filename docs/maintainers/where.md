@@ -112,7 +112,7 @@ TorchLens - extract outs and metadata from PyTorch models. (65 modules, 31532 li
 | `_capture_fingerprint` | Capture-cache content fingerprints and instance-attribute key fragments. | 423 |
 | `_capture_honesty` | Shared capture-honesty facts and preamble for report/export surfaces. | 779 |
 | `_capture_intervention` | Capture-door intervention glue for ''tl.trace(intervene=...)''. | 28 |
-| `_capture_state_helpers` | Internal model state, cache, and input helpers for public trace capture. | 2308 |
+| `_capture_state_helpers` | Internal model state, cache, and input helpers for public trace capture. | 2319 |
 | `_captured_run` | Shared public base types for TorchLens captured runs. | 287 |
 | `_chunked_capture_helpers` | Internal chunked-forward helper functions for public trace capture. | 14 |
 | `_chunking` | Input chunking helpers for forward-only chunked capture. | 24 |
@@ -215,6 +215,7 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 | `_episode_ledger_anchors` | Load-time anchors: does a grammatically valid episode ledger describe THIS product? | 188 |
 | `_flops_shape_rules` | Shape helpers and the shape-derived FLOP rules for weighted, recurrent and chained calls. | 298 |
 | `_forward_helpers` | Forward-pass helpers for the RUN stage: memory bracket, backend lookup and predicate forward. | 573 |
+| `_fused_attention_hold` | Hold torch's fused attention fast path off for one captured forward. | 102 |
 | `_input_records` | Input and label record helpers for the RUN stage. | 463 |
 | `_nonfinite_prefix` | Failure-safe prefix finalization + the ONE raw-to-public label resolver. | 379 |
 | `_outcome_payload` | Persisted-attestation codec and load-time outcome resolution. | 422 |
@@ -1282,12 +1283,12 @@ Torch backend implementation package for TorchLens capture. (98 modules, 51529 l
 | `identity_shims` | Wrap-state identity shims: keep torch-internal identity checks truthful. | 1043 |
 | `instrument` | Model instrumentation entry for the WRAP stage. | 162 |
 | `legacy_ctors` | Capture of legacy tensor constructors: ''torch.<dtype>Tensor(...)'' and ''Variable(t)''. | 301 |
-| `model_prep` | Prepare torch ''nn.Module'' objects for capture sessions. | 2361 |
+| `frozen_parameter_gradients` | Private scope letting an analysis capture build a gradient path through frozen parameters. | 70 |
+| `model_prep` | Prepare torch ''nn.Module'' objects for capture sessions. | 2359 |
 | `module_stack` | Manage the torch capture module-call stack. | 87 |
 | `offload_hooks` | Accelerate offload/dispatch hook shims for eager capture (R5). | 214 |
 | `ops` | Log tensors produced by decorated torch operations. | 605 |
-| `param_late_registration` | Late registration of parameters the captured forward itself created (lazy modules). | 235 |
-| `param_mutation` | In-place mutation of Parameters during torch capture (receiver policy). | 300 |
+| `param_mutation` | In-place mutation of Parameters during torch capture (receiver policy) and late registration of forward-created parameters. | 545 |
 | `prehook_provenance` | Reversible forward-pre-hook input provenance for PyTorch eager capture. | 1003 |
 | `rescue` | Rescue re-run: recover escaped ops with a TorchFunctionMode net. | 960 |
 | `sources` | Log torch capture source tensors. | 641 |

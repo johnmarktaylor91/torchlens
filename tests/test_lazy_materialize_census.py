@@ -74,7 +74,7 @@ def _armed_witness() -> Iterator[None]:
 def _materialization_owners(trace: tl.Trace) -> list[dict[str, Any]]:
     return [
         entry
-        for entry in trace.completeness_decompositions
+        for entry in trace.health.completeness_decompositions
         if entry["owner_wrapper"] == LAZY_MODULE_MATERIALIZE_WRAPPER
     ]
 

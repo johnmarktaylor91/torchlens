@@ -136,14 +136,12 @@ from .escape_detection import (
     mark_expected_original_accounted,
     reset_detector_tables,
 )
-from .param_late_registration import (
-    late_register_forward_created_parameter,
-    materialized_lazy_slots,
-    note_lazy_slot_materializing,
-)
 from .param_mutation import (
     frozen_parameter_receiver_context as _frozen_parameter_receiver_context,
     is_prepared_parameter_receiver as _is_prepared_parameter_receiver,
+    late_register_forward_created_parameter,
+    materialized_lazy_slots,
+    note_lazy_slot_materializing,
     parameter_mutation_output_for_logging as _parameter_mutation_output_for_logging,
     receiver_kwarg_as_positional as _receiver_kwarg_as_positional,
 )

@@ -14,6 +14,7 @@ from torchlens import _state
 from torchlens._capture import peak_memory
 from torchlens.backends.registry import BackendUnsupportedError
 
+from .._capture_honesty import ADVISORY_FUSED_ATTENTION_FASTPATH_HELD, append_capture_advisory
 from .._quantities import Bytes
 from ..backends.registry import (
     BackendName,
@@ -554,10 +555,6 @@ def _record_fused_attention_hold(
     held = compiled_prep.fused_attention_held if compiled_prep is not None else ()
     if not held:
         return
-    from .._capture_honesty import (
-        ADVISORY_FUSED_ATTENTION_FASTPATH_HELD,
-        append_capture_advisory,
-    )
 
     append_capture_advisory(
         self,

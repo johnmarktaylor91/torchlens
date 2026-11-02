@@ -16,6 +16,7 @@ from tqdm import tqdm
 from torchlens.backends.registry import BackendUnsupportedError
 
 from . import _user_funcs as _user_funcs, _validation_argument_references as _arg_references
+from ._capture._fused_attention_hold import hold_fused_attention_fastpath_off
 from ._capture_state_helpers import (
     _model_for_ground_truth_validation,
     _model_for_validation_replay,
@@ -23,7 +24,6 @@ from ._capture_state_helpers import (
     _move_tensors_to_device,
     _reject_opaque_wrappers,
     _unwrap_data_parallel,
-    hold_fused_attention_fastpath_off,
     unwrap_compiled_model,
 )
 from ._data_classes.trace import Trace
