@@ -373,6 +373,7 @@ def _rectangles(mask: _Mask) -> tuple[tuple[_Rectangle, ...], bool]:
     ``_RECTANGLE_BUDGET`` blocks the bounding rectangle stands in and the
     second item is ``False`` (the caller drops the relation to upper_bound).
     """
+    # Complexity (C): the greedy slab extension is one essential loop; splitting hides the budget.
 
     shape = mask.shape
     if mask.form == "whole":
@@ -461,6 +462,7 @@ def _mask_from_box(
     walk constrained it, so a seed restricted to one batch row or channel
     stays restricted there.
     """
+    # Complexity (C): the three axis kinds (windowed, full, pointwise) are the rule itself.
 
     assert descriptor.axes is not None
     if result.box.empty:
@@ -514,6 +516,7 @@ def _gradient_influence(
     node: _InfluenceTerm,
 ) -> Selection:
     """OR one autograd probe per (seed unit, target site) into exact entries."""
+    # Complexity (C): one typed budget refusal plus the per-probe fold is one cohesive step.
 
     probes = tuple(
         (seed_op, tuple(int(value) for value in coordinates))

@@ -72,6 +72,7 @@ def _seed_axis_sets(op: Op, descriptor: ReceptiveField, seed: _AxisSets) -> _Axi
     the per-unit convention) or a set, which the walk routes exactly as
     ``complete_unit`` coordinates are routed.
     """
+    # Complexity (C): one validation pass over four seed conditions reads clearer than four loops.
     assert descriptor.axes is not None
     if len(seed) != len(op.shape):
         raise ReceptiveFieldError("seed rank does not match the seed operation.")
