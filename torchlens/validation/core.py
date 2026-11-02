@@ -46,6 +46,8 @@ from .._utils.tensor_utils import (
     derive_float_tolerances,
     fp8_safe_comparison_pair,
     get_fp8_dtypes,
+    sparse_component_tensors,
+    sparse_with_values,
     tensor_all_nan,
     tensor_nanequal,
 )
@@ -4518,6 +4520,19 @@ def _buffer_parent_source_equal(
     return tensor_nanequal(saved_arg_value, parent_out, allow_tolerance=False)
 
 
+def _perturb_sparse_outs(parent_outs: torch.Tensor, output_outs: torch.Tensor) -> torch.Tensor:
+    """Perturb a sparse parent through its values, keeping layout, indices and shape.
+
+    The dense strategy reads the tensor elementwise (``isfinite``, ``unique``,
+    fancy indexing), which the sparse backends do not implement; perturbing
+    the values component with that same strategy keeps the tripwire
+    non-vacuous while the child op still receives a well-formed sparse input.
+    """
+
+    values = sparse_component_tensors(parent_outs)[-1]
+    return sparse_with_values(parent_outs, _perturb_layer_outs(values, output_outs))
+
+
 def _perturb_layer_outs(parent_outs: torch.Tensor, output_outs: torch.Tensor) -> torch.Tensor:
     """Generate a random perturbation of a saved tensor for validation.
 
@@ -4550,6 +4565,8 @@ def _perturb_layer_outs(parent_outs: torch.Tensor, output_outs: torch.Tensor) ->
     device = parent_outs.device
     if parent_outs.numel() == 0:
         return parent_outs.detach().clone()
+    if parent_outs.layout is not torch.strided:
+        return _perturb_sparse_outs(parent_outs, output_outs)
 
     if parent_outs.dtype in [
         torch.int,

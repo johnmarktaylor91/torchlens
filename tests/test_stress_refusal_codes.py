@@ -21,13 +21,14 @@ from torch import nn
 import torchlens as tl
 from torchlens._constants import ORIG_TORCH_FUNCS
 from torchlens._ir.selector_eval import evaluate
-from torchlens._utils.tensor_utils import sparse_component_tensors
+from torchlens._utils.tensor_utils import sparse_component_tensors, sparse_with_values
 from torchlens.backends.torch.buffer_writes import _whole_storage_uint8
 from torchlens.backends.torch.rescue import _state_bytes_equal
 from torchlens.errors import TraceCaptureError
 from torchlens.intervention.errors import LiveModeLabelError
 from torchlens.intervention.hooks import live_selector_matches_site
 from torchlens.types import FailureOrigin
+from torchlens.validation.core import _perturb_layer_outs
 
 _LIVE_SUBJECT = SimpleNamespace(_layer_label_raw="relu_1")
 
@@ -196,3 +197,22 @@ def test_sparse_buffer_is_left_as_the_forward_left_it() -> None:
     tl.trace(model, [torch.randn(3, 4)])
     assert model.adjacency.layout is torch.sparse_coo
     torch.testing.assert_close(model.adjacency.to_dense(), before.to_dense())
+
+
+def test_perturbing_a_sparse_parent_keeps_its_structure() -> None:
+    sparse = (torch.eye(3) + torch.diag(torch.ones(2), 1)).to_sparse()
+    perturbed = _perturb_layer_outs(sparse, torch.randn(3, 4))
+    assert perturbed.layout is torch.sparse_coo
+    assert perturbed.shape == sparse.shape
+    assert torch.equal(perturbed._indices(), sparse._indices())
+    assert not torch.equal(perturbed._values(), sparse._values())
+    csr = sparse.to_sparse_csr()
+    rebuilt = sparse_with_values(csr, csr.values() * 3)
+    assert rebuilt.layout is torch.sparse_csr
+    torch.testing.assert_close(rebuilt.to_dense(), csr.to_dense() * 3)
+
+
+def test_sparse_buffer_model_validates() -> None:
+    torch.manual_seed(0)
+    model = _SparseAdjacency().eval()
+    assert tl.validate(model, [torch.randn(3, 4)], scope="forward", seed=0)

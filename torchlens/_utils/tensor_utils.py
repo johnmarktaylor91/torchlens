@@ -764,6 +764,36 @@ def sparse_component_tensors(t: torch.Tensor) -> tuple[torch.Tensor, ...]:
     return tuple(getattr(t, name)() for name in accessors)
 
 
+def sparse_with_values(t: torch.Tensor, values: torch.Tensor) -> torch.Tensor:
+    """Return a sparse tensor with ``t``'s layout, indices and shape but new ``values``.
+
+    Parameters
+    ----------
+    t:
+        Sparse tensor (COO or any compressed layout) whose structure is kept.
+    values:
+        Replacement values tensor, the same shape as ``t``'s own values component.
+
+    Returns
+    -------
+    torch.Tensor
+        A new sparse tensor; ``t`` is not modified.
+
+    Raises
+    ------
+    ValueError
+        For layouts without a known component decomposition.
+    """
+
+    *indices, _old_values = sparse_component_tensors(t)
+    if t.layout is torch.sparse_coo:
+        return torch.sparse_coo_tensor(indices[0], values, t.shape, device=t.device)
+    compressed, plain = indices
+    return torch.sparse_compressed_tensor(
+        compressed, plain, values, t.shape, layout=t.layout, device=t.device
+    )
+
+
 def get_memory_amount(t: torch.Tensor) -> int:
     """Return the memory footprint of a tensor in bytes.
 
