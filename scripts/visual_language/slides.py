@@ -1439,7 +1439,8 @@ UNENCODED: tuple[tuple[str, str], ...] = (
 OTHER_PICTURES: tuple[tuple[str, str, str, str], ...] = (
     (
         "Bundle graph",
-        "several traces of one model, grouped",
+        "several traces of one model, grouped; nodes='members' draws one box per "
+        "trace and on='grad' compares gradients",
         "bundle.draw(path)",
         "docs/reference/glossary.md",
     ),

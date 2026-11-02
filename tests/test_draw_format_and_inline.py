@@ -8,12 +8,16 @@
   returns the picture for inline display. A path argument always writes.
 
 Kernel detection is ``torchlens.viz._drawing._in_notebook``, the same check
-``tl.draw`` uses; the tests monkeypatch it.
+``tl.draw`` uses; the tests monkeypatch it. The bare-call tests pass ``path=None``
+explicitly: the suite's autouse leak guard (``tests/_leak_guards.py``) points the
+``path`` default of ``Trace.draw`` into ``tmp_path``, so an argument-free call in a
+test is not a bare call.
 """
 
 from __future__ import annotations
 
 import shutil
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -36,9 +40,13 @@ class _Tiny(torch.nn.Module):
 
 
 @pytest.fixture(scope="module")
-def trace() -> tl.Trace:
+def trace() -> Iterator[tl.Trace]:
     torch.manual_seed(0)
-    return tl.trace(_Tiny(), torch.randn(1, 3))
+    captured = tl.trace(_Tiny(), torch.randn(1, 3))
+    try:
+        yield captured
+    finally:
+        captured.cleanup()
 
 
 def _files(folder: Path) -> list[str]:
@@ -81,8 +89,8 @@ def test_bare_draw_outside_a_kernel_writes_and_prints(
 ) -> None:
     monkeypatch.setattr(drawing_module, "_in_notebook", lambda: False)
     monkeypatch.chdir(tmp_path)
-    first = trace.draw()
-    second = trace.draw()
+    first = trace.draw(path=None)
+    second = trace.draw(path=None)
     assert first.file_format == "pdf"
     assert first.path is not None and first.path.name == "modelgraph.pdf"
     assert second.path is not None and second.path.name == "modelgraph-2.pdf"
@@ -95,7 +103,7 @@ def test_bare_draw_in_a_kernel_writes_nothing_and_displays_inline(
 ) -> None:
     monkeypatch.setattr(drawing_module, "_in_notebook", lambda: True)
     monkeypatch.chdir(tmp_path)
-    drawing = trace.draw()
+    drawing = trace.draw(path=None)
     assert drawing.path is None
     assert drawing.file_format == "svg"
     assert drawing.data is not None and b"<svg" in drawing.data

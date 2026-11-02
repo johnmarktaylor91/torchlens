@@ -20,6 +20,7 @@ import torch
 
 from torchlens import _state
 from torchlens._data_classes._trace_viz import TraceVisualizationMixin
+from torchlens.bundle import Bundle
 
 
 def _global_hook_and_mode_depths() -> tuple[int, int, int]:
@@ -188,6 +189,9 @@ def _threads_stopped_after_test() -> Iterator[None]:
 #: is a repo-root collision risk for a test that omits the argument.
 _DRAW_DEFAULT_OUTPATH_TARGETS: tuple[tuple[type, str, str], ...] = (
     (TraceVisualizationMixin, "draw", "modelgraph"),
+    # A bare ``Bundle.draw()`` writes ``bundle_modelgraph.<format>`` into the cwd
+    # (JMT drawing.3, Sun 1 Nov 2026), the same repo-root collision risk.
+    (Bundle, "draw", "bundle_modelgraph"),
 )
 
 

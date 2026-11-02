@@ -197,8 +197,9 @@ def test_bare_draw_outside_a_kernel_never_overwrites(
 ) -> None:
     monkeypatch.setattr(drawing_module, "_in_notebook", lambda: False)
     monkeypatch.chdir(tmp_path)
-    first = bundle.draw(file_format="svg")
-    bundle.draw(file_format="svg")
+    # path=None: the suite's leak guard points the path default into tmp_path.
+    first = bundle.draw(path=None, file_format="svg")
+    bundle.draw(path=None, file_format="svg")
     assert first.path == Path("bundle_modelgraph.svg")
     assert (tmp_path / "bundle_modelgraph.svg").is_file()
     assert (tmp_path / "bundle_modelgraph-2.svg").is_file()
@@ -213,7 +214,7 @@ def test_bare_draw_in_a_kernel_displays_inline_and_writes_nothing(
 ) -> None:
     monkeypatch.setattr(drawing_module, "_in_notebook", lambda: True)
     monkeypatch.chdir(tmp_path)
-    drawing = bundle.draw()
+    drawing = bundle.draw(path=None)
     assert drawing.path is None
     assert drawing.file_format == "svg"
     assert drawing.data is not None and b"<svg" in drawing.data
