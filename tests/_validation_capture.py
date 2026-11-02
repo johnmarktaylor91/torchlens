@@ -48,3 +48,13 @@ def _assert_degenerate_forward(model: nn.Module, x: torch.Tensor) -> None:
     assert not validate_forward_pass(model, x)
     failure = last_validation_failure()
     assert failure is not None and failure.check_name == "degenerate_forward", failure
+
+
+def _with_identity_weights(model, fc1_bias: float, fc2_bias: float):
+    """Pin ``fc1`` and ``fc2`` to the identity with constant biases (a finite control)."""
+
+    with torch.no_grad():
+        for layer, bias in ((model.fc1, fc1_bias), (model.fc2, fc2_bias)):
+            layer.weight.copy_(torch.eye(layer.weight.shape[0]))
+            layer.bias.fill_(bias)
+    return model
