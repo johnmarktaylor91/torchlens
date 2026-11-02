@@ -572,6 +572,11 @@ class TraceCaptureError(CaptureError):
         The :class:`~torchlens.types.FailureOrigin` the capture outcome
         recorded: ``user_op`` when the model's own code raised, ``torchlens``
         when the innermost attributable frame was TorchLens, else ``unknown``.
+
+    ``fields["code"]`` is always set: ``forward_raised`` when the model's own
+    code (or an unattributable frame) raised, ``capture_internal_error`` when
+    the innermost attributable frame was TorchLens (spellings
+    DOCUMENTED-UNSTABLE).
     """
 
     def __init__(
@@ -580,6 +585,7 @@ class TraceCaptureError(CaptureError):
         *,
         partial_trace: Any = None,
         origin: Any = None,
+        code: str = "forward_raised",
         **payload: Any,
     ) -> None:
         """Initialize the failed-forward error.
@@ -592,11 +598,14 @@ class TraceCaptureError(CaptureError):
             Partial capture recovered from the failed forward, if any.
         origin:
             Diagnostic failure origin from the capture outcome.
+        code:
+            Stable machine-readable refusal code; the capture door picks it
+            from ``origin`` (:func:`torchlens._capture._trace_capture_error.failed_forward_error`).
         **payload:
             Structured context retained on ``fields``.
         """
 
-        super().__init__(message, **payload)
+        super().__init__(message, code=code, **payload)
         self.partial_trace = partial_trace
         self.origin = origin
 

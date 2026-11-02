@@ -20,6 +20,17 @@ from .._utils._exception_notes import annotate_guarded, pop_failure_notes
 from ..errors import TorchLensError
 from .outcome import FailureOrigin, classify_failure_origin, safe_exception_str
 
+#: Stable ``fields["code"]`` per failure origin. A TorchLens frame raising is a
+#: different condition (report it) from the model's own code raising (fix the
+#: model); the unknown origin reads as the forward raising, since it did.
+_ORIGIN_CODES = MappingProxyType(
+    {
+        FailureOrigin.USER_OP: "forward_raised",
+        FailureOrigin.TORCHLENS: "capture_internal_error",
+        FailureOrigin.UNKNOWN: "forward_raised",
+    }
+)
+
 _ORIGIN_SENTENCES = MappingProxyType(
     {
         FailureOrigin.USER_OP: "The model's own code raised this error, not TorchLens.",
@@ -83,6 +94,7 @@ def failed_forward_error(trace: object, exc: Exception, num_ops: int | None) -> 
     error = TraceCaptureError(
         _message(exc, origin, num_ops, last_op),
         origin=origin,
+        code=_ORIGIN_CODES.get(origin, "forward_raised"),
         cause_type=type(exc).__name__,
         last_captured_op=last_op,
         num_captured_ops=num_ops,

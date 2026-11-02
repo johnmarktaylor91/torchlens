@@ -1196,7 +1196,10 @@ def live_selector_matches_site(selector_like: Any, site: Any) -> bool:
     if not matched and selector.selector_kind == "label":
         label_value = str(selector.selector_value)
         if looks_like_finalized_label(label_value):
-            raise LiveModeLabelError(live_label_error_message(label_value))
+            raise LiveModeLabelError(
+                live_label_error_message(label_value),
+                code="label_selector_not_live",
+            )
     return matched
 
 
