@@ -101,6 +101,19 @@ _INSTALLED_APPLY: classmethod[Any, Any, Any] | None = None
 _ORIGINAL_APPLY: classmethod[Any, Any, Any] | None = None
 
 
+def unlogged_wrapper_name(func_name: str) -> str:
+    """Census token of a wrapped-but-unlogged call.
+
+    Export spellings (``numpy``, ``__array__``) belong to the departure journal, so their
+    dispatches are accounted to :data:`FOREIGN_DATA_EXPORT_WRAPPER_NAME`; the metadata reads
+    keep their own ``torch_func:<name>:not_logged`` token.
+    """
+
+    if func_name in EXPORT_FUNC_NAMES:
+        return FOREIGN_DATA_EXPORT_WRAPPER_NAME
+    return f"torch_func:{func_name}:not_logged"
+
+
 def note_function_export(name: str, args: tuple[Any, ...] = ()) -> None:
     """Record an export: for the innermost live ``apply`` frame, else the departure journal.
 

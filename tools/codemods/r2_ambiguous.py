@@ -538,7 +538,7 @@ OVERRIDES: dict[tuple[str, str, str, int], str] = {
         0,
     ): "apply",
     (
-        "docs/reference/experiment_ledger.md",
+        "docs/reference/experiments.md",
         'retain=, engine="live_hook", model=, x=)` runs ONE candidate engine (the',
         "x",
         0,

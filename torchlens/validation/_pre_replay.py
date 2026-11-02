@@ -63,7 +63,7 @@ def pre_replay_verdict(
     if layer.func is None:
         if _is_provable_functionless_source_or_boundary(core.is_intervention_replacement, layer):
             return result_type.exempted("functionless_source_or_boundary")
-        return result_type.failed_result("functionless_computational_op")
+        return result_type.failed_result("no_replayable_function")
     if is_unresolved_foreign_data(layer.func):
         if perturb:
             return result_type.unverified(FOREIGN_DATA_REPLAY_REASON)

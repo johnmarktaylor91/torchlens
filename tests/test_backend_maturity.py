@@ -81,9 +81,10 @@ def test_torch_is_the_registered_stable_reference() -> None:
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "torch graduation waits on two open decisions: the validation reason names the "
-        "protocol cells check (AGT-2514) and validation after load (AGT-2500); the shipped "
-        "torch scorecard fails those cells until they are settled"
+        "torch graduation waits on the random_forward roster row (reference parity, "
+        "validation, and validation after load, AGT-2500); the reason-name cells passed "
+        "once the spec reason names landed, and the shipped torch scorecard still fails "
+        "the random_forward cells"
     ),
 )
 def test_every_stable_backend_has_all_graduation_items_met() -> None:

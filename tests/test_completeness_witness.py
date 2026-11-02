@@ -976,7 +976,6 @@ def test_expected_opaque_boundary_table_is_exact_and_budgeted() -> None:
     """Metadata-only exclusions remain a small reviewable exact-name table."""
 
     assert {row.wrapper_name for row in AUDITED_COMPLETENESS_BOUNDARIES} == {
-        "torch_func:numpy:not_logged",
         "torch_func:size:not_logged",
         "torch_func:dim:not_logged",
         "torch_func:item:logged",
@@ -988,6 +987,7 @@ def test_expected_opaque_boundary_table_is_exact_and_budgeted() -> None:
         "autograd_function:foreign",
         "foreign_data:export",
         "jit_script:boundary",
+        "lazy_module:materialize",
     }
     scalar_rows = [row for row in AUDITED_COMPLETENESS_BOUNDARIES if row.operator is not None]
     assert {row.wrapper_name for row in scalar_rows} == {

@@ -48,7 +48,7 @@ from ._utils.arg_handling import normalize_input_args, safe_copy_input_tree
 from ._utils.display import warn_parallel
 from ._utils.hashing import compute_graph_shape_hash
 from ._utils.introspection import get_vars_of_type_from_obj
-from ._utils.rng import set_random_seed
+from ._utils.rng import restores_rng_streams, set_random_seed
 from ._validation_state_snapshot import (
     COPY_FAILED_CODE,
     StateSnapshot,
@@ -905,6 +905,7 @@ def show_bundle_graph(
     return render_bundle_graph(bundle, options)
 
 
+@restores_rng_streams
 def validate_forward_pass(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
@@ -928,8 +929,7 @@ def validate_forward_pass(
     input_kwargs:
         Keyword arguments for model forward pass.
     seed:
-        Fixed RNG seed for reproducibility. Reseeds the process-global RNG
-        engines without restoring them; see ``tl.trace``'s ``seed``.
+        Fixed RNG seed; like ``tl.trace``, the caller's streams are restored on return.
     verbose:
         If True, print detailed error messages on validation failure.
     validate_metadata:
@@ -1345,9 +1345,8 @@ def _validate_forward_pass_torch(
     input_kwargs:
         Keyword arguments for model forward pass.
     seed:
-        Fixed RNG seed for reproducibility (auto-generated if None). Reseeds
-        the process-global RNG engines without restoring them; see
-        ``tl.trace``'s ``random_seed``.
+        Fixed RNG seed (auto-generated if None). Seeds the global RNG engines for the
+        ground-truth and logged runs; the public entries restore the caller's streams.
     verbose:
         If True, print detailed error messages on validation failure.
     validate_metadata:
@@ -1533,7 +1532,7 @@ def _validate_forward_pass_torch(
                 {"code": COPY_FAILED_CODE} if plain_attr_snapshot.copy_failure else None,
             )
         from .backends.torch._ops_containers import _walk_output_tensors_with_paths
-        from .validation._pristine import pristine_torch_oracle
+        from .validation._pristine import pristine_ground_truth_oracle
 
         # R75-1: the phase-0 ground truth must observe through PRISTINE
         # torch. In a wrapped process this forward used to run through the
@@ -1545,7 +1544,7 @@ def _validate_forward_pass_torch(
         # capture is active), validation REFUSES rather than blessing a
         # wrap-state-dependent ground truth.
         try:
-            with pristine_torch_oracle():
+            with pristine_ground_truth_oracle(ground_truth_model):
                 ground_truth_output = ground_truth_model(*input_args_copy, **input_kwargs_copy)
         except CaptureNotActiveError:
             return _refuse_validation_precondition(
@@ -1827,6 +1826,7 @@ def _validate_forward_pass_torch(
     return outs_are_valid
 
 
+@restores_rng_streams
 def validate_backward_pass(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
@@ -1857,9 +1857,9 @@ def validate_backward_pass(
     validate_metadata:
         If True, run metadata invariant checks on the captured backward trace.
     seed:
-        Fixed RNG seed for stock and candidate passes. Reseeds the
-        process-global RNG engines without restoring them; see
-        ``tl.trace``'s ``seed``.
+        Fixed RNG seed for stock and candidate passes. Like ``tl.trace``, the call
+        seeds the process-global RNG engines for its runs and restores the caller's
+        streams on return and on error.
     atol:
         Absolute allclose tolerance. ``None`` (default) derives the
         tolerance per gradient dtype (R13); the historical fp32 decimal
