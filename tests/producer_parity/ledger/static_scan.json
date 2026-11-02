@@ -7210,7 +7210,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/checks/_audit.py",
+  "file": "torchlens/debug/_checks/_audit.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -7218,7 +7218,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/checks/_scan.py",
+  "file": "torchlens/debug/_checks/_scan.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -7226,7 +7226,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/checks/_session.py",
+  "file": "torchlens/debug/_checks/_session.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false

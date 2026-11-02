@@ -108,7 +108,7 @@ validation, and core data-class names for the current 2.x surface.
 | `torchlens/agent/` | Read-only agent inspection surface: registry, envelope, overview, query, stats, compare, torch-free CLI | Agent and MCP tooling |
 | `torchlens/attribution/onebackward/` | One-backward `(node, slot)` attribution reads | Gradient reads over existing op fields |
 | `torchlens/brainpipe.py` | Memory-planned whole-model extraction (plan, table, run, npz) | Large extraction runs under a byte budget |
-| `torchlens/checks/` | Training sanity checks (`audit_params`, gradient-flow audit) | Parameter and gradient health |
+| `torchlens/debug/_checks/` | Training sanity checks (exposed as `tl.debug.ChecksSession` and friends) (`audit_params`, gradient-flow audit) | Parameter and gradient health |
 | `tests/conformance/` | Capture conformance packs C0-C2 (test-side harness) | Third-party conformance testing |
 | `torchlens/differential.py` | The guarded cross-capture delta projection | Comparing two captures |
 | `torchlens/_ecosystem/` | Provider discovery | Entry-point providers |

@@ -30,7 +30,7 @@
 /torchlens/bundle/                   @johnmarktaylor91
 /torchlens/callbacks/                @johnmarktaylor91
 /torchlens/capture/                  @johnmarktaylor91
-/torchlens/checks/                   @johnmarktaylor91
+/torchlens/debug/_checks/                   @johnmarktaylor91
 /torchlens/compat/                   @johnmarktaylor91
 /tests/conformance/              @johnmarktaylor91
 /torchlens/_data_classes/             @johnmarktaylor91

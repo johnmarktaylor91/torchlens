@@ -38,9 +38,9 @@ from typing import Any
 
 import torch
 
-from .. import _state
-from .._observability._chassis import EventStream, ObserverEvent
-from ..errors._base import TorchLensWarning
+from ... import _state
+from ..._observability._chassis import EventStream, ObserverEvent
+from ...errors._base import TorchLensWarning
 from ._adapters import OptimizerFacts, optimizer_facts
 from ._constants import WATCHDOG_FACTOR
 from ._errors import CheckConfigError, CheckLifecycleError, CheckViolationError

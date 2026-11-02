@@ -24,7 +24,7 @@ source_modules =
     torchlens._autoroute
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.examples
     torchlens.export
     torchlens.neuro
@@ -57,7 +57,7 @@ source_modules =
     torchlens._data_classes
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.compat
     torchlens.examples
     torchlens.export
@@ -97,7 +97,6 @@ forbidden_modules =
     torchlens.bridge
     torchlens.bundle
     torchlens.callbacks
-    torchlens.checks
     torchlens.debug
     torchlens.examples
     torchlens.export
@@ -146,7 +145,7 @@ source_modules =
     torchlens._io
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.compat
     torchlens.examples
     torchlens.export
@@ -184,7 +183,7 @@ source_modules =
     torchlens._ir
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.compat
     torchlens.examples
     torchlens.export
@@ -227,7 +226,7 @@ source_modules =
     torchlens._merged
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.examples
     torchlens.export
     torchlens.neuro
@@ -312,7 +311,7 @@ source_modules =
     torchlens._partial
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.examples
     torchlens.export
     torchlens.neuro
@@ -346,7 +345,7 @@ source_modules =
     torchlens._postprocess
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.examples
     torchlens.export
     torchlens.neuro
@@ -397,7 +396,6 @@ forbidden_modules =
     torchlens.bundle
     torchlens.callbacks
     torchlens.capture
-    torchlens.checks
     torchlens.compat
     torchlens.debug
     torchlens.distributed
@@ -438,7 +436,6 @@ forbidden_modules =
     torchlens.bundle
     torchlens.callbacks
     torchlens.capture
-    torchlens.checks
     torchlens.compat
     torchlens.debug
     torchlens.distributed
@@ -465,7 +462,7 @@ source_modules =
     torchlens._utils
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.compat
     torchlens.examples
     torchlens.export
@@ -531,7 +528,6 @@ forbidden_modules =
     torchlens.bundle
     torchlens.callbacks
     torchlens.capture
-    torchlens.checks
     torchlens.compat
     torchlens.debug
     torchlens.distributed
@@ -572,7 +568,6 @@ forbidden_modules =
     torchlens.bundle
     torchlens.callbacks
     torchlens.capture
-    torchlens.checks
     torchlens.compat
     torchlens.debug
     torchlens.distributed
@@ -624,7 +619,7 @@ source_modules =
     torchlens.backends
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.compat
     torchlens.examples
     torchlens.export
@@ -670,7 +665,7 @@ source_modules =
     torchlens.bundle
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.examples
     torchlens.export
     torchlens.neuro
@@ -710,7 +705,7 @@ source_modules =
     torchlens.capture
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.compat
     torchlens.examples
     torchlens.export
@@ -747,7 +742,7 @@ allow_indirect_imports = true
 name = checks (L5) does not import higher layers
 type = forbidden
 source_modules =
-    torchlens.checks
+    torchlens.debug._checks
 forbidden_modules =
     torchlens.callbacks
     torchlens.examples
@@ -759,7 +754,7 @@ forbidden_modules =
 name = checks (L5) does not import higher layers directly
 type = forbidden
 source_modules =
-    torchlens.checks
+    torchlens.debug._checks
 forbidden_modules =
     torchlens._notebook
     torchlens.bridge
@@ -776,7 +771,7 @@ source_modules =
     torchlens.compat
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.examples
     torchlens.export
     torchlens.neuro
@@ -838,7 +833,7 @@ source_modules =
     torchlens.distributed
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.examples
     torchlens.export
     torchlens.neuro
@@ -896,7 +891,6 @@ forbidden_modules =
     torchlens.bundle
     torchlens.callbacks
     torchlens.capture
-    torchlens.checks
     torchlens.compat
     torchlens.debug
     torchlens.distributed
@@ -942,7 +936,7 @@ source_modules =
     torchlens.fastlog
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.compat
     torchlens.examples
     torchlens.export
@@ -984,7 +978,7 @@ source_modules =
     torchlens.intervention
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.examples
     torchlens.export
     torchlens.neuro
@@ -1163,7 +1157,7 @@ source_modules =
     torchlens.transforms
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.examples
     torchlens.export
     torchlens.neuro
@@ -1196,7 +1190,7 @@ source_modules =
     torchlens.validation
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.examples
     torchlens.export
     torchlens.neuro

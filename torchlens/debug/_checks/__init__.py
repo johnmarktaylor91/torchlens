@@ -22,9 +22,9 @@ The honestly-redefined flagship checks (memo section 1, all measured):
   are the mechanism working) and RAISE at S-B before the weights are
   written -- the only pre-write tripwire under fp32 and bf16.
 
-One-shot parameter-space auditing is ``tl.debug.param_health``. Access spelling is ``import torchlens.checks``
-for now; root-facade routing is an F35 registration fragment. Every
-spelling here is DOCUMENTED-UNSTABLE pending naming-session ratification.
+One-shot parameter-space auditing is ``tl.debug.param_health``. The public names of this
+package are re-exported from ``torchlens.debug`` (``tl.debug.ChecksSession`` and so on).
+Every spelling here is DOCUMENTED-UNSTABLE pending naming-session ratification.
 """
 
 from __future__ import annotations

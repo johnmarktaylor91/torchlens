@@ -18,7 +18,7 @@ import torch
 import torchvision
 from torch import nn
 
-from torchlens.checks import ChecksSession
+from torchlens.debug._checks import ChecksSession
 
 pytestmark = [pytest.mark.real_model, pytest.mark.real_class]
 

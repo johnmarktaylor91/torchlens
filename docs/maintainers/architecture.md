@@ -109,7 +109,7 @@ tests; `tests/AGENTS.md` has the full area table.
 | Representation geometry and statistics | `tl.repgeom`, `tl.stats` | `repgeom/`, `stats/` | `test_repgeom*.py`, `test_stats*.py` |
 | Activation transforms | `tl.transforms` | `transforms/` | `test_transforms*.py`, `transforms_corpus/` |
 | Debugging helpers | `tl.debug` | `debug/` | `test_debug*.py` |
-| Training checks, observers, trackers | `torchlens.checks`, `tl.observers`, `torchlens.trackers` | `checks/`, `observers.py`, `trackers/`, `_observe/`, `_observability/` | `test_checks*.py`, `test_observ*.py`, `test_tracker*.py`, `test_train_mode/` |
+| Training checks, observers, trackers | `tl.debug.ChecksSession`, `tl.observers`, `torchlens.trackers` | `debug/_checks/`, `observers.py`, `trackers/`, `_observe/`, `_observability/` | `test_checks*.py`, `test_observ*.py`, `test_tracker*.py`, `test_train_mode/` |
 | Live narration | `torchlens._snoop` | `_snoop/` | `test_snoop*.py` |
 | Multi-rank merge | `tl.merge_ranks`, `tl.merged` | `_merged/`, `distributed/` | `test_merge*.py`, `test_distributed*.py` |
 | Dataset extraction | `tl.dataset_extraction` | `dataset_extraction.py`, `_extraction/`, `_data_substrate/` | `test_dataset_extraction*.py` |

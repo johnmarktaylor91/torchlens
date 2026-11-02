@@ -8,7 +8,7 @@ phase-sensitive (a checkpoint verdict must not depend on WHEN you called
 it), and the caller who names the mapping owns the phase label.
 
 Knob parity with ``tl.debug.dtype_range`` is pinned by test against
-:mod:`torchlens.checks._constants` (one constants module, memo 4.4).
+:mod:`torchlens.debug._checks._constants` (one constants module, memo 4.4).
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from typing import Any
 
 import torch
 
-from .._debug_report import Report
+from ..._debug_report import Report
 from ._constants import MAX_FRACTION_DEFAULT, SUBNORMAL_FRACTION_THRESHOLD_DEFAULT
 from ._errors import CheckConfigError
 from ._records import CHECK_REPORT_SCHEMA_VERSION, CheckFinding, severity_sorted
@@ -202,7 +202,7 @@ def _row_findings(
                     "n_neginf": float(row.num_neginf),
                 },
                 remedy="Reload the last healthy checkpoint; arm the scheduled scan to catch the minting step.",
-                follow_up="torchlens.checks session: register_nonfinite_param_check(every=1)",
+                follow_up="torchlens.debug._checks session: register_nonfinite_param_check(every=1)",
             )
         )
     if bounds and row.name in bounds and ((row.bounds_below or 0) + (row.bounds_above or 0)) > 0:

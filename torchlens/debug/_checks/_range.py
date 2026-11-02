@@ -21,8 +21,8 @@ from typing import Any
 
 import torch
 
-from .. import _state
-from .._observability._chassis import EventStream, ObserverEvent
+from ... import _state
+from ..._observability._chassis import EventStream, ObserverEvent
 from ._errors import CheckConfigError
 from ._records import CheckFinding, severity_sorted
 

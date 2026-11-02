@@ -323,9 +323,9 @@ _LAZY_EXCEPTION_PATHS = {
     # model-explorer export, features, inventory, mechinterp, neuro,
     # preprocessing, semantic norm reconstruction, snoop, stats, tviz, rank
     # render) and the two user-filterable warning categories --
-    "CheckConfigError": ("torchlens.checks._errors", "CheckConfigError"),
-    "CheckLifecycleError": ("torchlens.checks._errors", "CheckLifecycleError"),
-    "CheckViolationError": ("torchlens.checks._errors", "CheckViolationError"),
+    "CheckConfigError": ("torchlens.debug._checks._errors", "CheckConfigError"),
+    "CheckLifecycleError": ("torchlens.debug._checks._errors", "CheckLifecycleError"),
+    "CheckViolationError": ("torchlens.debug._checks._errors", "CheckViolationError"),
     "AttributionError": ("torchlens.attribution._result", "AttributionError"),
     "ReadError": ("torchlens.attribution.onebackward._errors", "ReadError"),
     "ReadInternalError": ("torchlens.attribution.onebackward._errors", "ReadInternalError"),

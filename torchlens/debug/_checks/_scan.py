@@ -21,8 +21,8 @@ from typing import Any
 
 import torch
 
-from .. import _state
-from .._utils.tensor_utils import fp8_widen_for_numeric_ops
+from ... import _state
+from ..._utils.tensor_utils import fp8_widen_for_numeric_ops
 from ._errors import CheckConfigError
 
 __tl_layer__ = "L5"

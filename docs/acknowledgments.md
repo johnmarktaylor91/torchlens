@@ -179,7 +179,7 @@ work; do not under-apply it to unlicensed or copyleft work.
 ## Training-time diagnostics and tracking
 
 - **torcheck** (pengyan510) -- the check vocabulary and the register-once /
-  named-module / enable-disable ergonomics `torchlens.checks` systematizes.
+  named-module / enable-disable ergonomics `tl.debug.ChecksSession` systematizes.
   **torchtest** -- same niche, honored the same way.
 - **Andrej Karpathy**, "A Recipe for Training Neural Networks" -- the raw
   update-to-weight ratio and the sanity-check culture. **Lightning** -- the

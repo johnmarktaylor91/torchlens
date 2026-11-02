@@ -1,6 +1,6 @@
 """Typed refusal classes for the training-checks kit (lane F23).
 
-Every raise site in ``torchlens.checks`` carries a stable ``fields["code"]``
+Every raise site in ``torchlens.debug._checks`` carries a stable ``fields["code"]``
 plus a non-empty ``fields["remedy"]`` and is ledgered in
 ``docs/reference/error_refusal_contract.md``. Callers branch on the code,
 never on message text (checks memo 4.5).
@@ -8,7 +8,7 @@ never on message text (checks memo 4.5).
 
 from __future__ import annotations
 
-from ..errors._base import CaptureError, ConfigurationError
+from ...errors._base import CaptureError, ConfigurationError
 
 __tl_layer__ = "L5"
 
