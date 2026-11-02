@@ -3185,11 +3185,11 @@ class Trace(TraceLike):
 
         return derive_pristine(self)
 
-    def push(self, replay: ReplayOptions | None = None) -> "Trace":
+    def push(self, replay: "ReplayOptions | None" = None) -> "Trace":
         """Push the edit downstream through the recorded graph (DAG replay)."""
         return _doors.intervention()._trace_run.push(self, replay=replay)
 
-    def push_from(self, site: Any, replay: ReplayOptions | None = None) -> "Trace":
+    def push_from(self, site: Any, replay: "ReplayOptions | None" = None) -> "Trace":
         """Push downstream from a pre-mutated site."""
         return _doors.intervention()._trace_run.push_from(self, site, replay=replay)
 
