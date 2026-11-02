@@ -44,7 +44,7 @@ def test_output_is_the_exact_forward_return(kind: str, save: str) -> None:
         handle.remove()
     assert len(seen) == 1
     assert trace.output is seen[0]
-    assert trace.raw_output is None
+    assert trace.transformed_output is None
 
 
 def test_output_refuses_after_stop_after() -> None:
@@ -65,7 +65,7 @@ def test_output_is_independent_of_the_output_transform() -> None:
         capture=tl.options.CaptureOptions(output_transform=lambda output: output["logits"]),
     )
     assert isinstance(trace.output, dict)
-    assert trace.raw_output is trace.output["logits"]
+    assert trace.transformed_output is trace.output["logits"]
 
 
 @pytest.mark.parametrize("level", ["audit", "portable"])
@@ -136,7 +136,7 @@ def test_truncated_live_run_has_no_forward_return(fast: bool) -> None:
         torch.ones(1, 3),
         capture=tl.options.CaptureOptions(capture_container_structure=True),
     )
-    site = next(layer.layer_label for layer in trace.layer_list if layer.layer_type == "linear")
+    site = next(op.label for op in trace.ops if op.type == "linear")
     result = trace.run(inputs=torch.full((1, 3), 2.0), fast=fast, until=site)
     with pytest.raises(PayloadUnavailableError) as exc_info:
         _ = result.trace.output
