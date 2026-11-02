@@ -1555,9 +1555,8 @@ torchlens/viz/node_plots.py::heatmap	143
 torchlens/viz/node_plots.py::image_scatter	111
 torchlens/viz/node_plots.py::lineplot	174
 torchlens/_data_classes/_trace_removal.py::batch_remove_log_entries	67
-torchlens/_data_classes/_trace_rerun_state.py::refresh_rerun_op_from	61
-torchlens/_data_classes/_trace_rerun_state.py::replace_state_from	74
+torchlens/_data_classes/_trace_rerun_state.py::replace_state_from	71
 torchlens/_data_classes/_trace_state_io.py::trace_getstate	111
 torchlens/_data_classes/_trace_state_io.py::trace_setstate	334
-torchlens/_data_classes/trace.py	3734
+torchlens/_data_classes/trace.py	3733
 torchlens/_data_classes/trace.py::Trace.draw	107

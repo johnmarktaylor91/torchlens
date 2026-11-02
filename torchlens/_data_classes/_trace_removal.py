@@ -93,9 +93,7 @@ def remove_log_entry(
     remove_references:
         Whether to scrub all graph references to the removed entry.
     replacement_labels:
-        Optional removed-label -> survivor substitutions for merge-style
-        removals: conditional references repoint to the survivor instead
-        of being dropped.
+        Removed-label to survivor substitutions for merge-style removals.
     """
     tensor_label = _label_for_reference_removal(log_entry, trace._tracing_finished)
     _materialize_layer_mirrors_for_removed(trace, (log_entry,))
@@ -121,9 +119,7 @@ def batch_remove_log_entries(
     remove_references:
         Whether to scrub all graph references to the removed entries.
     replacement_labels:
-        Optional removed-label -> survivor substitutions for merge-style
-        removals: conditional references repoint to the survivor instead
-        of being dropped.
+        Removed-label to survivor substitutions for merge-style removals.
     """
     entries_to_remove = list(entries_to_remove)
     removal_ids = {id(entry) for entry in entries_to_remove}

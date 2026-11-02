@@ -39,23 +39,22 @@ from typing import (
     ClassVar,
     Literal,
     TextIO,
+    Union,
     cast,
 )
 
 import torch
 from torch import nn
 
+from ..intervention.types import FrozenInterventionSpec, TargetSpec
+from ..options import InterventionOptions, ReplayOptions
+
 if TYPE_CHECKING:
     from torchlens._runnable import ReadinessReport
 
     from .._io.streaming import BundleStreamWriter
-    from .._runnable import (
-        ArchivedActivation,
-        SparseRunDescriptor,
-    )
+    from .._runnable import ArchivedActivation, SparseRunDescriptor
     from ..debug._audit import HealthReport
-    from ..intervention.types import FrozenInterventionSpec, TargetSpec
-    from ..options import InterventionOptions, ReplayOptions
     from ._op_dedup import IdentityCacheEntry
     from ._trace_views import _CallableList
     from .func_call_location import FuncCallLocation
@@ -2082,7 +2081,7 @@ class Trace(TraceLike):
         return TraceHealth(self)
 
     @property
-    def _graph_is_recurrent(self) -> "bool":
+    def _graph_is_recurrent(self) -> bool:
         """Whether any layer has more than one pass."""
         return any(v > 1 for v in self._layer_num_calls.values())
 
@@ -2099,34 +2098,34 @@ class Trace(TraceLike):
         return _trace_views.layers_recurrent(self)
 
     @property
-    def _graph_max_ops_per_layer(self) -> "int":
+    def _graph_max_ops_per_layer(self) -> int:
         """Maximum number of ops for any layer."""
         return max(self._layer_num_calls.values(), default=1)
 
     @property
-    def _graph_is_branching(self) -> "bool":
+    def _graph_is_branching(self) -> bool:
         """Whether any layer has more than one child."""
         return any(len(entry.children) > 1 for entry in self._layer_list)
 
     @property
-    def _graph_has_conditional_branching(self) -> "bool":
+    def _graph_has_conditional_branching(self) -> bool:
         """Whether any layer is in a conditional branch."""
         return any(entry.is_in_conditional_body for entry in self._layer_list)
 
     @property
-    def _graph_has_conditionals(self) -> "bool":
+    def _graph_has_conditionals(self) -> bool:
         """Whether this Trace contains conditional-flow records."""
 
         return len(self._graph_conditionals) > 0
 
     @property
-    def _graph_is_dynamic(self) -> "bool":
+    def _graph_is_dynamic(self) -> bool:
         """Whether execution depends on runtime tensor values."""
 
         return self.graph.has_conditionals
 
     @property
-    def _source_forward_location(self) -> "str | None":
+    def _source_forward_location(self) -> str | None:
         """Combined forward source location."""
 
         if self._source_forward_file is None or self._source_forward_line is None:
@@ -2134,7 +2133,7 @@ class Trace(TraceLike):
         return f"{self._source_forward_file}:{self._source_forward_line}"
 
     @property
-    def _source_class_location(self) -> "str | None":
+    def _source_class_location(self) -> str | None:
         """Combined model class source location."""
 
         if self._source_class_file is None or self._source_class_line is None:
@@ -2142,7 +2141,7 @@ class Trace(TraceLike):
         return f"{self._source_class_file}:{self._source_class_line}"
 
     @property
-    def _source_init_location(self) -> "str | None":
+    def _source_init_location(self) -> str | None:
         """Combined model ``__init__`` source location."""
 
         if self._source_init_file is None or self._source_init_line is None:
@@ -2150,7 +2149,7 @@ class Trace(TraceLike):
         return f"{self._source_init_file}:{self._source_init_line}"
 
     @property
-    def _cost_last_backward_duration(self) -> "Duration | None":
+    def _cost_last_backward_duration(self) -> Duration | None:
         """Most recent backward-pass duration, if any."""
 
         if not self._cost_backward_durations:
@@ -2158,13 +2157,13 @@ class Trace(TraceLike):
         return as_duration(self._cost_backward_durations[-1])
 
     @property
-    def _cost_total_backward_duration(self) -> "Duration":
+    def _cost_total_backward_duration(self) -> Duration:
         """Sum of all captured backward-pass durations."""
 
         return Duration(sum(self._cost_backward_durations))
 
     @property
-    def _autograd_last_backward_root_grad_fn_object_id(self) -> "int | None":
+    def _autograd_last_backward_root_grad_fn_object_id(self) -> int | None:
         """Most recent backward root grad_fn_handle object id, if any."""
 
         if not self._autograd_backward_root_grad_fn_object_ids:
@@ -2172,12 +2171,12 @@ class Trace(TraceLike):
         return self._autograd_backward_root_grad_fn_object_ids[-1]
 
     @property
-    def _cost_overhead_duration(self) -> "Duration":
+    def _cost_overhead_duration(self) -> Duration:
         """Time spent on TorchLens overhead (total minus function calls)."""
         return self._provenance_duration - self._cost_func_calls_duration
 
     @property
-    def _provenance_duration(self) -> "Duration":
+    def _provenance_duration(self) -> Duration:
         """Total capture-phase duration in seconds."""
 
         if not self._provenance_start_time or not self._provenance_end_time:
@@ -2185,31 +2184,31 @@ class Trace(TraceLike):
         return Duration(self._provenance_end_time - self._provenance_start_time)
 
     @property
-    def _provenance_kind(self) -> "str":
+    def _provenance_kind(self) -> str:
         """Return this product's capture kind: ``"episode"`` or ``"plain"``."""
 
         return _doors.report()._trace_facts.provenance_kind(self)
 
     @property
-    def episode(self) -> "Any | None":
+    def episode(self) -> Any | None:
         """Return the parsed episode step ledger, or ``None``."""
 
         return _doors.report()._trace_facts.episode(self)
 
     @property
-    def episode_coupling(self) -> "Any | None":
+    def episode_coupling(self) -> Any | None:
         """Return the attested coupling verdict, or ``None``."""
 
         return _doors.report()._trace_facts.episode_coupling(self)
 
     @property
-    def _cost_total_flops_forward(self) -> "Flops":
+    def _cost_total_flops_forward(self) -> Flops:
         """Total forward FLOPs (the canonical identity-partition aggregation)."""
 
         return _doors.report()._trace_facts.cost_total_flops_forward(self)
 
     @property
-    def _cost_total_flops_backward(self) -> "Flops":
+    def _cost_total_flops_backward(self) -> Flops:
         """Total backward FLOPs across all layers (skipping None/unknown)."""
         return Flops(
             sum(
@@ -2220,7 +2219,7 @@ class Trace(TraceLike):
         )
 
     @property
-    def _cost_total_flops(self) -> "Flops":
+    def _cost_total_flops(self) -> Flops:
         """Total FLOPs (forward + backward)."""
         return Flops(self.cost.total_flops_forward + self.cost.total_flops_backward)
 
@@ -2231,55 +2230,55 @@ class Trace(TraceLike):
         return _doors.report()._trace_facts.cost_flops_by_op_type(self)
 
     @property
-    def _cost_total_macs_forward(self) -> "Macs":
+    def _cost_total_macs_forward(self) -> Macs:
         """Total TRUE forward MACs over ops with a known MAC split."""
 
         return _doors.report()._trace_facts.cost_total_macs_forward(self)
 
     @property
-    def factcore(self) -> "Any":
+    def factcore(self) -> Any:
         """The ONE numbers substrate for this trace."""
 
         return _doors.report()._trace_facts.factcore(self)
 
     @property
-    def health_facts(self) -> "Any":
+    def health_facts(self) -> Any:
         """Normalized, serializable health observations."""
 
         return _doors.report()._trace_facts.health_facts(self)
 
     @property
-    def nonfinite_verdict(self) -> "str":
+    def nonfinite_verdict(self) -> str:
         """Three-state health verdict: found / checked_and_clean / not_checked."""
 
         return _doors.report()._trace_facts.nonfinite_verdict(self)
 
     @property
-    def unknown_flop_ops(self) -> "tuple[Any, ...]":
+    def unknown_flop_ops(self) -> tuple[Any, ...]:
         """Named ledger of ops with unknown FLOPs, grouped by op name."""
 
         return _doors.report()._trace_facts.unknown_flop_ops(self)
 
     @property
-    def compute_coverage(self) -> "dict[str, int]":
+    def compute_coverage(self) -> dict[str, int]:
         """Four-way compute coverage counts over every layer-list row."""
 
         return _doors.report()._trace_facts.compute_coverage(self)
 
     @property
-    def macs_unknown_split_ops(self) -> "tuple[str, ...]":
+    def macs_unknown_split_ops(self) -> tuple[str, ...]:
         """Labels of compute ops whose exact MAC split cannot be derived."""
 
         return _doors.report()._trace_facts.macs_unknown_split_ops(self)
 
     @property
-    def _cost_total_macs_backward(self) -> "Macs | None":
+    def _cost_total_macs_backward(self) -> Macs | None:
         """Backward MACs are not derivable and always ``None`` (estimates only)."""
 
         return None
 
     @property
-    def _cost_total_macs(self) -> "Macs | None":
+    def _cost_total_macs(self) -> Macs | None:
         """Total MACs are not derivable and always ``None`` (see total_macs_backward)."""
 
         return None
@@ -2291,42 +2290,42 @@ class Trace(TraceLike):
         return _doors.report()._trace_facts.cost_macs_by_kind(self)
 
     @property
-    def params(self) -> "ParamAccessor":
+    def params(self) -> ParamAccessor:
         """Access parameter metadata by address, short name, or index."""
         return self._param_logs
 
     @property
-    def _graph_tied_param_groups(self) -> "tuple[tuple[str, ...], ...]":
+    def _graph_tied_param_groups(self) -> tuple[tuple[str, ...], ...]:
         """Alias-address groups of parameters registered at more than one path."""
 
         return _trace_views.graph_tied_param_groups(self)
 
     @property
-    def ops(self) -> "TraceOpAccessor":
+    def ops(self) -> TraceOpAccessor:
         """Access per-invocation Op records by label or index."""
 
         return _trace_views.ops(self)
 
     @property
-    def transforms(self) -> "tuple[Op, ...]":
+    def transforms(self) -> tuple[Op, ...]:
         """Return transform-boundary operation records."""
 
         return _trace_views.transforms(self)
 
     @property
-    def model_profile(self) -> "ModelProfile":
+    def model_profile(self) -> ModelProfile:
         """Return a computed semantic I/O profile descriptor."""
 
         return _trace_profile.model_profile(self)
 
     def profile(
         self,
-        level: "Literal['op', 'module', 'call']" = "op",
+        level: Literal["op", "module", "call"] = "op",
         *,
-        sort_by: "Literal['time', 'flops', 'activation_memory', 'param_count']" = "time",
-        ascending: "bool" = False,
-        k: "int | None" = None,
-        group_by: "Literal['source_line'] | None" = None,
+        sort_by: Literal["time", "flops", "activation_memory", "param_count"] = "time",
+        ascending: bool = False,
+        k: int | None = None,
+        group_by: Literal["source_line"] | None = None,
     ) -> "ProfileReport":
         """Return a unified resource profile assembled from this trace."""
 
@@ -2334,12 +2333,12 @@ class Trace(TraceLike):
             self, level, sort_by=sort_by, ascending=ascending, k=k, group_by=group_by
         )
 
-    def sites(self) -> "Any":
+    def sites(self) -> Any:
         """Return the tabular view of this trace's structural sites."""
 
         return _trace_inventory.build_sites_table(self)
 
-    def bill_of_materials(self) -> "dict[str, Any]":
+    def bill_of_materials(self) -> dict[str, Any]:
         """Return the inventory of what this trace actually contains."""
 
         return _doors.report()._trace_facts.bill_of_materials(self)
@@ -2347,26 +2346,26 @@ class Trace(TraceLike):
     def explain(
         self,
         *,
-        audience: "Literal['researcher', 'practitioner', 'auto']" = "auto",
-        max_tokens: "int | None" = None,
+        audience: Literal["researcher", "practitioner", "auto"] = "auto",
+        max_tokens: int | None = None,
     ) -> "ExplainReport":
         """Explain this trace in plain language (DOCUMENTED-UNSTABLE)."""
 
         return _doors.report()._trace_facts.explain(self, audience=audience, max_tokens=max_tokens)
 
-    def capabilities(self) -> "Any":
+    def capabilities(self) -> Any:
         """Return the report-family capability card for THIS trace."""
 
         return _doors.report()._trace_facts.capabilities(self)
 
     def receptive_fields(
         self,
-        level: "Literal['op', 'layer', 'call', 'module']" = "op",
+        level: Literal["op", "layer", "call", "module"] = "op",
         *,
         input_op: "Op | None" = None,
         statuses: "Collection[ReceptiveFieldStatus] | None" = None,
-        sort_by: "str | None" = None,
-        ascending: "bool" = True,
+        sort_by: str | None = None,
+        ascending: bool = True,
         direction: "ReceptiveFieldDirection | str" = "receptive",
     ) -> "ReceptiveFieldProfile":
         """Return the trace-wide geometric receptive-field table."""
@@ -2383,12 +2382,12 @@ class Trace(TraceLike):
 
     def projective_fields(
         self,
-        level: "Literal['op', 'layer', 'call', 'module']" = "op",
+        level: Literal["op", "layer", "call", "module"] = "op",
         *,
         input_op: "Op | None" = None,
         statuses: "Collection[ReceptiveFieldStatus] | None" = None,
-        sort_by: "str | None" = None,
-        ascending: "bool" = True,
+        sort_by: str | None = None,
+        ascending: bool = True,
     ) -> "ReceptiveFieldProfile":
         """Return the trace-wide source-anchored projective-field table."""
 
@@ -2408,19 +2407,19 @@ class Trace(TraceLike):
         return self._module_logs
 
     @property
-    def module_collapse_order(self) -> "list[tuple[str, float]]":
+    def module_collapse_order(self) -> list[tuple[str, float]]:
         """Every module's smart-collapse priority (``Module.collapse_score``), highest first."""
 
         return _doors.visualization()._trace_collapse.module_collapse_order(self)
 
-    def collapse_order(self, mode: "Literal['auto', 'max']" = "auto") -> "list[tuple[str, float]]":
+    def collapse_order(self, mode: Literal["auto", "max"] = "auto") -> list[tuple[str, float]]:
         """Return smart-collapse ranking for a policy."""
 
         return _doors.visualization()._trace_collapse.collapse_order(self, mode)
 
     def collapse_plan(
         self,
-        mode: "Literal['auto', 'max'] | float" = "auto",
+        mode: Literal["auto", "max"] | float = "auto",
         context: "RenderContext | None" = None,
     ) -> "CollapsePlan":
         """Return the v2 diagnostic collapse plan for this trace."""
@@ -2432,18 +2431,18 @@ class Trace(TraceLike):
 
         return _doors.visualization()._trace_collapse.collapse_schedule(self, context)
 
-    def modules_with_facet(self, name: "str") -> "Iterator[Any]":
+    def modules_with_facet(self, name: str) -> Iterator[Any]:
         """Yield Modules whose semantic facet view has a facet available now."""
 
         return (module for module in self.modules if module.facets.has(name))
 
-    def attention_blocks(self) -> "Iterator[Any]":
+    def attention_blocks(self) -> Iterator[Any]:
         """Yield Modules with an available query-projection facet."""
 
         return self.modules_with_facet("q")
 
     @property
-    def module_calls(self) -> "TraceModuleCallAccessor":
+    def module_calls(self) -> TraceModuleCallAccessor:
         """Access per-invocation ModuleCall records by call label or index."""
 
         return _trace_views.module_calls(self)
@@ -2459,18 +2458,18 @@ class Trace(TraceLike):
 
         return self._root_call()
 
-    def walk_calls(self) -> "Iterator['ModuleCall']":
+    def walk_calls(self) -> Iterator["ModuleCall"]:
         """Yield every ModuleCall in call-tree depth-first order."""
 
         return _call_tree.walk_calls(self)
 
     def show_call_tree(
         self,
-        max_depth: "int | None" = None,
-        include_atomic: "bool" = True,
-        show_call_index: "bool" = True,
-        file: "TextIO | None" = None,
-    ) -> "None":
+        max_depth: int | None = None,
+        include_atomic: bool = True,
+        show_call_index: bool = True,
+        file: TextIO | None = None,
+    ) -> None:
         """Print this Trace's full ModuleCall tree as an ASCII tree."""
 
         return _call_tree.show_call_tree(self, max_depth, include_atomic, show_call_index, file)
@@ -2481,75 +2480,73 @@ class Trace(TraceLike):
         return cast("Module", self._module_logs["self"])
 
     @property
-    def num_edges(self) -> "int":
+    def num_edges(self) -> int:
         """Distinct edges in the per-pass Op graph, including boundary edges."""
 
         return _trace_views.num_edges(self)
 
     @property
-    def _graph_num_compute_edges(self) -> "int":
+    def _graph_num_compute_edges(self) -> int:
         """Distinct Op graph edges whose endpoints are both compute Ops."""
 
         return _trace_views.graph_num_compute_edges(self)
 
     @property
-    def _graph_num_buffer_edges(self) -> "int":
+    def _graph_num_buffer_edges(self) -> int:
         """Distinct Op graph edges with at least one buffer endpoint."""
 
         return _trace_views.graph_num_buffer_edges(self)
 
     @property
-    def _graph_num_layer_edges(self) -> "int":
+    def _graph_num_layer_edges(self) -> int:
         """Distinct edges in the aggregate Layer graph."""
 
         return _trace_views.graph_num_layer_edges(self)
 
     @property
-    def _autograd_num_backward_edges(self) -> "int | None":
+    def _autograd_num_backward_edges(self) -> int | None:
         """Distinct edges in the backward GradFn graph, or ``None`` if ungated."""
 
         return _trace_views.autograd_num_backward_edges(self)
 
     @property
-    def _graph_branching_factor(self) -> "float":
+    def _graph_branching_factor(self) -> float:
         """Mean fan-out: children (consumers) per compute Op."""
 
         return _trace_views.graph_branching_factor(self)
 
     @property
-    def _graph_max_in_degree(self) -> "int":
+    def _graph_max_in_degree(self) -> int:
         """Maximum number of parents over compute Ops."""
 
         return _trace_views.graph_max_in_degree(self)
 
     @property
-    def _graph_max_out_degree(self) -> "int":
+    def _graph_max_out_degree(self) -> int:
         """Maximum number of children over compute Ops."""
 
         return _trace_views.graph_max_out_degree(self)
 
     @property
-    def _autograd_intermediate_derived_grads(self) -> "IntermediateDerivedGradAccessor":
+    def _autograd_intermediate_derived_grads(self) -> None:
         """Access exact op-level derived gradient records, when a backend provides them."""
 
         return _trace_views.autograd_intermediate_derived_grads(self)
 
     @_autograd_intermediate_derived_grads.setter
-    def _autograd_intermediate_derived_grads(
-        self, value: "IntermediateDerivedGradAccessor"
-    ) -> "None":
+    def _autograd_intermediate_derived_grads(self, value: IntermediateDerivedGradAccessor) -> None:
         """Store exact op-level derived gradient records."""
 
         self.__dict__["_intermediate_derived_grads"] = value
 
     @property
-    def has_trainable_params(self) -> "bool":
+    def has_trainable_params(self) -> bool:
         """Whether this Trace contains at least one trainable parameter."""
 
         return self.num_params_trainable > 0
 
     @property
-    def has_frozen_params(self) -> "bool":
+    def has_frozen_params(self) -> bool:
         """Whether this Trace contains at least one frozen parameter."""
 
         return self.num_params_frozen > 0
@@ -2560,19 +2557,19 @@ class Trace(TraceLike):
         return self._buffer_accessor  # type: ignore[return-value]
 
     @property
-    def _graph_orphans(self) -> "OrphanAccessor":
+    def _graph_orphans(self) -> OrphanAccessor:
         """Access retained orphan island operations by raw or final label."""
 
         return _trace_views.graph_orphans(self)
 
     @property
-    def _autograd_grad_fns(self) -> "GradFnAccessor":
+    def _autograd_grad_fns(self) -> GradFnAccessor:
         """Access backward grad_fn_handle metadata by label, index, pass label, or substring."""
 
         return _trace_views.autograd_grad_fns(self)
 
     @property
-    def _autograd_grad_fn_calls(self) -> "TraceGradFnCallAccessor":
+    def _autograd_grad_fn_calls(self) -> TraceGradFnCallAccessor:
         """Access per-invocation GradFnCall records by qualified label or index."""
 
         return _trace_views.autograd_grad_fn_calls(self)
@@ -2589,13 +2586,13 @@ class Trace(TraceLike):
         return _trace_stats_grad_fn_site.grad_fn_site_summary(self)
 
     @property
-    def _autograd_backward_passes(self) -> "BackwardPassAccessor":
+    def _autograd_backward_passes(self) -> BackwardPassAccessor:
         """Access backward pass records by 0-based position or named pass number."""
 
         return _trace_views.autograd_backward_passes(self)
 
     @property
-    def _autograd_last_backward_pass(self) -> "BackwardPass | None":
+    def _autograd_last_backward_pass(self) -> BackwardPass | None:
         """Return the most recent backward pass record, if any."""
 
         backward_passes = self.autograd.backward_passes
@@ -2603,158 +2600,158 @@ class Trace(TraceLike):
             return None
         return backward_passes[-1]
 
-    def _sync_backward_projection_if_needed(self) -> "None":
+    def _sync_backward_projection_if_needed(self) -> None:
         """Synchronize lazy backward projections from runtime sidecar events."""
         return _doors.backends_torch()._trace_backward.sync_backward_projection_if_needed(self)
 
     @property
-    def saved_ops(self) -> "Accessor[Op]":
+    def saved_ops(self) -> Accessor[Op]:
         """Access Ops with saved activations."""
 
         return _trace_views.saved_ops(self)
 
     @property
-    def saved_grad_ops(self) -> "Accessor[Op]":
+    def saved_grad_ops(self) -> Accessor[Op]:
         """Access Ops with saved gradients."""
 
         return _trace_views.saved_grad_ops(self)
 
     @property
-    def saved_layers(self) -> "Accessor[Layer]":
+    def saved_layers(self) -> Accessor[Layer]:
         """Access Layers containing at least one Op with a saved activation."""
 
         return _trace_views.saved_layers(self)
 
     @property
-    def _layers_saved_grad(self) -> "Accessor[Layer]":
+    def _layers_saved_grad(self) -> Accessor[Layer]:
         """Access Layers containing at least one Op with a saved gradient."""
 
         return _trace_views.layers_saved_grad(self)
 
     @property
-    def saved_module_calls(self) -> "Accessor[Any]":
+    def saved_module_calls(self) -> Accessor[Any]:
         """Access ModuleCalls whose outputs include saved activations."""
 
         return self._module_calls_with_output_in(set(self.saved_ops.keys()))
 
-    def _module_calls_with_output_in(self, op_labels: "set[str]") -> "Accessor[Any]":
+    def _module_calls_with_output_in(self, op_labels: set[str]) -> Accessor[Any]:
         """Access ModuleCalls with at least one output Op among ``op_labels``."""
         return _trace_views.module_calls_with_output_in(self, op_labels)
 
     @property
-    def saved_modules(self) -> "Accessor[Any]":
+    def saved_modules(self) -> Accessor[Any]:
         """Access Modules with at least one saved-activation ModuleCall."""
 
         return _trace_views.saved_modules(self)
 
     @property
-    def saved_grad_module_calls(self) -> "Accessor[Any]":
+    def saved_grad_module_calls(self) -> Accessor[Any]:
         """Access ModuleCalls whose outputs include saved gradients."""
 
         return self._module_calls_with_output_in(set(self.saved_grad_ops.keys()))
 
     @property
-    def saved_grad_modules(self) -> "Accessor[Any]":
+    def saved_grad_modules(self) -> Accessor[Any]:
         """Access Modules with at least one saved-gradient ModuleCall."""
 
         return _trace_views.saved_grad_modules(self)
 
     @property
-    def _autograd_saved_grad_fn_calls(self) -> "Accessor[Any]":
+    def _autograd_saved_grad_fn_calls(self) -> Accessor[Any]:
         """Access GradFnCall records with saved gradient inputs or outputs."""
 
         return _trace_views.autograd_saved_grad_fn_calls(self)
 
     @property
-    def _autograd_saved_grad_fns(self) -> "GradFnAccessor":
+    def _autograd_saved_grad_fns(self) -> GradFnAccessor:
         """Access GradFns containing at least one saved GradFnCall."""
 
         return _trace_views.autograd_saved_grad_fns(self)
 
     @property
-    def compute_ops(self) -> "Accessor[Op]":
+    def compute_ops(self) -> Accessor[Op]:
         """Access Ops that are not graph-boundary sentinels."""
 
         return _trace_views.compute_ops(self)
 
     @property
-    def _layers_compute(self) -> "Accessor[Layer]":
+    def _layers_compute(self) -> Accessor[Layer]:
         """Access Layers whose representative Op is not a boundary sentinel."""
 
         return _trace_views.layers_compute(self)
 
     @property
-    def input_ops(self) -> "Accessor[Op]":
+    def input_ops(self) -> Accessor[Op]:
         """Access flat input-boundary Ops."""
 
         return _trace_views.input_ops(self)
 
     @property
-    def num_input_layers(self) -> "int":
+    def num_input_layers(self) -> int:
         """Number of distinct input-boundary Layers (a multi-pass Layer counts once)."""
 
         return len(dict.fromkeys(self.input_layers))
 
     @property
-    def output_ops(self) -> "Accessor[Op]":
+    def output_ops(self) -> Accessor[Op]:
         """Access flat output-boundary Ops."""
 
         return _trace_views.output_ops(self)
 
     @property
-    def num_output_layers(self) -> "int":
+    def num_output_layers(self) -> int:
         """Number of distinct output-boundary Layers (a multi-pass Layer counts once)."""
 
         return len(dict.fromkeys(self.output_layers))
 
     @property
-    def num_buffer_layers(self) -> "int":
+    def num_buffer_layers(self) -> int:
         """Number of distinct buffer-boundary Layers."""
 
         return len(dict.fromkeys(self.buffer_layers))
 
     @property
-    def buffer_read_ops(self) -> "list[str]":
+    def buffer_read_ops(self) -> list[str]:
         """Labels for buffer Ops that read registered-buffer values into the graph."""
 
         return _trace_views.buffer_read_ops(self)
 
     @property
-    def buffer_write_ops(self) -> "list[str]":
+    def buffer_write_ops(self) -> list[str]:
         """Labels for buffer Ops that record registered-buffer write events."""
 
         return _trace_views.buffer_write_ops(self)
 
     @property
-    def _layers_internal_source(self) -> "Accessor[Layer]":
+    def _layers_internal_source(self) -> Accessor[Layer]:
         """Access Layers representing internal-source positions."""
 
         return _trace_views.layers_internal_source(self)
 
     @property
-    def _layers_internal_sink(self) -> "Accessor[Layer]":
+    def _layers_internal_sink(self) -> Accessor[Layer]:
         """Access Layers representing internal-sink positions."""
 
         return _trace_views.layers_internal_sink(self)
 
     @property
-    def num_uncalled_modules(self) -> "int | None":
+    def num_uncalled_modules(self) -> int | None:
         """Number of registered source-model modules not called in this Trace."""
 
         return _trace_views.num_uncalled_modules(self)
 
     @property
-    def ops_with_params(self) -> "Accessor[Op]":
+    def ops_with_params(self) -> Accessor[Op]:
         """Access Ops that use at least one parameter tensor."""
 
         return _trace_views.ops_with_params(self)
 
-    def between(self, sources: "Any", sinks: "Any") -> "TraceSlice":
+    def between(self, sources: Any, sinks: Any) -> "TraceSlice":
         """Return the sub-DAG view carrying influence from sources to sinks."""
 
         return _doors.trace_slice().build_slice_between(self, sources, sinks)
 
-    def subgraph(self, selection: "Any") -> "TraceSlice":
+    def subgraph(self, selection: Any) -> "TraceSlice":
         """Return the sub-DAG view of any ACT region of this trace."""
 
         return _doors.trace_slice().build_slice_from_selection(self, selection)
@@ -2765,25 +2762,25 @@ class Trace(TraceLike):
         return stack_traces(self, selector=selector)
 
     @property
-    def injected_ops(self) -> "tuple[Any, ...]":
+    def injected_ops(self) -> tuple[Any, ...]:
         """Injected-op records from ``log_injections=True`` hooks."""
 
         return _doors.intervention()._trace_edits.injected_ops(self)
 
     @property
-    def model_ops(self) -> "tuple[Any, ...]":
+    def model_ops(self) -> tuple[Any, ...]:
         """The MODEL half of the injections query split."""
 
         return tuple(self._layer_list)
 
     def save_intervention(
         self,
-        path: "str | Path",
+        path: str | Path,
         *,
-        level: "str" = "executable_with_callables",
-        allow_direct_writes: "bool" = False,
-        overwrite: "bool" = False,
-    ) -> "None":
+        level: str = "executable_with_callables",
+        allow_direct_writes: bool = False,
+        overwrite: bool = False,
+    ) -> None:
         """Save this log's intervention recipe to a ``.tlspec`` directory."""
 
         return _doors.intervention()._trace_edits.save_intervention(
@@ -2791,24 +2788,24 @@ class Trace(TraceLike):
         )
 
     @cached_property
-    def recipe(self) -> "FrozenInterventionSpec":
+    def recipe(self) -> FrozenInterventionSpec:
         """Return an immutable snapshot of this log's intervention recipe."""
 
         return self._ensure_intervention_spec().freeze()
 
-    def _history_site_payload(self, site: "Any") -> "Any":
+    def _history_site_payload(self, site: Any) -> Any:
         """Forward to ``_trace_intervention_records.history_site_payload``."""
 
         return _trace_intervention_records.history_site_payload(site)
 
     def set(
         self,
-        site: "Any",
-        value: "Any",
+        site: Any,
+        value: Any,
         *,
-        direction: "str" = "forward",
-        strict: "bool" = False,
-        confirm_mutation: "bool" = False,
+        direction: str = "forward",
+        strict: bool = False,
+        confirm_mutation: bool = False,
     ) -> "Trace":
         """Set a site out recipe without propagating it."""
 
@@ -2818,13 +2815,13 @@ class Trace(TraceLike):
 
     def attach_hooks(
         self,
-        hooks_or_site: "Any",
-        hook: "Any" = None,
-        *extra_hooks: "Any",
-        strict: "bool" = False,
-        prepend: "bool" = False,
-        confirm_mutation: "bool" = False,
-    ) -> "Any":
+        hooks_or_site: Any,
+        hook: Any = None,
+        *extra_hooks: Any,
+        strict: bool = False,
+        prepend: bool = False,
+        confirm_mutation: bool = False,
+    ) -> Any:
         """Attach sticky hooks to the current intervention spec."""
 
         return _doors.intervention()._trace_hooks.attach_hooks(
@@ -2837,12 +2834,12 @@ class Trace(TraceLike):
             confirm_mutation=confirm_mutation,
         )
 
-    def _refuse_chunked_batch_coupling(self, entries: "list[Any]") -> "None":
+    def _refuse_chunked_batch_coupling(self, entries: list[Any]) -> None:
         """Forward to ``_doors.intervention()._trace_edits.refuse_chunked_batch_coupling``."""
 
         return _doors.intervention()._trace_edits.refuse_chunked_batch_coupling(self, entries)
 
-    def remove(self) -> "None":
+    def remove(self) -> None:
         """Remove the most recent legacy-returned hook attachment."""
 
         return _doors.intervention()._trace_edits.remove(self)
@@ -2852,18 +2849,18 @@ class Trace(TraceLike):
 
         return self
 
-    def __exit__(self, exc_type: "Any", exc: "Any", traceback: "Any") -> "None":
+    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
         """Clean up a legacy scoped hook attachment."""
 
         self.remove()
 
     def clear_edits(
         self,
-        site: "Any" = None,
-        handle: "Any" = None,
+        site: Any = None,
+        handle: Any = None,
         *,
-        strict: "bool" = False,
-        confirm_mutation: "bool" = False,
+        strict: bool = False,
+        confirm_mutation: bool = False,
     ) -> "Trace":
         """Detach sticky hooks by site or handle."""
 
@@ -2871,7 +2868,7 @@ class Trace(TraceLike):
             self, site, handle, strict=strict, confirm_mutation=confirm_mutation
         )
 
-    def clear_hooks(self, *, confirm_mutation: "bool" = False) -> "Trace":
+    def clear_hooks(self, *, confirm_mutation: bool = False) -> "Trace":
         """Clear all sticky hooks from the current intervention spec."""
 
         return _doors.intervention()._trace_hooks.clear_hooks(
@@ -2879,14 +2876,14 @@ class Trace(TraceLike):
         )
 
     @property
-    def _graph_edges(self) -> "tuple[Any, ...]":
+    def _graph_edges(self) -> tuple[Any, ...]:
         """Forward to ``_doors.intervention()._trace_edits.graph_edges``."""
 
         return _doors.intervention()._trace_edits.graph_edges(self)
 
     def _settle_selection_do(
-        self, txn: "_DoTransaction", selected_engine: "str", mutation_kind: "str"
-    ) -> "None":
+        self, txn: "_DoTransaction", selected_engine: str, mutation_kind: str
+    ) -> None:
         """Forward to ``_doors.intervention()._trace_edits.settle_selection_do``."""
 
         return _doors.intervention()._trace_edits.settle_selection_do(
@@ -2895,13 +2892,13 @@ class Trace(TraceLike):
 
     def do(
         self,
-        hooks_or_site: "Any",
-        value_or_hook: "Any" = None,
+        hooks_or_site: Any,
+        value_or_hook: Any = None,
         *,
-        model: "nn.Module | None" = None,
-        inputs: "Any" = None,
-        intervention: "InterventionOptions | None" = None,
-        loss: "Callable[['Trace'], torch.Tensor] | None" = None,
+        model: nn.Module | None = None,
+        inputs: Any = None,
+        intervention: InterventionOptions | None = None,
+        loss: Callable[["Trace"], torch.Tensor] | None = None,
     ) -> "Trace":
         """Apply an intervention and dispatch to replay, rerun, or set-only."""
 
@@ -2917,12 +2914,12 @@ class Trace(TraceLike):
 
     def _do_with_options(
         self,
-        hooks_or_site: "Any",
-        value_or_hook: "Any",
+        hooks_or_site: Any,
+        value_or_hook: Any,
         *,
-        model: "nn.Module | None",
-        x: "Any",
-        intervention_options: "InterventionOptions",
+        model: nn.Module | None,
+        x: Any,
+        intervention_options: InterventionOptions,
     ) -> "Trace":
         """Forward to ``_doors.intervention()._trace_edits.do_with_options``."""
 
@@ -2936,26 +2933,26 @@ class Trace(TraceLike):
         )
 
     @property
-    def armed_edits(self) -> "tuple[Any, ...]":
+    def armed_edits(self) -> tuple[Any, ...]:
         """The gradient rules in this trace's recipe, as ``Rule`` clauses."""
 
         return armed_edits(self)
 
-    def _armed_summary_line(self) -> "str | None":
+    def _armed_summary_line(self) -> str | None:
         """Summary text while an armed gradient rule has not fired (or ``None``)."""
 
         return armed_summary_line(self)
 
     def _record_do_intervention_event(
         self,
-        txn: "_DoTransaction",
+        txn: _DoTransaction,
         *,
-        status: "str | None",
-        error: "str | None" = None,
-        staged_only: "bool" = False,
-        extra_fields: "dict[str, Any] | None" = None,
-        event_row: "bool" = False,
-    ) -> "dict[str, Any]":
+        status: str | None,
+        error: str | None = None,
+        staged_only: bool = False,
+        extra_fields: dict[str, Any] | None = None,
+        event_row: bool = False,
+    ) -> dict[str, Any]:
         """Forward to ``_doors.intervention()._trace_edits.record_do_intervention_event``."""
 
         return _doors.intervention()._trace_edits.record_do_intervention_event(
@@ -2968,37 +2965,37 @@ class Trace(TraceLike):
             event_row=event_row,
         )
 
-    def fork(self, name: "str | None" = None) -> "Trace":
+    def fork(self, name: str | None = None) -> "Trace":
         """Create a copy-on-write intervention fork of this log."""
 
         return _fork_lineage.fork_trace(self, name)
 
-    def _record_operation(self, op: "str", **payload: "Any") -> "None":
+    def _record_operation(self, op: str, **payload: Any) -> None:
         """Forward to ``_trace_intervention_records.record_operation``."""
 
         return _trace_intervention_records.record_operation(self, op, **payload)
 
-    def _warn_if_root_mutation(self, *, confirm_mutation: "bool") -> "None":
+    def _warn_if_root_mutation(self, *, confirm_mutation: bool) -> None:
         """Forward to ``_doors.intervention()._trace_edits.warn_if_root_mutation``."""
 
         return _doors.intervention()._trace_edits.warn_if_root_mutation(
             self, confirm_mutation=confirm_mutation
         )
 
-    def _select_do_engine(self, engine: "str", *, model: "nn.Module | None", x: "Any") -> "str":
+    def _select_do_engine(self, engine: str, *, model: nn.Module | None, x: Any) -> str:
         """Forward to ``_doors.intervention()._trace_edits.select_do_engine``."""
 
         return _doors.intervention()._trace_edits.select_do_engine(self, engine, model=model, x=x)
 
     def _apply_do_mutation(
         self,
-        hooks_or_site: "Any",
-        value_or_hook: "Any",
+        hooks_or_site: Any,
+        value_or_hook: Any,
         *,
-        engine: "str",
-        strict: "bool",
-        confirm_mutation: "bool",
-    ) -> "tuple[str, tuple[str, ...]]":
+        engine: str,
+        strict: bool,
+        confirm_mutation: bool,
+    ) -> tuple[str, tuple[str, ...]]:
         """Forward to ``_doors.intervention()._trace_edits.apply_do_mutation``."""
 
         return _doors.intervention()._trace_edits.apply_do_mutation(
@@ -3011,20 +3008,20 @@ class Trace(TraceLike):
         )
 
     @staticmethod
-    def _is_selection_batch(value: "Any") -> "bool":
+    def _is_selection_batch(value: Any) -> bool:
         """Forward to ``_doors.intervention()._trace_selection_edits.is_selection_batch``."""
 
         return _doors.intervention()._trace_selection_edits.is_selection_batch(value)
 
     @staticmethod
-    def _selection_batch_kind(selection: "Any") -> "str":
+    def _selection_batch_kind(selection: Any) -> str:
         """Forward to ``_doors.intervention()._trace_selection_edits.selection_batch_kind``."""
 
         return _doors.intervention()._trace_selection_edits.selection_batch_kind(selection)
 
     def _apply_selection_batch_do(
-        self, pairs: "Any", *, engine: "str", strict: "bool"
-    ) -> "tuple[str, tuple[str, ...]]":
+        self, pairs: Any, *, engine: str, strict: bool
+    ) -> tuple[str, tuple[str, ...]]:
         """Forward to ``_doors.intervention()._trace_selection_edits.apply_selection_batch_do``."""
 
         return _doors.intervention()._trace_selection_edits.apply_selection_batch_do(
@@ -3032,8 +3029,8 @@ class Trace(TraceLike):
         )
 
     def _batch_act_plan(
-        self, index: "int", selection: "Any", edit: "Any"
-    ) -> "tuple[Any, list[dict[str, Any]], dict[str, Any]]":
+        self, index: int, selection: Any, edit: Any
+    ) -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
         """Forward to ``_doors.intervention()._trace_selection_edits.batch_act_plan``."""
 
         return _doors.intervention()._trace_selection_edits.batch_act_plan(
@@ -3041,8 +3038,8 @@ class Trace(TraceLike):
         )
 
     def _apply_cross_kind_batch_do(
-        self, pairs: "list[tuple[Any, Any]]", kinds: "list[str]", *, engine: "str", strict: "bool"
-    ) -> "tuple[str, tuple[str, ...]]":
+        self, pairs: list[tuple[Any, Any]], kinds: list[str], *, engine: str, strict: bool
+    ) -> tuple[str, tuple[str, ...]]:
         """Forward to ``_doors.intervention()._trace_selection_edits.apply_cross_kind_batch_do``."""
 
         return _doors.intervention()._trace_selection_edits.apply_cross_kind_batch_do(
@@ -3050,8 +3047,8 @@ class Trace(TraceLike):
         )
 
     def _apply_selection_do(
-        self, selection: "Any", edit: "Any", *, engine: "str", strict: "bool"
-    ) -> "tuple[str, tuple[str, ...]]":
+        self, selection: Any, edit: Any, *, engine: str, strict: bool
+    ) -> tuple[str, tuple[str, ...]]:
         """Forward to ``_doors.intervention()._trace_selection_edits.apply_selection_do``."""
 
         return _doors.intervention()._trace_selection_edits.apply_selection_do(
@@ -3059,8 +3056,8 @@ class Trace(TraceLike):
         )
 
     def _attach_selection_plan_hooks(
-        self, hook_items: "list[dict[str, Any]]", *, strict: "bool"
-    ) -> "tuple[str, ...]":
+        self, hook_items: list[dict[str, Any]], *, strict: bool
+    ) -> tuple[str, ...]:
         """Forward to ``_doors.intervention()._trace_selection_edits.attach_selection_plan_hooks``."""
 
         return _doors.intervention()._trace_selection_edits.attach_selection_plan_hooks(
@@ -3068,8 +3065,8 @@ class Trace(TraceLike):
         )
 
     def _apply_selection_edge_do(
-        self, selection: "Any", lifted: "Any", edit: "Any", *, engine: "str", strict: "bool"
-    ) -> "str":
+        self, selection: Any, lifted: Any, edit: Any, *, engine: str, strict: bool
+    ) -> str:
         """Forward to ``_doors.intervention()._trace_selection_edits.apply_selection_edge_do``."""
 
         return _doors.intervention()._trace_selection_edits.apply_selection_edge_do(
@@ -3077,83 +3074,83 @@ class Trace(TraceLike):
         )
 
     def _apply_selection_param_do(
-        self, selection: "Any", lifted: "Any", edit: "Any", *, engine: "str", strict: "bool"
-    ) -> "str":
+        self, selection: Any, lifted: Any, edit: Any, *, engine: str, strict: bool
+    ) -> str:
         """Forward to ``_doors.intervention()._trace_selection_edits.apply_selection_param_do``."""
 
         return _doors.intervention()._trace_selection_edits.apply_selection_param_do(
             self, selection, lifted, edit, engine=engine, strict=strict
         )
 
-    def _apply_leaf_selection_edits(self, leaf_items: "list[dict[str, Any]]") -> "None":
+    def _apply_leaf_selection_edits(self, leaf_items: list[dict[str, Any]]) -> None:
         """Forward to ``_doors.intervention()._trace_selection_edits.apply_leaf_selection_edits``."""
 
         return _doors.intervention()._trace_selection_edits.apply_leaf_selection_edits(
             self, leaf_items
         )
 
-    def _validate_supplied_model_matches_capture(self, model: "nn.Module") -> "None":
+    def _validate_supplied_model_matches_capture(self, model: nn.Module) -> None:
         """Forward to ``_doors.intervention()._trace_edits.validate_supplied_model_matches_capture``."""
 
         return _doors.intervention()._trace_edits.validate_supplied_model_matches_capture(
             self, model
         )
 
-    def _fork_trace(self, *, name: "str | None") -> "Trace":
+    def _fork_trace(self, *, name: str | None) -> "Trace":
         """Build a copy-on-write fork of this Trace (the M11 builder)."""
 
         return build_fork(self, name=name)
 
-    def _next_fork_name(self) -> "str":
+    def _next_fork_name(self) -> str:
         """Forward to ``_fork_lineage.next_fork_name``."""
 
         return _fork_lineage.next_fork_name(self)
 
-    def _rebind_fork_owner_refs(self) -> "None":
+    def _rebind_fork_owner_refs(self) -> None:
         """Forward to ``_fork_lineage.rebind_fork_owner_refs``."""
 
         return _fork_lineage.rebind_fork_owner_refs(self)
 
-    def _recipe_is_clean(self) -> "bool":
+    def _recipe_is_clean(self) -> bool:
         """Forward to ``_trace_intervention_records.recipe_is_clean``."""
 
         return _trace_intervention_records.recipe_is_clean(self)
 
-    def _ensure_intervention_spec(self) -> "InterventionSpec":
+    def _ensure_intervention_spec(self) -> InterventionSpec:
         """Forward to ``intervention._trace_edits.ensure_intervention_spec``."""
 
         return _doors.intervention()._trace_edits.ensure_intervention_spec(self)
 
-    def _mark_intervention_spec_mutated(self, *, outs_stale: "bool" = True) -> "None":
+    def _mark_intervention_spec_mutated(self, *, outs_stale: bool = True) -> None:
         """Forward to ``_trace_intervention_records.mark_intervention_spec_mutated``."""
 
         return _trace_intervention_records.mark_intervention_spec_mutated(
             self, outs_stale=outs_stale
         )
 
-    def _validate_intervention_site(self, site: "Any", *, strict: "bool") -> "None":
+    def _validate_intervention_site(self, site: Any, *, strict: bool) -> None:
         """Forward to ``_doors.intervention()._trace_edits.validate_intervention_site``."""
 
         return _doors.intervention()._trace_edits.validate_intervention_site(
             self, site, strict=strict
         )
 
-    def _target_spec_from_site(self, site: "Any", *, strict: "bool") -> "TargetSpec":
+    def _target_spec_from_site(self, site: Any, *, strict: bool) -> TargetSpec:
         """Forward to ``_doors.intervention()._trace_edits.target_spec_from_site``."""
 
         return _doors.intervention()._trace_edits.target_spec_from_site(self, site, strict=strict)
 
     def save_new_outs(
         self,
-        model: "torch.nn.Module",
-        input_args: "torch.Tensor | list[Any]",
-        input_kwargs: "dict[Any, Any] | None" = None,
-        layers_to_save: "str | list[str]" = "all",
-        grad_layers_to_save: "str | list[str] | None" = "all",
-        seed: "int | None" = None,
-        backward_ready: "bool | None" = None,
-        _run_until_plan: "Any | None" = None,
-    ) -> "None":
+        model: torch.nn.Module,
+        input_args: torch.Tensor | list[Any],
+        input_kwargs: dict[Any, Any] | None = None,
+        layers_to_save: str | list[str] = "all",
+        grad_layers_to_save: str | list[str] | None = "all",
+        seed: int | None = None,
+        backward_ready: bool | None = None,
+        _run_until_plan: Any | None = None,
+    ) -> None:
         """Re-run the model with new inputs, saving only outs."""
         return _doors.validation()._trace_checks.save_new_outs(
             self,
@@ -3169,10 +3166,10 @@ class Trace(TraceLike):
 
     def validate_forward_pass(
         self,
-        ground_truth_output_tensors: "list[torch.Tensor] | torch.Tensor",
-        verbose: "bool" = False,
-        validate_metadata: "bool" = True,
-    ) -> "bool | 'ValidationStatus'":
+        ground_truth_output_tensors: list[torch.Tensor] | torch.Tensor,
+        verbose: bool = False,
+        validate_metadata: bool = True,
+    ) -> Union[bool, "ValidationStatus"]:
         """Validate saved outs against ground-truth model outputs."""
         return _doors.validation()._trace_checks.validate_forward_pass(
             self, ground_truth_output_tensors, verbose=verbose, validate_metadata=validate_metadata
@@ -3184,36 +3181,36 @@ class Trace(TraceLike):
         return _doors.validation()._trace_checks.validation_replay_status(self)
 
     @property
-    def is_pristine(self) -> "bool | None":
+    def is_pristine(self) -> bool | None:
         """Whether nothing ever intervened on this trace, read from its saved evidence."""
 
         return derive_pristine(self)
 
-    def push(self, replay: "ReplayOptions | None" = None) -> "Trace":
+    def push(self, replay: ReplayOptions | None = None) -> "Trace":
         """Push the edit downstream through the recorded graph (DAG replay)."""
         return _doors.intervention()._trace_run.push(self, replay=replay)
 
-    def push_from(self, site: "Any", replay: "ReplayOptions | None" = None) -> "Trace":
+    def push_from(self, site: Any, replay: ReplayOptions | None = None) -> "Trace":
         """Push downstream from a pre-mutated site."""
         return _doors.intervention()._trace_run.push_from(self, site, replay=replay)
 
     def run(
         self,
-        model: "Any" = None,
-        x: "Any" = None,
+        model: Any = None,
+        x: Any = None,
         *,
-        inputs: "Any | MissingType" = MISSING,
-        seed: "int | None" = None,
-        fast: "bool" = False,
-        carry_state: "bool" = False,
-        until: "Any" = None,
-        save: "Any" = None,
-        on_divergence: "Literal['raise', 'return']" = "raise",
-        chunk_paths: "Any | None" = None,
-        replay: "ReplayOptions | None" = None,
-        input_transform: "Callable[[Any], Any] | bool | object" = _USE_STORED_TRANSFORM,
-        output_transform: "Callable[[Any], Any] | bool | object" = _USE_STORED_TRANSFORM,
-        on_zero_fire: "str | MissingType" = MISSING,
+        inputs: Any | MissingType = MISSING,
+        seed: int | None = None,
+        fast: bool = False,
+        carry_state: bool = False,
+        until: Any = None,
+        save: Any = None,
+        on_divergence: Literal["raise", "return"] = "raise",
+        chunk_paths: Any | None = None,
+        replay: ReplayOptions | None = None,
+        input_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
+        output_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
+        on_zero_fire: str | MissingType = MISSING,
     ) -> "Trace | RunResult":
         """Execute this Trace through its live or loaded provider."""
         return _doors.intervention()._trace_run.run(
@@ -3234,21 +3231,21 @@ class Trace(TraceLike):
             on_zero_fire=on_zero_fire,
         )
 
-    def check_metadata_invariants(self) -> "bool":
+    def check_metadata_invariants(self) -> bool:
         """Run metadata invariant checks on this completed model log."""
         return _doors.validation()._trace_checks.check_metadata_invariants(self)
 
-    def cleanup(self) -> "None":
+    def cleanup(self) -> None:
         """Delete log data, break cycles, and free cached GPU memory."""
         return cleanup(self)
 
-    def _release_param_refs(self, *, allow_iter_rehydrate: "bool" = False) -> "None":
+    def _release_param_refs(self, *, allow_iter_rehydrate: bool = False) -> None:
         """Release live ``nn.Parameter`` references held by ParamLogs."""
         return release_param_refs(self, allow_iter_rehydrate=allow_iter_rehydrate)
 
     def _postprocess(
-        self, output_tensors: "list[torch.Tensor]", output_tensor_addresses: "list[str]"
-    ) -> "None":
+        self, output_tensors: list[torch.Tensor], output_tensor_addresses: list[str]
+    ) -> None:
         """Run postprocessing on a completed raw capture pass."""
         from .._postprocess import postprocess as _impl
 
@@ -3264,15 +3261,15 @@ class Trace(TraceLike):
 
     def _run_and_log_inputs_through_model(
         self,
-        model: "torch.nn.Module",
-        input_args: "torch.Tensor | list[Any]",
-        input_kwargs: "dict[Any, Any] | None" = None,
-        layers_to_save: "str | list[str | int] | None" = "all",
-        grad_layers_to_save: "str | list[str | int] | None" = "all",
-        random_seed: "int | None" = None,
-        postprocess: "bool" = True,
-        reservation_resume: "object | None" = None,
-    ) -> "Any":
+        model: torch.nn.Module,
+        input_args: torch.Tensor | list[Any],
+        input_kwargs: dict[Any, Any] | None = None,
+        layers_to_save: str | list[str | int] | None = "all",
+        grad_layers_to_save: str | list[str | int] | None = "all",
+        random_seed: int | None = None,
+        postprocess: bool = True,
+        reservation_resume: object | None = None,
+    ) -> Any:
         """Run a forward pass and capture it into this model log."""
         from .._capture.run import run_and_log_inputs_through_model as _impl
 
@@ -3288,29 +3285,29 @@ class Trace(TraceLike):
             reservation_resume=reservation_resume,
         )
 
-    def log_backward(self, loss: "torch.Tensor", **backward_kwargs: "Any") -> "Trace":
+    def log_backward(self, loss: torch.Tensor, **backward_kwargs: Any) -> "Trace":
         """Run backward from ``loss`` while capturing first-class backward metadata."""
         return _doors.backends_torch()._trace_backward.log_backward(self, loss, **backward_kwargs)
 
-    def backward(self, loss: "torch.Tensor", **backward_kwargs: "Any") -> "Trace":
+    def backward(self, loss: torch.Tensor, **backward_kwargs: Any) -> "Trace":
         """Run backward from ``loss`` and populate this Trace with backward metadata."""
 
         return self.log_backward(loss, **backward_kwargs)
 
-    def capture_backward(self) -> "Any":
+    def capture_backward(self) -> Any:
         """Return a context manager that captures user-managed backward calls."""
         return _doors.backends_torch()._trace_backward.capture_backward(self)
 
-    def disarm_triggers(self) -> "None":
+    def disarm_triggers(self) -> None:
         """Detach this Trace from global autograd backward interception."""
         _doors.intervention()._trace_run.disarm_triggers(self)
 
     def _remove_log_entry(
         self,
-        log_entry: "Op",
-        remove_references: "bool" = True,
-        replacement_labels: "dict[str, str] | None" = None,
-    ) -> "None":
+        log_entry: Op,
+        remove_references: bool = True,
+        replacement_labels: dict[str, str] | None = None,
+    ) -> None:
         """Remove a single layer-pass entry and scrub graph references."""
         return remove_log_entry(
             self,
@@ -3321,10 +3318,10 @@ class Trace(TraceLike):
 
     def _batch_remove_log_entries(
         self,
-        entries_to_remove: "Iterable[Op]",
-        remove_references: "bool" = True,
-        replacement_labels: "dict[str, str] | None" = None,
-    ) -> "None":
+        entries_to_remove: Iterable[Op],
+        remove_references: bool = True,
+        replacement_labels: dict[str, str] | None = None,
+    ) -> None:
         """Remove multiple layer-pass entries using single-pass filtering."""
         return batch_remove_log_entries(
             self,
@@ -3334,25 +3331,25 @@ class Trace(TraceLike):
         )
 
     @property
-    def logged_values(self) -> "dict[str, Any]":
+    def logged_values(self) -> dict[str, Any]:
         """Return values recorded via ``log_value`` during this capture."""
 
         values = (getattr(self, "annotations", {}) or {}).get("logged_values", {})
         return dict(values) if isinstance(values, dict) else {}
 
-    def to_agent_json(self, *, max_ops: "int | None" = None) -> "dict[str, Any]":
+    def to_agent_json(self, *, max_ops: int | None = None) -> dict[str, Any]:
         """Return a self-describing machine-readable dump of this trace."""
 
         return _doors.report()._agent_json.build_agent_json(self, max_ops=max_ops)
 
-    def _attach_dataframe_honesty(self, frame: "Any") -> "Any":
+    def _attach_dataframe_honesty(self, frame: Any) -> Any:
         """Stamp ``frame.attrs`` with this trace's capture-honesty facts."""
 
         from .._capture_honesty import attach_dataframe_honesty
 
         return attach_dataframe_honesty(frame, self)
 
-    def to_pandas(self, include_decoded_output_summary: "bool" = False) -> "pd.DataFrame":
+    def to_pandas(self, include_decoded_output_summary: bool = False) -> "pd.DataFrame":
         """Return a dataframe containing one row per layer pass."""
 
         return _doors.export()._trace_tables.to_pandas(
@@ -3361,12 +3358,12 @@ class Trace(TraceLike):
 
     def decode_output(
         self,
-        k: "int | None" = None,
+        k: int | None = None,
         *,
-        style: "str | None" = None,
-        head: "str | None" = None,
-        tokenizer: "Any | None" = None,
-    ) -> "Any":
+        style: str | None = None,
+        head: str | None = None,
+        tokenizer: Any | None = None,
+    ) -> Any:
         """Return decoded output rows: the captured rows, or a decode on demand."""
 
         return _doors.export()._trace_tables.decode_output(
@@ -3375,11 +3372,11 @@ class Trace(TraceLike):
 
     def output_table(
         self,
-        k: "int" = 5,
-        batch_items: "int | Sequence[int] | None" = None,
+        k: int = 5,
+        batch_items: int | Sequence[int] | None = None,
         *,
-        style: "str | None" = None,
-        head: "str | None" = None,
+        style: str | None = None,
+        head: str | None = None,
     ) -> "pd.DataFrame":
         """Return decoded output as a batch top-k dataframe."""
 
@@ -3387,64 +3384,64 @@ class Trace(TraceLike):
             self, k=k, batch_items=batch_items, style=style, head=head
         )
 
-    def show(self, kind: "str | None" = None, **kwargs: "Any") -> "str | None":
+    def show(self, kind: str | None = None, **kwargs: Any) -> str | None:
         """Render this trace using a lightweight notebook-friendly dispatcher."""
 
         return _doors.visualization()._trace_draw.show(self, kind=kind, **kwargs)
 
     def draw(
         self,
-        view: "VisModeLiteral | MissingType" = MISSING,
-        depth: "int | MissingType" = MISSING,
-        renderer: "VisRendererLiteral | MissingType" = MISSING,
-        layout: "VisNodePlacementLiteral | MissingType" = MISSING,
-        node_style: "VisNodeModeLiteral | MissingType" = MISSING,
-        vis_mode: "VisModeLiteral" = "unrolled",
-        vis_call_depth: "int" = 1000,
-        path: "str | None" = None,
-        vis_graph_overrides: "dict[str, Any] | None" = None,
+        view: VisModeLiteral | MissingType = MISSING,
+        depth: int | MissingType = MISSING,
+        renderer: VisRendererLiteral | MissingType = MISSING,
+        layout: VisNodePlacementLiteral | MissingType = MISSING,
+        node_style: VisNodeModeLiteral | MissingType = MISSING,
+        vis_mode: VisModeLiteral = "unrolled",
+        vis_call_depth: int = 1000,
+        path: str | None = None,
+        vis_graph_overrides: dict[str, Any] | None = None,
         module: "Module | str | None" = None,
-        node_mode: "VisNodeModeLiteral" = "default",
-        node_spec_fn: "Callable[..., Any] | None" = None,
-        collapsed_node_spec_fn: "Callable[..., Any] | None" = None,
-        collapse_fn: "Callable[..., Any] | None" = None,
-        collapse: "CollapseLiteral" = "none",
-        fold_repeats: "FoldRepeatsLiteral" = None,
-        fold_patterns: "Any" = None,
-        skip_fn: "Callable[..., Any] | None" = None,
-        vis_edge_overrides: "dict[str, Any] | None" = None,
-        vis_grad_edge_overrides: "dict[str, Any] | None" = None,
-        vis_module_overrides: "dict[str, Any] | None" = None,
-        vis_save_only: "bool" = False,
-        file_format: "str" = "pdf",
-        show_buffers: "BufferVisibilityLiteral" = "meaningful",
-        direction: "VisDirectionLiteral" = "bottomup",
-        vis_node_placement: "VisNodePlacementLiteral" = "auto",
-        vis_renderer: "VisRendererLiteral" = "graphviz",
-        theme: "str" = "torchlens",
-        vis_intervention_mode: "VisInterventionModeLiteral" = "node_mark",
-        vis_show_cone: "bool" = False,
+        node_mode: VisNodeModeLiteral = "default",
+        node_spec_fn: Callable[..., Any] | None = None,
+        collapsed_node_spec_fn: Callable[..., Any] | None = None,
+        collapse_fn: Callable[..., Any] | None = None,
+        collapse: CollapseLiteral = "none",
+        fold_repeats: FoldRepeatsLiteral = None,
+        fold_patterns: Any = None,
+        skip_fn: Callable[..., Any] | None = None,
+        vis_edge_overrides: dict[str, Any] | None = None,
+        vis_grad_edge_overrides: dict[str, Any] | None = None,
+        vis_module_overrides: dict[str, Any] | None = None,
+        vis_save_only: bool = False,
+        file_format: str = "pdf",
+        show_buffers: BufferVisibilityLiteral = "meaningful",
+        direction: VisDirectionLiteral = "bottomup",
+        vis_node_placement: VisNodePlacementLiteral = "auto",
+        vis_renderer: VisRendererLiteral = "graphviz",
+        theme: str = "torchlens",
+        vis_intervention_mode: VisInterventionModeLiteral = "node_mark",
+        vis_show_cone: bool = False,
         code_panel: "CodePanelOption" = False,
-        node_overlay: "str | Mapping[str, Any] | Callable[[Any], Any] | None" = None,
-        node_label_fields: "list[str] | None" = None,
-        show_legend: "bool | None" = None,
-        font_size: "int | None" = None,
-        dpi: "int | None" = None,
-        for_paper: "bool" = False,
-        return_graph: "bool" = False,
-        order_siblings: "bool" = True,
-        show_containers: "Literal[False, 'labels', 'cluster', 'collapsed', 'auto', 'nodes']" = False,
-        container_max_inline: "int" = 12,
-        show_input_transform_summary: "bool" = False,
-        show_orphans: "bool" = False,
+        node_overlay: str | Mapping[str, Any] | Callable[[Any], Any] | None = None,
+        node_label_fields: list[str] | None = None,
+        show_legend: bool | None = None,
+        font_size: int | None = None,
+        dpi: int | None = None,
+        for_paper: bool = False,
+        return_graph: bool = False,
+        order_siblings: bool = True,
+        show_containers: Literal[False, "labels", "collapsed", "nodes"] = False,
+        container_max_inline: int = 12,
+        show_input_transform_summary: bool = False,
+        show_orphans: bool = False,
         *,
-        color_by: "str | Callable[[Any], Any] | None" = None,
-        size_by: "str | Callable[[Any], Any] | None" = None,
-        scale: "str | None" = None,
-        stack_by: "str | bool | Callable[[Any], Any] | None" = None,
-        show_redundant_args: "bool" = False,
-        show_saved_for_backward: "bool" = False,
-    ) -> "Any":
+        color_by: str | Callable[[Any], Any] | None = None,
+        size_by: str | Callable[[Any], Any] | None = None,
+        scale: str | None = None,
+        stack_by: str | bool | Callable[[Any], Any] | None = None,
+        show_redundant_args: bool = False,
+        show_saved_for_backward: bool = False,
+    ) -> Any:
         """Render the computational graph for this model log."""
 
         return _doors.visualization()._trace_draw.draw(
@@ -3500,55 +3497,55 @@ class Trace(TraceLike):
             show_saved_for_backward=show_saved_for_backward,
         )
 
-    def add_node_overlay(self, scores: "Mapping[str, Any]", *, name: "str" = "overlay") -> "Trace":
+    def add_node_overlay(self, scores: Mapping[str, Any], *, name: str = "overlay") -> "Trace":
         """Register external per-node overlay scores for later rendering."""
 
         self._node_overlay_scores = dict(scores)
         self._node_overlay_name = name
         return self
 
-    def animate_ops(self, site: "Any") -> "str":
+    def animate_ops(self, site: Any) -> str:
         """Return a minimal HTML animation for repeated ops at ``site``."""
 
         return _doors.visualization()._trace_draw.animate_ops(self, site=site)
 
     @property
-    def nonfinite_ops(self) -> "tuple[str, ...]":
+    def nonfinite_ops(self) -> tuple[str, ...]:
         """Return pass-qualified labels of ops whose output held NaN or Inf."""
 
         return nonfinite_op_labels(self)
 
     @property
-    def nonfinite_coverage(self) -> "Any":
+    def nonfinite_coverage(self) -> Any:
         """Return the evidence basis and coverage behind :attr:`nonfinite_ops`."""
 
         return nonfinite_coverage(self)
 
-    def first_nonfinite(self, link_format: "Literal['terminal', 'html', 'text']" = "text") -> "str":
+    def first_nonfinite(self, link_format: Literal["terminal", "html", "text"] = "text") -> str:
         """Return a text answer describing the first saved non-finite out."""
 
         return _doors.report()._trace_summary.first_nonfinite(self, link_format=link_format)
 
     def draw_backward(
         self,
-        path: "str" = "backward_modelgraph",
-        vis_graph_overrides: "dict[str, Any] | None" = None,
-        node_spec_fn: "Callable[..., Any] | None" = None,
-        collapsed_node_spec_fn: "Callable[..., Any] | None" = None,
-        vis_node_mode: "VisNodeModeLiteral" = "default",
-        vis_edge_overrides: "dict[str, Any] | None" = None,
-        vis_save_only: "bool" = False,
-        file_format: "str" = "pdf",
-        vis_direction: "VisDirectionLiteral" = "topdown",
+        path: str = "backward_modelgraph",
+        vis_graph_overrides: dict[str, Any] | None = None,
+        node_spec_fn: Callable[..., Any] | None = None,
+        collapsed_node_spec_fn: Callable[..., Any] | None = None,
+        vis_node_mode: VisNodeModeLiteral = "default",
+        vis_edge_overrides: dict[str, Any] | None = None,
+        vis_save_only: bool = False,
+        file_format: str = "pdf",
+        vis_direction: VisDirectionLiteral = "topdown",
         code_panel: "CodePanelOption" = False,
-        vis_mode: "VisModeLiteral" = "rolled",
-        bwd: "int | Iterable[int] | None" = None,
-        show_legend: "bool | None" = None,
+        vis_mode: VisModeLiteral = "rolled",
+        bwd: int | Iterable[int] | None = None,
+        show_legend: bool | None = None,
         *,
-        theme: "str" = "torchlens",
-        show_module_paths: "bool" = False,
-        show_grad_values: "bool" = False,
-    ) -> "str":
+        theme: str = "torchlens",
+        show_module_paths: bool = False,
+        show_grad_values: bool = False,
+    ) -> str:
         """Render the captured backward grad_fn_handle graph."""
 
         return _doors.visualization()._trace_draw.draw_backward(
@@ -3573,20 +3570,20 @@ class Trace(TraceLike):
 
     def draw_combined(
         self,
-        path: "str" = "combined_modelgraph",
-        vis_graph_overrides: "dict[str, Any] | None" = None,
-        node_spec_fn: "Callable[..., Any] | None" = None,
-        backward_node_spec_fn: "Callable[..., Any] | None" = None,
-        vis_edge_overrides: "dict[str, Any] | None" = None,
-        vis_save_only: "bool" = False,
-        file_format: "str" = "pdf",
-        vis_direction: "VisDirectionLiteral" = "leftright",
-        vis_mode: "VisModeLiteral" = "unrolled",
-        intervening_cluster: "Literal['upstream', 'outside', 'downstream', 'own']" = "upstream",
-        show_buffers: "BufferVisibilityLiteral" = "meaningful",
-        bwd: "int | Iterable[int] | None" = None,
-        show_legend: "bool | None" = None,
-    ) -> "str":
+        path: str = "combined_modelgraph",
+        vis_graph_overrides: dict[str, Any] | None = None,
+        node_spec_fn: Callable[..., Any] | None = None,
+        backward_node_spec_fn: Callable[..., Any] | None = None,
+        vis_edge_overrides: dict[str, Any] | None = None,
+        vis_save_only: bool = False,
+        file_format: str = "pdf",
+        vis_direction: VisDirectionLiteral = "leftright",
+        vis_mode: VisModeLiteral = "unrolled",
+        intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
+        show_buffers: BufferVisibilityLiteral = "meaningful",
+        bwd: int | Iterable[int] | None = None,
+        show_legend: bool | None = None,
+    ) -> str:
         """Render forward ops and backward grad_fns in one graph."""
 
         return _doors.visualization()._trace_draw.draw_combined(
@@ -3608,47 +3605,47 @@ class Trace(TraceLike):
 
     def preview_fastlog(
         self,
-        predicate: "Callable[..., Any] | None" = None,
-        keep_op: "Callable[..., Any] | None" = None,
-        **kwargs: "Any",
-    ) -> "str":
+        predicate: Callable[..., Any] | None = None,
+        keep_op: Callable[..., Any] | None = None,
+        **kwargs: Any,
+    ) -> str:
         """Render a fastlog predicate preview for this model graph."""
 
         return _doors.visualization()._trace_draw.preview_fastlog(
             self, predicate=predicate, keep_op=keep_op, **kwargs
         )
 
-    def last_run_records(self) -> "tuple['FireRecord', ...]":
+    def last_run_records(self) -> tuple["FireRecord", ...]:
         """Return fire records from the most recent replay, rerun, or live capture."""
 
         return _doors.visualization()._trace_draw.last_run_records(self)
 
-    def _repr_html_(self) -> "str":
+    def _repr_html_(self) -> str:
         """Return the notebook HTML representation for this model log."""
 
         return _doors.report()._trace_summary.repr_html(self)
 
     def summary(  # noqa: PLR0913 - the ratified public grammar: every axis is a named keyword
         self,
-        level: "str | None" = None,
+        level: str | None = None,
         *,
-        view: "str | None" = None,
-        depth: "Any" = None,
-        columns: "list[str] | None" = None,
-        filter: "Any" = None,
-        buffers: "str | None" = None,
-        fold_repeats: "Any" = None,
-        max_rows: "int | None" = None,
-        flop_convention: "str | None" = None,
-        units: "str | None" = None,
-        style: "str | None" = None,
-        input_shape: "Any" = None,
-        execution_mode: "str | None" = None,
-        grad_mode: "str | None" = None,
-        _execution_note: "str | None" = None,
-        _input_synthesis: "str | None" = None,
-        **unsupported: "Any",
-    ) -> "str":
+        view: str | None = None,
+        depth: Any = None,
+        columns: list[str] | None = None,
+        filter: Any = None,
+        buffers: str | None = None,
+        fold_repeats: Any = None,
+        max_rows: int | None = None,
+        flop_convention: str | None = None,
+        units: str | None = None,
+        style: str | None = None,
+        input_shape: Any = None,
+        execution_mode: str | None = None,
+        grad_mode: str | None = None,
+        _execution_note: str | None = None,
+        _input_synthesis: str | None = None,
+        **unsupported: Any,
+    ) -> str:
         """Render a summary of this capture."""
 
         return _doors.report()._trace_summary.summary(
@@ -3674,15 +3671,15 @@ class Trace(TraceLike):
 
     def render_dagua_graph(
         self,
-        vis_mode: "str" = "unrolled",
-        vis_call_depth: "int" = 1000,
-        path: "str" = "graph.gv",
-        vis_save_only: "bool" = False,
-        file_format: "str" = "pdf",
-        show_buffers: "bool" = False,
-        vis_direction: "str" = "bottomup",
-        theme: "str" = "torchlens",
-    ) -> "str":
+        vis_mode: str = "unrolled",
+        vis_call_depth: int = 1000,
+        path: str = "graph.gv",
+        vis_save_only: bool = False,
+        file_format: str = "pdf",
+        show_buffers: bool = False,
+        vis_direction: str = "bottomup",
+        theme: str = "torchlens",
+    ) -> str:
         """Render this model log with the experimental Dagua backend."""
 
         return _doors.visualization()._trace_draw.render_dagua_graph(
@@ -3699,12 +3696,12 @@ class Trace(TraceLike):
 
     def to_dagua_graph(
         self,
-        vis_mode: "str" = "unrolled",
-        vis_call_depth: "int" = 1000,
-        show_buffers: "bool" = False,
-        direction: "str" = "bottomup",
-        include_grad_edges: "bool | None" = None,
-    ) -> "Any":
+        vis_mode: str = "unrolled",
+        vis_call_depth: int = 1000,
+        show_buffers: bool = False,
+        direction: str = "bottomup",
+        include_grad_edges: bool | None = None,
+    ) -> Any:
         """Translate this model log into an experimental Dagua graph."""
 
         return _doors.visualization()._trace_draw.to_dagua_graph(

@@ -73,14 +73,9 @@ def replace_state_from(target: Trace, trace: Trace) -> None:
     target:
         The trace that receives the state.
     trace:
-        Fully postprocessed fresh log whose graph, layer containers,
-        accessors, output metadata, shape/hash fields, and per-pass entries
-        should replace this log's current run-state.
-
-    Returns
-    -------
-    None
-        This log is mutated in place.
+        Fully postprocessed fresh log whose graph, layer containers, accessors,
+        output metadata, shape/hash fields and per-pass entries replace the
+        target's current run-state in place.
     """
 
     preserved_fields = (
@@ -191,8 +186,7 @@ def refresh_rerun_op_from(trace: Trace, layer: Any, new_layer: Any) -> None:
     layer:
         Existing operation record retained by the fast path.
     new_layer:
-        Fresh rerun operation record supplying current payloads and
-        per-call metadata.
+        Fresh rerun record supplying current payloads and per-call metadata.
     """
 
     preserved_fields = {
@@ -215,10 +209,7 @@ def refresh_rerun_op_from(trace: Trace, layer: Any, new_layer: Any) -> None:
         value = copies[field_name] = copy_rerun_value(trace, new_layer_state.get(field_name))
         if field_name == "annotations":
             value = merge_user_annotations(trace, value, preserved_user_annotations)
-        layer._internal_set(
-            field_name,
-            value,
-        )
+        layer._internal_set(field_name, value)
     for field_name in (
         "out_ref",
         "grad_ref",
