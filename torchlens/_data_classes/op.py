@@ -120,6 +120,7 @@ from ..intervention.types import (
 )
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
+from ._op_card_html import OpCardHtmlMixin
 from ._op_dedup import _dedup_cached_identity_out, _dedup_saved_activation_out
 from ._op_grad_stream import stream_grad_blobs
 from ._op_transforms import (
@@ -129,7 +130,6 @@ from ._op_transforms import (
     validate_streaming_transform_output,
     validate_train_mode_transform_output,
 )
-from ._repr import OpCardHtmlMixin
 from ._state_adapter import state_items, state_restore
 from .field_policy import (
     build_record_field_policy_table,

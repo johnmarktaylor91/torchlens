@@ -6,7 +6,7 @@ attribute, the generated schema and every reader of ``Trace._PORTABLE_STATE_SPEC
 
 from __future__ import annotations
 
-from .._io import FieldPolicy
+from .._io._field_policy import FieldPolicy
 
 __all__ = ["TRACE_PORTABLE_STATE_SPEC"]
 

@@ -36,17 +36,39 @@ PREVIEW_BACKEND = "(preview backend: shape/dtype only)"
 EDITED = "(edited)"
 
 
-def _payload_state(record: Any) -> str:
-    """Return ``present`` / ``lazy`` / ``unsaved`` without materializing.
+def _payload_state(op: Any) -> str:
+    """Return the op's CURRENT payload state: present | lazy | unsaved.
 
-    Delegates to the agent-surface classifier (one probe, shared
-    semantics): reading through the private slot accessor so the probe
-    never triggers a materializing ``op.out`` read.
+    Capture-time ``saved`` used to mean two different things (agent memo P0
+    part 4): "a payload is resident" and "a lazy ref could materialize one".
+    This is the resident-now answer, read through the private slot accessor
+    so the probe itself never triggers a materializing ``op.out`` read. A
+    row with ``saved=true`` and ``payload_state="unsaved"`` is a
+    payload-stripped artifact -- saved at capture, no bytes here.
+
+    Parameters
+    ----------
+    op:
+        Operation record (the agent surface, stats tables and the record
+        renderers share this one probe).
+
+    Returns
+    -------
+    str
+        ``"present"`` (resident tensor), ``"lazy"`` (materializable blob
+        ref), or ``"unsaved"`` (no payload here).
     """
 
-    from ..report._agent_json import _payload_state as probe
-
-    return probe(record)
+    slot = getattr(op, "_slot", None)
+    if callable(slot):
+        if slot("out") is not None:
+            return "present"
+        if slot("out_ref") is not None:
+            return "lazy"
+        return "unsaved"
+    if getattr(op, "out_ref", None) is not None:
+        return "lazy"
+    return "present" if getattr(op, "has_saved_activation", False) else "unsaved"
 
 
 def _metadata_core(record: Any) -> str:
