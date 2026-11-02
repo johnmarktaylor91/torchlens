@@ -132,12 +132,17 @@ jobs:
           # without this row only the non-gating latest canary ran them. Smoke
           # scope, not enforcing (the byte goldens enforce on pr.yml's pinned
           # row only). The mypy, checks, packaging and audit jobs keep pinning
-          # the newest-admitted torch, not this one.
+          # the newest-admitted torch, not this one. torch 2.15 ships no
+          # CPython 3.10 wheels, and no torchvision release pairs with it yet
+          # (0.29.x requires torch 2.14), so the row installs no torchvision:
+          # torchvision-only tests skip and the R0 sweep, which needs it, is
+          # not claimed. Pin the paired torchvision and transformers here
+          # once torchvision publishes one.
           - track: forward
             python: "3.11"
             torch: "2.15.0+cpu"
-            torchvision: "0.30.0+cpu"
-            transformers: "5.18.0"
+            torchvision: ""
+            transformers: ""
             numpy: numpy
             scope: smoke
     steps:
@@ -172,6 +177,9 @@ jobs:
           # need numpy 2 without declaring it (see the file's header).
           constraint_args=()
           if [ -n "${CONSTRAINTS}" ]; then constraint_args=(-c "${CONSTRAINTS}"); fi
+          # A row with no torchvision pin installs none (see the forward row).
+          vision_args=()
+          if [ -n "${TORCHVISION_VERSION}" ]; then vision_args=("torchvision==${TORCHVISION_VERSION}"); fi
           # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
           # The viz extra (matplotlib, torchshow, lovely-tensors) is installed
           # because tviz is shipped surface with smoke-marked render tests.
@@ -181,7 +189,7 @@ jobs:
             --index-strategy unsafe-best-match \
             -e ".[dev,tabular,viz]" \
             "torch==${TORCH_VERSION}" \
-            "torchvision==${TORCHVISION_VERSION}" \
+            "${vision_args[@]}" \
             "${NUMPY_SPEC}" \
             "pydot==4.0.1" \
             "graphviz==0.21"
@@ -212,11 +220,18 @@ jobs:
           python - <<'PY'
           import os
 
+          import importlib.util
+
           import torch
+
+          assert torch.__version__ == os.environ["TORCH_VERSION"]
+          if not os.environ["TORCHVISION_VERSION"]:
+              assert importlib.util.find_spec("torchvision") is None
+              print(torch.__version__, "no torchvision")
+              raise SystemExit(0)
           import torchvision
           from torchvision.ops import nms
 
-          assert torch.__version__ == os.environ["TORCH_VERSION"]
           assert torchvision.__version__ == os.environ["TORCHVISION_VERSION"]
           boxes = torch.tensor([[0.0, 0.0, 1.0, 1.0]])
           scores = torch.tensor([1.0])
