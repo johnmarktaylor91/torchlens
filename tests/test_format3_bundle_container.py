@@ -11,6 +11,7 @@ referenced with an unknown key refuses with the contract's typed codes.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -89,7 +90,7 @@ def test_forked_bundle_round_trips(tmp_path: Path) -> None:
     assert [entry["name"] for entry in references] == ["clean", "changed"]
     for position, entry in enumerate(references):
         assert set(entry) == set(container.MEMBER_REFERENCE_KEYS)
-        assert entry["path"] == container.member_relative_path(position)
+        assert entry["path"] == container.member_relative_path(position, entry["name"])
         assert (target / entry["path"] / "manifest.json").is_file()
 
     loaded = tl.load(target)
@@ -169,3 +170,67 @@ def test_member_writer_that_writes_nothing_refuses(tmp_path: Path) -> None:
             bundle, tmp_path, level="portable", write_member=lambda trace, path, level: None
         )
     assert info.value.fields["code"] == "bundle_save_failed"
+
+
+def test_member_directory_names_are_contained() -> None:
+    """A member name with separators or dots stays one directory under ``members/``."""
+
+    assert container.member_relative_path(0, "clean") == "members/0000-clean"
+    assert container.member_relative_path(3, "a/../b c") == "members/0003-a_.._b_c"
+    assert container.member_relative_path(1, "..") == "members/0001-.."
+    long_name = container.member_relative_path(2, "x" * 200)
+    assert long_name == "members/0002-" + "x" * container.MEMBER_NAME_CHARS
+
+
+def test_relations_file_round_trips(tmp_path: Path) -> None:
+    """relations.json holds the relation rows and reads back through the closed parser."""
+
+    bundle = _forked_bundle()
+    row = container.write_relations(bundle, tmp_path)
+    assert row is not None
+    files = {container.RELATIONS_FILE: row}
+    rows = container.read_relations(tmp_path, files)
+    assert rows is not None
+    assert [r.to_payload() for r in rows] == [r.to_payload() for r in bundle.relations]
+
+
+def test_relation_free_bundle_writes_no_relations_file(tmp_path: Path) -> None:
+    """A bundle without relation rows writes no file and reads back as none."""
+
+    value = torch.randn(2, 3)
+    bundle = tl.Bundle({"a": tl.trace(_Shift(0.0), value)})
+    assert container.write_relations(bundle, tmp_path) is None
+    assert not (tmp_path / container.RELATIONS_FILE).exists()
+    assert container.read_relations(tmp_path, {}) is None
+
+
+def test_edited_relations_file_refuses(tmp_path: Path) -> None:
+    """A relation table edited after the write refuses as an integrity failure."""
+
+    row = container.write_relations(_forked_bundle(), tmp_path)
+    target = tmp_path / container.RELATIONS_FILE
+    target.write_text(target.read_text("utf-8").replace("changed", "ghost"), "utf-8")
+    with pytest.raises(ArtifactError) as info:
+        container.read_relations(tmp_path, {container.RELATIONS_FILE: row})
+    assert info.value.fields["code"] == "bundle_metadata_integrity_refused"
+
+
+def test_unlisted_relations_file_refuses(tmp_path: Path) -> None:
+    """A relations file the manifest does not list refuses."""
+
+    container.write_relations(_forked_bundle(), tmp_path)
+    with pytest.raises(ArtifactError) as info:
+        container.read_relations(tmp_path, {})
+    assert info.value.fields["code"] == "manifest_schema_invalid"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="symlinks need privileges on Windows")
+def test_symlinked_member_manifest_refuses(tmp_path: Path) -> None:
+    """A member manifest replaced by a symlink refuses before it is hashed."""
+
+    _bundle, target = _saved(tmp_path)
+    manifest = target / _index(target)["members"][0]["path"] / "manifest.json"
+    moved = tmp_path / "elsewhere.json"
+    manifest.rename(moved)
+    manifest.symlink_to(moved)
+    assert _load_code(target) == "load_path_symlink_rejected"

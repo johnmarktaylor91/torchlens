@@ -1,8 +1,9 @@
 """The 3.0 runnable component replays exactly as the live trace reruns.
 
 ``torchlens/_io/format3/runnable.py`` carries the runnable component as typed
-JSON plus safetensors (``runnable/component.json``, ``descriptor.json`` and one
-safetensors file per tensor family). These tests prove the carrier change keeps
+JSON plus safetensors (``runnable/descriptor.json``, ``state_dict-NNNN.safetensors``,
+``buffers.safetensors`` and, when archived, ``activations-NNNN.safetensors``), listed by
+the manifest's ``runnable`` object and ``files`` rows. These tests prove the carrier change keeps
 the replay check bit for bit:
 
 * the descriptor written is the descriptor the tlspec 11 save stamped, and the
@@ -135,7 +136,8 @@ def _save_and_load_runnable(
             include_weights=True,
             include_activations=include_activations,
         )
-        assert (artifact / "runnable" / runnable3.COMPONENT_FILE).is_file()
+        manifest = json.loads((artifact / "manifest.json").read_text("utf-8"))
+        assert manifest["runnable"]["descriptor"] == runnable3.DESCRIPTOR_PATH
         return tl.load(artifact), artifact
     records = root / "records.tlspec"
     _quiet_save(trace, records, level="runnable")
@@ -143,11 +145,11 @@ def _save_and_load_runnable(
     artifact.mkdir()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        runnable3.write_runnable(
+        written = runnable3.write_runnable(
             trace, artifact, include_weights=True, include_activations=include_activations
         )
     loaded = tl.load(records)
-    runnable3.attach_runnable(loaded, artifact)
+    runnable3.attach_runnable(loaded, artifact, written.manifest, written.files)
     return loaded, artifact
 
 
@@ -222,21 +224,35 @@ def test_descriptor_and_families_equal_the_tlspec11_save(tmp_path: Path) -> None
     artifact.mkdir()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        record = runnable3.write_runnable(trace, artifact, include_weights=True)
-    assert record["component"] == "runnable/component.json"
+        written = runnable3.write_runnable(trace, artifact, include_weights=True)
 
     manifest = json.loads((old / "manifest.json").read_text(encoding="utf-8"))
     descriptor = json.loads((artifact / "runnable" / "descriptor.json").read_text("utf-8"))
     assert descriptor == manifest["run"]
 
-    index = json.loads((artifact / "runnable" / "component.json").read_text("utf-8"))
-    assert index["component_versions"] == runnable3.component_versions()
-    assert set(index["families"]) == {"state_dict", "nonpersistent_buffers"}
-    state = load_file(str(artifact / "runnable" / "state_dict.safetensors"))
+    assert written.manifest == {
+        "descriptor": "runnable/descriptor.json",
+        **runnable3.manifest_versions(),
+        "state_dict": ["runnable/state_dict-0001.safetensors"],
+        "state_dict_family": "state_dict_v1",
+        "buffers": "runnable/buffers.safetensors",
+        "buffers_family": "runnable_nonpersistent_buffer_v1",
+    }
+    assert set(written.files) == {
+        "runnable/descriptor.json",
+        "runnable/state_dict-0001.safetensors",
+        "runnable/buffers.safetensors",
+    }
+    assert sorted(p.name for p in (artifact / "runnable").iterdir()) == [
+        "buffers.safetensors",
+        "descriptor.json",
+        "state_dict-0001.safetensors",
+    ]
+    state = load_file(str(artifact / "runnable" / "state_dict-0001.safetensors"))
     assert set(state) == set(model.state_dict())
     for name, tensor in model.state_dict().items():
         torch.testing.assert_close(state[name], tensor, rtol=0, atol=0)
-    buffers = load_file(str(artifact / "runnable" / "nonpersistent_buffers.safetensors"))
+    buffers = load_file(str(artifact / "runnable" / "buffers.safetensors"))
     torch.testing.assert_close(buffers["scale"], model.scale, rtol=0, atol=0)
 
 
@@ -344,92 +360,157 @@ def test_loaded_callable_placeholder_rerun_refuses_typed(tmp_path: Path) -> None
     assert info.value.fields.get("code") == "run_intervention_spec_not_persisted"
 
 
-def _component(tmp_path: Path) -> Path:
-    """Write one runnable component with weights and buffers; return the artifact root."""
+def _component(tmp_path: Path) -> tuple[Path, runnable3.RunnableWrite]:
+    """Write one runnable component with weights and buffers; return the root and the write."""
 
     trace = tl.trace(_StateModel().eval(), torch.ones(2, 3), capture=_CAP)
     artifact = tmp_path / "artifact"
     artifact.mkdir()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        runnable3.write_runnable(trace, artifact, include_weights=True)
-    return artifact
+        written = runnable3.write_runnable(trace, artifact, include_weights=True)
+    return artifact, written
 
 
-def _refusal_code(artifact: Path) -> str:
+def _refusal_code(artifact: Path, manifest: Any, files: Any) -> str:
     """Load the component and return the typed refusal code."""
 
     with pytest.raises(ArtifactError) as info:
-        runnable3.load_runnable(artifact)
+        runnable3.load_runnable(artifact, manifest, files)
     return str(info.value.fields["code"])
 
 
 def test_component_absent_loads_as_none(tmp_path: Path) -> None:
-    """An artifact without a runnable directory has no component."""
+    """An artifact without a runnable object or directory has no component."""
 
-    assert runnable3.load_runnable(tmp_path) is None
+    assert runnable3.load_runnable(tmp_path, None, {}) is None
+
+
+def test_component_round_trips_its_families(tmp_path: Path) -> None:
+    """The loaded families hold the written tensors under the bound family names."""
+
+    artifact, written = _component(tmp_path)
+    component = runnable3.load_runnable(artifact, written.manifest, written.files)
+    assert component is not None
+    assert set(component.families) == {"state_dict", "nonpersistent_buffers"}
+    assert set(component.families["state_dict"]) == {"fc.weight", "fc.bias", "shift"}
+
+
+def test_state_dict_chunks_at_the_limit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A state dict larger than the chunk limit spans numbered files and replays."""
+
+    monkeypatch.setattr(runnable3, "CHUNK_BYTES", 16)
+    artifact, written = _component(tmp_path)
+    assert len(written.manifest["state_dict"]) == 3
+    assert written.manifest["state_dict"][-1] == "runnable/state_dict-0003.safetensors"
+    component = runnable3.load_runnable(artifact, written.manifest, written.files)
+    assert component is not None
+    assert set(component.families["state_dict"]) == {"fc.weight", "fc.bias", "shift"}
+    _assert_replays_like_live(_StateModel().eval(), torch.randn(2, 3), tmp_path, "chunked")
+
+
+def test_unlisted_component_directory_refuses(tmp_path: Path) -> None:
+    """A runnable directory the manifest does not list refuses."""
+
+    artifact, _written = _component(tmp_path)
+    assert _refusal_code(artifact, None, {}) == "manifest_schema_invalid"
 
 
 def test_altered_family_file_refuses(tmp_path: Path) -> None:
     """A family file whose bytes changed refuses as an integrity failure."""
 
-    artifact = _component(tmp_path)
-    target = artifact / "runnable" / "state_dict.safetensors"
+    artifact, written = _component(tmp_path)
+    target = artifact / "runnable" / "state_dict-0001.safetensors"
     data = bytearray(target.read_bytes())
     data[-1] ^= 0xFF
     target.write_bytes(bytes(data))
-    assert _refusal_code(artifact) == "bundle_metadata_integrity_refused"
+    assert _refusal_code(artifact, written.manifest, written.files) == (
+        "bundle_metadata_integrity_refused"
+    )
 
 
 def test_altered_descriptor_refuses(tmp_path: Path) -> None:
     """A descriptor edited after the write refuses as an integrity failure."""
 
-    artifact = _component(tmp_path)
+    artifact, written = _component(tmp_path)
     target = artifact / "runnable" / "descriptor.json"
     target.write_text(target.read_text("utf-8").replace('"cpu"', '"cuda"', 1), "utf-8")
-    assert _refusal_code(artifact) == "bundle_metadata_integrity_refused"
+    assert _refusal_code(artifact, written.manifest, written.files) == (
+        "bundle_metadata_integrity_refused"
+    )
 
 
 def test_missing_family_file_refuses(tmp_path: Path) -> None:
-    """A family the index lists but the directory lacks refuses as missing."""
+    """A family the manifest lists but the directory lacks refuses as missing."""
 
-    artifact = _component(tmp_path)
-    (artifact / "runnable" / "nonpersistent_buffers.safetensors").unlink()
-    assert _refusal_code(artifact) == "bundle_load_failed"
-
-
-def test_unknown_index_key_refuses(tmp_path: Path) -> None:
-    """The component index is a closed object."""
-
-    artifact = _component(tmp_path)
-    index_path = artifact / "runnable" / "component.json"
-    index = json.loads(index_path.read_text("utf-8"))
-    index["callables"] = {"fc": "pickled"}
-    index_path.write_text(json.dumps(index), "utf-8")
-    assert _refusal_code(artifact) == "manifest_schema_invalid"
+    artifact, written = _component(tmp_path)
+    (artifact / "runnable" / "buffers.safetensors").unlink()
+    assert _refusal_code(artifact, written.manifest, written.files) == "bundle_load_failed"
 
 
-def test_family_file_outside_the_fixed_names_refuses(tmp_path: Path) -> None:
-    """A family entry cannot point at a path of its own choosing."""
+@pytest.mark.parametrize(
+    ("edit", "where"),
+    [
+        (lambda m, f: m.update(callables={"fc": "pickled"}), "unknown key"),
+        (lambda m, f: m.pop("state_dict_family"), "family without schema"),
+        (lambda m, f: m.update(call_recipe_version="v0"), "stale version"),
+        (lambda m, f: m.update(descriptor="runnable/other.json"), "descriptor path"),
+        (lambda m, f: m.update(state_dict=["../../outside.safetensors"]), "outside path"),
+        (lambda m, f: m.update(state_dict=["runnable/state_dict-0002.safetensors"]), "numbering"),
+        (lambda m, f: m.update(state_dict=[]), "empty family"),
+        (lambda m, f: f.pop("runnable/buffers.safetensors"), "no files row"),
+    ],
+)
+def test_malformed_runnable_object_refuses(tmp_path: Path, edit: Any, where: str) -> None:
+    """The manifest's runnable object is closed, versioned and names fixed files."""
 
-    artifact = _component(tmp_path)
-    index_path = artifact / "runnable" / "component.json"
-    index = json.loads(index_path.read_text("utf-8"))
-    index["families"]["state_dict"]["file"] = "../../outside.safetensors"
-    index_path.write_text(json.dumps(index), "utf-8")
-    assert _refusal_code(artifact) == "manifest_schema_invalid"
+    artifact, written = _component(tmp_path)
+    manifest, files = dict(written.manifest), dict(written.files)
+    edit(manifest, files)
+    assert _refusal_code(artifact, manifest, files) == "manifest_schema_invalid", where
+
+
+def test_missing_state_key_refuses_at_bind(tmp_path: Path) -> None:
+    """A state file rewritten without one tensor (rows updated) refuses at the bind."""
+
+    from safetensors.torch import load_file, save_file
+
+    from torchlens._utils.hashing import sha256_file
+    from torchlens.errors import StateBindingError
+
+    trace = tl.trace(_StateModel().eval(), torch.ones(2, 3), capture=_CAP)
+    records = tmp_path / "records.tlspec"
+    _quiet_save(trace, records, level="runnable")
+    artifact = tmp_path / "artifact"
+    artifact.mkdir()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        written = runnable3.write_runnable(trace, artifact, include_weights=True)
+    relative = "runnable/state_dict-0001.safetensors"
+    state = load_file(str(artifact / relative))
+    state.pop("fc.bias")
+    save_file(state, str(artifact / relative))
+    files = dict(written.files)
+    files[relative] = {
+        "sha256": sha256_file(artifact / relative),
+        "bytes": (artifact / relative).stat().st_size,
+    }
+    with pytest.raises(StateBindingError):
+        runnable3.attach_runnable(tl.load(records), artifact, written.manifest, files)
 
 
 @pytest.mark.skipif(os.name == "nt", reason="symlinks need privileges on Windows")
 def test_symlinked_component_refuses(tmp_path: Path) -> None:
     """A symlinked component file refuses before it is read."""
 
-    artifact = _component(tmp_path)
+    artifact, written = _component(tmp_path)
     target = artifact / "runnable" / "descriptor.json"
     moved = tmp_path / "elsewhere.json"
     target.rename(moved)
     target.symlink_to(moved)
-    assert _refusal_code(artifact) == "load_path_symlink_rejected"
+    assert _refusal_code(artifact, written.manifest, written.files) == (
+        "load_path_symlink_rejected"
+    )
 
 
 def test_family_present_against_descriptor_refuses(tmp_path: Path) -> None:
@@ -448,7 +529,7 @@ def test_family_present_against_descriptor_refuses(tmp_path: Path) -> None:
 def test_component_directory_is_written_once(tmp_path: Path) -> None:
     """Writing into an artifact that already holds a component refuses typed."""
 
-    artifact = _component(tmp_path)
+    artifact, _written = _component(tmp_path)
     trace = tl.trace(_StateModel().eval(), torch.ones(2, 3), capture=_CAP)
     with pytest.raises(ArtifactError) as info:
         runnable3.write_runnable(trace, artifact)

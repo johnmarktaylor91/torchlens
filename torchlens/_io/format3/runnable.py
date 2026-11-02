@@ -1,29 +1,27 @@
 """The 3.0 runnable component: descriptor JSON plus safetensors state, no pickle.
 
-Contract: ``docs/maintainers/saved_format_3.md``, section "Runnable". A runnable
-save adds one directory, ``runnable/``, beside the trace records:
+Contract: ``docs/maintainers/saved_format_3.md``, section 7 "Runnable" and the
+runnable example of section 8. A runnable save adds one directory,
+``runnable/``, beside the trace records:
 
-* ``component.json``: the component index. It carries the component versions
-  of the writer contract (descriptor, call recipe, callable reference,
-  initializer policy, the two state families, the activation payload, the
-  witness registry), the descriptor file and its sha256, and one entry per
-  tensor family: schema, safetensors file, sha256 and one tensor reference
-  per member (``name`` plus the contract's tensor reference fields).
 * ``descriptor.json``: the sparse taken-path descriptor as canonical JSON
-  (sorted keys, no NaN or infinity). Callables are carried as the
-  descriptor's callable registry records (a registry key per callable),
-  never as a callable object; the initializer policy is the descriptor's
-  ``initializer_policy_version`` field.
-* ``state_dict.safetensors``, ``nonpersistent_buffers.safetensors``,
-  ``activations.safetensors``: one file per present family, keyed by the
-  canonical state name (weights, buffers) or the activation member's blob id.
+  (sorted keys, no NaN or infinity), byte for byte the descriptor the tlspec 11
+  manifest carried under ``run``. It holds the call recipe, the callables as
+  callable registry records (a registry key per callable, never a callable
+  object) and the initializer policy (``initializer_policy_version``).
+* ``state_dict-NNNN.safetensors``: the capture-time state dict, keyed by
+  canonical state name, packed into files of at most ``CHUNK_BYTES``.
+* ``buffers.safetensors``: the non-persistent buffer values, keyed by name.
+* ``activations-NNNN.safetensors``: the capture-selected activations, keyed by
+  the activation member's blob id (only when activations were archived).
 
-The writer door returns the index record the trace manifest lists for the
-component (``component`` path and sha256). The reader door validates the
-index, the hashes and the family membership against the parsed descriptor
-and binds the families onto a loaded trace through the same ``_runnable``
-binders the tlspec 11 loader used, so the readiness, attestation and path
-faithfulness checks prove exactly what they proved before.
+The writer door returns the manifest's ``runnable`` object (component versions
+and file paths) and the ``files`` rows (sha256 and byte length) for every file
+it wrote; the trace writer merges both into ``manifest.json``. The reader door
+takes the same two values back, checks every listed file against its row,
+checks the versions and file names, and binds the families onto a loaded trace
+through the ``_runnable`` binders the tlspec 11 loader used, so the readiness,
+attestation and path faithfulness checks prove exactly what they proved before.
 """
 
 from __future__ import annotations
@@ -68,32 +66,53 @@ from ..runnable import (
 from ..runnable_load import attach_sparse_run_readiness
 from .contract import REFUSAL_CODES, RUNNABLE_DIR
 
-#: Index file of the runnable component, relative to ``runnable/``.
-COMPONENT_FILE = "component.json"
-#: Descriptor file of the runnable component, relative to ``runnable/``.
-DESCRIPTOR_FILE = "descriptor.json"
-#: ``format`` value of the component index; anything else is not this component.
-COMPONENT_FORMAT = "torchlens.runnable_component"
-#: Integer version of the component index layout.
-COMPONENT_LAYOUT_VERSION = 1
-#: Payload codec every runnable family is written with.
-FAMILY_CODEC = "torch_safetensors_v1"
-#: The three tensor families: name, file, and the descriptor payload layer.
-FAMILY_FILES: dict[str, str] = {
-    "state_dict": "state_dict.safetensors",
-    "nonpersistent_buffers": "nonpersistent_buffers.safetensors",
-    "activations": "activations.safetensors",
+#: Descriptor file of the runnable component.
+DESCRIPTOR_PATH = f"{RUNNABLE_DIR}/descriptor.json"
+#: Non-persistent buffer file of the runnable component.
+BUFFERS_PATH = f"{RUNNABLE_DIR}/buffers.safetensors"
+#: Largest safetensors file a chunked family writes, in bytes (contract section 3).
+CHUNK_BYTES = 256 * 1024 * 1024
+#: Chunked families: manifest key to file stem under ``runnable/``.
+CHUNKED_FAMILIES: dict[str, str] = {"state_dict": "state_dict", "activations": "activations"}
+#: Manifest key of each family's payload schema.
+FAMILY_SCHEMA_KEYS: dict[str, str] = {
+    "state_dict": "state_dict_family",
+    "buffers": "buffers_family",
+    "activations": "activations_family",
 }
-#: Keys of the component index, all required.
-_COMPONENT_KEYS = frozenset(
-    {"format", "layout_version", "component_versions", "descriptor", "families"}
+#: Required keys of the manifest's ``runnable`` object (versions plus the descriptor).
+_REQUIRED_KEYS = frozenset(
+    {
+        "descriptor",
+        "descriptor_version",
+        "call_recipe_version",
+        "callable_ref_version",
+        "initializer_policy_version",
+        "witness_registry_version",
+    }
 )
-#: Keys of one family entry, all required.
-_FAMILY_KEYS = frozenset({"schema", "file", "sha256", "members"})
-#: Keys of one family member: its name plus the contract's tensor reference fields.
-_MEMBER_KEYS = frozenset(
-    {"name", "blob", "key", "dtype", "shape", "device", "requires_grad", "codec", "complex"}
-)
+#: Keys a present family adds to the ``runnable`` object.
+_FAMILY_KEYS = frozenset(FAMILY_SCHEMA_KEYS) | frozenset(FAMILY_SCHEMA_KEYS.values())
+#: Keys of one ``files`` row.
+_FILE_ROW_KEYS = frozenset({"sha256", "bytes"})
+#: Remedy for an altered component.
+_ALTERED = "save the trace again at level='runnable'; the runnable component was altered"
+
+
+@dataclass(frozen=True)
+class RunnableWrite:
+    """What the runnable writer door hands the trace writer.
+
+    Attributes
+    ----------
+    manifest:
+        The manifest's ``runnable`` object: component versions and file paths.
+    files:
+        Artifact-relative path to ``{"sha256", "bytes"}`` for every file written.
+    """
+
+    manifest: dict[str, Any]
+    files: dict[str, dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -102,15 +121,13 @@ class RunnableComponent:
 
     Attributes
     ----------
-    component_versions:
-        Component versions the writer stamped (the writer contract's envelope rows).
     descriptor:
         Decoded descriptor JSON object.
     families:
-        Family name to ``{member name: tensor}``; only present families appear.
+        Family name (``state_dict``, ``nonpersistent_buffers``,
+        ``activations``) to ``{member key: tensor}``; only present families appear.
     """
 
-    component_versions: Mapping[str, Any]
     descriptor: Mapping[str, Any]
     families: Mapping[str, Mapping[str, torch.Tensor]] = field(default_factory=dict)
 
@@ -205,107 +222,91 @@ def _unshared_host_tensors(
     return host
 
 
-def _member_record(name: str, key: str, file_name: str, tensor: torch.Tensor) -> dict[str, Any]:
-    """Build one family member: its name plus a contract tensor reference."""
-
-    return {
-        "name": name,
-        "blob": f"{RUNNABLE_DIR}/{file_name}",
-        "key": key,
-        "dtype": str(tensor.dtype).replace("torch.", ""),
-        "shape": [int(dim) for dim in tensor.shape],
-        "device": str(tensor.device),
-        "requires_grad": bool(tensor.requires_grad),
-        "codec": FAMILY_CODEC,
-        "complex": False,
-    }
-
-
-def _write_family(
-    component_dir: Path,
-    family: str,
-    schema: str,
-    members: Sequence[tuple[str, str, torch.Tensor]],
-) -> dict[str, Any]:
-    """Write one tensor family as one safetensors file and return its index entry.
-
-    Parameters
-    ----------
-    component_dir:
-        The ``runnable/`` directory being written.
-    family:
-        Key of ``FAMILY_FILES``.
-    schema:
-        The payload schema the descriptor declares for the family.
-    members:
-        ``(name, key, tensor)`` per member, in index order.
-    """
-
-    file_name = FAMILY_FILES[family]
-    host = _unshared_host_tensors(members)
-    target = component_dir / file_name
-    save_file(host, str(target))
-    os.chmod(target, 0o600)
-    return {
-        "schema": schema,
-        "file": file_name,
-        "sha256": sha256_file(target),
-        "members": [_member_record(name, key, file_name, tensor) for name, key, tensor in members],
-    }
-
-
-def _specs_as_members(specs: Sequence[Any], *, key_by_blob: bool) -> list[tuple[str, str, Any]]:
-    """Turn tlspec blob specs into family members keyed by name or blob id."""
-
-    return [
-        (str(spec.label), str(spec.blob_id) if key_by_blob else str(spec.label), spec.value)
-        for spec in specs
-    ]
-
-
-def write_runnable(
-    trace: Any,
-    path: str | Path,
-    *,
-    include_weights: bool = True,
-    include_activations: bool = False,
-) -> dict[str, Any]:
-    """Write the runnable component of a trace into an artifact directory.
-
-    The descriptor is produced, validated and payload-stamped exactly as the
-    tlspec 11 runnable save did; only the carrier changes.
-
-    Parameters
-    ----------
-    trace:
-        Live trace carrying runnable state.
-    path:
-        Artifact directory (the component lands under ``runnable/``).
-    include_weights:
-        Write the capture-time state dict family.
-    include_activations:
-        Write the capture-selected activation family.
+def manifest_versions() -> dict[str, str]:
+    """Return the version fields every manifest ``runnable`` object carries.
 
     Returns
     -------
-    dict[str, Any]
-        The manifest record of the component: ``component`` (artifact-relative
-        index path) and ``sha256`` of the index file.
-
-    Raises
-    ------
-    ArtifactError
-        ``bundle_save_failed`` when the component directory already exists;
-        the descriptor producer's own typed refusals otherwise.
+    dict[str, str]
+        Manifest key to the component version this runtime writes and reads.
     """
 
-    component_dir = Path(path) / RUNNABLE_DIR
-    if component_dir.exists() or component_dir.is_symlink():
-        _refuse(
-            "target_exists",
-            f"The runnable component directory {component_dir} already exists.",
-            "write the runnable component once, into a fresh artifact directory",
-        )
+    return {
+        "descriptor_version": RUNNABLE_TLSPEC_SCHEMA_VERSION,
+        "call_recipe_version": RUNNABLE_CALL_RECIPE_VERSION,
+        "callable_ref_version": str(RUNNABLE_CALLABLE_REF_SCHEMA_VERSION),
+        "initializer_policy_version": RUNNABLE_INITIALIZER_POLICY_VERSION,
+        "witness_registry_version": WITNESS_FAMILY_REGISTRY_VERSION,
+    }
+
+
+def _file_row(root: Path, relative: str) -> dict[str, Any]:
+    """Return the manifest ``files`` row of one written file."""
+
+    target = root / relative
+    os.chmod(target, 0o600)
+    return {"sha256": sha256_file(target), "bytes": target.stat().st_size}
+
+
+def _chunked(
+    members: Sequence[tuple[str, torch.Tensor]],
+) -> list[list[tuple[str, torch.Tensor]]]:
+    """Split ``(key, tensor)`` members into chunks of at most ``CHUNK_BYTES``.
+
+    A tensor larger than the limit gets a chunk of its own.
+    """
+
+    chunks: list[list[tuple[str, torch.Tensor]]] = []
+    current: list[tuple[str, torch.Tensor]] = []
+    size = 0
+    for key, tensor in members:
+        nbytes = tensor.numel() * tensor.element_size()
+        if current and size + nbytes > CHUNK_BYTES:
+            chunks.append(current)
+            current, size = [], 0
+        current.append((key, tensor))
+        size += nbytes
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def _write_safetensors(
+    root: Path, relative: str, members: Sequence[tuple[str, torch.Tensor]]
+) -> dict[str, Any]:
+    """Write one safetensors file and return its ``files`` row."""
+
+    save_file(_unshared_host_tensors(members), str(root / relative))
+    return _file_row(root, relative)
+
+
+def _write_chunked(
+    root: Path, stem: str, members: Sequence[tuple[str, torch.Tensor]], files: dict[str, Any]
+) -> list[str]:
+    """Write one chunked family; record each file in ``files``; return the paths."""
+
+    paths: list[str] = []
+    for number, chunk in enumerate(_chunked(members), start=1):
+        relative = f"{RUNNABLE_DIR}/{stem}-{number:04d}.safetensors"
+        files[relative] = _write_safetensors(root, relative, chunk)
+        paths.append(relative)
+    return paths
+
+
+def _spec_members(specs: Sequence[Any], *, key_by_blob: bool) -> list[tuple[str, torch.Tensor]]:
+    """Turn tlspec blob specs into ``(key, tensor)`` members keyed by name or blob id."""
+
+    return [(str(spec.blob_id) if key_by_blob else str(spec.label), spec.value) for spec in specs]
+
+
+def _stamped_descriptor(
+    trace: Any, *, include_weights: bool, include_activations: bool
+) -> tuple[Any, list[Any], list[Any], list[Any]]:
+    """Produce and payload-stamp the descriptor exactly as the tlspec 11 save did.
+
+    Returns the descriptor and the buffer, weight and activation blob specs.
+    """
+
     descriptor = require_sparse_run_descriptor(trace)
     buffer_specs = tlspec_bundle._capture_nonpersistent_buffer_blob_specs(trace, descriptor)
     if buffer_specs:
@@ -328,165 +329,239 @@ def write_runnable(
             capture_state_digests=state_digests,
             input_fingerprints=fingerprints,
         )
-    descriptor_json = sparse_descriptor_to_json(descriptor)
-    layers = descriptor.payload_layers
+    return descriptor, buffer_specs, weight_specs, activation_specs
 
+
+def write_runnable(
+    trace: Any,
+    path: str | Path,
+    *,
+    include_weights: bool = True,
+    include_activations: bool = False,
+) -> RunnableWrite:
+    """Write the runnable component of a trace into an artifact directory.
+
+    The descriptor is produced, validated and payload-stamped exactly as the
+    tlspec 11 runnable save did; only the carrier changes.
+
+    Parameters
+    ----------
+    trace:
+        Live trace carrying runnable state.
+    path:
+        Artifact directory (the component lands under ``runnable/``).
+    include_weights:
+        Write the capture-time state dict family.
+    include_activations:
+        Write the capture-selected activation family.
+
+    Returns
+    -------
+    RunnableWrite
+        The manifest ``runnable`` object and the ``files`` rows to merge.
+
+    Raises
+    ------
+    ArtifactError
+        ``bundle_save_failed`` when the component directory already exists;
+        the descriptor producer's own typed refusals otherwise.
+    """
+
+    root = Path(path)
+    component_dir = root / RUNNABLE_DIR
+    if component_dir.exists() or component_dir.is_symlink():
+        _refuse(
+            "target_exists",
+            f"The runnable component directory {component_dir} already exists.",
+            "write the runnable component once, into a fresh artifact directory",
+        )
+    descriptor, buffer_specs, weight_specs, activation_specs = _stamped_descriptor(
+        trace, include_weights=include_weights, include_activations=include_activations
+    )
+    layers = descriptor.payload_layers
     component_dir.mkdir(parents=True)
     os.chmod(component_dir, 0o700)
-    _write_private_text(component_dir / DESCRIPTOR_FILE, canonical_json_text(descriptor_json))
-    families: dict[str, Any] = {}
-    if buffer_specs:
-        families["nonpersistent_buffers"] = _write_family(
-            component_dir,
-            "nonpersistent_buffers",
-            str(layers.nonpersistent_buffers.schema),
-            _specs_as_members(buffer_specs, key_by_blob=False),
-        )
+    _write_private_text(
+        root / DESCRIPTOR_PATH, canonical_json_text(sparse_descriptor_to_json(descriptor))
+    )
+    files: dict[str, dict[str, Any]] = {DESCRIPTOR_PATH: _file_row(root, DESCRIPTOR_PATH)}
+    manifest: dict[str, Any] = {"descriptor": DESCRIPTOR_PATH, **manifest_versions()}
     if weight_specs:
-        families["state_dict"] = _write_family(
-            component_dir,
-            "state_dict",
-            str(layers.weights.schema),
-            _specs_as_members(weight_specs, key_by_blob=False),
+        manifest["state_dict"] = _write_chunked(
+            root, "state_dict", _spec_members(weight_specs, key_by_blob=False), files
         )
+        manifest["state_dict_family"] = str(layers.weights.schema)
+    if buffer_specs:
+        files[BUFFERS_PATH] = _write_safetensors(
+            root, BUFFERS_PATH, _spec_members(buffer_specs, key_by_blob=False)
+        )
+        manifest["buffers"] = BUFFERS_PATH
+        manifest["buffers_family"] = str(layers.nonpersistent_buffers.schema)
     if activation_specs:
-        families["activations"] = _write_family(
-            component_dir,
-            "activations",
-            str(layers.activations.schema),
-            _specs_as_members(activation_specs, key_by_blob=True),
+        manifest["activations"] = _write_chunked(
+            root, "activations", _spec_members(activation_specs, key_by_blob=True), files
         )
-    index = {
-        "format": COMPONENT_FORMAT,
-        "layout_version": COMPONENT_LAYOUT_VERSION,
-        "component_versions": component_versions(),
-        "descriptor": {
-            "file": DESCRIPTOR_FILE,
-            "sha256": sha256_file(component_dir / DESCRIPTOR_FILE),
-        },
-        "families": families,
-    }
-    index_path = component_dir / COMPONENT_FILE
-    _write_private_text(index_path, canonical_json_text(index))
-    return {"component": f"{RUNNABLE_DIR}/{COMPONENT_FILE}", "sha256": sha256_file(index_path)}
+        manifest["activations_family"] = str(layers.activations.schema)
+    return RunnableWrite(manifest=manifest, files=files)
 
 
-def _require_mapping(value: Any, where: str, keys: frozenset[str]) -> Mapping[str, Any]:
-    """Return ``value`` when it is an object with exactly ``keys``; refuse otherwise."""
+def _checked_path(root: Path, relative: Any, allowed: str, files: Mapping[str, Any]) -> Path:
+    """Resolve one listed component file and verify it against its ``files`` row.
 
-    if not isinstance(value, Mapping) or set(value) != keys:
-        found = sorted(value) if isinstance(value, Mapping) else type(value).__name__
+    ``allowed`` is the exact path, or a ``{n}`` pattern for a chunk number.
+    """
+
+    if not isinstance(relative, str) or not _path_allowed(relative, allowed):
         _refuse(
             "manifest_invalid",
-            f"The runnable component {where} must be an object with exactly the keys "
-            f"{sorted(keys)}; found {found}.",
-            "save the trace again at level='runnable'; the component index was altered",
+            f"The runnable component names the file {relative!r}; it must be {allowed!r}.",
+            _ALTERED,
         )
-    return value
-
-
-def _checked_file(component_dir: Path, name: Any, expected_sha: Any, where: str) -> Path:
-    """Resolve one component file by its fixed name and verify its sha256."""
-
-    allowed = {DESCRIPTOR_FILE, *FAMILY_FILES.values()}
-    if not isinstance(name, str) or name not in allowed or not isinstance(expected_sha, str):
+    row = files.get(relative)
+    if not isinstance(row, Mapping) or set(row) != _FILE_ROW_KEYS:
         _refuse(
             "manifest_invalid",
-            f"The runnable component {where} names {name!r}; only {sorted(allowed)} are allowed.",
-            "save the trace again at level='runnable'; the component index was altered",
+            f"The runnable component file {relative!r} has no sha256 and bytes row in the "
+            "manifest's files.",
+            _ALTERED,
         )
-    target = component_dir / name
-    reject_symlink_path(target, context=f"runnable {where}", code=REFUSAL_CODES["symlink_path"])
+    target = root / relative
+    reject_symlink_path(
+        target, context="runnable component file", code=REFUSAL_CODES["symlink_path"]
+    )
     if not target.is_file():
         _refuse(
             "blob_missing",
             f"The runnable component file {target} is missing.",
             "copy the whole artifact directory; the runnable component is incomplete",
         )
-    if sha256_file(target) != expected_sha:
+    if target.stat().st_size != row["bytes"] or sha256_file(target) != row["sha256"]:
         _refuse(
             "record_file_corrupt",
-            f"The runnable component file {target} does not match its recorded sha256.",
-            "save the trace again; the runnable component was altered after it was written",
+            f"The runnable component file {target} does not match its sha256 and byte length.",
+            _ALTERED,
         )
     return target
 
 
-def _read_json_file(target: Path, where: str) -> Any:
-    """Read one bounded JSON file; refuse an unreadable one."""
+def _path_allowed(relative: str, allowed: str) -> bool:
+    """Return whether ``relative`` is ``allowed`` (a ``{n}`` stands for four digits)."""
+
+    if "{n}" not in allowed:
+        return relative == allowed
+    head, tail = allowed.split("{n}")
+    number = relative[len(head) : len(relative) - len(tail)]
+    return (
+        relative.startswith(head)
+        and relative.endswith(tail)
+        and len(number) == 4
+        and number.isdigit()
+    )
+
+
+def _read_safetensors(target: Path, map_location: str | torch.device) -> dict[str, torch.Tensor]:
+    """Load one safetensors file; refuse an unreadable one."""
 
     try:
-        return read_bounded(target)
-    except (OSError, ValueError) as exc:
-        _refuse(
-            "record_file_corrupt",
-            f"The runnable {where} {target} is not readable JSON ({type(exc).__name__}).",
-            "save the trace again; the runnable component was altered after it was written",
-        )
-
-
-def _read_family(
-    component_dir: Path, family: str, entry: Any, map_location: str | torch.device
-) -> dict[str, torch.Tensor]:
-    """Validate one family entry, load its file and return ``{member name: tensor}``."""
-
-    record = _require_mapping(entry, f"family {family!r}", _FAMILY_KEYS)
-    if record["file"] != FAMILY_FILES[family]:
-        _refuse(
-            "manifest_invalid",
-            f"The runnable family {family!r} must live in {FAMILY_FILES[family]!r}.",
-            "save the trace again at level='runnable'; the component index was altered",
-        )
-    target = _checked_file(component_dir, record["file"], record["sha256"], f"family {family!r}")
-    members = record["members"]
-    if not isinstance(members, list):
-        _refuse(
-            "manifest_invalid",
-            f"The runnable family {family!r} members must be a list.",
-            "save the trace again at level='runnable'; the component index was altered",
-        )
-    by_key: dict[str, str] = {}
-    names: set[str] = set()
-    for member in members:
-        row = _require_mapping(member, f"family {family!r} member", _MEMBER_KEYS)
-        name, key = row["name"], row["key"]
-        if not isinstance(name, str) or not isinstance(key, str) or name in names or key in by_key:
-            _refuse(
-                "manifest_invalid",
-                f"The runnable family {family!r} repeats or mistypes member {name!r}.",
-                "save the trace again at level='runnable'; the component index was altered",
-            )
-        names.add(name)
-        by_key[key] = name
-    try:
-        tensors = load_file(str(target), device=str(map_location))
+        return load_file(str(target), device=str(map_location))
     except (OSError, ValueError, RuntimeError) as exc:
         _refuse(
             "record_file_corrupt",
             f"The runnable family file {target} is not a readable safetensors file "
             f"({type(exc).__name__}).",
-            "save the trace again; the runnable component was altered after it was written",
+            _ALTERED,
         )
-    if set(tensors) != set(by_key):
+
+
+def _read_family(
+    root: Path,
+    manifest: Mapping[str, Any],
+    family: str,
+    files: Mapping[str, Any],
+    map_location: str | torch.device,
+) -> dict[str, torch.Tensor] | None:
+    """Read one family's files into ``{key: tensor}``; ``None`` when it is absent."""
+
+    listed = manifest.get(family)
+    if listed is None:
+        return None
+    if family in CHUNKED_FAMILIES:
+        stem = CHUNKED_FAMILIES[family]
+        if not isinstance(listed, list) or not listed:
+            _refuse(
+                "manifest_invalid", f"The runnable {family!r} entry must list its files.", _ALTERED
+            )
+        expected = [f"{RUNNABLE_DIR}/{stem}-{n:04d}.safetensors" for n in range(1, len(listed) + 1)]
+        if listed != expected:
+            _refuse(
+                "manifest_invalid",
+                f"The runnable {family!r} files must be numbered from 0001 in order.",
+                _ALTERED,
+            )
+        paths = [
+            _checked_path(root, item, f"{RUNNABLE_DIR}/{stem}-{{n}}.safetensors", files)
+            for item in listed
+        ]
+    else:
+        paths = [_checked_path(root, listed, BUFFERS_PATH, files)]
+    values: dict[str, torch.Tensor] = {}
+    for target in paths:
+        chunk = _read_safetensors(target, map_location)
+        if set(chunk) & set(values):
+            _refuse("record_file_corrupt", f"The runnable {family!r} files repeat a key.", _ALTERED)
+        values.update(chunk)
+    return values
+
+
+def _checked_manifest(manifest: Any) -> Mapping[str, Any]:
+    """Check the ``runnable`` object's key set, versions and family pairing."""
+
+    keys = set(manifest) if isinstance(manifest, Mapping) else set()
+    if (
+        not isinstance(manifest, Mapping)
+        or not keys >= _REQUIRED_KEYS
+        or not keys <= _REQUIRED_KEYS | _FAMILY_KEYS
+        or any(
+            (family in keys) != (schema in keys) for family, schema in FAMILY_SCHEMA_KEYS.items()
+        )
+    ):
         _refuse(
-            "record_file_corrupt",
-            f"The runnable family file {target} holds keys that disagree with its index.",
-            "save the trace again; the runnable component was altered after it was written",
+            "manifest_invalid",
+            "The manifest's runnable object must hold the descriptor, the five component "
+            f"versions and a schema beside each family file; found {sorted(keys)}.",
+            _ALTERED,
         )
-    return {by_key[key]: tensor for key, tensor in tensors.items()}
+    if manifest["descriptor"] != DESCRIPTOR_PATH:
+        _refuse(
+            "manifest_invalid", f"The runnable descriptor must be {DESCRIPTOR_PATH!r}.", _ALTERED
+        )
+    stale = sorted(key for key, value in manifest_versions().items() if manifest[key] != value)
+    if stale:
+        _refuse(
+            "manifest_invalid",
+            f"The runnable component versions {stale} differ from this runtime's.",
+            "load it with the TorchLens release that wrote it, or save the trace again",
+        )
+    return manifest
 
 
 def load_runnable(
     path: str | Path,
+    manifest: Mapping[str, Any] | None,
+    files: Mapping[str, Any],
     *,
     map_location: str | torch.device = "cpu",
 ) -> RunnableComponent | None:
-    """Load the runnable component after the artifact validated.
+    """Load the runnable component after the artifact's manifest validated.
 
     Parameters
     ----------
     path:
         Artifact directory.
+    manifest:
+        The manifest's ``runnable`` object, or ``None`` when it has none.
+    files:
+        The manifest's ``files`` rows.
     map_location:
         Device for the family tensors.
 
@@ -499,77 +574,56 @@ def load_runnable(
     ------
     ArtifactError
         A typed refusal from ``REFUSAL_CODES`` for a symlinked, missing,
-        altered or malformed component.
+        altered or malformed component, or a component directory the manifest
+        does not list.
     """
 
-    component_dir = Path(path) / RUNNABLE_DIR
+    root = Path(path)
+    component_dir = root / RUNNABLE_DIR
     reject_symlink_path(
         component_dir, context="runnable component", code=REFUSAL_CODES["symlink_path"]
     )
-    if not component_dir.exists():
+    if manifest is None:
+        if component_dir.exists():
+            _refuse(
+                "manifest_invalid",
+                f"The artifact holds {component_dir} but its manifest lists no runnable object.",
+                _ALTERED,
+            )
         return None
-    index_path = component_dir / COMPONENT_FILE
-    reject_symlink_path(index_path, context="runnable index", code=REFUSAL_CODES["symlink_path"])
-    if not index_path.is_file():
+    checked = _checked_manifest(manifest)
+    descriptor_path = _checked_path(root, checked["descriptor"], DESCRIPTOR_PATH, files)
+    try:
+        descriptor = read_bounded(descriptor_path)
+    except (OSError, ValueError) as exc:
         _refuse(
-            "blob_missing",
-            f"The runnable component index {index_path} is missing.",
-            "copy the whole artifact directory; the runnable component is incomplete",
+            "record_file_corrupt",
+            f"The runnable descriptor {descriptor_path} is not readable JSON ({type(exc).__name__}).",
+            _ALTERED,
         )
-    index = _require_mapping(_read_json_file(index_path, "index"), "index", _COMPONENT_KEYS)
-    if index["format"] != COMPONENT_FORMAT or index["layout_version"] != COMPONENT_LAYOUT_VERSION:
-        _refuse(
-            "manifest_invalid",
-            f"The runnable component index {index_path} is not a layout "
-            f"{COMPONENT_LAYOUT_VERSION} {COMPONENT_FORMAT!r} index.",
-            "load it with the TorchLens release that wrote it, or save the trace again",
-        )
-    if not isinstance(index["component_versions"], Mapping):
-        _refuse(
-            "manifest_invalid",
-            "The runnable component versions must be an object.",
-            "save the trace again at level='runnable'; the component index was altered",
-        )
-    descriptor_entry = _require_mapping(
-        index["descriptor"], "descriptor", frozenset({"file", "sha256"})
-    )
-    if descriptor_entry["file"] != DESCRIPTOR_FILE:
-        _refuse(
-            "manifest_invalid",
-            f"The runnable descriptor must live in {DESCRIPTOR_FILE!r}.",
-            "save the trace again at level='runnable'; the component index was altered",
-        )
-    descriptor_path = _checked_file(
-        component_dir, descriptor_entry["file"], descriptor_entry["sha256"], "descriptor"
-    )
-    descriptor = _read_json_file(descriptor_path, "descriptor")
     if not isinstance(descriptor, Mapping):
         _refuse(
             "manifest_invalid",
-            f"The runnable descriptor {descriptor_path} must be a JSON object.",
-            "save the trace again at level='runnable'; the descriptor was altered",
+            f"The runnable descriptor {descriptor_path} must be an object.",
+            _ALTERED,
         )
-    raw_families = index["families"]
-    if not isinstance(raw_families, Mapping) or not set(raw_families) <= set(FAMILY_FILES):
-        _refuse(
-            "manifest_invalid",
-            f"The runnable families must be an object over {sorted(FAMILY_FILES)}.",
-            "save the trace again at level='runnable'; the component index was altered",
-        )
-    families = {
-        family: _read_family(component_dir, family, entry, map_location)
-        for family, entry in raw_families.items()
-    }
-    return RunnableComponent(
-        component_versions=dict(index["component_versions"]),
-        descriptor=descriptor,
-        families=families,
-    )
+    families = {}
+    for family, bound_as in (
+        ("state_dict", "state_dict"),
+        ("buffers", "nonpersistent_buffers"),
+        ("activations", "activations"),
+    ):
+        values = _read_family(root, checked, family, files, map_location)
+        if values is not None:
+            families[bound_as] = values
+    return RunnableComponent(descriptor=descriptor, families=families)
 
 
 def attach_runnable(
     trace: Any,
     path: str | Path,
+    manifest: Mapping[str, Any] | None,
+    files: Mapping[str, Any],
     *,
     map_location: str | torch.device = "cpu",
 ) -> Any:
@@ -585,6 +639,10 @@ def attach_runnable(
         Trace rebuilt by the reader.
     path:
         Artifact directory.
+    manifest:
+        The manifest's ``runnable`` object, or ``None``.
+    files:
+        The manifest's ``files`` rows.
     map_location:
         Device for the family tensors.
 
@@ -594,7 +652,7 @@ def attach_runnable(
         The non-executing readiness report attached to ``trace``.
     """
 
-    component = load_runnable(path, map_location=map_location)
+    component = load_runnable(path, manifest, files, map_location=map_location)
     if component is None:
         return attach_sparse_run_readiness(trace, None)
     report = attach_sparse_run_readiness(trace, component.descriptor)

@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1355 modules, 629773 lines, 0 modules without a docstring.
+85 packages, 1355 modules, 629943 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -23,7 +23,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10552 |
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 52 | 35638 |
-| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 6 | 1323 |
+| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 6 | 1493 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 21 | 10962 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5849 |
 | `torchlens._notebook` | Extras-gated notebook namespace with no public objects yet. | 9 | 2412 |
@@ -468,15 +468,15 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 
 ### `torchlens._io.format3`
 
-The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (6 modules, 1323 lines)
+The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (6 modules, 1493 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 15 |
-| `container` | The 3.0 bundle container: members as envelope references, relations as JSON. | 166 |
+| `container` | The 3.0 bundle container: members as envelope references, relations as JSON. | 278 |
 | `contract` | Constants of the 3.0 saved format, pinned against the persisted-field contract. | 250 |
 | `reader` | The 3.0 reader: manifest first, then every record validated against the contract. | 85 |
-| `runnable` | The 3.0 runnable component: descriptor JSON plus safetensors state, no pickle. | 731 |
+| `runnable` | The 3.0 runnable component: descriptor JSON plus safetensors state, no pickle. | 789 |
 | `writer` | The 3.0 writer: a trace or bundle to typed JSON records plus safetensors blobs. | 76 |
 
 ### `torchlens._ir`
