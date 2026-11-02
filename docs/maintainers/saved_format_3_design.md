@@ -3,12 +3,12 @@
 The design behind `torchlens/_io/format3/`: what the 3.0 artifact contains, how it is read and
 written, what leaves the code base with the pickle carrier, and what it is expected to cost.
 The constants are `torchlens/_io/format3/contract.py`; the prose contract is
-`saved_format_3.md` beside this page. Maintainer decisions it implements (31 Oct and 1 Nov
-2026): drop pickle for typed JSON plus safetensors, with unencodable user objects stringified
-under a disclosure; save the intervention recipe with the trace and refuse only callables
-(io.1); persist the derived columns at the portable level (io.2); key phase timings by
-pipeline step name (io.5); add `Op.is_constant` (backends.2); keep the save-time reload check
-and the checked load (late.21).
+`saved_format_3.md` beside this page, and this page says where it extends that contract.
+Maintainer decisions it implements (31 Oct and 1 Nov 2026): drop pickle for typed JSON plus
+safetensors, with unencodable user objects stringified under a disclosure; save the
+intervention recipe with the trace and refuse only callables (io.1); persist the derived
+columns at the portable level (io.2); key phase timings by pipeline step name (io.5); add
+`Op.is_constant` (backends.2); keep the save-time reload check and the checked load (late.21).
 
 ## 0. Summary
 
@@ -48,7 +48,7 @@ build streams disjoint write territories (writer: `writer.py`, `payloads.py`, `v
 | `contract.py` | constants (exists, contract stream): envelope names, tags, codecs, refusal table | 250 | contract (landed) |
 | `schema.py` | per-record schema derived at import from `STORAGE_BINDINGS` (`_data_classes/_schema_bindings.py`), field annotations and the writer contract's `component_specs`; nested-family sub-schemas (section 9); schema digest | 600 | writer |
 | `values.py` | the typed-value codec: Python value to tagged JSON and back, both directions in one module so tags stay symmetric; dtype table; disclosure builder | 450 | writer |
-| `payloads.py` | safetensors chunk writer and reader; inline-tensor rule; `LazyActivationRef` rebuilt on (chunk, key) | 450 | writer |
+| `payloads.py` | safetensors chunk writer and reader with opaque keys; `LazyActivationRef` rebuilt on (chunk, key) | 450 | writer |
 | `writer.py` | `write_trace`, `write_bundle`, `write_intervention_recipe`: include-flag resolution (reuses `save_policy.py`), privacy and barcode policies carried over from `scrub.py`, record-table emission, manifest, reload check, atomic publish | 750 | writer |
 | `reader.py` | `read_manifest`, `validate_artifact`, `load_trace`, `load_bundle`, `load_intervention_recipe`: manifest first, digests, record tables through the decoder, record construction, accessor rebuild, grouping settlement | 750 | reader |
 | `validate.py` | cross-record invariants after decode (section 9): site keys, structure-only coherence, checkpoint windows, edge carriers, graph structure, kernel relations, identity facts, injection provenance, evidence facts | 600 | reader |
@@ -71,116 +71,127 @@ each pass 1,500 lines once the scrub policies and the invariants move in.
 ## 2. Envelope
 
 Directory artifact (the `.tlspec` suffix stays a convention, not a requirement). Names are the
-contract's constants.
+contract's constants and the contract page's section (a), adopted as written.
 
 ```
 <name>.tlspec/
   manifest.json          required; read first; nothing else is opened before it validates
-  records/<record>.json  one table per record kind present (twelve kinds, RECORD_INDEX)
-  blobs/<family>-<nnn>.safetensors   tensor payloads; family = codec id; nnn from 000
+  records/<record>.json  one file per record kind present (twelve kinds, RECORD_INDEX)
+  blobs/<codec>-<nnnn>.safetensors   tensor payloads, chunked (section 6)
+  annotations.json       optional (contract page (a))
   intervention.json      io.1: present when the trace was captured with an intervention
   runnable/descriptor.json           runnable level: the sparse descriptor (content frozen)
-  runnable/state-<nnn>.safetensors   runnable level: state_dict_v1 and nonpersistent buffers
-  members/<member>/...   kind=bundle: one trace artifact per member, same layout
+  runnable/state_dict-<nnnn>.safetensors, runnable/buffers.safetensors
+  members/<index>-<name>/...         kind=bundle: one trace artifact per member; relations.json
 ```
 
-Manifest (JSON object; `MANIFEST_REQUIRED_FIELDS`):
+Manifest: the contract's field list (`format`, `format_version` 3, `tlspec_version`, `kind`,
+writer identity, `backend`, `backend_runtime`, `model_signature`, `model_fingerprint`,
+`save_level`, `payload_policy`, `contract_digest`, `codecs`, `records` as
+`{record: {path, rows, sha256, bytes}}`, `files` as `{relpath: {sha256, bytes}}`, optional
+`runnable` and `intervention` objects). This design adds one optional object:
 
 | Key | Value |
 | --- | --- |
-| `format` | `"torchlens.saved_format"` |
-| `format_version` | `3` |
-| `tlspec_version` | record contract version written (11 at the cut; the writer stream bumps when it adds the io.2 and backends.2 columns) |
-| `kind` | `trace`, `bundle` or `intervention` |
-| `save_level` | one of `SAVE_LEVELS` |
-| `payload_policy` | resolved include flags: `outs`, `grads`, `saved_args`, `rng_states`, `buffer_values`, `structure_only` (booleans) |
-| `contract_digest` | the `writer_contract_digest` of `torchlens/schemas/writer_contract_v<N>.json` the writer ran with |
-| `schema_digest` | digest of the record schemas `schema.py` derived (catches a binding change without a contract bump) |
-| `codecs` | list of codec ids used in `blobs/` |
-| `records` | object: record kind to `{file, rows, sha256}` |
-| `files` | object: every file under the root except `manifest.json`, path to `{bytes, sha256}` |
-| `disclosures` | object: `{count, first: [up to 16 "at" paths]}` of `unencodable` values written (section 5) |
-| `advisories` | capture advisories carried today in `_capture_advisories` (unchanged content, moved to the envelope so `tl.io.inspect` can show them without decoding records) |
-| `torchlens_version`, `python_version`, `torch_version`, `platform`, `created_at` | writer identity (`WRITER_IDENTITY_FIELDS`) |
+| `disclosures` | `{count, first: [up to 16 "at" paths]}` of `unencodable` values written (section 5); absent when the count is zero |
 
-The `files` digests replace `bundle_metadata.py`'s metadata-digest check and
-`_artifact_anchors.py`'s manifest-vs-metadata anchors: the manifest is the single integrity
-root; a record file whose digest disagrees refuses `bundle_metadata_integrity_refused` before
-decode. Blob verification is eager by default (as today) and skipped only for `lazy=True`
-reads of tensors that are never materialized.
+The `files` digests are the single integrity root (they replace `bundle_metadata.py`'s
+metadata digest and `_artifact_anchors.py`'s manifest-vs-metadata anchors); a listed file whose
+digest or length disagrees refuses `bundle_metadata_integrity_refused` before parse; unlisted
+files are never read. Blob verification is eager by default (as today) and deferred only for
+`lazy=True` reads of tensors that are never materialized. The manifest has no self-digest; the
+save-time reload check (section 9) is its check.
 
-Rejected: a single `artifact.json` holding manifest plus records (loses lazy and per-record
-digests; 100 MB JSON parses are slow and un-streamable); YAML or TOML (no gain, new decoder
-surface); zip container (atomic rename of a directory with fsync is already what `_durability`
-does; a zip would make streaming appends a rewrite).
+Rejected: a single `artifact.json` holding manifest plus records (loses per-record digests and
+lazy column skipping; 100 MB JSON parses are slow and un-streamable); YAML or TOML (no gain,
+new decoder surface); zip container (atomic rename of a directory with fsync is already what
+`_durability` does; a zip would make streaming appends a rewrite); a `schema_digest` beside
+`contract_digest` (redundant: the writer contract already digests the field policies and
+component specs the schemas derive from).
 
 ## 3. Record tables
 
-`records/<record>.json`:
+The contract page (b), adopted: `records/trace.json` is one object
+`{"record": "trace", "tlspec_version": 11, "fields": {key: value}}`; every other kind is
+columnar:
 
 ```json
-{"record": "op", "class": "torchlens._data_classes.op.Op", "tlspec_version": 11,
- "columns": ["label", "func_name", ...],
- "rows": [[...], [...]]}
+{"record": "op", "tlspec_version": 11, "rows": 1200,
+ "columns": {"label": [...], "func_name": [...], ...}}
 ```
 
-- `columns` is exactly `persisted_field_names(record)` from `_io/field_registry.py` (the
-  bindings), in page order. The reader refuses a column it does not know
-  (`unknown_persisted_field`) and refuses a missing column unless the schema marks the key as
-  added after `tlspec_version` of the file (the one forward-compatibility rule; it is how the
-  writer stream's io.2 and backends.2 columns read older 3.x files during the build, and it is
-  the only versioning rule inside the 3 major).
-- Row order is the record's natural order (ops by execution order, layers by label order,
-  modules by address order); the row index is the row id used by `id_array` fields.
-- One row per record instance. `trace` has exactly one row. Record kinds with no instances
-  have no file and no `records` entry.
-- Each cell is encoded by `StorageKind` (`JSON_TYPE_BY_STORAGE_KIND`): SCALAR, INTERNED, GROUP
-  and COMPUTED as `value` (section 4); EDGE and BITSET as `id_array` (arrays of row ids into
-  the target record); PAYLOAD as `tensor_ref` (a tensor reference or a container of them);
-  RUNTIME never written. Fields whose policy is `DROP` are not columns.
-- Nested record objects referenced from a field (for example `dict[int, BackwardPass]` on
-  `Trace`) are row ids into that record's table, never inline copies. Nested component objects
-  (the writer contract's `component_specs` classes that are not records: `Duration`,
-  `HookInfo`, `ModuleInputSnapshot`, `PreHookEffect`, `ContainerSpec`, `KernelLaunch`,
-  `Edit`, `FireRecord`, `_AtenExecutionContext` and the rest of the 50) are encoded inline as
-  `component` objects (section 4).
+- The column set is `persisted_field_names(record)` from `_io/field_registry.py` (the
+  bindings), filtered by level: a `required` key is a column at every level; an `optional` key
+  with a payload flag is a column iff that flag is on in `payload_policy`; a forbidden column
+  refuses (`record_schema_invalid`, provisional); absent optional columns are absent, never
+  null-filled. The reader refuses a column it does not know (`unknown_persisted_field`).
+  Within the 3 major the one forward-compatibility rule is: a key the schema marks as added
+  after the file's `tlspec_version` may be absent (this is how the writer stream's tlspec 12
+  columns read tlspec 11 files during the build).
+- Every column array has length `rows`; rows are in live container order (ops by execution
+  order, layers by label order, modules by address order). `trace` has one row (the object
+  form); record kinds with no instances have no file and no `records` entry.
+- Cross-record references are the label and address strings the live records hold today
+  (`parent_ops`, `module_address`, site keys); no row ids are introduced. EDGE and BITSET
+  columns are therefore `id_array`: arrays of those strings.
+- Each cell is encoded by `StorageKind` (`JSON_TYPE_BY_STORAGE_KIND`): SCALAR, INTERNED,
+  GROUP and COMPUTED as `value` (section 4; INTERNED writes the string, GROUP writes the member
+  list the accessor exposes, the store layout is physical); EDGE and BITSET as `id_array`;
+  PAYLOAD as `tensor_ref` (a tensor reference or a container of them); RUNTIME never written.
+  Fields whose policy is `DROP` are not columns.
+- Nested record objects held by a field (for example `dict[int, BackwardPass]` on `Trace`)
+  are the referencing strings or indices the live field holds, pointing into that record's
+  table, never inline copies. Nested value objects (the writer contract's `component_specs`
+  classes that are not records: `Duration`, `HookInfo`, `ModuleInputSnapshot`,
+  `PreHookEffect`, `ContainerSpec`, `KernelLaunch`, `Edit`, `FireRecord`,
+  `_AtenExecutionContext` and the rest of the 50) are encoded inline as `record`-tagged
+  objects (section 4).
 
 Rejected: array of objects per row (174 Op keys repeated per row triples the file and the
-parse time); column-major arrays (worse locality for the row-building decoder, no gain for
-lazy because rows are the unit of lazy); separate file per column (thousands of files).
+parse time); row-major arrays with a columns header (this design's first draft; the contract's
+columnar form makes the column-set check a key-set comparison on the file and lets a lazy
+reader skip payload columns, and the decoder zips columns at the same cost); separate file per
+column (thousands of files).
 
 ## 4. Typed values: the closed vocabulary
 
 Plain JSON carries `null`, `bool`, finite `number` (ints within 2^53), `string`, `array`
 (Python `list`), and `object` with string keys (Python `dict` whose keys are all `str` and
 none equal to the marker). Everything else is an object with the marker key `$tl` whose value
-is a tag. The tag set is closed; a tag the decoder does not know refuses
-`record_schema_invalid` (provisional spelling, section 14) naming the record, row and column.
+is a tag from `TYPED_VALUE_TAGS` (contract page (d), adopted). The tag set is closed; a tag the
+decoder does not know refuses `record_schema_invalid` (provisional spelling, section 14) naming
+the record, row and column.
 
 | Tag | Payload fields | Decodes to |
 | --- | --- | --- |
-| `tensor` | `TENSOR_REFERENCE_FIELDS` (`blob`, `key`, `dtype`, `shape`, `device`, `requires_grad`, `codec`, `complex`) plus `inline` (section 6) | a tensor (eager) or `LazyActivationRef` |
+| `tensor` | `TENSOR_REFERENCE_FIELDS` (`blob`, `key`, `dtype`, `shape`, `device`, `requires_grad`, `codec`, `complex`) | a tensor (eager) or `LazyActivationRef` |
 | `tuple` | `items` | `tuple` |
 | `set`, `frozenset` | `items` (canonically sorted by the encoder) | `set`, `frozenset` |
 | `dict` | `items`: array of `[key, value]` pairs (used when any key is not a `str`, or a key equals `$tl`) | `dict` |
-| `bytes` | `b64` | `bytes` |
-| `float` | `text`: `nan`, `inf`, `-inf`, `-0.0` | `float` |
-| `int` | `text`: decimal, used beyond 2^53 | `int` |
+| `bytes` | `b64` (up to 1 MiB) | `bytes` |
+| `float` | `text`: `nan`, `inf`, `-inf` | `float` |
+| `int` | `text`: decimal, used beyond 53 bits | `int` |
 | `complex` | `re`, `im` | `complex` |
-| `dtype` | `name` from the dtype table in `values.py` (torch dtype names; numpy dtype strings for `numpy_safetensors_v1`) | `torch.dtype` or `numpy.dtype` |
+| `dtype` | `name` (torch dtype name without prefix; numpy dtype string for `numpy_safetensors_v1`) from the dtype table in `values.py` | `torch.dtype` or `numpy.dtype` |
 | `device` | `text` | `torch.device` |
-| `type` | `name` from the closed class table: the twelve record classes, the component classes, builtins | the class object |
-| `enum` | `name` (class from the closed table), `value` | the enum member |
-| `component` | `kind` (a `component_specs` class name), `fields` (object, encoded recursively by the component's sub-schema) | the component dataclass instance |
+| `type` | `name` (dotted) | the dotted name string; the reader imports nothing. A field that needs the class object resolves it through the `record` table (none is known today; a builder that finds one files it) |
+| `enum` | `name` (TorchLens-owned enum class from the closed table), `value` | the enum member |
+| `record` | `type` (a class name from the closed allowlist), `fields` (object, encoded recursively by the class's sub-schema) | the TorchLens value object (`OpRef`, `FireRecord`, `Edit`, audit rows, `Duration`, `KernelLaunch`, ...) |
 | `unencodable` | `UNENCODABLE_FIELDS`: `type`, `repr` (at most 256 chars), `repr_length`, `at` | the disclosure object itself (section 5) |
 | `callable_placeholder` | `CALLABLE_PLACEHOLDER_FIELDS`: `position`, `qualname`, `repr_length` | the placeholder object (section 8) |
+
+The `record` allowlist: the writer contract's `component_specs` table (50 classes at v11,
+`field_registry.component_spec_tables()`), not the restricted unpickler's TorchLens rows as
+`RECORD_TYPE_ALLOWLIST_SOURCE` says today. The two lists name the same value objects; the
+unpickler is deleted by this design (section 10), and the writer contract is already the digested
+source of every nested class the format may hold. Filed as an amendment (section 15).
 
 Rules the decoder enforces and the encoder guarantees:
 
 - No `eval`, no `pickle`, no `importlib`, no `getattr` on a module by a name from the file.
-  `dtype`, `type` and `enum` resolve through tables built at import time from the record and
-  component class list and `torch`'s dtype attributes (`utils/_torch_compat.py` owns the
-  probe). A name outside a table refuses; it is never looked up.
+  `dtype`, `enum` and `record` resolve through tables built at import time from the component
+  class list and `torch`'s dtype attributes (`utils/_torch_compat.py` owns the probe). A name
+  outside a table refuses; it is never looked up.
 - Encoding is canonical: object keys sorted, sets sorted by the encoder's total order (type
   name, then repr), floats via `repr`, no trailing whitespace, UTF-8, `ensure_ascii=False`.
   Two saves of the same trace produce byte-identical record files (the property
@@ -191,9 +202,6 @@ Rules the decoder enforces and the encoder guarantees:
   of what it finds beyond the JSON kinds. The schema says what a cell may hold (section 9);
   a value of another kind refuses.
 
-The `component` tag and the `inline` field are additions to the contract stream's constants and
-are filed as amendments (section 15).
-
 ## 5. Unencodable values: stringified with a disclosure (format.1)
 
 A value the encoder meets that is not in section 4's vocabulary (a user object stored in a
@@ -203,14 +211,14 @@ module attribute, a custom metadata value, a third-party container) is written a
 anything on the value but `type()` and `repr()`; a `repr` that raises yields
 `"<unrepresentable>"`. A `torch.nn.Module` or tensor subclass found where a plain value was
 expected goes the same way (tensors in PAYLOAD and tensor-typed columns go to blobs; a tensor
-inside a user mapping in a `value` column is inlined or bloated per section 6, never
-stringified).
+inside a user mapping in a `value` column is a disclosure too, per contract page (c)).
 
 Disclosure: the manifest `disclosures.count` and the first 16 `at` paths; `tl.load` attaches
 an advisory `unencodable_values_stringified` (spelling awaiting a ruling, section 14) to the loaded
 trace's capture advisories, so a user who saved a trace with custom attributes learns on load
 that they came back as text. The decoder returns the disclosure object (a small frozen
-dataclass in `values.py` with the four fields and a `__repr__` that shows them) in place of
+dataclass in `values.py` with the four fields and a `__repr__` that shows them; its public
+name is the contract's spelling item 2, `UnencodableValue` proposed) in place of
 the value, so `op.module_attributes["x"]` is a visible stand-in and never silently `None`.
 
 Precedent: `scrub._stringify_value` and the manifest keys `custom_attributes_disclosure` and
@@ -225,33 +233,34 @@ pickling the odd value into a side blob (the ruling removes pickle entirely).
   backend transport codecs in `_io/payload_codec.py` (jax, tinygrad, mlx, paddle, tf) stay:
   they produce numpy arrays that `numpy_safetensors_v1` carries, plus their hint metadata,
   which rides in the tensor reference's `codec` object as today.
-- Chunked packed files: `blobs/<family>-<nnn>.safetensors`, where `family` is the codec id.
-  Every tensor is one key `t<k>` (opaque, monotone per artifact) in exactly one chunk. A chunk
-  is closed when it would pass `PAYLOAD_CHUNK_BYTES` (1 GiB, a module constant in
-  `payloads.py`, overridable only through the private `TORCHLENS_PAYLOAD_CHUNK_BYTES`
-  environment variable for tests). A reference is `{"blob": "torch_safetensors_v1-000",
+- Reference object, structure-only form, dtype and device spellings, the
+  `metadata_value_unportable` refusal for a tensor the codec cannot hold, complex as the real
+  view with `complex: true`, and no inline tensors (threshold 0): contract page (c), adopted. A
+  tensor met in a metadata position (a user mapping in a `value` column) becomes an
+  `unencodable` disclosure, never a refusal and never a blob.
+- Chunked packed files: `blobs/<codec>-<nnnn>.safetensors`. Every tensor is one key `t<k>`
+  (opaque, monotone per artifact) in exactly one chunk. A chunk is closed when it would pass
+  `PAYLOAD_CHUNK_BYTES` (256 MiB, the contract's cap, a module constant in `payloads.py`,
+  overridable only through the private `TORCHLENS_PAYLOAD_CHUNK_BYTES` environment variable
+  for tests). A reference is `{"blob": "blobs/torch_safetensors_v1-0000.safetensors",
   "key": "t17", ...}`.
-- Why chunks: one file per tensor costs an fsync per tensor (1,208 fsyncs, 1.7 s on
+- Where this departs from contract page (c), and why (filed as an amendment, section 15): the
+  contract packs by field family (`out`, `grad`, `transformed_out`, ..., `annotation`,
+  `recipe`) under keys `<record>.<row>.<field>[.<path>]`. Row-addressed keys cannot be written
+  by the streaming writer: during capture the row order is not known (orphan removal,
+  relabeling and container adoption renumber ops at finalize), and safetensors keys cannot be
+  renamed without rewriting the file. `relabel_blob` exists in `streaming.py` for exactly this.
+  Opaque keys make a relabel a record-cell edit and nothing else. Family packing buys nothing
+  safetensors does not already give: `safe_open` reads one tensor by offset whatever else is
+  in the file, and the per-file digest stays bounded by the chunk cap. Chunking by codec keeps
+  one chunk series per dtype universe.
+- Why chunks at all: one file per tensor costs an fsync per tensor (1,208 fsyncs, 1.7 s on
   chain_600; 415, 0.6 s on nsrt_cnn) and a directory with thousands of entries; one file per
   artifact cannot be appended to (safetensors is header-first) so streaming saves would have to
-  rewrite it at finalize. Chunks give streaming an append (open the next chunk) and keep every
-  file under a size the reader can `mmap` on 32-bit-offset platforms.
-- Keys are opaque, so relabeling an op (the streaming writer's `relabel_blob`) rewrites only
-  the record cell, never a blob or a header.
+  rewrite it at finalize. Chunks give streaming an append (open the next chunk).
 - Views and shared storage: safetensors has no aliasing. Each tensor reference is written
   contiguous; two record cells that referred to the same storage live get two keys. The
   `tensor_policy.py` rules (what is saved at which level) are unchanged.
-- Complex tensors are written as their real view with `complex: true`; bool, bfloat16,
-  float8 and the other safetensors dtypes pass through; a dtype safetensors cannot carry
-  (none in torch 2.1 to 2.12 today; the probe is in `_torch_compat`) refuses
-  `metadata_value_unportable` at save with the dtype named.
-- Structure-only artifacts omit `blob` and `key` and keep `dtype`, `shape`, `device`,
-  `requires_grad` (as today's structure-only BlobSpec does).
-- Inline rule: a tensor met in a `value` column (annotations, raw values, user mappings) with
-  `numel() <= 64` is written with `inline: [..]` (a flat list in row-major order, non-finite
-  floats as `float`-tagged objects, complex as `[re, im]` pairs) and no `blob`/`key`. A tensor
-  in a PAYLOAD column always goes to a chunk, whatever its size, so lazy loading, eviction and
-  `to_disk` have one path. This replaces `_inline_tensor.py` (pickle reduce of small tensors).
 - Lazy loading: `LazyActivationRef` (`_io/lazy.py`) keeps its public surface (`blob_path`,
   `materialize`, identity check) and holds (artifact root, chunk file, key, dtype, shape,
   device). `materialize` opens the chunk with `safetensors.safe_open` and reads one key; the
@@ -260,8 +269,9 @@ pickling the odd value into a side blob (the ruling removes pickle entirely).
   to the open chunk through `payloads.ChunkWriter.submit` instead.
 
 Rejected: npz or raw `.bin` with offsets (safetensors is already a dependency and already the
-blob format); base64 tensors in JSON (slow, 33 percent larger, defeats lazy); inlining PAYLOAD
-tensors below a size (two code paths for the same column).
+blob format); base64 tensors in JSON (slow, 33 percent larger, defeats lazy); inline small
+tensors in value columns (this design's first draft; the contract's reason wins: one encoder,
+one validator, one digest path, and packing removes the per-file cost inlining avoided).
 
 ## 7. Runnable component
 
@@ -274,14 +284,15 @@ callable-ref resolution in `_io/runnable_load.py` (`_getattr_allowlisted`). That
 replay machinery (which torch function to call), not record decoding; it stays the only
 name-to-object step in the load path and keeps its allowlist.
 
-What changes (carrier only):
+What changes (carrier only; names per contract page (a) and the runnable hand-off note):
 
 - The descriptor JSON moves from `manifest.json["run"]` to `runnable/descriptor.json`
   (listed in `files` with its digest). `manifest.json` keeps `kind`, `save_level: runnable`
-  and a `runnable: {descriptor: "runnable/descriptor.json", state_chunks: [...]}` pointer.
-- `state_dict_v1` tensors and nonpersistent buffers go to `runnable/state-<nnn>.safetensors`
-  chunks (same chunk writer, family `state`). Their references inside the descriptor are
-  `{blob, key}` like every other tensor reference; the per-tensor blob files go.
+  and the `runnable` object (component versions and paths).
+- `state_dict_v1` tensors go to `runnable/state_dict-<nnnn>.safetensors` chunks (the same
+  chunk writer, opaque keys) and nonpersistent buffers to `runnable/buffers.safetensors`.
+  Their references inside the descriptor are `{blob, key}` like every other tensor reference;
+  the per-tensor blob files go.
 - The module accessor state (`_io_module_accessor_state`) and `sites` that the runnable
   reader needs from the Trace are record columns (`trace` and `module` tables), read through
   the one decoder; `attach_sparse_run_readiness` and `runnable_coherence.py` take the decoded
@@ -296,18 +307,21 @@ with its own version line and its own loader; a column would couple the two vers
 ## 8. Intervention recipe (io.1)
 
 - `intervention.json` is written beside the records when the trace was captured with an
-  intervention: `{"format": "torchlens.intervention_recipe", "format_version": <the
-  `_spec_codec` version>, "spec": <_serialize_intervention_spec output>, "edits": [...],
-  "fire_records": [...]}`. The spec and fire-record JSON are the existing
-  `intervention/_spec_codec.py` encoders; nothing new is invented for selectors, targets,
-  sampling or edge addresses.
+  intervention: the contract page (e) grammar: `format = torchlens.intervention_recipe`, `format_version = 3`,
+  `helper_registry_version`, `save_level`, `executable`, `spec_derived`, `append_state`,
+  `rules[]`, `helpers[]`, `function_registry_keys[]`; a rule is `{index, direction, selector,
+  edit, metadata}` with the selector as `_target_spec_to_json` emits it. The selector, target,
+  sampling and edge-address JSON are the existing `intervention/_spec_codec.py` encoders;
+  nothing new is invented for them. Tensor arguments go to `blobs/` through the chunk writer.
 - Built-in edits (`Edit` with `portability == "builtin"`) are encoded field by field (`name`,
   `args`, `kwargs`, `metadata`, `signal`, `is_batch_independent`,
   `is_compatible_with_append`, `selection_recipe`) through the typed-value codec; `factory`
   stays `DROP`.
-- A callable edit (or a callable anywhere in `args`/`kwargs`) is replaced by
-  `{"$tl": "callable_placeholder", "position": "<edit index>.<arg path>", "qualname":
-  "<module>.<qualname>", "repr_length": <int>}`. The recipe still loads; a rerun that would
+- A callable edit has `portability: callable_placeholder` and carries
+  `{"$tl": "callable_placeholder", "position": <rule index>, "qualname": "<module>.<qualname>",
+  "repr_length": <int>}` (contract page (e)); a callable inside a built-in edit's `args`/`kwargs`
+  is replaced in place by the same object with `position` as `"<rule index>.<arg path>"`.
+  `executable` is false in the file and the manifest. The recipe still loads; a rerun that would
   need the callable refuses `run_intervention_spec_not_persisted` (code kept for exactly this
   case; row text rewritten by the writer stream to say "a callable edit was replaced by a
   placeholder at <position>"). Everything else about a loaded intervened trace reruns.
@@ -552,28 +566,35 @@ provisional mapping):
   `unknown`. Recommend: the function is public (`tl.io.detect_tlspec_format`), so the label
   change is a public word change and needs the lockstep edits.
 
-## 15. Where this design extends the contract constants
+## 15. Where this design and the contract page differ
 
-The constants in `contract.py` predate this page; these are the additions it needs:
+Adopted from the contract page (`saved_format_3.md`) after this design's first draft
+disagreed: columnar record files and
+label-string cross references (section 3); no inline tensors (section 6); `type` decodes to
+its dotted name; `record` as the tag for TorchLens value objects; the runnable and bundle
+layouts and the recipe `format_version` (sections 2, 7, 8); no `schema_digest`.
 
-1. `TYPED_VALUE_TAGS` gains `component` (section 4). Without it, a component object inside
-   an `Any`-typed cell (annotation values, `dict` columns) has no encoding but `unencodable`,
-   which would stringify first-party data.
-2. `TENSOR_REFERENCE_FIELDS` gains `inline` (section 6) for the small-tensor rule; `blob` and
-   `key` are absent when `inline` is present.
-3. `MANIFEST_REQUIRED_FIELDS` gains `schema_digest`, `disclosures` and `advisories`
-   (section 2); `files` entries are `{bytes, sha256}`; `records` entries are
-   `{file, rows, sha256}`.
-4. Record files carry `columns` and `rows` (section 3), not an array of objects.
-5. The runnable descriptor lives at `runnable/descriptor.json`, state chunks at
-   `runnable/state-<nnn>.safetensors` (section 7).
-6. Bundles use `manifest.json` with `kind: bundle` and `members/<name>/`; `bundle.json` is
-   not written (section 2).
-7. The one 2.x refusal test is the manifest and root listing, not a pickle-global probe
-   (section 14); `_pre3_module_paths.py` joins the deletion list.
+Where this page extends the contract page, each with the exact change:
 
-Everything else in `contract.py` (names, codes, levels, record index, planned and live-side
-keys, `PHASE_TIMING_KEY_SOURCE`) is adopted as written.
+1. Blob keys are opaque (`t<k>`), chunks are per codec (`blobs/<codec>-<nnnn>.safetensors`)
+   with the contract's 256 MiB cap; not per field family under `<record>.<row>.<field>` keys.
+   Reason: the streaming writer does not know the row at write time and safetensors keys
+   cannot be renamed (section 6). Builders: `payloads.py` owns the key counter; the record
+   cell carries the key; `relabel_blob` edits the cell only.
+2. `RECORD_TYPE_ALLOWLIST_SOURCE` becomes the writer contract's `component_specs`
+   (`torchlens._io.field_registry.component_spec_tables`), not `torchlens._io._safe_unpickle`,
+   which this design deletes (section 10). Same classes; a digested, surviving source.
+3. Manifest gains the optional `disclosures` object (section 2) so `tl.load` can attach the
+   `unencodable_values_stringified` advisory and `tl.io.inspect` can show the count without
+   decoding every cell.
+4. The intervention recipe's rule-level `callable_placeholder` is also allowed inside
+   `args`/`kwargs` of a built-in edit (a callable argument), with `position` as
+   `<rule index>.<arg path>` (section 8); the contract page (e) places it at the edit's
+   `portability` only. Both forms refuse rerun with the same code.
+
+Everything else in `contract.py` and the contract page (names, codes, levels, record index, planned
+and live-side keys, io.2 settle-at-save, `PHASE_TIMING_KEY_SOURCE`, the 2.x refusal rule,
+`record_schema_invalid` provisional) is adopted as written.
 
 ## 16. Build order
 
