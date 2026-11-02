@@ -217,7 +217,14 @@ jobs:
           # four workers oversubscribe the runner.
           OMP_NUM_THREADS: "1"
         run: |
-          pytest tests/ -m smoke -n 4 --tb=short -q \
+          # Collect only the smoke file list (test files whose source spells a
+          # smoke mark): a whole-tree collection imports every test module.
+          # tests/_tiers_plugin.py fails any whole-tree session that finds a
+          # smoke test outside the list, and the tier-durations repository
+          # check fails a helper module that applies the mark.
+          smoke_list="$(python scripts/tier_durations.py files --tier smoke)"
+          mapfile -t smoke_files <<< "$smoke_list"
+          pytest "${smoke_files[@]}" -m smoke -n 4 --tb=short -q \
             --junitxml="${{ runner.temp }}/junit/smoke.junit.xml"
           # `serial` tests are load- or memory-sensitive: run them without
           # xdist so parallel workers never starve them (marker contract).
@@ -427,7 +434,14 @@ jobs:
           # One torch thread per xdist worker (see tests.yml smoke step).
           OMP_NUM_THREADS: "1"
         run: |
-          pytest tests/ -m smoke -n 4 --tb=short -q \
+          # Collect only the smoke file list (test files whose source spells a
+          # smoke mark): a whole-tree collection imports every test module.
+          # tests/_tiers_plugin.py fails any whole-tree session that finds a
+          # smoke test outside the list, and the tier-durations repository
+          # check fails a helper module that applies the mark.
+          smoke_list="$(python scripts/tier_durations.py files --tier smoke)"
+          mapfile -t smoke_files <<< "$smoke_list"
+          pytest "${smoke_files[@]}" -m smoke -n 4 --tb=short -q \
             --junitxml="${{ runner.temp }}/junit/canary-smoke.junit.xml"
           # `serial` tests run without xdist (see tests.yml smoke step).
           mapfile -t serial_files < <(grep -rlE --include="test_*.py" "mark\.serial" tests)
@@ -632,7 +646,14 @@ jobs:
         env:
           OMP_NUM_THREADS: "1"
         run: |
-          pytest tests/ -m smoke -n 4 \
+          # Collect only the smoke file list (test files whose source spells a
+          # smoke mark): a whole-tree collection imports every test module.
+          # tests/_tiers_plugin.py fails any whole-tree session that finds a
+          # smoke test outside the list, and the tier-durations repository
+          # check fails a helper module that applies the mark.
+          smoke_list="$(python scripts/tier_durations.py files --tier smoke)"
+          mapfile -t smoke_files <<< "$smoke_list"
+          pytest "${smoke_files[@]}" -m smoke -n 4 \
             --cov=torchlens --cov-branch \
             --cov-report=term --cov-report=xml:"${{ runner.temp }}/coverage.xml" \
             --cov-report=json:"${{ runner.temp }}/coverage.json" \

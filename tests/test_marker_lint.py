@@ -38,13 +38,14 @@ import pytest
 from _source_corpus import package_ast, package_files, package_source
 from _tiers_plugin import (
     SMOKE_INCOMPATIBLE_MARKERS,
+    fail_on_off_list_smoke_items,
     fail_on_tier_violations,
     item_combo_violations,
     smoke_only_session,
     tier_combo_violations,
 )
 
-from scripts.tier_durations import file_tier, source_may_hold_smoke_items
+from scripts.tier_durations import file_tier, on_smoke_file_list, source_may_hold_smoke_items
 
 
 @pytest.mark.smoke
@@ -1208,11 +1209,13 @@ def test_selection_markers_are_orthogonal_to_every_tier() -> None:
 def test_smoke_file_list_never_hides_a_smoke_test(request: pytest.FixtureRequest) -> None:
     """Every smoke item lives in a file ``scripts/tier_durations.py files --tier smoke`` lists.
 
-    The commit gate (``scripts/smoke_ci_parity.py``) collects only the test files
-    whose source spells ``mark.smoke`` / ``mark.smoke_cells``. A smoke mark
-    applied any other way (an alias imported from a helper, a hook adding it)
-    would silently drop out of the commit gate, so every session checks each
-    collected smoke item against the same source token.
+    Every smoke run (the commit gate ``scripts/smoke_ci_parity.py`` and CI's
+    smoke steps) collects only the test files whose source spells
+    ``mark.smoke`` / ``mark.smoke_cells``. A smoke mark applied any other way
+    (an alias imported from a helper, a hook adding it) would silently drop out
+    of them. ``tests/_tiers_plugin.py`` fails every session that collects such
+    an item (deselected ones included); this re-checks the selected items after
+    every collection hook has run.
     """
 
     hidden = sorted(
@@ -1220,7 +1223,7 @@ def test_smoke_file_list_never_hides_a_smoke_test(request: pytest.FixtureRequest
             str(item.path)
             for item in request.session.items
             if item.get_closest_marker("smoke") is not None
-            and not source_may_hold_smoke_items(Path(item.path))
+            and not on_smoke_file_list(Path(item.path))
         }
     )
     assert not hidden, (
@@ -1293,8 +1296,12 @@ def test_smoke_cells_marks_exactly_the_named_items(item_name: str, expected: boo
         def __init__(self, name: str) -> None:
             self.name = name
             self.nodeid = f"tests/test_planted.py::{name}"
-            self.config = SimpleNamespace()
+            self.path = Path(__file__)  # on the smoke file list
+            self.config = SimpleNamespace(stash=pytest.Stash())
             self.added: list[str] = []
+
+        def get_closest_marker(self, name: str) -> pytest.Mark | None:
+            return pytest.mark.smoke.mark if name in self.added else None
 
         def iter_markers(self, name: str | None = None) -> list[pytest.Mark]:
             if name is None:
@@ -1308,6 +1315,39 @@ def test_smoke_cells_marks_exactly_the_named_items(item_name: str, expected: boo
     item = _FakeItem(item_name)
     pytest_itemcollected(item)  # type: ignore[arg-type]
     assert item.added == (["smoke"] if expected else [])
+
+
+def test_item_collection_records_smoke_items_off_the_file_list(tmp_path: Path) -> None:
+    """A smoke item from a file the smoke file list skips is recorded, then fails the session."""
+
+    from _tiers_plugin import _OFF_LIST_SMOKE_ITEMS, pytest_itemcollected
+
+    outside = tmp_path / "test_outside.py"
+    outside.write_text("@pytest.mark.smoke\ndef test_x(): ...\n")
+    config = SimpleNamespace(stash=pytest.Stash())
+
+    def _item(path: Path, nodeid: str, smoke: bool) -> SimpleNamespace:
+        return SimpleNamespace(
+            name=nodeid.rsplit("::", 1)[-1],
+            nodeid=nodeid,
+            path=path,
+            config=config,
+            iter_markers=lambda name=None: [],
+            get_closest_marker=lambda name: pytest.mark.smoke.mark if smoke else None,
+        )
+
+    items = [
+        _item(outside, "elsewhere/test_outside.py::test_x", smoke=True),
+        _item(outside, "elsewhere/test_outside.py::test_y", smoke=False),
+        _item(Path(__file__), "tests/test_marker_lint.py::test_z", smoke=True),
+    ]
+    for item in items:
+        pytest_itemcollected(item)  # type: ignore[arg-type]
+    recorded = config.stash[_OFF_LIST_SMOKE_ITEMS]
+    assert recorded == ["elsewhere/test_outside.py::test_x"]
+    with pytest.raises(pytest.UsageError, match="outside the smoke file list"):
+        fail_on_off_list_smoke_items(recorded)
+    fail_on_off_list_smoke_items([])
 
 
 @pytest.mark.smoke

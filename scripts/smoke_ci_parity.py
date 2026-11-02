@@ -132,11 +132,11 @@ def ensure_venv(venv: Path, reinstall: bool) -> Path:
 
 
 def smoke_test_files() -> list[str]:
-    """Return the test files whose source spells a smoke mark (the files `-m smoke` can select).
+    """Return the smoke file list (``scripts/tier_durations.py files --tier smoke``).
 
     Collecting only these files keeps the gate's collection to the smoke tier
-    instead of the whole tree; ``tests/test_marker_lint.py`` holds every smoke
-    item to the same source token.
+    instead of the whole tree, as CI's smoke steps do. ``tests/_tiers_plugin.py``
+    fails any session that collects a smoke item from a file outside the list.
     """
 
     import importlib.util
@@ -151,7 +151,7 @@ def smoke_test_files() -> list[str]:
     return [
         file
         for file in tier_durations.test_files_on_disk(PROJECT_ROOT / "tests")
-        if tier_durations.source_may_hold_smoke_items(PROJECT_ROOT / file)
+        if tier_durations.on_smoke_file_list(PROJECT_ROOT / file)
     ]
 
 
