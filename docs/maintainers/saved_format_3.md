@@ -295,6 +295,35 @@ callable reference and initializer policy at the component versions the writer c
 written follows the callable placeholder rule and makes the artifact audit-only. The `runnable`
 manifest object lists the component versions and files.
 
+- `descriptor.json` is canonical JSON (sorted keys, no NaN or infinity) and is byte for byte the
+  descriptor the tlspec 11 manifest carried under `run`. Callables appear only as callable registry
+  records (a registry key per callable); no callable object is ever written.
+- `state_dict-NNNN.safetensors` holds the capture-time state dict keyed by canonical state name,
+  numbered from 0001, each file at most 256 MiB (a larger tensor gets a file of its own).
+  `buffers.safetensors` holds the non-persistent buffer values keyed by buffer name.
+  `activations-NNNN.safetensors` holds the capture-selected activations, keyed by the activation
+  member's blob id, when the save archived them. Tensors that share storage (tied weights, view
+  activations) are written as separate copies.
+- The `runnable` manifest object is closed. Required: `descriptor`, `descriptor_version`,
+  `call_recipe_version`, `callable_ref_version`, `initializer_policy_version`,
+  `witness_registry_version`. Each present family adds its file entry and its schema:
+  `state_dict` (list) with `state_dict_family`, `buffers` with `buffers_family`, `activations`
+  (list) with `activations_family`. Every listed file has a `files` row.
+- Load refuses `manifest_schema_invalid` for an unknown key, a family without its schema, a version
+  other than the runtime's, a file name outside the fixed names, chunk numbering that is not
+  0001 upward, a listed file without a `files` row, or a `runnable/` directory the manifest does
+  not list; `bundle_metadata_integrity_refused` for a file whose sha256 or byte length differs;
+  `bundle_load_failed` for a listed file that is missing; `load_path_symlink_rejected` for a
+  symlinked file. The families then bind through the same strict state binders as before, so
+  readiness, numeric attestation and path faithfulness prove what they proved in tlspec 11.
+
+A bundle's member list references each member by `name`, `path` (`members/<index>-<name>`, the
+name part keeping letters, digits, `.`, `_` and `-` and at most 64 characters) and
+`manifest_sha256`, the sha256 of that member's `manifest.json`. A member swapped or edited after
+the save refuses `bundle_metadata_integrity_refused`; an unknown reference key or a mistyped hash
+refuses `manifest_schema_invalid`. `relations.json` holds the closed relation rows and is listed
+in the bundle manifest's `files`.
+
 ## 8. Worked examples
 
 A portable save of a tiny CNN (`conv2d`, `relu`, `linear`), excerpts:

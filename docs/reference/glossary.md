@@ -699,7 +699,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   artifact). Pair kinds: `alternative_of` (peers; still comparable), `forked_from`,
   `successor_of`, `escalates`, `fed_by`, `selected_by`; member kind: `episode_member`. Each kind's
   params are a
-  closed set; rows persist in `bundle.json` and every load re-checks them. On a pair row `from` is
+  closed set; rows persist in the bundle artifact (`relations.json` in the 3.0 format) and every
+  load re-checks them. On a pair row `from` is
   always the LATER member. Rows are ordering and topology claims: members joined by a directed
   path of ordering kinds are not comparison operands.
 
@@ -934,7 +935,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Runnable artifact**
 : A `.tlspec` saved at `level="runnable"` with a sparse taken-path descriptor. Its source capture
   must use `replayable=True`; this flag supplies replay templates even when no intervention
-  is planned.
+  is planned. In the 3.0 format the descriptor is `runnable/descriptor.json` and the state is
+  safetensors files beside it, listed by the manifest's `runnable` object; no callable is ever
+  pickled ([saved_format_3.md](../maintainers/saved_format_3.md), section 7).
 
 **Readiness**
 : The non-executing runnable state `ready` or `unavailable`.
