@@ -20,7 +20,7 @@ from . import TLSPEC_VERSION, ArtifactError, refuse_bundle_exists
 from ._durability import _restrict_mode, fsync_dir, fsync_tree
 from ._tlspec_identity import _backend_v2_fields, _model_fingerprint, _model_signature, _safe_len
 from ._tlspec_json_helpers import _json_int_or_none, _json_str_or_none, _utc_timestamp
-from .format3.writer import envelope_fields
+from .format3.writer import EnvelopeSpec, envelope_fields
 from .manifest import Manifest, TensorEntry, _runtime_python_version
 from .paths import reject_symlink_path
 
@@ -350,16 +350,7 @@ class _TlSpecWriter:
             intervention_compat_metadata=None,
         )
         manifest.pop("body_index", None)
-        manifest.update(
-            envelope_fields(
-                tmp_path,
-                kind="bundle",
-                save_level=save_level,
-                payload_policy={},
-                records={},
-                codecs=(),
-            )
-        )
+        manifest.update(envelope_fields(tmp_path, EnvelopeSpec("bundle", save_level)))
         return manifest
 
     @staticmethod

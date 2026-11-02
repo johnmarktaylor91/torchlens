@@ -30,7 +30,7 @@ from .._utils.hashing import sha256_file
 from . import TLSPEC_VERSION, ArtifactError, refuse_bundle_exists
 from ._durability import _restrict_mode, fsync_dir, fsync_tree
 from .format3.payloads import TORCH_CODEC, PayloadStore, host_tensor, tensor_reference
-from .format3.writer import preflight_reload, write_trace_envelope
+from .format3.writer import EnvelopeSpec, TraceTables, preflight_reload, write_trace_envelope
 from .manifest import Manifest, TensorEntry, _runtime_python_version
 from .paths import _make_tmp_bundle_path, reject_symlink_path
 from .scrub import BlobSpec
@@ -478,14 +478,12 @@ class BundleStreamWriter:
 
         try:
             scrubbed_state["_capture_outcome"] = outcome_payload
+            policy, codecs = self._staged_payload_policy, self._payload_store.codecs
             write_trace_envelope(
                 self.tmp_path,
                 base_manifest=self._staged_base_manifest,
-                scrubbed_state=scrubbed_state,
-                tensor_refs=self._tensor_refs,
-                codecs=self._payload_store.codecs,
-                save_level="portable",
-                payload_policy=self._staged_payload_policy,
+                tables=TraceTables(scrubbed_state, self._tensor_refs),
+                envelope=EnvelopeSpec("trace", "portable", payload_policy=policy, codecs=codecs),
             )
             for path in sorted(self.tmp_path.rglob("*")):
                 _restrict_mode(path, 0o700 if path.is_dir() else 0o600)

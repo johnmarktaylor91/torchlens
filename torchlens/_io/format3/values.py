@@ -704,7 +704,10 @@ def enum_table() -> dict[str, type[enum.Enum]]:
     modules.update(module for module, _ in RECORD_CONTRACT_CLASSES.values())
     for module_name in sorted(modules):
         for value in vars(import_module(module_name)).values():
-            if isinstance(value, type) and issubclass(value, enum.Enum):
-                if _is_torchlens_class(value):
-                    table[class_path(value)] = value
+            if (
+                isinstance(value, type)
+                and issubclass(value, enum.Enum)
+                and _is_torchlens_class(value)
+            ):
+                table[class_path(value)] = value
     return table

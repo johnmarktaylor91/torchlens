@@ -24,10 +24,11 @@ from .._io.format3.recipe import (
     PLACEHOLDER_PORTABILITY,
     CallablePlaceholder,
     NestedEdit,
+    RecipeHeader,
     read_recipe,
     recipe_placeholders,
 )
-from .._io.format3.writer import envelope_fields, write_intervention_recipe
+from .._io.format3.writer import EnvelopeSpec, envelope_fields, write_intervention_recipe
 from .._io.format_errors import ArtifactError
 from .._io.paths import reject_symlink_path
 from .._io.tensor_policy import Ok, is_supported_for_save
@@ -49,7 +50,7 @@ from .errors import (
     SiteResolutionError,
     UntrustedCallableError,
 )
-from .helpers import HELPER_REGISTRY_VERSION, rebuild_builtin_helper
+from .helpers import rebuild_builtin_helper
 from .spec_compat import (
     SpecCompat,
     TargetManifestDiff,
@@ -150,15 +151,14 @@ def save_intervention(
         _refuse_unsupported_recipe_tensors(spec)
         target_manifest = _build_target_manifest(trace, spec, save_level)
         store = PayloadStore(tmp_path)
-        intervention_entry, disclosures = write_intervention_recipe(
-            spec,
-            tmp_path,
-            store=store,
+        header = RecipeHeader(
             save_level=save_level.value,
-            helper_registry_version=HELPER_REGISTRY_VERSION,
             append_state=_append_state_for_json(trace),
             function_registry_keys=_serialize_function_registry_keys(trace),
             spec_derived=_spec_is_predicate_derived(spec),
+        )
+        intervention_entry, disclosures = write_intervention_recipe(
+            spec, tmp_path, store=store, header=header
         )
         chunks = store.close()
         if _write_tensor_blob_fn is not None:
@@ -176,12 +176,12 @@ def save_intervention(
             envelope=dict(
                 envelope_fields(
                     tmp_path,
-                    kind="intervention",
-                    save_level=save_level.value,
-                    payload_policy={},
-                    records={},
-                    codecs=store.codecs,
-                    disclosures=disclosures,
+                    EnvelopeSpec(
+                        "intervention",
+                        save_level.value,
+                        codecs=store.codecs,
+                        disclosures=disclosures,
+                    ),
                 ),
                 intervention=intervention_entry,
             ),

@@ -391,7 +391,9 @@ def read_tensor(root: str | Path, *, blob: str, key: str) -> torch.Tensor:
     path = contained_chunk(Path(root), blob)
     try:
         with safe_open(str(path), framework="pt") as handle:
-            if key not in handle.keys():
+            # A safetensors handle has no membership test; list its keys.
+            stored_keys = handle.keys()
+            if key not in stored_keys:
                 raise ArtifactError(
                     f"Tensor key {key!r} is missing from {blob}.",
                     code="bundle_load_failed",
@@ -407,13 +409,7 @@ def read_tensor(root: str | Path, *, blob: str, key: str) -> torch.Tensor:
 
 
 def submit_tensor_payload(
-    *,
-    store: PayloadStore,
-    tensor_refs: dict[str, dict[str, Any]],
-    blob_id: str,
-    tensor: torch.Tensor,
-    kind: str,
-    label: str,
+    *, store: PayloadStore, tensor_refs: dict[str, dict[str, Any]], blob_spec: Any
 ) -> dict[str, Any]:
     """Queue one torch tensor payload into the artifact's chunk files.
 
@@ -423,14 +419,10 @@ def submit_tensor_payload(
         Chunk store of the staged artifact (``blobs/<codec>-<nnnn>.safetensors``).
     tensor_refs:
         Blob id to tensor reference fields; this payload's entry is added.
-    blob_id:
-        Opaque blob identifier the scrubbed state references.
-    tensor:
-        Tensor payload to persist.
-    kind:
-        Logical tensor kind.
-    label:
-        Human-readable TorchLens layer label.
+    blob_spec:
+        Logical payload selected during scrub: ``blob_id`` (the opaque id the
+        scrubbed state references), ``value`` (the tensor), ``kind`` (logical
+        tensor kind) and ``label`` (TorchLens layer label).
 
     Returns
     -------
@@ -439,13 +431,14 @@ def submit_tensor_payload(
         ``seal_tensor_entries`` once the chunk is on disk.
     """
 
+    blob_id, tensor = blob_spec.blob_id, blob_spec.value
     host = host_tensor(tensor)
     blob, key = store.submit(host, codec=TORCH_CODEC)
     tensor_refs[blob_id] = tensor_reference(tensor, blob=blob, key=key)
     return {
         "blob_id": blob_id,
-        "kind": kind,
-        "label": label,
+        "kind": blob_spec.kind,
+        "label": blob_spec.label,
         "relative_path": blob,
         "backend": "safetensors",
         "shape": [int(dim) for dim in tensor.shape],

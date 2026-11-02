@@ -449,11 +449,8 @@ def test_disclosures_count_and_first_paths(tmp_path: Path) -> None:
     manifest = format_writer.write_trace_envelope(
         tmp_path,
         base_manifest={},
-        scrubbed_state=state,
-        tensor_refs={},
-        codecs=[],
-        save_level="portable",
-        payload_policy=policy,
+        tables=format_writer.TraceTables(state, {}),
+        envelope=format_writer.EnvelopeSpec("trace", "portable", payload_policy=policy),
     )
     assert manifest == _manifest(tmp_path)
     summary = manifest.get("disclosures")

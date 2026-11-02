@@ -43,7 +43,6 @@ from .._utils.display import user_stacklevel
 from .._utils.hashing import sha256_file
 from ..backends.registry import BackendSpec, get_backend_spec
 from ..errors import RunnablePreflightError, TorchLensWarning
-from ..intervention.helpers import HELPER_REGISTRY_VERSION
 from . import (
     TLSPEC_VERSION,
     ArtifactError,
@@ -75,7 +74,13 @@ from .format3.payloads import (
     tensor_reference,
 )
 from .format3.recipe import write_trace_recipe
-from .format3.writer import preflight_reload, settle_live_side, write_trace_envelope
+from .format3.writer import (
+    EnvelopeSpec,
+    TraceTables,
+    preflight_reload,
+    settle_live_side,
+    write_trace_envelope,
+)
 from .lazy import LazyActivationRef
 from .manifest import Manifest, Provenance, TensorEntry, enforce_version_policy
 from .paths import (
@@ -762,11 +767,7 @@ def save(
         # io.1: a staged intervention spec persists as intervention.json (its
         # tensors join this artifact's payload store before it closes).
         intervention_entry, recipe_disclosures = write_trace_recipe(
-            tmp_path,
-            trace,
-            store=payload_store,
-            save_level=save_level,
-            helper_registry_version=HELPER_REGISTRY_VERSION,
+            tmp_path, trace, store=payload_store, save_level=save_level
         )
         payload_store.close()
         tensor_entries = seal_tensor_entries(tmp_path, tensor_entries)
@@ -811,16 +812,15 @@ def save(
         )
         if intervention_entry is not None:
             base_manifest["intervention"] = intervention_entry
-        write_trace_envelope(
-            tmp_path,
-            base_manifest=base_manifest,
-            extra_disclosures=recipe_disclosures,
-            scrubbed_state=scrubbed_state,
+        tables = TraceTables(
+            scrubbed_state,
+            tensor_refs,
             record_pairs=[*record_pairs, (scrubbed_state, trace)],
             include_source=bool(include_source),
-            tensor_refs=tensor_refs,
-            codecs=payload_store.codecs,
-            save_level=save_level,
+        )
+        envelope = EnvelopeSpec(
+            "trace",
+            save_level,
             payload_policy={
                 "include_outs": bool(include_outs),
                 "include_grads": bool(include_grads),
@@ -830,6 +830,11 @@ def save(
                 "include_custom_attributes": bool(include_custom_attributes),
                 "structure_only": scrubbed_state.get("_options_structure_only") is True,
             },
+            codecs=payload_store.codecs,
+            disclosures=recipe_disclosures,
+        )
+        write_trace_envelope(
+            tmp_path, base_manifest=base_manifest, tables=tables, envelope=envelope
         )
         _restrict_tree_modes(tmp_path)
         preflight_reload(tmp_path)
@@ -2844,14 +2849,7 @@ def _write_payload_blob(
 
     if blob_spec.logical_backend == "torch" and isinstance(blob_spec.value, torch.Tensor):
         return TensorEntry(
-            **submit_tensor_payload(
-                store=store,
-                tensor_refs=tensor_refs,
-                blob_id=blob_spec.blob_id,
-                tensor=blob_spec.value,
-                kind=blob_spec.kind,
-                label=blob_spec.label,
-            )
+            **submit_tensor_payload(store=store, tensor_refs=tensor_refs, blob_spec=blob_spec)
         )
 
     encoded = codec.to_numpy(blob_spec.value)
