@@ -3,8 +3,8 @@ docs-md	AGENTS.md	1,474
 docs-md	AGENTS.md	1,500
 docs-md	AGENTS.md	1.5
 docs-md	AGENTS.md	10
-docs-md	AGENTS.md	100
 docs-md	AGENTS.md	11
+docs-md	AGENTS.md	130
 docs-md	AGENTS.md	140
 docs-md	AGENTS.md	186
 docs-md	AGENTS.md	2.0
@@ -19,7 +19,11 @@ docs-md	AGENTS.md	28
 docs-md	AGENTS.md	3.10,
 docs-md	AGENTS.md	32
 docs-md	AGENTS.md	39,361
+docs-md	AGENTS.md	40
+docs-md	AGENTS.md	45
 docs-md	AGENTS.md	5.5
+docs-md	AGENTS.md	60
+docs-md	AGENTS.md	65
 docs-md	AGENTS.md	9.9
 docs-md	AGENTS.md	91
 docs-md	README.md	0.0198,
@@ -6932,7 +6936,12 @@ test-docstrings	tests/_oracle_env.py	78
 test-docstrings	tests/_state_isolation.py	76
 test-docstrings	tests/_state_isolation.py	77
 test-docstrings	tests/_state_isolation.py	953
+test-docstrings	tests/_tiers_plugin.py	11
+test-docstrings	tests/_tiers_plugin.py	130
 test-docstrings	tests/_tiers_plugin.py	20
+test-docstrings	tests/_tiers_plugin.py	2026
+test-docstrings	tests/_tiers_plugin.py	459
+test-docstrings	tests/_tiers_plugin.py	65
 test-docstrings	tests/backend_conformance/test_ci_zero_test_guard.py	49
 test-docstrings	tests/backend_conformance/test_ci_zero_test_guard.py	50
 test-docstrings	tests/backend_conformance/test_deviceref_vocabulary.py	17

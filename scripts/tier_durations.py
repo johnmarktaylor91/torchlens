@@ -26,6 +26,9 @@ Commands::
 is the body of the ``tier-durations`` repository check. ``shards`` balances the
 test files on disk over ``--count`` shards by measured seconds (longest
 processing time first); ``--index`` prints one shard's files for ``pytest``.
+``files --tier smoke`` prints the smoke file list: every ``test_*.py`` whose
+source spells a smoke mark, computed from the tree on each call (nothing is
+stored, so it cannot go stale). Every smoke run collects only these files.
 """
 
 from __future__ import annotations
@@ -76,6 +79,11 @@ _TIER_TOKENS: tuple[tuple[str, re.Pattern[bytes]], ...] = (
     ("smoke", re.compile(rb"\bmark\.smoke(?:_cells)?\b")),
 )
 SMOKE_MARK_TOKEN = _TIER_TOKENS[-1][1]
+#: A smoke mark applied by name (``item.add_marker("smoke")``, ``getattr(pytest.mark, "smoke")``).
+_SMOKE_BY_NAME = re.compile(rb"""\b(?:add_marker|getattr)\([^)]*?["']smoke["']""")
+#: Helper modules allowed to apply the smoke mark: the tiers plugin resolves
+#: ``smoke_cells``, whose spelling stays in the test file it marks.
+SMOKE_MARK_APPLIERS = frozenset({"tests/_tiers_plugin.py"})
 
 
 @dataclass(frozen=True)
@@ -105,6 +113,45 @@ def source_may_hold_smoke_items(path: Path) -> bool:
     """Return whether ``path``'s source spells a ``smoke`` or ``smoke_cells`` mark."""
 
     return SMOKE_MARK_TOKEN.search(path.read_bytes()) is not None
+
+
+def on_smoke_file_list(path: Path) -> bool:
+    """Return whether ``files --tier smoke`` lists ``path``.
+
+    The list holds every ``test_*.py`` under ``tests/`` whose source spells a
+    ``smoke`` or ``smoke_cells`` mark. ``tests/_tiers_plugin.py`` fails any
+    session that collects a smoke item from a file outside it.
+    """
+
+    return (
+        path.name.startswith("test_")
+        and path.suffix == ".py"
+        and path.resolve().is_relative_to(TESTS_DIR.resolve())
+        and path.is_file()
+        and source_may_hold_smoke_items(path)
+    )
+
+
+def off_list_smoke_sources(root: Path | None = None) -> list[str]:
+    """Return non-test modules under ``root`` (default ``TESTS_DIR``) that can apply a smoke mark.
+
+    A helper, conftest or ``*_test.py`` module that spells a smoke mark can put
+    smoke items in files the smoke file list skips; every smoke run collects
+    only that list, so it would never see them. The tiers plugin catches such
+    items in whole-tree sessions; this source scan catches the cause on every
+    pull request through the ``tier-durations`` repository check.
+    """
+
+    base = TESTS_DIR if root is None else root
+    found = []
+    for path in sorted(base.rglob("*.py")):
+        rel = path.relative_to(REPO_ROOT).as_posix()
+        if path.name.startswith("test_") or rel in SMOKE_MARK_APPLIERS:
+            continue
+        source = path.read_bytes()
+        if SMOKE_MARK_TOKEN.search(source) or _SMOKE_BY_NAME.search(source):
+            found.append(rel)
+    return found
 
 
 def file_tier(path: Path) -> str:
@@ -346,7 +393,11 @@ def _regenerate(args: argparse.Namespace) -> int:
 def _check(args: argparse.Namespace) -> int:
     rows = read_rows(args.durations)
     meta = read_meta(args.meta)
-    structural = structural_findings(rows)
+    structural = structural_findings(rows) + [
+        f"{rel}: applies a smoke mark outside a test_*.py file, so the smoke file list "
+        "(`files --tier smoke`) would skip the items it marks"
+        for rel in off_list_smoke_sources()
+    ]
     failures, warnings = budget_findings(rows, meta)
     measured = {row.file for row in rows}
     unmeasured = [f for f in test_files_on_disk() if f not in measured]
@@ -377,11 +428,7 @@ def _shards(args: argparse.Namespace) -> int:
 def _files(args: argparse.Namespace) -> int:
     for file in test_files_on_disk():
         tier = file_tier(REPO_ROOT / file)
-        holds = (
-            source_may_hold_smoke_items(REPO_ROOT / file)
-            if args.tier == "smoke"
-            else tier == args.tier
-        )
+        holds = on_smoke_file_list(REPO_ROOT / file) if args.tier == "smoke" else tier == args.tier
         if holds:
             print(file)
     return 0
