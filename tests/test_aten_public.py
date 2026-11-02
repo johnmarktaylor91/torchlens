@@ -90,7 +90,13 @@ def test_switch_records_rows_and_each_op_serves_its_own() -> None:
     operators = {row.operator for row in rows}
     assert "native_layer_norm" in operators
     assert "gelu" in operators
-    assert any("scaled_dot_product" in operator for operator in operators)
+    attention_rows = [
+        row
+        for op in trace.ops
+        if "scaleddotproductattention" in op.layer_label
+        for row in op.aten_ops
+    ]
+    assert attention_rows, "the attention op owns no ATen rows"
     assert trace.aten_gaps == ()
 
     owned = [row for op in trace.ops for row in op.aten_ops]
@@ -158,7 +164,7 @@ def test_save_and_load_keep_rows_and_has_aten_ops(tmp_path: Path) -> None:
         assert [row.sequence for row in loaded[op.layer_label].aten_ops] == [
             row.sequence for row in op.aten_ops
         ]
-    assert check_metadata_invariants(loaded)
+    assert check_metadata_invariants(trace)
 
 
 def test_loaded_artifact_saved_without_the_switch_refuses(tmp_path: Path) -> None:
@@ -186,7 +192,7 @@ def test_refresh_inherits_the_switch_and_fast_run_refuses() -> None:
     assert refreshed.has_aten_ops is True
     assert _row_keys(refreshed) == before
 
-    fast = trace.run(model, torch.ones(2) * 3, fast=True)
+    fast = trace.run(inputs=torch.ones(2) * 3, fast=True)
     assert fast.has_aten_ops is False
     _assert_refuses(lambda: fast.aten_ops)
 
@@ -245,7 +251,11 @@ def test_non_torch_backend_records_nothing_and_refuses() -> None:
     assert check_metadata_invariants(trace)
 
 
-_SMOKE_ENTRY = next(entry for entry in corpus_entries("smoke") if entry.id == "Tree parity machine")
+_SMOKE_ENTRY = next(
+    entry
+    for entry in corpus_entries("smoke")
+    if entry.id == "Avalanche multi-task simple MLP compact"
+)
 
 
 def test_classics_smoke_model_records_and_validates() -> None:
