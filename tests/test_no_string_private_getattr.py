@@ -72,9 +72,14 @@ _TRACE_IDENTIFIERS = frozenset(
     }
 )
 
-#: The Trace group prefixes, one per group view (``TraceCost`` -> ``cost``).
+#: Group views whose private stores keep an older prefix: ``TraceSettings`` (the
+#: options.4 ruling renamed the view, not its ``_options_*`` stores).
+_GROUP_STORE_PREFIXES = {"settings": "options"}
+
+#: The Trace group store prefixes, one per group view (``TraceCost`` -> ``cost``).
 _TRACE_GROUP_PREFIXES = frozenset(
-    cls.__name__.removeprefix("Trace").lower() for cls in _TraceGroup.__subclasses__()
+    _GROUP_STORE_PREFIXES.get(name, name)
+    for name in (cls.__name__.removeprefix("Trace").lower() for cls in _TraceGroup.__subclasses__())
 )
 
 #: The v11-rest private stores: Trace collections and counters whose public
@@ -335,7 +340,9 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # _render_nodes.py sites.
     # 23 -> 22 (2026-08-14 fix-wave reconcile, fix/vizr2 2d1371ac): one
     # reach-in discharged with the imagepath-out-of-saved-DOT rework.
-    "_visualization": 22,
+    # 22 -> 20 (2026-11-01 C2 integration, lane wip/mp-r2-draw-2 c5c1d322d): two
+    # reach-ins discharged with the Trace.draw/Drawing rework.
+    "_visualization": 20,
     # 2 -> 1 (2026-08-14 fixwave-2 reconcile): one reach-in discharged upstream.
     "viz": 1,
 }

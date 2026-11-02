@@ -269,6 +269,7 @@ PRIVATE_ORDERED_DROP_FIELDS: dict[str, dict[str, str]] = {
         "_distributed_plane_p": "session-time plane-P dispatch journal for armed captures (merge-ranks C2 census evidence)",
         "_transform": "capture-time input transform callable; opaque, session-only",
         "_output_transform": "capture-time output transform callable; opaque, session-only",
+        "_output_slot": "exact live forward return; memory only, never serialized",
         "_visualizer_dir": "per-session visualizer scratch directory path",
         "_out_dedup_mode": "session dedup strategy for retained activation payloads",
         "_out_identity_cache": "session identity cache backing out dedup",

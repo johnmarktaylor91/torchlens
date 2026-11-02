@@ -42,7 +42,7 @@ from ._trace_accessors import (
     TraceOpAccessor,
 )
 from ._trace_groups import TraceAutograd, TraceCost, TraceGraph, TraceProvenance
-from ._trace_groups_capture import TraceHealth, TraceOptions, TraceSource
+from ._trace_groups_capture import TraceHealth, TraceSettings, TraceSource
 from ._trace_profile import ModelProfile
 from ._trace_stats_grad_fn_site import _fire_timings_by_key
 from .backward_pass import BackwardPass, BackwardPassAccessor
@@ -91,10 +91,10 @@ class TraceStatsMixin(_TraceMixinBase):
         return TraceProvenance(self)
 
     @property
-    def options(self: "Trace") -> "TraceOptions":
+    def options(self: "Trace") -> "TraceSettings":
         """The capture options this Trace ran with (the stored snapshot)."""
 
-        return TraceOptions(self)
+        return TraceSettings(self)
 
     @property
     def health(self: "Trace") -> "TraceHealth":

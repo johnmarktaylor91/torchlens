@@ -9,7 +9,7 @@ It fills the backend protocol (`maturity="preview"`, no `capture_backend`); its
 - `MLXBackend.capture_trace()` is the standalone entry; `GradOptions`
   (re-exported from `__init__.py`) drives derived gradients including
   intermediates (`_MLXIntermediateTapObserver`, `intermediate_derived_grads=True`).
-- Static-label `intervene=` AND `halt=` both ship; combining either with
+- Static-label `intervene=` AND `stop_after=` both ship; combining either with
   `grad_options=` refuses typed (derived-grad replay would misrepresent the
   intervened forward). Halted traces set `is_stopped` / `stop_reason` /
   `halt_frontier`; a halt selector matching zero sites warns.

@@ -197,8 +197,10 @@ def _armed_trace(*, backward_ready: bool = False) -> tl.Trace:
         Trace with a present primitive profile.
     """
 
-    capture = tl.options.CaptureOptions(backward_ready=backward_ready)
-    kwargs = {"save_mode": "reference"} if backward_ready else {}
+    capture = tl.options.CaptureOptions(
+        backward_ready=backward_ready, **({"save_mode": "reference"} if backward_ready else {})
+    )
+    kwargs: dict[str, object] = {}
     with _activate_aten_recording_for_tests():
         return tl.trace(
             _TwoOpModel(),
@@ -331,8 +333,7 @@ def test_delayed_grad_fn_lineage_covers_required_mutation_breakers(
         trace = tl.trace(
             model,
             torch.ones(2, 3, requires_grad=True),
-            capture=capture,
-            save_mode="reference",
+            capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
         )
         trace.log_backward(trace.output_ops[0].out)
 

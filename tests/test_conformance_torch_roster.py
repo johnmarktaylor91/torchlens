@@ -250,7 +250,12 @@ def test_grad_options_refuses_with_the_capability_code(backend: Any) -> None:
             return v * 2.0
 
     with pytest.raises(BackendUnsupportedError) as excinfo:
-        tl.trace(_Counts(), torch.randn(2, 4), backend=backend, grad_options={"derived": True})
+        tl.trace(
+            _Counts(),
+            torch.randn(2, 4),
+            backend=backend,
+            capture=tl.options.CaptureOptions(grad_options={"derived": True}),
+        )
     assert excinfo.value.code == "intermediate_derived_grads_unsupported"
     assert excinfo.value.fields["code"] == excinfo.value.code
     assert not calls

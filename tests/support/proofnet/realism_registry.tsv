@@ -27,6 +27,7 @@ clamp	toy	referenced	F36-freeze
 clear_cache	toy	referenced	F36-freeze
 clip_norm	toy	referenced	F36-freeze
 dead	toy	referenced	F36-freeze
+draw	NONE	referenced	r2-draw-2
 export	toy	referenced	F36-freeze
 extract	R1	referenced	F36-freeze
 extract_dataset	R1	referenced	F36-freeze

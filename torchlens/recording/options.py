@@ -42,25 +42,39 @@ _RECORDING_FIELDS: Final[tuple[str, ...]] = (
     "default_op",
     "default_module",
     "history_size",
-    "lookback",
-    "lookback_payload_policy",
     "include_source_events",
     "intervene",
-    "halt",
     "max_predicate_failures",
     "on_predicate_error",
     "on_forward_error",
+    "default_grad",
+    "postprocess",
+)
+"""The public ``RecordingOptions`` fields, in declaration order."""
+
+_RESOLVED_ONLY_FIELDS: Final[tuple[str, ...]] = (
+    "lookback",
+    "lookback_payload_policy",
+    "halt",
     "streaming",
     "seed",
     "activation_transform",
     "save_raw_activations",
     "save_grads",
-    "default_grad",
     "grad_transform",
     "save_raw_grads",
     "echo",
     "detach_saved_activations",
 )
+"""Recorder slots with no ``RecordingOptions`` field.
+
+Each reaches the recorder through another public door: the capture knobs ride
+``capture=CaptureOptions(...)`` (``lookback``, ``lookback_payload_policy``,
+``seed``, ``activation_transform``, ``save_raw_activations``, ``save_grads``,
+``grad_transform``, ``save_raw_grads``, ``detach_saved_activations``), the stop
+predicate is the door's ``stop_after=``, narration is ``narrate=`` and the disk
+sink is ``storage=``.
+"""
 
 
 def _resolve_recording_option(
@@ -79,40 +93,26 @@ def _resolve_recording_option(
 
 @dataclass(frozen=True, slots=True, init=False)
 class RecordingOptions:
-    """Grouped options for one fastlog predicate recording session."""
+    """Grouped recorder options for one ``tl.record`` session.
+
+    These are the knobs that belong to the recorder itself. Capture knobs ride
+    ``capture=CaptureOptions(...)``, the stop predicate is the door's
+    ``stop_after=``, narration is ``narrate=`` and the disk sink is ``storage=``.
+    """
 
     keep_op: PredicateFn | None
     default_op: bool | CaptureSpec
     default_module: bool | CaptureSpec
     history_size: int
-    lookback: int
-    lookback_payload_policy: LookbackPayloadPolicy
     include_source_events: bool
     intervene: InterventionPredicate | None
-    halt: HaltPredicateFn | None
     max_predicate_failures: int
     on_predicate_error: PredicateErrorMode
     on_forward_error: ForwardErrorMode
-    streaming: StorageOptions | None
-    seed: int | None
-    activation_transform: _ActivationPostfunc | None
-    save_raw_activations: bool
-    save_grads: GradPredicateFn | bool | CaptureSpec | None
     default_grad: bool | CaptureSpec
-    grad_transform: _GradientPostfunc | None
-    save_raw_grads: bool
-    #: Normalized live-narration options (``torchlens.options.NarrationOptions``)
-    #: or ``None``; typed ``Any`` here because fastlog (L2) never imports
-    #: the narration engine -- seams read the armed session off the trace.
-    echo: Any | None
-    #: Whether a retained activation whose capture spec does not ask for
-    #: ``save_grad`` is detached from the autograd graph. ``True`` (the
-    #: ``record`` default) stores detached copies; ``False`` stores
-    #: graph-connected copies wherever the source tensor carries autograd
-    #: history, as ``tl.trace``'s default save does. A spec with
-    #: ``save_grad=True`` stays attached either way. Disk payloads are always
-    #: detached inspection copies.
-    detach_saved_activations: bool
+    #: Post-capture finalization pass: ``"none"`` (the default) or the
+    #: ``validate_postprocess`` vocabulary (``tl.record(recording=...)``).
+    postprocess: str
     _specified_fields: frozenset[str] = field(
         default_factory=frozenset,
         init=False,
@@ -126,24 +126,13 @@ class RecordingOptions:
         default_op: bool | CaptureSpec | MissingType = MISSING,
         default_module: bool | CaptureSpec | MissingType = MISSING,
         history_size: int | MissingType = MISSING,
-        lookback: int | MissingType = MISSING,
-        lookback_payload_policy: LookbackPayloadPolicy | MissingType = MISSING,
         include_source_events: bool | MissingType = MISSING,
         intervene: InterventionPredicate | None | MissingType = MISSING,
-        halt: HaltPredicateFn | None | MissingType = MISSING,
         max_predicate_failures: int | MissingType = MISSING,
         on_predicate_error: PredicateErrorMode | MissingType = MISSING,
         on_forward_error: ForwardErrorMode | MissingType = MISSING,
-        streaming: StorageOptions | None | MissingType = MISSING,
-        seed: int | None | MissingType = MISSING,
-        activation_transform: _ActivationPostfunc | None | MissingType = MISSING,
-        save_raw_activations: bool | MissingType = MISSING,
-        save_grads: GradPredicateFn | bool | CaptureSpec | None | MissingType = MISSING,
         default_grad: bool | CaptureSpec | MissingType = MISSING,
-        grad_transform: _GradientPostfunc | None | MissingType = MISSING,
-        save_raw_grads: bool | MissingType = MISSING,
-        narrate: Any | None | MissingType = MISSING,
-        detach_saved_activations: bool | MissingType = MISSING,
+        postprocess: str | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen recording option bundle."""
 
@@ -159,18 +148,10 @@ class RecordingOptions:
             "history_size": _resolve_recording_option(
                 "history_size", history_size, 8, specified_fields
             ),
-            "lookback": _resolve_recording_option("lookback", lookback, 0, specified_fields),
-            "lookback_payload_policy": _resolve_recording_option(
-                "lookback_payload_policy",
-                lookback_payload_policy,
-                "metadata_only",
-                specified_fields,
-            ),
             "include_source_events": _resolve_recording_option(
                 "include_source_events", include_source_events, False, specified_fields
             ),
             "intervene": _resolve_recording_option("intervene", intervene, None, specified_fields),
-            "halt": _resolve_recording_option("halt", halt, None, specified_fields),
             "max_predicate_failures": _resolve_recording_option(
                 "max_predicate_failures", max_predicate_failures, 32, specified_fields
             ),
@@ -180,29 +161,11 @@ class RecordingOptions:
             "on_forward_error": _resolve_recording_option(
                 "on_forward_error", on_forward_error, "raise", specified_fields
             ),
-            "streaming": _resolve_recording_option("streaming", streaming, None, specified_fields),
-            "seed": _resolve_recording_option("seed", seed, None, specified_fields),
-            "activation_transform": _resolve_recording_option(
-                "activation_transform", activation_transform, None, specified_fields
-            ),
-            "save_raw_activations": _resolve_recording_option(
-                "save_raw_activations", save_raw_activations, True, specified_fields
-            ),
-            "save_grads": _resolve_recording_option(
-                "save_grads", save_grads, None, specified_fields
-            ),
             "default_grad": _resolve_recording_option(
                 "default_grad", default_grad, False, specified_fields
             ),
-            "grad_transform": _resolve_recording_option(
-                "grad_transform", grad_transform, None, specified_fields
-            ),
-            "save_raw_grads": _resolve_recording_option(
-                "save_raw_grads", save_raw_grads, True, specified_fields
-            ),
-            "echo": _resolve_recording_option("echo", narrate, None, specified_fields),
-            "detach_saved_activations": _resolve_recording_option(
-                "detach_saved_activations", detach_saved_activations, True, specified_fields
+            "postprocess": _resolve_recording_option(
+                "postprocess", postprocess, "none", specified_fields
             ),
         }
         _validate_recording_values(values)
@@ -215,13 +178,13 @@ class RecordingOptions:
 
         return {field_name: getattr(self, field_name) for field_name in _RECORDING_FIELDS}
 
-    def is_field_explicit(self, field_name: str) -> bool:
+    def _is_field_explicit(self, field_name: str) -> bool:
         """Return whether a field was explicitly supplied by the caller."""
 
         return field_name in self._specified_fields
 
     @classmethod
-    def from_values(
+    def _from_values(
         cls: type[RecordingOptions],
         values: Mapping[str, Any],
         specified_fields: frozenset[str],
@@ -236,47 +199,90 @@ class RecordingOptions:
         return instance
 
 
+@dataclass(frozen=True, slots=True)
+class _RecordingConfig:
+    """The recorder's resolved configuration: every slot one predicate session reads.
+
+    Private. Built by the Recorder from the public ``RecordingOptions`` fields plus
+    the values the other doors carry (``capture=``, ``stop_after=``, ``narrate=``,
+    ``storage=``), and stored on the trace as ``_predicate_save_options`` for the
+    capture seams that read it. The field names are the recorder's historical
+    slot names, so every reader is unchanged.
+    """
+
+    keep_op: PredicateFn | None = None
+    default_op: bool | CaptureSpec = False
+    default_module: bool | CaptureSpec = False
+    history_size: int = 8
+    lookback: int = 0
+    lookback_payload_policy: LookbackPayloadPolicy = "metadata_only"
+    include_source_events: bool = False
+    intervene: InterventionPredicate | None = None
+    halt: HaltPredicateFn | None = None
+    max_predicate_failures: int = 32
+    on_predicate_error: PredicateErrorMode = "auto"
+    on_forward_error: ForwardErrorMode = "raise"
+    streaming: StorageOptions | None = None
+    seed: int | None = None
+    activation_transform: _ActivationPostfunc | None = None
+    save_raw_activations: bool = True
+    save_grads: GradPredicateFn | bool | CaptureSpec | None = None
+    default_grad: bool | CaptureSpec = False
+    grad_transform: _GradientPostfunc | None = None
+    save_raw_grads: bool = True
+    #: Normalized live-narration options (``torchlens.options.NarrationOptions``)
+    #: or ``None``; typed ``Any`` here because fastlog (L2) never imports
+    #: the narration engine -- seams read the armed session off the trace.
+    echo: Any | None = None
+    #: Whether a retained activation whose capture spec does not ask for
+    #: ``save_grad`` is detached from the autograd graph. ``True`` (the
+    #: ``record`` default) stores detached copies; ``False`` stores
+    #: graph-connected copies wherever the source tensor carries autograd
+    #: history, as ``tl.trace``'s default save does. A spec with
+    #: ``save_grad=True`` stays attached either way. Disk payloads are always
+    #: detached inspection copies.
+    detach_saved_activations: bool = True
+    postprocess: str = "none"
+
+    def __post_init__(self) -> None:
+        """Validate every slot with the recorder's historical refusals."""
+
+        values = self.as_dict()
+        _validate_recording_values(values)
+        _validate_resolved_recording_values(values)
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return every slot as a plain dictionary."""
+
+        return {
+            field_name: getattr(self, field_name)
+            for field_name in (*_RECORDING_FIELDS, *_RESOLVED_ONLY_FIELDS)
+        }
+
+
+def _resolve_recording_config(**values: Any) -> _RecordingConfig:
+    """Build the resolved config; a ``MISSING`` value falls to the slot default."""
+
+    return _RecordingConfig(
+        **{name: value for name, value in values.items() if value is not MISSING}
+    )
+
+
 def _validate_recording_values(values: Mapping[str, Any]) -> None:
-    """Validate scalar recording option values."""
+    """Validate the public recording option values."""
 
     history_size = values["history_size"]
-    lookback = values["lookback"]
-    lookback_payload_policy = values["lookback_payload_policy"]
     intervene = values["intervene"]
-    halt = values["halt"]
     max_predicate_failures = values["max_predicate_failures"]
     on_predicate_error = values["on_predicate_error"]
     on_forward_error = values["on_forward_error"]
-    activation_transform = values["activation_transform"]
-    save_raw_activations = values["save_raw_activations"]
-    save_grads = values["save_grads"]
     default_grad = values["default_grad"]
-    grad_transform = values["grad_transform"]
-    save_raw_grads = values["save_raw_grads"]
-    detach_saved_activations = values["detach_saved_activations"]
     if not isinstance(history_size, int) or not 0 <= history_size <= 1024:
         raise InvalidArgumentError(
             f"history_size must be an integer in [0, 1024]; received {history_size!r}",
             code="history_size_invalid",
             remedy="pass an integer history_size between 0 and 1024",
             argument="history_size",
-        )
-    if not isinstance(lookback, int) or not 0 <= lookback <= 1024:
-        raise InvalidArgumentError(
-            f"lookback must be an integer in [0, 1024]; received {lookback!r}",
-            code="lookback_invalid",
-            remedy="pass an integer lookback between 0 and 1024",
-            argument="lookback",
-        )
-    if lookback_payload_policy not in LOOKBACK_PAYLOAD_POLICIES:
-        allowed = ", ".join(repr(policy) for policy in LOOKBACK_PAYLOAD_POLICIES[:-1])
-        raise InvalidArgumentError(
-            f"lookback_payload_policy must be one of {allowed}, "
-            f"or {LOOKBACK_PAYLOAD_POLICIES[-1]!r}; "
-            f"received {lookback_payload_policy!r}",
-            code="lookback_payload_policy_invalid",
-            remedy="choose a documented lookback payload policy",
-            argument="lookback_payload_policy",
         )
     # R64: the record surface carries its OWN codes (recording_*) so one
     # documented code never maps to two catchable builtins -- the tl.trace
@@ -288,13 +294,6 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
             code="recording_intervention_predicate_type_invalid",
             remedy="pass tl.when(...), another predicate, or None",
             argument="intervene",
-        )
-    if halt is not None and not callable(halt):
-        raise InvalidArgumentError(
-            f"halt must be callable or None; received {type(halt).__name__}",
-            code="recording_halt_predicate_type_invalid",
-            remedy="pass a halt predicate or None",
-            argument="halt",
         )
     if not isinstance(max_predicate_failures, int) or max_predicate_failures < 0:
         raise InvalidArgumentError(
@@ -319,6 +318,49 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
             code="on_forward_error_invalid",
             remedy="pass on_forward_error='raise', 'attach_partial', or 'return_partial'",
             argument="on_forward_error",
+        )
+    if not isinstance(default_grad, (bool, CaptureSpec)):
+        raise InvalidArgumentError(
+            f"default_grad must be bool or CaptureSpec; received {type(default_grad).__name__}",
+            code="recording_option_type_invalid",
+            remedy="pass a bool or CaptureSpec default_grad",
+            argument="default_grad",
+        )
+
+
+def _validate_resolved_recording_values(values: Mapping[str, Any]) -> None:
+    """Validate the slots the recorder resolves from the other doors."""
+
+    lookback = values["lookback"]
+    lookback_payload_policy = values["lookback_payload_policy"]
+    halt = values["halt"]
+    activation_transform = values["activation_transform"]
+    save_raw_activations = values["save_raw_activations"]
+    save_grads = values["save_grads"]
+    grad_transform = values["grad_transform"]
+    if not isinstance(lookback, int) or not 0 <= lookback <= 1024:
+        raise InvalidArgumentError(
+            f"lookback must be an integer in [0, 1024]; received {lookback!r}",
+            code="lookback_invalid",
+            remedy="pass an integer lookback between 0 and 1024",
+            argument="lookback",
+        )
+    if lookback_payload_policy not in LOOKBACK_PAYLOAD_POLICIES:
+        allowed = ", ".join(repr(policy) for policy in LOOKBACK_PAYLOAD_POLICIES[:-1])
+        raise InvalidArgumentError(
+            f"lookback_payload_policy must be one of {allowed}, "
+            f"or {LOOKBACK_PAYLOAD_POLICIES[-1]!r}; "
+            f"received {lookback_payload_policy!r}",
+            code="lookback_payload_policy_invalid",
+            remedy="choose a documented lookback payload policy",
+            argument="lookback_payload_policy",
+        )
+    if halt is not None and not callable(halt):
+        raise InvalidArgumentError(
+            f"halt must be callable or None; received {type(halt).__name__}",
+            code="recording_halt_predicate_type_invalid",
+            remedy="pass a halt predicate or None",
+            argument="halt",
         )
     if activation_transform is not None and not callable(activation_transform):
         raise InvalidArgumentError(
@@ -347,13 +389,6 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
             remedy="pass a predicate, bool, CaptureSpec, or None as save_grads",
             argument="save_grads",
         )
-    if not isinstance(default_grad, (bool, CaptureSpec)):
-        raise InvalidArgumentError(
-            f"default_grad must be bool or CaptureSpec; received {type(default_grad).__name__}",
-            code="recording_option_type_invalid",
-            remedy="pass a bool or CaptureSpec default_grad",
-            argument="default_grad",
-        )
     if grad_transform is not None and not callable(grad_transform):
         raise InvalidArgumentError(
             f"grad_transform must be callable or None; received {type(grad_transform).__name__}",
@@ -361,10 +396,8 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
             remedy="pass a callable grad_transform or None",
             argument="grad_transform",
         )
-    for flag_name, flag in (
-        ("save_raw_grads", save_raw_grads),
-        ("detach_saved_activations", detach_saved_activations),
-    ):
+    for flag_name in ("save_raw_grads", "detach_saved_activations"):
+        flag = values[flag_name]
         if not isinstance(flag, bool):
             raise InvalidArgumentError(
                 f"{flag_name} must be a bool; received {type(flag).__name__}",
@@ -372,75 +405,3 @@ def _validate_recording_values(values: Mapping[str, Any]) -> None:
                 remedy=f"pass {flag_name}=True or False",
                 argument=flag_name,
             )
-
-
-def merge_recording_options(
-    *,
-    recording: RecordingOptions | None,
-    keep_op: PredicateFn | None | MissingType = MISSING,
-    default_op: bool | CaptureSpec | MissingType = MISSING,
-    default_module: bool | CaptureSpec | MissingType = MISSING,
-    history_size: int | MissingType = MISSING,
-    lookback: int | MissingType = MISSING,
-    lookback_payload_policy: LookbackPayloadPolicy | MissingType = MISSING,
-    include_source_events: bool | MissingType = MISSING,
-    intervene: InterventionPredicate | None | MissingType = MISSING,
-    halt: HaltPredicateFn | None | MissingType = MISSING,
-    max_predicate_failures: int | MissingType = MISSING,
-    on_predicate_error: PredicateErrorMode | MissingType = MISSING,
-    on_forward_error: ForwardErrorMode | MissingType = MISSING,
-    streaming: StorageOptions | None | MissingType = MISSING,
-    seed: int | None | MissingType = MISSING,
-    activation_transform: _ActivationPostfunc | None | MissingType = MISSING,
-    save_raw_activations: bool | MissingType = MISSING,
-    save_grads: GradPredicateFn | bool | CaptureSpec | None | MissingType = MISSING,
-    default_grad: bool | CaptureSpec | MissingType = MISSING,
-    grad_transform: _GradientPostfunc | None | MissingType = MISSING,
-    save_raw_grads: bool | MissingType = MISSING,
-    narrate: Any | None | MissingType = MISSING,
-    detach_saved_activations: bool | MissingType = MISSING,
-) -> RecordingOptions:
-    """Merge flat recording kwargs into a grouped options object."""
-
-    base_values = recording.as_dict() if recording is not None else RecordingOptions().as_dict()
-    specified_fields = (
-        set(recording._specified_fields) if recording is not None else set()  # noqa: SLF001
-    )
-    incoming = {
-        "keep_op": keep_op,
-        "default_op": default_op,
-        "default_module": default_module,
-        "history_size": history_size,
-        "lookback": lookback,
-        "lookback_payload_policy": lookback_payload_policy,
-        "include_source_events": include_source_events,
-        "intervene": intervene,
-        "halt": halt,
-        "max_predicate_failures": max_predicate_failures,
-        "on_predicate_error": on_predicate_error,
-        "on_forward_error": on_forward_error,
-        "streaming": streaming,
-        "seed": seed,
-        "activation_transform": activation_transform,
-        "save_raw_activations": save_raw_activations,
-        "save_grads": save_grads,
-        "default_grad": default_grad,
-        "grad_transform": grad_transform,
-        "save_raw_grads": save_raw_grads,
-        # The narrate= keyword fills the stored echo field.
-        "echo": narrate,
-        "detach_saved_activations": detach_saved_activations,
-    }
-    for field_name, value in incoming.items():
-        if value is MISSING:
-            continue
-        if field_name in specified_fields:
-            raise InvalidArgumentError(
-                f"Recording option {field_name!r} was specified twice",
-                code="recording_option_duplicate",
-                remedy="pass each recording option exactly once",
-                argument=field_name,
-            )
-        base_values[field_name] = value
-        specified_fields.add(field_name)
-    return RecordingOptions.from_values(base_values, frozenset(specified_fields))

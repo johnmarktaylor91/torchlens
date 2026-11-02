@@ -447,7 +447,7 @@ def _operation(
         def trace_profile() -> Any:
             """Run profiled trace and expose phase timings in benchmark metadata."""
 
-            trace = tl.trace(model, x, profile=True)
+            trace = tl.trace(model, x)
             state["phase_timings"] = getattr(trace, "_phase_timings", {})
             state["profile_enabled"] = getattr(trace, "profile_enabled", False)
             return trace
@@ -482,7 +482,9 @@ def _operation(
         import torchlens as tl
 
         _prime_target_model(model, x, device)
-        return lambda: tl.record(model, x, default_op=False, default_module=True)
+        return lambda: tl.record(
+            model, x, recording=tl.options.RecordingOptions(default_op=False, default_module=True)
+        )
     if operation == "fastlog_zero":
         import torchlens as tl
 
@@ -494,8 +496,7 @@ def _operation(
             model,
             x,
             save=lambda _ctx: False,
-            default_op=False,
-            default_module=False,
+            recording=tl.options.RecordingOptions(default_op=False, default_module=False),
         )
     if operation.startswith("fastlog_halt_"):
         import torchlens as tl
@@ -509,7 +510,7 @@ def _operation(
             model,
             x,
             save=lambda _ctx: False,
-            halt=lambda ctx: (
+            stop_after=lambda ctx: (
                 ctx.kind == "op" and isinstance(ctx.raw_index, int) and ctx.raw_index >= halt_index
             ),
         )
@@ -523,8 +524,7 @@ def _operation(
             model,
             x,
             save=lambda ctx: getattr(ctx, "func_name", None) in names,
-            default_op=False,
-            default_module=False,
+            recording=tl.options.RecordingOptions(default_op=False, default_module=False),
         )
     if operation == "fastlog_op_50":
         import torchlens as tl
@@ -536,14 +536,15 @@ def _operation(
             model,
             x,
             save=lambda ctx: getattr(ctx, "func_name", None) in names,
-            default_op=False,
-            default_module=False,
+            recording=tl.options.RecordingOptions(default_op=False, default_module=False),
         )
     if operation == "fastlog_all":
         import torchlens as tl
 
         _prime_target_model(model, x, device)
-        return lambda: tl.record(model, x, default_op=True, default_module=True)
+        return lambda: tl.record(
+            model, x, recording=tl.options.RecordingOptions(default_op=True, default_module=True)
+        )
     if operation == "aux_validate":
         import torchlens as tl
 

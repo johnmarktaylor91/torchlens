@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
     from torchlens.debug._audit import HealthReport
     from torchlens.report._explain import ExplainReport
+    from torchlens.viz._drawing import Drawing
 
 
 @dataclass(frozen=True)
@@ -174,21 +175,24 @@ class PartialTrace:
 
         return audit_trace(self)
 
-    def draw(self, path: str | None = None, **_: Any) -> str:
-        """Render the failed capture as minimal Graphviz DOT source.
+    def draw(self, path: str | None = None, **_: Any) -> Drawing:
+        """Render the failed capture as a minimal Graphviz picture.
 
         Parameters
         ----------
         path:
-            Accepted for API symmetry; no file is written by this minimal renderer.
+            Accepted for API symmetry; no file is written by this minimal renderer
+            (``Drawing.save(path)`` writes one).
         **_:
             Ignored rendering keyword arguments accepted for compatibility.
 
         Returns
         -------
-        str
-            DOT source for the raw operations captured before failure.
+        Drawing
+            The picture whose DOT source lists the raw operations captured before the
+            failure; ``str()`` of it is that source.
         """
+        from torchlens.viz._drawing import Drawing
 
         lines = [
             "digraph torchlens_partial {",
@@ -211,7 +215,7 @@ class PartialTrace:
                 f'  "{_dot_escape(_display_label(self.raw_layers[-1]))}" -> "__failure__";'
             )
         lines.append("}")
-        return "\n".join(lines)
+        return Drawing(dot="\n".join(lines))
 
     def show(self, kind: Literal["graph", "repr", "html"] | None = None, **kwargs: Any) -> str:
         """Display this partial log using a small set of inspection modes.
@@ -232,7 +236,7 @@ class PartialTrace:
 
         kind = kind or "graph"
         if kind == "graph":
-            return self.draw(**kwargs)
+            return str(self.draw(**kwargs))
         if kind == "repr":
             return repr(self)
         if kind == "html":

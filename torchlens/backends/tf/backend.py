@@ -144,7 +144,7 @@ class TFBackend:
         # see the matching comment in ``backends/jax/backend.py``.
         capture_options = merge_capture_options(
             capture=capture,
-            layers_to_save=layers_to_save,
+            _layers_to_save=layers_to_save,
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,
@@ -160,7 +160,7 @@ class TFBackend:
             save_transformed_output=save_raw_output,
             save_visualizations=save_visualizations,
         )
-        layers_to_save = capture_options.layers_to_save
+        layers_to_save = capture_options._layers_to_save
         keep_orphans = capture_options.keep_orphans
         output_device = capture_options.output_device
         detach_saved_activations = capture_options.detach_saved_activations
@@ -427,6 +427,9 @@ class TFBackend:
             # silently with zero payloads (R17 parity with sibling previews).
             warn_zero_match_save_predicate("tf")
         trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
+        from ...recording.types import returned
+
+        trace._output_slot = returned(result.output)
         trace.transformed_output = (
             output_transform(result.output) if callable(output_transform) else None
         )

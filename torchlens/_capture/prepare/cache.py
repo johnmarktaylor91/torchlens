@@ -534,7 +534,6 @@ def _evict_capture_cache(cache_root: Path, *, keep: Path) -> None:
 # inversion exists to kill.
 CAPTURE_CACHE_KEY_CURATED: frozenset[str] = frozenset(
     {
-        "layers_to_save",
         "save_raw_input",
         "output_transform",
         "save_transformed_output",
@@ -561,13 +560,17 @@ CAPTURE_CACHE_KEY_CURATED: frozenset[str] = frozenset(
         "backward_ready",
         "inference_only",
         "module_filter",
-        "stop_after",
         "jax_control_flow",
         "jax_max_control_flow_unroll",
         "module_identity_mode",
         "payload_policy",
-        "save_preview",
         "structure_only",
+        "grad_options",
+        "grouping",
+        "jax_static_argnums",
+        "on_nonfinite",
+        "reconstruction_ready",
+        "save_raw_grads",
     }
 )
 
@@ -633,7 +636,7 @@ def _resolve_cache_key(state: _DoorState) -> _DoorState:
     config = _curated_cache_config(state)
     # The inversion sweep: every CaptureOptions field not hand-curated
     # above and not declared session-neutral enters the key here --
-    # raise_on_nan, track_nonfinite, save_budget, distributed_witness,
+    # save_budget, distributed_witness, lookback, chunk_size,
     # measure_python_peak_memory, emit_nvtx, transform, name, and any
     # future field. Streaming options change what the returned trace
     # retains (and where), so they sweep in full as well.
@@ -702,6 +705,14 @@ def _curated_cache_config(state: _DoorState) -> dict[str, Any]:
         "intervene": _predicate_cache_key(args.intervene),
         "halt": _predicate_cache_key(state.halt),
         "stop_after": _stable_cache_fragment(state.stop_after_site),
+        # Former door kwargs that now ride CaptureOptions and
+        # change what is captured: keyed by field name so the static
+        # coverage lint sees them (the runtime sweep is invisible to it).
+        "grad_options": _stable_cache_fragment(opts.grad_options),
+        "grouping": opts.grouping,
+        "jax_static_argnums": _stable_cache_fragment(opts.jax_static_argnums),
+        "on_nonfinite": opts.on_nonfinite,
+        "reconstruction_ready": opts.reconstruction_ready,
         "replayable": opts.replayable,
         "structure_only": opts.structure_only,
         "track_device_memory": opts.track_device_memory,
@@ -710,7 +721,7 @@ def _curated_cache_config(state: _DoorState) -> dict[str, Any]:
         "save_raw_input": repr(state.save_raw_input_policy),
         "save_transformed_output": repr(state.save_raw_output_policy),
         "save_raw_activations": state.save_options.save_raw_activations,
-        "save_raw_gradients": state.save_options.save_raw_gradients,
+        "save_raw_grads": state.save_options.save_raw_gradients,
         "activation_transform": _stable_cache_fragment(state.save_options.activation_transform),
         "grad_transform": _stable_cache_fragment(state.save_options.grad_transform),
         "seed": opts.seed,
@@ -725,7 +736,5 @@ def _curated_cache_config(state: _DoorState) -> dict[str, Any]:
         "jax_max_control_flow_unroll": opts.jax_max_control_flow_unroll,
         "module_identity_mode": opts.module_identity_mode,
         "payload_policy": opts.payload_policy,
-        "save_preview": opts.save_preview,
-        "profile": state.profile_enabled,
     }
     return cache_config

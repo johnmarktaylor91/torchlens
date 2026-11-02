@@ -9,7 +9,7 @@ and ``AttributionResult`` remain re-exported through ``_core`` and the package
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, TypeAlias
+from typing import Any, ClassVar, TypeAlias
 
 from torch import Tensor
 
@@ -86,6 +86,16 @@ class Attribution:
     values: AttributionValueTree
     target_repr: str
     extra: dict[str, Any]
+
+    # Read by ``draw(color_by=)`` so the drawing code needs no import of this package.
+    _color_by_kind: ClassVar[str] = "attribution"
+
+    def _color_by_source(self, trace: Any, source: Any) -> Any:
+        """Return the ``draw(color_by=)`` value source for ``source`` (this result or a collection)."""
+
+        from torchlens.attribution._viz import attribution_color_by
+
+        return attribution_color_by(trace, source)
 
     def __repr__(self) -> str:
         """Return a compact representation without dumping attribution tensors."""

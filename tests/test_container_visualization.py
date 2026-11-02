@@ -94,16 +94,14 @@ def test_show_containers_false_is_default_dot_identity(tmp_path: Path) -> None:
 
     trace = _trace(DictOutputModel())
     default_source = trace.draw(
-        vis_save_only=True,
         file_format="dot",
         path=str(tmp_path / "default"),
-    )
+    ).dot
     explicit_source = trace.draw(
         show_containers=False,
-        vis_save_only=True,
         file_format="dot",
         path=str(tmp_path / "explicit"),
-    )
+    ).dot
 
     assert default_source == explicit_source
     assert "container_group" not in default_source
@@ -117,10 +115,9 @@ def test_show_containers_labels_adds_key_labeled_midpoint_edges(tmp_path: Path) 
     trace = _trace(DictOutputModel())
     source = trace.draw(
         show_containers="labels",
-        vis_save_only=True,
         file_format="dot",
         path=str(tmp_path / "labels"),
-    )
+    ).dot
 
     assert 'label=<<TABLE BORDER="0"' in source
     assert '<FONT POINT-SIZE="8">a</FONT>' in source
@@ -135,10 +132,9 @@ def test_show_containers_nodes_boxes_only_single_owner_leaves(tmp_path: Path) ->
     trace = _trace(DictOutputModel())
     source = trace.draw(
         show_containers="nodes",
-        vis_save_only=True,
         file_format="dot",
         path=str(tmp_path / "nodes_no_owner"),
-    )
+    ).dot
 
     assert '<FONT POINT-SIZE="8">a</FONT>' in source
     assert "cluster_container_" not in source
@@ -177,10 +173,9 @@ def test_show_containers_collapsed_only_for_identical_shapes(tmp_path: Path) -> 
     collapsed_source = homogeneous.draw(
         show_containers="collapsed",
         container_max_inline=2,
-        vis_save_only=True,
         file_format="dot",
         path=str(tmp_path / "collapsed"),
-    )
+    ).dot
     assert "container_final_output_0_tuple" in collapsed_source
     assert "output_1pass1" not in collapsed_source
 
@@ -188,10 +183,9 @@ def test_show_containers_collapsed_only_for_identical_shapes(tmp_path: Path) -> 
     inline_source = mixed.draw(
         show_containers="collapsed",
         container_max_inline=1,
-        vis_save_only=True,
         file_format="dot",
         path=str(tmp_path / "inline"),
-    )
+    ).dot
     assert "container_final_output_0_tuple" not in inline_source
     assert "output_1pass1" in inline_source
 
@@ -206,10 +200,9 @@ def test_show_containers_nodes_adds_source_and_sink_nodes(tmp_path: Path) -> Non
     )
     source = trace.draw(
         show_containers="nodes",
-        vis_save_only=True,
         file_format="dot",
         path=str(tmp_path / "nodes_input"),
-    )
+    ).dot
 
     assert "dict[2] (model input)" in source
     assert "container_node_" in source
@@ -228,10 +221,9 @@ def test_show_containers_nodes_adds_midgraph_member_ties(tmp_path: Path) -> None
     )
     source = trace.draw(
         show_containers="nodes",
-        vis_save_only=True,
         file_format="dot",
         path=str(tmp_path / "nodes_midgraph"),
-    )
+    ).dot
 
     assert "dict[2] (call output)" in source
     assert "arrowhead=none" in source
@@ -258,10 +250,9 @@ def test_show_containers_nodes_homogeneous_collapse_is_coherent(tmp_path: Path) 
     )
     source = trace.draw(
         show_containers="nodes",
-        vis_save_only=True,
         file_format="dot",
         path=str(tmp_path / "nodes_wide"),
-    )
+    ).dot
 
     declared = set(re.findall(r'^\s*"?([\w.:\-+@]+)"? \[', source, re.MULTILINE))
     endpoints: set[str] = set()
@@ -294,7 +285,6 @@ def test_show_containers_nodes_draw_then_save_round_trips(tmp_path: Path) -> Non
     )
     trace.draw(
         show_containers="nodes",
-        vis_save_only=True,
         file_format="dot",
         path=str(tmp_path / "nodes_before_save"),
     )
@@ -353,9 +343,8 @@ def test_show_containers_survives_multipass_layers(
 
     trace = tl.trace(RecurrentDictOutputModel(), torch.randn(2, 4))
     trace.draw(
-        vis_mode=vis_mode,
+        rolled=vis_mode == "rolled",
         show_containers=show_containers,
-        vis_save_only=True,
         file_format="dot",
         path=str(tmp_path / f"{vis_mode}_{show_containers}"),
     )

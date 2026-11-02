@@ -459,8 +459,7 @@ def test_m5_inplace_grad_fn_metadata_is_user_op() -> None:
     trace = tl.trace(
         _InplaceGradModel().eval(),
         x,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     inplace_op = _ops_by_func(trace, "add_")[0]
 

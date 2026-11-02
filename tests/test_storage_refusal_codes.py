@@ -64,7 +64,12 @@ def test_chunk_size_with_streaming_storage_refuses_with_a_code(
 ) -> None:
     model, x = tiny
     with pytest.raises(ChunkedForwardConfigError) as info:
-        tl.trace(model, x, chunk_size=1, storage=tl.to_disk(str(tmp_path / "s.tlspec")))
+        tl.trace(
+            model,
+            x,
+            storage=tl.to_disk(str(tmp_path / "s.tlspec")),
+            capture=tl.options.CaptureOptions(chunk_size=1),
+        )
     assert _code(info.value) == "trace_option_unsupported"
 
 

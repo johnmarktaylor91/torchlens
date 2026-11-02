@@ -95,13 +95,14 @@ def summary(  # noqa: PLR0913 - the ratified public grammar: every axis is a nam
     view: str | None = None,
     depth: Any = None,
     columns: list[str] | None = None,
-    filter: Any = None,  # noqa: A002 - the memo-ratified axis name
+    where: Any = None,
     buffers: str | None = None,
     fold_repeats: Any = None,
     max_rows: int | None = None,
     flop_convention: str | None = None,
     units: str | None = None,
     style: str | None = None,
+    max_scan_elements: int | None = None,
     # One-call-only spellings (typed errors here, never no-ops).
     input_shape: Any = None,
     execution_mode: str | None = None,
@@ -131,12 +132,13 @@ def summary(  # noqa: PLR0913 - the ratified public grammar: every axis is a nam
     for name, value in (
         ("view", view),
         ("depth", depth),
-        ("filter", filter),
+        ("where", where),
         ("buffers", buffers),
         ("fold_repeats", fold_repeats),
         ("flop_convention", flop_convention),
         ("units", units),
         ("style", style),
+        ("max_scan_elements", max_scan_elements),
     ):
         if value is not None:
             new_kwargs[name] = value

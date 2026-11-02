@@ -34,8 +34,7 @@ def _armed_trace(save_mode: str = "copy") -> tl.Trace:
     return tl.trace(
         model,
         x,
-        capture=CaptureOptions(backward_ready=True, save_grads="all"),
-        save_mode=save_mode,
+        capture=CaptureOptions(backward_ready=True, save_grads="all", save_mode=save_mode),
     )
 
 
@@ -321,8 +320,9 @@ def test_saved_grad_hook_clones_once_and_transforms_once() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(backward_ready=True, save_grads="all"),
-        grad_transform=counting_transform,
+        capture=CaptureOptions(
+            backward_ready=True, save_grads="all", grad_transform=counting_transform
+        ),
     )
     trace.log_backward(_loss(trace))
 

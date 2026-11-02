@@ -77,6 +77,7 @@ STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
         "output_id2label": StorageBinding(StorageKind.SCALAR, annotation='dict[int, str] | None'),
         "output_num_classes": StorageBinding(StorageKind.SCALAR, annotation='int | None'),
         "_output_transform": StorageBinding(StorageKind.RUNTIME),
+        "_output_slot": StorageBinding(StorageKind.RUNTIME, annotation='OutputSlot | None'),
         "_options_save_transformed_output": StorageBinding(StorageKind.SCALAR),
         "layer_visualizers": StorageBinding(StorageKind.RUNTIME),
         "save_visualizations": StorageBinding(StorageKind.SCALAR),

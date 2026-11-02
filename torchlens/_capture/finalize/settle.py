@@ -281,6 +281,7 @@ def _project_refreshed(
             projected_layer_nums,
             projected_grad_layer_nums,
         ).project_prefix(refreshed, _run_until_plan)
+        self._output_slot = refreshed._output_slot
         self._runnable.output_losslessness = None
         self._replay_arg_version_data_complete = False
         return
@@ -564,13 +565,16 @@ def _finalize_halted_trace(
     backend.cleanup_model_session(self, (model, input_tensors))
     if frontier_output is None:
         raise RuntimeError(
-            "trace(halt=...) could not identify a tensor frontier for the halted partial graph."
+            "trace(stop_after=...) could not identify a tensor frontier for the halted partial graph."
         ) from halt_exc
 
     self.is_stopped = True
     self.stop_reason = halt_exc.reason
     self._graph_stop_frontier = halt_exc.reason
     self.transformed_output = None
+    from ...recording.types import stopped
+
+    self._output_slot = stopped(halt_exc.reason)
     if not postprocess:
         self.__dict__.pop("_output_attribution_input_tensors", None)
         self._provenance_end_time = time.time()

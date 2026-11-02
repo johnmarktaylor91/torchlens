@@ -173,7 +173,7 @@ def test_record_does_not_crash_on_registered_buffer_output() -> None:
     # synthesized output node) so the buffer's out value is retained for the
     # assertions below; the crash this guards against triggers during output
     # extraction itself, regardless of what the predicate saves.
-    recording = tl.record(model, x, default_op=True)
+    recording = tl.record(model, x, recording=tl.options.RecordingOptions(default_op=True))
     assert recording is not None
     assert recording.is_failed is False
 

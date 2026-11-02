@@ -17,7 +17,9 @@ def _mlp() -> nn.Module:
 def test_enrich_module_path_strings_populates_metadata() -> None:
     """Module path enrichment adds expected metadata fields."""
 
-    recording = tl.record(_mlp(), torch.randn(1, 4), default_op=True)
+    recording = tl.record(
+        _mlp(), torch.randn(1, 4), recording=tl.options.RecordingOptions(default_op=True)
+    )
     enriched = recording.enrich(["module_path_strings"])
     assert enriched is not recording
     assert enriched.records
@@ -28,7 +30,9 @@ def test_enrich_module_path_strings_populates_metadata() -> None:
 def test_enrich_all_feasible_matches_available_enrichments() -> None:
     """All-feasible applies all enrichments currently computable."""
 
-    recording = tl.record(_mlp(), torch.randn(1, 4), default_op=True)
+    recording = tl.record(
+        _mlp(), torch.randn(1, 4), recording=tl.options.RecordingOptions(default_op=True)
+    )
     by_name = recording.enrich(["module_path_strings"])
     by_preset = recording.enrich("all-feasible")
     assert [record.metadata for record in by_preset.records] == [
