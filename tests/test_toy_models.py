@@ -12,31 +12,20 @@ from os.path import join as opj
 import example_models
 import pytest
 import torch
+from _validation_capture import _assert_degenerate_forward
 
 import torchlens as tl
 from torchlens import trace
 from torchlens._user_funcs import log_model_metadata
 from torchlens._visualization import show_model_graph
 from torchlens.errors import TraceNotReproducibleWarning
-from torchlens.validation import last_validation_failure, validate_forward_pass
+from torchlens.validation import validate_forward_pass
 
 VIS_OUTPUT_DIR = opj(os.environ["TORCHLENS_TEST_OUTPUTS_DIR"], "visualizations")
 
 # =============================================================================
 # Simple operations
 # =============================================================================
-
-
-def _assert_degenerate_forward(model: torch.nn.Module, x: torch.Tensor) -> None:
-    """Assert validation fails as degenerate: every final output element is non-finite.
-
-    Used where the NaN or inf is intrinsic to the model: no affine input change
-    ``c + s * x`` (c in [-25, 25], s in {1, 0.1, 0.01}) makes the output finite.
-    """
-
-    assert not validate_forward_pass(model, x)
-    failure = last_validation_failure()
-    assert failure is not None and failure.check_name == "degenerate_forward", failure
 
 
 @pytest.mark.heavy
@@ -820,9 +809,7 @@ def test_orphan_tensors(default_input1):
 
 def test_simple_loop_no_param(default_input1):
     model = example_models.SimpleLoopNoParam()
-    # The fixture input drives log() of negatives, so every output is NaN and the
-    # forward must fail as degenerate. Inputs near 20.25 keep every log argument
-    # positive through the loop: same graph, finite output, so loop replay stays covered.
+    # log() of negatives: every output NaN, degenerate; near 20.25 the same loop stays finite.
     _assert_degenerate_forward(model, default_input1)
     assert validate_forward_pass(model, 20.25 + 0.1 * default_input1)
     show_model_graph(
