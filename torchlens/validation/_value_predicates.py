@@ -8,6 +8,8 @@ Split from ``validation/exemptions.py`` along this seam (R43 file-size ratchet);
 the predicates are unchanged.
 """
 
+from __future__ import annotations
+
 from numbers import Number
 from typing import TYPE_CHECKING, Any
 

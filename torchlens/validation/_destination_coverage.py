@@ -12,6 +12,8 @@ Split from ``validation/exemptions.py`` along this seam (R43 file-size ratchet);
 the proofs are unchanged.
 """
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Any
 
 import numpy as np

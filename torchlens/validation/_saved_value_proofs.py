@@ -28,6 +28,8 @@ Split from ``validation/exemptions.py`` (R43 file-size ratchet), which dispatche
 here from its posthoc value-proof decision.
 """
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
