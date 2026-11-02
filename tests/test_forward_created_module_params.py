@@ -38,6 +38,10 @@ def test_forward_created_parameters_bind_to_their_initializer_ops() -> None:
     assert not late.unattributed_tensor_args
     parent_funcs = sorted(by_label[label.split(":")[0]].func_name for label in late.parents)
     assert parent_funcs == ["relu", "uniform_", "uniform_"]
+    # Each initializer nests to one bottom-level ``uniform_`` write; the enclosing
+    # ``kaiming_uniform_`` and ``init.uniform_`` calls record no second op.
+    initializer_funcs = [op.func_name for op in trace.ops if op.func_name.endswith("uniform_")]
+    assert initializer_funcs == ["uniform_", "uniform_"]
 
 
 @pytest.mark.smoke

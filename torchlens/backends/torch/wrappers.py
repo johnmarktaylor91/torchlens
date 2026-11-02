@@ -60,7 +60,6 @@ from ..._utils.tensor_utils import (
     disarm_deferred_payload_window,
     materialize_deferred_for_call,
     print_override,
-    safe_copy,
 )
 from ._completeness_boundaries import completeness_scope_for_wrapper
 from ._completeness_cross_thread import (
@@ -96,7 +95,6 @@ from ._storage_overlap import (
 )
 from ._tl import (
     _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
-    NO_USER_GRAD_FN,
     DescriptorCompatProperty,
     get_tensor_label,
     has_detached_saved_activations,
@@ -139,8 +137,11 @@ from .escape_detection import (
 from .param_mutation import (
     frozen_parameter_receiver_context as _frozen_parameter_receiver_context,
     is_mutated_parameter_receiver as _is_mutated_parameter_receiver,
+    nested_write_relabeled_receiver as _nested_write_relabeled_receiver,
     parameter_mutation_output_for_logging as _parameter_mutation_output_for_logging,
     receiver_kwarg_as_positional as _receiver_kwarg_as_positional,
+    receiver_mutation_label as _receiver_mutation_label,
+    same_object_logging_copy as _same_object_logging_copy,
 )
 from .sources import log_closure_constant_if_known, log_source_tensor
 
@@ -1358,6 +1359,7 @@ def torch_func_decorator(
             return _call_print_func(trace, func, func_name, args, kwargs)
 
         # Snapshot args before the call in case in-place ops mutate them.
+        receiver_label_before = _receiver_mutation_label(args)
         if trace._options_save_args:
             from ._ops_arguments import _copy_saved_call_args
 
@@ -1581,39 +1583,20 @@ def torch_func_decorator(
         # otherwise the module exit re-reads the input's label and the boundary
         # node (e.g. identity_1_2) never attaches to the module's output_ops.
         if same_object_returned:
-            # Create a distinct tensor object for logging — otherwise attaching
-            # _tl.label_raw on the output would clobber the input's label.
-            # Snapshot the USER op's live autograd node first (round-31 M5):
-            # the safe copy's grad_fn is TorchLens's own ``CloneBackward``
-            # bookkeeping, and it must never replace the operation's recorded
-            # autograd metadata (``grad_fn_class_*`` / handle).
-            # TorchLens bookkeeping read: for a same-object in-place return the
-            # output IS the user's receiver (a registered buffer for BN's
-            # ``num_batches_tracked.add_(1)``), so an unmarked ``grad_fn`` read
-            # would record a phantom declared-state fact (r65 unread-bit).
-            with internal_scalar_read():
-                live_user_grad_fn = out_orig.grad_fn if isinstance(out_orig, torch.Tensor) else None
-            out_orig = safe_copy(out_orig)
-            if isinstance(out_orig, torch.Tensor):
-                # A leaf receiver (``x.detach().requires_grad_(True)``) has no
-                # live node: stamp the sentinel so the record carries ``None``
-                # instead of the copy's own ``CloneBackward`` (a phantom handle
-                # no backward can ever visit).
-                try:
-                    setattr(
-                        out_orig,
-                        "tl_user_grad_fn",
-                        NO_USER_GRAD_FN if live_user_grad_fn is None else live_user_grad_fn,
-                    )
-                except AttributeError:
-                    pass
-            out_orig = _parameter_mutation_output_for_logging(
-                trace,
-                out_orig,
-                source=args[0],
-                was_inplace=was_inplace,
-                is_storage_rebind=is_storage_rebinding_setter,
-            )
+            out_orig = _same_object_logging_copy(out_orig)
+            # A nested bottom-level write already recorded this Parameter
+            # mutation; the enclosing initializer keeps its Parameter return
+            # and logs nothing (``nested_write_relabeled_receiver``).
+            if is_bottom_level_func or not (
+                was_inplace and _nested_write_relabeled_receiver(args[0], receiver_label_before)
+            ):
+                out_orig = _parameter_mutation_output_for_logging(
+                    trace,
+                    out_orig,
+                    source=args[0],
+                    was_inplace=was_inplace,
+                    is_storage_rebind=is_storage_rebinding_setter,
+                )
             # A storage rebind is recorded as the non-mutating ``detach(rhs)`` call.
             if not is_storage_rebinding_setter:
                 _stamp_same_object_mutation(out_orig, args[0], mutation_signature)
