@@ -11,7 +11,7 @@ the record or on the stable refusal codes below — never on exception text.
 |---|---|---|
 | `COMPLETE` | settled complete; attested by the settlement stamp | `False` |
 | `STOPPED` | stopped by `stop=` or imperative `tl.recording.stop()`; an honest prefix | `True` |
-| `ABORTED_NONFINITE` | stopped by the `raise_on_nan` policy | `True` |
+| `ABORTED_NONFINITE` | stopped by the `on_nonfinite='raise'` policy | `True` |
 | `FAILED` | the capture raised; phase + diagnostic origin attribution | `True` |
 | `UNATTESTED` | structurally finished, but no settlement evidence (legacy artifacts only) | `None` |
 | `UNKNOWN` | unprovable terminal state; the most restrictive row | `None` |
@@ -142,7 +142,7 @@ Row rationales, stated once:
   crashed with a misleading "computational graph changed" error, and halted
   `run(inputs=..., fast=True)` SILENTLY SUCCEEDED against the full native
   forward (the false-blessing hole). The refusal names the re-arm follow-on:
-  re-capture without `halt=`, or use loaded-sparse `run()`.
+  re-capture without `stop_after=`, or use loaded-sparse `run()`.
 - **N4** is a crash→typed conversion: no legacy workflow successfully saved a
   halted runnable (the producer preflight already failed).
 - **`Recording.backward`** refuses a failed partial with the table's N3
@@ -160,7 +160,7 @@ Row rationales, stated once:
   `torch.no_grad()` or `torch.inference_mode()`, which implies
   `inference_only=True` (reported as `Recording.outcome.inference_only`).
 
-## `raise_on_nan`'s honest scope
+## `on_nonfinite='raise'`'s honest scope
 
 The tripwire checks RAW op-boundary tensors only: a NaN introduced by
 `activation_transform` never aborts (COMPLETE), a raw NaN aborts even when
@@ -172,7 +172,7 @@ skipped, and uncheckable dtypes warn once per capture.
 *(Every spelling here is DOCUMENTED-UNSTABLE pending naming-session
 ratification; no deprecation shim owed on rename.)*
 
-`raise_on_nan` is a stop-and-throw; the queryable form is separate and never
+`on_nonfinite='raise'` is a stop-and-throw; the queryable form is separate and never
 changes control flow. `Trace.nonfinite_ops` returns the pass-qualified labels
 of ops whose output held at least one NaN or Inf (each a valid `trace[label]`
 key), and `Trace.nonfinite_coverage` returns the frozen evidence disclosure:
@@ -189,14 +189,14 @@ Two evidence bases:
   memoized (measured 0.02–0.27 s on resnet18/transformer/gpt2-class models,
   then ~2 ms memoized). On a selective-save capture this basis is honestly
   blind to unsaved ops (`unexamined` says how many).
-- **`"capture"`**: `CaptureOptions(track_nonfinite=True)` opts into a per-op
+- **`"capture"`**: `CaptureOptions(on_nonfinite='track')` opts into a per-op
   `torch.isfinite(out).all()` at op commit, covering every committed op —
   saved or not. fp8 widens exactly first; empty tensors are exactly finite;
   uncheckable dtypes land in `unchecked`. CPU flags are read immediately;
   CUDA/MPS flags are deferred as 0-dim bool tensors and drained in ONE batch
   at the capture finalize seam, so the forward is never synchronized per op.
 
-Measured cost of `track_nonfinite=True` relative to a default capture
+Measured cost of `on_nonfinite='track'` relative to a default capture
 (min-of-reps, 2026-08-19): CPU resnet18-b8 +5.8%, transformer-enc
 +14.5%, gpt2 +3.4%; H200 (cu128) resnet18-b8 +4.9%, transformer-enc +6.7%,
 gpt2 +4.3%, with an eager per-op read variant costing +6.9%/+9.3%/+7.3% —
@@ -224,7 +224,7 @@ latch a stop request on the active trace before raising. If the forward then
 returns "normally" — user code swallowed the control signal in a broad
 `except:` — the boundary checkpoint raises
 `tl.errors.StopSignalSwallowedError` and the capture settles FAILED, never
-COMPLETE. The halt-capable preview backends (paddle's shipped `halt=`, MLX's
+COMPLETE. The halt-capable preview backends (paddle's shipped `stop_after=`, MLX's
 halt selector) hold the same contract: their `StopSignal` raise sites latch
 the request on the trace, and `stamp_backend_finalized` — the one preview
 settlement stamp — consumes the latch, refusing a latched-but-unhalted
@@ -263,7 +263,7 @@ sits inside a region whose only success exit reaches an authority stamp.
   by an `AttributeError: _raw_graph_ws` cleanup double-fault; F5's guarded
   cleanups let the original exception propagate, and the settlement stamp in
   `finally` survives any double-fault.
-- A refresh now re-arms `raise_on_nan` (F2); it silently disarmed before.
+- A refresh now re-arms `on_nonfinite='raise'` (F2); it silently disarmed before.
 - F3b disclosure: the halted path skips `finalize_forward_session` (and with
   it buffer-write reconciliation). Characterization shows byte-identical
   buffer topology, buffer-write event counts, and model buffer state versus

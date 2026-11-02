@@ -26,7 +26,7 @@ from ..recording.exceptions import PredicateError
 from ..recording.types import CaptureSpec, ModuleStackFrame, RecordContext
 
 if TYPE_CHECKING:
-    from ..recording.options import RecordingOptions
+    from ..recording.options import _RecordingConfig
 
 
 def _coerce_default_capture_spec(default: bool | CaptureSpec) -> CaptureSpec:
@@ -99,7 +99,7 @@ def _normalize_capture_decision(
 
 def _evaluate_keep_op(
     ctx: RecordContext,
-    options: RecordingOptions,
+    options: _RecordingConfig,
 ) -> CaptureSpec | RetroactiveCaptureDecision:
     """Evaluate the operation/source predicate slot for one event."""
 
@@ -237,7 +237,7 @@ def _keep_op_needs_alias_retry(predicate: object | None) -> bool:
 
 def _evaluate_intervene_op(
     ctx: RecordContext,
-    options: RecordingOptions,
+    options: _RecordingConfig,
 ) -> InterventionDecision | None:
     """Evaluate the active operation intervention predicate slot.
 
@@ -271,7 +271,7 @@ def _evaluate_intervene_op(
 
 def _evaluate_halt(
     ctx: RecordContext,
-    options: RecordingOptions,
+    options: _RecordingConfig,
     frontier_output: Any | None = None,
 ) -> None:
     """Evaluate the halt predicate slot and raise when it matches.
@@ -299,7 +299,7 @@ def _evaluate_halt(
     StopDirective(halt_options=options).evaluate_halt(ctx, frontier_output=frontier_output)
 
 
-def _is_halt_only_capture(options: RecordingOptions) -> bool:
+def _is_halt_only_capture(options: _RecordingConfig) -> bool:
     """Return whether capture can evaluate only the halt predicate per event.
 
     The fast path is deliberately narrow: no save predicate, no default
@@ -323,7 +323,7 @@ def _is_halt_only_capture(options: RecordingOptions) -> bool:
 
 def _evaluate_retroactive_followed_by(
     ctx: RecordContext,
-    options: RecordingOptions,
+    options: _RecordingConfig,
 ) -> RetroactiveCaptureDecision | None:
     """Evaluate supported ``candidate & followed_by(successor)`` predicate sugar."""
 
@@ -434,7 +434,7 @@ def _matching_recent_parent_labels(
     return tuple(matches)
 
 
-def _module_capture_spec(options: RecordingOptions) -> CaptureSpec:
+def _module_capture_spec(options: _RecordingConfig) -> CaptureSpec:
     """Return the capture policy for one module boundary event.
 
     Module events have no predicate slot (predicate-gated module-event

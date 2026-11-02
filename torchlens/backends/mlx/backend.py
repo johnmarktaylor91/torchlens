@@ -1117,9 +1117,13 @@ class MLXBackend:
                     stacklevel=2,
                 )
             trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
+            from ...recording.types import returned, stopped
+
             if halt_signal is not None:
+                trace._output_slot = stopped(halt_signal.reason)
                 trace.transformed_output = None
             else:
+                trace._output_slot = returned(output)
                 trace.transformed_output = (
                     output_transform(output) if callable(output_transform) else None
                 )

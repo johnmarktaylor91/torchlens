@@ -34,6 +34,7 @@ from typing import Any
 
 import torch
 
+from ..options import CaptureOptions, RecordingOptions
 from ._artifact import HistoryWriter, RamRing
 from ._collector import PlanRow, StepTruth, WatchPlan, WatchSettings
 from ._errors import WatchLifecycleError, WatchPlanError
@@ -254,9 +255,11 @@ class OpTierCollector:
             recording = _record(
                 self.model,
                 input_args,
-                input_kwargs,
+                input_kwargs=input_kwargs,
                 save=self.save,
-                default_op=fastlog.CaptureSpec(save_out=False, save_metadata=True),
+                recording=RecordingOptions(
+                    default_op=fastlog.CaptureSpec(save_out=False, save_metadata=True)
+                ),
             )
         rows: list[PlanRow] = []
         for record in recording.records:
@@ -411,16 +414,15 @@ class OpTierCollector:
 
         _record: Any = _record_one_shot.record
 
-        output, _recording = _record(
+        _recording = _record(
             self.model,
             input_args,
-            input_kwargs,
+            input_kwargs=input_kwargs,
             save=self.save,
-            default_op=True,
-            activation_transform=self._reducer,
-            save_raw_activations=False,
-            return_output=True,
+            recording=RecordingOptions(default_op=True),
+            capture=CaptureOptions(activation_transform=self._reducer, save_raw_activations=False),
         )
+        output = _recording.output
         return output
 
     def observe_step(
@@ -446,16 +448,15 @@ class OpTierCollector:
 
         _record: Any = _record_one_shot.record
 
-        output, recording = _record(
+        recording = _record(
             self.model,
             input_args,
-            input_kwargs,
+            input_kwargs=input_kwargs,
             save=self.save,
-            default_op=True,
-            activation_transform=self._reducer,
-            save_raw_activations=False,
-            return_output=True,
+            recording=RecordingOptions(default_op=True),
+            capture=CaptureOptions(activation_transform=self._reducer, save_raw_activations=False),
         )
+        output = recording.output
         step = self._open_block_step()
         # Batch the host transfer (D16): one stacked .cpu() per device per
         # step over every packed row, never a per-site sync.

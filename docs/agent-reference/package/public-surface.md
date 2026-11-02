@@ -1,6 +1,6 @@
 ## Public Surface
 
-`torchlens.__all__` is intentionally small and currently has 83 names. New user-facing
+`torchlens.__all__` is intentionally small and currently has 84 names. New user-facing
 objects should usually live under submodules (`torchlens.io`, `torchlens.options`,
 `torchlens.bridge`, `torchlens.errors`, etc.). Interim-phase policy is remove-and-rename,
 never deprecation shims (scripts/checks/deprecation_inventory.py pins the package
@@ -16,8 +16,7 @@ windowed = tl.trace(
     model,
     x,
     save=tl.func("conv2d") & tl.followed_by(tl.func("relu")),
-    lookback=4,
-    lookback_payload_policy="detached_raw",
+capture=CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
 )
 patched = tl.trace(
     model,
@@ -107,16 +106,15 @@ image_trace.draw(node_spec_fn=tl.viz.nodes.scree())
 Sprint B annotation/MDS names are provisional until review-day signoff. `Trace.model_profile`
 is computed, not persisted. `tl.repgeom.mds_evolution(...)` requires the target batch
 activations to have been saved at capture time; use a curated `save=` subset, not exhaustive
-`layers_to_save="all"`,
+`save="all"`,
 for image batches. `Trace._annotation_blobs` is public-provisional only for render-time
 annotation payloads and compatibility review.
 Sprint C RDM, feature-map, and scree node visuals are PIL-only render-time images composed
 from `tl.viz.render_*` primitives and are provisional until review-day signoff.
 
 `record(keep_op=...)` and `record(keep_module=...)` are removed and raise `TypeError`.
-`record(save=...)` is the only selective-capture spelling. `capture=CaptureOptions(
-layers_to_save=[...])` remains the final-label selection door (the bare flat kwarg is
-removed); it is NOT two-pass-only —
+`record(save=...)` is the only selective-capture spelling. On `trace`, `save=[...]`
+also accepts final-label selections.
 `_trace_selector_helpers.py` builds a live single-pass predicate whenever early labels
 suffice, falling back to two-pass resolution otherwise. An
 unqualified recurrent layer label saves all passes, while `"label:2"` saves only pass 2.
@@ -132,5 +130,5 @@ FuncGraph static path is implemented for compiled/SavedModel entries (opaque reg
 honestly unverified). Static-label `intervene=` SHIPS for eager entries (two-level writable
 layer, fail-closed site reachability), and T1 derived gradients SHIP for eager entries via
 `tl.backends.tf.GradOptions` (graph-only captures refuse `grad_options` typed; `intervene=`
-cannot combine with `grad_options=`). Deferred: `halt=`/`recipes=`, true backward capture,
+cannot combine with `grad_options=`). Deferred: `stop_after=`/`recipes=`, true backward capture,
 and value-dependent predicates.

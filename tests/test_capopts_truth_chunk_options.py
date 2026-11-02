@@ -88,7 +88,7 @@ def test_chunked_capture_honors_save_budget() -> None:
     with pytest.raises(SaveBudgetExceededError):
         tl.trace(SmallNet(), x, capture=CaptureOptions(save_budget=1))
     with pytest.raises(SaveBudgetExceededError):
-        tl.trace(SmallNet(), x, chunk_size=4, capture=CaptureOptions(save_budget=1))
+        tl.trace(SmallNet(), x, capture=CaptureOptions(save_budget=1, chunk_size=4))
 
 
 @pytest.mark.smoke
@@ -99,8 +99,9 @@ def test_chunked_capture_carries_peak_memory_knob() -> None:
     log = tl.trace(
         SmallNet(),
         x,
-        chunk_size=4,
-        capture=CaptureOptions(measure_python_peak_memory=True, measure_host_peak_memory=True),
+        capture=CaptureOptions(
+            measure_python_peak_memory=True, measure_host_peak_memory=True, chunk_size=4
+        ),
     )
     peak = log.cost.forward_peak_memory
     assert peak is not None and peak > 0, (
@@ -117,8 +118,7 @@ def test_chunked_capture_carries_host_peak_memory_knob() -> None:
     log = tl.trace(
         SmallNet(),
         torch.randn(8, 4),
-        chunk_size=4,
-        capture=CaptureOptions(measure_host_peak_memory=True),
+        capture=CaptureOptions(measure_host_peak_memory=True, chunk_size=4),
     )
     assert log.cost.forward_peak_memory_reason != CPU_PEAK_NOT_REQUESTED_REASON, (
         "measure_host_peak_memory=True on a chunked capture read as not requested; "

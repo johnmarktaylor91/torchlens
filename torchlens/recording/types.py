@@ -5,16 +5,17 @@ from __future__ import annotations
 __tl_layer__ = "L1"
 __tl_vocabulary__ = True
 
+import dataclasses
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Final, Literal, cast
 
 import torch
 
 from .._captured_run import TraceLike
-from .._errors import CaptureNotActiveError, InvalidArgumentError
+from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavailableError
 from .._ir.predicate import EventKind, ModuleStackFrame, RecordContext, RetroactiveCaptureDecision
 from .._utils.tensor_utils import SaveMode
 
@@ -26,12 +27,26 @@ __all__ = [
     "PredicateFailure",
     "RecordContext",
     "Recording",
+    "RecordingSettings",
     "StorageIntent",
 ]
 
 if TYPE_CHECKING:
     from .._capture.session import CapturedRunCore
     from .._data_classes.trace import Trace
+    from ..intervention.predicates import InterventionPredicate
+    from ..options import StorageOptions
+    from ..types import _ActivationPostfunc, _GradientPostfunc
+    from ..viz._drawing import Drawing
+    from .options import (
+        ForwardErrorMode,
+        GradPredicateFn,
+        HaltPredicateFn,
+        LookbackPayloadPolicy,
+        PredicateErrorMode,
+        PredicateFn,
+        _RecordingConfig,
+    )
 
 
 def _distinct_label_index_keys(label: str, raw_label: str | None) -> tuple[str, ...]:
@@ -348,8 +363,14 @@ class DryRun:
 
         return to_pandas(self)
 
-    def draw(self, **kwargs: Any) -> str:
-        """Render a flat Graphviz graph of trace operation events."""
+    def draw(self, **kwargs: Any) -> Drawing:
+        """Render a flat Graphviz graph of trace operation events.
+
+        Returns
+        -------
+        Drawing
+            The picture; ``str()`` of it is the DOT source.
+        """
 
         from .._visualization.fastlog_live import draw
 
@@ -436,9 +457,265 @@ _RAW_METADATA_FIELDS = (
 )
 
 
+# --- Model-output readback (Recording.output / Trace.output) ---------------
+# The forward's return value is held in a private OutputSlot that lives in
+# memory only: never written to a bundle, never pickled. read_output returns
+# it or refuses typed with the reason; it never returns None for a missing output.
+
+OutputStatus = Literal["returned", "forward_failed", "stopped"]
+
+
 @dataclass(frozen=True, slots=True)
+class OutputSlot:
+    """Private holder for one capture's model output, or the reason it has none.
+
+    Attributes
+    ----------
+    status:
+        ``"returned"`` (``value`` is the model's return value),
+        ``"forward_failed"`` (the forward raised; ``detail`` names the failure)
+        or ``"stopped"`` (``stop_after=`` ended the capture before the model
+        returned; ``detail`` names the stop).
+    value:
+        The return value when ``status == "returned"``.
+    detail:
+        The failure or stop description otherwise.
+    """
+
+    status: OutputStatus
+    value: Any = None
+    detail: str | None = None
+
+
+def returned(value: Any) -> OutputSlot:
+    """Return the slot for a forward that returned ``value``."""
+
+    return OutputSlot(status="returned", value=value)
+
+
+def forward_failed(detail: str | None) -> OutputSlot:
+    """Return the slot for a forward that raised."""
+
+    return OutputSlot(status="forward_failed", detail=detail)
+
+
+def stopped(detail: str | None) -> OutputSlot:
+    """Return the slot for a capture that ``stop_after=`` ended early."""
+
+    return OutputSlot(status="stopped", detail=detail)
+
+
+def read_output(slot: OutputSlot | None, *, owner: str) -> Any:
+    """Return the model output held by ``slot`` or refuse with the reason.
+
+    Parameters
+    ----------
+    slot:
+        The capture's private output slot; ``None`` when the object was
+        restored from disk (or a pickle) or built without a live forward.
+    owner:
+        ``"Trace"`` or ``"Recording"``, used in the refusal text.
+
+    Returns
+    -------
+    Any
+        The model's return value, exactly as returned.
+
+    Raises
+    ------
+    PayloadUnavailableError
+        ``output_not_stored`` for an object without a live output (loaded from
+        disk), ``output_forward_failed`` when the forward raised, and
+        ``output_capture_stopped`` when ``stop_after=`` ended the capture
+        before the model returned.
+    """
+
+    if slot is None:
+        raise PayloadUnavailableError(
+            f"this {owner} has no model output: the output is held in memory only and is "
+            f"not stored with saved {owner}s, so a {owner} loaded from disk (or unpickled) "
+            "never carries it",
+            code="output_not_stored",
+            remedy=f"re-run the capture and read .output on the live {owner}",
+        )
+    if slot.status == "forward_failed":
+        raise PayloadUnavailableError(
+            f"this {owner} has no model output: the forward raised before the model "
+            f"returned ({slot.detail or 'no failure text'})",
+            code="output_forward_failed",
+            remedy="fix the failing forward and re-run; the partial result keeps the failure",
+        )
+    if slot.status == "stopped":
+        raise PayloadUnavailableError(
+            f"this {owner} has no model output: stop_after= ended the capture before the "
+            f"model returned ({slot.detail or 'stop site fired'})",
+            code="output_capture_stopped",
+            remedy="drop stop_after= (or move it past the last op) to let the model return",
+        )
+    return slot.value
+
+
+#: ``RecordingSettings`` field -> the ``_RecordingConfig`` slot it reads. The
+#: record speaks the public spellings: the capture knobs keep their
+#: ``CaptureOptions`` names, the recorder knobs their ``RecordingOptions``
+#: names, and the three door-carried slots their door keywords.
+_SETTINGS_SLOTS: Final[tuple[tuple[str, str], ...]] = (
+    ("keep_op", "keep_op"),
+    ("default_op", "default_op"),
+    ("default_module", "default_module"),
+    ("history_size", "history_size"),
+    ("include_source_events", "include_source_events"),
+    ("intervene", "intervene"),
+    ("max_predicate_failures", "max_predicate_failures"),
+    ("on_predicate_error", "on_predicate_error"),
+    ("on_forward_error", "on_forward_error"),
+    ("default_grad", "default_grad"),
+    ("postprocess", "postprocess"),
+    ("lookback", "lookback"),
+    ("lookback_payload_policy", "lookback_payload_policy"),
+    ("seed", "seed"),
+    ("activation_transform", "activation_transform"),
+    ("save_raw_activations", "save_raw_activations"),
+    ("save_grads", "save_grads"),
+    ("grad_transform", "grad_transform"),
+    ("save_raw_grads", "save_raw_grads"),
+    ("detach_saved_activations", "detach_saved_activations"),
+    ("stop_after", "halt"),
+    ("storage", "streaming"),
+    ("narrate", "echo"),
+)
+
+#: Value types a saved recording stores verbatim (bundle ``metadata.json``).
+_PERSISTED_SETTING_TYPES: Final[tuple[type, ...]] = (bool, int, float, str)
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class RecordingSettings:
+    """The settings one recording was made with; read-only.
+
+    Returned by ``Recording.options``. One record answers "how was this
+    recording made?" across every door that configured it: the capture knobs
+    (``capture=CaptureOptions(...)``: ``save_grads``, ``activation_transform``,
+    ``grad_transform``, ``lookback``, ...), the recorder knobs
+    (``recording=RecordingOptions(...)``: ``keep_op``, ``default_op``,
+    ``history_size``, ...) and the door keywords ``stop_after=``, ``storage=``
+    and ``narrate=``. Values are the live objects the recorder used (the
+    predicate or transform callable itself, the ``CaptureSpec``), never repr
+    strings. Built by the recorder; there is no public constructor.
+
+    A recording recovered from disk carries the plain values (bools, numbers,
+    strings) that saved recordings store; a setting whose value is a callable
+    or an object (predicates, transforms, ``CaptureSpec`` values, storage and
+    narration options) is not stored with saved recordings and reads ``None``
+    there.
+
+    Attributes
+    ----------
+    keep_op:
+        The save predicate deciding which op events keep a record (``save=``).
+    default_op:
+        Capture decision for op events the save predicate leaves undecided.
+    default_module:
+        Capture decision for module events the save predicate leaves undecided.
+    history_size:
+        How many recent event contexts a predicate could look back over.
+    include_source_events:
+        Whether input and buffer source events were offered to the predicates.
+    intervene:
+        The live intervention predicate applied during the forward.
+    max_predicate_failures:
+        How many predicate failures were kept before counting the rest.
+    on_predicate_error:
+        What a raising predicate did: ``auto``, ``accumulate`` or ``fail-fast``.
+    on_forward_error:
+        What a raising forward did: ``raise``, ``attach_partial`` or ``return_partial``.
+    default_grad:
+        Capture decision for gradient events no gradient predicate decided.
+    postprocess:
+        The post-capture finalization pass (``none`` by default).
+    lookback:
+        How many earlier events each record context carried.
+    lookback_payload_policy:
+        Which payload the lookback contexts carried.
+    seed:
+        The random seed set before the forward, if any.
+    activation_transform:
+        The function applied to each saved activation.
+    save_raw_activations:
+        Whether the untransformed activation was kept beside the transformed one.
+    save_grads:
+        Which gradients were saved: a predicate, a bool or a ``CaptureSpec``.
+    grad_transform:
+        The function applied to each saved gradient.
+    save_raw_grads:
+        Whether the untransformed gradient was kept beside the transformed one.
+    detach_saved_activations:
+        Whether saved activations were detached from the autograd graph.
+    stop_after:
+        The stop predicate from ``stop_after=``, if any.
+    storage:
+        The disk sink from ``storage=``, if any.
+    narrate:
+        The live narration settings (a ``NarrationOptions``) that printed each captured
+        event as the forward ran, from the door's ``narrate=``; ``None`` when off.
+    """
+
+    keep_op: PredicateFn | None
+    default_op: bool | CaptureSpec | None
+    default_module: bool | CaptureSpec | None
+    history_size: int | None
+    include_source_events: bool | None
+    intervene: InterventionPredicate | None
+    max_predicate_failures: int | None
+    on_predicate_error: PredicateErrorMode | None
+    on_forward_error: ForwardErrorMode | None
+    default_grad: bool | CaptureSpec | None
+    postprocess: str | None
+    lookback: int | None
+    lookback_payload_policy: LookbackPayloadPolicy | None
+    seed: int | None
+    activation_transform: _ActivationPostfunc | None
+    save_raw_activations: bool | None
+    save_grads: GradPredicateFn | bool | CaptureSpec | None
+    grad_transform: _GradientPostfunc | None
+    save_raw_grads: bool | None
+    detach_saved_activations: bool | None
+    stop_after: HaltPredicateFn | None
+    storage: StorageOptions | None
+    narrate: Any | None
+
+    @classmethod
+    def _from_values(cls: type[RecordingSettings], values: Mapping[str, Any]) -> RecordingSettings:
+        """Build the record; a field absent from ``values`` reads ``None``."""
+
+        record = object.__new__(cls)
+        for name, _slot in _SETTINGS_SLOTS:
+            object.__setattr__(record, name, values.get(name))
+        return record
+
+    @classmethod
+    def _from_config(cls: type[RecordingSettings], config: _RecordingConfig) -> RecordingSettings:
+        """Project the recorder's resolved config onto the public spellings."""
+
+        return cls._from_values({name: getattr(config, slot) for name, slot in _SETTINGS_SLOTS})
+
+    def _persisted_values(self) -> dict[str, Any]:
+        """Return the plain values a saved recording stores (``metadata.json``)."""
+
+        return {
+            name: value
+            for name, _slot in _SETTINGS_SLOTS
+            if isinstance(value := getattr(self, name), _PERSISTED_SETTING_TYPES)
+        }
+
+
+@dataclass(frozen=True, slots=True, init=False)
 class Recording(TraceLike):
     """Result of a fastlog recording session.
+
+    Built by ``tl.record`` and ``Recorder``; there is no public constructor
+    (the recorder and the bundle recovery build it through the private
+    ``_build``). ``options`` returns the settings the recording was made with.
 
     Notes
     -----
@@ -470,7 +747,6 @@ class Recording(TraceLike):
     end_times: list[float]
     predicate_failures: list[PredicateFailure]
     num_predicate_failure_overflows: int
-    keep_op_repr: str | None
     history_size: int
     orphan_records: list[dict[str, Any]] = field(default_factory=list)
     is_stopped: bool = False
@@ -490,9 +766,6 @@ class Recording(TraceLike):
     grad_by_pass: dict[int, list[int]] = field(default_factory=dict)
     grad_by_label: dict[str, list[int]] = field(default_factory=dict)
     grad_by_grad_fn_label: dict[str, list[int]] = field(default_factory=dict)
-    save_grads_repr: str | None = None
-    _grad_transform_repr: str | None = None
-    _activation_transform_repr: str | None = None
     is_recovered: bool = False
     recovery_warnings: list[str] = field(default_factory=list)
     _capture_events: Any | None = field(default=None, repr=False, compare=False)
@@ -506,6 +779,89 @@ class Recording(TraceLike):
     # (torchlens/_capture/outcome.py); ``outcome`` below derives conservatively
     # for unstamped legacy/recovered recordings.
     _outcome: Any | None = field(default=None, repr=False, compare=False)
+    # The resolved settings record behind ``options`` (a ``RecordingSettings``).
+    _options: Any | None = field(default=None, repr=False, compare=False)
+    # The live model output behind ``output`` (an ``OutputSlot``); memory only,
+    # never persisted or pickled.
+    _output: Any | None = field(default=None, repr=False, compare=False)
+
+    @classmethod
+    def _build(cls: type[Recording], **values: Any) -> Recording:
+        """Build a Recording from field values; omitted fields take their defaults.
+
+        The one construction path (the class has no generated ``__init__``):
+        the recorder's empty session record, bundle recovery and tests. A
+        required field left out, or an unknown name, fails on assignment.
+        """
+
+        recording = object.__new__(cls)
+        for item in dataclasses.fields(cls):
+            if item.name in values:
+                value = values.pop(item.name)
+            elif item.default_factory is not dataclasses.MISSING:
+                value = item.default_factory()
+            elif item.default is not dataclasses.MISSING:
+                value = item.default
+            else:
+                value = values[item.name]  # a required field left out: KeyError names it
+            object.__setattr__(recording, item.name, value)
+        for name, value in values.items():
+            object.__setattr__(recording, name, value)
+        return recording
+
+    def _replace(self, **changes: Any) -> Recording:
+        """Return a copy with ``changes`` applied (``dataclasses.replace`` needs ``__init__``)."""
+
+        values = {
+            item.name: object.__getattribute__(self, item.name) for item in dataclasses.fields(self)
+        }
+        values.update(changes)
+        return type(self)._build(**values)
+
+    @property
+    def output(self) -> Any:
+        """Return the model's return value, exactly as the model returned it.
+
+        The tensor, tuple, dict, Hugging Face output object or distribution the
+        forward returned (for a multi-pass ``Recorder``, the last pass's). Held in
+        memory only: the recording keeps it alive for as long as the recording
+        exists (for a Hugging Face model this includes ``past_key_values``); it
+        is released when the recording is dropped.
+
+        Returns
+        -------
+        Any
+            The model output.
+
+        Raises
+        ------
+        PayloadUnavailableError
+            ``output_not_stored`` on a recording loaded from disk or unpickled,
+            ``output_forward_failed`` on a failed partial recording
+            (``on_forward_error="return_partial"``), and
+            ``output_capture_stopped`` when ``stop_after=`` ended the capture
+            before the model returned. Never returns ``None`` for a missing
+            output.
+        """
+
+        return read_output(self._output, owner="Recording")
+
+    @property
+    def options(self) -> RecordingSettings:
+        """Return the settings this recording was made with (read-only).
+
+        Returns
+        -------
+        RecordingSettings
+            The resolved capture and recorder settings, as live values. On a
+            recording recovered from disk, settings that saved recordings do
+            not store (callables and objects) read ``None``.
+        """
+
+        stored = self._options
+        if isinstance(stored, RecordingSettings):
+            return stored
+        return RecordingSettings._from_values({})
 
     @property
     def outcome(self) -> Any:
@@ -812,24 +1168,6 @@ class Recording(TraceLike):
             rows.append(row)
         return tuple(rows)
 
-    @property
-    def activation_transform_repr(self) -> str | None:
-        """Canonical repr for the out transform callable.
-
-        Returns
-        -------
-        str | None
-            Callable repr captured at recording time, if any.
-        """
-
-        return self._activation_transform_repr
-
-    @property
-    def grad_transform_repr(self) -> str | None:
-        """Canonical repr for the gradient transform callable."""
-
-        return self._grad_transform_repr
-
     def add_grad_record(self, record: GradRecord) -> None:
         """Append one retained gradient record and update indexes."""
 
@@ -1132,7 +1470,7 @@ class Recording(TraceLike):
             )
         from .._capture.projectors import RecordingProjector
         from .._data_classes.trace import Trace
-        from .options import RecordingOptions
+        from .options import _RecordingConfig
 
         projection = RecordingProjector().project(self._captured_run_cores)
         if projection.capture_events is None:
@@ -1145,7 +1483,7 @@ class Recording(TraceLike):
         # than captured live.
         trace._options_mode = "exhaustive"
         trace._cooked_from = "recording"
-        trace._predicate_save_options = RecordingOptions()
+        trace._predicate_save_options = _RecordingConfig()
         trace._replay_arg_version_data_complete = False
         # Hand postprocess a STRUCTURAL COPY, never this frozen Recording's own
         # `_capture_events`. Later graph traversal replaces operation events in
@@ -1289,6 +1627,29 @@ class Recording(TraceLike):
                 "halted-capture path"
             ),
         )
+
+
+def _recording_getstate(self: Recording) -> list[Any]:
+    """Pickle every field except the memory-only model output."""
+
+    return [
+        None if item.name == "_output" else object.__getattribute__(self, item.name)
+        for item in dataclasses.fields(self)
+    ]
+
+
+def _recording_setstate(self: Recording, state: list[Any]) -> None:
+    """Restore a pickled Recording field by field."""
+
+    for item, value in zip(dataclasses.fields(self), state, strict=True):
+        object.__setattr__(self, item.name, value)
+
+
+# Assigned after the class body: ``dataclass(slots=True, frozen=True)`` installs
+# its own pickling pair on Python 3.10 even when the class defines one, and that
+# pair would pickle the live model output.
+Recording.__getstate__ = _recording_getstate  # type: ignore[method-assign,assignment]
+Recording.__setstate__ = _recording_setstate  # type: ignore[attr-defined]
 
 
 def _mark_recording_halted(recording: Recording, pass_index: int, reason: str) -> None:

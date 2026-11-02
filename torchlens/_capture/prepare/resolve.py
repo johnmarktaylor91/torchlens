@@ -707,6 +707,6 @@ def _validate_predicate_capabilities(state: _DoorState) -> None:
     if halt is not None:
         validate_followed_by_capability(
             halt,
-            api_name="trace(halt=...)",
+            api_name="trace(stop_after=...)",
             supports_retroactive=False,
         )

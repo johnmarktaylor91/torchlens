@@ -64,7 +64,7 @@ def test_recorder_scratch_pass_settles_complete() -> None:
 
 
 def test_halted_capture_settles_attested_halted() -> None:
-    trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
+    trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=halt_on_relu)
     outcome = trace.outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.STOPPED
@@ -87,7 +87,7 @@ def test_halted_trace_analysis_save_round_trips(tmp_path) -> None:
     export to be allowed.
     """
 
-    trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
+    trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=halt_on_relu)
     assert "_output_attribution_input_tensors" not in trace.__dict__
     bundle = tmp_path / "halted_analysis.tlspec"
     trace.save(bundle, overwrite=True)
@@ -233,7 +233,7 @@ def test_nonfinite_abort_settles_aborted_nonfinite() -> None:
         tl.trace(
             NaNModel(),
             torch.ones(1, 3),
-            capture=tl.options.CaptureOptions(raise_on_nan=True),
+            capture=tl.options.CaptureOptions(on_nonfinite="raise"),
         )
     outcome = exc_info.value.partial_trace.trace.outcome
     assert outcome is not None
@@ -293,7 +293,7 @@ def test_halted_postprocess_failure_settles_failed_postprocess(monkeypatch) -> N
 
     monkeypatch.setattr(pp.graph_traversal, "_add_output_layers", _boom)
     with pytest.raises(ValueError, match="planted halted-pp") as exc_info:
-        tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
+        tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=halt_on_relu)
     assert isinstance(exc_info.value.__context__, StopSignal)
     outcome = captured[0].outcome
     assert outcome is not None
@@ -313,7 +313,7 @@ def test_halted_finalize_failure_settles_failed_finalize(monkeypatch) -> None:
 
     monkeypatch.setattr(TorchBackend, "cleanup_model_session", _boom)
     with pytest.raises(ValueError, match="planted halted-cleanup") as exc_info:
-        tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
+        tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=halt_on_relu)
     assert isinstance(exc_info.value.__context__, StopSignal)
     outcome = sessions[-1].outcome
     assert outcome is not None
@@ -373,7 +373,7 @@ def test_cooked_halted_trace_settles_attested_halted() -> None:
         ThreeStageModel(),
         torch.ones(1, 3),
         save=lambda ctx: ctx.kind == "op",
-        halt=halt_on_relu,
+        stop_after=halt_on_relu,
     )
     assert recording.is_stopped is True
     cooked = recording.to_trace()
@@ -400,11 +400,11 @@ def test_cooked_halted_outcome_matches_exhaustive_settlement() -> None:
         ThreeStageModel(),
         torch.ones(1, 3),
         save=lambda ctx: ctx.kind == "op",
-        halt=halt_on_relu,
+        stop_after=halt_on_relu,
     )
     cooked = recording.to_trace()
     outcome = cooked.outcome
-    exhaustive = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
+    exhaustive = tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=halt_on_relu)
 
     assert outcome.boundary_kind == exhaustive.outcome.boundary_kind == "op"
     # Coherence with the trace's own remapped halt fields (final label space).
@@ -561,7 +561,7 @@ def test_hostile_str_fastlog_return_partial_builds_failed_recording() -> None:
         _HostileStrModel(),
         torch.ones(1, 3),
         save=lambda ctx: ctx.kind == "op",
-        on_forward_error="return_partial",
+        recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
     )
     assert recording.is_failed is True
     assert recording.status == "partial_error"
@@ -578,7 +578,7 @@ def test_hostile_repr_fastlog_return_partial_records_fallback_repr() -> None:
         _HostileReprModel(),
         torch.ones(1, 3),
         save=lambda ctx: ctx.kind == "op",
-        on_forward_error="return_partial",
+        recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
     )
     assert recording.is_failed is True
     assert recording.error_repr == "<unrepresentable _HostileReprError: __repr__ raised>"

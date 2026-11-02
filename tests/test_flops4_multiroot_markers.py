@@ -30,6 +30,7 @@ from torchlens.report import backward_status
 from torchlens.validation.invariants import check_metadata_invariants
 
 _OPTIONS = tl.options.CaptureOptions(backward_ready=True)
+_REFERENCE_OPTIONS = tl.options.CaptureOptions(backward_ready=True, save_mode="reference")
 _MATMULS = ("mm", "addmm")
 
 
@@ -42,7 +43,7 @@ def _two_captures(
     first = nn.Linear(4, 3) if first is None else first
     second = nn.Linear(3, 2)
     x1, x2 = torch.randn(5, 4), torch.randn(5, 3)
-    kwargs: dict[str, Any] = {"capture": _OPTIONS, "save_mode": "reference"}
+    kwargs: dict[str, Any] = {"capture": _REFERENCE_OPTIONS}
     if armed:
         with _activate_aten_recording_for_tests():
             trace1, trace2 = tl.trace(first, x1, **kwargs), tl.trace(second, x2, **kwargs)

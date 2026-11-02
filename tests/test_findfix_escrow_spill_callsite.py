@@ -23,7 +23,6 @@ from torch import nn
 import torchlens as tl
 from torchlens._capture.plan import CapturePlan
 from torchlens.errors import TorchLensWarning
-from torchlens.options import CaptureOptions
 
 
 class _Mlp(nn.Module):
@@ -77,7 +76,7 @@ def test_escrow_spill_warning_names_the_callers_file() -> None:
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        tl.trace(model, x, capture=CaptureOptions(layers_to_save=[first_linear]))
+        tl.trace(model, x, save=[first_linear])
 
     spills = _spill_records(caught)
     assert len(spills) == 1, [str(record.message) for record in caught]
@@ -94,7 +93,7 @@ def test_escrow_spill_warning_is_not_promoted_by_the_torchlens_module_filter() -
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         warnings.filterwarnings("error", category=UserWarning, module=r"torchlens(\.|$)")
-        trace = tl.trace(model, x, capture=CaptureOptions(layers_to_save=[first_linear]))
+        trace = tl.trace(model, x, save=[first_linear])
 
     assert len(_spill_records(caught)) == 1
     saved = trace[first_linear]

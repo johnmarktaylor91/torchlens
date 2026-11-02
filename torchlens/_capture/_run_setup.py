@@ -39,7 +39,7 @@ from ..intervention import injection as _injection
 from ..intervention.hooks import normalize_hook_plan, site_universe as _site_universe
 from ..intervention.types import InterventionDecision
 from ..options import StorageOptions
-from ..recording.options import RecordingOptions
+from ..recording.options import _RecordingConfig
 from ..recording.types import CaptureSpec
 from ._episode_ledger import attach_episode_header
 from .prepare.resolve import (
@@ -376,7 +376,7 @@ def _configure_predicate_options(trace: Trace, r: SimpleNamespace) -> None:
         if r.save_outs_to is not None
         else None
     )
-    trace._predicate_save_options = RecordingOptions(
+    trace._predicate_save_options = _RecordingConfig(
         keep_op=r.save_predicate,
         # The live forward sees only activation branches; gradient and
         # node branches armed as sticky backward hooks above.

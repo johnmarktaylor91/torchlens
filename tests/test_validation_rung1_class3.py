@@ -49,7 +49,8 @@ def _capture(model: nn.Module, args: Any, seed: int = 0) -> Any:
     return tl.trace(
         model,
         args,
-        capture=CaptureOptions(layers_to_save="all", save_args=True, seed=seed),
+        capture=CaptureOptions(save_args=True, seed=seed),
+        save="all",
     )
 
 

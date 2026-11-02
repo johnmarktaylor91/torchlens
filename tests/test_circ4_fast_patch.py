@@ -30,14 +30,18 @@ from torchlens.mechinterp._edge_patch import _head_spec, _input_edge_record
 pytest.importorskip("transformers")
 pytestmark = pytest.mark.heavy
 
-_CAPTURE = tl.options.CaptureOptions(layers_to_save="all", replayable=True)
+_CAPTURE = tl.options.CaptureOptions(replayable=True)
 
 
 @pytest.fixture(scope="module")
 def tiny():
     model = _tiny_gpt2()
-    clean = tl.trace(model, torch.tensor([[3, 7, 1, 9, 4], [2, 6, 1, 8, 5]]), capture=_CAPTURE)
-    corrupt = tl.trace(model, torch.tensor([[5, 7, 2, 9, 8], [4, 6, 3, 8, 1]]), capture=_CAPTURE)
+    clean = tl.trace(
+        model, torch.tensor([[3, 7, 1, 9, 4], [2, 6, 1, 8, 5]]), capture=_CAPTURE, save="all"
+    )
+    corrupt = tl.trace(
+        model, torch.tensor([[5, 7, 2, 9, 8], [4, 6, 3, 8, 1]]), capture=_CAPTURE, save="all"
+    )
     try:
         yield clean, mi.component_graph(clean), mi.component_graph(corrupt)
     finally:

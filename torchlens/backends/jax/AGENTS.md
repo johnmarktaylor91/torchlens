@@ -43,7 +43,7 @@ Jaxpr-first JAX backend preview. It fills the backend protocol (`maturity="previ
   streaming all False, `payload_policy="array_payloads"`.
 
 ## Local Invariants
-- `intervene=` / `halt=` are NOT supported on jax (unlike the tf/mlx/paddle
+- `intervene=` / `stop_after=` are NOT supported on jax (unlike the tf/mlx/paddle
   previews); do not claim intervention parity.
 - The capture is static (jaxpr interpretation), not eager wrapper capture;
   taken-branch honesty depends on the control-flow mode, and rejected nested

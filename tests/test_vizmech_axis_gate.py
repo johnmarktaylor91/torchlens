@@ -123,15 +123,14 @@ def test_axis_combo_renders_clean(
     """One pairwise-cover row: render, audit through the rendering engine."""
 
     dot = nested_trace.draw(
-        vis_save_only=True,
         file_format=str(combo["fmt"]),
         path=str(tmp_path / "axis"),
         theme=str(combo["theme"]),
         direction=combo["direction"],  # type: ignore[arg-type]
-        vis_call_depth=int(combo["depth"]),  # type: ignore[arg-type]
-        vis_node_placement=str(combo["engine"]) if combo["engine"] == "rank" else "dot",
+        depth=int(combo["depth"]),  # type: ignore[arg-type]
+        layout=str(combo["engine"]) if combo["engine"] == "rank" else "dot",
         show_legend=True,
-    )
+    ).dot
     engine = "rank" if combo["engine"] == "rank" else "dot"
     parsed = parse_layout_json(run_layout_json(dot, engine), engine=engine, dot_source=dot)
     result = audit_layout(parsed)
@@ -173,11 +172,10 @@ def test_rank_entry_cluster_width_vs_member_extent(tmp_path: Path) -> None:
 
     trace = tl.trace(_Nested(), torch.randn(1, 4))
     dot = trace.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "rank_width"),
-        vis_node_placement="rank",
-    )
+        layout="rank",
+    ).dot
     parsed = parse_layout_json(run_layout_json(dot, "rank"), engine="rank", dot_source=dot)
     envelope = compute_usability_envelope(parsed)
     assert envelope.cluster_width_ratios, "rank entry lost its clusters"

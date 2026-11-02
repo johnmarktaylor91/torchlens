@@ -70,7 +70,9 @@ class TestCloneSkipTrace:
             log = tl.trace(
                 model,
                 x,
-                save=tl.options.SaveOptions(activation_transform=probe, save_raw_activations=False),
+                capture=tl.options.CaptureOptions(
+                    activation_transform=probe, save_raw_activations=False
+                ),
             )
         finally:
             for handle in handles:
@@ -92,7 +94,9 @@ class TestCloneSkipTrace:
         log = tl.trace(
             model,
             x,
-            save=tl.options.SaveOptions(activation_transform=probe, save_raw_activations=False),
+            capture=tl.options.CaptureOptions(
+                activation_transform=probe, save_raw_activations=False
+            ),
         )
         retained_ptrs = {
             op.transformed_out.untyped_storage().data_ptr()
@@ -116,7 +120,7 @@ class TestCloneSkipTrace:
             log = tl.trace(
                 model,
                 x,
-                save=tl.options.SaveOptions(activation_transform=summary(lambda t: t.sum())),
+                capture=tl.options.CaptureOptions(activation_transform=summary(lambda t: t.sum())),
             )
         finally:
             for handle in handles:
@@ -143,9 +147,10 @@ class TestCloneSkipFastlog:
             rec = tl.record(
                 model,
                 x,
-                default_op=CaptureSpec(save_out=True),
-                activation_transform=probe,
-                save_raw_activations=False,
+                recording=tl.options.RecordingOptions(default_op=CaptureSpec(save_out=True)),
+                capture=tl.options.CaptureOptions(
+                    activation_transform=probe, save_raw_activations=False
+                ),
             )
         finally:
             for handle in handles:
@@ -175,9 +180,12 @@ class TestCloneSkipFastlog:
             tl.record(
                 model,
                 x,
-                default_op=CaptureSpec(save_out=True, dtype=torch.float64),
-                activation_transform=probe,
-                save_raw_activations=False,
+                recording=tl.options.RecordingOptions(
+                    default_op=CaptureSpec(save_out=True, dtype=torch.float64)
+                ),
+                capture=tl.options.CaptureOptions(
+                    activation_transform=probe, save_raw_activations=False
+                ),
             )
         finally:
             for handle in handles:
@@ -195,11 +203,11 @@ class TestReduceOnlyBudget:
         log = tl.trace(
             model,
             x,
-            save=tl.options.SaveOptions(
+            capture=tl.options.CaptureOptions(
+                save_budget=8192,
                 activation_transform=summary(lambda t: t.float().sum().unsqueeze(0)),
                 save_raw_activations=False,
             ),
-            capture=tl.options.CaptureOptions(save_budget=8192),
         )
         assert log["linear_1_1"].transformed_out is not None
 
@@ -213,10 +221,9 @@ class TestReduceOnlyBudget:
             tl.trace(
                 model,
                 x,
-                save=tl.options.SaveOptions(
-                    # A summary that is itself large: a full-size detached copy.
+                capture=tl.options.CaptureOptions(
+                    save_budget=8192,
                     activation_transform=summary(lambda t: t.float().flatten().clone()),
                     save_raw_activations=False,
                 ),
-                capture=tl.options.CaptureOptions(save_budget=8192),
             )

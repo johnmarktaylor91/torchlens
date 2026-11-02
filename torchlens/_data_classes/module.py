@@ -64,6 +64,7 @@ if TYPE_CHECKING:
 
     from .._ir.container import ContainerSpec
     from ..receptive_field._view import ReceptiveFieldView
+    from ..viz._drawing import Drawing
     from .buffer import BufferAccessor
     from .func_call_location import FuncCallLocation
     from .op import Op
@@ -2396,7 +2397,7 @@ class Module:
             return iter(self.layer_labels)
         return iter(self._source_trace[label] for label in self.layer_labels)
 
-    def draw(self, **kwargs: Any) -> str:
+    def draw(self, **kwargs: Any) -> "Drawing":
         """Render this module's focused graph.
 
         Parameters
@@ -2406,8 +2407,8 @@ class Module:
 
         Returns
         -------
-        str
-            Graphviz DOT source string.
+        Drawing
+            The picture, as ``Trace.draw(module=self, ...)`` returns it.
 
         Raises
         ------
@@ -2422,7 +2423,7 @@ class Module:
                 code="record_not_bound",
                 remedy="keep the owning Trace alive and read records through it",
             )
-        return cast(str, trace.draw(module=self, **kwargs))
+        return trace.draw(module=self, **kwargs)
 
     def to_pandas(self) -> "pd.DataFrame":
         """Export this module's layers as a pandas DataFrame.

@@ -115,7 +115,9 @@ def _validate_chunked_forward_capture(
             "chunk_size cannot be combined with intervene=.", "drop intervene="
         )
     if halt is not None:
-        _refuse_chunk_option_conflict("chunk_size cannot be combined with halt=.", "drop halt=")
+        _refuse_chunk_option_conflict(
+            "chunk_size cannot be combined with stop_after=.", "drop stop_after="
+        )
     if streaming.path is not None or streaming.on_save is not None:
         _refuse_chunk_option_conflict(
             "chunk_size is in-memory only in v1 and cannot be combined with streaming storage.",

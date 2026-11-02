@@ -204,14 +204,15 @@ def isolated_capture(
     capture_options = run_trace_kwargs.get("capture")
     if capture_options is None:
         run_trace_kwargs["capture"] = CaptureOptions(seed=seed)
-    elif not capture_options.is_field_explicit("seed"):
-        explicit_values = {
-            field_name: value
-            for field_name, value in capture_options.as_dict().items()
-            if capture_options.is_field_explicit(field_name)
-        }
-        explicit_values["seed"] = seed
-        run_trace_kwargs["capture"] = CaptureOptions(**explicit_values)
+    elif not capture_options._is_field_explicit("seed"):
+        values = capture_options.as_dict()
+        values["seed"] = seed
+        run_trace_kwargs["capture"] = CaptureOptions._from_values(
+            values,
+            capture_options._specified_fields | {"seed"},
+            _layers_to_save=capture_options._layers_to_save,
+            _layers_to_save_explicit=capture_options._layers_to_save_explicit,
+        )
     with preserved_rng_state():
         random.seed(seed)
         try:
@@ -221,4 +222,4 @@ def isolated_capture(
         except ImportError:
             pass
         torch.manual_seed(seed)
-        return trace(run_model, cloned_args, cloned_kwargs, **run_trace_kwargs)
+        return trace(run_model, cloned_args, input_kwargs=cloned_kwargs, **run_trace_kwargs)

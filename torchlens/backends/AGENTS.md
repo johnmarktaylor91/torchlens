@@ -74,7 +74,7 @@ implementation guides:
   (`jax/AGENTS.md`).
 - `mlx/` - eager wrapper capture with live per-op replay validation
   (`mlx/AGENTS.md`).
-- `paddle/` - eager dygraph wrapper capture with live intervene=/halt=
+- `paddle/` - eager dygraph wrapper capture with live intervene=/stop_after=
   (`paddle/AGENTS.md`).
 - `tinygrad/` - UOp-snapshot capture of an eager forward (`tinygrad/AGENTS.md`).
 

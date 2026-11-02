@@ -29,7 +29,7 @@ def _capture(builder_name: str):
     model = getattr(families, builder_name)("eager")
     torch.manual_seed(5)
     x = torch.randint(0, 500, (2, 6))
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    trace = tl.trace(model, x, save="all")
     return model, trace
 
 

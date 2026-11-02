@@ -46,7 +46,7 @@ Every verb climbs the same three-rung **input ladder** ([full guide](docs/quicks
 ```python
 # API sketch; `model` is your model and `lm` any HuggingFace language model.
 log = tl.trace(model, x)                             # best: your real input
-log = tl.trace(model, input_size=(1, 3, 224, 224))   # your shape, random values; disclosed
+log = tl.trace(model, input_shape=(1, 3, 224, 224))   # your shape, random values; disclosed
 log = tl.trace(model)                                # inferred shape + random values; disclosed, or a teach
 log = tl.trace(lm, "The quick brown fox")            # HF models: a string is a real input
 ```
@@ -122,7 +122,7 @@ asserted from metadata; the full platform statement is in
 |---|---|---|
 | Python | 3.10, 3.11, 3.12, 3.13 | one smoke-tier CI row per interpreter, plus clean-venv wheel installs at release |
 | PyTorch | 2.1+ on Python 3.10/3.11; 2.2+ on 3.12; 2.6+ on 3.13 (the first torch with wheels for each interpreter) | floor rows pin the exact floor pair per interpreter; newest-admitted rows pin the current release; a daily canary runs latest |
-| transformers (`torchlens[hf]`) | Policy: track the latest released transformers. 4.45 (the floor) and the current 4.x release install, import, pass the version-policy lockstep and every real-model R0 row that is not keyed to the 5.x band (the op-count goldens and four fixtures recorded on 5.x, including the T5 sdpa construction pin that only 5.18+ satisfies, are deselected on the 4.x legs until per-band expectations land); both the release-gating R0 deep sweep (`tests.yml`) and the nightly `hf-band-legs` candidate leg pin exactly the latest released 5.x (5.18.0), re-recorded on every release bump. The candidate leg additionally runs the offline, real-checkpoint R1 + 20-scenario RG workflow gallery against an exact passed-ID floor; its three remaining known limitations (typed, pinned refusals, not crashes) are enumerated in `tests/workflow_gallery/rg_enumerated_red_hf5.tsv` | floor / current / candidate constraint legs under `tests/support/proofnet/constraints/` (nightly `hf-band-legs`); release-gating pin in `.github/workflows/tests.yml` |
+| transformers (`torchlens[hf]`) | Policy: track the latest released transformers. 4.45 (the floor) and the current 4.x release install, import, pass the version-policy lockstep and every real-model R0 row that is not keyed to the 5.x band (the op-count goldens and four fixtures recorded on 5.x, including the T5 sdpa construction pin that only 5.18+ satisfies, are deselected on the 4.x legs until per-band expectations land); both the release-gating R0 deep sweep (`pr.yml`) and the nightly `hf-band-legs` candidate leg pin exactly the latest released 5.x (5.18.0), re-recorded on every release bump. The candidate leg additionally runs the offline, real-checkpoint R1 + 20-scenario RG workflow gallery against an exact passed-ID floor; its three remaining known limitations (typed, pinned refusals, not crashes) are enumerated in `tests/workflow_gallery/rg_enumerated_red_hf5.tsv` | floor / current / candidate constraint legs under `tests/support/proofnet/constraints/` (nightly `hf-band-legs`); release-gating pin in `.github/workflows/pr.yml` |
 | Platforms | Linux/CPU is the tested platform; macOS and Windows run a nightly import + capture + save/load canary only | see the CI-attested platforms section of the limitations doc |
 
 `pip install torchlens` installs the CPU-agnostic core (torch is resolved by pip for
@@ -177,8 +177,8 @@ Visualize the graph as a PDF:
 
 ```python
 log.draw()                        # unrolled by default
-log.draw(vis_mode='rolled')       # rolled (compact for recurrent)
-log.draw(vis_mode='unrolled')     # every pass as a distinct node
+log.draw(rolled=True)             # rolled (compact for recurrent)
+log.draw(rolled=False)            # every pass as a distinct node
 ```
 
 <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/alexnet.png" width=30% height=30%>
@@ -200,10 +200,11 @@ log = tl.trace(model, x, save=tl.in_module('classifier'))
 # Save conv2d ops that are immediately followed by a relu, keeping a 4-op lookback window
 conv_before_relu = tl.func('conv2d') & tl.followed_by(tl.func('relu'))
 log = tl.trace(model, x, save=conv_before_relu,
-               lookback=4, lookback_payload_policy='detached_raw')
+               capture=tl.options.CaptureOptions(lookback=4,
+                                                 lookback_payload_policy='detached_raw'))
 
 # Stop capture early (can be faster than a plain forward pass)
-log = tl.trace(model, x, save=tl.in_module('features.6'), halt=tl.in_module('features.6'))
+log = tl.trace(model, x, save=tl.in_module('features.6'), stop_after=tl.in_module('features.6'))
 
 # Lightweight sparse recording for tight loops -- materialize structure later
 recording = tl.record(model, x, save=tl.func('relu'))
@@ -218,7 +219,7 @@ tl.extract_dataset(model, dataset, layers=['relu_1_2', 'conv2d_3_7'],
                    batch_size=32, path='torchlens-activations/')
 ```
 
-**Performance note:** With `halt=` and `tl.record`, capture can run *faster
+**Performance note:** With `stop_after=` and `tl.record`, capture can run *faster
 than the raw forward pass* -- measured at 0.84x raw on ResNet-18 and 0.83x on
 GPT-2 (HookedTransformer) at 25% depth. Full exhaustive capture runs at
 roughly 14x the raw forward and amortizes on large models. See
@@ -333,8 +334,8 @@ modules_df = log.modules.to_pandas()
 
 ```python
 log.draw()                           # default: unrolled with sibling ordering
-log.draw(vis_mode='rolled')          # compact rolled layout
-log.draw(vis_mode='unrolled')        # every pass as a distinct node
+log.draw(rolled=True)                # compact rolled layout
+log.draw(rolled=False)               # every pass as a distinct node
 ```
 
 Control nesting depth to zoom in on submodules:
@@ -361,7 +362,7 @@ recurrent_model = SimpleRecurrent()
 seq = torch.randn(6, 5)
 recurrent_log = tl.trace(recurrent_model, seq)
 print(recurrent_log['linear_1:2'].out)     # second pass of the linear layer
-recurrent_log.draw(vis_mode='rolled')
+recurrent_log.draw(rolled=True)
 ```
 
 And the HTML export is already **interactive** -- one self-contained file with
@@ -395,7 +396,7 @@ Available helpers: `tl.zero_ablate`, `tl.mean_ablate`,
 `tl.add_noise`, `tl.project_onto`, `tl.project_out`, `tl.swap_with`, `tl.splice_module`.
 
 For post-hoc DAG replay and isolated experiments, capture with
-`intervention_ready=True` and use `log.fork()` + `log.push()` /
+`capture=tl.options.CaptureOptions(intervention_ready=True)` and use `log.fork()` + `log.push()` /
 `log.run(model, x)`. Live hooks during rerun require capture-time selectors
 (e.g. `tl.func(...)`, `tl.module(...)`); finalized labels resolve via
 `log.find_sites(...)`. See [docs/intervention_api.md](docs/intervention_api.md)
@@ -472,7 +473,7 @@ and pipeline point-to-point graphs still refuse with typed findings; see the
 | Gradients | full backward graph | leaf-level + zero-tap T1 intermediate derived | leaf-level + T1 intermediate derived | leaf-level + custom-VJP-tap T1 intermediate derived | leaf-level + T1 intermediate derived | leaf + exact T1 intermediate derived (eager entries, `tl.backends.tf.GradOptions`) |
 | Recurrence grouping (multi-pass layers) | yes | yes | yes (eager) | yes (eager) | yes (eager) | yes (eager; static FuncGraph path stays ungrouped) |
 | Validation oracle (live) | whole-forward replay | per-equation replay + perturbation | per-UOp replay + perturbation | per-op replay + perturbation | replay + perturbation + coverage guard | per-op replay (allowlisted) + self-consistency |
-| Interventions | yes | -- | -- | yes (+`halt=`) | yes (+`halt=`, value-dependent predicates) | yes (eager entries, static-label, fail-closed) |
+| Interventions | yes | -- | -- | yes (+`stop_after=`) | yes (+`stop_after=`, value-dependent predicates) | yes (eager entries, static-label, fail-closed) |
 | Halt / fastlog / streaming | yes | -- | -- | halt only | halt only | -- |
 
 Preview `save=` selectors filter what is exposed, not what is captured (no memory

@@ -67,11 +67,10 @@ def uniform_log() -> Any:
 def _draw(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 def _varying_layer(log: tl.Trace) -> Any:
@@ -92,7 +91,7 @@ def test_summary_row_is_escaped_at_the_choke_point(varying_log: tl.Trace, tmp_pa
 
     layer = _varying_layer(varying_log)
     summary = layer.shape_summary
-    dot = _draw(varying_log, tmp_path, vis_mode="rolled")
+    dot = _draw(varying_log, tmp_path, rolled=True)
     if ">" in summary:
         assert summary.replace(">", "&gt;") in dot
         assert f">{summary}<" not in dot
