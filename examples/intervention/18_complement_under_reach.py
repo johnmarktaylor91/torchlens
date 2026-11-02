@@ -47,7 +47,9 @@ def main() -> None:
         downstream = tl.neighborhood(tl.func("relu"), hops=len(everything), direction="downstream")
         outside = log[tl.all_sites() - downstream]
         # Subtraction keeps every site as a row; the emptied rows select nothing.
-        kept = [label for label, site in zip(outside.labels, outside) if site.num_selected]
+        kept = [
+            label for label, site in zip(outside.labels, outside, strict=True) if site.num_selected
+        ]
         print("not downstream of relu:", kept)
 
         region = log[tl.neighborhood(outside, hops=1, direction="downstream")]

@@ -180,7 +180,9 @@ def _sites(selection) -> frozenset[str]:
     """Return the labels of rows carrying at least one selected element."""
 
     return frozenset(
-        label for label, entry in zip(selection.labels, selection) if entry.num_selected
+        label
+        for label, entry in zip(selection.labels, selection, strict=True)
+        if entry.num_selected
     )
 
 

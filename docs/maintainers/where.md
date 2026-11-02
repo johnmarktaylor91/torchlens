@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1350 modules, 628535 lines, 0 modules without a docstring.
+84 packages, 1350 modules, 628526 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -72,7 +72,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.distributed` | Distributed capture opt-in: arming, group lifetime identity, and evidence. | 6 | 2214 |
 | `torchlens.errors` | Public TorchLens exception classes. | 4 | 1028 |
 | `torchlens.examples` | Example-loading namespace for small TorchLens artifacts. | 1 | 73 |
-| `torchlens.experiment` | torchlens.experiment: multi-run experiments as first-class objects. | 5 | 1989 |
+| `torchlens.experiment` | torchlens.experiment: multi-run experiments as first-class objects. | 5 | 1980 |
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 333 |
 | `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 2 | 950 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 15 | 5828 |
@@ -1507,14 +1507,14 @@ Example-loading namespace for small TorchLens artifacts. (1 modules, 73 lines)
 
 ### `torchlens.experiment`
 
-torchlens.experiment: multi-run experiments as first-class objects. (5 modules, 1989 lines)
+torchlens.experiment: multi-run experiments as first-class objects. (5 modules, 1980 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | torchlens.experiment: multi-run experiments as first-class objects. | 83 |
 | `_effects` | The effect table read view: ''EffectsView'' and ''bundle_effects''. | 194 |
-| `_engine` | The private candidate engine + the ''site_sweep'' face ( items 6-8). | 929 |
-| `_grid` | ''sweep_grid'': named axes over the candidate engine, a labeled N-dimensional result. | 649 |
+| `_engine` | The private candidate engine + the ''site_sweep'' face ( items 6-8). | 914 |
+| `_grid` | ''sweep_grid'': named axes over the candidate engine, a labeled N-dimensional result. | 655 |
 | `_head_sugar` | Head-ablation sugar ( item 7b): the canonical mechinterp move, guarded. | 134 |
 
 ### `torchlens.experimental`
