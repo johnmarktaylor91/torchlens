@@ -20,9 +20,10 @@ geometric mask and refuse typed (``selection_unresolvable`` with reason
 ``influence_geometry_unavailable``), pointing at the gradient method.
 
 Gradient method (``method="gradient"``). One autograd probe per
-(seed unit, target site) through the shipped per-unit probes; supports OR per
-target site. Seeds are never summed into one backward (sign cancellation can
-hide a true influence). The probe count is bounded by ``probe_budget``
+(seed unit, target site) through the shipped per-unit probes, the autograd
+graph retained so the trace stays probe-able; supports OR per target site.
+Seeds are never summed into one backward (sign cancellation can hide a true
+influence). The probe count is bounded by ``probe_budget``
 (refusal reason ``influence_probe_budget``) and stated before any probe runs.
 
 Disclosure. Basis and field status ride the entry's ``provenance.source``
