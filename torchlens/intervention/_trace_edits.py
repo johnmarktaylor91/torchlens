@@ -59,6 +59,7 @@ from .audit import (
 from .errors import EngineDispatchError, ModelMismatchError, SpecMutationError, TraceMutationWarning
 from .hooks import is_facet_target, lower_record_site_target
 from .injection import injected_ops as _injected_op_records
+from .replay import push_from_handles
 from .save import save_intervention as _save_intervention_recipe
 from .spec import Recipe as PublicInterventionSpec, _canonical_repr, addresses_autograd_nodes
 
@@ -470,7 +471,11 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
         settle_selection_do(trace, txn, selected_engine, mutation_kind)
         return trace
     try:
-        if selected_engine == "replay":
+        if selected_engine == "replay" and attached_handles:
+            # Propagate from THIS call's hooks only: older rules fire inside
+            # the cone but open no cone of their own.
+            result = push_from_handles(trace, attached_handles, strict=strict_value)
+        elif selected_engine == "replay":
             result = trace.push(replay=ReplayOptions(strict=strict_value))
         else:
             assert model is not None

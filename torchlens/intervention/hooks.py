@@ -1051,7 +1051,9 @@ def _normalize_sticky_hook_specs(
                     site_target=hook_spec.site_target,
                     normalized_callable=cast(HookCallable, stored_hook),
                     helper_spec=hook_spec.helper,
-                    metadata=MappingProxyType(dict(hook_spec.metadata)),
+                    metadata=MappingProxyType(
+                        {**hook_spec.metadata, "sticky_handle": hook_spec.handle}
+                    ),
                 )
             )
             continue
@@ -1070,6 +1072,9 @@ def _normalize_sticky_hook_specs(
                 **hook_spec.metadata,
                 "signal": entry.metadata["signal"],
                 "universe": entry.metadata["universe"],
+                # The sticky handle the entry came from, so a transaction can
+                # tell its own freshly attached hooks from older rules.
+                "sticky_handle": hook_spec.handle,
             }
             entries.append(
                 NormalizedHookEntry(
