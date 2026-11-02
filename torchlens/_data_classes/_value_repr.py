@@ -23,6 +23,7 @@ from typing import Any
 
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._utils.fail_open import fail_open
+from ._repr import format_shape_list
 
 #: Sentinel for a payload read that raised (distinct from a freed ``None``).
 _READ_FAILED = object()
@@ -246,8 +247,6 @@ def _params_line(op: Any) -> str | None:
     shapes = getattr(op, "param_shapes", None) or []
     if not shapes:
         return None
-    from ._repr import format_shape_list
-
     return (
         f"params {format_shape_list(shapes)} = "
         f"{getattr(op, 'num_params', '?')} ({getattr(op, 'param_memory', '?')})"
