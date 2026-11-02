@@ -143,8 +143,10 @@ def same_object_logging_copy(out_orig: Any) -> Any:
     logged = safe_copy(out_orig)
     if isinstance(logged, torch.Tensor):
         with suppress(AttributeError):
-            logged.tl_user_grad_fn = (
-                NO_USER_GRAD_FN if live_user_grad_fn is None else live_user_grad_fn
+            setattr(  # noqa: B010 -- TorchLens stamp on a Tensor, not a declared attribute
+                logged,
+                "tl_user_grad_fn",
+                NO_USER_GRAD_FN if live_user_grad_fn is None else live_user_grad_fn,
             )
     return logged
 
