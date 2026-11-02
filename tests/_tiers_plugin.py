@@ -4,8 +4,11 @@ pytest markers are additive, so a test carrying ``smoke`` together with
 ``heavy`` or ``slow`` still runs under ``-m smoke``. Such a combination is a
 partition mistake; this plugin checks every item the session selects (after
 ``-m`` deselection, as the former lint test did) and fails the session before
-the first test runs. The marker names themselves are
-declared in ``pyproject.toml`` (``[tool.pytest.ini_options] markers``), in
+the first test runs. It also fails any session that collects a smoke item
+from a file outside the smoke file list (``scripts/tier_durations.py files
+--tier smoke``), and a smoke session (``-m smoke``) skips every test module
+off that list before import, so smoke runs collect only the listed files.
+The marker names themselves are declared in ``pyproject.toml`` (``[tool.pytest.ini_options] markers``), in
 lockstep with ``tests/composition_expectations/marker_algebra.py``.
 
 Registered by ``tests/conftest.py`` through ``pytest_plugins``.
@@ -13,6 +16,7 @@ Registered by ``tests/conftest.py`` through ``pytest_plugins``.
 
 from __future__ import annotations
 
+import functools
 import importlib.util
 import os
 import re
@@ -21,6 +25,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
+from scripts.tier_durations import TESTS_DIR, on_smoke_file_list
 
 #: Markers that may never combine with ``smoke`` on one resolved item.
 #: ``heavy``/``slow``: additive markers keep the item in ``-m smoke`` despite
@@ -32,6 +38,9 @@ import pytest
 SMOKE_INCOMPATIBLE_MARKERS = ("heavy", "slow", "serial", "rare", "big_memory")
 
 _SMOKE_ONLY_MARKEXPR = re.compile(r"^\s*smoke\s*(?:$|and\s)")
+
+#: Node ids of smoke items collected from files outside the smoke file list.
+_OFF_LIST_SMOKE_ITEMS = pytest.StashKey[list[str]]()
 
 
 def smoke_only_session(config: pytest.Config) -> bool:
@@ -104,12 +113,47 @@ def pytest_itemcollected(item: pytest.Item) -> None:
     ``item.name``) in the smoke tier, so a parametrized family keeps one or two
     representative cells while the rest run in the backstops. Applied at item
     collection, before any ``-m`` deselection.
+
+    A smoke item whose file is off the smoke file list is recorded here, before
+    deselection, so every session that collects the whole tree (the not-slow
+    shards, the backstops) judges every smoke item, selected or not.
     """
 
     for mark in item.iter_markers("smoke_cells"):
         if item.name in mark.args:
             item.add_marker(pytest.mark.smoke)
-            return
+            break
+    if item.get_closest_marker("smoke") is not None and not _on_smoke_file_list(str(item.path)):
+        item.config.stash.setdefault(_OFF_LIST_SMOKE_ITEMS, []).append(item.nodeid)
+
+
+@functools.cache
+def _on_smoke_file_list(path: str) -> bool:
+    return on_smoke_file_list(Path(path))
+
+
+def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool | None:
+    """Skip, before import, a test module off the smoke file list in a smoke session.
+
+    Under ``-m smoke`` (or ``-m "smoke and ..."``) a ``test_*.py`` module under
+    ``tests/`` that is not on the smoke file list cannot hold a smoke item, so
+    collecting ``tests/`` imports only the listed modules. Passing the listed
+    files as arguments instead selects the same tests but costs more: pytest
+    re-walks the parent directory for every file argument (measured 2026-11-02,
+    459 file arguments: about 130 s to collect against about 65 s for the whole
+    tree). A module named on the command line is always collected, and
+    ``TORCHLENS_SMOKE_PREFILTER=0`` turns the skip off (a whole-tree count).
+    """
+
+    if (
+        os.environ.get("TORCHLENS_SMOKE_PREFILTER", "1") == "0"
+        or collection_path.suffix != ".py"
+        or not collection_path.name.startswith("test_")
+        or not smoke_only_session(config)
+        or not collection_path.resolve().is_relative_to(TESTS_DIR.resolve())
+    ):
+        return None
+    return None if _on_smoke_file_list(str(collection_path)) else True
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -174,17 +218,37 @@ def apply_tier_shard(config: pytest.Config, items: list[pytest.Item]) -> None:
 
 @pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Apply ``--tier-shard``, then fail on any SELECTED contradictory tier combination.
+    """Apply ``--tier-shard``, then fail on off-list smoke items or a contradictory tier combination.
 
-    Runs after the mark plugin's deselection, so a session judges the items it
-    will run (targeted runs included); items the session deselects are not
-    judged, as the former lint test's ``session.items`` census did. The shard
-    filter keeps the invocation rooted at ``tests/``, so the conftest gates that
-    arm only on an unfiltered ``tests/`` run stay armed in every shard.
+    Off-list smoke items were recorded at item collection, so they are judged
+    whether or not this session selects them. Tier combinations run after the
+    mark plugin's deselection, so a session judges the items it will run
+    (targeted runs included); items the session deselects are not judged, as
+    the former lint test's ``session.items`` census did. The shard filter keeps
+    the invocation rooted at ``tests/``, so the conftest gates that arm only on
+    an unfiltered ``tests/`` run stay armed in every shard.
     """
 
     apply_tier_shard(config, items)
+    fail_on_off_list_smoke_items(config.stash.get(_OFF_LIST_SMOKE_ITEMS, []))
     fail_on_tier_violations(items)
+
+
+def fail_on_off_list_smoke_items(nodeids: list[str]) -> None:
+    """Raise ``pytest.UsageError`` naming smoke items the smoke file list would skip.
+
+    Every smoke run collects only the smoke file list, so such an item would
+    silently drop out of the commit gate and CI's smoke steps.
+    """
+
+    if nodeids:
+        raise pytest.UsageError(
+            "smoke tests live outside the smoke file list (`python scripts/tier_durations.py "
+            "files --tier smoke`: test_*.py files under tests/ whose source spells "
+            "`mark.smoke` or `mark.smoke_cells`), so every smoke run would skip them. Spell "
+            "the mark through `pytest.mark.smoke` in the test file itself:\n  "
+            + "\n  ".join(sorted(nodeids))
+        )
 
 
 def fail_on_tier_violations(items: Iterable[Any]) -> None:
