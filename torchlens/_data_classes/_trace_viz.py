@@ -1,19 +1,17 @@
 """Trace visualization mixin."""
 
 from collections.abc import Callable, Iterable, Mapping
-from html import escape
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
     from .._visualization.code_panel import CodePanelOption
-    from ..experimental.dagua._bridge import TorchLensRenderAudit
     from ..intervention.types import FireRecord
+    from ..viz._drawing import Drawing
     from .trace import Trace
 
     _TraceMixinBase = Trace
 else:
     _TraceMixinBase = object
-from .._deprecations import MISSING, MissingType
 from .._errors import CaptureNotActiveError, InvalidArgumentError
 from .._literals import (
     BufferVisibilityLiteral,
@@ -35,6 +33,8 @@ from ._nonfinite import (
     nonfinite_op_labels,
 )
 from .module import Module
+
+GraphLiteral = Literal["forward", "backward", "combined"]
 
 
 def _flatten_backward_fire_ref(value: Any) -> tuple["FireRecord", ...]:
@@ -61,7 +61,7 @@ def _flatten_backward_fire_ref(value: Any) -> tuple["FireRecord", ...]:
 class TraceVisualizationMixin(_TraceMixinBase):
     """``Trace`` visualization surface: ``draw``, ``show``, and collapse diagnostics."""
 
-    def show(self: "Trace", kind: str | None = None, **kwargs: Any) -> str | None:
+    def show(self: "Trace", kind: str | None = None, **kwargs: Any) -> Any:
         """Render this trace using a lightweight notebook-friendly dispatcher.
 
         Parameters
@@ -74,365 +74,414 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
         Returns
         -------
-        str | None
-            Rendered representation, Graphviz DOT source, or ``None`` when
-            rendering is explicitly disabled with ``vis_mode="none"``.
+        Any
+            The :class:`~torchlens.viz.Drawing` from :meth:`draw`, or the
+            requested text representation.
         """
 
-        if kwargs.get("vis_mode") == "none":
-            return None
         if kind == "repr":
             return repr(self)
         if kind == "html":
             return self._repr_html_()
-        return cast("str | None", self.draw(**kwargs))
+        return self.draw(**kwargs)
 
-    def draw(
+    def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field is a keyword
         self: "Trace",
-        view: VisModeLiteral | MissingType = MISSING,
-        depth: int | MissingType = MISSING,
-        renderer: VisRendererLiteral | MissingType = MISSING,
-        layout: VisNodePlacementLiteral | MissingType = MISSING,
-        node_style: VisNodeModeLiteral | MissingType = MISSING,
-        vis_mode: VisModeLiteral = "unrolled",
-        vis_call_depth: int = 1000,
         path: str | None = None,
-        vis_graph_overrides: dict[str, Any] | None = None,
+        *,
+        graph: GraphLiteral = "forward",
+        rolled: bool = False,
+        depth: int = 1000,
         module: "Module | str | None" = None,
-        node_mode: VisNodeModeLiteral = "default",
-        node_spec_fn: Callable[..., Any] | None = None,
-        collapsed_node_spec_fn: Callable[..., Any] | None = None,
-        collapse_fn: Callable[..., Any] | None = None,
         collapse: CollapseLiteral = "none",
         fold_repeats: FoldRepeatsLiteral = None,
         fold_patterns: Any = None,
-        skip_fn: Callable[..., Any] | None = None,
-        vis_edge_overrides: dict[str, Any] | None = None,
-        vis_grad_edge_overrides: dict[str, Any] | None = None,
-        vis_module_overrides: dict[str, Any] | None = None,
-        vis_save_only: bool = False,
-        file_format: str = "pdf",
-        show_buffers: BufferVisibilityLiteral = "meaningful",
-        direction: VisDirectionLiteral = "bottomup",
-        vis_node_placement: VisNodePlacementLiteral = "auto",
-        vis_renderer: VisRendererLiteral = "graphviz",
         theme: str = "torchlens",
-        vis_intervention_mode: VisInterventionModeLiteral = "node_mark",
-        vis_show_cone: bool = False,
-        code_panel: "CodePanelOption" = False,
+        layout: VisNodePlacementLiteral = "auto",
+        renderer: VisRendererLiteral = "graphviz",
+        direction: VisDirectionLiteral | None = None,
+        node_style: VisNodeModeLiteral = "default",
+        show_buffers: BufferVisibilityLiteral = "meaningful",
+        show_legend: bool | None = None,
+        color_by: Any = None,
+        size_by: str | Callable[[Any], Any] | None = None,
+        size_scale: str | None = None,
+        stack_by: str | bool | Callable[[Any], Any] | None = None,
         node_overlay: str | Mapping[str, Any] | Callable[[Any], Any] | None = None,
         node_label_fields: list[str] | None = None,
-        show_legend: bool | None = None,
+        graph_overrides: dict[str, Any] | None = None,
+        edge_overrides: dict[str, Any] | None = None,
+        grad_edge_overrides: dict[str, Any] | None = None,
+        module_overrides: dict[str, Any] | None = None,
+        node_spec_fn: Callable[..., Any] | None = None,
+        collapsed_node_spec_fn: Callable[..., Any] | None = None,
+        collapse_fn: Callable[..., Any] | None = None,
+        skip_fn: Callable[..., Any] | None = None,
+        intervention_mode: VisInterventionModeLiteral = "node_mark",
+        show_cone: bool = False,
+        code_panel: "CodePanelOption" = False,
         font_size: int | None = None,
         dpi: int | None = None,
-        for_paper: bool = False,
-        return_graph: bool = False,
         order_siblings: bool = True,
         show_containers: Literal[False, "labels", "cluster", "collapsed", "auto", "nodes"] = False,
         container_max_inline: int = 12,
         show_input_transform_summary: bool = False,
         show_orphans: bool = False,  # Invariants support flipping this; owner visual review pending.
-        *,
-        color_by: str | Callable[[Any], Any] | None = None,
-        size_by: str | Callable[[Any], Any] | None = None,
-        scale: str | None = None,
-        stack_by: str | bool | Callable[[Any], Any] | None = None,
         show_redundant_args: bool = False,
         show_saved_for_backward: bool = False,
-    ) -> Any:
-        """Render the computational graph for this model log.
+        bwd: int | Iterable[int] | None = None,
+        show_module_paths: bool = False,
+        show_grad_values: bool = False,
+        backward_node_spec_fn: Callable[..., Any] | None = None,
+        intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
+        file_format: str = "pdf",
+        open_viewer: bool = False,
+    ) -> "Drawing":
+        """Draw this trace and return the picture as a :class:`~torchlens.viz.Drawing`.
+
+        The keywords are the :class:`~torchlens.options.VisualizationOptions`
+        field names. ``str(drawing)`` is the Graphviz DOT source, ``drawing.save(path)``
+        writes it and ``drawing.show()`` displays it.
 
         Parameters
         ----------
-        vis_mode, vis_call_depth, path, vis_graph_overrides, module, node_mode, \
-        node_spec_fn, collapsed_node_spec_fn, collapse_fn, skip_fn, vis_edge_overrides, \
-        vis_grad_edge_overrides, vis_module_overrides, vis_save_only, vis_fileformat, \
-        show_buffers, direction, vis_node_placement, vis_renderer, theme, \
-        vis_intervention_mode, vis_show_cone, code_panel, order_siblings, show_containers,
-        container_max_inline, show_input_transform_summary, show_orphans:
-            Forwarded unchanged to :func:`torchlens._visualization._render_dot.draw`.
-            ``show_orphans=True`` renders orphan (island) ops -- captured but unreachable
-            from both inputs and outputs -- as a dashed, greyed cluster of edgeless nodes,
-            instead of omitting them. Orphans must have been retained at capture time
-            (capture with ``keep_orphans=True``).
-            ``show_buffers`` accepts ``"never"``, ``"meaningful"``, or
-            ``"always"``. ``direction`` accepts ``"bottomup"``, ``"topdown"``,
-            ``"leftright"``, or ``"rightleft"``.
-            ``vis_outpath=None`` (the default) writes a collision-safe file in
-            the current directory -- ``modelgraph.<format>``, then
-            ``modelgraph-2.<format>``, ``modelgraph-3.<format>`` -- and always
-            prints its path, so a bare ``draw()`` never overwrites an earlier
-            picture. An explicit path is written exactly (overwriting) and is
-            printed only when the trace is verbose.
+        path:
+            Output path stem. ``None`` (the default) writes a collision-safe
+            file in the current directory (``modelgraph.<format>``, then
+            ``modelgraph-2.<format>``, ...) and prints its path, so a bare
+            ``draw()`` never overwrites an earlier picture. An explicit path is
+            written exactly (overwriting) and printed only when the trace is
+            verbose. Backward and combined graphs default to
+            ``backward_modelgraph`` and ``combined_modelgraph``.
+        graph:
+            Which graph: ``"forward"`` (the ops), ``"backward"`` (the captured
+            grad_fn graph) or ``"combined"`` (both in one picture).
+        rolled:
+            ``True`` draws each repeated module once (the rolled graph);
+            ``False`` (default) draws every pass (the unrolled graph).
+        depth:
+            Maximum module nesting depth shown.
+        module:
+            Focus the picture on one module (a ``Module`` or its address).
         collapse:
             Smart module-collapse mode. ``"none"`` preserves the full graph,
-            ``"auto"`` uses the v2 readability-targeted engine, and ``"max"``
-            aggressively condenses eligible modules and segment boxes. A float
-            in ``[0.0, 1.0]`` selects a deterministic monotone schedule:
-            ``0.0`` is equivalent to ``"none"``, ``1.0`` is equivalent to
-            ``"max"``, and larger values never increase the visible node count
-            or uncollapse a collapsed unit. ``"auto"`` is the first schedule
-            point whose visible count enters the readable band, while its
-            current implementation remains unchanged for compatibility.
+            ``"auto"`` uses the readability-targeted engine, ``"max"``
+            condenses every eligible module, and a float in ``[0.0, 1.0]``
+            selects a deterministic monotone schedule (``0.0`` is ``"none"``,
+            ``1.0`` is ``"max"``; larger values never increase the visible
+            node count or uncollapse a collapsed unit).
         fold_repeats:
-            Repeat-fold policy. ``None`` preserves the default policy: off for
-            ``collapse="none"`` and band-pressure two-pass folding for
-            ``"auto"``/``"max"``. ``True`` folds every eligible repeated run,
-            including standalone folding with ``collapse="none"``. ``False``
-            disables run folding.
+            Repeat-fold policy. ``None`` keeps the default (off for
+            ``collapse="none"``, band-pressure folding otherwise), ``True``
+            folds every eligible repeated run, ``False`` disables folding.
         fold_patterns:
-            Declarative user-named pattern folding (DOCUMENTED-UNSTABLE
-            spelling; collapse memo D11). ``None`` = off; ``"idiomatic"``
-            selects the curated conv-bn-relu preset; a mapping declares named
-            linear paths (for example ``{"ConvBnRelu": "conv2d > batch_norm
-            > relu"}``; exact repetition ``atom{k}``; an atom naming an
-            earlier pattern inlines it). Matched instances render as dashed
-            ``PATTERN '<name>' -- N ops`` chips; honesty-refused sites are
-            counted and disclosed. v1 supports the pattern-only view
-            (``collapse="none"``); combining with automatic collapse refuses
-            typed (``pattern_collapse_combination_unsupported``).
+            Declarative user-named pattern folding (DOCUMENTED-UNSTABLE):
+            ``None`` = off; ``"idiomatic"`` selects the curated conv-bn-relu
+            preset; a mapping declares named linear paths such as
+            ``{"ConvBnRelu": "conv2d > batch_norm > relu"}``. Combining with
+            automatic collapse refuses typed
+            (``pattern_collapse_combination_unsupported``).
+        theme:
+            Skin preset: ``"torchlens"`` (default), ``"paper"``, ``"dark"``,
+            ``"colorblind"`` or ``"high_contrast"``.
+        layout:
+            Node placement: ``"auto"``, ``"dot"`` or ``"rank"``.
+        renderer:
+            ``"graphviz"`` (default) or the experimental ``"dagua"`` after opt-in.
+        direction:
+            Edge flow: ``"bottomup"``, ``"topdown"``, ``"leftright"`` or
+            ``"rightleft"``. ``None`` takes the graph's default (forward
+            ``"bottomup"``, backward ``"topdown"``, combined ``"leftright"``).
+        node_style:
+            Node label style: ``"default"`` or ``"profiling"``.
+        show_buffers:
+            Buffer visibility: ``"never"``, ``"meaningful"`` or ``"always"``.
         show_legend:
-            Tri-state legend visibility. ``None`` (default) is AUTO: no
-            legend unless an encoding channel is active, in which case a
-            channel-only disclosure legend is emitted. ``True`` renders the
-            full theme legend (plus channel rows when active); ``False``
-            disables the legend even with channels active — a deliberate
-            act that leaves the encoding undisclosed.
+            Tri-state legend visibility. ``None`` (default) draws a legend only
+            when an encoding channel is active, ``True`` draws the full theme
+            legend, ``False`` disables the legend even with channels active.
         color_by:
-            UNSTABLE (keyword-only; no deprecation shim owed). Encoding
-            channel value source: a Layer/Op field name (``"flops_forward"``),
-            a scalar builtin (``"time"``, ``"flops"``, ``"bytes"``,
-            ``"magnitude"``, ``"grad_norm"``), or a callable ``node ->
-            value``. Encoded nodes are filled from a colorblind-safe
-            sequential ramp normalized linear min-max over visible nodes;
-            missing/non-finite values leave nodes unencoded (disclosed in
-            the legend). Requires the Graphviz dot layout: under
-            ``layout="auto"`` an active channel forces dot; explicit
-            ``layout="rank"`` refuses. On rolled multi-pass layers, field
-            sources resolve through the rolled-aggregate allowlist —
-            per-pass-varying and first-pass-only sources stay unencoded with
-            a legend note rather than painting an unprovable uniform value.
+            Fill encoding channel (keyword-only; unstable). A Layer/Op field
+            name (``"flops_forward"``), a scalar builtin (``"time"``,
+            ``"flops"``, ``"bytes"``, ``"magnitude"``, ``"grad_norm"``), a
+            callable ``node -> value``, a mapping of layer label or module
+            address to value (an overlay; the legend names it ``overlay``), or
+            an attribution result or an iterable of them (each layer-scoped
+            result paints its layer with the ``abs_sum`` of its values; another
+            reduction is a mapping you compute). Encoded nodes are filled from
+            a colorblind-safe sequential ramp; missing or non-finite values
+            leave nodes unencoded (disclosed in the legend). Requires the dot
+            layout: ``layout="rank"`` refuses.
         size_by:
-            UNSTABLE (keyword-only; no deprecation shim owed). Size encoding
-            channel source: a Layer/Op field name, the closed ``"dims"``
-            shape token (numel of the non-batch output shape — the D4
-            default mapping, applied as default because D4 is unruled), or
-            a callable ``node -> scalar``. Encoded nodes get width/height
-            MINIMUMS (``fixedsize=false``: labels are never truncated,
-            fonts never scale) with encoded area clamped to 4x the default
-            node area. STRICTLY OPT-IN: plain ``draw()`` keeps uniform
-            boxes. On a rolled multi-pass layer a size source that cannot
-            be certified single-valued refuses typed
-            (``size_by_rolled_varying``): size has no honest "n/a"
-            rendering, so it refuses where color degrades. Callables bypass
-            the rolled table (disclosed in the legend).
-        scale:
-            UNSTABLE (keyword-only). Size-channel scale transform:
-            ``"sqrt"`` (default) or ``"linear"`` (the literal area motif).
-            Supplied without ``size_by`` it refuses
-            (``scale_requires_size_by``). Every legend drawn states the
-            active scale.
+            Size encoding channel (keyword-only; unstable): a Layer/Op field
+            name, the ``"dims"`` shape token, or a callable ``node -> scalar``.
+            Encoded nodes get width/height minimums (labels are never
+            truncated), clamped to 4x the default area. A rolled multi-pass
+            layer whose source cannot be certified single-valued refuses typed
+            (``size_by_rolled_varying``).
+        size_scale:
+            Size-channel transform: ``"sqrt"`` (default) or ``"linear"``.
+            Supplied without ``size_by`` it refuses (``scale_requires_size_by``).
         stack_by:
-            UNSTABLE (keyword-only). Rank encoding channel: nodes sharing an
-            annotation value pin to one Graphviz rank (column/row), the
-            classic unrolled-RNN timestep diagram. STRICTLY OPT-IN.
-            ``True``/``"auto"`` derives the annotation (``pass_index`` on
-            multi-pass ops only) under the lockstep license — the
-            multi-pass execution order must be globally monotone, else it
-            refuses (``stack_by_auto_underivable``); an explicit field name
-            or callable bypasses the license (the caption disclosed what
-            was used). Rolled graphs refuse (``stack_by_requires_unrolled``).
-            While stacking is active the sibling-ordering post-pass no-ops
-            (two rank-constraint systems would fight), and collapsed boxes/
-            fold reps stay un-annotated.
+            Rank encoding channel (keyword-only; unstable): nodes sharing an
+            annotation value pin to one Graphviz rank, the unrolled-RNN
+            timestep diagram. ``True`` derives the pass index (unrolled
+            multi-pass ops only); rolled graphs refuse
+            (``stack_by_requires_unrolled``).
+        node_overlay:
+            Per-node label row: a stock overlay name (``"flops"``, ``"time"``,
+            ``"bytes"``, ``"magnitude"``, ``"nan"``, ``"grad_norm"``,
+            ``"intervention"``, ``"bundle_delta"``), a mapping of layer label
+            to value, or a callable ``node -> value``.
+        node_label_fields:
+            Explicit list of label rows to show on every node.
+        graph_overrides, edge_overrides, grad_edge_overrides, module_overrides:
+            Graphviz attribute overrides for the graph, forward edges, gradient
+            edges and module boxes.
+        node_spec_fn, collapsed_node_spec_fn, collapse_fn, skip_fn:
+            Per-node styling and selection callbacks (see ``tl.viz.nodes``).
+        intervention_mode:
+            How intervened sites are marked: ``"node_mark"`` or ``"cone"``.
+        show_cone:
+            Shade the downstream cone of every intervention.
+        code_panel:
+            Source-location panel option (``False``, ``True`` or a panel spec).
+        font_size, dpi:
+            Typography and raster resolution overrides.
+        order_siblings:
+            Keep sibling ops in execution order (a post-pass; off while
+            ``stack_by`` is active).
+        show_containers:
+            Container rendering: ``False``, ``"labels"``, ``"cluster"``,
+            ``"collapsed"``, ``"auto"`` or ``"nodes"``.
+        container_max_inline:
+            Inline container size ceiling for ``show_containers="auto"``.
+        show_input_transform_summary:
+            Add the input-transform summary row.
+        show_orphans:
+            Render orphan (island) ops, captured but unreachable from inputs
+            and outputs, as a dashed greyed cluster (capture with
+            ``keep_orphans=True``).
         show_redundant_args:
-            UNSTABLE (keyword-only). Checked suppression of redundant
-            constructor-arg label rows is DEFAULT-ON: an arg such as
-            ``in_features=4`` is omitted exactly when its value provably
-            equals the captured shape dimension it duplicates on THIS
-            trace (a closed torch-module candidate table; the check is
-            data equality on records). A mismatch or unavailable shape
-            keeps the arg VISIBLE — the rule can only reveal more, never
-            hide a discrepancy. Pass ``True`` to show every captured arg.
+            Show constructor-arg label rows that provably duplicate a captured
+            shape dimension (suppressed by default; the rule only ever reveals
+            more).
         show_saved_for_backward:
-            UNSTABLE (keyword-only). Saved-for-backward annotation: adds a
-            label row (``saved for backward: N tensors, X MB``) on every op
-            whose grad_fn measurably retained tensors for the backward pass,
-            from the capture-time ``num_autograd_tensors`` /
-            ``autograd_memory`` measurements — the memory autograd is
-            actually holding, made visible per node. Ops that saved nothing
-            (or whose backward graph was never built, e.g. under
-            ``torch.no_grad``) get no row: an absent row makes no claim. On
-            rolled multi-pass layers the stored measurements are cross-pass
-            sums and the row discloses ``(total across passes)``. Composes
-            with ``color_by="autograd_memory"`` for a ramp over the same
-            quantity.
+            Add a ``saved for backward: N tensors, X MB`` row on every op whose
+            grad_fn measurably retained tensors.
+        bwd:
+            Backward and combined graphs: which backward pass or passes to draw.
+        show_module_paths, show_grad_values:
+            Backward graph: opt-in rows naming the owning module of each
+            backward node and summarizing its captured output gradient.
+        backward_node_spec_fn:
+            Combined graph: per-node styling callback for the backward nodes.
+        intervening_cluster:
+            Combined graph: placement of backward-only nodes (``"upstream"``,
+            ``"outside"``, ``"downstream"`` or ``"own"``).
+        file_format:
+            Output file format (``"pdf"`` default, ``"svg"``, ``"png"``, ...).
+        open_viewer:
+            ``True`` opens the written picture in the system viewer; the
+            default never opens anything.
 
         Returns
         -------
-        Any
-            Graphviz DOT source, renderer-specific output, or renderer object
-            when ``return_graph=True``.
+        Drawing
+            The picture: DOT source (or animation HTML), its format, the written
+            path when a file was written, and the resolved policy.
         """
-        from .._visualization._render_dot import draw as _impl
 
-        if view is not MISSING:
-            vis_mode = cast(VisModeLiteral, view)
-        if depth is not MISSING:
-            vis_call_depth = cast(int, depth)
-        if renderer is not MISSING:
-            vis_renderer = cast(VisRendererLiteral, renderer)
-        if layout is not MISSING:
-            vis_node_placement = cast(VisNodePlacementLiteral, layout)
-        if node_style is not MISSING:
-            node_mode = cast(VisNodeModeLiteral, node_style)
-        if vis_mode not in ("none", "rolled", "unrolled"):
-            # Name the spelling the caller used and every accepted value; the
-            # renderer-level check downstream never sees "none" or "view".
-            mode_argument = "view" if view is not MISSING else "vis_mode"
+        from pathlib import Path
+
+        from ..viz._drawing import Drawing
+
+        if graph not in ("forward", "backward", "combined"):
             raise InvalidArgumentError(
-                f"{mode_argument} must be 'none', 'rolled', or 'unrolled'; received {vis_mode!r}",
+                f"graph must be 'forward', 'backward', or 'combined'; received {graph!r}",
                 code="visualization_mode_invalid",
-                remedy=f"pass {mode_argument}='none', 'rolled', or 'unrolled'",
-                argument=mode_argument,
+                remedy="pass graph='forward', 'backward', or 'combined'",
+                argument="graph",
             )
-        if vis_mode == "none":
-            return None
-
-        return _impl(
-            self,
-            vis_mode=vis_mode,
-            vis_call_depth=vis_call_depth,
-            vis_outpath=path,
-            vis_graph_overrides=vis_graph_overrides,
-            module=module,
-            node_mode=node_mode,
-            node_spec_fn=node_spec_fn,
-            collapsed_node_spec_fn=collapsed_node_spec_fn,
-            collapse_fn=collapse_fn,
-            collapse=collapse,
-            fold_repeats=fold_repeats,
-            fold_patterns=fold_patterns,
-            skip_fn=skip_fn,
-            vis_edge_overrides=vis_edge_overrides,
-            vis_grad_edge_overrides=vis_grad_edge_overrides,
-            vis_module_overrides=vis_module_overrides,
-            vis_save_only=vis_save_only,
-            vis_fileformat=file_format,
-            show_buffer_layers=show_buffers,
-            direction=direction,
-            vis_node_placement=vis_node_placement,
-            vis_renderer=vis_renderer,
-            vis_theme=theme,
-            vis_intervention_mode=vis_intervention_mode,
-            vis_show_cone=vis_show_cone,
-            code_panel=code_panel,
-            node_overlay=node_overlay,
-            node_label_fields=node_label_fields,
-            show_legend=show_legend,
-            font_size=font_size,
-            dpi=dpi,
-            for_paper=for_paper,
-            return_graph=return_graph,
-            order_siblings=order_siblings,
-            show_containers=show_containers,
-            container_max_inline=container_max_inline,
-            show_input_transform_summary=show_input_transform_summary,
-            show_orphans=show_orphans,
-            color_by=color_by,
-            size_by=size_by,
-            scale=scale,
-            stack_by=stack_by,
-            show_redundant_args=show_redundant_args,
-            show_saved_for_backward=show_saved_for_backward,
+        num_ops = len(self) if hasattr(self, "__len__") else None
+        policy: dict[str, Any] = {
+            "graph": graph,
+            "rolled": rolled,
+            "theme": theme,
+            "collapse": collapse,
+            "module": module,
+            "depth": depth,
+        }
+        from .._visualization._render_utils import (
+            DEFAULT_DRAW_STEM,
+            collision_safe_outpath,
+            strip_known_extension,
         )
 
-    def add_node_overlay(
+        vis_mode: VisModeLiteral = "rolled" if rolled else "unrolled"
+        if graph == "backward":
+            from .._visualization._render_entrypoints import render_backward_graph
+
+            outpath = "backward_modelgraph" if path is None else path
+            rendered: Any = render_backward_graph(
+                self,
+                vis_outpath=outpath,
+                vis_graph_overrides=graph_overrides,
+                node_spec_fn=node_spec_fn,
+                collapsed_node_spec_fn=collapsed_node_spec_fn,
+                vis_node_mode=node_style,
+                vis_edge_overrides=edge_overrides,
+                vis_save_only=not open_viewer,
+                vis_fileformat=file_format,
+                direction="topdown" if direction is None else direction,
+                code_panel=code_panel,
+                vis_mode=vis_mode,
+                bwd=bwd,
+                show_legend=show_legend,
+                theme=theme,
+                show_module_paths=show_module_paths,
+                show_grad_values=show_grad_values,
+            )
+        elif graph == "combined":
+            from .._visualization._render_entrypoints import render_combined_graph
+
+            outpath = "combined_modelgraph" if path is None else path
+            rendered = render_combined_graph(
+                self,
+                vis_outpath=outpath,
+                vis_graph_overrides=graph_overrides,
+                node_spec_fn=node_spec_fn,
+                backward_node_spec_fn=backward_node_spec_fn,
+                vis_edge_overrides=edge_overrides,
+                vis_save_only=not open_viewer,
+                vis_fileformat=file_format,
+                direction="leftright" if direction is None else direction,
+                vis_mode=vis_mode,
+                intervening_cluster=intervening_cluster,
+                show_buffer_layers=show_buffers,
+                bwd=bwd,
+                show_legend=show_legend,
+            )
+        else:
+            from .._visualization._color_sources import resolve_color_source
+            from .._visualization._render_dot import draw as _impl
+
+            outpath = (
+                collision_safe_outpath(DEFAULT_DRAW_STEM, file_format) if path is None else path
+            )
+            rendered = _impl(
+                self,
+                vis_mode=vis_mode,
+                vis_call_depth=depth,
+                vis_outpath=outpath,
+                announce_path=path is None,
+                vis_graph_overrides=graph_overrides,
+                module=module,
+                node_mode=node_style,
+                node_spec_fn=node_spec_fn,
+                collapsed_node_spec_fn=collapsed_node_spec_fn,
+                collapse_fn=collapse_fn,
+                collapse=collapse,
+                fold_repeats=fold_repeats,
+                fold_patterns=fold_patterns,
+                skip_fn=skip_fn,
+                vis_edge_overrides=edge_overrides,
+                vis_grad_edge_overrides=grad_edge_overrides,
+                vis_module_overrides=module_overrides,
+                vis_save_only=not open_viewer,
+                vis_fileformat=file_format,
+                show_buffer_layers=show_buffers,
+                direction="bottomup" if direction is None else direction,
+                vis_node_placement=layout,
+                vis_renderer=renderer,
+                vis_theme=theme,
+                vis_intervention_mode=intervention_mode,
+                vis_show_cone=show_cone,
+                code_panel=code_panel,
+                node_overlay=node_overlay,
+                node_label_fields=node_label_fields,
+                show_legend=show_legend,
+                font_size=font_size,
+                dpi=dpi,
+                order_siblings=order_siblings,
+                show_containers=show_containers,
+                container_max_inline=container_max_inline,
+                show_input_transform_summary=show_input_transform_summary,
+                show_orphans=show_orphans,
+                color_by=resolve_color_source(self, color_by),
+                size_by=size_by,
+                scale=size_scale,
+                stack_by=stack_by,
+                show_redundant_args=show_redundant_args,
+                show_saved_for_backward=show_saved_for_backward,
+            )
+        written = Path(f"{strip_known_extension(str(outpath))}.{file_format}")
+        return Drawing(
+            dot=str(rendered),
+            file_format=file_format,
+            path=written if written.exists() else None,
+            num_ops=num_ops,
+            policy=policy,
+        )
+
+    def animate(
         self: "Trace",
-        scores: Mapping[str, Any],
+        site: Any,
+        path: str | None = None,
         *,
-        name: str = "overlay",
-    ) -> "Trace":
-        """Register external per-node overlay scores for later rendering.
+        open_viewer: bool = False,
+    ) -> "Drawing":
+        """Animate the passes at ``site`` and return the picture as a :class:`~torchlens.viz.Drawing`.
 
-        Parameters
-        ----------
-        scores:
-            Mapping from layer labels to scalar or displayable values.
-        name:
-            Overlay name stored on the log for discoverability.
-
-        Returns
-        -------
-        Trace
-            This log, allowing chained calls before ``draw``.
-        """
-
-        self._node_overlay_scores = dict(scores)
-        self._node_overlay_name = name
-        return self
-
-    def animate_ops(self: "Trace", site: Any) -> str:
-        """Return a minimal HTML animation for repeated ops at ``site``.
+        The animation is its own door: ``draw`` draws graphs, ``animate`` plays
+        the repeated ops at one site.
 
         Parameters
         ----------
         site:
-            Layer label, pass-qualified layer label, or object with a
-            ``layer_label`` attribute.
+            A site label, pass-qualified label or record (anything with a
+            ``layer_label``). The picture is the HTML animation of the repeated
+            ops at that site: ``str(drawing)`` is the HTML, ``drawing.show()``
+            plays it and ``drawing.save(path)`` writes it.
+        path:
+            Output path; ``.html`` is appended when the suffix differs.
+            ``None`` (the default) keeps the animation in memory.
+        open_viewer:
+            ``True`` opens the animation in the system viewer.
 
         Returns
         -------
-        str
-            Self-contained HTML fragment with play/pause controls.
+        Drawing
+            The HTML animation (``file_format == "html"``).
 
         Raises
         ------
         KeyError
-            If the requested site cannot be resolved.
+            ``site`` names no layer of this trace.
         """
 
-        label = str(getattr(site, "layer_label", site))
-        base_label = label.split(":", 1)[0]
-        if base_label not in self._layer_logs:
-            raise KeyError(f"Unknown layer site {label!r}.")
-        layer = self._layer_logs[base_label]
-        pass_entries = list(getattr(layer, "ops", ()) or [])
-        if not pass_entries:
-            pass_entries = [self[label]]
-        frames = [
-            {
-                "pass": int(getattr(entry, "pass_number", index + 1) or index + 1),
-                "label": str(getattr(entry, "layer_label", base_label)),
-                "shape": "x".join(str(dim) for dim in getattr(entry, "shape", ()) or ()),
-                "memory": str(getattr(entry, "activation_memory", "")),
-            }
-            for index, entry in enumerate(pass_entries)
-        ]
-        frame_markup = "".join(
-            "<li data-frame='{idx}'>{label} pass {call_index}: {shape} {memory}</li>".format(
-                idx=index,
-                label=escape(str(frame["label"])),
-                call_index=frame["pass"],
-                shape=escape(str(frame["shape"] or "scalar")),
-                memory=escape(str(frame["memory"])),
-            )
-            for index, frame in enumerate(frames)
+        from pathlib import Path
+
+        from .._visualization._pass_animation import pass_animation_html
+        from ..viz._drawing import Drawing
+
+        html = pass_animation_html(self, site)
+        num_ops = len(self) if hasattr(self, "__len__") else None
+        drawing = Drawing(
+            dot="",
+            file_format="html",
+            data=html.encode("utf-8"),
+            num_ops=num_ops,
+            policy={"animate": str(getattr(site, "layer_label", site))},
         )
-        return (
-            "<div class='tl-pass-animation' data-site='"
-            + escape(base_label)
-            + "'><button type='button' data-action='play'>Play</button>"
-            + "<button type='button' data-action='pause'>Pause</button><ol>"
-            + frame_markup
-            + "</ol><script>(function(){var root=document.currentScript.parentElement;"
-            + "var items=root.querySelectorAll('li');var i=0,t=null;"
-            + "function show(){items.forEach(function(x,j){x.style.display=j===i?'':'none';});}"
-            + "show();root.querySelector('[data-action=play]').onclick=function(){"
-            + "if(t)return;t=setInterval(function(){i=(i+1)%items.length;show();},500);};"
-            + "root.querySelector('[data-action=pause]').onclick=function(){clearInterval(t);t=null;};"
-            + "})();</script></div>"
-        )
+        if path is not None:
+            target = Path(path)
+            if target.suffix.lower() != ".html":
+                target = target.with_name(target.name + ".html")
+            drawing.path = drawing.save(target)
+        if open_viewer:
+            drawing.show()
+        return drawing
 
     @property
     def nonfinite_ops(self: "Trace") -> tuple[str, ...]:
@@ -440,7 +489,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
         DOCUMENTED-UNSTABLE spelling (pending naming-session ratification; no
         deprecation shim owed on rename). This is the queryable per-op record:
-        when this capture ran with ``CaptureOptions(track_nonfinite=True)`` it
+        when this capture ran with ``CaptureOptions(on_nonfinite='track')`` it
         serves the capture-time verdicts (covering ops that retained no
         payload); otherwise it derives the answer from the memoized
         saved-payload scan already backing ``print(trace)``, at zero
@@ -547,129 +596,6 @@ class TraceVisualizationMixin(_TraceMixinBase):
         return (
             "No non-finite tensor values found in saved outs"
             f"{coverage_gap_note(self, kind='saved')}."
-        )
-
-    def draw_backward(
-        self: "Trace",
-        path: str = "backward_modelgraph",
-        vis_graph_overrides: dict[str, Any] | None = None,
-        node_spec_fn: Callable[..., Any] | None = None,
-        collapsed_node_spec_fn: Callable[..., Any] | None = None,
-        vis_node_mode: VisNodeModeLiteral = "default",
-        vis_edge_overrides: dict[str, Any] | None = None,
-        vis_save_only: bool = False,
-        file_format: str = "pdf",
-        vis_direction: VisDirectionLiteral = "topdown",
-        code_panel: "CodePanelOption" = False,
-        vis_mode: VisModeLiteral = "rolled",
-        bwd: int | Iterable[int] | None = None,
-        show_legend: bool | None = None,
-        *,
-        theme: str = "torchlens",
-        show_module_paths: bool = False,
-        show_grad_values: bool = False,
-    ) -> str:
-        """Render the captured backward grad_fn_handle graph.
-
-        Parameters
-        ----------
-        path, vis_graph_overrides, node_spec_fn, collapsed_node_spec_fn, \
-        vis_node_mode, vis_edge_overrides, vis_save_only, file_format, \
-        vis_direction, code_panel, vis_mode, bwd, show_legend:
-            Forwarded unchanged to
-            :func:`torchlens._visualization._render_entrypoints.render_backward_graph`.
-            ``collapsed_node_spec_fn`` and ``vis_node_mode`` are accepted for
-            forward-visualization API symmetry but are not applied because
-            backward graphs do not render collapsed module nodes.
-        theme:
-            Keyword-only. Skin preset, the names :meth:`draw` takes: ``"torchlens"``
-            (default), ``"paper"``, ``"dark"``, ``"colorblind"`` or
-            ``"high_contrast"``. It sets the page, text, typography and key
-            ink; the backward node and arrow colours stay the same.
-        show_module_paths:
-            UNSTABLE (keyword-only). Opt-in row naming the module that owns
-            each backward node (``module <address>``; AccumulateGrad nodes
-            read ``param <address>``). Nodes no module owns get no row.
-        show_grad_values:
-            UNSTABLE (keyword-only). Opt-in row summarizing each node's
-            captured output gradient (``grad norm <x>, absmax <y>``; ``grad
-            values not captured`` when the capture kept no tensor).
-
-        Returns
-        -------
-        str
-            Graphviz DOT source.
-        """
-        from .._visualization._render_entrypoints import render_backward_graph as _impl
-
-        return _impl(
-            self,
-            vis_outpath=path,
-            vis_graph_overrides=vis_graph_overrides,
-            node_spec_fn=node_spec_fn,
-            collapsed_node_spec_fn=collapsed_node_spec_fn,
-            vis_node_mode=vis_node_mode,
-            vis_edge_overrides=vis_edge_overrides,
-            vis_save_only=vis_save_only,
-            vis_fileformat=file_format,
-            direction=vis_direction,
-            code_panel=code_panel,
-            vis_mode=vis_mode,
-            bwd=bwd,
-            show_legend=show_legend,
-            theme=theme,
-            show_module_paths=show_module_paths,
-            show_grad_values=show_grad_values,
-        )
-
-    def draw_combined(
-        self: "Trace",
-        path: str = "combined_modelgraph",
-        vis_graph_overrides: dict[str, Any] | None = None,
-        node_spec_fn: Callable[..., Any] | None = None,
-        backward_node_spec_fn: Callable[..., Any] | None = None,
-        vis_edge_overrides: dict[str, Any] | None = None,
-        vis_save_only: bool = False,
-        file_format: str = "pdf",
-        vis_direction: VisDirectionLiteral = "leftright",
-        vis_mode: VisModeLiteral = "unrolled",
-        intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
-        show_buffers: BufferVisibilityLiteral = "meaningful",
-        bwd: int | Iterable[int] | None = None,
-        show_legend: bool | None = None,
-    ) -> str:
-        """Render forward ops and backward grad_fns in one graph.
-
-        Parameters
-        ----------
-        path, vis_graph_overrides, node_spec_fn, backward_node_spec_fn, \
-        vis_edge_overrides, vis_save_only, file_format, vis_direction, \
-        vis_mode, intervening_cluster, show_buffers, bwd, show_legend:
-            Forwarded unchanged to
-            :func:`torchlens._visualization._render_entrypoints.render_combined_graph`.
-
-        Returns
-        -------
-        str
-            Graphviz DOT source.
-        """
-        from .._visualization._render_entrypoints import render_combined_graph as _impl
-
-        return _impl(
-            self,
-            vis_outpath=path,
-            vis_graph_overrides=vis_graph_overrides,
-            node_spec_fn=node_spec_fn,
-            backward_node_spec_fn=backward_node_spec_fn,
-            vis_edge_overrides=vis_edge_overrides,
-            vis_save_only=vis_save_only,
-            vis_fileformat=file_format,
-            direction=vis_direction,
-            vis_mode=vis_mode,
-            intervening_cluster=intervening_cluster,
-            show_buffer_layers=show_buffers,
-            bwd=bwd,
-            show_legend=show_legend,
         )
 
     def preview_fastlog(
@@ -779,13 +705,14 @@ class TraceVisualizationMixin(_TraceMixinBase):
         view: str | None = None,
         depth: Any = None,
         columns: list[str] | None = None,
-        filter: Any = None,  # noqa: A002 - the memo-ratified axis name
+        where: Any = None,
         buffers: str | None = None,
         fold_repeats: Any = None,
         max_rows: int | None = None,
         flop_convention: str | None = None,
         units: str | None = None,
         style: str | None = None,
+        max_scan_elements: int | None = None,
         # One-call-only spellings (typed errors here, never no-ops).
         input_shape: Any = None,
         execution_mode: str | None = None,
@@ -810,14 +737,17 @@ class TraceVisualizationMixin(_TraceMixinBase):
         ----------
         level:
             Rebuilt row grain: ``"auto"`` (default) | ``"module"`` |
-            ``"op"``.
+            ``"op"``. With ``view="stats"``, ``"op"`` (and ``"auto"``) is one
+            row per executed op and ``"module"`` one row per module-output
+            payload.
         view:
-            Column/footer preset: ``"overview"`` (default) | ``"compute"``.
+            ``"overview"`` (default) | ``"compute"`` | ``"stats"`` (per-site
+            payload statistics; see docs/reference/summary.md, "The stats view").
         depth:
             ``"auto"`` | ``"all"`` | int module-tree depth.
         columns:
             Bundle name, exact ordered list, or ``+name``/``-name`` deltas.
-        filter:
+        where:
             Regex string or ``row -> bool`` callable; presentation-only
             (whole-model totals preserved and coverage disclosed).
         buffers:
@@ -834,6 +764,10 @@ class TraceVisualizationMixin(_TraceMixinBase):
         style:
             ``"auto"`` | ``"ascii"`` | ``"unicode"`` for display helpers;
             ``str(result)`` is ALWAYS the canonical ASCII payload.
+        max_scan_elements:
+            The payload-scan element budget of ``view="stats"``; later retained
+            rows become typed ``unscanned`` rows. Refused typed
+            (``summary_option_invalid``) with any other view.
         **unsupported:
             Refused typed (``summary_option_invalid``): a removed legacy
             spelling (``preset``, ``fields``, ``show_ops``, ``include_ops``,
@@ -868,12 +802,13 @@ class TraceVisualizationMixin(_TraceMixinBase):
         for name, value in (
             ("view", view),
             ("depth", depth),
-            ("filter", filter),
+            ("where", where),
             ("buffers", buffers),
             ("fold_repeats", fold_repeats),
             ("flop_convention", flop_convention),
             ("units", units),
             ("style", style),
+            ("max_scan_elements", max_scan_elements),
         ):
             if value is not None:
                 new_kwargs[name] = value
@@ -902,52 +837,10 @@ class TraceVisualizationMixin(_TraceMixinBase):
             input_synthesis=_input_synthesis,
         )
 
-    def render_dagua_graph(
-        self: "Trace",
-        vis_mode: str = "unrolled",
-        vis_call_depth: int = 1000,
-        path: str = "graph.gv",
-        vis_save_only: bool = False,
-        file_format: str = "pdf",
-        show_buffers: bool = False,
-        vis_direction: str = "bottomup",
-        theme: str = "torchlens",
-    ) -> str:
-        """Render this model log with the experimental Dagua backend.
-
-        Parameters
-        ----------
-        vis_mode, vis_call_depth, path, vis_save_only, file_format, \
-        show_buffers, vis_direction, theme:
-            Forwarded unchanged to
-            ``torchlens.experimental.dagua._bridge.render_trace_with_dagua``.
-
-        Returns
-        -------
-        str
-            Serialized Dagua graph output or the rendered artifact path.
-        """
-        from ..experimental.dagua._bridge import render_trace_with_dagua as _impl
-
-        return cast(
-            str,
-            _impl(
-                self,
-                vis_mode=vis_mode,
-                vis_call_depth=vis_call_depth,
-                path=path,
-                vis_save_only=vis_save_only,
-                file_format=file_format,
-                show_buffers=show_buffers,
-                vis_direction=vis_direction,
-                theme=theme,
-            ),
-        )
-
     def to_dagua_graph(
         self: "Trace",
-        vis_mode: str = "unrolled",
-        vis_call_depth: int = 1000,
+        rolled: bool = False,
+        depth: int = 1000,
         show_buffers: bool = False,
         direction: str = "bottomup",
         include_grad_edges: bool | None = None,
@@ -956,7 +849,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
         Parameters
         ----------
-        vis_mode, vis_call_depth, show_buffers, direction, include_grad_edges:
+        rolled, depth, show_buffers, direction, include_grad_edges:
             Forwarded unchanged to
             :func:`torchlens.experimental.dagua.trace_to_dagua_graph`.
 
@@ -969,21 +862,9 @@ class TraceVisualizationMixin(_TraceMixinBase):
 
         return _impl(
             self,
-            vis_mode=vis_mode,
-            vis_call_depth=vis_call_depth,
+            vis_mode="rolled" if rolled else "unrolled",
+            vis_call_depth=depth,
             show_buffers=show_buffers,
             direction=direction,
             include_grad_edges=include_grad_edges,
         )
-
-    def visualization_field_audit(self: "Trace") -> "TorchLensRenderAudit":
-        """Return the visualization field-usage audit for this model log.
-
-        Returns
-        -------
-        TorchLensRenderAudit
-            Audit of used and unused fields in the visualization bridge.
-        """
-        from ..experimental.dagua._bridge import build_render_audit as _impl
-
-        return _impl(self)

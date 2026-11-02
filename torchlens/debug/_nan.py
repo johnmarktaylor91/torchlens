@@ -413,8 +413,8 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanReport:
     x:
         Positional model input accepted by :func:`torchlens.trace`.
     **trace_kwargs:
-        Additional :func:`torchlens.trace` keyword arguments. ``raise_on_nan``
-        is always enabled by this diagnostic.
+        Additional :func:`torchlens.trace` keyword arguments. The capture runs
+        with ``on_nonfinite="raise"`` whatever the caller's ``capture=`` says.
 
     Returns
     -------
@@ -426,16 +426,17 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanReport:
     from ..options import CaptureOptions
 
     capture = trace_kwargs.pop("capture", None)
-    trace_kwargs.pop("raise_on_nan", None)
     if capture is not None:
-        explicit_values = {
-            field_name: value
-            for field_name, value in capture.as_dict().items()
-            if capture.is_field_explicit(field_name)
-        }
-        trace_kwargs["capture"] = CaptureOptions(**explicit_values, raise_on_nan=True)
+        values = capture.as_dict()
+        values["on_nonfinite"] = "raise"
+        trace_kwargs["capture"] = CaptureOptions._from_values(
+            values,
+            capture._specified_fields | {"on_nonfinite"},
+            _layers_to_save=capture._layers_to_save,
+            _layers_to_save_explicit=capture._layers_to_save_explicit,
+        )
     else:
-        trace_kwargs["capture"] = CaptureOptions(raise_on_nan=True)
+        trace_kwargs["capture"] = CaptureOptions(on_nonfinite="raise")
     try:
         trace(model, x, **trace_kwargs)
     except CaptureError as exc:

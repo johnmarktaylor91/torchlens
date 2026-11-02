@@ -133,6 +133,16 @@ class GenerationRecording:
     not_recorded: tuple[str, ...] = NOT_RECORDED
 
     @property
+    def output(self) -> Any:
+        """Return what ``generate()`` returned, exactly (``recording.output``).
+
+        Held in memory only; a recording loaded from disk refuses with
+        ``output_not_stored``.
+        """
+
+        return self.recording.output
+
+    @property
     def n_steps(self) -> int:
         """Return the number of recorded forwards (prefill included)."""
 

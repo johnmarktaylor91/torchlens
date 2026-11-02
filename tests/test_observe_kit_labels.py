@@ -82,7 +82,7 @@ def _raise_on_nan_error(model: nn.Module, x: torch.Tensor) -> CaptureError:
     """Run one raise_on_nan capture and return the CaptureError it raises."""
 
     with pytest.raises(CaptureError) as exc_info:
-        tl.trace(model, x, capture=tl.options.CaptureOptions(raise_on_nan=True))
+        tl.trace(model, x, capture=tl.options.CaptureOptions(on_nonfinite="raise"))
     return exc_info.value
 
 

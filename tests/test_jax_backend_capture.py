@@ -1263,9 +1263,8 @@ def test_jax_region_summary_pandas_and_draw_work(tmp_path: Path) -> None:
     assert len(trace.to_pandas()) == len(trace._layer_list)
     dot = trace.draw(
         path=str(tmp_path / "jax_region_graph"),
-        vis_save_only=True,
         file_format="dot",
-    )
+    ).dot
     assert "jax_region" in dot
 
 

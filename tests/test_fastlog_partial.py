@@ -162,7 +162,7 @@ def test_attach_partial_reraises_original_with_failed_recording() -> None:
             FailingAfterOps(),
             torch.tensor(1.0),
             save=_save_ops,
-            on_forward_error="attach_partial",
+            recording=tl.options.RecordingOptions(on_forward_error="attach_partial"),
         )
     assert isinstance(exc_info.value.__cause__, RuntimeError)
 
@@ -172,13 +172,13 @@ def test_attach_partial_reraises_original_with_failed_recording() -> None:
 
 
 def test_return_partial_one_shot_returns_failed_recording() -> None:
-    """return_partial returns the failed Recording when return_output=False."""
+    """return_partial returns the failed Recording."""
 
     recording = tl.record(
         FailingAfterOps(),
         torch.tensor(1.0),
         save=_save_ops,
-        on_forward_error="return_partial",
+        recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
     )
 
     _assert_failed_partial(recording)
@@ -187,18 +187,21 @@ def test_return_partial_one_shot_returns_failed_recording() -> None:
     assert "caveat=" in summary
 
 
-def test_return_partial_with_return_output_returns_none_output() -> None:
-    """return_partial with return_output=True returns ``(None, partial)``."""
+def test_return_partial_output_refuses_naming_the_failure() -> None:
+    """A failed partial recording has no output; ``output`` refuses, never ``None``."""
 
-    output, recording = tl.record(
+    from torchlens._errors import PayloadUnavailableError
+
+    recording = tl.record(
         FailingAfterOps(),
         torch.tensor(1.0),
         save=_save_ops,
-        on_forward_error="return_partial",
-        return_output=True,
+        recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
     )
 
-    assert output is None
+    with pytest.raises(PayloadUnavailableError) as exc_info:
+        _ = recording.output
+    assert exc_info.value.fields["code"] == "output_forward_failed"
     _assert_failed_partial(recording)
 
 
@@ -230,7 +233,7 @@ def test_failed_forward_leaves_global_state_clean(mode: str) -> None:
             FailingAfterOps(),
             torch.tensor(1.0),
             save=_save_ops,
-            on_forward_error=mode,
+            recording=tl.options.RecordingOptions(on_forward_error=mode),
         )
     else:
         with pytest.raises(TraceCaptureError, match="intentional forward boom") as _tce_info:
@@ -238,7 +241,7 @@ def test_failed_forward_leaves_global_state_clean(mode: str) -> None:
                 FailingAfterOps(),
                 torch.tensor(1.0),
                 save=_save_ops,
-                on_forward_error=mode,
+                recording=tl.options.RecordingOptions(on_forward_error=mode),
             )
         assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
@@ -253,7 +256,7 @@ def test_failed_recording_rejects_to_trace_and_log_backward() -> None:
         FailingAfterOps(),
         torch.tensor(1.0, requires_grad=True),
         save=_save_ops,
-        on_forward_error="return_partial",
+        recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
     )
 
     with pytest.raises(RuntimeError, match="failed partial Recording"):
@@ -282,7 +285,7 @@ def test_partial_build_double_fault_reraises_original(monkeypatch: pytest.Monkey
             FailingAfterOps(),
             torch.tensor(1.0),
             save=_save_ops,
-            on_forward_error="attach_partial",
+            recording=tl.options.RecordingOptions(on_forward_error="attach_partial"),
         )
     assert isinstance(exc_info.value.__cause__, RuntimeError)
 
@@ -320,7 +323,7 @@ def test_missing_failed_event_snapshot_reraises_original(
             FailingAfterOps(),
             torch.tensor(1.0),
             save=_save_ops,
-            on_forward_error="return_partial",
+            recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
         )
     assert isinstance(exc_info.value.__cause__, RuntimeError)
 
@@ -342,9 +345,10 @@ def test_model_error_wins_over_module_exit_predicate_error() -> None:
         ParentWithFailingChild(),
         torch.tensor(1.0),
         save=_save_ops,
-        halt=module_exit_halt,
-        on_predicate_error="fail-fast",
-        on_forward_error="return_partial",
+        stop_after=module_exit_halt,
+        recording=tl.options.RecordingOptions(
+            on_predicate_error="fail-fast", on_forward_error="return_partial"
+        ),
     )
 
     _assert_failed_partial(recording)
@@ -367,8 +371,8 @@ def test_root_module_exit_halt_failure_deduplicates_partial_event_stream() -> No
         FailingAfterOps(),
         torch.tensor(1.0),
         save=_save_ops_and_modules,
-        halt=halt,
-        on_forward_error="return_partial",
+        stop_after=halt,
+        recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
     )
 
     _assert_failed_partial(recording)
@@ -395,7 +399,7 @@ def test_multi_output_user_failure_partial_is_consistent() -> None:
         MultiOutputThenFail(),
         torch.tensor(1.0),
         save=_save_ops,
-        on_forward_error="return_partial",
+        recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
     )
 
     _assert_failed_partial(recording)
@@ -446,7 +450,7 @@ def test_return_partial_does_not_finalize_aborted_disk_storage(tmp_path: Path) -
         torch.tensor(1.0),
         save=_save_ops,
         storage=tl.to_disk(final_path, retain_in_memory=True),
-        on_forward_error="return_partial",
+        recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
     )
 
     assert not final_path.exists()
@@ -465,7 +469,7 @@ def test_disk_partial_bundle_path_points_to_recoverable_temp_dir(tmp_path: Path)
         torch.tensor(1.0),
         save=_save_ops,
         storage=tl.to_disk(final_path, retain_in_memory=False),
-        on_forward_error="return_partial",
+        recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
     )
 
     assert recording.path is not None
@@ -491,9 +495,10 @@ def test_accumulated_predicate_error_suppressed_after_failed_forward() -> None:
         ParentWithFailingChild(),
         torch.tensor(1.0),
         save=_save_ops,
-        halt=module_exit_halt,
-        on_predicate_error="accumulate",
-        on_forward_error="return_partial",
+        stop_after=module_exit_halt,
+        recording=tl.options.RecordingOptions(
+            on_predicate_error="accumulate", on_forward_error="return_partial"
+        ),
     )
 
     _assert_failed_partial(recording)
@@ -515,8 +520,8 @@ def test_accumulated_predicate_error_still_raises_without_forward_failure() -> N
             HealthyModel(),
             torch.tensor(1.0),
             save=_save_ops,
-            halt=module_exit_halt,
-            on_predicate_error="accumulate",
+            stop_after=module_exit_halt,
+            recording=tl.options.RecordingOptions(on_predicate_error="accumulate"),
         )
 
 
@@ -527,7 +532,7 @@ def test_failed_recording_log_backward_refusal_carries_n3_code() -> None:
         FailingAfterOps(),
         torch.tensor(1.0, requires_grad=True),
         save=_save_ops,
-        on_forward_error="return_partial",
+        recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
     )
     with pytest.raises(RecorderStateError) as exc_info:
         recording.backward(torch.tensor(1.0, requires_grad=True))

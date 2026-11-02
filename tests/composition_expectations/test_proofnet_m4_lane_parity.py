@@ -69,7 +69,7 @@ def test_zero_match_getitem_and_label_list_refuse_with_one_code(parity_trace: An
         tl.trace(
             model,
             torch.randn(2, 4),
-            capture=tl.options.CaptureOptions(layers_to_save=[MISSING_SITE]),
+            save=[MISSING_SITE],
         )
     assert _code(list_exc.value) == "op_lookup_not_found", (
         "layers_to_save zero-match diverged from the getitem lane"

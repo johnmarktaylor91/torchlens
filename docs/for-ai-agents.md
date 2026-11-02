@@ -51,7 +51,7 @@ mechanism and records real values, real taken-branch control flow, op-level reco
 Keras/`tf.Module` module stacks. Graph-only FuncGraph fallback is the static-mode design for
 compiled/SavedModel-style entries. SHIPPED for eager entries: static-label `intervene=`
 (two-level writable layer, fail-closed site reachability) and leaf + exact T1 intermediate
-derived gradients via `tl.backends.tf.GradOptions`. Still deferred: `halt=`/`recipes=`, true
+derived gradients via `tl.backends.tf.GradOptions`. Still deferred: `stop_after=`/`recipes=`, true
 backward capture, and value-dependent predicates (graph-only captures also refuse
 `grad_options` typed).
 JAX `array_payloads` saves round-trip typed PRNG keys and fully addressable single-host sharded
@@ -64,7 +64,7 @@ on the measured fixtures.
 
 ## Public surface map
 
-`torchlens.__all__` currently exposes 83 names. The most-used ones, grouped by job (this
+`torchlens.__all__` currently exposes 84 names. The most-used ones, grouped by job (this
 table is a selection, not the full list — read `torchlens.__all__` for that):
 
 | Job | Names |
@@ -101,8 +101,7 @@ trace = tl.trace(
     model,
     x,
     save=conv_before_relu,
-    lookback=4,
-    lookback_payload_policy="detached_raw",
+capture=tl.options.CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
 )
 
 assert trace.find_sites(tl.func("conv2d")).first().out.shape == (1, 2, 3, 3)
@@ -211,12 +210,10 @@ x = torch.randn(1, 2)
 
 trace = tl.trace(model, x, save=tl.func("tanh"))
 graph = trace.draw(
-    view="unrolled",
+    rolled=False,
     path=str(Path(DOCS_TMPDIR) / "agent-graph"),
-    vis_save_only=True,
     file_format="dot",
-    return_graph=True,
-)
+    )
 
 assert graph is not None
 ```

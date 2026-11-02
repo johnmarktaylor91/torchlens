@@ -33,7 +33,7 @@ slots only.
 |---|---|---|
 | `save=` | `RecordContext` | `CaptureDecision` (`True`/`False`/`None`/`CaptureSpec`); `RetroactiveCaptureDecision` RAW-CALLABLE-ONLY (see below) |
 | run-time `save=` | `RecordContext` | SAME ROW as `save=` — run-time save maps onto `slot="save"` with identical normalization |
-| `halt=` | `RecordContext` | `bool` ONLY; EXCLUSIVE stop — the record satisfying the predicate is NOT captured (shipped semantics) |
+| `stop_after=` | `RecordContext` | `bool` ONLY; EXCLUSIVE stop — the record satisfying the predicate is NOT captured (shipped semantics) |
 | `until=` | `RecordContext` | `bool` ONLY; INCLUSIVE stop — the record satisfying the predicate IS captured, then the run stops. This row pins subject + return domain + inclusivity; the consumer owns its dispatch |
 | grad `save=` | `GradRecordContext` | `CaptureDecision` — NOT a `PredicateProtocol` member (different subject); documented per-slot |
 | `intervene=` | live proxy (`Any`) | `InterventionPredicateDecision` — OUTSIDE `PredicateProtocol` and the registry; registered names are NOT accepted by `intervene=` |

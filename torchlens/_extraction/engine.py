@@ -718,8 +718,8 @@ def _capture_outputs(
         trace = _tl.trace(
             plan.model,
             envelope.args,
-            dict(envelope.kwargs),
-            capture=_tl.options.CaptureOptions(layers_to_save=list(plan.layer_plan.values())),
+            input_kwargs=dict(envelope.kwargs),
+            save=list(plan.layer_plan.values()),
             intervene=plan.intervention.spec,
         )
         receipt = batch_receipt(trace)
@@ -730,8 +730,8 @@ def _capture_outputs(
         trace = _tl.trace(
             plan.model,
             envelope.args,
-            dict(envelope.kwargs),
-            capture=_tl.options.CaptureOptions(layers_to_save=list(plan.layer_plan.values())),
+            input_kwargs=dict(envelope.kwargs),
+            save=list(plan.layer_plan.values()),
         )
         return _resolve_trace_outputs(plan, trace)
     _trace, outputs, views = _tl._extract_layers_with_trace(

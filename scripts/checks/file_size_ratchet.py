@@ -508,8 +508,8 @@ _MAX_LEDGER_SLACK = 100
 _TEST_FILE_CEILINGS: dict[str, int] = {
     "tests/test_validation.py": 8750,
     "tests/example_models.py": 5500,
-    "tests/test_real_world_models.py": 5200,
-    "tests/test_toy_models.py": 4500,
+    "tests/test_real_world_models.py": 5100,
+    "tests/test_toy_models.py": 4400,
     "tests/test_auto_collapse_metrics.py": 3200,
     "tests/test_backward.py": 2550,
     # 2400 -> 2650 (2026-10-01 ci-fix ratchet settle): the M1 raise-arm
@@ -519,7 +519,7 @@ _TEST_FILE_CEILINGS: dict[str, int] = {
     # measures 2608. Next 50-line step above it -- this file's purpose is
     # exactly this kind of targeted regression addition, so the growth is
     # the campaign's reviewed product, not drift.
-    "tests/validation_goldens/test_validation_exemption_hardening.py": 2650,
+    "tests/validation_goldens/test_validation_exemption_hardening.py": 2550,
     "tests/test_conditional_branches.py": 2150,
     # 2050 -> 2100 (2026-09-01 W051-FLAKE): the held-ref recipe registry gained the
     # Python / legacy-NumPy GLOBAL-engine state rows (getstate/setstate/seed, W051

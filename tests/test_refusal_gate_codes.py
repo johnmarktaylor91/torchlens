@@ -109,7 +109,9 @@ def test_default_backend_early_refusal_is_coded() -> None:
             return v * 2.0
 
     with pytest.raises(BackendUnsupportedError) as excinfo:
-        tl.trace(_Counts(), torch.ones(2), jax_static_argnums=(0,))
+        tl.trace(
+            _Counts(), torch.ones(2), capture=tl.options.CaptureOptions(jax_static_argnums=(0,))
+        )
     _assert_code(excinfo.value, _OPTION_CODE)
     assert not calls
 
@@ -340,7 +342,7 @@ def test_capture_option_probe_marks_only_its_own_fields(flag: str) -> None:
     explicit = {
         field.name
         for field in dataclass_fields(CaptureOptions)
-        if not field.name.startswith("_") and capture.is_field_explicit(field.name)
+        if not field.name.startswith("_") and capture._is_field_explicit(field.name)
     }
     assert explicit == {str(request.option)}, explicit
 

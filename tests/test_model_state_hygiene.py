@@ -286,13 +286,13 @@ def _door_trace_bound_method(model: _Model) -> None:
 def _door_record(model: _Model) -> None:
     """``tl.record`` with an opaque ``save=``."""
 
-    tl.record(model, _X, save=lambda ctx: True, return_output=True)
+    tl.record(model, _X, save=lambda ctx: True)
 
 
 def _door_record_intervene(model: _Model) -> None:
     """``tl.record`` with a live intervention."""
 
-    tl.record(model, _X, save=lambda ctx: True, intervene=_spec(), return_output=True)
+    tl.record(model, _X, save=lambda ctx: True, intervene=_spec())
 
 
 def _door_bind(model: _Model) -> None:
@@ -654,8 +654,7 @@ def test_stray_session_wrapper_never_breaks_a_later_capture(door: str) -> None:
             assert "lin" in later_trace.modules, "the registered child went unrecorded"
             out = later_trace[later_trace.output_layers[0]].out.detach()
         else:
-            out, _recording = tl.record(
-                later, _X, save=lambda ctx: True, halt=_watch, return_output=True
-            )
+            _recording = tl.record(later, _X, save=lambda ctx: True, stop_after=_watch)
+            out = _recording.output
             assert "lin" in entered, "the registered child went unrecorded"
     assert torch.equal(out.detach(), expected)

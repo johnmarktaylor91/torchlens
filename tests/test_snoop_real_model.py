@@ -120,12 +120,12 @@ def test_resnet18_scoped_echo_leaves_logits_unchanged() -> None:
     with torch.no_grad():
         raw_logits = model(x)
     sink = io.StringIO()
-    output, recording = tl.record(
+    recording = tl.record(
         model,
         x,
         narrate=NarrationOptions(sites=tl.in_module("layer3"), sink=sink),
-        return_output=True,
     )
+    output = recording.output
     assert torch.equal(raw_logits, output)
     assert recording.records == []
     lines = [line for line in sink.getvalue().split("\n") if line]
@@ -169,7 +169,7 @@ def test_resnet18_incompatible_add_crash_trio() -> None:
                 torch.randn(1, 3, 224, 224),
                 save=tl.func("linear"),
                 narrate=NarrationOptions(sites=True, sink=sink),
-                on_forward_error="attach_partial",
+                recording=tl.options.RecordingOptions(on_forward_error="attach_partial"),
             )
         assert isinstance(excinfo.value.__cause__, RuntimeError)
     transcript = sink.getvalue()

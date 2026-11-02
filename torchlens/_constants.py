@@ -149,6 +149,7 @@ MODEL_LOG_FIELD_ORDER = [
     "output_id2label",
     "output_num_classes",
     "_output_transform",
+    "_output_slot",
     "_options_save_transformed_output",
     "layer_visualizers",
     "save_visualizations",

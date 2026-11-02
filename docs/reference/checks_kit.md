@@ -26,7 +26,7 @@ semantics (see "What the measurements broke" below).
 | `add_module_unchanging_check(module)` | `session.register_frozen_check([...parameter names])` | Declared-frozen parameters; the default evidence keeps exact snapshots and shows the delta. |
 | `add_tensor_unchanging_check(tensor)` | `session.register_frozen_check(["name"])` | |
 | `add_module_output_range_check(module, output_range=(low, high))` | `checks.RangeProbe({site: (low, high)})`, passed to a trace as `capture=tl.options.CaptureOptions(hooks=probe.hook_plan())` | Sites are TorchLens selectors such as `tl.func("softmax")`. |
-| `add_module_nan_check(module)` | `session.register_nonfinite_param_check()` and `session.register_nonfinite_grad_check()`; for activations, `tl.trace(..., capture=tl.options.CaptureOptions(raise_on_nan=True))` | Parameters, gradients and activations are checked at the points where the evidence is exact. |
+| `add_module_nan_check(module)` | `session.register_nonfinite_param_check()` and `session.register_nonfinite_grad_check()`; for activations, `tl.trace(..., capture=tl.options.CaptureOptions(on_nonfinite='raise'))` | Parameters, gradients and activations are checked at the points where the evidence is exact. |
 | `add_module_inf_check(module)` | The same three checks | They cover NaN and Inf together. |
 | `add_tensor_nan_check(tensor)` | `session.register_nonfinite_param_check()` | Scans every parameter and, by default, every buffer. |
 | `add_tensor_inf_check(tensor)` | `session.register_nonfinite_param_check()` | |
@@ -66,7 +66,7 @@ with session:                               # attach() installs the hooks; detac
         optimizer.step()
 
 report = session.report()
-print(report)                               # house-style summary (matches TraceAudit)
+print(report)                               # house-style summary (matches HealthReport)
 ```
 
 Construction is silent and does no device work: no hooks, no syncs, no stdout.
@@ -82,7 +82,7 @@ handle when there is one, so skip accounting can read scale decrements.
 | S-A | per-parameter post-accumulate-grad hooks | every backward INCLUDING scaler-skipped attempts; values SCALED, PRE-clip |
 | S-B | optimizer step pre-hook | accepted steps only; values already UNSCALED, POST-clip; the last moment before weights change |
 | S-C | optimizer step post-hook | after the write: exact deltas, ratios, scheduled scans |
-| S-D | the shipped activation path | `raise_on_nan`, `track_nonfinite`, `capture.hooks` |
+| S-D | the shipped activation path | `on_nonfinite='raise'`, `on_nonfinite='track'`, `capture.hooks` |
 
 Two standing laws fall out of this table. Gradients at S-B are already
 unscaled -- dividing by `scaler.get_scale()` there under-reports by exactly the

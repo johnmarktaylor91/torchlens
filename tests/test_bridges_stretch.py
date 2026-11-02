@@ -87,7 +87,7 @@ def _bridge_log() -> tuple[_TinyBridgeModel, torch.Tensor, Any]:
     torch.manual_seed(120)
     model = _TinyBridgeModel().eval()
     x = torch.randn(2, 1, 8, 8)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(model, x, save="all")
     return model, x, log
 
 
@@ -188,9 +188,9 @@ def _contrastive_logs() -> tuple[Any, Any]:
 
     torch.manual_seed(121)
     model = _TinyBridgeModel().eval()
-    options = tl.options.CaptureOptions(layers_to_save="all")
-    log_pos = tl.trace(model, torch.randn(2, 1, 8, 8) + 1.0, capture=options)
-    log_neg = tl.trace(model, torch.randn(2, 1, 8, 8), capture=options)
+    options = tl.options.CaptureOptions()
+    log_pos = tl.trace(model, torch.randn(2, 1, 8, 8) + 1.0, capture=options, save="all")
+    log_neg = tl.trace(model, torch.randn(2, 1, 8, 8), capture=options, save="all")
     return log_pos, log_neg
 
 

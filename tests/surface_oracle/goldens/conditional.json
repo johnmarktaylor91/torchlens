@@ -5124,6 +5124,7 @@
    "_out_hash_cache": {},
    "_out_identity_cache": {},
    "_out_recipe_revision": 0,
+   "_output_slot": null,
    "_output_transform": null,
    "_param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "_parent_run": "<callable ReferenceType>",
@@ -5448,8 +5449,9 @@
    ],
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "options": "<torchlens._data_classes._trace_groups_capture.TraceOptions>",
+   "options": "<torchlens._data_classes._trace_groups_capture.TraceSettings>",
    "outcome": "<torchlens._capture._outcome_types.CaptureOutcome>",
+   "output": "<raises PayloadUnavailableError>",
    "output_id2label": null,
    "output_layers": [
     "output_1"
@@ -10620,6 +10622,7 @@
    "_out_hash_cache": {},
    "_out_identity_cache": {},
    "_out_recipe_revision": 0,
+   "_output_slot": "<torchlens.recording.types.OutputSlot>",
    "_output_transform": null,
    "_param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "_parent_run": null,
@@ -10940,8 +10943,18 @@
    ],
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "options": "<torchlens._data_classes._trace_groups_capture.TraceOptions>",
+   "options": "<torchlens._data_classes._trace_groups_capture.TraceSettings>",
    "outcome": "<torchlens._capture._outcome_types.CaptureOutcome>",
+   "output": {
+    "__tensor__": true,
+    "dtype": "torch.float32",
+    "requires_grad": false,
+    "sha256": "6a3ef13567877541bc03ee76e90810ce984fbb62db25015688b3732d18ffd0cb",
+    "shape": [
+     2,
+     2
+    ]
+   },
    "output_id2label": null,
    "output_layers": [
     "output_1"
@@ -16108,6 +16121,7 @@
    "_out_hash_cache": {},
    "_out_identity_cache": {},
    "_out_recipe_revision": 0,
+   "_output_slot": null,
    "_output_transform": null,
    "_param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "_parent_run": null,
@@ -16432,8 +16446,9 @@
    ],
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "options": "<torchlens._data_classes._trace_groups_capture.TraceOptions>",
+   "options": "<torchlens._data_classes._trace_groups_capture.TraceSettings>",
    "outcome": "<torchlens._capture._outcome_types.CaptureOutcome>",
+   "output": "<raises PayloadUnavailableError>",
    "output_id2label": null,
    "output_layers": [
     "output_1"
@@ -21598,6 +21613,7 @@
    "_out_hash_cache": {},
    "_out_identity_cache": {},
    "_out_recipe_revision": 0,
+   "_output_slot": "<torchlens.recording.types.OutputSlot>",
    "_output_transform": null,
    "_param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "_parent_run": "<callable ReferenceType>",
@@ -21922,8 +21938,18 @@
    ],
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "options": "<torchlens._data_classes._trace_groups_capture.TraceOptions>",
+   "options": "<torchlens._data_classes._trace_groups_capture.TraceSettings>",
    "outcome": "<torchlens._capture._outcome_types.CaptureOutcome>",
+   "output": {
+    "__tensor__": true,
+    "dtype": "torch.float32",
+    "requires_grad": false,
+    "sha256": "6a3ef13567877541bc03ee76e90810ce984fbb62db25015688b3732d18ffd0cb",
+    "shape": [
+     2,
+     2
+    ]
+   },
    "output_id2label": null,
    "output_layers": [
     "output_1"
@@ -26973,6 +26999,7 @@
    "_out_hash_cache": {},
    "_out_identity_cache": {},
    "_out_recipe_revision": 0,
+   "_output_slot": null,
    "_output_transform": null,
    "_param_logs": "<torchlens._data_classes.param.ParamAccessor>",
    "_parent_run": null,
@@ -27291,8 +27318,9 @@
    ],
    "ops": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
    "ops_with_params": "<torchlens._data_classes._trace_accessors.TraceOpAccessor>",
-   "options": "<torchlens._data_classes._trace_groups_capture.TraceOptions>",
+   "options": "<torchlens._data_classes._trace_groups_capture.TraceSettings>",
    "outcome": "<torchlens._capture._outcome_types.CaptureOutcome>",
+   "output": "<raises PayloadUnavailableError>",
    "output_id2label": null,
    "output_layers": [
     "output_1"

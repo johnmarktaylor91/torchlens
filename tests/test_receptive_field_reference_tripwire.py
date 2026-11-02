@@ -147,8 +147,8 @@ def test_buffer_version_node_copy_is_still_guarded(monkeypatch: pytest.MonkeyPat
     trace = tl.trace(
         _BatchNormModel().eval(),
         _X,
-        save_mode="reference",
-        capture=CaptureOptions(layers_to_save="all"),
+        capture=CaptureOptions(save_mode="reference"),
+        save="all",
     )
     version_nodes = [op for op in trace._layer_list if op._slot("buffer_write_kind") == "fused"]
     assert version_nodes, "eval BatchNorm logged no buffer version node"

@@ -610,7 +610,7 @@ def _trace_kwargs(
 ) -> dict[str, Any]:
     """Return trace keyword arguments with the helper's REQUIRED fields applied.
 
-    The patching helpers cannot work without ``layers_to_save="all"`` (facet
+    The patching helpers cannot work without ``save="all"`` (facet
     values must be readable on every candidate module) and
     ``save_args=True`` (reconstructed facets read saved op args), and
     attribution additionally needs ``save_grads``. These used to be supplied
@@ -619,7 +619,7 @@ def _trace_kwargs(
     partially absent and grids were computed over a silently narrowed module
     set. The required fields now COMPOSE with the user's options: fields the
     user left unspecified are filled in, an explicitly matching value passes,
-    and an explicitly CONFLICTING ``layers_to_save``/``save_arg_values``
+    and an explicitly CONFLICTING ``save``/``save_args``
     refuses with the requirement named (an explicit user ``save_grads``
     predicate is honored as-is -- a too-narrow one fails loudly at the
     gradient read). Flat capture spellings (``layers_to_save=`` etc.) were
@@ -638,17 +638,16 @@ def _trace_kwargs(
             "accepts capture knobs only through the grouped spelling "
             "capture=tl.options.CaptureOptions(...). Move these fields into capture=."
         )
-    if "capture" in kwargs:
-        kwargs["capture"] = _compose_required_capture(kwargs["capture"], save_grads=save_grads)
-        return kwargs
-    capture_fields: dict[str, Any] = {"layers_to_save": "all", "save_args": True}
-    if save_grads is not None:
-        capture_fields["save_grads"] = save_grads
-    kwargs["capture"] = CaptureOptions(**capture_fields)
+    kwargs["capture"] = _compose_required_capture(
+        kwargs.get("capture", CaptureOptions()),
+        save_grads=save_grads,
+        _save=kwargs.get("save", "all"),
+    )
+    kwargs["save"] = "all"
     return kwargs
 
 
-def _compose_required_capture(capture: Any, *, save_grads: bool | None) -> Any:
+def _compose_required_capture(capture: Any, *, save_grads: bool | None, _save: Any = "all") -> Any:
     """Merge the patching-required capture fields into user capture options.
 
     Parameters
@@ -673,17 +672,19 @@ def _compose_required_capture(capture: Any, *, save_grads: bool | None) -> Any:
 
     if not isinstance(capture, CaptureOptions):
         return capture
-    required: dict[str, Any] = {"layers_to_save": "all", "save_arg_values": True}
+    required: dict[str, Any] = {"save_args": True}
     conflicts = [
         field_name
         for field_name, required_value in required.items()
-        if capture.is_field_explicit(field_name) and getattr(capture, field_name) != required_value
+        if capture._is_field_explicit(field_name) and getattr(capture, field_name) != required_value
     ]
+    if not isinstance(_save, str) or _save != "all":
+        conflicts.append("save")
     if conflicts:
         raise ValueError(
-            f"Patching helpers require capture options {required!r}, but the supplied "
-            f"capture= explicitly sets {conflicts!r} to conflicting values. Facet values "
-            "must be readable on every candidate module (layers_to_save='all') and "
+            f"Patching helpers require save='all' and capture options {required!r}, but the supplied "
+            f"trace kwargs explicitly set {conflicts!r} to conflicting values. Facet values "
+            "must be readable on every candidate module (save='all') and "
             "reconstructed facets read saved op args (save_args=True); a narrower "
             "capture silently shrinks or empties the patch table. Drop these fields from "
             "capture= (they are filled in automatically) or set them to the required "
@@ -692,15 +693,15 @@ def _compose_required_capture(capture: Any, *, save_grads: bool | None) -> Any:
     fills = {
         field_name: required_value
         for field_name, required_value in required.items()
-        if not capture.is_field_explicit(field_name)
+        if not capture._is_field_explicit(field_name)
     }
-    if save_grads is not None and not capture.is_field_explicit("save_grads"):
+    if save_grads is not None and not capture._is_field_explicit("save_grads"):
         fills["save_grads"] = save_grads
     if not fills:
         return capture
     values = capture.as_dict()
     values.update(fills)
-    return CaptureOptions.from_values(
+    return CaptureOptions._from_values(
         values, frozenset(capture._specified_fields) | frozenset(fills)
     )
 

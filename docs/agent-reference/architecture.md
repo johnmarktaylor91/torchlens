@@ -6,7 +6,7 @@ See `architecture.md` in `.project-context` for the older full map and
 
 Key entry points:
 - Main capture: `torchlens/_user_funcs.py` - `trace()`, `show_model_graph()`,
-  `draw_backward()`, `validate_forward_pass()`
+  `draw()`, `validate_forward_pass()`
 - Backend registry: `torchlens/backends/registry.py` - `BackendSpec`, `BackendName`,
   backend resolution, validation dispatch, and canonical backend errors.
 - Backend protocol: `torchlens/backends/_backend_protocol.py` - `BackendProtocol`, the one
@@ -40,7 +40,7 @@ Key entry points:
   Synthesized rungs persist `InputProvenance` inside the existing
   `Trace.provenance.input_preprocessor` KEEP field; `decode_output`/`output_table`
   refuse `nongold_semantics_unavailable` on synthesized values; first raw
-  read warns once (`nongold_raw_value_read`). `torchlens._user_funcs.render`
+  read warns once (`nongold_raw_value_read`). `torchlens._user_funcs.draw`
   is the one-call facade (metadata-only pinned eval/no-grad, state-hash
   verified restore, `collapse="auto"` there only, detached `Drawing`,
   never auto-opens). Lazy: gold/declared rungs materialize during the one
@@ -260,7 +260,7 @@ Key entry points:
   errors for unsaved payload reads. Forward exceptions default to
   `on_forward_error="raise"`; `on_forward_error="attach_partial"` attaches
   `exc.partial_recording` and re-raises, while `on_forward_error="return_partial"` returns a
-  failed partial `Recording`. Failed partials set `status="partial_error"`, `is_failed=True`,
+  failed partial `Recording`. Failed partials set `status="partial_error"` and `is_failed` `True`,
   string-only error metadata, `num_committed_ops`, and best-effort `last_event_*` fields.
   user-op failures exclude the failing call; TL-side capture failures may include a
   skipped/partial current-call event. A forward exception during any capture door raises
@@ -278,9 +278,9 @@ Key entry points:
   (pass-qualified labels of ops whose output held NaN/Inf) +
   `trace.nonfinite_coverage` (evidence basis and coverage counts). Default
   captures serve it from the memoized saved-payload scan at zero capture cost;
-  `CaptureOptions(track_nonfinite=True)` opts into capture-time per-op checks
+  `CaptureOptions(on_nonfinite='track')` opts into capture-time per-op checks
   covering unsaved ops, with device flags drained in one batch at the finalize
-  seam (never a per-op CUDA sync). `raise_on_nan` is independent and unchanged.
+  seam (never a per-op CUDA sync). `on_nonfinite='raise'` is independent and unchanged.
 - Attribution kit (DOCUMENTED-UNSTABLE): `torchlens.attribution` ships
   `integrated_gradients`, `occlusion`, `grad_cam`, and the display-only
   `overlay` renderer, all operating on Traces. `grad_cam` also takes
@@ -312,7 +312,7 @@ Key entry points:
   (`torchlens/backends/paddle/interventions.py`; forward-only, builtin helper adapters
   `zero_ablate`/`scale`/`add`/`replace_with`, corroborated validation carve-out), and on the
   eager TF preview (static-label, two-level writable layer, fail-closed site reachability;
-  see invariant 15). `trace(halt=...)` runs on torch and Paddle; the remaining previews
+  see invariant 15). `trace(stop_after=...)` runs on torch and Paddle; the remaining previews
   refuse typed.
   Spec persistence is one path: `intervention/save.py` owns the `.tlspec` directory,
   tensors and manifest; `intervention/_spec_codec.py` holds the one spec-document
@@ -326,7 +326,7 @@ Key entry points:
   `False` honored). Rolled multi-pass field sources resolve through the name-keyed allowlist in
   `torchlens/_visualization/_encoding.py`; varying/first-pass-only sources stay unencoded with a
   legend note (honest-visuals tripwire), and unclassified sources refuse `encoding_source_invalid`.
-  Wave-1 size channel `Trace.draw(size_by=..., scale=...)` (UNSTABLE, D4 default-applied):
+  Wave-1 size channel `Trace.draw(size_by=..., size_scale=...)` (UNSTABLE, D4 default-applied):
   scalar field / `"dims"` (non-batch numel) / callable mapped to width/height MINIMUMS
   (`fixedsize=false`, area clamped 4x default, fonts never scale, strictly opt-in). Rolled
   multi-pass sources that cannot be certified single-valued refuse `size_by_rolled_varying`
@@ -361,7 +361,7 @@ Key entry points:
   only pathological inputs (raw ops above 20x the constant) still decline outright
   (`collapse_pathological_skip`; `collapse_plan()` refuses `collapse_plan_unavailable`;
   the schedule degrades to one full-graph step). Context reductions (`module=` focus,
-  `vis_call_depth`, rolled mode) genuinely re-admit the quality planner.
+  `depth=`, rolled mode) genuinely re-admit the quality planner.
 
 Common unified capture patterns:
 
@@ -380,8 +380,7 @@ windowed = tl.trace(
     model,
     x,
     save=tl.func("conv2d") & tl.followed_by(tl.func("relu")),
-    lookback=4,
-    lookback_payload_policy="detached_raw",
+capture=tl.options.CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
 )
 patched = tl.trace(
     model,
@@ -400,7 +399,7 @@ runnable_path = "architecture.tlspec"
 torch_trace.save(runnable_path, level="runnable", include_weights=True)
 loaded_trace = tl.load(runnable_path)
 verified = loaded_trace.run(inputs=x, seed=42, on_divergence="raise")
-overview_svg = torch_trace.draw(collapse="auto", file_format="svg", vis_save_only=True)
+overview_svg = torch_trace.draw(collapse="auto", file_format="svg")
 module_scores = torch_trace.module_collapse_order
 
 # Influence geometry follows the real captured DAG in both directions.
@@ -415,8 +414,7 @@ pf_table = torch_trace.projective_fields(level="layer")
 # Gradient verification needs requires_grad inputs, backward_ready=True, and
 # save_mode="reference"; verify().verdict is PASS / FAIL / INDETERMINATE.
 armed_trace = tl.trace(model, x.requires_grad_(True),
-                       capture=tl.options.CaptureOptions(backward_ready=True),
-                       save_mode="reference")
+                       capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))
 armed_op = armed_trace["relu_1_2"]
 armed_unit = armed_op.receptive_field.center_unit(batch_index=0)
 rf_gradient = armed_op.receptive_field.probe_grad(armed_unit, retain_graph=True)

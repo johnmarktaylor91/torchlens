@@ -10,11 +10,12 @@ import types
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, cast
 
+from . import options as _options
 from ._capture.arg_positions import _normalize_func_name
-from ._errors import AmbiguousOpLookupError, ArgumentConflictError, ArgumentTypeError
+from ._deprecations import MISSING
+from ._errors import AmbiguousOpLookupError, ArgumentTypeError
 from ._selection.selectors import BaseSelector
 from .backends import registry as _backend_registry
-from .options import SaveOptions
 from .recording.options import PredicateFn
 from .recording.types import RecordContext
 
@@ -23,8 +24,8 @@ if TYPE_CHECKING:
 
 
 def _split_save_options_and_predicate(
-    save_value: SaveOptions | PredicateFn | BaseSelector | None,
-) -> tuple[SaveOptions | None, PredicateFn | None]:
+    save_value: _options._SaveTransforms | PredicateFn | BaseSelector | None,
+) -> tuple[_options._SaveTransforms | None, PredicateFn | None]:
     """Separate grouped save options from ``trace(save=predicate)`` sugar.
 
     Parameters
@@ -34,13 +35,13 @@ def _split_save_options_and_predicate(
 
     Returns
     -------
-    tuple[SaveOptions | None, PredicateFn | None]
+    tuple[_SaveTransforms | None, PredicateFn | None]
         Grouped save options and optional selective-save predicate.
     """
 
     if save_value is None:
         return None, None
-    if isinstance(save_value, SaveOptions):
+    if isinstance(save_value, _options._SaveTransforms):
         return save_value, None
     from ._selection.selectors import FacetSelector
     from .intervention._facet_save import _facet_save_predicate
@@ -55,16 +56,39 @@ def _split_save_options_and_predicate(
     if callable(save_value):
         return None, cast(PredicateFn, save_value)
     raise ArgumentTypeError(
-        f"save must be a layer list or string, SaveOptions instance, predicate callable, "
+        f"save must be a layer list or string, predicate callable, "
         f"selector, or None; "
         f"received {type(save_value).__name__}",
         code="save_predicate_type_invalid",
         remedy=(
             "pass a list of layer names or module addresses such as save=['layer1'], "
-            "a selector such as save=tl.func('relu'), save='all', or a SaveOptions instance"
+            "a selector such as save=tl.func('relu'), save='all', or a a reduce-only save"
         ),
         argument="save",
         received_type=type(save_value).__name__,
+    )
+
+
+def _resolve_save_transforms(
+    capture_options: CaptureOptions,
+    *,
+    activation_transform: Any = MISSING,
+    grad_transform: Any = MISSING,
+    save_raw_activations: Any = MISSING,
+    save_raw_grads: Any = MISSING,
+) -> _options._SaveTransforms:
+    """Return the save transforms: the merged capture fields, flat values winning."""
+
+    base = _options._save_transforms_from_capture(capture_options)
+    return _options._SaveTransforms(
+        activation_transform=(
+            base.activation_transform if activation_transform is MISSING else activation_transform
+        ),
+        grad_transform=base.grad_transform if grad_transform is MISSING else grad_transform,
+        save_raw_activations=(
+            base.save_raw_activations if save_raw_activations is MISSING else save_raw_activations
+        ),
+        save_raw_grads=(base.save_raw_gradients if save_raw_grads is MISSING else save_raw_grads),
     )
 
 
@@ -101,8 +125,8 @@ def _route_save_label_selection(
 
     The list form documented on ``tl.trace`` (layer names, pass-qualified labels,
     module addresses, integer indexes, substrings, ``'all'``/``'none'``) selects
-    exactly what ``capture=CaptureOptions(layers_to_save=...)`` selects;
-    ``save='stats'`` becomes the reduce-and-discard ``SaveOptions``.
+    the same internal label-selection machinery;
+    ``save='stats'`` becomes the reduce-and-discard ``_SaveTransforms``.
 
     Parameters
     ----------
@@ -118,12 +142,8 @@ def _route_save_label_selection(
     Returns
     -------
     tuple[Any, CaptureOptions]
-        ``(save value left for predicate/SaveOptions splitting, capture options)``.
+        ``(save value left for predicate/_SaveTransforms splitting, capture options)``.
 
-    Raises
-    ------
-    ArgumentConflictError
-        ``save_selection_conflict`` when ``capture=`` also sets ``layers_to_save``.
     """
 
     if isinstance(save_value, str) and save_value.lower() == "stats":
@@ -133,22 +153,10 @@ def _route_save_label_selection(
         return stats_save_options(), _flatten_stage_names_in_options(capture_options, model)
     if not _is_save_label_selection(save_value):
         return save_value, _flatten_stage_names_in_options(capture_options, model)
-    from ._option_receipt import _field_is_explicit
     from .options import merge_capture_options
 
-    if capture is not None and _field_is_explicit(capture, "layers_to_save"):
-        raise ArgumentConflictError(
-            "save= and capture=CaptureOptions(layers_to_save=...) both select layers",
-            code="save_selection_conflict",
-            remedy=(
-                f"keep one selection: tl.trace(model, x, save={save_value!r}) without "
-                "capture.layers_to_save, or tl.trace(model, x, capture=CaptureOptions("
-                f"layers_to_save={capture.layers_to_save!r}))"
-            ),
-            arguments=("save", "capture.layers_to_save"),
-        )
     selection = save_value if isinstance(save_value, str) else list(cast(Iterable[Any], save_value))
-    merged = merge_capture_options(capture=capture_options, layers_to_save=selection)
+    merged = merge_capture_options(capture=capture_options, _layers_to_save=selection)
     return None, _flatten_stage_names_in_options(merged, model)
 
 
@@ -174,7 +182,7 @@ def _flatten_stage_names_in_options(capture_options: CaptureOptions, model: Any)
         ``capture_options``, or a copy with the rewritten ``layers_to_save``.
     """
 
-    selection = getattr(capture_options, "layers_to_save", None)
+    selection = capture_options._layers_to_save
     named_modules = getattr(model, "named_modules", None)
     if not callable(named_modules) or not isinstance(selection, (str, list, tuple)):
         return capture_options
@@ -186,10 +194,15 @@ def _flatten_stage_names_in_options(capture_options: CaptureOptions, model: Any)
     from ._option_receipt import _explicit_fields
 
     values = capture_options.as_dict()
-    values["layers_to_save"] = rewritten[0] if isinstance(selection, str) else rewritten
+    selection = rewritten[0] if isinstance(selection, str) else rewritten
     return cast(
         "CaptureOptions",
-        type(capture_options)().from_values(values, _explicit_fields(capture_options)),
+        type(capture_options)._from_values(
+            values,
+            _explicit_fields(capture_options),
+            _layers_to_save=selection,
+            _layers_to_save_explicit=capture_options._layers_to_save_explicit,
+        ),
     )
 
 

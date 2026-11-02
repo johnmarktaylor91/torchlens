@@ -62,7 +62,7 @@ def _op_compute_indexes(recording: tl.Recording) -> list[int | None]:
 def _as_recording(
     result: tl.Recording | tuple[Any, tl.Recording],
 ) -> tl.Recording:
-    """Narrow record() results when return_output=False is used."""
+    """Narrow record() results to the Recording."""
 
     if isinstance(result, tuple):
         return result[1]
@@ -91,7 +91,7 @@ def test_record_halt_predicate_stops_after_save_decision() -> None:
             FiveOpModel(),
             torch.tensor(1.0),
             save=lambda ctx: ctx.kind == "op",
-            halt=lambda ctx: ctx.kind == "op" and ctx.step_index == 4,
+            stop_after=lambda ctx: ctx.kind == "op" and ctx.step_index == 4,
         )
     )
 
@@ -108,7 +108,7 @@ def test_record_halt_only_skips_unsaved_projected_events() -> None:
         tl.record(
             FiveOpModel(),
             torch.tensor(1.0),
-            halt=lambda ctx: ctx.kind == "op" and ctx.step_index == 4,
+            stop_after=lambda ctx: ctx.kind == "op" and ctx.step_index == 4,
         )
     )
 
@@ -191,9 +191,8 @@ def test_halt_from_inside_module_predicate(halt_kind: str, reason: str, halted_l
         tl.record(
             ChildModuleModel(),
             torch.ones(1, 3),
-            halt=halt_on_module_event,
-            default_module=True,
-            default_op=False,
+            stop_after=halt_on_module_event,
+            recording=tl.options.RecordingOptions(default_module=True, default_op=False),
         )
     )
 
@@ -222,7 +221,7 @@ def test_halt_source_predicate() -> None:
             FiveOpModel(),
             torch.tensor(1.0),
             save=keep_op,
-            include_source_events=True,
+            recording=tl.options.RecordingOptions(include_source_events=True),
         )
     )
 
@@ -243,8 +242,8 @@ def test_record_halt_predicate_can_stop_on_source_event() -> None:
         tl.record(
             FiveOpModel(),
             torch.tensor(1.0),
-            halt=lambda ctx: ctx.kind == "input",
-            include_source_events=True,
+            stop_after=lambda ctx: ctx.kind == "input",
+            recording=tl.options.RecordingOptions(include_source_events=True),
         )
     )
 
@@ -261,7 +260,7 @@ def test_record_halt_predicate_module_exit_boundary() -> None:
             ChildModuleModel(),
             torch.ones(1, 3),
             save=lambda ctx: ctx.kind == "op",
-            halt=lambda ctx: ctx.kind == "module_exit" and ctx.address == "linear",
+            stop_after=lambda ctx: ctx.kind == "module_exit" and ctx.address == "linear",
         )
     )
 
@@ -283,8 +282,8 @@ def test_record_halt_predicate_rejects_non_bool_return() -> None:
         tl.record(
             FiveOpModel(),
             torch.tensor(1.0),
-            halt=invalid_halt,
-            on_predicate_error="accumulate",
+            stop_after=invalid_halt,
+            recording=tl.options.RecordingOptions(on_predicate_error="accumulate"),
         )
 
     assert len(exc_info.value.failures) == 8
@@ -379,7 +378,7 @@ def test_fastlog_halt_finalizes_disk_storage(tmp_path: Path) -> None:
             FiveOpModel(),
             torch.tensor(1.0),
             save=_keep_ops_until_fourth,
-            streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
+            storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
         )
     )
     loaded = tl.load(bundle_path)

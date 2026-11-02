@@ -56,8 +56,8 @@ def stack() -> Iterator[dict[str, Any]]:
         # The exact call the package makes per side: same encoding, mask included.
         enc = tok(prompts, return_tensors="pt", padding=True)
         kwargs = {"input_ids": enc.input_ids, "attention_mask": enc.attention_mask}
-        capture = tl.options.CaptureOptions(layers_to_save="all")
-        return tl.trace(model, (), input_kwargs=kwargs, capture=capture)
+        capture = tl.options.CaptureOptions()
+        return tl.trace(model, (), input_kwargs=kwargs, capture=capture, save="all")
 
     stack = {
         "model": model,
@@ -181,8 +181,8 @@ def test_padded_unequal_prompts_match_batched_package(stack: dict[str, Any]) -> 
         enc = tok(prompts, return_tensors="pt", padding=True)
         assert bool((enc.attention_mask == 0).any())
         kwargs = {"input_ids": enc.input_ids, "attention_mask": enc.attention_mask}
-        capture = tl.options.CaptureOptions(layers_to_save="all")
-        return tl.trace(stack["model"], (), input_kwargs=kwargs, capture=capture)
+        capture = tl.options.CaptureOptions()
+        return tl.trace(stack["model"], (), input_kwargs=kwargs, capture=capture, save="all")
 
     log_pos = trace([p for p, _ in pairs])
     log_neg = trace([n for _, n in pairs])

@@ -57,6 +57,7 @@ if TYPE_CHECKING:
         SparseRunDescriptor,
     )
     from ..debug._audit import HealthReport
+    from ..recording.types import OutputSlot
     from ._op_dedup import IdentityCacheEntry
     from .func_call_location import FuncCallLocation
 
@@ -103,6 +104,7 @@ from ._trace_accessors import (
 )
 from ._trace_missing_attrs import _raise_missing_trace_attribute
 from ._trace_narrate import TraceNarrateMixin
+from ._trace_output import TraceOutputMixin
 from ._transform_repr import _scrubbed_transform_repr
 from .backward_pass import BackwardPass
 from .container import reconstruct_container, reconstruct_output
@@ -203,6 +205,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "batch_render": "auto",
     "transformed_output": None,
     "_output_transform": None,
+    "_output_slot": None,
     "_options_save_transformed_output": "small",
     "layer_visualizers": None,
     "save_visualizations": False,
@@ -812,6 +815,7 @@ class Trace(
     TraceExportMixin,
     TraceVisualizationMixin,
     TraceNarrateMixin,
+    TraceOutputMixin,
     TraceLike,
 ):
     """Top-level container for a logged forward pass.
@@ -1042,6 +1046,7 @@ class Trace(
     output_postprocessor: ResolvedPostprocessing | None
     output_id2label: dict[int, str] | None
     output_num_classes: int | None
+    _output_slot: "OutputSlot | None"
     input_object_id: int | None
     model_object_id: int | None
     input_signature_hash: str | None
@@ -1203,6 +1208,7 @@ class Trace(
         "output_id2label": FieldPolicy.KEEP,
         "output_num_classes": FieldPolicy.KEEP,
         "_output_transform": FieldPolicy.DROP,
+        "_output_slot": FieldPolicy.DROP,
         "_options_save_transformed_output": FieldPolicy.KEEP,
         "layer_visualizers": FieldPolicy.DROP,
         "save_visualizations": FieldPolicy.KEEP,
@@ -1754,6 +1760,7 @@ class Trace(
         self.output_id2label: dict[int, str] | None = None
         self.output_num_classes: int | None = None
         self._output_transform = output_transform
+        self._output_slot = None
         self._options_save_transformed_output = save_transformed_output
         self.layer_visualizers = layer_visualizers
         self.save_visualizations = save_visualizations
@@ -2950,6 +2957,9 @@ class Trace(
         state["_options_activation_transform"] = None
         state["_options_grad_transform"] = None
         state["_output_transform"] = None
+        # The actual forward return can retain arbitrary live user objects.
+        # It is available only on the capture that executed the forward.
+        state["_output_slot"] = None
         # R10-7b: the MODERN tl.trace(..., transform=...) kwarg populates
         # `_transform`, a fourth raw-callable holder the original fix missed
         # (it covered only the deprecated activation_transform= spelling).
@@ -3034,6 +3044,7 @@ class Trace(
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         """Restore pickle state and rebuild weakref-backed links."""
+        state["_output_slot"] = None
         pickle_module_accessor_state = state.pop("_pickle_module_accessor_state", None)
         # P7/R10: restore the persisted NEGATIVE verification disclosure. The
         # row is string-only and can only ever WORSEN a verdict: anything but
@@ -3081,6 +3092,7 @@ class Trace(
             "_options_save_mode": "copy",
             "transformed_output": None,
             "_output_transform": None,
+            "_output_slot": None,
             "_options_save_transformed_output": "small",
             "layer_visualizers": None,
             "save_visualizations": False,
@@ -3635,6 +3647,8 @@ class Trace(
             Fresh rerun trace supplying current run metadata.
         """
 
+        # Share the fresh return itself; the metadata copier rebuilds containers.
+        self._output_slot = new_log._output_slot
         field_names = (
             "transformed_output",
             "_options_save_transformed_output",
@@ -3737,6 +3751,8 @@ class Trace(
         self._options_seed = trace._options_seed
         self._provenance_input_object_id = trace._provenance_input_object_id
         self._provenance_input_signature_hash = trace._provenance_input_signature_hash
+        # Concatenated captures have no single model-return object.
+        self._output_slot = None
         self._rebind_fork_owner_refs()
 
     def _is_append_buffer_side_effect_layer(
