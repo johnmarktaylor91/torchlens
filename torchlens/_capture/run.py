@@ -399,7 +399,7 @@ def _instrument_model(self: "Trace", run: _RunState) -> None:
     """
 
     run.instrumentation = contextlib.ExitStack()
-    with _timed_phase(self, "ctx_build:model_prepare"):
+    with _timed_phase(self, "ctx_build_model_prepare"):
         run.compiled_prep = _enter_instrumentation(self, run, run.instrumentation)
     self._provenance_setup_duration = Duration(time.time() - self._provenance_start_time)
     _vprint(self, f"Model prepared ({self._provenance_setup_duration:.2f s})")
@@ -502,7 +502,7 @@ def _run_exhaustive_forward(self: "Trace", run: _RunState) -> Any:
 
     model = cast(Callable[..., Any], run.model)
     input_args, input_kwargs = run.input_args, cast(dict[Any, Any], run.input_kwargs)
-    with _timed_phase(self, "dispatch:forward_model"):
+    with _timed_phase(self, "dispatch_forward_model"):
         with _forward_peak_memory_bracket(self, run.model_device):
             with run.backend.inference_context(self):
                 self._runnable.rng_monitor_uncertain = True

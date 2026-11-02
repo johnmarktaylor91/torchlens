@@ -932,7 +932,7 @@ def _emit_and_finish_forward(
             # until the rank internals grow a cwd-based root.
             resolved_graph_overrides["imagepath"] = str(rank_visualizer_dir)
         rank_execution: dict[str, str] = {}
-        with _timed_phase(trace, "render:graphviz:forward"):
+        with _timed_phase(trace, "render_graphviz_forward"):
             result = render_rank_layout(
                 forward_render_ir,
                 request.vis_mode,
@@ -1155,7 +1155,7 @@ def _publish_forward_render(
     source_path = dot.save(target.outpath)
     with open(source_path, "w", encoding="utf-8") as source_file:
         source_file.write(final_source)
-    with _timed_phase(trace, "render:graphviz:forward"):
+    with _timed_phase(trace, "render_graphviz_forward"):
         try:
             rendered_path = f"{target.outpath}.{target.fileformat}"
             render_image_root = Path(late_visualizer_dir) if late_visualizer_dir else None

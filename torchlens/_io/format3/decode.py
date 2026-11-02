@@ -37,11 +37,11 @@ from .values import (
     BYTES_LIMIT,
     TAG_FIELDS,
     RowRef,
+    _scalar_base as scalar_base,
     class_path,
     dtype_table,
     enum_table,
     record_type_table,
-    scalar_base,
 )
 
 # Decoding: the closed vocabulary back to Python values

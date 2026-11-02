@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 from .._errors import ArgumentTypeError
 from .._io import ArtifactError, JaxPayloadLoadHint, PayloadLoadHints, _json
 from .._io.bundle import cleanup_tmp, load as _load
+from .._io.format3 import contract as _format3_contract
 from .._io.sidecar import (
     AnalysisOnlySidecar,
     SidecarFamily,
@@ -67,9 +68,7 @@ def detect_tlspec_format(path: str | Path) -> str:
     _reject_symlinked_metadata_path(tlspec_path)
     manifest = _read_json_object_if_present(tlspec_path / "manifest.json")
     if manifest is not None:
-        from .._io.format3 import contract as format3_contract
-
-        if manifest.get("format") == format3_contract.FORMAT_NAME:
+        if manifest.get("format") == _format3_contract.FORMAT_NAME:
             return "v3"
         has_kind = "kind" in manifest
         has_tlspec_version = "tlspec_version" in manifest

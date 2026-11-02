@@ -113,7 +113,7 @@ def _emit_predicate_operation_events(
         _label_raw = f"{layer_type}_{type_index}_{raw_index}_raw"
         set_tensor_label(out, _label_raw)
         module_frame = state.module_stack[-1] if state.module_stack else None
-        with _timed_phase(self, "ctx_build:record_context"):
+        with _timed_phase(self, "ctx_build_record_context"):
             ctx = build_op_record_context(
                 kind="op",
                 label=_label_raw,

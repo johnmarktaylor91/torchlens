@@ -684,12 +684,11 @@
   `tl.load` with the typed `tl.errors.ArtifactTooOldError` ("saved by torchlens 2.x"; the
   remedy names 2.36.x and re-capture). There is no reader, ledger or migration. Legacy 2.16
   intervention specs remain loadable — the refusal covers Trace rehydration only. WRITE/READ SYMMETRY (W051-IO): the
-  save path dry-runs the exact `metadata.pkl` bytes through the loader's default-deny
-  unpickler before writing — an unportable value refuses typed (`annotation_value_unportable`
-  naming the key path / `metadata_value_unportable`), tensors under annotations (incl.
-  `log_value` tensors) are coerced to plain detached tensors on the scrubbed copy, and the
-  loader anchors manifest facts to the pickled state (`bundle_manifest_metadata_mismatch`),
-  validates op graph coherence (`artifact_graph_structure_invalid`), corroborates tier-(ii)
+  save path writes typed JSON with no pickle and, before publish, parses and decodes the
+  written records with the reader's decoder; a value with no typed encoding is stringified
+  with a manifest disclosure, a value with no 3.0 form at all refuses typed
+  (`metadata_value_unportable`), tensors under annotations (incl. `log_value` tensors) are
+  coerced to plain detached tensors on the scrubbed copy, and the loader validates op graph coherence (`artifact_graph_structure_invalid`), corroborates tier-(ii)
   edge carriers against the audit (`artifact_edge_substitutions_invalid`), and checks the
   TorchLens-owned annotation families (`artifact_annotations_invalid`); a v9+ artifact with
   no `root_entry_point` refuses `artifact_root_entry_point_invalid`.

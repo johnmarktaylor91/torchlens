@@ -15,6 +15,7 @@ from example_models import TinyReluAdd as _ReluModel
 from torch import nn
 
 import torchlens as tl
+from torchlens._io import ArtifactError
 from torchlens._ir.container import TupleIndex
 from torchlens._ir.selector_eval import selector_from_spec
 from torchlens._selection.selectors import output_at
@@ -28,7 +29,6 @@ from torchlens.intervention.errors import (
 )
 from torchlens.intervention.save import (
     _sync_spec_records_from_log,
-    _write_tlspec_tensor_blob,
     resolve_function_registry_key,
     save_intervention,
 )
@@ -139,10 +139,9 @@ def test_audit_save_load_and_compat(tmp_path: Path) -> None:
     log.save_intervention(path, level="audit")
 
     assert path.is_dir()
-    assert (path / "spec.json").exists()
-    assert (path / "manifest.json").exists()
-    assert (path / "README.md").exists()
-    assert (path / "tensors").is_dir()
+    # The 3.0 layout: manifest.json plus intervention.json; a zero_ablate has no
+    # tensors, so there is no blobs/ directory (and no 2.x spec.json or tensors/).
+    assert sorted(child.name for child in path.iterdir()) == ["intervention.json", "manifest.json"]
     spec = load_intervention_spec(path, trust_custom_callables=True)
     assert tl.load(path) == spec
     compat = check_spec_compat(spec, _log(_ReluModel(), x))
@@ -150,8 +149,18 @@ def test_audit_save_load_and_compat(tmp_path: Path) -> None:
     assert compat.has_identical_target_resolution is True
 
 
-def test_live_forward_records_persist_in_saved_intervention_spec(tmp_path: Path) -> None:
-    """Live forward hook records survive intervention spec save/load."""
+def _saved_fire_records(trace: Any) -> list[Any]:
+    """Return the FireRecords a trace carries per op (``Op.edits``)."""
+
+    return [record for op in trace.ops for record in (op.edits or ())]
+
+
+def test_live_forward_records_persist_in_saved_trace(tmp_path: Path) -> None:
+    """Live forward hook records survive trace save/load on the ops that fired.
+
+    The 3.0 recipe holds rules, not fires (design section 8); a saved trace
+    carries its FireRecords per op, so the round trip goes through the trace.
+    """
 
     log = tl.trace(
         _ReluModel(),
@@ -163,15 +172,15 @@ def test_live_forward_records_persist_in_saved_intervention_spec(tmp_path: Path)
     )
     path = tmp_path / "forward_records.tlspec"
 
-    assert log._intervention_spec.records
+    assert _saved_fire_records(log)
 
-    log.save_intervention(path, level="portable")
-    spec = load_intervention_spec(path, trust_custom_callables=True)
+    log.save(path, level="portable")
+    records = _saved_fire_records(tl.load(path))
 
-    assert spec.records
-    assert all(isinstance(record, FireRecord) for record in spec.records)
-    assert any(record.signal == "forward" for record in spec.records)
-    assert any(record.replaced is True for record in spec.records)
+    assert records
+    assert all(isinstance(record, FireRecord) for record in records)
+    assert any(record.signal == "forward" for record in records)
+    assert any(record.replaced is True for record in records)
 
 
 def test_predicate_intervention_spec_round_trip_preserves_targets_and_hooks(
@@ -198,8 +207,8 @@ def test_predicate_intervention_spec_round_trip_preserves_targets_and_hooks(
     assert spec.hook_specs[0].helper is not None
 
 
-def test_container_path_fire_records_save_at_default_level(tmp_path: Path) -> None:
-    """Tuple-output FireRecord container paths save and load at the default level."""
+def test_container_path_fire_records_survive_trace_save(tmp_path: Path) -> None:
+    """Tuple-output FireRecord container paths survive a default-level trace save."""
 
     log = tl.trace(
         _ChunkModel(),
@@ -211,10 +220,9 @@ def test_container_path_fire_records_save_at_default_level(tmp_path: Path) -> No
     )
     path = tmp_path / "chunk_intervention.tlspec"
 
-    log.save_intervention(path)
-    spec = load_intervention_spec(path)
+    log.save(path)
 
-    assert {record.container_path for record in spec.records} == {
+    assert {record.container_path for record in _saved_fire_records(tl.load(path))} == {
         (TupleIndex(0),),
         (TupleIndex(1),),
     }
@@ -337,7 +345,7 @@ def test_stored_helper_keyword_outside_the_constructor_refuses_typed(tmp_path: P
     )
     path = tmp_path / "foreign_keyword.tlspec"
     log.save_intervention(path, level="portable")
-    spec_path = path / "spec.json"
+    spec_path = path / "intervention.json"
     spec_json = json.loads(spec_path.read_text(encoding="utf-8"))
 
     def _plant(value: Any) -> int:
@@ -361,7 +369,7 @@ def test_stored_helper_keyword_outside_the_constructor_refuses_typed(tmp_path: P
 
 
 def test_loaded_import_ref_has_no_load_side_effect_until_execution(tmp_path: Path) -> None:
-    """Executable import refs import lazily after load and only when executed."""
+    """A saved hook callable is a placeholder: loading never imports its module."""
 
     module_path = tmp_path / "side_effect_mod.py"
     sentinel = tmp_path / "sentinel"
@@ -383,27 +391,20 @@ def test_loaded_import_ref_has_no_load_side_effect_until_execution(tmp_path: Pat
         sentinel.unlink()
         sys.modules.pop("side_effect_mod", None)
 
-        # DEFAULT-trust load is deny-by-default (r12 RCE guard): the foreign module is
-        # never imported at load and applying the spec raises WITHOUT executing it.
-        untrusted = load_intervention_spec(path)
-        assert not sentinel.exists()
-        assert "side_effect_mod" not in sys.modules
-        denied = _log(_ReluModel(), torch.ones(1, 3))
-        denied._intervention_spec = untrusted
-        with pytest.raises(UntrustedCallableError):
-            denied.run(_ReluModel(), torch.ones(1, 3))
-        assert not sentinel.exists()
-        assert "side_effect_mod" not in sys.modules
-
-        # A TRUSTED load stays lazy: still no import until the spec is executed.
-        spec = load_intervention_spec(path, trust_custom_callables=True)
-
-        assert not sentinel.exists()
-        fresh = _log(_ReluModel(), torch.ones(1, 3))
-        fresh._intervention_spec = spec
-        rerun = fresh.run(_ReluModel(), torch.ones(1, 3))
-        assert sentinel.exists()
-        assert torch.equal(rerun[rerun.output_layers[0]].out, torch.ones(1, 3))
+        # 3.0 never saves a user callable (io.1): the rule is a placeholder that
+        # names it, and no load, default or trusted, imports or executes the module.
+        for trusted in (False, True):
+            loaded = load_intervention_spec(path, trust_custom_callables=trusted)
+            assert not sentinel.exists()
+            assert "side_effect_mod" not in sys.modules
+            assert loaded.metadata["executable"] is False
+            [placeholder] = loaded.metadata["recipe_placeholders"]
+            assert placeholder["qualname"] == "side_effect_mod.hook"
+            edit = loaded.hook_specs[0].helper
+            assert edit is not None
+            assert edit.portability == "opaque_audit"
+            assert edit.factory is None
+            assert dict(edit.metadata)["qualname"] == "side_effect_mod.hook"
     finally:
         sys.modules.pop("side_effect_mod", None)
         if str(tmp_path) in sys.path:
@@ -413,7 +414,7 @@ def test_loaded_import_ref_has_no_load_side_effect_until_execution(tmp_path: Pat
 def test_loaded_helper_import_ref_preserves_identity_and_executes_lazily(
     tmp_path: Path,
 ) -> None:
-    """Helper import refs load lazily and remain executable helper specs."""
+    """A saved import-ref helper is a placeholder: loading never imports its module."""
 
     module_path = tmp_path / "side_effect_helper_mod.py"
     sentinel = tmp_path / "helper_sentinel"
@@ -442,29 +443,20 @@ def test_loaded_helper_import_ref_preserves_identity_and_executes_lazily(
         sentinel.unlink()
         sys.modules.pop("side_effect_helper_mod", None)
 
-        # DEFAULT-trust load is deny-by-default (r12 RCE guard): applying the import-ref
-        # helper raises WITHOUT importing or executing the foreign module.
-        untrusted = load_intervention_spec(path)
-        assert not sentinel.exists()
-        assert "side_effect_helper_mod" not in sys.modules
-        denied = _log(_ReluModel(), torch.ones(1, 3))
-        denied._intervention_spec = untrusted
-        with pytest.raises(UntrustedCallableError):
-            denied.run(_ReluModel(), torch.ones(1, 3))
-        assert not sentinel.exists()
-        assert "side_effect_helper_mod" not in sys.modules
-
-        # A TRUSTED load stays lazy and preserves the executable helper spec.
-        spec = load_intervention_spec(path, trust_custom_callables=True)
-
-        assert not sentinel.exists()
-        assert spec.hook_specs[0].helper is not None
-        assert spec.hook_specs[0].helper.name == "side_effect_helper"
-        fresh = _log(_ReluModel(), torch.ones(1, 3))
-        fresh._intervention_spec = spec
-        rerun = fresh.run(_ReluModel(), torch.ones(1, 3))
-        assert sentinel.exists()
-        assert torch.equal(rerun[rerun.output_layers[0]].out, torch.ones(1, 3))
+        # 3.0 never saves a user callable (io.1): the rule is a placeholder that
+        # names it, and no load, default or trusted, imports or executes the module.
+        for trusted in (False, True):
+            loaded = load_intervention_spec(path, trust_custom_callables=trusted)
+            assert not sentinel.exists()
+            assert "side_effect_helper_mod" not in sys.modules
+            assert loaded.metadata["executable"] is False
+            [placeholder] = loaded.metadata["recipe_placeholders"]
+            assert placeholder["qualname"] == "side_effect_helper_mod.make_hook"
+            edit = loaded.hook_specs[0].helper
+            assert edit is not None
+            assert edit.portability == "opaque_audit"
+            assert edit.factory is None
+            assert dict(edit.metadata)["qualname"] == "side_effect_helper_mod.make_hook"
     finally:
         sys.modules.pop("side_effect_helper_mod", None)
         if str(tmp_path) in sys.path:
@@ -472,8 +464,8 @@ def test_loaded_helper_import_ref_preserves_identity_and_executes_lazily(
 
 
 @pytest.mark.smoke
-def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path) -> None:
-    """Live backward hook records survive intervention spec save/load."""
+def test_live_backward_records_persist_in_saved_trace(tmp_path: Path) -> None:
+    """Live backward hook records survive trace save/load on the ops that fired."""
 
     x = torch.randn(2, 3, requires_grad=True)
     log = tl.trace(
@@ -485,10 +477,12 @@ def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_records.tlspec"
 
-    log.save_intervention(path, level="portable")
-    spec = load_intervention_spec(path, trust_custom_callables=True)
+    log.save(path, level="portable")
+    loaded = tl.load(path)
 
-    backward_records = [record for record in spec.records if record.signal == "backward"]
+    backward_records = [
+        record for record in _saved_fire_records(loaded) if record.signal == "backward"
+    ]
     assert backward_records
     assert backward_records[0].backward_pass_number == 1
     assert backward_records[0].call_index == 1
@@ -554,7 +548,7 @@ def test_backward_hook_spec_saves_before_first_backward_and_executes(
 
 
 def test_intervention_tlspec_v2_writes_and_v1_still_loads(tmp_path: Path) -> None:
-    """New intervention specs write v2 while the loader still accepts v1 specs."""
+    """New intervention specs write the 3.0 recipe; an unknown recipe format refuses typed."""
 
     log = tl.trace(
         _ReluModel(),
@@ -567,32 +561,22 @@ def test_intervention_tlspec_v2_writes_and_v1_still_loads(tmp_path: Path) -> Non
     path = tmp_path / "versioned_records.tlspec"
 
     log.save_intervention(path, level="portable")
-    spec_path = path / "spec.json"
+    recipe_path = path / "intervention.json"
     manifest_path = path / "manifest.json"
-    spec_json = json.loads(spec_path.read_text(encoding="utf-8"))
+    recipe_json = json.loads(recipe_path.read_text(encoding="utf-8"))
     manifest_json = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-    assert spec_json["format_version"] == "2"
-    assert manifest_json["format_version"] == "2"
+    assert recipe_json["format_version"] == 3
+    assert manifest_json["format_version"] == 3
+    assert not (path / "spec.json").exists()
 
-    spec_json["format_version"] = "1"
-    manifest_json["format_version"] = "1"
-    spec_path.write_text(json.dumps(spec_json), encoding="utf-8")
-    manifest_path.write_text(json.dumps(manifest_json), encoding="utf-8")
-
-    # format_version 1 is the spec format torchlens 2.x wrote: it refuses with the one
-    # 2.x error, never loads.
-    from torchlens.errors import ArtifactTooOldError
-
-    with pytest.raises(ArtifactTooOldError) as excinfo:
+    # A recipe stamped with a format this TorchLens does not read refuses typed.
+    recipe_json["format_version"] = 4
+    recipe_path.write_text(json.dumps(recipe_json), encoding="utf-8")
+    with pytest.raises(ArtifactError) as excinfo:
         load_intervention_spec(path)
-    assert excinfo.value.fields["code"] == "artifact_version_below_floor"
-    assert excinfo.value.fields["observed"] == "intervention format_version=1"
-
-    spec_json["format_version"] = "3"
-    spec_path.write_text(json.dumps(spec_json), encoding="utf-8")
-    with pytest.raises(ValueError, match="Unsupported intervention .tlspec format_version"):
-        load_intervention_spec(path)
+    assert excinfo.value.fields["code"] == "bundle_load_failed"
+    assert "recipe format_version 4" in str(excinfo.value)
 
 
 def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
@@ -679,8 +663,10 @@ def test_portable_rejects_opaque_hook(tmp_path: Path) -> None:
         return out
 
     log.attach_hooks({tl.func("relu"): opaque_hook}, confirm_mutation=True)
-    with pytest.raises(OpaqueCallableError):
+    with pytest.raises(OpaqueCallableError) as excinfo:
         log.save_intervention(tmp_path / "opaque.tlspec", level="portable")
+    assert excinfo.value.fields["code"] == "intervention_spec_not_portable"
+    assert not (tmp_path / "opaque.tlspec").exists()
 
 
 @pytest.mark.smoke
@@ -735,7 +721,7 @@ def test_loaded_spec_tolerates_custom_key_without_import(
 
     path = tmp_path / "custom_key.tlspec"
     _log().save_intervention(path, level="audit")
-    spec_path = path / "spec.json"
+    spec_path = path / "intervention.json"
     payload = json.loads(spec_path.read_text(encoding="utf-8"))
     payload["function_registry_keys"] = [
         {
@@ -794,7 +780,7 @@ def test_loaded_custom_key_is_denied_at_execution_until_trusted(
 
     path = tmp_path / "execution_gate.tlspec"
     _log().save_intervention(path, level="audit")
-    spec_path = path / "spec.json"
+    spec_path = path / "intervention.json"
     payload = json.loads(spec_path.read_text(encoding="utf-8"))
     payload["function_registry_keys"] = [
         {
@@ -1007,7 +993,7 @@ def test_r2_load_tolerates_torchlens_prefixed_foreign_key_no_foreign_import(
 
     path = tmp_path / "r2_foreign.tlspec"
     _log().save_intervention(path, level="audit")
-    spec_path = path / "spec.json"
+    spec_path = path / "intervention.json"
     payload = json.loads(spec_path.read_text(encoding="utf-8"))
     payload["function_registry_keys"] = [
         {
@@ -1111,12 +1097,12 @@ def test_atomic_save_cleans_up_after_tensor_write_failure(tmp_path: Path) -> Non
     target = tmp_path / "crash.tlspec"
 
     def crashing_writer(**kwargs: Any) -> Any:
-        """Write one sidecar and then simulate a crash.
+        """Simulate a crash after the recipe's tensor chunks are written.
 
         Parameters
         ----------
         **kwargs:
-            Tensor writer keyword arguments.
+            Chunk hook keyword arguments (``tmp_path`` and ``chunks``).
 
         Returns
         -------
@@ -1124,7 +1110,7 @@ def test_atomic_save_cleans_up_after_tensor_write_failure(tmp_path: Path) -> Non
             Never returned.
         """
 
-        _write_tlspec_tensor_blob(**kwargs)
+        assert kwargs["chunks"]
         raise RuntimeError("simulated tensor crash")
 
     with pytest.raises(RuntimeError, match="simulated tensor crash"):

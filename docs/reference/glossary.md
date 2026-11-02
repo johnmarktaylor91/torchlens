@@ -1447,12 +1447,15 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : `Trace.save` persists a `Trace` into a portable `.tlspec` directory bundle at a chosen
   level; `tl.load` loads a `.tlspec` object with eager tensor materialization.
   3.0 format: see [saved_format_3.md](../maintainers/saved_format_3.md).
-  The staged intervention spec is session-only: `Trace.save` keeps the intervened
-  values and their per-op provenance, and every legacy rerun door of a loaded intervened trace
-  (`run(model, x)` plain, append or chunked, a fork's `run`, `do(engine="rerun")`, and an edit
-  staged after loading) refuses `run_intervention_spec_not_persisted` rather than rerun without
-  the recorded intervention (the recipe travels through `save_intervention`); the replay and
-  `run(inputs=...)` doors cannot run an analysis artifact at all.
+  `Trace.save` writes the staged intervention spec as the typed recipe `intervention.json`
+  beside the intervened values and their per-op provenance (`save_intervention` writes the same
+  recipe as an artifact of its own). A loaded trace whose recipe holds only built-in edits reruns
+  it through every legacy rerun door (`run(model, x)` plain, append or chunked, a fork's `run`,
+  `do(engine="rerun")`, and an edit staged after loading). A custom callable is saved as a
+  callable placeholder (its position and qualified name, never its code), and a recipe holding one
+  refuses `run_intervention_spec_not_persisted` naming the rule, rather than rerun without the
+  recorded intervention; the replay and `run(inputs=...)` doors cannot run an analysis artifact
+  at all.
   A rerun replays the capture's recorded `save=` request on its own graph, so it saves the same
   sites a fresh capture would even after a staged edit inserts ops. A trace restored from pickle
   carries no recorded request and re-saves by the capture's raw op indices, which is exact only

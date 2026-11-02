@@ -135,7 +135,11 @@ def test_intervention_spec_v2_16_refuses_as_2x() -> None:
 
 
 def test_live_intervention_spec_restamped_to_format_1_refuses_as_2x(tmp_path: Path) -> None:
-    """The format stamp alone decides: a spec saved today, restamped 1, refuses as 2.x."""
+    """Today's recipe rewritten in the 2.x layout (``spec.json``) refuses as 2.x.
+
+    Both 2.x spec formats refuse with the one error: format 1 (2.16 to 2.28) and
+    format 2 (2.29 to 2.36).
+    """
 
     trace = tl.trace(
         TinyReluAdd(),
@@ -146,14 +150,19 @@ def test_live_intervention_spec_restamped_to_format_1_refuses_as_2x(tmp_path: Pa
     )
     path = tmp_path / "restamped.tlspec"
     trace.save_intervention(path, level="portable")
-    spec_path = path / "spec.json"
-    spec = json.loads(spec_path.read_text(encoding="utf-8"))
-    assert spec["format_version"] == "2"
-    spec["format_version"] = "1"
-    spec_path.write_text(json.dumps(spec), encoding="utf-8")
+    recipe_path = path / "intervention.json"
+    recipe = json.loads(recipe_path.read_text(encoding="utf-8"))
+    assert recipe["format_version"] == 3
+    recipe_path.unlink()
+    (path / "manifest.json").write_text(
+        json.dumps({"format_version": "1", "tensor_entries": []}), encoding="utf-8"
+    )
+    for legacy_version in ("1", "2"):
+        spec = {**recipe, "format_version": legacy_version}
+        (path / "spec.json").write_text(json.dumps(spec), encoding="utf-8")
 
-    error = assert_refuses_as_2x(path)
-    assert error.fields["observed"] == "intervention format_version=1"
+        error = assert_refuses_as_2x(path)
+        assert error.fields["observed"] == f"intervention format_version={legacy_version}"
 
 
 _EXTRACTION_V1 = _LEGACY / "extraction_v1"

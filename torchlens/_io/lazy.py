@@ -334,11 +334,13 @@ class LazyActivationRef:
                     observed_sha256 = "a file that changed while it was read"
         except (OSError, SafetensorError, ValueError) as exc:
             raise ArtifactError(
-                f"Failed to materialize key {key!r} of blob {blob_path}: {exc}"
+                f"Failed to materialize key {key!r} of blob {blob_path}: {exc}",
+                code="bundle_load_failed",
             ) from exc
         if tensor is None or observed_sha256 != self.expected_sha256:
             raise ArtifactError(
                 f"blob at {blob_path} sha256 mismatch; expected {self.expected_sha256} "
-                f"got {observed_sha256}"
+                f"got {observed_sha256}",
+                code="bundle_load_failed",
             )
         return tensor

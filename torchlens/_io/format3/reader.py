@@ -26,7 +26,6 @@ import torch
 from ..._data_classes._state_adapter import state_new, state_restore
 from ..._data_classes.field_policy import StorageKind
 from ..format_contract import BlobRef
-from ..recipe_reader import read_recipe
 from ..state_contract import governed_artifact_load
 from . import contract
 from .decode import (
@@ -489,7 +488,7 @@ def _restore_record(
 #: The rehydration step of each door, installed by ``torchlens._io.bundle`` (see
 #: :func:`install_load_hooks`). ``trace`` receives a :class:`DecodedArtifact` and
 #: the load options; ``bundle`` the loaded members, relations, baseline and root;
-#: ``recipe`` a decoded recipe and its artifact.
+#: ``recipe`` the validated artifact root.
 _LOAD_HOOKS: dict[str, Callable[..., Any]] = {}
 _HOOK_KINDS: Final = frozenset({"trace", "bundle", "recipe"})
 
@@ -659,7 +658,7 @@ def load_intervention_recipe(path: str | Path) -> Any:
 
     Built-in edits come back through the helper registry; a callable
     placeholder loads as an audit-only edit that every rerun door refuses
-    (``run_intervention_spec_not_persisted``). Grammar: ``recipe_reader``;
+    (``run_intervention_spec_not_persisted``). Grammar: ``format3.recipe``;
     object construction: the installed ``recipe`` step.
     """
 
@@ -674,6 +673,4 @@ def load_intervention_recipe(path: str | Path) -> Any:
             remedy="save the trace with its intervention spec, or load the trace itself",
             file_path=str(root),
         )
-    artifact = DecodedArtifact(root, manifest)
-    recipe = read_recipe(root, manifest, decoder=artifact.decoder)
-    return _hook("recipe", root)(recipe, artifact)
+    return _hook("recipe", root)(root)

@@ -245,7 +245,7 @@ def _make_layer_log_entry(
     _note_module_filter_suppression(self, keep_by_predicate, save_this_activation)
     if keep_by_predicate and save_this_activation:
         if predicate_spec is None or predicate_ctx is None:
-            with _timed_phase(self, "clone_save:activation_fields"):
+            with _timed_phase(self, "clone_save_activation_fields"):
                 _save_activation_fields(
                     self,
                     fields_dict,
@@ -255,7 +255,7 @@ def _make_layer_log_entry(
                     activation_transform,
                 )
         else:
-            with _timed_phase(self, "clone_save:activation_fields"):
+            with _timed_phase(self, "clone_save_activation_fields"):
                 _save_predicate_activation_fields(
                     self,
                     fields_dict,
