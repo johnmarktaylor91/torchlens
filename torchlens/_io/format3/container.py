@@ -208,6 +208,23 @@ def write_relations(bundle: Any, bundle_root: Path) -> dict[str, Any] | None:
     return {"sha256": sha256_file(target), "bytes": target.stat().st_size}
 
 
+def _verify_relations_file(target: Path, row: Any) -> None:
+    """Refuse a symlinked relation table or one that differs from its ``files`` row."""
+
+    reject_symlink_path(target, context="bundle relations", code=REFUSAL_CODES["symlink_path"])
+    if (
+        not isinstance(row, Mapping)
+        or not target.is_file()
+        or target.stat().st_size != row.get("bytes")
+        or sha256_file(target) != row.get("sha256")
+    ):
+        _refuse(
+            "record_file_corrupt",
+            f"The bundle relation table {target} does not match its sha256 and byte length.",
+            "save the bundle again from the live traces",
+        )
+
+
 def read_relations(
     bundle_root: Path,
     files: Mapping[str, Any],
@@ -245,18 +262,7 @@ def read_relations(
                 "save the bundle again; its manifest was altered",
             )
         return None
-    reject_symlink_path(target, context="bundle relations", code=REFUSAL_CODES["symlink_path"])
-    if (
-        not isinstance(row, Mapping)
-        or not target.is_file()
-        or target.stat().st_size != row.get("bytes")
-        or sha256_file(target) != row.get("sha256")
-    ):
-        _refuse(
-            "record_file_corrupt",
-            f"The bundle relation table {target} does not match its sha256 and byte length.",
-            "save the bundle again from the live traces",
-        )
+    _verify_relations_file(target, row)
     try:
         payload = read_bounded(target)
     except (OSError, ValueError) as exc:

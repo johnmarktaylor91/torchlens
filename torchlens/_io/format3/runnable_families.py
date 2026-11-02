@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Iterator, Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -110,12 +111,29 @@ def _chunks(
         yield current
 
 
+@dataclass(frozen=True)
+class FamilySink:
+    """Where a component's families are written.
+
+    Attributes
+    ----------
+    root:
+        Artifact directory.
+    files:
+        Manifest ``files`` rows; one row is added per written file.
+    keys:
+        The component's key counter; each tensor takes the next ``t<k>``.
+    """
+
+    root: Path
+    files: dict[str, dict[str, Any]]
+    keys: Iterator[int]
+
+
 def write_family(
-    root: Path,
+    sink: FamilySink,
     stem: str,
     members: Sequence[tuple[str, torch.Tensor]],
-    files: dict[str, dict[str, Any]],
-    keys: Iterator[int],
     *,
     chunked: bool,
 ) -> tuple[list[str], dict[str, dict[str, Any]]]:
@@ -123,17 +141,13 @@ def write_family(
 
     Parameters
     ----------
-    root:
-        Artifact directory.
+    sink:
+        Artifact directory, ``files`` rows and key counter.
     stem:
         File stem under ``runnable/``: chunked families write
         ``<stem>-NNNN.safetensors`` from 0001, an unchunked one ``<stem>.safetensors``.
     members:
         ``(name, tensor)`` per member, in order.
-    files:
-        Manifest ``files`` rows; one row is added per written file.
-    keys:
-        The component's key counter; each tensor takes the next ``t<k>``.
     chunked:
         Whether the family splits at ``CHUNK_BYTES``.
     """
@@ -146,15 +160,15 @@ def write_family(
         stored: dict[str, torch.Tensor] = {}
         storages: set[int] = set()
         for name, tensor in group:
-            key = f"t{next(keys)}"
+            key = f"t{next(sink.keys)}"
             value = _stored_tensor(tensor)
             storage = value.untyped_storage().data_ptr()
             # Tied weights and view activations share storage, which safetensors refuses.
             stored[key] = value.clone() if storage in storages else value
             storages.add(storage)
             references[name] = _reference(relative, key, tensor)
-        save_file(stored, str(root / relative))
-        files[relative] = file_row(root, relative)
+        save_file(stored, str(sink.root / relative))
+        sink.files[relative] = file_row(sink.root, relative)
         paths.append(relative)
     return paths, references
 

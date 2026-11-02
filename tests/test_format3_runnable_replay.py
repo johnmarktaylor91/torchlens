@@ -637,8 +637,9 @@ def test_complex_tensor_round_trips_as_its_real_view(tmp_path: Path) -> None:
     value = torch.randn(3, dtype=torch.complex64)
     files: dict[str, Any] = {}
     (tmp_path / "runnable").mkdir()
+    sink = runnable_families.FamilySink(tmp_path, files, itertools.count())
     paths, references = runnable_families.write_family(
-        tmp_path, "state_dict", [("w", value)], files, itertools.count(), chunked=True
+        sink, "state_dict", [("w", value)], chunked=True
     )
     assert references["w"]["complex"] is True and references["w"]["dtype"] == "complex64"
     loaded = runnable_families.read_family(tmp_path, paths, references, files, "cpu")

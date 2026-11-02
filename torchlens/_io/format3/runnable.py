@@ -69,12 +69,17 @@ from ..runnable_load import attach_sparse_run_readiness
 from .contract import REFUSAL_CODES, RUNNABLE_DIR
 from .runnable_families import (
     ALTERED as _ALTERED,
+    FamilySink,
     checked_file,
     file_row,
     read_family,
     refuse as _refuse,
     write_family,
 )
+
+#: The runnable carrier binds through ``_runnable`` and ``_io.runnable`` and sits in
+#: their stratum (the layer map's ``_io.runnable`` row), like ``_io.bundle_container``.
+__tl_layer__ = "L3"
 
 #: Descriptor file of the runnable component.
 DESCRIPTOR_PATH = f"{RUNNABLE_DIR}/descriptor.json"
@@ -283,30 +288,47 @@ def write_runnable(
     descriptor, buffer_specs, weight_specs, activation_specs = _stamped_descriptor(
         trace, include_weights=include_weights, include_activations=include_activations
     )
+    sink = _create_component(root, descriptor)
+    manifest: dict[str, Any] = {"descriptor": DESCRIPTOR_PATH, **manifest_versions()}
     layers = descriptor.payload_layers
+    _write_families(
+        sink,
+        manifest,
+        (
+            ("state_dict", weight_specs, layers.weights.schema, False),
+            ("buffers", buffer_specs, layers.nonpersistent_buffers.schema, False),
+            ("activations", activation_specs, layers.activations.schema, True),
+        ),
+    )
+    return RunnableWrite(manifest=manifest, files=sink.files)
+
+
+def _create_component(root: Path, descriptor: Any) -> FamilySink:
+    """Create ``runnable/`` owner-only, write the descriptor and return the family sink."""
+
+    component_dir = root / RUNNABLE_DIR
     component_dir.mkdir(parents=True)
     os.chmod(component_dir, 0o700)
     _write_private_text(
         root / DESCRIPTOR_PATH, canonical_json_text(sparse_descriptor_to_json(descriptor))
     )
-    files: dict[str, dict[str, Any]] = {DESCRIPTOR_PATH: file_row(root, DESCRIPTOR_PATH)}
-    manifest: dict[str, Any] = {"descriptor": DESCRIPTOR_PATH, **manifest_versions()}
-    keys = itertools.count()
-    for family, specs, schema, key_by_blob in (
-        ("state_dict", weight_specs, layers.weights.schema, False),
-        ("buffers", buffer_specs, layers.nonpersistent_buffers.schema, False),
-        ("activations", activation_specs, layers.activations.schema, True),
-    ):
+    return FamilySink(root, {DESCRIPTOR_PATH: file_row(root, DESCRIPTOR_PATH)}, itertools.count())
+
+
+def _write_families(
+    sink: FamilySink, manifest: dict[str, Any], families: Sequence[tuple[str, Any, Any, bool]]
+) -> None:
+    """Write each non-empty family and record its three manifest keys."""
+
+    for family, specs, schema, key_by_blob in families:
         if not specs:
             continue
         stem, chunked, _bound = FAMILIES[family]
-        paths, references = write_family(
-            root, stem, _spec_members(specs, key_by_blob=key_by_blob), files, keys, chunked=chunked
-        )
+        members = _spec_members(specs, key_by_blob=key_by_blob)
+        paths, references = write_family(sink, stem, members, chunked=chunked)
         manifest[family] = paths if chunked else paths[0]
         manifest[f"{family}_family"] = str(schema)
         manifest[f"{family}_tensors"] = references
-    return RunnableWrite(manifest=manifest, files=files)
 
 
 def _checked_manifest(manifest: Any) -> Mapping[str, Any]:
@@ -362,6 +384,28 @@ def _family_paths(family: str, listed: Any) -> list[str]:
     return list(listed) if chunked else [listed]
 
 
+def _read_descriptor(root: Path, files: Mapping[str, Any]) -> Mapping[str, Any]:
+    """Read the verified descriptor file; refuse unreadable or non-object JSON."""
+
+    descriptor_path = checked_file(root, DESCRIPTOR_PATH, files)
+    try:
+        descriptor = read_bounded(descriptor_path)
+    except (OSError, ValueError) as exc:
+        _refuse(
+            "record_file_corrupt",
+            f"The runnable descriptor {descriptor_path} is not readable JSON "
+            f"({type(exc).__name__}).",
+            _ALTERED,
+        )
+    if not isinstance(descriptor, Mapping):
+        _refuse(
+            "manifest_invalid",
+            f"The runnable descriptor {descriptor_path} must be an object.",
+            _ALTERED,
+        )
+    return descriptor
+
+
 def load_runnable(
     path: str | Path,
     manifest: Mapping[str, Any] | None,
@@ -409,22 +453,7 @@ def load_runnable(
             )
         return None
     checked = _checked_manifest(manifest)
-    descriptor_path = checked_file(root, DESCRIPTOR_PATH, files)
-    try:
-        descriptor = read_bounded(descriptor_path)
-    except (OSError, ValueError) as exc:
-        _refuse(
-            "record_file_corrupt",
-            f"The runnable descriptor {descriptor_path} is not readable JSON "
-            f"({type(exc).__name__}).",
-            _ALTERED,
-        )
-    if not isinstance(descriptor, Mapping):
-        _refuse(
-            "manifest_invalid",
-            f"The runnable descriptor {descriptor_path} must be an object.",
-            _ALTERED,
-        )
+    descriptor = _read_descriptor(root, files)
     families: dict[str, Mapping[str, torch.Tensor]] = {}
     for family, (_stem, _chunked, bound_as) in FAMILIES.items():
         if family not in checked:
@@ -499,6 +528,31 @@ def _declared_layer(trace: Any, family: str) -> Any:
     }[family]
 
 
+def _declared_present(family: str, declared: Any, values: Any, schema: str) -> bool:
+    """Return whether the descriptor declares ``family`` present, checking it agrees.
+
+    Refuses a family present against an absent declaration, or a declaration
+    with a schema this reader does not bind.
+    """
+
+    if not declared.present:
+        if values is not None:
+            _refuse(
+                "record_file_corrupt",
+                f"The runnable family {family!r} is present while the descriptor "
+                "declares it absent.",
+                "save the trace again; the runnable component was altered",
+            )
+        return False
+    if declared.schema != schema:
+        _refuse(
+            "record_file_corrupt",
+            f"The runnable family {family!r} declares unsupported schema {declared.schema!r}.",
+            "load it with the TorchLens release that wrote it, or save the trace again",
+        )
+    return True
+
+
 def bind_runnable_families(trace: Any, families: Mapping[str, Mapping[str, torch.Tensor]]) -> None:
     """Bind the loaded tensor families onto a trace whose descriptor attached.
 
@@ -539,23 +593,10 @@ def bind_runnable_families(trace: Any, families: Mapping[str, Mapping[str, torch
                 "save the trace again; the runnable component was altered",
             )
         declared = _declared_layer(trace, family)
-        if not declared.present:
-            if values is not None:
-                _refuse(
-                    "record_file_corrupt",
-                    f"The runnable family {family!r} is present while the descriptor "
-                    "declares it absent.",
-                    "save the trace again; the runnable component was altered",
-                )
+        if not _declared_present(family, declared, values, expected_schema[family]):
             if family == "activations":
                 trace._runnable.archived_activations = {}
             continue
-        if declared.schema != expected_schema[family]:
-            _refuse(
-                "record_file_corrupt",
-                f"The runnable family {family!r} declares unsupported schema {declared.schema!r}.",
-                "load it with the TorchLens release that wrote it, or save the trace again",
-            )
         if family == "state_dict":
             bind_embedded_trace_state(trace, values or {})
         elif family == "nonpersistent_buffers":
