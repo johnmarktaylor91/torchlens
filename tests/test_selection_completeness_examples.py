@@ -153,7 +153,9 @@ class _Oracle:
 
 
 def _sites(selection: Any) -> frozenset[str]:
-    return frozenset(label for label, row in zip(selection.labels, selection) if row.num_selected)
+    return frozenset(
+        label for label, row in zip(selection.labels, selection, strict=True) if row.num_selected
+    )
 
 
 def _family(selection: Any) -> frozenset[str]:
@@ -211,7 +213,7 @@ def test_theorem_a_every_family_and_mask_is_a_selection(two_paths, size) -> None
     for family in itertools.combinations(labels, size):
         for empties in itertools.product((False, True), repeat=size):
             sentence = None
-            for label, empty in zip(family, empties):
+            for label, empty in zip(family, empties, strict=True):
                 if empty:
                     whole = two_paths[label].__selection__()
                     term = whole - whole
@@ -223,7 +225,7 @@ def test_theorem_a_every_family_and_mask_is_a_selection(two_paths, size) -> None
                 sentence = _lift(two_paths, [labels[0]]) & _lift(two_paths, [labels[1]])
             resolved = two_paths[sentence]
             assert _family(resolved) == frozenset(family)
-            expected = {label for label, empty in zip(family, empties) if not empty}
+            expected = {label for label, empty in zip(family, empties, strict=True) if not empty}
             assert _sites(resolved) == expected
             assert all(row.num_selected in (0, 1) for row in resolved)
 
@@ -381,7 +383,7 @@ def test_theorem_b_translation_matches_the_query(fixture_name, seed, request) ->
 
 
 def test_theorem_c_kernel_without_closures_is_edge_blind() -> None:
-    """M1 and M2 share labels and K0 values; one-hop reach from ``a`` differs."""
+    """M and M' share labels and K0 values; one-hop reach from ``a`` differs."""
 
     first = _capture(_TwoPaths(), (1, 3), 0)
     second = _capture(_TwoPathsRewired(), (1, 3), 0)

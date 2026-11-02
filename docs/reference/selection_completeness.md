@@ -226,10 +226,10 @@ site query `q ∈ Q` there is a kernel sentence `tr(q)`, containing no reference
 such that for every finished capture `T` satisfying the standing assumptions,
 `Sites([[tr(q)]]_T) = [[q]]_T`, with two caveats:
 
-- (C1, complement) `¬q` uses the universal sentence `U = lift(tl.all_sites())`, which selects
+- (Caveat 1, complement) `¬q` uses the universal sentence `U = lift(tl.all_sites())`, which selects
   the same sites as `lift(tl.label_matches(".*"))`; it resolves to all of `V_T` exactly when
   every record in `V` has a shape, and refuses otherwise.
-- (C2, unbounded reach) `Reach^{*}` is translated with a concrete hop count `N`; the translation
+- (Caveat 2, unbounded reach) `Reach^{*}` is translated with a concrete hop count `N`; the translation
   is exact on every capture with `|V| ≤ N + 1`. No sentence expresses it uniformly for all
   captures, because `hops` must be an integer.
 
@@ -299,9 +299,9 @@ tr(α)                 = lift(σ_α)
 tr(q1 ∪ q2)           = tr(q1) | tr(q2)
 tr(q1 ∩ q2)           = tr(q1) & tr(q2)
 tr(q1 \ q2)           = tr(q1) - tr(q2)
-tr(¬q)                = U - tr(q),  U = lift(tl.all_sites())                [C1]
+tr(¬q)                = U - tr(q),  U = lift(tl.all_sites())                [caveat 1]
 tr(Reach_d^{≤k}(q))   = tl.neighborhood(tr(q), hops=k, direction=D(d))
-tr(Reach_d^{*}(q))    = tl.neighborhood(tr(q), hops=N, direction=D(d))      [C2]
+tr(Reach_d^{*}(q))    = tl.neighborhood(tr(q), hops=N, direction=D(d))      [caveat 2]
 ```
 
 Two shortcuts give family-clean results where they apply and may replace the general clauses:
@@ -314,13 +314,13 @@ assumptions.
 1. *Atoms.* `Sites([[lift(σ_α)]]_T) = {v : σ_α(v)} = [[α]]_T` by Assumption GA and the atom rule;
    the value is family-clean. For the shortcut `lift(~σ_α)`, the structural selector `~σ_α`
    matches exactly the records not matching `σ_α`, so `Sites = V_T \ [[α]]_T` provided every
-   record has a shape (otherwise refusal, caveat C1 again).
+   record has a shape (otherwise refusal, caveat 1 again).
 2. *Union, intersection, difference.* By Lemma B1 the result is whole-site; by Lemma B2 and the
    induction hypothesis its `Sites` is the set union, intersection or difference of the
    operands' query values.
 3. *Complement.* The universal `U` has `Sites = V_T` and full masks when every record has a shape
    (the regex `.*` matches every label; resolution refuses on a record without a shape rather
-   than dropping it, caveat C1). `U - tr(q)` is whole-site by Lemma B1, and by Lemma B2
+   than dropping it, caveat 1). `U - tr(q)` is whole-site by Lemma B1, and by Lemma B2
    `Sites(U - tr(q)) = V_T \ [[q]]_T = [[¬q]]_T`. Its touched family is all of `V_T`: the sites of
    `[[q]]_T` stay touched with empty masks.
 4. *Bounded reach.* Let `X = tr(q)`. By the closure rule of Section 1.4 the producer seeds from
@@ -333,7 +333,7 @@ assumptions.
    `|V|`.)
 5. *Unbounded reach.* On a finite graph, `Reach^{*}(X) = Reach^{≤|V|-1}(X)`, since a simple path
    has at most `|V| - 1` edges. So `hops=N` with `N ≥ |V| - 1` is exact. The sentence fixes `N`
-   before the capture is known, hence caveat C2.
+   before the capture is known, hence caveat 2.
 6. *Complement and difference under a reach.* Steps 3 and 4 compose with no restriction on where
    `¬` and `\` occur. The operand `U - tr(q)` of step 3 touches all of `V_T` but carries elements
    only on `V_T \ [[q]]_T`, and a closure producer reads only the sites that carry elements, so
@@ -357,7 +357,7 @@ the same site sets.
 
 ### 3.3 Proof of Theorem C
 
-**Lemma C1 (edge-blindness of K0).** Let `T1`, `T2` be captures with the same `V`, `attr`,
+**Lemma C.1 (edge-blindness of K0).** Let `T1`, `T2` be captures with the same `V`, `attr`,
 `shape`, saved values and parameters, differing only in `E`. Every `K0` sentence resolves
 identically on `T1` and `T2`.
 
@@ -368,17 +368,17 @@ resolution capture or of explicit evidence captures (value, statistical and comp
 producers; the evidence captures are the same fixed data on both sides), or basis geometry
 (`tl.subspace`). None reads `E`. The combinators are pointwise in the operands' values. ∎
 
-**Proposition C2 (reachability sees the edges).** Take the two models
+**Proposition C.2 (reachability sees the edges).** Take the two models
 
 ```text
-M1: a = relu(x);  h = a * 2;  d = h + 1;  b = d + a
-M2: a = relu(x);  h = x * 2;  d = h + 1;  b = d + a
+M:  a = relu(x);  h = a * 2;  d = h + 1;  b = d + a
+M': a = relu(x);  h = x * 2;  d = h + 1;  b = d + a
 ```
 
 Both execute the same functions in the same order on tensors of the same shape, so their records
 carry the same labels (`relu_1_1:1`, `mul_1_2:1`, `add_1_3:1`, `add_2_4:1`) and the same `attr`;
 they differ only in whether `h` consumes `a` or `x`. With `α = {relu_1_1:1}`, `Reach_fwd^{≤1}(α)`
-is `{a, h, b}` on `M1` and `{a, b}` on `M2`. By Lemma C1 no `K0` sentence separates them, so none
+is `{a, h, b}` on `M` and `{a, b}` on `M'`. By Lemma C.1 no `K0` sentence separates them, so none
 expresses `Reach_fwd^{≤1}(α)`. ∎
 
 **The first-order strengthening.** Suppose a first-order formula `φ(x)` over `(E, P)` defined
@@ -389,23 +389,23 @@ each `r`-neighbourhood isomorphism type, and two points `x`, `y` in them have is
 `r`-neighbourhoods, then `φ(x)` holds in the first iff `φ(y)` holds in the second. Take
 `n > 2r + 2` and the two structures
 
-- `S1`: two disjoint directed paths `p_0 → ... → p_{2n}` and `q_0 → ... → q_{2n}`, with `α` true
+- `S`: two disjoint directed paths `p_0 → ... → p_{2n}` and `q_0 → ... → q_{2n}`, with `α` true
   at `p_0` only;
-- `S2`: the same points, with the middle edges swapped: `p_n → q_{n+1}` and `q_n → p_{n+1}`
+- `S'`: the same points, with the middle edges swapped: `p_n → q_{n+1}` and `q_n → p_{n+1}`
   replace `p_n → p_{n+1}` and `q_n → q_{n+1}`; `α` true at `p_0` only.
 
 Every point of either structure lies on a path segment, and the swap happens farther than `r`
 from every path end, so the two structures have exactly the same `r`-neighbourhood types with the
 same counts, and `p_{2n}` has the same `r`-neighbourhood in both (an end segment with no
-`α`-point). Yet in `S1` the point `p_{2n}` is reachable from `p_0`, while in `S2` it is reachable
-only from `q_0`, so `p_{2n} ∈ Reach_fwd^{*}(α)` in `S1` and `p_{2n} ∉ Reach_fwd^{*}(α)` in `S2`.
+`α`-point). Yet in `S` the point `p_{2n}` is reachable from `p_0`, while in `S'` it is reachable
+only from `q_0`, so `p_{2n} ∈ Reach_fwd^{*}(α)` in `S` and `p_{2n} ∉ Reach_fwd^{*}(α)` in `S'`.
 This contradicts Hanf locality. Both structures are DAGs, so the argument applies to trace
 graphs. This is the classical fact that transitive closure is not first-order definable (Aho and
 Ullman, 1979, for the database form). Bounded reach `Reach^{≤k}` *is* first-order definable, with
 quantifier rank growing with `k`, which is why the kernel needs `hops` as a parameter rather than
 a fixed formula. ∎
 
-The part proved from scratch (Lemma C1 and Proposition C2) is the part specific to this system:
+The part proved from scratch (Lemma C.1 and Proposition C.2) is the part specific to this system:
 that no shipped attribute generator leaks edge information. It holds only because the generator
 inventory is closed and because the opaque `tl.where` is kept outside `K` (Section 4, Assumption
 A4).
@@ -462,7 +462,7 @@ repository root).
   records) restricted to records with a string label (`_graph_indexes` in `torchlens/receptive_field/_path.py`; `_TraceGraph.from_trace` in
   `torchlens/_selection/graph.py`); sites are those with a tuple-of-ints `shape` (`_site_shape`
   in `torchlens/_selection/selection.py`). Multi-output functions are recorded per slot with a
-  shape each (`torch.max(x, dim)` gives one record per output). Caveat C1 holds exactly when no
+  shape each (`torch.max(x, dim)` gives one record per output). Caveat 1 holds exactly when no
   record lacks a shape.
 - **A2 (edges).** `E` is built from `op.parents` resolved against labels (`_graph_indexes`).
   Capture completeness, that every realized dependence is a recorded parent, is TorchLens's
@@ -630,7 +630,7 @@ for same_family in (x & x, ~~x, x | x, x - (x - x)):
 - **Element-granularity cones for regions.** Not shipped; see Theorem B, step 7.
 - **Relativized closure** (`within=` or `avoiding=` on the closure producers). Not shipped;
   expressible per capture only (Theorem D, item 1).
-- **Unbounded `hops`.** Not shipped; caveat C2 stands.
+- **Unbounded `hops`.** Not shipped; caveat 2 stands.
 - **Subspace selections.** `tl.subspace` resolves to a support *set*, so the boolean laws of
   Section 1.4 hold for it as for any mask; the non-distributive lattice of linear subspaces never
   enters the set algebra (editing through a composed subspace is refused instead).
