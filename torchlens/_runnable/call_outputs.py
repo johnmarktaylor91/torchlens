@@ -552,7 +552,7 @@ def _spec_node_reconstruction_lossy(spec: ContainerSpec) -> bool:
             container_type
         ) or _reconstruction_would_substitute_plain(container_type, "namedtuple", spec.fields, spec)
     # Local import: this body is rebound into ``_runnable_execution``'s globals.
-    from ._ir.distribution_container import (
+    from .._ir.distribution_container import (
         DISTRIBUTION_CONTAINER_KIND,
         distribution_type_rebuild_is_lossy,
     )

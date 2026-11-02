@@ -146,17 +146,12 @@ def _distribution_leaf_paths(spec: Any, prefix: str = "") -> tuple[str, ...]:
     (``.base_dist.loc``), so the paths name ops the user can target.
     """
 
+    from .._ir.container import NamedField
+
     children = dict(getattr(spec, "child_specs", ()) or ())
     paths: list[str] = []
     for name in getattr(spec, "fields", ()) or ():
-        child = next(
-            (
-                node
-                for component, node in children.items()
-                if getattr(component, "name", None) == name
-            ),
-            None,
-        )
+        child = children.get(NamedField(name))
         if child is not None and child.kind == spec.kind:
             paths.extend(_distribution_leaf_paths(child, f"{prefix}.{name}"))
         else:
