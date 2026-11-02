@@ -35,7 +35,9 @@ print(status.state)  # 'passed': every op replayed from its parents' saved paylo
 
 Operators and methods are captured as the `mlx.core` function they stand for: `a + b` logs
 `add`, `a @ w` logs `matmul`, `v.sum()` logs `sum`, `v[0]` logs `getitem`, `v > 0` logs
-`greater`. An array the forward uses that is neither an input, a parameter nor the output
+`greater`. Modules keep their MLX parameter-tree addresses (`layers.0`); the list or dict
+holding sub-modules gets its own module record (`layers`, class `list`), as a torch
+`ModuleList` does. An array the forward uses that is neither an input, a parameter nor the output
 of a recorded op (a closure array, a module-level array) is recorded as a `constant` source
 op with its payload, and the op that used it lists the constant as a parent. `mx.ones`,
 `mx.zeros`, `mx.arange` and the other literal producers stay ops with no parents and a saved
@@ -74,7 +76,9 @@ named code), `not yet proven` (False, refusal not yet pinned by a passing suite 
 | Structure-only capture (`structure_only_capture`) | unsupported | `structure_only_capture_unsupported` |
 | Explicit `random_seed=` | unsupported | `explicit_seed_unsupported` |
 | Trace options outside `module_identity_mode`, `grad_options` | unsupported | `trace_option_unsupported` |
-| `mx.compile` / `mx.grad` / `mx.vmap` wrappers as the traced entry | unsupported | typed refusal at entry |
+| `mx.compile` / `mx.grad` / `mx.vmap` wrappers as the traced entry | unsupported | `traced_transform_entry_unsupported` |
+| `grad_options=` together with `intervene=` or `halt=` | unsupported (capture them in separate calls) | `intervention_with_derived_grads_unsupported` |
+| An intervention that returns a non-`mx.array` or changes shape or dtype | unsupported | `intervention_result_invalid` |
 | Ops outside the wrapped surface | flagged (`unwrapped_op_in_capture`) or refused under `unwrapped_policy("refuse")` | `unwrapped_op_in_capture` |
 | Arrays constructed inside the forward (`mx.array(...)`) | flagged as unwrapped (build constants outside the forward) | `unwrapped_op_in_capture` |
 
@@ -86,4 +90,6 @@ reason from the shared closed list: `replay_mismatch`, `parent_payload_missing`,
 `constant_producer_leaf` (a constant leaf or a literal producer: replayed when a function
 exists, exempted from perturbation because it has no tensor parent) and
 `constant_parent_payload` (a consumer whose dependency was proven by perturbing a constant
-parent). A failed status names the first offending op in its message.
+parent), `declared_parents_inconsistent` (an op's declared parents disagree with the arrays its
+saved call reads) and `replay_coverage_incomplete` (the replay did not cover every captured
+op). A failed status names the first offending op in its message.

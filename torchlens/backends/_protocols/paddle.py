@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from .._backend_protocol import REFUSAL_CODES, FrameworkRequirement, SpecBackedProtocol
+from .._backend_protocol import FrameworkRequirement, SpecBackedProtocol
 from .._trace_options import PADDLE_TRACE_OPTIONS
 
 # Refusal codes the Paddle preview raises, each spelled once. Every
@@ -32,11 +32,9 @@ PADDLE_REFUSAL_FOREIGN = "foreign_tensor_input"
 PADDLE_REFUSAL_SCALAR_ESCAPE = "value_dependent_branch_unsupported"
 #: A stochastic Paddle op inside the forward (its draw cannot be replayed).
 PADDLE_REFUSAL_STOCHASTIC = "rng_replay_unsupported"
-#: An in-place or global-state Paddle op inside the forward. New spelling: not
-#: yet in ``REFUSAL_CODES`` (registration requested from the protocol owner).
+#: An in-place or global-state Paddle op inside the forward.
 PADDLE_REFUSAL_INPLACE = "inplace_op_unsupported"
-#: Paddle runs outside dygraph mode, or in PIR mode. New spelling: not yet in
-#: ``REFUSAL_CODES`` (registration requested from the protocol owner).
+#: Paddle runs outside dygraph mode, or in PIR mode.
 PADDLE_REFUSAL_RUNTIME_MODE = "runtime_mode_unsupported"
 
 #: Codes raised inside the Paddle package and registered in ``REFUSAL_CODES``.
@@ -51,13 +49,9 @@ PADDLE_RAISED_CODES: frozenset[str] = frozenset(
         PADDLE_REFUSAL_FOREIGN,
         PADDLE_REFUSAL_SCALAR_ESCAPE,
         PADDLE_REFUSAL_STOCHASTIC,
+        PADDLE_REFUSAL_INPLACE,
+        PADDLE_REFUSAL_RUNTIME_MODE,
     }
-)
-
-#: Codes raised inside the Paddle package that wait for registration. They
-#: join ``refusal_codes()`` automatically once ``REFUSAL_CODES`` lists them.
-PADDLE_CODES_PENDING_REGISTRATION: frozenset[str] = frozenset(
-    {PADDLE_REFUSAL_RUNTIME_MODE, PADDLE_REFUSAL_INPLACE}
 )
 
 
@@ -67,10 +61,10 @@ def paddle_package_refusal_codes() -> frozenset[str]:
     Returns
     -------
     frozenset[str]
-        :data:`PADDLE_RAISED_CODES` plus every pending code the registry now lists.
+        :data:`PADDLE_RAISED_CODES`.
     """
 
-    return PADDLE_RAISED_CODES | (PADDLE_CODES_PENDING_REGISTRATION & REFUSAL_CODES)
+    return PADDLE_RAISED_CODES
 
 
 PADDLE_FRAMEWORK = FrameworkRequirement(
