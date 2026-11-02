@@ -13,8 +13,6 @@ from typing import Any
 
 from ... import _state
 
-__all__ = ["get_arg_names"]
-
 
 def get_arg_names(orig_func: Callable[..., Any], func_name: str) -> None:
     """Extract argument names for a function and store in ``_state._arg_names``.

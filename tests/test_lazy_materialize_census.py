@@ -23,10 +23,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
-from torchlens.backends.torch.completeness_witness import (
-    AUDITED_COMPLETENESS_BOUNDARIES,
-    LAZY_MODULE_MATERIALIZE_WRAPPER,
-)
+from torchlens.backends.torch._completeness_audited import LAZY_MODULE_MATERIALIZE_WRAPPER
+from torchlens.backends.torch.completeness_witness import AUDITED_COMPLETENESS_BOUNDARIES
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 
 WIDTH = 8

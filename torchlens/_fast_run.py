@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import sys
 import threading
 import time
 import weakref
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager, nullcontext
 from typing import Any, cast
 
@@ -18,11 +19,14 @@ from . import _state
 from ._call_fingerprint import (
     fingerprinting,
     install_module_token_hooks,
+    module_fingerprint_address,
 )
 from ._capture._fused_attention_hold import hold_fused_attention_fastpath_off
 from ._data_classes._trace_accessors import boundary_label_rows
 from ._fast_live_plans import (
+    DirectForwardRoute,
     _admitted_collection_labels,
+    _direct_call,
     _drop_uncollected_payloads,
     _FastOutputPlan,
     _live_modules_by_address,
@@ -30,11 +34,9 @@ from ._fast_live_plans import (
     _output_tensor_leaves,
     _pair_output_leaves,
     _remove_fast_live_hooks,
-    build_direct_forward_routes,
     build_function_plans,
     build_module_plans,
     collected_function_output,
-    direct_forward_routes_installed,
     install_collection_hooks,
     repeats_last_function_output,
     require_distinct_plan_modules,
@@ -47,7 +49,6 @@ from ._fast_live_steer import (
     fast_live_input_admission,
     hooked_run_diagnostic,
     install_steer_hooks,
-    refusal_code,
     session_is_active,
 )
 from ._fast_live_until import (
@@ -115,7 +116,6 @@ from ._runnable.providers import (
     _host_rng_unreproduced,
     _seed_run_generators,
     _seeded_fork_devices,
-    run_loaded_sparse_trace,
 )
 from ._runnable.state import PreparedRunnableState, RunResourceCeiling, prepare_runnable_state
 from ._runnable.state_context import _ambient_execution_context_restored
@@ -132,10 +132,13 @@ from ._runnable.witness_contracts import (
     _tensor_leaf_paths,
     _unbound_state_escape_stale,
 )
+from ._utils._module_call_dispatch import forward_entered_through_module_call
 from ._utils.arg_handling import normalize_input_args
 from ._utils.rng import restore_host_rng, set_random_seed, snapshot_host_rng
 from .backends.torch._ops_container_base import _try_build_container_spec
-from .errors import PathDivergenceError, RunCapabilityUnavailableError, RuntimeSignatureDriftError
+from .backends.torch._session_forwards import _NO_INSTANCE_FORWARD, _SessionForward
+from .backends.torch._tl import get_module_meta
+from .errors import RunCapabilityUnavailableError, RuntimeSignatureDriftError
 
 
 def _is_opaque_output_root(output: Any) -> bool:
@@ -1414,133 +1417,110 @@ class _FastLiveSession:
         self.trace.transformed_output = transform(output) if transform is not None else None
 
 
-def run_fast_loaded_trace(trace: Any, inputs: Any, *, seed: int | None) -> RunResult:
-    """Run or initialize the explicit verify-once loaded sparse fast path.
+def _was_called_directly(module: nn.Module) -> bool:
+    """Return whether a capture marked ``module`` as entered by a direct call."""
+
+    meta = get_module_meta(module)
+    return meta is not None and meta.direct_forward_called
+
+
+def build_direct_forward_routes(
+    model: nn.Module,
+    modules: Mapping[str, nn.Module],
+    plan_addresses: tuple[str, ...],
+    steer_modules: Mapping[str, nn.Module],
+) -> tuple[DirectForwardRoute, ...]:
+    """Build one route per live module a capture entered by a direct ``forward()`` call.
 
     Parameters
     ----------
-    trace:
-        Loaded sparse source Trace.
-    inputs:
-        Runtime input tree.
-    seed:
-        Seed pinned for the lifetime of the fast session.
-
-    Returns
-    -------
-    RunResult
-        First ordinary verified result or a later compiled fast result.
-    """
-
-    session = trace.__dict__.get("_fast_run_session")
-    if isinstance(session, _FastSparseSession):
-        return session.run(inputs, seed=seed)
-    result = run_loaded_sparse_trace(
-        trace,
-        inputs,
-        seed=seed,
-        on_divergence=DivergencePolicy.RAISE,
-    )
-    if result.report.path_faithfulness is not PathFaithfulness.VERIFIED:
-        raise RunCapabilityUnavailableError(
-            "fast=True requires a fully verified first sparse run; this artifact settled "
-            f"{result.report.path_faithfulness.value}.",
-            code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-            detection_stage="fast_verify_once",
-        )
-    trace.__dict__["_fast_run_session"] = _FastSparseSession.build(
-        trace,
-        result.trace,
-        seed=seed,
-    )
-    return result
-
-
-def run_fast_live_trace(
-    trace: Any, inputs: Any, *, seed: int | None, until: Any = None
-) -> RunResult:
-    """Run the explicit native-forward targeted-collection live fast path."""
-
-    source_ref = getattr(trace, "_source_model_ref", None)
-    model = source_ref() if source_ref is not None else None
-    if not isinstance(model, nn.Module):
-        raise RunCapabilityUnavailableError(
-            "The live Trace no longer retains its source model: the trace "
-            "holds it only weakly, so live-run availability depends on the "
-            "caller keeping a strong reference (an inline-constructed model "
-            "is collected at the first gc pass after capture). Keep the "
-            "model alive, or save/load a runnable artifact instead.",
-            code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-            provider=RunProvider.LIVE,
-        )
-    session = trace.__dict__.get("_fast_run_session")
-    if (
-        not isinstance(session, _FastLiveSession)
-        or session.model_ref() is not model
-        or not session.steer_plan.follows(trace)
-    ):
-        if hasattr(session, "close"):
-            session.close()
-        session = _FastLiveSession(trace, model)
-        trace.__dict__["_fast_run_session"] = session
-    return session.run(inputs, seed=seed, until=until)
-
-
-#: Typed refusals that send the legacy rerun door back to the capture engine.
-_FAST_RERUN_REFUSALS: tuple[type[BaseException], ...] = (
-    RunCapabilityUnavailableError,
-    PathDivergenceError,
-    RuntimeSignatureDriftError,
-)
-
-
-def try_guarded_fast_rerun(
-    trace: Any, model: nn.Module, inputs: Any, *, output_transform: Any = None
-) -> tuple[bool, str | None]:
-    """Run the legacy intervened rerun through the guarded fast engine when eligible.
-
-    Parameters
-    ----------
-    trace:
-        Live trace carrying the staged spec; refreshed in place on success.
     model:
-        The model the caller passed (or the trace's retained live model).
-    inputs:
-        Transformed forward input.
-    output_transform:
-        The resolved rerun output transform, applied to the native output for
-        ``trace.transformed_output`` exactly as the capture engine does.
-
-    Returns
-    -------
-    tuple[bool, str | None]
-        ``(True, None)`` when the fast engine ran; ``(False, code)`` with the
-        typed refusal code when the caller must fall back to the capture
-        engine. A refused session is closed so the fallback's rebuilt trace
-        starts a fresh plan next time; the trace is never poisoned here
-        because the fallback replaces its state.
+        Live root model (never routed: capture leaves the root undecorated).
+    modules:
+        Every live address, alias spellings included.
+    plan_addresses:
+        Addresses the session collects through a forward hook.
+    steer_modules:
+        Steered address to live module, as the steer plan resolved them.
     """
 
-    # The legacy door leaves no TorchLens hook on the user's model between
-    # calls (the rerun hook-staging contract), so the session is built for the
-    # run and closed after it; the explicit fast=True door keeps its cached
-    # session as before.
-    close_fast_run_session(trace)
-    session: _FastLiveSession | None = None
+    routes: list[DirectForwardRoute] = []
+    for name, module in model.named_modules():
+        if module is model or not _was_called_directly(module):
+            continue
+        collect = [
+            planned
+            for planned in plan_addresses
+            if modules.get("" if planned == "self" else planned) is module
+        ]
+        routes.append(
+            DirectForwardRoute(
+                module_ref=weakref.ref(module),
+                token=_state.module_token(module_fingerprint_address(module, name)),
+                steer_addresses=tuple(
+                    steered for steered, target in steer_modules.items() if target is module
+                ),
+                collect_address=collect[0] if collect else None,
+            )
+        )
+    return tuple(routes)
+
+
+class _RoutedForward(_SessionForward):
+    """A per-run ``forward`` that runs the session hook work on a direct call only."""
+
+    def __init__(
+        self,
+        direct: Callable[..., Any],
+        module: nn.Module,
+        original: Callable[..., Any],
+        prior: Any,
+    ) -> None:
+        """Hold the direct-call delegate and the module's own ``forward``."""
+
+        super().__init__(direct, module, original, prior)
+        self._original = original
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Pass a ``Module.__call__`` call through; route a direct call."""
+
+        if forward_entered_through_module_call(sys._getframe(1)):
+            return self._original(*args, **kwargs)
+        return self._delegate(*args, **kwargs)
+
+
+@contextmanager
+def direct_forward_routes_installed(
+    routes: tuple[DirectForwardRoute, ...], session_ref: weakref.ReferenceType[Any]
+) -> Iterator[None]:
+    """Install the routes for one native forward, then restore every ``forward``.
+
+    A module whose ``forward`` no longer holds the route at exit (the model
+    reassigned it mid-forward) keeps the newer value, as session cleanup does.
+    """
+
+    installed: list[tuple[nn.Module, Any, _RoutedForward]] = []
     try:
-        session = _FastLiveSession(trace, model)
-        session.poison_on_divergence = False
-        # The legacy door returns the refreshed Trace, not a run verdict; the
-        # hooked-run ceiling belongs to the explicit run(inputs=, fast=True) door.
-        session.reports_hooked_ceiling = False
-        session.output_transform = output_transform
-        session.run(inputs, seed=None)
-    except _FAST_RERUN_REFUSALS as exc:
-        return False, refusal_code(exc)
+        for route in routes:
+            module = route.module_ref()
+            if module is None:
+                continue
+            prior = module.__dict__.get("forward", _NO_INSTANCE_FORWARD)
+            original = module.forward
+            wrapper = _RoutedForward(
+                _direct_call(route, module, original, session_ref), module, original, prior
+            )
+            module.__dict__["forward"] = wrapper
+            installed.append((module, prior, wrapper))
+        yield
     finally:
-        if session is not None:
-            session.close()
-    return True, None
+        for module, prior, wrapper in reversed(installed):
+            if module.__dict__.get("forward") is not wrapper:
+                continue
+            if prior is _NO_INSTANCE_FORWARD:
+                module.__dict__.pop("forward", None)
+            else:
+                module.__dict__["forward"] = prior
 
 
 def close_fast_run_session(trace: Any) -> None:

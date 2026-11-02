@@ -12,8 +12,6 @@ from __future__ import annotations
 
 from typing import Any
 
-__all__ = ["torch_structseq_field_names"]
-
 
 def torch_structseq_field_names(value: Any) -> tuple[str, ...]:
     """Return the exact ordered public field names of a torch structseq value.

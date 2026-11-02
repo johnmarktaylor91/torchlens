@@ -11,14 +11,6 @@ from typing import Any
 
 import torch
 
-__all__ = [
-    "_docs_pointer",
-    "_first_user_frame",
-    "_meta_state_offense",
-    "_offense_entry",
-    "_sparse_state_offense",
-]
-
 
 def _offense_entry(name: str, reason: str, path: str, tensor: torch.Tensor) -> dict[str, Any]:
     """Build one structured offense record (R67: WHERE, not just WHAT).
