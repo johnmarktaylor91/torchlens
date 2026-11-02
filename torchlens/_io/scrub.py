@@ -160,6 +160,7 @@ def scrub_for_save(
     payload_materialization: bool = True,
     sparse_runnable: bool = False,
     blob_id_floor: int = 0,
+    record_pairs: list[tuple[Any, Any]] | None = None,
 ) -> tuple[dict[str, Any], list[BlobSpec], list[dict[str, str]]]:
     """Scrub a ``Trace`` into portable metadata plus tensor blob specs.
 
@@ -208,6 +209,8 @@ def scrub_for_save(
     blob_id_floor:
         Ids start at ``blob_id_floor + 1``; a streaming finalize passes the
         writer's issued count so no scrub id repeats a streamed id.
+    record_pairs:
+        Filled with ``(scrubbed copy, live original)`` pairs for the 3.0 writer.
 
     Returns
     -------
@@ -250,6 +253,8 @@ def scrub_for_save(
     _stamp_replacement_evidence(trace, scrubbed_state)
     _scrub_nondeterministic_identities(scrubbed_state)
     detach_conditional_trace_backrefs(scrubbed_state)
+    if record_pairs is not None:
+        record_pairs.extend((memo.get(id(item)), item) for item in memo.get(id(memo), ()))
     return scrubbed_state, blob_specs, options.unsupported_tensor_records
 
 
