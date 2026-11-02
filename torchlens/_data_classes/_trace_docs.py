@@ -42,5 +42,8 @@ def attach_trace_docs(cls: type) -> None:
         if isinstance(target, functools.cached_property):
             target.__doc__ = doc
             target.func.__doc__ = doc
+        elif isinstance(target, property):
+            cls.__dict__[name].fget.__doc__ = doc
+            setattr(cls, name, property(target.fget, target.fset, target.fdel, doc))
         else:
             target.__doc__ = doc

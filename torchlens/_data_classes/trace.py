@@ -46,17 +46,15 @@ from typing import (
 import torch
 from torch import nn
 
-from ..intervention.types import FrozenInterventionSpec, TargetSpec
-from ..options import InterventionOptions, ReplayOptions
-
 if TYPE_CHECKING:
     from torchlens._runnable import ReadinessReport
 
     from .._io.streaming import BundleStreamWriter
     from .._runnable import ArchivedActivation, SparseRunDescriptor
     from ..debug._audit import HealthReport
+    from ..intervention.types import FrozenInterventionSpec, TargetSpec
+    from ..options import InterventionOptions, ReplayOptions
     from ._op_dedup import IdentityCacheEntry
-    from ._trace_views import _CallableList
     from .func_call_location import FuncCallLocation
 
 from collections.abc import Collection, Iterable, Sequence
@@ -137,6 +135,7 @@ from ._trace_profile import ModelProfile
 from ._trace_removal import batch_remove_log_entries, release_param_refs, remove_log_entry
 from ._trace_stack import StackedActivations, stack_traces
 from ._trace_state_io import _MODEL_LOG_DEFAULT_FILL
+from ._trace_views import _CallableList
 from ._transform_repr import _scrubbed_transform_repr
 from .backward_pass import BackwardPass, BackwardPassAccessor
 from .cleanup import (
@@ -1448,7 +1447,7 @@ class Trace(TraceLike):
         return _trace_views.find_layers(self, selector=selector, limit=limit)
 
     @property
-    def uncalled_modules(self) -> "_CallableList":
+    def uncalled_modules(self) -> _CallableList:
         """Return registered modules that were not exercised in the captured pass.
 
         Returns
@@ -2528,7 +2527,7 @@ class Trace(TraceLike):
         return _trace_views.graph_max_out_degree(self)
 
     @property
-    def _autograd_intermediate_derived_grads(self) -> None:
+    def _autograd_intermediate_derived_grads(self) -> IntermediateDerivedGradAccessor:
         """Access exact op-level derived gradient records, when a backend provides them."""
 
         return _trace_views.autograd_intermediate_derived_grads(self)
@@ -2788,7 +2787,7 @@ class Trace(TraceLike):
         )
 
     @cached_property
-    def recipe(self) -> FrozenInterventionSpec:
+    def recipe(self) -> "FrozenInterventionSpec":
         """Return an immutable snapshot of this log's intervention recipe."""
 
         return self._ensure_intervention_spec().freeze()
@@ -2897,7 +2896,7 @@ class Trace(TraceLike):
         *,
         model: nn.Module | None = None,
         inputs: Any = None,
-        intervention: InterventionOptions | None = None,
+        intervention: "InterventionOptions | None" = None,
         loss: Callable[["Trace"], torch.Tensor] | None = None,
     ) -> "Trace":
         """Apply an intervention and dispatch to replay, rerun, or set-only."""
@@ -2919,7 +2918,7 @@ class Trace(TraceLike):
         *,
         model: nn.Module | None,
         x: Any,
-        intervention_options: InterventionOptions,
+        intervention_options: "InterventionOptions",
     ) -> "Trace":
         """Forward to ``_doors.intervention()._trace_edits.do_with_options``."""
 
@@ -3135,7 +3134,7 @@ class Trace(TraceLike):
             self, site, strict=strict
         )
 
-    def _target_spec_from_site(self, site: Any, *, strict: bool) -> TargetSpec:
+    def _target_spec_from_site(self, site: Any, *, strict: bool) -> "TargetSpec":
         """Forward to ``_doors.intervention()._trace_edits.target_spec_from_site``."""
 
         return _doors.intervention()._trace_edits.target_spec_from_site(self, site, strict=strict)
@@ -3207,7 +3206,7 @@ class Trace(TraceLike):
         save: Any = None,
         on_divergence: Literal["raise", "return"] = "raise",
         chunk_paths: Any | None = None,
-        replay: ReplayOptions | None = None,
+        replay: "ReplayOptions | None" = None,
         input_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
         output_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
         on_zero_fire: str | MissingType = MISSING,
