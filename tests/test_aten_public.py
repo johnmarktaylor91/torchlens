@@ -181,7 +181,7 @@ def test_loaded_artifact_saved_without_the_switch_refuses(tmp_path: Path) -> Non
 
 
 def test_refresh_inherits_the_switch_and_fast_run_refuses() -> None:
-    """``run()`` re-records; a ``run(fast=True)`` result carries no rows."""
+    """``run()`` refreshes keep the recording, the fast live tier included."""
 
     torch.manual_seed(0)
     model = _TwoOpModel()
