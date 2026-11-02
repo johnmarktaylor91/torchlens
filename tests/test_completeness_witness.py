@@ -977,7 +977,6 @@ def test_expected_opaque_boundary_table_is_exact_and_budgeted() -> None:
 
     assert {row.wrapper_name for row in AUDITED_COMPLETENESS_BOUNDARIES} == {
         "torch_func:numpy:not_logged",
-        "torch_func:__array__:not_logged",
         "torch_func:size:not_logged",
         "torch_func:dim:not_logged",
         "torch_func:item:logged",
