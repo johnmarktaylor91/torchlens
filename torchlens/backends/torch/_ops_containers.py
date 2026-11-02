@@ -24,6 +24,7 @@ from ..._ir.container import (
 from ..._ir.container_registry import OUTPUT_TREE_MAX_DEPTH
 from ..._ir.distribution_container import (
     DISTRIBUTION_CONTAINER_KIND,
+    DISTRIBUTION_STATE_UNRECORDABLE,
     distribution_children,
     distribution_layout,
     is_distribution,
@@ -102,27 +103,9 @@ def _build_container_spec_unguarded(
     child_specs: list[tuple[OutputPathComponent, ContainerSpec]] = []
     registered = get_registered_container(type(value))
     if registered is not None:
-        children, aux_data = registered.flatten(value)
-        for index, item in enumerate(children):
-            child_spec = _try_build_container_spec(
-                item, _depth=_depth + 1, _in_progress=_in_progress
-            )
-            if child_spec is not None:
-                child_specs.append((TupleIndex(index), child_spec))
-        module, qualname = _container_type_ref(value)
-        return ContainerSpec(
-            kind="registered",
-            length=len(children),
-            type_module=module,
-            type_qualname=qualname,
-            child_specs=tuple(child_specs),
-            aux_data=aux_data,
-        )
-    distribution_spec = _distribution_container_spec(
-        value, _depth=_depth, _in_progress=_in_progress
-    )
-    if distribution_spec is not None:
-        return distribution_spec
+        return _registered_container_spec(value, registered, _depth, _in_progress)
+    if is_distribution(value):
+        return _distribution_container_spec(value, _depth=_depth, _in_progress=_in_progress)
     if _is_hf_model_output(value):
         keys = tuple(value.keys())
         reconstructable = True
@@ -288,13 +271,35 @@ def _build_container_spec_unguarded(
     return None
 
 
+def _registered_container_spec(
+    value: Any, registered: Any, _depth: int, _in_progress: set[int]
+) -> ContainerSpec:
+    """Build the spec for a registered container through its ``flatten`` hook."""
+
+    child_specs: list[tuple[OutputPathComponent, ContainerSpec]] = []
+    children, aux_data = registered.flatten(value)
+    for index, item in enumerate(children):
+        child_spec = _try_build_container_spec(item, _depth=_depth + 1, _in_progress=_in_progress)
+        if child_spec is not None:
+            child_specs.append((TupleIndex(index), child_spec))
+    module, qualname = _container_type_ref(value)
+    return ContainerSpec(
+        kind="registered",
+        length=len(children),
+        type_module=module,
+        type_qualname=qualname,
+        child_specs=tuple(child_specs),
+        aux_data=aux_data,
+    )
+
+
 def _distribution_container_spec(
     value: Any,
     *,
     _depth: int,
     _in_progress: set[int],
-) -> ContainerSpec | None:
-    """Build the spec for a ``torch.distributions`` output, or ``None`` for anything else.
+) -> ContainerSpec:
+    """Build the spec for a ``torch.distributions`` output.
 
     Each recorded attribute is a ``NamedField`` child (a tensor leaf or a nested
     distribution's spec); literal state and tensor aliases ride in ``aux_data``.
@@ -302,8 +307,6 @@ def _distribution_container_spec(
     paths stay addressable.
     """
 
-    if not is_distribution(value):
-        return None
     layout = distribution_layout(value)
     instance_dict = vars(value)
     child_specs: list[tuple[OutputPathComponent, ContainerSpec]] = []
@@ -509,35 +512,9 @@ def _prove_runnable_output_lossless_unguarded(
 
     registered = get_registered_container(type(value))
     if registered is not None:
-        if not getattr(registered, "state_complete", False):
-            instance_dict = getattr(value, "__dict__", None)
-            if isinstance(instance_dict, dict) and any(
-                item is not None for item in instance_dict.values()
-            ):
-                # r37 3-ADJ-3: registration without the explicit state_complete
-                # declaration cannot prove the hooks round-trip this instance's
-                # extra state -- refuse at save rather than drop it on replay.
-                return False, f"registered_container_instance_state:{type(value).__qualname__}"
-        children, _aux = registered.flatten(value)
-        for item in children:
-            proved, reason = _prove_runnable_output_lossless(
-                item, _depth=_depth + 1, _in_progress=_in_progress
-            )
-            if not proved:
-                return False, reason
-        return True, ""
+        return _prove_registered_lossless(value, registered, _depth, _in_progress)
     if is_distribution(value):
-        layout = distribution_layout(value)
-        if layout.lossy_reason:
-            return False, layout.lossy_reason
-        instance_dict = vars(value)
-        for name in layout.fields:
-            proved, reason = _prove_runnable_output_lossless(
-                instance_dict[name], _depth=_depth + 1, _in_progress=_in_progress
-            )
-            if not proved:
-                return False, reason
-        return True, ""
+        return _prove_distribution_lossless(value, _depth, _in_progress)
     if _is_hf_model_output(value):
         for key in value.keys():
             proved, reason = _prove_runnable_output_lossless(
@@ -610,6 +587,60 @@ def _prove_runnable_output_lossless_unguarded(
                 return False, reason
         return True, ""
     return False, f"opaque_leaf:{type(value).__qualname__}"
+
+
+def _prove_registered_lossless(
+    value: Any, registered: Any, _depth: int, _in_progress: set[int]
+) -> tuple[bool, str]:
+    """Prove a registered container's instance state and children lossless."""
+
+    if not getattr(registered, "state_complete", False):
+        instance_dict = getattr(value, "__dict__", None)
+        if isinstance(instance_dict, dict) and any(
+            item is not None for item in instance_dict.values()
+        ):
+            # r37 3-ADJ-3: registration without the explicit state_complete
+            # declaration cannot prove the hooks round-trip this instance's
+            # extra state -- refuse at save rather than drop it on replay.
+            return False, f"registered_container_instance_state:{type(value).__qualname__}"
+    children, _aux = registered.flatten(value)
+    for item in children:
+        proved, reason = _prove_runnable_output_lossless(
+            item, _depth=_depth + 1, _in_progress=_in_progress
+        )
+        if not proved:
+            return False, reason
+    return True, ""
+
+
+def _prove_distribution_lossless(
+    value: Any, _depth: int, _in_progress: set[int]
+) -> tuple[bool, str]:
+    """Prove a ``torch.distributions`` output's recorded state and children lossless."""
+
+    layout = distribution_layout(value)
+    if layout.lossy_reason:
+        return False, layout.lossy_reason
+    instance_dict = vars(value)
+    for name in layout.fields:
+        proved, reason = _prove_runnable_output_lossless(
+            instance_dict[name], _depth=_depth + 1, _in_progress=_in_progress
+        )
+        if not proved:
+            return False, reason
+    return True, ""
+
+
+def lossy_distribution_output_reason(output: Any) -> str:
+    """Return the lossy reason when ``output`` holds a ``torch.distributions`` object
+    capture cannot record losslessly, else an empty string."""
+
+    if output is None or isinstance(output, torch.Tensor):
+        return ""
+    proved, reason = _prove_runnable_output_lossless(output)
+    if proved or not reason.startswith(DISTRIBUTION_STATE_UNRECORDABLE):
+        return ""
+    return reason
 
 
 def runnable_output_losslessness(

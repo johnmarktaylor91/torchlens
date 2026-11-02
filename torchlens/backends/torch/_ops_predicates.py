@@ -57,6 +57,37 @@ __all__ = (
 )
 
 
+def _replace_distribution_children(
+    value: Any,
+    path: tuple[OutputPathComponent, ...],
+    replacements: dict[tuple[OutputPathComponent, ...], torch.Tensor],
+) -> Any:
+    """Rebuild a ``torch.distributions`` value with its replaced recorded fields."""
+
+    replaced = value
+    for name, item in distribution_children(value):
+        new_item = _replace_output_value(item, (*path, NamedField(name)), replacements)
+        if new_item is not item:
+            replaced = replace_distribution_field(replaced, name, new_item)
+    return replaced
+
+
+def _replace_dataclass_fields(
+    value: Any,
+    path: tuple[OutputPathComponent, ...],
+    replacements: dict[tuple[OutputPathComponent, ...], torch.Tensor],
+) -> Any:
+    """Rebuild a dataclass value with its replaced fields."""
+
+    changes = {
+        field.name: _replace_output_value(
+            getattr(value, field.name), (*path, DataclassField(field.name)), replacements
+        )
+        for field in dataclasses.fields(value)
+    }
+    return dataclasses.replace(value, **changes)
+
+
 def _replace_output_value(
     value: Any,
     path: tuple[OutputPathComponent, ...],
@@ -82,12 +113,7 @@ def _replace_output_value(
     if path in replacements:
         return replacements[path]
     if is_distribution(value):
-        replaced = value
-        for name, item in distribution_children(value):
-            new_item = _replace_output_value(item, (*path, NamedField(name)), replacements)
-            if new_item is not item:
-                replaced = replace_distribution_field(replaced, name, new_item)
-        return replaced
+        return _replace_distribution_children(value, path, replacements)
     if _is_hf_model_output(value):
         key_values = {
             key: _replace_output_value(item, (*path, HFKey(key)), replacements)
@@ -101,13 +127,7 @@ def _replace_output_value(
         ]
         return type(value)(*replaced_items)
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        changes = {
-            field.name: _replace_output_value(
-                getattr(value, field.name), (*path, DataclassField(field.name)), replacements
-            )
-            for field in dataclasses.fields(value)
-        }
-        return dataclasses.replace(value, **changes)
+        return _replace_dataclass_fields(value, path, replacements)
     if isinstance(value, tuple):
         return type(value)(
             _replace_output_value(item, (*path, TupleIndex(index)), replacements)

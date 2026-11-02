@@ -6,7 +6,7 @@ import time
 import warnings
 import weakref
 from collections import Counter
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from functools import partial
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -17,7 +17,7 @@ from torch import nn
 from .._capture.prepare.chunked import iter_chunked_inputs, normalize_chunk_paths, plan_chunks
 from .._data_classes._trace_accessors import boundary_label_rows
 from .._data_classes._trace_missing_attrs import is_live_trace
-from .._errors import InvalidArgumentError, TorchLensWarning
+from .._errors import InvalidArgumentError
 from .._input_coerce import _coerce_input_args
 from .._trace_state import TraceState
 from .._utils._torch_compat import tensor_has_named_dims
@@ -31,12 +31,7 @@ from ._rerun_predicate import (
     refuse_unmatchable_staged_labels,
     settle_predicate_rerun,
 )
-from ._zero_fire import (
-    current_zero_fire_policy,
-    external_stacklevel,
-    raise_rerun_zero_fire,
-    settle_zero_fire,
-)
+from ._zero_fire_doors import disclose_unfired_rerun_entries
 from .errors import (
     AppendBatchDependenceError,
     AppendMismatchError,
@@ -1508,62 +1503,8 @@ def _reconcile_rerun_hook_fires(
         unfired.extend([plan_id] * (shortfall - consumed))
     if unfired:
         _refuse_source_matched_zero_fire(source_log, new_log, hook_plan, unfired)
-        # First CONTRACTED S-18 row (compo wave 0): the disclosure standing between a user and a
-        # silently un-applied intervention carries a stable machine-readable code and a structured
-        # remedy -- consumers branch on ``fields["code"]``, never on message text. The typed
-        # refusals above fire first, whatever the on_zero_fire policy says; the policy settles the
-        # rest (default: this coded warning). Under "error" the refusal raises here, before the
-        # swap, so the trace is unchanged.
-        message = (
-            "Rerun hook plan entries fired at zero sites on the new inputs: "
-            f"{unfired!r}. The rerun completed, but those interventions were "
-            "no-ops. Remedy: resolve the target sites against the rerun trace "
-            "(trace[selector]) before re-applying, or route the edit "
-            "through the push engine (fork().do(...)), which validates sites "
-            "at plan time"
-        )
-
-        reason_fields = _unfired_non_tensor_reason(new_log, hook_plan, unfired)
-        if reason_fields:
-            message = (
-                f"{message}. Reason ({reason_fields['reason']}): {reason_fields['reason_detail']}"
-            )
-
-        def _warn() -> None:
-            """Emit the coded ``rerun_zero_fire`` warning under ``on_zero_fire='warn'``."""
-
-            warnings.warn(
-                TorchLensWarning(
-                    message,
-                    code="rerun_zero_fire",
-                    unfired_plan_ids=list(unfired),
-                    **reason_fields,
-                ),
-                stacklevel=external_stacklevel(),
-            )
-
-        settle_zero_fire(
-            current_zero_fire_policy(),
-            warn=_warn,
-            raise_error=lambda: raise_rerun_zero_fire(message, list(unfired)),
-        )
+        disclose_unfired_rerun_entries(new_log, hook_plan, unfired, _hook_plan_identifier)
     return total_fired, tuple(unfired)
-
-
-def _unfired_non_tensor_reason(
-    new_log: Trace, hook_plan: Sequence[Any], unfired: Sequence[str]
-) -> dict[str, Any]:
-    """Zero-fire ``reason`` fields for unfired module entries whose output is not a tensor."""
-
-    from ._zero_fire import non_tensor_reason_fields, recorded_non_tensor_details
-
-    unfired_ids = set(unfired)
-    targets = {
-        str(getattr(getattr(entry, "site_target", None), "selector_value", ""))
-        for entry in hook_plan
-        if _hook_plan_identifier(entry) in unfired_ids
-    }
-    return non_tensor_reason_fields(recorded_non_tensor_details(new_log, targets))
 
 
 def _same_rerun_inputs(source_log: Trace, new_log: Trace) -> bool:

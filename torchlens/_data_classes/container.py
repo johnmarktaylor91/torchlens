@@ -92,7 +92,7 @@ class Container:
             return int(self.spec.length or 0)
         if self.spec.kind in {"dict", "hf_model_output"}:
             return len(self.spec.keys)
-        if self.spec.kind in {"namedtuple", "dataclass", _distribution_kind()}:
+        if self.spec.kind in ContainerSpec._FIELD_KINDS:
             return len(self.spec.fields)
         if self.spec.kind == "literal":
             return 1
@@ -1080,18 +1080,6 @@ def _value_for_op(op: Op, source: str) -> Any:
     )
 
 
-def _distribution_kind() -> str:
-    """Return the distribution container kind without an eager edge into ``_ir``.
-
-    The spine layer lint counts each eagerly imported name from a higher layer;
-    the kind's one spelling stays in ``_ir.distribution_container``.
-    """
-
-    from .._ir.distribution_container import DISTRIBUTION_CONTAINER_KIND
-
-    return DISTRIBUTION_CONTAINER_KIND
-
-
 def _element_keys(spec: ContainerSpec) -> tuple[Any, ...]:
     """Return immediate user-facing keys for a spec.
 
@@ -1110,7 +1098,7 @@ def _element_keys(spec: ContainerSpec) -> tuple[Any, ...]:
         return tuple(range(spec.length or 0))
     if spec.kind in {"dict", "hf_model_output"}:
         return spec.keys
-    if spec.kind in {"namedtuple", "dataclass", _distribution_kind()}:
+    if spec.kind in ContainerSpec._FIELD_KINDS:
         return spec.fields
     if spec.kind == "literal":
         return ("literal",)
@@ -1139,10 +1127,8 @@ def _component_for_key(spec: ContainerSpec, key: Any) -> OutputPathComponent:
         return DictKey(key)
     if spec.kind == "hf_model_output":
         return HFKey(key)
-    if spec.kind in {"namedtuple", _distribution_kind()} and isinstance(key, str):
-        return NamedField(key)
-    if spec.kind == "dataclass" and isinstance(key, str):
-        return DataclassField(key)
+    if spec.kind in ContainerSpec._FIELD_KINDS and isinstance(key, str):
+        return DataclassField(key) if spec.kind == "dataclass" else NamedField(key)
     if spec.kind == "literal" and key == "literal":
         return TupleIndex(0)
     raise KeyError(key)

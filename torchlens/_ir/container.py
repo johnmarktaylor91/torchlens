@@ -20,12 +20,18 @@ from ._container_type_probes import (
     _fields_are_inert_settable,
     _inert_new,
     _is_generated_namedtuple_type,
+    _is_hf_model_output_type,
+    _is_trusted_transformers_output_type,
     _metaclass_defines_foreign_call,
     _name_is_data_descriptor,
     _type_has_instance_dict,
     _type_has_safe_new,
 )
-from .distribution_container import DISTRIBUTION_CONTAINER_KIND
+from .distribution_container import (
+    DISTRIBUTION_CONTAINER_KIND,
+    is_distribution_type,
+    rebuild_distribution_node,
+)
 
 # Canonical ``defaultdict`` factory callables restorable on load WITHOUT importing
 # an arbitrary callable. Capture imports this SAME mapping; a factory outside the
@@ -132,6 +138,11 @@ class ContainerSpec:
         "aux_data": FieldPolicy.BLOB_RECURSIVE,
         "lossy_reconstruction": FieldPolicy.KEEP,
     }
+
+    #: Kinds whose children are named fields (``NamedField`` or ``DataclassField``).
+    _FIELD_KINDS: ClassVar[frozenset[str]] = frozenset(
+        {"namedtuple", "dataclass", DISTRIBUTION_CONTAINER_KIND}
+    )
 
     kind: Literal[
         "tuple",
@@ -418,44 +429,33 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
             return _construct_model_output_without_init(container_type, key_values)
         return key_values
     if spec.kind == DISTRIBUTION_CONTAINER_KIND:
-        return _rebuild_distribution_node(spec, child_by_key, leaf_iter)
+        return rebuild_distribution_node(spec, child_by_key, leaf_iter)
     if spec.kind == "registered":
-        values = [
-            _rebuild_child_or_leaf(child_by_key, TupleIndex(index), leaf_iter)
-            for index in range(spec.length or 0)
-        ]
-        container_type = _resolve_container_type(spec)
-        if container_type is None:
-            raise ValueError(
-                f"Registered container type {spec.type_module}.{spec.type_qualname} "
-                "could not be imported."
-            )
-        registration = get_registered_container(container_type)
-        if registration is None:
-            raise ValueError(
-                f"Container type {container_type.__qualname__!r} is not registered in this runtime."
-            )
-        return registration.unflatten(spec.aux_data, values)
+        return _rebuild_registered_node(spec, child_by_key, leaf_iter)
     raise ValueError(f"Unsupported ContainerSpec kind {spec.kind!r}.")
 
 
-def _rebuild_distribution_node(
+def _rebuild_registered_node(
     spec: ContainerSpec, child_by_key: dict[OutputPathComponent, ContainerSpec], leaf_iter: Any
 ) -> Any:
-    """Rebuild a ``torch.distributions`` node from its recorded fields (inert, exact).
+    """Rebuild a registered container through its registration's ``unflatten`` hook."""
 
-    The type must resolve to a loaded, admissible ``Distribution`` subclass; an
-    unresolvable type has no plain stand-in that would not change what the
-    caller receives, so ``rebuild_distribution`` refuses rather than substituting one.
-    """
-
-    from .distribution_container import rebuild_distribution
-
-    field_values = {
-        name: _rebuild_child_or_leaf(child_by_key, NamedField(name), leaf_iter)
-        for name in spec.fields
-    }
-    return rebuild_distribution(_resolve_container_type(spec), spec, field_values)
+    values = [
+        _rebuild_child_or_leaf(child_by_key, TupleIndex(index), leaf_iter)
+        for index in range(spec.length or 0)
+    ]
+    container_type = _resolve_container_type(spec)
+    if container_type is None:
+        raise ValueError(
+            f"Registered container type {spec.type_module}.{spec.type_qualname} "
+            "could not be imported."
+        )
+    registration = get_registered_container(container_type)
+    if registration is None:
+        raise ValueError(
+            f"Container type {container_type.__qualname__!r} is not registered in this runtime."
+        )
+    return registration.unflatten(spec.aux_data, values)
 
 
 def _rebuild_dict_subtype(spec: ContainerSpec, items: dict[Any, Any]) -> Any:
@@ -606,40 +606,6 @@ def _is_trusted_structseq_type(container_type: type[Any], spec: ContainerSpec) -
 # family. A resolved ``__init__`` provided by any of these is trusted; anything else is a custom
 # constructor and is treated as a lossy black box (see ``_model_output_has_foreign_init``).
 _TRUSTED_MODEL_OUTPUT_INIT_BASES: tuple[type[Any], ...] = (object, dict, OrderedDict)
-
-
-def _is_trusted_transformers_output_type(
-    container_type: type[Any], spec: ContainerSpec | None
-) -> bool:
-    """Return whether ``container_type`` is a genuine ``transformers`` output by resolution authority.
-
-    r42 secB_1: mirrors :func:`_is_trusted_structseq_type`. The trust decision keys on the SPEC's
-    resolution authority (``spec.type_module`` / ``spec.type_qualname``), never the resolved
-    class's spoofable ``__module__`` string nor a loose ``startswith("transformers")`` prefix
-    (which matches ``transformers_evil``). Trust requires ALL of: the spec named the genuine
-    package (``transformers`` or ``transformers.``-prefixed), that module is actually loaded in
-    ``sys.modules``, and static re-resolution of ``spec.type_qualname`` from it returns the
-    IDENTICAL class object. A ``None`` spec (a legacy direct call with no resolution authority)
-    is never trusted -- fail closed.
-    """
-
-    if spec is None:
-        return False
-    module = spec.type_module or ""
-    if module != "transformers" and not module.startswith("transformers."):
-        return False
-    if not spec.type_qualname:
-        return False
-    loaded = sys.modules.get(module)
-    if loaded is None:
-        return False
-    resolved: Any = loaded
-    try:
-        for attribute_name in spec.type_qualname.split("."):
-            resolved = inspect.getattr_static(resolved, attribute_name)
-    except AttributeError:
-        return False
-    return resolved is container_type
 
 
 def _model_output_has_foreign_init(
@@ -1030,38 +996,6 @@ _ALLOWED_MAPPING_TYPE_REFS: frozenset[tuple[str, str]] = frozenset(
 )
 
 
-def _is_hf_model_output_type(container_type: type[Any]) -> bool:
-    """Return whether ``container_type`` is a HuggingFace ``ModelOutput`` container class.
-
-    Mirrors the capture-side ``ir.container_registry._is_hf_model_output`` heuristic at
-    the class level. Inspects only the ALREADY-RESOLVED class (its MRO / name / mapping
-    protocol); it never imports ``transformers`` to satisfy an attacker.
-
-    Parameters
-    ----------
-    container_type:
-        Resolved class to classify.
-
-    Returns
-    -------
-    bool
-        True when the class is a real ``transformers`` ``ModelOutput`` subclass or a
-        HuggingFace-style mapping output class.
-    """
-
-    for base in getattr(container_type, "__mro__", ()):
-        if base.__module__.startswith("transformers") and base.__name__ == "ModelOutput":
-            return True
-    return (
-        (
-            container_type.__module__.startswith("transformers")
-            or container_type.__name__.endswith("ModelOutput")
-        )
-        and hasattr(container_type, "keys")
-        and hasattr(container_type, "__getitem__")
-    )
-
-
 def _container_type_is_admissible(container_type: type[Any], spec: ContainerSpec) -> bool:
     """Return whether ``container_type`` may be constructed for ``spec.kind``.
 
@@ -1108,8 +1042,6 @@ def _container_type_is_admissible(container_type: type[Any], spec: ContainerSpec
     if kind == "registered":
         return get_registered_container(container_type) is not None
     if kind == DISTRIBUTION_CONTAINER_KIND:
-        from .distribution_container import is_distribution_type
-
         return is_distribution_type(container_type) and _type_has_safe_new(container_type)
     return False
 

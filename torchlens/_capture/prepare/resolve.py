@@ -480,12 +480,11 @@ def _warn_zero_match_capture_selectors(
         backward pass.
     halt_selector:
         Capture-time halt predicate, if configured. ``halt=`` was the one
-        selector slot outside the zero-match disclosure family: a typo'd
-        label selector silently ran the FULL forward (spending the memory/
-        latency the halt was meant to avoid) and handed back the model's
-        real outputs where the caller expected a frontier. Only ``BaseSelector``
-        halts are judged -- an arbitrary value-dependent callable legitimately
-        never firing is data, not a typo.
+        selector slot outside the zero-match disclosure family: a typo'd label
+        selector silently ran the FULL forward (spending the memory and latency
+        the halt was meant to avoid) and handed back the model's real outputs
+        where the caller expected a frontier. Only ``BaseSelector`` halts are
+        judged; an arbitrary value-dependent callable never firing is data, not a typo.
     layers_to_save_request:
         The ORIGINAL selective label-based ``layers_to_save`` request, when
         one was made. ``layers_to_save`` resolves through its own predicate/

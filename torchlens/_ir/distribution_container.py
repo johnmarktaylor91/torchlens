@@ -324,3 +324,44 @@ __all__ = (
     "rebuild_distribution",
     "replace_distribution_field",
 )
+
+
+def rebuild_distribution_node(spec: Any, child_by_key: dict[Any, Any], leaf_iter: Any) -> Any:
+    """Rebuild a ``torch.distributions`` node from its recorded fields (inert, exact).
+
+    The type must resolve to a loaded, admissible ``Distribution`` subclass; an
+    unresolvable type has no plain stand-in that would not change what the
+    caller receives, so ``rebuild_distribution`` refuses rather than substituting one.
+    """
+
+    from .container import NamedField, _rebuild_child_or_leaf, _resolve_container_type
+
+    field_values = {
+        name: _rebuild_child_or_leaf(child_by_key, NamedField(name), leaf_iter)
+        for name in spec.fields
+    }
+    return rebuild_distribution(_resolve_container_type(spec), spec, field_values)
+
+
+def build_distribution_spec(
+    value: Any, type_module: str | None, type_qualname: str | None, child_specs: tuple[Any, ...]
+) -> Any:
+    """Return the ``ContainerSpec`` for a distribution whose children are already built.
+
+    Lossy when the layout cannot record an attribute or any child rebuilds lossy.
+    """
+
+    from .container import ContainerSpec
+
+    layout = distribution_layout(value)
+    return ContainerSpec(
+        kind=DISTRIBUTION_CONTAINER_KIND,
+        length=len(layout.fields),
+        fields=layout.fields,
+        type_module=type_module,
+        type_qualname=type_qualname,
+        child_specs=child_specs,
+        aux_data=layout.aux_data(),
+        lossy_reconstruction=bool(layout.lossy_reason)
+        or any(child.lossy_reconstruction for _component, child in child_specs),
+    )
