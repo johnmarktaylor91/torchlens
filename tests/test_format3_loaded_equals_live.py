@@ -33,6 +33,7 @@ import os
 import re
 import weakref
 from collections import deque
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -331,7 +332,9 @@ def _compare_level(trace: Any, root: Path) -> _Comparison:
 
 
 @pytest.fixture(scope="module")
-def comparisons(tmp_path_factory: pytest.TempPathFactory) -> dict[str, _Comparison]:
+def comparisons(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Iterator[dict[str, _Comparison]]:
     base = tmp_path_factory.mktemp("format3_lel")
     torch.manual_seed(0)
     trace = tl.trace(
@@ -339,11 +342,14 @@ def comparisons(tmp_path_factory: pytest.TempPathFactory) -> dict[str, _Comparis
         torch.randn(2, 1, 6, 6),
         capture=tl.options.CaptureOptions(replayable=True),
     )
-    results = {}
-    for level in _LEVELS:
-        trace.save(base / level, level=level)
-        results[level] = _compare_level(trace, base / level)
-    return results
+    try:
+        results = {}
+        for level in _LEVELS:
+            trace.save(base / level, level=level)
+            results[level] = _compare_level(trace, base / level)
+        yield results
+    finally:
+        trace.cleanup()
 
 
 @pytest.mark.parametrize("level", _LEVELS)

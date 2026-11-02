@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -121,7 +122,7 @@ def _walk_json(value: Any):
 
 
 @pytest.fixture(scope="module")
-def saved(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Path]:
+def saved(tmp_path_factory: pytest.TempPathFactory) -> Iterator[dict[str, Path]]:
     """Save the tiny CNN at every save level (plus grads and structure-only variants)."""
 
     base = tmp_path_factory.mktemp("format3_writer")
@@ -145,14 +146,18 @@ def saved(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Path]:
     structure.save(base / "structure_only")
 
     tl.Bundle({"plain": plain, "graded": graded}).save(base / "bundle")
-    return {
-        "portable": base / "portable",
-        "audit": base / "audit",
-        "grads": base / "grads",
-        "runnable": base / "runnable",
-        "structure_only": base / "structure_only",
-        "bundle": base / "bundle",
-    }
+    try:
+        yield {
+            "portable": base / "portable",
+            "audit": base / "audit",
+            "grads": base / "grads",
+            "runnable": base / "runnable",
+            "structure_only": base / "structure_only",
+            "bundle": base / "bundle",
+        }
+    finally:
+        for live in (plain, graded, replayable, structure):
+            live.cleanup()
 
 
 _TRACE_LABELS = ("portable", "audit", "grads", "runnable", "structure_only")
