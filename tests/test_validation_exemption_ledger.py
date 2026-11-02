@@ -254,7 +254,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="discrete_value_output",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
-        proof="torchlens.validation.exemptions:_posthoc_discrete_output_decision",
+        proof="torchlens.validation.exemptions:_posthoc_value_proof_decision",
         refuses="a continuous output whose value carries the perturbed parent",
     ),
     Exemption(

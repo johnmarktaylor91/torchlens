@@ -246,3 +246,28 @@ class TestAliasGuardUnit:
     def test_non_tensor_passes_through(self) -> None:
         live = torch.randn(8)
         assert ensure_summary_output_owns_storage(3.5, live) == 3.5
+
+    def test_unreadable_storage_still_fails_safe(self) -> None:
+        sentinel = object()
+
+        class _Unreadable:
+            def untyped_storage(self) -> None:
+                raise RuntimeError("storage unreadable")
+
+            def clone(self) -> object:
+                return sentinel
+
+        assert ensure_summary_output_owns_storage(_Unreadable(), torch.randn(8)) is sentinel
+
+    def test_recursion_error_propagates(self) -> None:
+        """A recursion inside the check is capture re-entry, never "unprovable aliasing"."""
+
+        class _Recursing:
+            def untyped_storage(self) -> None:
+                raise RecursionError("maximum recursion depth exceeded")
+
+            def clone(self) -> None:
+                raise AssertionError("a recursion must surface, not clone")
+
+        with pytest.raises(RecursionError):
+            ensure_summary_output_owns_storage(_Recursing(), torch.randn(8))

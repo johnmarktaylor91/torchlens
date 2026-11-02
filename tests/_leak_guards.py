@@ -19,7 +19,7 @@ import pytest
 import torch
 
 from torchlens import _state
-from torchlens._data_classes._trace_viz import TraceVisualizationMixin
+from torchlens._data_classes.trace import Trace
 
 
 def _global_hook_and_mode_depths() -> tuple[int, int, int]:
@@ -187,10 +187,10 @@ def _threads_stopped_after_test() -> Iterator[None]:
 #: the process cwd, not any per-trace scratch directory, so every entry here
 #: is a repo-root collision risk for a test that omits the argument.
 _DRAW_DEFAULT_OUTPATH_TARGETS: tuple[tuple[type, str, str], ...] = (
-    (TraceVisualizationMixin, "draw", "modelgraph"),
-    (TraceVisualizationMixin, "draw_backward", "backward_modelgraph"),
-    (TraceVisualizationMixin, "draw_combined", "combined_modelgraph"),
-    (TraceVisualizationMixin, "render_dagua_graph", "graph.gv"),
+    (Trace, "draw", "modelgraph"),
+    (Trace, "draw_backward", "backward_modelgraph"),
+    (Trace, "draw_combined", "combined_modelgraph"),
+    (Trace, "render_dagua_graph", "graph.gv"),
 )
 
 

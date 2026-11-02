@@ -31,7 +31,7 @@ def _package_of(module: ModuleType) -> ModuleType:
 def report() -> ModuleType:
     """Door to ``torchlens.report`` (facts, summary and narrate destinations)."""
 
-    from ..report import _narrate, _trace_facts, _trace_summary  # noqa: F401
+    from ..report import _agent_json, _narrate, _trace_facts, _trace_summary  # noqa: F401
 
     return _package_of(_trace_summary)
 
@@ -45,9 +45,15 @@ def visualization() -> ModuleType:
 
 
 def intervention() -> ModuleType:
-    """Door to ``torchlens.intervention`` (edits, hooks, run and op-edit destinations)."""
+    """Door to ``torchlens.intervention`` (edits, selection edits, hooks, run and op-edit destinations)."""
 
-    from ..intervention import _op_edits, _trace_edits, _trace_hooks, _trace_run  # noqa: F401
+    from ..intervention import (  # noqa: F401
+        _op_edits,
+        _trace_edits,
+        _trace_hooks,
+        _trace_run,
+        _trace_selection_edits,
+    )
 
     return _package_of(_trace_edits)
 
@@ -106,3 +112,11 @@ def receptive_field() -> ModuleType:
     from ..receptive_field import _layer_fields, _op_fields, _trace_tables  # noqa: F401
 
     return _package_of(_trace_tables)
+
+
+def trace_slice() -> ModuleType:
+    """Door to ``torchlens._trace_slice`` (the ``between`` and ``subgraph`` slice builders)."""
+
+    from .. import _trace_slice
+
+    return _trace_slice
