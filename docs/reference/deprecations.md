@@ -165,6 +165,7 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `rerun()` | `run()` | removed |
 | `Bundle.replay()` | `Bundle.do(site, edit)` | removed |
 | `Bundle.rerun()` | `Bundle.run()` | removed |
+| `Bundle.measure_members(metric=, order=)` | `Bundle.map(fn)`: live members by name, released candidates read `"unmeasured"` | removed |
 | `intervening()` | `without_op()` | removed |
 | `sweep(param=...)` | `sweep(at=...)` | removed |
 | `record_span()` | `span()` | removed |

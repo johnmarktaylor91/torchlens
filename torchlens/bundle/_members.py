@@ -4,6 +4,8 @@ The functions normalise the construction shapes a bundle accepts (a mapping,
 a sequence of traces, a sequence of ``(name, trace)`` pairs) into ordered
 ``(name, trace)`` pairs, refuse non-capture members typed, and resolve
 member references (a name or the member object) to member names.
+``released_candidates`` names the effect-table candidates the bundle no
+longer holds, which ``Bundle.map`` reports as ``"unmeasured"``.
 """
 
 from __future__ import annotations
@@ -185,3 +187,27 @@ def derive_name(log: Trace, *, name: str | None, index: int) -> str:
     if log_name:
         return str(log_name)
     return f"member_{index}"
+
+
+def released_candidates(bundle: Bundle) -> list[str]:
+    """Effect-table candidates with no retained member, sorted, each once.
+
+    Parameters
+    ----------
+    bundle:
+        Bundle whose effect tables are read.
+
+    Returns
+    -------
+    list[str]
+        Candidate ids a table records whose member was released, refused or
+        failed; the ``__baseline__`` row is never listed.
+    """
+    released: set[str] = set()
+    for table in bundle._effect_tables.values():
+        for row in table.rows:
+            if row.candidate_id == "__baseline__":
+                continue
+            if row.member_name is None or row.member_name not in bundle._members:
+                released.add(row.candidate_id)
+    return sorted(released)

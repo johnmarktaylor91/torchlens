@@ -5,6 +5,11 @@
 
 ### Behavior changes
 
+- **bundle**: `Bundle.measure_members` is gone. `Bundle.map(fn)` is the one per-member read: it
+  returns `fn` over every live member keyed by name, and every effect-table candidate the bundle
+  no longer holds (released, refused or failed) keyed by its candidate id with the value
+  `"unmeasured"`. The `order="chain"` view and the `measure_members_order_unavailable` code go
+  with it; `bundle.history` still lists the operations in ledger order.
 - **fastlog**: the `Recording.enrich` step `"param_addresses"` is gone. It never produced an
   enrichment (capture records carry no `parent_param_addresses` field, so it always refused);
   the accepted steps are `"module_path_strings"` and `"all-feasible"`, and any other name
