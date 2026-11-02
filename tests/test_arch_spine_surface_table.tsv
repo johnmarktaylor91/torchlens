@@ -16,7 +16,7 @@ torchlens.Trace	torchlens._data_classes.trace	L1	core	1	0
 torchlens.add	torchlens.intervention.predicates	L4	core	1	0
 torchlens.add_noise	torchlens.intervention.helpers	L4	core	1	0
 torchlens.agent	torchlens.agent	FACADE	facade	0	0
-torchlens.all_sites	torchlens._selection.selectors	L4	core	1	0
+torchlens.all_sites	torchlens._selection.universal	L4	core	1	0
 torchlens.appliances	torchlens.appliances	L1	core	0	0
 torchlens.at_step	torchlens._selection.selectors	L4	core	1	0
 torchlens.attribution	torchlens.attribution	L5	core	0	0

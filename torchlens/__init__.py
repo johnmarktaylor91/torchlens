@@ -100,7 +100,7 @@ _LAZY_ATTRS = {
     "record": ("torchlens.recording._record_one_shot", "record"),
     "receptive_field": ("torchlens.receptive_field", None),
     "label_matches": ("torchlens._selection.selectors", "label_matches"),
-    "all_sites": ("torchlens._selection.selectors", "all_sites"),
+    "all_sites": ("torchlens._selection.universal", "all_sites"),
     "clear_cache": ("torchlens._user_funcs", "clear_cache"),
     "release_model": ("torchlens._user_funcs", "release_model"),
     "replace_with": ("torchlens.intervention.predicates", "replace_with"),

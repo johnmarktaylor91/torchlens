@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1349 modules, 628528 lines, 0 modules without a docstring.
+84 packages, 1350 modules, 628535 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 44 | 24930 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1496 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4553 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 77 | 36539 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 77 | 36537 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10552 |
@@ -33,7 +33,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 2188 |
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 2 | 473 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14711 |
-| `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 15 | 9494 |
+| `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 16 | 9503 |
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 10 | 6695 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2937 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2118 |
@@ -278,7 +278,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (77 modules, 36539 lines)
+Core data structures for representing a logged forward pass. (77 modules, 36537 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -333,7 +333,7 @@ Core data structures for representing a logged forward pass. (77 modules, 36539 
 | `_trace_rerun_state` | Trace rerun-state family: the saved inputs and options a rerun replays (record rebuild destination; empty until its bodies move in). | 5 |
 | `_trace_stack` | Order-aligned activation stacking for completed traces. | 175 |
 | `_trace_state_io` | Trace pickle state helpers moved off ''Trace.__getstate__'' and ''__setstate__'' (record rebuild destination; empty until its bodies move... | 5 |
-| `_trace_stats` | Trace computed stats mixin. | 1314 |
+| `_trace_stats` | Trace computed stats mixin. | 1312 |
 | `_trace_stats_grad_fn_site` | Pure helpers behind the Trace grad-fn site and fire-timing rollups. | 128 |
 | `_trace_validation` | Trace validation, run and backward mixin: thin methods over the record-rebuild destinations. | 610 |
 | `_trace_views` | Trace group-view and field-derived accessor functions. | 463 |
@@ -667,7 +667,7 @@ Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (19 modules, 14
 
 ### `torchlens._selection`
 
-Selection: naming sites and resolving them on a trace. (15 modules, 9494 lines)
+Selection: naming sites and resolving them on a trace. (16 modules, 9503 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -682,9 +682,10 @@ Selection: naming sites and resolving them on a trace. (15 modules, 9494 lines)
 | `resolver` | Resolve TorchLens intervention selectors against model logs. | 1121 |
 | `selection` | Selection / intervention algebra: the dual selection types (L6 stage 1). | 1731 |
 | `selector_base` | The selector base class, its composites and the address-universe classification. | 700 |
-| `selectors` | Typed selectors for TorchLens intervention site resolution. | 1761 |
+| `selectors` | Typed selectors for TorchLens intervention site resolution. | 1713 |
 | `subspace` | Subspace selection producer: directions in activation space (L6 producer wave). | 336 |
 | `target` | Portable target specs: the saved form of a selector plus its slice. | 162 |
+| `universal` | The universal selector ''tl.all_sites'', the named form of ''tl.label_matches(".*")''. | 57 |
 | `values` | Value-based and statistical selection producers (L6 producer wave). | 1178 |
 
 ### `torchlens._semantic`
