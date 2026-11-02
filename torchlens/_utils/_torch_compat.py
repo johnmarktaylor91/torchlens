@@ -77,6 +77,8 @@ __all__ = [
     "HAS_DEVICE_MESH",
     "HAS_DISABLE_TORCH_FUNCTION",
     "HAS_DISABLED_TORCH_FUNCTION_IMPL",
+    "HAS_SPARSE_COMPONENT_ACCESS",
+    "sparse_component_tensors",
     "HAS_DISPATCH_MODE_STACK_QUERY",
     "HAS_DTENSOR",
     "HAS_DTENSOR_SHARD_GEOMETRY",
@@ -1244,6 +1246,71 @@ def _probe_disabled_torch_function_impl() -> bool:
     return callable(_nested_getattr_or_none(torch, ("_C", "_disabled_torch_function_impl")))
 
 
+def _probe_sparse_component_access() -> bool:
+    """Return whether sparse tensors expose their dense component tensors.
+
+    The buffer-write tracker snapshots every registered buffer's whole storage
+    bytes; a sparse tensor has no storage of its own (``untyped_storage()``
+    raises ``NotImplementedError``), so the bytes a write can land on are those
+    of its index and value tensors. COO exposes them through the uncoalesced
+    accessors ``Tensor._indices`` / ``Tensor._values`` (private spelling,
+    stable since 1.x); the compressed layouts through their public
+    ``crow_indices`` / ``col_indices`` / ``ccol_indices`` / ``row_indices`` /
+    ``values``. Without them sparse buffers are not snapshot-tracked and
+    :func:`sparse_component_tensors` fails closed.
+
+    Returns
+    -------
+    bool
+        ``True`` when every component accessor is a callable on ``torch.Tensor``.
+    """
+
+    names = (
+        "_indices",
+        "_values",
+        "crow_indices",
+        "col_indices",
+        "ccol_indices",
+        "row_indices",
+        "values",
+    )
+    return all(callable(getattr(torch.Tensor, name, None)) for name in names)
+
+
+def sparse_component_tensors(tensor: torch.Tensor) -> tuple[torch.Tensor, ...]:
+    """Return the dense tensors that back a sparse ``tensor`` (indices, then values).
+
+    Parameters
+    ----------
+    tensor:
+        A tensor with a sparse layout (COO, CSR, CSC, BSR or BSC).
+
+    Returns
+    -------
+    tuple[torch.Tensor, ...]
+        The layout's index tensors followed by its values tensor, each a view
+        of the sparse tensor's own component storage (COO components are read
+        uncoalesced, so the bytes are the ones a write touches).
+
+    Raises
+    ------
+    NotImplementedError
+        When ``tensor`` is not sparse, its layout has no known component
+        accessors, or ``HAS_SPARSE_COMPONENT_ACCESS`` is ``False``.
+    """
+
+    layout = tensor.layout
+    if not HAS_SPARSE_COMPONENT_ACCESS or layout is torch.strided:
+        raise NotImplementedError(f"no sparse component access for layout {layout}")
+    if layout is torch.sparse_coo:
+        return (tensor._indices(), tensor._values())
+    if layout in (torch.sparse_csr, getattr(torch, "sparse_bsr", None)):
+        return (tensor.crow_indices(), tensor.col_indices(), tensor.values())
+    if layout in (torch.sparse_csc, getattr(torch, "sparse_bsc", None)):
+        return (tensor.ccol_indices(), tensor.row_indices(), tensor.values())
+    raise NotImplementedError(f"no sparse component access for layout {layout}")
+
+
 def _probe_gradient_edge() -> bool:
     """Return whether torch's GradientEdge surface actually WORKS end to end.
 
@@ -1697,6 +1764,8 @@ HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG: bool = _probe_transformer_activation_f
 HAS_ATTENTION_CAUSAL_BIAS: bool = _probe_attention_causal_bias()
 HAS_EXPANDED_WEIGHTS_CONV_PICKER: bool = _probe_expanded_weights_conv_picker()
 HAS_DISABLED_TORCH_FUNCTION_IMPL: bool = _probe_disabled_torch_function_impl()
+#: Sparse buffers' index/value component access (``backends/torch/buffer_writes.py``).
+HAS_SPARSE_COMPONENT_ACCESS: bool = _probe_sparse_component_access()
 HAS_GRADIENT_EDGE: bool = False
 _GRADIENT_EDGE_PROBED: bool = False
 HAS_NODE_PREHOOK: bool = _probe_attribute_paths("HAS_NODE_PREHOOK")
@@ -1865,6 +1934,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_TENSORBASE_CLASS",
     "HAS_DISABLE_TORCH_FUNCTION",
     "HAS_DISABLED_TORCH_FUNCTION_IMPL",
+    "HAS_SPARSE_COMPONENT_ACCESS",
     "HAS_VARIABLE_FUNCTIONS_CLASS",
     "HAS_FAKE_TENSOR_MODE",
     "HAS_DTENSOR_SHARD_GEOMETRY",

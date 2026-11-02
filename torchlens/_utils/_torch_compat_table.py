@@ -152,6 +152,7 @@ _ROWS: tuple[CapabilityRow, ...] = (
     _row("HAS_DEVICE_CONTEXT_DISPATCH"),
     _row("HAS_DEVICE_MESH", absent_on=("2.1.2",)),
     _row("HAS_DISABLED_TORCH_FUNCTION_IMPL"),
+    _row("HAS_SPARSE_COMPONENT_ACCESS", measured=False),
     _row("HAS_DISABLE_TORCH_FUNCTION"),
     _row("HAS_DISPATCH_MODE_STACK_QUERY"),
     _row("HAS_DTENSOR"),

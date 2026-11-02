@@ -413,6 +413,15 @@
 
 ### Bug Fixes
 
+- **capture**: a model with a sparse registered buffer (a `to_sparse()` adjacency fed to
+  `torch.sparse.mm`) can be captured again; the buffer-write tracker's whole-storage snapshot
+  read `untyped_storage()`, which a sparse tensor does not have, so every capture failed before
+  the forward ran. Sparse buffers are now snapshot through their index and value components
+  (capability flag `HAS_SPARSE_COMPONENT_ACCESS`).
+- **errors**: `TraceCaptureError` carries a stable `fields["code"]`: `forward_raised` when the
+  model's own code raised, `capture_internal_error` when the innermost attributable frame was
+  TorchLens's. `LiveModeLabelError` defaults to `label_selector_not_live`, so a live selector
+  naming a finalized postprocess label refuses with a code from every raise site.
 - **capture**: call-site chains no longer include TorchLens's own frames when the package is
   imported through a relative `sys.path` entry such as `PYTHONPATH=.`; those frames had merged
   distinct call sites into false loops. The TorchLens-frame test now compares normalised file
