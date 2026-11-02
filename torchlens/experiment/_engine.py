@@ -796,10 +796,7 @@ def sweep_sites(
     declared_multi = _declared_multi_ids(pairs, multi_site)
     plan = [(candidate_id, where, edit) for candidate_id, where in pairs]
     resolved, refused = _preflight_candidates(baseline, plan, declared_multi, replicates)
-    return _run_plan(
-        baseline,
-        resolved,
-        refused,
+    run = _SweepRun(
         attempted=len(pairs),
         metric=metric,
         retain=retain,
@@ -809,43 +806,42 @@ def sweep_sites(
         retain_ceiling_bytes=retain_ceiling_bytes,
         edit_repr=repr(edit),
     )
+    return _run_plan(baseline, resolved, refused, run)
+
+
+@dataclass(frozen=True)
+class _SweepRun:
+    """The run settings one sweep face hands the shared engine.
+
+    ``extra_params`` ride the recorded ``site_sweep`` operation (a grid's
+    axes), so a loaded artifact can rebuild the caller's shape.
+    """
+
+    attempted: int
+    metric: Callable[[Any], Any]
+    retain: Any
+    engine: str
+    model: nn.Module | None
+    x: Any
+    retain_ceiling_bytes: int | None
+    edit_repr: str
+    extra_params: Mapping[str, Any] | None = None
 
 
 def _run_plan(
     baseline: Trace,
     resolved: list[_Candidate],
     refused: list[tuple[_Candidate, str]],
-    *,
-    attempted: int,
-    metric: Callable[[Any], Any],
-    retain: Any,
-    engine: str,
-    model: nn.Module | None,
-    x: Any,
-    retain_ceiling_bytes: int | None,
-    edit_repr: str,
-    extra_params: Mapping[str, Any] | None = None,
+    run: _SweepRun,
 ) -> Bundle:
     """Execute a preflighted plan: the ONE engine behind both sweep faces.
 
     ``resolved`` candidates run serially in order, each with its own
     ``edit``; ``refused`` candidates land as refused rows without running.
-    ``extra_params`` ride the recorded ``site_sweep`` operation (a grid's
-    axes), so a loaded artifact can rebuild the caller's shape.
     """
 
-    _preflight_retention(baseline, retain, retain_ceiling_bytes, len(resolved))
-    state = _open_sweep(
-        baseline,
-        lane=engine,
-        edit_repr=edit_repr,
-        metric=metric,
-        model=model,
-        x=x,
-        retain=retain,
-        attempted=attempted,
-        extra_params=extra_params,
-    )
+    _preflight_retention(baseline, run.retain, run.retain_ceiling_bytes, len(resolved))
+    state = _open_sweep(baseline, run)
     baseline_value = state.baseline_value
 
     # ---- serial execution, stable order -----------------------------------
@@ -887,34 +883,23 @@ def _close_sweep(state: _SweepState) -> Bundle:
     return bundle
 
 
-def _open_sweep(
-    baseline: Trace,
-    *,
-    lane: str,
-    edit_repr: str,
-    metric: Callable[[Any], Any],
-    model: nn.Module | None,
-    x: Any,
-    retain: Any,
-    attempted: int,
-    extra_params: Mapping[str, Any] | None,
-) -> _SweepState:
+def _open_sweep(baseline: Trace, run: _SweepRun) -> _SweepState:
     """Measure the baseline and open the Bundle + state every sweep row joins."""
 
-    baseline_value = _measure(metric, baseline, "baseline")
+    baseline_value = _measure(run.metric, baseline, "baseline")
     bundle = Bundle({"baseline": baseline}, baseline="baseline")
     state = _SweepState(
         bundle=bundle,
         baseline=baseline,
-        lane=lane,
-        edit_repr=edit_repr,
-        metric=metric,
-        model=model,
-        x=x,
-        retain=retain,
+        lane=run.engine,
+        edit_repr=run.edit_repr,
+        metric=run.metric,
+        model=run.model,
+        x=run.x,
+        retain=run.retain,
         baseline_value=baseline_value,
-        attempted=attempted,
-        extra_params=dict(extra_params or {}),
+        attempted=run.attempted,
+        extra_params=dict(run.extra_params or {}),
     )
     state.rows.append(
         MemberEffectRow(
