@@ -317,7 +317,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # capability warning stay here); measured 4968. Debloat target: 3450.
     # 5000 -> 4700 (compat table): the attribute-only capability probes moved
     # to declarative rows in _utils/_torch_compat_table.py; measured 4676.
-    "torchlens/_utils/_torch_compat.py": 4700,
+    "torchlens/_utils/_torch_compat.py": 4600,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one

@@ -1166,7 +1166,6 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/bundle/__init__.py", "__all__"),
         ("torchlens/bundle/_bytes.py", "__all__"),
         ("torchlens/bundle/_lineage.py", "__all__"),
-        ("torchlens/bundle/_measure.py", "__all__"),
         ("torchlens/bundle/_provenance.py", "__all__"),
         ("torchlens/bundle/_relations.py", "__all__"),
         ("torchlens/bundle/_vary.py", "__all__"),

@@ -568,7 +568,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `tl.intervention.Rule` with `target` (the selector or predicate) and `edit` (the helper or
   callable). `Rule.signal` is a read-only property derived from the target, never a field and
   never saved: `"backward"` for a gradient site (`tl.grad(...)`) or a node selector, `"forward"`
-  for an activation site, `"both"` for a union of the two. `Recipe.merge(*others)`
+  for an activation site, `"both"` for a union of the two. The site decides the pass: `Rule`
+  has no `direction` field, and `Rule(..., direction=...)` (or the old third positional
+  value) refuses `intervention_direction_invalid`. `Recipe.merge(*others)`
   (also `recipe_a & recipe_b`) returns one `tl.Recipe` joining the clauses; a duplicate clause
   refuses `spec_rules_duplicate`.
 
@@ -1104,6 +1106,16 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   regex pattern) select ops by their public labels. `tl.where` filters a table with a
   predicate callable.
 
+**tl.all_sites** — *unstable — no deprecation shim owed*
+: `tl.all_sites()` is the universal selector: `trace[tl.all_sites()]` selects every op of the
+  trace as a whole site, the same result as `trace[tl.label_matches(".*")]` (it stores that
+  kind and pattern, so it matches, binds and persists the same way; a saved spec reloads as
+  `tl.label_matches(".*")`). It composes with `|`, `&`, `-` and `~` like any selector.
+  `tl.all_sites() - region` is the complement of a region in the whole trace; the graph
+  producers and `trace.subgraph` read it as the sites outside `region`, because a site whose
+  element mask is empty seeds nothing. Resolution refuses typed (`non_tensor_site` /
+  `no_index_space`) when some op has no output index space, rather than dropping it.
+
 **Structural selectors**
 : `tl.func` / `tl.module` / `tl.in_module(address)` select by callable or module context
   (`in_module` only builds a selector; whether one record lies in a module is read on the
@@ -1417,7 +1429,12 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **Validation entry**
 : `tl.validate(model, x, scope=...)` validates a model/input pair for a requested scope
-  (for example `"saved"` or `"receptive_field"`), capturing what it needs itself.
+  (for example `"saved"` or `"receptive_field"`), capturing what it needs itself. Like
+  `tl.trace`, it seeds the global RNG streams (Python `random`, NumPy, torch CPU and CUDA) for
+  its own runs and restores the caller's streams on return and on error; the lower-level
+  `torchlens.validation.validate_forward_pass` and `validate_backward_pass` make the same
+  promise, as does `Trace.validate_forward_pass`, which replays each op under its recorded
+  RNG state.
   Keyword-only `output_device` and `save_budget` set the validator capture's save options,
   with the same values and defaults as `CaptureOptions.output_device` (`"same"`) and
   `CaptureOptions.save_budget` (`"auto"`): `output_device="cpu"` lets a GPU model validate
@@ -1581,9 +1598,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   autograd saved for that op's backward (each storage once within the op; a view counts in full),
   and `Layer.total_autograd_memory`, `ModuleCall.autograd_memory`,
   `Module.total_autograd_memory` and `Trace.cost.total_autograd_memory` sum those per-op bands, so a
-  tensor two ops save counts twice. Capture runs floating Parameters with `requires_grad=True`
-  unless `backward_ready=True`, so on frozen Parameters these and `Trace.cost.pinned_autograd_memory`
-  exceed what an eager forward saves; with `backward_ready=True` they match eager.
+  tensor two ops save counts twice. Capture never changes a Parameter's `requires_grad`, so on
+  frozen Parameters these and `Trace.cost.pinned_autograd_memory` match what an eager forward saves.
 
 **Module and call counts**
 : `len(ModuleCall.ops)` counts the call's pass-qualified Ops (the root call included: a Layer it
@@ -1734,6 +1750,16 @@ backends guide (`docs/backends.md`) carries the maturity table and links one pag
   | `constant_unrealizable` | a closure or literal constant has no readable buffer; the message names the constant op |
   | `rng_state_in_graph` | the forward graph carries lazy random-number state that a per-op evaluation would re-evaluate, on a backend without realize-once capture |
   | `unwrapped_op_in_capture` | a wrapper backend met an output or intermediate with no captured producer and the caller asked for a refusal; without that request the trace is marked `capture_verified=False` with this code as `provenance.verification_reason` and a warning |
+  | `runtime_mode_unsupported` | Paddle runs outside dygraph mode, or in PIR mode |
+  | `inplace_op_unsupported` | an in-place or global-state Paddle op runs inside the forward |
+  | `input_mutation_unsupported` | the traced tinygrad callable mutates an input (`Tensor.assign`, `Tensor.replace`, setitem) |
+  | `tensor_output_required` | the traced tinygrad callable returns no tinygrad Tensor |
+  | `tinygrad_input_required` | no positional input of the tinygrad call is a tinygrad Tensor |
+  | `live_payloads_required` | tinygrad replay validation or derived gradients were asked of an audit-only trace, which has no live realized-copy payloads |
+  | `mid_capture_execution_unsupported` | the traced tinygrad callable realizes a tensor or runs a `TinyJit` function during capture |
+  | `traced_transform_entry_unsupported` | the MLX capture entry is an `mx.compile`, `mx.grad` or `mx.vmap` wrapper rather than the eager module or callable |
+  | `intervention_with_derived_grads_unsupported` | MLX `grad_options=` combined with `intervene=` or `halt=` in one call |
+  | `intervention_result_invalid` | an MLX intervention returned something other than an `mx.array`, or changed the output's shape or dtype |
 
   Codes the backends already raised before the registry (`value_dependent_branch_unsupported`,
   `followed_by_unsupported`, `torchscript_boundary` and the rest) are members too; the frozenset is
@@ -1741,11 +1767,26 @@ backends guide (`docs/backends.md`) carries the maturity table and links one pag
 
 **tl.backends.VALIDATION_REASONS** (validation decision reasons)
 : The closed list of per-op decision reasons a backend's `validate` uses in
-  `ValidationStatus.decisions[*]["reason"]` and the status reason counts: `replay_mismatch`,
-  `parent_payload_missing`, `no_replayable_function`, `constant_producer_leaf`,
-  `constant_parent_payload`, `user_intervention_replacement`, `effectful_region`,
-  `perturbation_insensitive`, `dtype_tolerance_exceeded`, `op_unclassified`,
-  `capture_inconsistent`. `op_unclassified`: an op the checker cannot classify (outside every
+  `ValidationStatus.decisions[*]["reason"]` and the status reason counts. One word per failure: a
+  backend whose cause matches a definition uses that name, and a different cause has its own entry.
+  Shared: `replay_mismatch` (re-executing the op from its saved inputs did not reproduce its saved
+  output), `parent_payload_missing` (a payload the replay needs is absent: the op's own saved output
+  or a parent's), `no_replayable_function` (no callable can re-execute the op: none was recorded for
+  a computational op, or a preview backend could not rebuild or re-invoke the saved call),
+  `constant_producer_leaf`, `constant_parent_payload`, `user_intervention_replacement`,
+  `effectful_region`, `perturbation_insensitive`, `dtype_tolerance_exceeded`, `op_unclassified`,
+  `capture_inconsistent`. Torch's own: `arg_logging_mismatch` (the logged parent-argument positions
+  disagree with the data parents, or a parent's saved output disagrees with the argument snapshot at
+  its logged position), `missing_saved_args` (the argument snapshots replay needs were not
+  captured), `dispatch_op_count_mismatch` (replay saw a different number of dispatcher-level ops
+  than capture recorded), `bfs_incomplete` (the walk from outputs back to inputs did not reach every
+  op), `metadata_invariant_exception` (a metadata invariant check raised),
+  `replay_execution_exception` (the recorded function raised on re-execution),
+  `unattributed_tensor_arg` (a tensor argument matches no recorded parent and no known source),
+  `dropped_parent_edge_witness` (the completeness witness shows a parent edge capture dropped).
+  MLX's own: `declared_parents_inconsistent` (an op's declared parents disagree with the arrays its
+  saved call reads), `replay_coverage_incomplete` (the replay did not cover every captured op).
+  `op_unclassified`: an op the checker cannot classify (outside every
   classification table, or an initializer that contaminated the forward), recorded as a failed
   `metadata`-phase decision on that op. `capture_inconsistent`: capture records that disagree with
   each other (a callback self-consistency failure, an equation or op count mismatch, a replay kind
@@ -2170,7 +2211,8 @@ deprecation shim owed (do/Selection spellings slate-ratified subject to D7)*
   `(N sites, M elements)`. The former `SiteTable` (`resolve_sites`, `.first`, `.where`) folded into it:
   `selection[0]` and `trace[selector & other]` spell those. TWO-LEVEL DENOTATION:
   (touched-site family, selected-element set); zero-mask entries are retained
-  first-class; `.is_empty`/`__bool__` are ELEMENT-level; `bool()` on the QUERY
+  first-class (`len()` and iteration count them; the graph producers and
+  `trace.subgraph` do not seed from them); `.is_empty`/`__bool__` are ELEMENT-level; `bool()` on the QUERY
   type refuses typed (`selection_bool_ambiguous`). Anything region-shaped
   implements `__selection__`; `Site.mask` returns a FRESH materialization
   (mutation cannot alter the selection). Masks are exact AS SETS; producer
@@ -2251,8 +2293,14 @@ no deprecation shim owed*
   error). Operands are site label strings (a bare layer label on a
   multi-pass layer is the all-passes Layer spelling), `Op`/`Layer` handles,
   or any ACT selection; `between` endpoints also accept lists of regions.
-  Element masks never shrink a graph region (a touched site is a touched
-  node — family semantics). Membership is a structural fact about THIS
+  A seed or endpoint site that carries at least one selected element counts
+  as its whole node (a partial mask never shrinks a graph region). A site
+  whose element mask is EMPTY seeds nothing: `x - y` keeps every site `x`
+  touched, with an empty mask where `y` removed all of it, and those sites
+  are not part of the region the closure grows from, so
+  `tl.neighborhood(tl.all_sites() - region, ...)` grows from the sites
+  outside `region`. `trace.subgraph(selection)` takes the same member set.
+  Membership is a structural fact about THIS
   capture, so entries are whole-site masks with
   `provenance.relation="exact"`. PARAM/EDGE operands refuse
   `selection_kind_incompatible`; unknown sites refuse `site_not_in_trace`;

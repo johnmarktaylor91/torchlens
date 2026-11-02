@@ -170,3 +170,29 @@ def test_committed_durations_file_is_well_formed_and_small() -> None:
     assert td.structural_findings(rows) == []
     assert td.DURATIONS_PATH.stat().st_size < 200_000
     assert td.read_meta()["source_commit"]
+
+
+def test_tier_shard_option_partitions_every_file_exactly_once() -> None:
+    """``--tier-shard I/N`` keeps the files ``shards --count N --index I`` prints, disjointly."""
+
+    from types import SimpleNamespace
+
+    from _tiers_plugin import parse_tier_shard, tier_shard_items
+
+    files = td.test_files_on_disk()
+    stray = td.REPO_ROOT / "tests" / "not_a_listed_test_module.py"
+    items = [SimpleNamespace(path=td.REPO_ROOT / f) for f in files] + [SimpleNamespace(path=stray)]
+    expected = td.balanced_shards(td.read_rows(), 4, files)
+    seen: list[Path] = []
+    for index in range(4):
+        kept, dropped = tier_shard_items(items, index, 4, td.REPO_ROOT)
+        assert len(kept) + len(dropped) == len(items)
+        kept_files = [Path(item.path).relative_to(td.REPO_ROOT).as_posix() for item in kept]
+        extra = [stray.relative_to(td.REPO_ROOT).as_posix()] if index == 0 else []
+        assert sorted(kept_files) == sorted(expected[index] + extra)
+        seen += [Path(item.path) for item in kept]
+    assert sorted(seen) == sorted(Path(item.path) for item in items)
+    assert parse_tier_shard("3/8") == (3, 8)
+    for bad in ("8/8", "-1/8", "1", "a/b", "1/0"):
+        with pytest.raises(pytest.UsageError):
+            parse_tier_shard(bad)
