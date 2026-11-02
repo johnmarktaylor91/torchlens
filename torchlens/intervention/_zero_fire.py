@@ -167,7 +167,7 @@ def _distribution_leaf_paths(spec: Any, prefix: str = "") -> tuple[str, ...]:
 def live_distribution_leaf_paths(output: Any) -> tuple[str, ...]:
     """Return the tensor-leaf attribute paths capture records for a live distribution."""
 
-    from ..backends.torch.ops import _try_build_container_spec
+    from ..backends.torch._ops_container_base import _try_build_container_spec
 
     spec = _try_build_container_spec(output)
     return _distribution_leaf_paths(spec) if spec is not None else ()

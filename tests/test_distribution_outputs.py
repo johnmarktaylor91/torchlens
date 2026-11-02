@@ -37,8 +37,8 @@ from torchlens._ir.distribution_container import (
     distribution_layout,
 )
 from torchlens._runnable import PathFaithfulness
-from torchlens.backends.torch.ops import (
-    _try_build_container_spec,
+from torchlens.backends.torch._ops_container_base import _try_build_container_spec
+from torchlens.backends.torch._ops_containers import (
     _walk_output_tensors_with_paths,
     runnable_output_losslessness,
 )
@@ -250,7 +250,7 @@ def test_module_returning_a_distribution_exposes_parameter_outputs() -> None:
 def test_output_replacement_targets_one_distribution_parameter() -> None:
     """Replacing ``.loc`` returns a new distribution; ``scale`` and the original are untouched."""
 
-    from torchlens.backends.torch._ops_interventions import _replace_output_tensors_by_path
+    from torchlens.backends.torch._ops_predicates import _replace_output_tensors_by_path
 
     live = NormalHead().eval()(_x())
     zeros = torch.zeros(2, 2)
@@ -326,7 +326,7 @@ def test_tampered_distribution_spec_refuses_typed() -> None:
 def test_forged_lossless_flag_cannot_bless_a_stateful_type() -> None:
     """Load-time recompute: a data-descriptor field makes the rebuild lossy whatever the flag."""
 
-    from torchlens._runnable_execution import _spec_node_reconstruction_lossy
+    from torchlens._runnable.call_outputs import _spec_node_reconstruction_lossy
 
     spec = ContainerSpec(
         kind=DISTRIBUTION_CONTAINER_KIND,

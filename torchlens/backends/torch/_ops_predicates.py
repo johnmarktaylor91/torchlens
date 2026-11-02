@@ -17,6 +17,11 @@ from ..._ir.container import (
     OutputPathComponent,
     TupleIndex,
 )
+from ..._ir.distribution_container import (
+    distribution_children,
+    is_distribution,
+    replace_distribution_field,
+)
 from ..._ir.events import (
     FunctionCallRef,
 )
@@ -76,13 +81,6 @@ def _replace_output_value(
 
     if path in replacements:
         return replacements[path]
-    # Local import: this module's functions are rebound into ``ops``' globals.
-    from ..._ir.distribution_container import (
-        distribution_children,
-        is_distribution,
-        replace_distribution_field,
-    )
-
     if is_distribution(value):
         replaced = value
         for name, item in distribution_children(value):

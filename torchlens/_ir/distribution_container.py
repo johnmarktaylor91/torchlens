@@ -146,7 +146,7 @@ def distribution_layout(value: Any) -> DistributionLayout:
         The recorded fields, literal state, aliases and the lossy reason.
     """
 
-    from .container import _fields_are_inert_settable, _type_has_safe_new
+    from ._container_type_probes import _fields_are_inert_settable, _type_has_safe_new
 
     instance_dict = getattr(value, "__dict__", None)
     if not isinstance(instance_dict, dict):
@@ -249,7 +249,8 @@ def rebuild_distribution(
         If the type is not loaded or the recorded data is not admissible.
     """
 
-    from .container import ContainerReconstructionError, _inert_new
+    from ._container_type_probes import _inert_new
+    from .container import ContainerReconstructionError
 
     state, aliases, problem = _parse_aux_data(spec.aux_data, tuple(spec.fields))
     if container_type is None:

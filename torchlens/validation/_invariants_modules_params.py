@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .._ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
+from .._ir.distribution_container import DISTRIBUTION_CONTAINER_KIND
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -256,9 +257,6 @@ def _container_tensor_components(spec: object) -> tuple[object, ...]:
     tuple[object, ...]
         Components in traversal order.
     """
-
-    # Local import: this module's checks are rebound into ``invariants``' globals.
-    from .._ir.distribution_container import DISTRIBUTION_CONTAINER_KIND
 
     kind = getattr(spec, "kind", None)
     if kind in {"tuple", "list", "registered"}:
