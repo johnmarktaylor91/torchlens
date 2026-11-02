@@ -11,16 +11,22 @@ inline. Design:
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from pathlib import Path
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 import torch
 from safetensors import safe_open
 from safetensors.torch import save_file
 
+from ..._utils.hashing import sha256_file
 from .._durability import fsync_file
 from ..format_errors import ArtifactError
+from ..paths import reject_symlink_path
 from .contract import BLOBS_DIR, PAYLOAD_CODEC_IDS
+
+if TYPE_CHECKING:
+    from ..manifest import TensorEntry
 
 #: Bytes after which the chunk writer closes the current chunk and opens the next.
 PAYLOAD_CHUNK_BYTES: Final = 256 << 20
@@ -30,6 +36,8 @@ _CHUNK_BYTES_ENV: Final = "TORCHLENS_PAYLOAD_CHUNK_BYTES"
 TORCH_CODEC: Final = PAYLOAD_CODEC_IDS[0]
 #: Codec id of backend payloads carried as numpy-transport tensors.
 NUMPY_CODEC: Final = PAYLOAD_CODEC_IDS[1]
+#: File name stem of the intervention recipe's tensor chunks.
+RECIPE_CHUNK_STEM: Final = "recipe"
 
 
 def chunk_bytes_cap() -> int:
@@ -87,6 +95,9 @@ class ChunkWriter:
         codecs of one artifact.
     directory:
         Directory, relative to ``root``, that holds the chunks.
+    stem:
+        File name stem of the chunks; the codec id unless a series of its own
+        (the intervention recipe's ``recipe-<nnnn>``) is wanted.
     """
 
     def __init__(
@@ -96,6 +107,7 @@ class ChunkWriter:
         codec: str,
         counter: list[int] | None = None,
         directory: str = BLOBS_DIR,
+        stem: str | None = None,
     ) -> None:
         if codec not in PAYLOAD_CODEC_IDS:
             raise ArtifactError(
@@ -106,6 +118,7 @@ class ChunkWriter:
         self.root = Path(root)
         self.codec = codec
         self.directory = directory
+        self.stem = stem or codec
         self._counter = counter if counter is not None else [0]
         self._cap = chunk_bytes_cap()
         self._pending: dict[str, torch.Tensor] = {}
@@ -116,7 +129,7 @@ class ChunkWriter:
     def _chunk_name(self) -> str:
         """Return the relative path of the chunk being filled."""
 
-        return f"{self.directory}/{self.codec}-{self._index:04d}.safetensors"
+        return f"{self.directory}/{self.stem}-{self._index:04d}.safetensors"
 
     def submit(self, tensor: torch.Tensor) -> tuple[str, str]:
         """Queue one tensor into the open chunk.
@@ -180,6 +193,24 @@ class PayloadStore:
         self.directory = directory
         self._counter = [0]
         self._writers: dict[str, ChunkWriter] = {}
+        self._recipe: ChunkWriter | None = None
+
+    def recipe_writer(self) -> ChunkWriter:
+        """Return the writer of the intervention recipe's tensors (``recipe-<nnnn>``).
+
+        It shares the artifact's key counter, so recipe keys stay monotone
+        with the record payload keys.
+        """
+
+        if self._recipe is None:
+            self._recipe = ChunkWriter(
+                self.root,
+                codec=TORCH_CODEC,
+                counter=self._counter,
+                directory=self.directory,
+                stem=RECIPE_CHUNK_STEM,
+            )
+        return self._recipe
 
     def writer(self, codec: str) -> ChunkWriter:
         """Return the chunk writer of one codec, opening it on first use."""
@@ -203,13 +234,19 @@ class PayloadStore:
             writer = self._writers[codec]
             writer.flush()
             written.extend(writer.written)
+        if self._recipe is not None:
+            self._recipe.flush()
+            written.extend(self._recipe.written)
         return written
 
     @property
     def codecs(self) -> list[str]:
         """Codec ids that wrote at least one tensor, in contract order."""
 
-        return [codec for codec in PAYLOAD_CODEC_IDS if codec in self._writers]
+        used = set(self._writers)
+        if self._recipe is not None and self._recipe.written:
+            used.add(self._recipe.codec)
+        return [codec for codec in PAYLOAD_CODEC_IDS if codec in used]
 
 
 def open_chunk_writer(root: str | Path, *, codec: str) -> ChunkWriter:
@@ -276,6 +313,57 @@ def tensor_reference(
     return fields
 
 
+def contained_chunk(root: Path, blob: str) -> Path:
+    """Resolve a record's chunk path, refusing any path that leaves its chunk directory.
+
+    The artifact is untrusted: a reference must name ``<directory>/<file>``
+    under the artifact root, with no absolute path, no ``..`` and no symlinked
+    directory or file redirecting outside (a digest does not help, the same
+    hand wrote it).
+
+    Parameters
+    ----------
+    root:
+        Artifact directory.
+    blob:
+        Chunk path relative to ``root``, as stored in the reference.
+
+    Returns
+    -------
+    Path
+        The resolved chunk path.
+
+    Raises
+    ------
+    ArtifactError
+        ``bundle_load_failed`` for an absolute, traversing or escaping path.
+    """
+
+    candidate = Path(blob)
+    problem = None
+    if candidate.is_absolute():
+        problem = "an absolute path"
+    elif ".." in candidate.parts:
+        problem = "a parent traversal"
+    elif len(candidate.parts) != 2:
+        problem = "not <directory>/<chunk file>"
+    if problem is None:
+        directory = root / candidate.parts[0]
+        reject_symlink_path(directory, context="payload chunk directory", code="bundle_load_failed")
+        try:
+            resolved = (root / candidate).resolve()
+            resolved.relative_to(directory.resolve())
+        except (OSError, ValueError):
+            problem = "a path traversal outside its chunk directory"
+        else:
+            return resolved
+    raise ArtifactError(
+        f"Payload chunk reference {blob!r} is {problem}; refusing to read it.",
+        code="bundle_load_failed",
+        remedy="the artifact was altered; load only artifacts you trust, or re-save it",
+    )
+
+
 def read_tensor(root: str | Path, *, blob: str, key: str) -> torch.Tensor:
     """Read one tensor by chunk file and key; the eager half of a lazy reference.
 
@@ -300,7 +388,7 @@ def read_tensor(root: str | Path, *, blob: str, key: str) -> torch.Tensor:
         ``bundle_load_failed`` when the chunk or key is missing or unreadable.
     """
 
-    path = Path(root) / blob
+    path = contained_chunk(Path(root), blob)
     try:
         with safe_open(str(path), framework="pt") as handle:
             if key not in handle.keys():
@@ -316,3 +404,80 @@ def read_tensor(root: str | Path, *, blob: str, key: str) -> torch.Tensor:
             code="bundle_load_failed",
             remedy="the artifact is incomplete or damaged; re-save it",
         ) from exc
+
+
+def submit_tensor_payload(
+    *,
+    store: PayloadStore,
+    tensor_refs: dict[str, dict[str, Any]],
+    blob_id: str,
+    tensor: torch.Tensor,
+    kind: str,
+    label: str,
+) -> dict[str, Any]:
+    """Queue one torch tensor payload into the artifact's chunk files.
+
+    Parameters
+    ----------
+    store:
+        Chunk store of the staged artifact (``blobs/<codec>-<nnnn>.safetensors``).
+    tensor_refs:
+        Blob id to tensor reference fields; this payload's entry is added.
+    blob_id:
+        Opaque blob identifier the scrubbed state references.
+    tensor:
+        Tensor payload to persist.
+    kind:
+        Logical tensor kind.
+    label:
+        Human-readable TorchLens layer label.
+
+    Returns
+    -------
+    dict[str, Any]
+        Fields of the manifest ``TensorEntry``; ``sha256`` is filled by
+        ``seal_tensor_entries`` once the chunk is on disk.
+    """
+
+    host = host_tensor(tensor)
+    blob, key = store.submit(host, codec=TORCH_CODEC)
+    tensor_refs[blob_id] = tensor_reference(tensor, blob=blob, key=key)
+    return {
+        "blob_id": blob_id,
+        "kind": kind,
+        "label": label,
+        "relative_path": blob,
+        "backend": "safetensors",
+        "shape": [int(dim) for dim in tensor.shape],
+        "dtype": str(tensor.dtype).replace("torch.", ""),
+        "device_at_save": str(tensor.device),
+        "layout": str(tensor.layout).replace("torch.", ""),
+        "bytes": int(host.numel() * host.element_size()),
+        "sha256": "",
+        "requires_grad": bool(tensor.requires_grad),
+    }
+
+
+def seal_tensor_entries(tmp_path: Path, entries: list[TensorEntry]) -> list[TensorEntry]:
+    """Fill each entry's ``sha256`` with the digest of its closed chunk file.
+
+    Parameters
+    ----------
+    tmp_path:
+        Staged artifact directory.
+    entries:
+        Entries queued while the chunks were open.
+
+    Returns
+    -------
+    list[TensorEntry]
+        The entries with chunk digests, in the same order.
+    """
+
+    digests: dict[str, str] = {}
+    sealed: list[TensorEntry] = []
+    for entry in entries:
+        if entry.relative_path not in digests:
+            digests[entry.relative_path] = sha256_file(tmp_path / entry.relative_path)
+        sealed.append(replace(entry, sha256=digests[entry.relative_path]))
+    return sealed

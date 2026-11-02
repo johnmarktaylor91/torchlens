@@ -42,8 +42,9 @@ from .contract import (
     RECORD_CONTRACT_VERSION,
     RECORD_INDEX,
     RECORDS_DIR,
-    refuse_writer_not_built,
 )
+from .payloads import PayloadStore
+from .recipe import build_recipe, write_recipe
 from .schema import level_columns, record_schema
 from .values import ValueEncoder, decode_value, object_state, record_type_table, tagged
 
@@ -490,6 +491,7 @@ def write_trace_envelope(
     save_level: str,
     payload_policy: Mapping[str, bool],
     kind: str = "trace",
+    extra_disclosures: Sequence[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     """Write the record tables and 3.0 manifest of one staged trace.
 
@@ -512,6 +514,8 @@ def write_trace_envelope(
         Resolved payload flags.
     kind:
         Artifact kind recorded in the manifest.
+    extra_disclosures:
+        Disclosures of files written beside the records (the recipe).
 
     Returns
     -------
@@ -538,19 +542,19 @@ def write_trace_envelope(
             payload_policy=payload_policy,
             records=records,
             codecs=codecs,
-            disclosures=disclosures,
+            disclosures=[*disclosures, *extra_disclosures],
         )
     )
     (root / MANIFEST_FILE).write_bytes(_dump(manifest, sort_keys=True))
     return manifest
 
 
-def _refuse_reload(detail: str) -> ArtifactError:
+def _refuse_reload(detail: str, *, code: str) -> ArtifactError:
     """Return the save refusal for a staged artifact that does not read back."""
 
     return ArtifactError(
         f"The 3.0 writer produced an artifact that does not read back: {detail}",
-        code="bundle_save_failed",
+        code=code,
         remedy="report this; the writer and the reader disagree",
     )
 
@@ -575,21 +579,26 @@ def reload_check(root: Path) -> None:
     try:
         manifest = _json.read_bounded(root / MANIFEST_FILE)
     except (OSError, ValueError) as exc:
-        raise _refuse_reload(f"manifest.json: {exc}") from exc
+        raise _refuse_reload(f"manifest.json: {exc}", code="bundle_save_failed") from exc
     for kind, entry in dict(manifest.get("records") or {}).items():
         try:
             payload = _json.read_bounded(root / str(entry["path"]))
         except (OSError, ValueError, KeyError) as exc:
-            raise _refuse_reload(f"records of {kind}: {exc}") from exc
+            raise _refuse_reload(f"records of {kind}: {exc}", code="bundle_save_failed") from exc
         if kind == "trace":
             decode_value(payload.get("fields"), at="trace")
             continue
         rows = payload.get("rows")
         if rows != entry.get("rows"):
-            raise _refuse_reload(f"{kind} has {rows} rows, the manifest says {entry.get('rows')}")
+            raise _refuse_reload(
+                f"{kind} has {rows} rows, the manifest says {entry.get('rows')}",
+                code="bundle_save_failed",
+            )
         for name, cells in dict(payload.get("columns") or {}).items():
             if not isinstance(cells, list) or len(cells) != rows:
-                raise _refuse_reload(f"column {kind}.{name} does not have {rows} cells")
+                raise _refuse_reload(
+                    f"column {kind}.{name} does not have {rows} cells", code="bundle_save_failed"
+                )
             decode_value(cells, at=f"{kind}.{name}")
 
 
@@ -663,21 +672,63 @@ def write_bundle(bundle: Any, path: str | Path, *, level: str = "portable") -> N
     bundle.save(path, level=level)
 
 
-def write_intervention_recipe(spec: Any, path: str | Path) -> None:
+def write_intervention_recipe(
+    spec: Any,
+    path: str | Path,
+    *,
+    store: PayloadStore | None = None,
+    save_level: str = "portable",
+    helper_registry_version: Any = None,
+    append_state: Mapping[str, Any] | None = None,
+    function_registry_keys: Sequence[Mapping[str, Any]] = (),
+    spec_derived: bool = False,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Write a staged intervention spec as the typed recipe file.
 
     The same grammar serves the recipe inside a trace artifact and the
-    separate recipe ``save_intervention`` writes.
+    separate recipe ``save_intervention`` writes (``recipe.build_recipe``).
 
     Parameters
     ----------
     spec:
         Staged intervention spec (rules and built-in edits).
     path:
-        Target file.
+        Artifact directory; ``intervention.json`` is written under it and the
+        recipe tensors into ``blobs/recipe-<nnnn>.safetensors``.
+    store:
+        Payload store of the artifact, so recipe keys share its counter; the
+        caller closes it. ``None`` opens and closes one here.
+    save_level, helper_registry_version, append_state, function_registry_keys, spec_derived:
+        Recipe header values (``recipe.build_recipe``).
+
+    Returns
+    -------
+    tuple[dict[str, Any], list[dict[str, Any]]]
+        The manifest ``intervention`` entry and the disclosures of values
+        stored as text.
     """
 
-    refuse_writer_not_built("write_intervention_recipe", "torchlens/_io/format3/writer.py")
+    if spec is None or not hasattr(spec, "hook_specs"):
+        raise ArtifactError(
+            f"write_intervention_recipe needs a staged intervention spec, got {type(spec).__name__}.",
+            code="bundle_save_failed",
+            remedy="pass trace._intervention_spec or a loaded InterventionSpec",
+        )
+    root = Path(path)
+    owned = store is None
+    payloads = PayloadStore(root) if store is None else store
+    recipe, disclosures = build_recipe(
+        spec,
+        store=payloads,
+        save_level=save_level,
+        helper_registry_version=helper_registry_version,
+        append_state=dict(append_state or {}),
+        function_registry_keys=function_registry_keys,
+        spec_derived=spec_derived,
+    )
+    if owned:
+        payloads.close()
+    return write_recipe(root, recipe), disclosures
 
 
 __all__ = [

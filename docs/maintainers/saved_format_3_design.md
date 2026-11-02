@@ -396,7 +396,7 @@ Delete outright once the reader stream's `load_trace` reads the golden set:
 | --- | ---: | --- |
 | `torchlens/_io/_safe_unpickle.py` | 1983 | restricted unpickler, allowlist, opcode prescan, `_RenameAwareUnpickler`, `_RENAMED_PICKLE_GLOBALS` |
 | `torchlens/_io/rehydrate.py` | 1510 | `Trace.__new__` plus `__setstate__` walk over pickled state |
-| `torchlens/_io/_portability_preflight.py` | 332 | dry-run unpickle before publish |
+| `torchlens/_io/_portability_preflight.py` | gone | dry-run unpickle before publish |
 | `torchlens/_io/state_keys.py` | 307 | shadow filter for pickled setstate key sets |
 | `torchlens/_io/_inline_tensor.py` | 275 | pickle reduce of small tensors |
 | `torchlens/_io/_pre3_module_paths.py` | 183 | pre-3 module-path probe in pickle globals (the 2.x refusal stays, section 14, by a cheaper test) |

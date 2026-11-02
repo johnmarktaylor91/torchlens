@@ -211,12 +211,12 @@ class _TlSpecWriter:
         *,
         path: Path,
         log: Any,
-        spec_json: dict[str, Any],
-        tensor_entries: list[TensorEntry],
-        legacy_format_version: str,
+        recipe: dict[str, Any],
+        target_manifest: list[Any],
         save_level: str,
+        envelope: dict[str, Any],
     ) -> None:
-        """Write a unified manifest for an intervention spec.
+        """Write the manifest of a ``kind="intervention"`` artifact.
 
         Parameters
         ----------
@@ -224,14 +224,14 @@ class _TlSpecWriter:
             Destination ``manifest.json`` path.
         log:
             Source model log carrying the intervention recipe.
-        spec_json:
-            Serialized intervention spec payload.
-        tensor_entries:
-            Persisted tensor entries.
-        legacy_format_version:
-            Legacy intervention ``format_version`` value.
+        recipe:
+            The recipe document written to ``intervention.json``.
+        target_manifest:
+            Resolved target rows the replay compatibility check compares.
         save_level:
             Save level recorded in the public schema.
+        envelope:
+            The 3.0 envelope fields (written last, so ``files`` is complete).
         """
 
         if save_level == "runnable":
@@ -241,21 +241,19 @@ class _TlSpecWriter:
                 remedy="use 'audit', 'executable_with_callables', or 'portable'",
                 artifact_kind="intervention",
             )
-        intervention_metadata = cls._intervention_compat_metadata(spec_json)
-        manifest = {
-            "format_version": legacy_format_version,
-            "tensor_entries": [entry.to_dict() for entry in tensor_entries],
-        }
-        manifest.update(
-            cls.build_manifest(
-                kind="intervention",
-                source=log,
-                tensor_entries=tensor_entries,
-                save_level=save_level,
-                spec_compat_info=intervention_metadata,
-                intervention_compat_metadata=intervention_metadata,
-            )
+        intervention_metadata = cls._intervention_compat_metadata(
+            {**recipe, "target_manifest": target_manifest}
         )
+        manifest = cls.build_manifest(
+            kind="intervention",
+            source=log,
+            tensor_entries=[],
+            save_level=save_level,
+            spec_compat_info=intervention_metadata,
+            intervention_compat_metadata=intervention_metadata,
+        )
+        manifest.pop("tensor_entries", None)
+        manifest.update(envelope)
         cls.write_json(path, manifest)
 
     @classmethod

@@ -3,13 +3,13 @@
 Threat model: a victim runs a DEFAULT ``tl.load`` on an attacker-controlled
 ``.tlspec`` DIRECTORY. These tests lock three fixes:
 
-* F-1 -- the intervention tensor-sidecar loader
-  (``torchlens/intervention/save.py::_load_tensor_refs``) must reject a manifest
-  ``relative_path`` that is absolute, escapes the spec directory with ``".."``,
-  or targets an in-bundle symlink, BEFORE the checksum gate and safetensors read
-  (the attacker also controls ``sha256``, so the checksum is not a defense).
-* F-2 -- ``load_intervention_spec`` must reject a symlinked ``spec.json`` /
-  ``manifest.json`` child before reading them.
+* F-1 -- the recipe tensor reader
+  (``torchlens/_io/format3/payloads.py::contained_chunk``) must reject a chunk
+  path that is absolute, escapes the artifact with ``".."``, or reaches outside
+  through a symlinked file or ``blobs/`` directory, BEFORE the safetensors read
+  (the attacker also writes the manifest digests, so they are not a defense).
+* F-2 -- ``load_intervention_spec`` must reject a symlinked ``intervention.json``
+  / ``manifest.json`` child before reading them.
 * D-LOW -- a torch-declared trace bundle must not select a non-torch payload
   codec: a per-entry ``logical_backend`` other than ``torch`` is rejected at
   manifest preflight so materialization never imports a foreign codec runtime.
@@ -134,8 +134,9 @@ def _build_torch_bundle(tmp_path: Path, *, name: str = "trace.tlspec") -> Path:
 def _build_intervention_spec(tmp_path: Path, *, name: str = "iv.tlspec") -> Path:
     """Save one portable intervention spec carrying a tensor sidecar.
 
-    Uses ``tl.steer`` so the spec persists exactly one ``tensors/`` sidecar,
-    exercising the guarded tensor-sidecar loader on the happy path.
+    Uses ``tl.steer`` so the recipe persists exactly one tensor in
+    ``blobs/recipe-0000.safetensors``, exercising the guarded chunk reader on the
+    happy path.
 
     Parameters
     ----------
@@ -177,117 +178,125 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
-def _first_sidecar(spec_path: Path) -> Path:
-    """Return the first intervention tensor sidecar file."""
+def _tensor_refs(node: Any) -> list[dict[str, Any]]:
+    """Return every tensor reference object inside recipe JSON, in document order."""
 
-    return next((spec_path / "tensors").glob("*.safetensors"))
+    found: list[dict[str, Any]] = []
+    if isinstance(node, list):
+        for item in node:
+            found.extend(_tensor_refs(item))
+    elif isinstance(node, dict):
+        if node.get("$tl") == "tensor":
+            found.append(node)
+        else:
+            for item in node.values():
+                found.extend(_tensor_refs(item))
+    return found
+
+
+def _point_first_ref(spec_path: Path, blob: str) -> Path:
+    """Repoint the recipe's first tensor reference at ``blob``; return the real chunk."""
+
+    recipe = _read_json(spec_path / "intervention.json")
+    ref = _tensor_refs(recipe)[0]
+    original = spec_path / str(ref["blob"])
+    ref["blob"] = blob
+    _write_json(spec_path / "intervention.json", recipe)
+    return original
 
 
 # ---------------------------------------------------------------------------
-# F-1: intervention tensor-sidecar path traversal / symlink
+# F-1: recipe tensor chunk path traversal / symlink
 # ---------------------------------------------------------------------------
 
 
-def test_intervention_normal_spec_with_sidecar_loads(tmp_path: Path) -> None:
-    """A benign intervention spec with a tensor sidecar still loads."""
+def test_intervention_normal_spec_with_tensor_loads(tmp_path: Path) -> None:
+    """A benign intervention spec with a recipe tensor still loads."""
 
     spec_path = _build_intervention_spec(tmp_path)
-    manifest = _read_json(spec_path / "manifest.json")
-    assert len(manifest["tensor_entries"]) == 1
+    recipe = _read_json(spec_path / "intervention.json")
+    assert len(_tensor_refs(recipe)) == 1
 
-    loaded = tl.load(spec_path)
+    loaded = load_intervention_spec(spec_path)
     assert isinstance(loaded, InterventionSpec)
 
 
-def test_intervention_sidecar_rejects_parent_traversal(tmp_path: Path) -> None:
-    """A ``".."`` sidecar path must be rejected even with a matching sha256."""
+def test_intervention_tensor_rejects_parent_traversal(tmp_path: Path) -> None:
+    """A ``".."`` chunk path must be rejected even when the file outside is identical."""
 
     spec_path = _build_intervention_spec(tmp_path)
-    manifest = _read_json(spec_path / "manifest.json")
-    original = _first_sidecar(spec_path)
-    outside = tmp_path / "outside.safetensors"
-    shutil.copy2(original, outside)
-    # Attacker controls sha256 too: point it at the (identical) out-of-bundle
-    # file so the checksum gate would pass if containment were not enforced.
-    manifest["tensor_entries"][0]["relative_path"] = "../outside.safetensors"
-    _write_json(spec_path / "manifest.json", manifest)
+    original = _point_first_ref(spec_path, "../outside.safetensors")
+    shutil.copy2(original, tmp_path / "outside.safetensors")
 
-    with pytest.raises(ReplayPreconditionError, match="parent traversal"):
-        tl.load(spec_path)
+    with pytest.raises(ArtifactError, match="parent traversal"):
+        load_intervention_spec(spec_path)
 
 
-def test_intervention_sidecar_rejects_absolute_path(tmp_path: Path) -> None:
-    """An absolute sidecar path must never be trusted."""
+def test_intervention_tensor_rejects_absolute_path(tmp_path: Path) -> None:
+    """An absolute chunk path must never be trusted."""
 
     spec_path = _build_intervention_spec(tmp_path)
-    manifest = _read_json(spec_path / "manifest.json")
-    original = _first_sidecar(spec_path)
     outside = tmp_path / "absolute.safetensors"
+    original = _point_first_ref(spec_path, str(outside.resolve()))
     shutil.copy2(original, outside)
-    manifest["tensor_entries"][0]["relative_path"] = str(outside.resolve())
-    _write_json(spec_path / "manifest.json", manifest)
 
-    with pytest.raises(ReplayPreconditionError, match="absolute"):
-        tl.load(spec_path)
+    with pytest.raises(ArtifactError, match="absolute"):
+        load_intervention_spec(spec_path)
 
 
-def test_intervention_sidecar_rejects_in_bundle_symlink_file(tmp_path: Path) -> None:
-    """An in-bundle sidecar symlink pointing outside must be rejected."""
+def test_intervention_tensor_rejects_in_bundle_symlink_file(tmp_path: Path) -> None:
+    """An in-artifact chunk symlink pointing outside must be rejected."""
 
     if not _supports_symlinks(tmp_path):
         pytest.skip("filesystem does not support symlinks")
 
     spec_path = _build_intervention_spec(tmp_path)
-    manifest = _read_json(spec_path / "manifest.json")
-    original = _first_sidecar(spec_path)
+    original = _point_first_ref(spec_path, "blobs/link.safetensors")
     outside = tmp_path / "secret.safetensors"
     shutil.copy2(original, outside)
-    link = spec_path / "tensors" / "link.safetensors"
-    link.symlink_to(outside)
-    manifest["tensor_entries"][0]["relative_path"] = "tensors/link.safetensors"
-    _write_json(spec_path / "manifest.json", manifest)
+    (spec_path / "blobs" / "link.safetensors").symlink_to(outside)
 
-    with pytest.raises(ReplayPreconditionError, match="symlink"):
-        tl.load(spec_path)
+    with pytest.raises(ArtifactError, match="traversal outside"):
+        load_intervention_spec(spec_path)
 
 
-def test_intervention_sidecar_rejects_symlinked_tensors_dir(tmp_path: Path) -> None:
-    """A symlinked ``tensors/`` directory that redirects outside is rejected."""
+def test_intervention_tensor_rejects_symlinked_blobs_dir(tmp_path: Path) -> None:
+    """A symlinked ``blobs/`` directory that redirects outside is rejected."""
 
     if not _supports_symlinks(tmp_path):
         pytest.skip("filesystem does not support symlinks")
 
     spec_path = _build_intervention_spec(tmp_path)
-    real_tensors = spec_path / "tensors"
-    outside_dir = tmp_path / "evil_tensors"
-    shutil.copytree(real_tensors, outside_dir)
-    shutil.rmtree(real_tensors)
-    real_tensors.symlink_to(outside_dir)
+    real_blobs = spec_path / "blobs"
+    outside_dir = tmp_path / "evil_blobs"
+    shutil.copytree(real_blobs, outside_dir)
+    shutil.rmtree(real_blobs)
+    real_blobs.symlink_to(outside_dir)
 
-    with pytest.raises(ReplayPreconditionError, match="traversal outside spec"):
-        tl.load(spec_path)
+    with pytest.raises(ArtifactError, match="symlink"):
+        load_intervention_spec(spec_path)
 
 
 # ---------------------------------------------------------------------------
-# F-2: symlinked spec.json / manifest.json child members
+# F-2: symlinked intervention.json / manifest.json child members
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
     ("child", "outside_name"),
     [
-        ("spec.json", "evil_spec.json"),
+        ("intervention.json", "evil_intervention.json"),
         ("manifest.json", "evil_manifest.json"),
     ],
     ids=[
-        "load_intervention_spec_rejects_symlinked_spec_json",
+        "load_intervention_spec_rejects_symlinked_intervention_json",
         "load_intervention_spec_rejects_symlinked_manifest_json",
     ],
 )
 def test_load_intervention_spec_rejects_symlinked_child_json(
     tmp_path: Path, child: str, outside_name: str
 ) -> None:
-    """``load_intervention_spec`` rejects a symlinked ``spec.json`` or ``manifest.json`` child."""
+    """``load_intervention_spec`` rejects a symlinked ``intervention.json`` or ``manifest.json``."""
 
     if not _supports_symlinks(tmp_path):
         pytest.skip("filesystem does not support symlinks")

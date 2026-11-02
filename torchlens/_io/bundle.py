@@ -43,6 +43,7 @@ from .._utils.display import user_stacklevel
 from .._utils.hashing import sha256_file
 from ..backends.registry import BackendSpec, get_backend_spec
 from ..errors import RunnablePreflightError, TorchLensWarning
+from ..intervention.helpers import HELPER_REGISTRY_VERSION
 from . import (
     TLSPEC_VERSION,
     ArtifactError,
@@ -55,7 +56,7 @@ from . import (
     refuse_missing_blobs,
 )
 from ._artifact_anchors import check_manifest_metadata_anchors, persisted_anchor_facts
-from ._durability import fsync_dir, fsync_tree
+from ._durability import _restrict_mode, _restrict_tree_modes, fsync_dir, fsync_tree
 from ._pickle_prescan import OpcodeCeilingExceeded
 from ._pre3_module_paths import modellog_216_error
 from ._root_manifest import NOT_ROUTED, load_by_root_manifest
@@ -69,9 +70,11 @@ from .format3.payloads import (
     NUMPY_CODEC,
     TORCH_CODEC,
     PayloadStore,
-    host_tensor,
+    seal_tensor_entries,
+    submit_tensor_payload,
     tensor_reference,
 )
+from .format3.recipe import write_trace_recipe
 from .format3.writer import preflight_reload, settle_live_side, write_trace_envelope
 from .lazy import LazyActivationRef
 from .manifest import Manifest, Provenance, TensorEntry, enforce_version_policy
@@ -757,8 +760,17 @@ def save(
                 )
             )
 
+        # io.1: a staged intervention spec persists as intervention.json (its
+        # tensors join this artifact's payload store before it closes).
+        intervention_entry, recipe_disclosures = write_trace_recipe(
+            tmp_path,
+            trace,
+            store=payload_store,
+            save_level=save_level,
+            helper_registry_version=HELPER_REGISTRY_VERSION,
+        )
         payload_store.close()
-        tensor_entries = _seal_tensor_entries(tmp_path, tensor_entries)
+        tensor_entries = seal_tensor_entries(tmp_path, tensor_entries)
 
         if skipped_blob_ids:
             _apply_skipped_blobs_to_scrubbed_state(scrubbed_state, skipped_blob_ids)
@@ -793,15 +805,19 @@ def save(
         # JSON record tables beside the safetensors blobs; no pickle file is
         # written at any level. The staged directory is reloaded once (the
         # save preflight, late.21) before the publish below.
+        base_manifest = _TlSpecWriter.build_trace_manifest(
+            trace=trace,
+            legacy_manifest=manifest,
+            save_level=save_level,
+            sparse_run=sparse_run_json,
+            scrubbed_state=scrubbed_state,
+        )
+        if intervention_entry is not None:
+            base_manifest["intervention"] = intervention_entry
         write_trace_envelope(
             tmp_path,
-            base_manifest=_TlSpecWriter.build_trace_manifest(
-                trace=trace,
-                legacy_manifest=manifest,
-                save_level=save_level,
-                sparse_run=sparse_run_json,
-                scrubbed_state=scrubbed_state,
-            ),
+            base_manifest=base_manifest,
+            extra_disclosures=recipe_disclosures,
             scrubbed_state=scrubbed_state,
             tensor_refs=tensor_refs,
             codecs=payload_store.codecs,
@@ -2833,58 +2849,6 @@ def _apply_visualization_save_policy(
         scrubbed_layer.visualizer_path = f"visualizers/{destination_name}"
 
 
-def _submit_tensor_payload(
-    *,
-    store: PayloadStore,
-    tensor_refs: dict[str, dict[str, Any]],
-    blob_id: str,
-    tensor: torch.Tensor,
-    kind: str,
-    label: str,
-) -> TensorEntry:
-    """Queue one torch tensor payload into the artifact's chunk files.
-
-    Parameters
-    ----------
-    store:
-        Chunk store of the staged artifact (``blobs/<codec>-<nnnn>.safetensors``).
-    tensor_refs:
-        Blob id to tensor reference fields; this payload's entry is added.
-    blob_id:
-        Opaque blob identifier the scrubbed state references.
-    tensor:
-        Tensor payload to persist.
-    kind:
-        Logical tensor kind.
-    label:
-        Human-readable TorchLens layer label.
-
-    Returns
-    -------
-    TensorEntry
-        Manifest tensor entry; ``sha256`` is filled by ``_seal_tensor_entries``
-        once the chunk is on disk.
-    """
-
-    host = host_tensor(tensor)
-    blob, key = store.submit(host, codec=TORCH_CODEC)
-    tensor_refs[blob_id] = tensor_reference(tensor, blob=blob, key=key)
-    return TensorEntry(
-        blob_id=blob_id,
-        kind=kind,
-        label=label,
-        relative_path=blob,
-        backend="safetensors",
-        shape=[int(dim) for dim in tensor.shape],
-        dtype=str(tensor.dtype).replace("torch.", ""),
-        device_at_save=str(tensor.device),
-        layout=str(tensor.layout).replace("torch.", ""),
-        bytes=int(host.numel() * host.element_size()),
-        sha256="",
-        requires_grad=bool(tensor.requires_grad),
-    )
-
-
 def _write_payload_blob(
     *,
     store: PayloadStore,
@@ -2912,13 +2876,15 @@ def _write_payload_blob(
     """
 
     if blob_spec.logical_backend == "torch" and isinstance(blob_spec.value, torch.Tensor):
-        return _submit_tensor_payload(
-            store=store,
-            tensor_refs=tensor_refs,
-            blob_id=blob_spec.blob_id,
-            tensor=blob_spec.value,
-            kind=blob_spec.kind,
-            label=blob_spec.label,
+        return TensorEntry(
+            **submit_tensor_payload(
+                store=store,
+                tensor_refs=tensor_refs,
+                blob_id=blob_spec.blob_id,
+                tensor=blob_spec.value,
+                kind=blob_spec.kind,
+                label=blob_spec.label,
+            )
         )
 
     encoded = codec.to_numpy(blob_spec.value)
@@ -2948,31 +2914,6 @@ def _write_payload_blob(
         requires_grad=False,
         **manifest_fields,
     )
-
-
-def _seal_tensor_entries(tmp_path: Path, entries: list[TensorEntry]) -> list[TensorEntry]:
-    """Fill each entry's ``sha256`` with the digest of its closed chunk file.
-
-    Parameters
-    ----------
-    tmp_path:
-        Staged artifact directory.
-    entries:
-        Entries queued while the chunks were open.
-
-    Returns
-    -------
-    list[TensorEntry]
-        The entries with chunk digests, in the same order.
-    """
-
-    digests: dict[str, str] = {}
-    sealed: list[TensorEntry] = []
-    for entry in entries:
-        if entry.relative_path not in digests:
-            digests[entry.relative_path] = sha256_file(tmp_path / entry.relative_path)
-        sealed.append(dataclasses.replace(entry, sha256=digests[entry.relative_path]))
-    return sealed
 
 
 def _attach_fast_copy_specs(
@@ -3224,7 +3165,10 @@ def _fast_copy_tensor_blob(
 
     source_tensor = _load_safetensors_file(source_blob_path, "cpu").get(_BLOB_TENSOR_KEY)
     if not isinstance(source_tensor, torch.Tensor):
-        raise ArtifactError(f"Tensor blob {source_blob_path} lacks {_BLOB_TENSOR_KEY!r}.")
+        raise ArtifactError(
+            f"Tensor blob {source_blob_path} lacks {_BLOB_TENSOR_KEY!r}.",
+            code="bundle_save_failed",
+        )
     host = source_tensor.contiguous()
     blob, key = store.submit(host, codec=TORCH_CODEC)
     reference = tensor_reference(host, blob=blob, key=key)
@@ -4321,43 +4265,6 @@ def _reanchor_visualizer_paths(trace: Trace, bundle_path: Path) -> None:
             layer.visualizer_path = None
             continue
         layer.visualizer_path = str(candidate)
-
-
-def _restrict_tree_modes(root: Path) -> None:
-    """Tighten every directory (0700) and file (0600) the 3.0 envelope wrote.
-
-    Parameters
-    ----------
-    root:
-        Staged artifact directory.
-    """
-
-    for path in root.rglob("*"):
-        _restrict_mode(path, 0o700 if path.is_dir() else 0o600)
-
-
-def _restrict_mode(path: Path, mode: int) -> None:
-    """Best-effort tighten a saved bundle path's permissions (POSIX only).
-
-    ``mkdir``/``open`` honor the ambient umask, so a bundle written under the common
-    umask 002 left its directories and metadata sidecars group-writable/readable even
-    though the safetensors blobs are 0600 (B8-10). This restores parity. Best-effort:
-    a filesystem that ignores mode bits is not a save failure.
-
-    Parameters
-    ----------
-    path:
-        Bundle directory or file to tighten.
-    mode:
-        Target permission bits (``0o700`` for directories, ``0o600`` for files).
-    """
-
-    if os.name != "posix":
-        return
-    try:
-        path.chmod(mode)
-    except OSError:
-        pass
 
 
 def _remove_path(path: Path) -> None:

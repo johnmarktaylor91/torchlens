@@ -28,7 +28,6 @@ from torchlens.intervention.errors import (
 )
 from torchlens.intervention.save import (
     _sync_spec_records_from_log,
-    _write_tlspec_tensor_blob,
     resolve_function_registry_key,
     save_intervention,
 )
@@ -1111,12 +1110,12 @@ def test_atomic_save_cleans_up_after_tensor_write_failure(tmp_path: Path) -> Non
     target = tmp_path / "crash.tlspec"
 
     def crashing_writer(**kwargs: Any) -> Any:
-        """Write one sidecar and then simulate a crash.
+        """Simulate a crash after the recipe's tensor chunks are written.
 
         Parameters
         ----------
         **kwargs:
-            Tensor writer keyword arguments.
+            Chunk hook keyword arguments (``tmp_path`` and ``chunks``).
 
         Returns
         -------
@@ -1124,7 +1123,7 @@ def test_atomic_save_cleans_up_after_tensor_write_failure(tmp_path: Path) -> Non
             Never returned.
         """
 
-        _write_tlspec_tensor_blob(**kwargs)
+        assert kwargs["chunks"]
         raise RuntimeError("simulated tensor crash")
 
     with pytest.raises(RuntimeError, match="simulated tensor crash"):

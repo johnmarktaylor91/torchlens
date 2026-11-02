@@ -134,11 +134,10 @@ def _stream_bytes_left(stream: Any) -> int | None:
 def _restrict_mode(path: Path, mode: int) -> None:
     """Best-effort tighten a streamed bundle path's permissions (POSIX only).
 
-    Twin of ``_io/bundle.py::_restrict_mode``: ``mkdir``/``open`` honor the
-    ambient umask, so under umask 002 the streaming bundle dir and its metadata
-    sidecars were left group-writable while the core bundle writer tightens
-    them. Best-effort: a filesystem that ignores mode bits is not a save
-    failure.
+    Shared by the eager and streaming writers: ``mkdir``/``open`` honor the
+    ambient umask, so under umask 002 a bundle's directories and metadata
+    sidecars were left group-writable (B8-10). Best-effort: a filesystem that
+    ignores mode bits is not a save failure.
 
     Parameters
     ----------
@@ -154,3 +153,16 @@ def _restrict_mode(path: Path, mode: int) -> None:
         path.chmod(mode)
     except OSError:
         pass
+
+
+def _restrict_tree_modes(root: Path) -> None:
+    """Tighten every directory (0700) and file (0600) under a staged artifact.
+
+    Parameters
+    ----------
+    root:
+        Staged artifact directory.
+    """
+
+    for path in root.rglob("*"):
+        _restrict_mode(path, 0o700 if path.is_dir() else 0o600)

@@ -505,12 +505,12 @@ def _is_tensor_payload(value: Any) -> bool:
     return isinstance(value, torch.Tensor) or type(value).__name__ == "BlobRef"
 
 
-def _refuse(at: str, detail: str) -> ArtifactError:
+def _refuse_value(at: str, detail: str, *, code: str) -> ArtifactError:
     """Return the provisional record-schema refusal (see contract PROVISIONAL_REFUSALS)."""
 
     return ArtifactError(
         f"Saved value at {at} is not valid typed JSON: {detail}",
-        code="manifest_schema_invalid",
+        code=code,
         remedy="the artifact is damaged or was written by an incompatible writer; re-save it",
     )
 
@@ -546,10 +546,10 @@ def decode_value(data: Any, *, schema: Any = None, at: str) -> Any:
     if tag is None:
         return {key: decode_value(item, at=f"{at}[{key!r}]") for key, item in data.items()}
     if tag not in TYPED_VALUE_TAGS:
-        raise _refuse(at, f"unknown tag {tag!r}")
+        raise _refuse_value(at, f"unknown tag {tag!r}", code="manifest_schema_invalid")
     missing = [name for name in TAG_FIELDS[tag] if name not in data]
     if missing and tag != "unencodable":
-        raise _refuse(at, f"tag {tag!r} lacks {missing}")
+        raise _refuse_value(at, f"tag {tag!r} lacks {missing}", code="manifest_schema_invalid")
     return _DECODERS[tag](data, at)
 
 
@@ -558,7 +558,7 @@ def _decode_items(data: dict[str, Any], at: str) -> list[Any]:
 
     items = data["items"]
     if not isinstance(items, list):
-        raise _refuse(at, "items is not an array")
+        raise _refuse_value(at, "items is not an array", code="manifest_schema_invalid")
     return [decode_value(item, at=f"{at}[{i}]") for i, item in enumerate(items)]
 
 
@@ -568,7 +568,9 @@ def _decode_dict(data: dict[str, Any], at: str) -> dict[Any, Any]:
     result: dict[Any, Any] = {}
     for index, pair in enumerate(data["items"]):
         if not isinstance(pair, list) or len(pair) != 2:
-            raise _refuse(at, f"dict item {index} is not a [key, value] pair")
+            raise _refuse_value(
+                at, f"dict item {index} is not a [key, value] pair", code="manifest_schema_invalid"
+            )
         result[decode_value(pair[0], at=f"{at}<key {index}>")] = decode_value(
             pair[1], at=f"{at}[{index}]"
         )
@@ -581,7 +583,11 @@ def _decode_enum(data: dict[str, Any], at: str) -> Any:
     cls = enum_table().get(str(data["type"]))
     member = None if cls is None else cls.__members__.get(str(data["name"]))
     if member is None:
-        raise _refuse(at, f"enum {data['type']}.{data['name']} is not a TorchLens enum member")
+        raise _refuse_value(
+            at,
+            f"enum {data['type']}.{data['name']} is not a TorchLens enum member",
+            code="manifest_schema_invalid",
+        )
     return member
 
 
@@ -590,14 +596,18 @@ def _decode_record(data: dict[str, Any], at: str) -> Any:
 
     cls = record_type_table().get(str(data["type"]))
     if cls is None or not isinstance(data["fields"], dict):
-        raise _refuse(at, f"record type {data['type']!r} is not on the allowlist")
+        raise _refuse_value(
+            at,
+            f"record type {data['type']!r} is not on the allowlist",
+            code="manifest_schema_invalid",
+        )
     fields = {name: decode_value(item, at=f"{at}.{name}") for name, item in data["fields"].items()}
     if dataclasses.is_dataclass(cls) or isinstance(getattr(cls, "_fields", None), tuple):
         return cls(**fields)
     if _scalar_base(cls) is not None:
-        instance = cls(fields.pop("value"))
-        instance.__dict__.update(fields)
-        return instance
+        scalar: Any = cls(fields.pop("value"))
+        scalar.__dict__.update(fields)
+        return scalar
     instance: Any = object.__new__(cls)
     setstate = getattr(instance, "__setstate__", None)
     if callable(setstate):
@@ -612,7 +622,7 @@ def _decode_dtype(data: dict[str, Any], at: str) -> torch.dtype:
 
     dtype = dtype_table().get(str(data["name"]))
     if dtype is None:
-        raise _refuse(at, f"unknown dtype {data['name']!r}")
+        raise _refuse_value(at, f"unknown dtype {data['name']!r}", code="manifest_schema_invalid")
     return dtype
 
 
