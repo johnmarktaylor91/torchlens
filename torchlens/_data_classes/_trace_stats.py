@@ -1291,10 +1291,12 @@ class TraceStatsMixin(_TraceMixinBase):
         The general slice door: whatever produced the region —
         ``tl.neighborhood(...)``, ``tl.between(...)``, an explicit
         ``tl.units(...)``, an ``Op``/``Layer``, or a future graph-motif
-        producer's hits — its touched-site FAMILY becomes the member set
-        (element masks never shrink a graph region), presented with the
-        same explicit-boundary :class:`~torchlens.types.TraceSlice`
-        contract as :meth:`between`. DOCUMENTED-UNSTABLE spelling.
+        producer's hits — the sites where it carries at least one selected
+        element become the member set, each as a whole node (a partial mask
+        never shrinks a node; a site whose mask is empty is not a member),
+        presented with the same explicit-boundary
+        :class:`~torchlens.types.TraceSlice` contract as :meth:`between`.
+        DOCUMENTED-UNSTABLE spelling.
 
         Parameters
         ----------
