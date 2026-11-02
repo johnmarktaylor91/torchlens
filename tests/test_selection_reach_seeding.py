@@ -120,7 +120,7 @@ class _Oracle:
     """Plain adjacency over one trace, built without the selection-graph code."""
 
     def __init__(self, trace) -> None:
-        ops = [op for op in trace.layer_list if isinstance(getattr(op, "label", None), str)]
+        ops = [op for op in trace._layer_list if isinstance(getattr(op, "label", None), str)]
         self.order = tuple(op.label for op in ops)
         by_reference: dict[str, str] = {}
         for op in ops:
@@ -159,7 +159,7 @@ class _Oracle:
 def _lift(trace, labels: Iterable[str]):
     """Return the whole-site union of the named ops, or ``None`` for no ops."""
 
-    oracle_ops = {op.label: op for op in trace.layer_list}
+    oracle_ops = {op.label: op for op in trace._layer_list}
     lifted = None
     for label in labels:
         term = oracle_ops[label].__selection__()
