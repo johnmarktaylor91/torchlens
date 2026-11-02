@@ -45,6 +45,14 @@ bodies dispatch ``handle_torch_function(<module-global self-reference>,
 every host module's ``handle_torch_function`` global gets a translating
 shim presenting the ledger ORIGINAL to user ``__torch_function__`` handlers
 -- the same identity basis C builtins and unwrapped eager torch present.
+A ninth covers the other half of that protocol edge: for a Tensor METHOD
+torch's C argument parser presents ``getattr(torch.Tensor, name)`` read at
+CALL time, the torchlens wrapper during the wrap epoch, so a torch-internal
+``__torch_function__`` keyed on import-time method originals misses --
+``UninitializedTensorMixin._allowed_methods`` (a user's ``model.to()`` on a
+not-yet-materialized lazy module raised ValueError after the first capture)
+and MaskedTensor's reduction table. Each such handler gets a shim that
+normalizes ``func`` to the ledger original before delegating.
 
 Strategy: NEVER re-implement torch's decision logic. Each shim normalizes
 the identity operand to the basis the immediately-following torch comparison
@@ -313,6 +321,7 @@ def install_identity_shims() -> None:
         late_records: list[tuple[Any, str, Any]] = []
         try:
             _install_causal_bias_shim(late_records)
+            _install_masked_tensor_protocol_shim(late_records)
         except Exception:
             _restore(late_records)
             raise
@@ -328,6 +337,8 @@ def install_identity_shims() -> None:
         _install_fx_trace_shim(records)
         _install_overrides_membership_shims(records)
         _install_protocol_identity_shims(records)
+        _install_lazy_module_protocol_shim(records)
+        _install_masked_tensor_protocol_shim(records)
     except Exception:
         _restore(records)
         raise
@@ -1021,6 +1032,102 @@ def _install_protocol_identity_shims(records: list[tuple[Any, str, Any]]) -> Non
             continue  # absent, already shimmed, or foreign-patched: hands off
         setattr(module, "handle_torch_function", handle_torch_function_shim)  # noqa: B010
         records.append((module, "handle_torch_function", real_handle))
+
+
+# ---------------------------------------------------------------------------
+# Site 9: torch-internal __torch_function__ handlers keyed on Tensor METHOD originals
+# ---------------------------------------------------------------------------
+
+
+def _install_original_presenting_torch_function(
+    holder: type, records: list[tuple[Any, str, Any]]
+) -> None:
+    """Shim ``holder.__torch_function__`` to receive ledger ORIGINALS.
+
+    Torch's C argument parser dispatches a Tensor METHOD to the protocol with
+    ``getattr(torch.Tensor, name)`` read at CALL time -- the torchlens wrapper
+    while wrappers are installed (torch.* functions, read from the unpatched
+    ``torch._C._VariableFunctions`` table, already arrive as originals). A
+    handler comparing ``func`` against import-time method originals therefore
+    misses for every wrapped method. The shim maps a wrapper ``func`` to its
+    ledger original and delegates to the real classmethod, so the decision
+    runs upstream logic on the basis unwrapped eager torch presents. A
+    non-wrapper ``func`` passes through untouched.
+
+    Parameters
+    ----------
+    holder:
+        The class defining the ``__torch_function__`` classmethod to shim.
+    records:
+        Teardown records; one ``(holder, "__torch_function__", original)``
+        entry is appended when a shim is installed.
+    """
+
+    orig_classmethod = vars(holder).get("__torch_function__")
+    if orig_classmethod is None or _is_shimmed(orig_classmethod):
+        return
+    orig_tf = getattr(orig_classmethod, "__func__", None)
+    if orig_tf is None:
+        return  # not a classmethod: an unknown handler shape, hands off
+
+    @functools.wraps(orig_tf)
+    def protocol_identity_shim(
+        cls: type,
+        func: Any,
+        types: Any,
+        args: tuple[Any, ...] = (),
+        kwargs: dict[str, Any] | None = None,
+    ) -> Any:
+        """Normalize a torchlens-wrapper ``func`` to its original, then delegate."""
+
+        return orig_tf(cls, _resolve(func), types, args, kwargs)
+
+    _register_shim(protocol_identity_shim)
+    holder.__torch_function__ = classmethod(protocol_identity_shim)  # type: ignore[attr-defined]
+    records.append((holder, "__torch_function__", orig_classmethod))
+
+
+def _install_lazy_module_protocol_shim(records: list[tuple[Any, str, Any]]) -> None:
+    """Shim the lazy-module materialization allowlist handler.
+
+    ``UninitializedTensorMixin.__torch_function__`` allows only the methods in
+    its import-time ``_allowed_methods`` (``is_floating_point``, ``to``,
+    ``cpu``, ...) on a not-yet-materialized ``UninitializedParameter`` /
+    ``UninitializedBuffer`` and raises ``ValueError`` for anything else.
+    ``nn.Module.to()`` calls ``t.is_floating_point()`` on every parameter, so
+    once wrappers were installed a plain ``model.to(device)`` on an
+    uninitialized lazy module raised, outside any capture. Normalizing
+    ``func`` keeps the allowlist decision exactly torch's: the allowed
+    methods pass, every other method still raises.
+    """
+
+    if not _torch_compat.HAS_LAZY_MODULE_PROTOCOL_ALLOWLIST:
+        return
+    parameter_module = getattr(torch.nn, "parameter", None)
+    mixin = getattr(parameter_module, "UninitializedTensorMixin", None)
+    if mixin is None:
+        return
+    _install_original_presenting_torch_function(mixin, records)
+
+
+def _install_masked_tensor_protocol_shim(records: list[tuple[Any, str, Any]]) -> None:
+    """Shim MaskedTensor's handler, keyed on import-time Tensor method originals.
+
+    ``MaskedTensor.__torch_function__`` looks ``func`` up in a table built at
+    import time (``torch.Tensor.sum`` and the other reductions beside their
+    ``torch.*`` twins); a wrapped method call presented the wrapper, missed
+    the table and fell through to the generic path. Resolved only through
+    ``sys.modules``: the module is imported with torch, and a process that
+    never imported it holds no MaskedTensor.
+    """
+
+    if not _torch_compat.HAS_MASKED_TENSOR_PROTOCOL_TABLE:
+        return
+    module = sys.modules.get("torch.masked.maskedtensor.core")
+    masked_tensor = getattr(module, "MaskedTensor", None) if module is not None else None
+    if masked_tensor is None:
+        return
+    _install_original_presenting_torch_function(masked_tensor, records)
 
 
 def _make_conv_picker_shim(orig_picker: Callable[..., Any]) -> Callable[..., Any]:

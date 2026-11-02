@@ -130,6 +130,8 @@ __all__ = [
     "HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG",
     "HAS_ATTENTION_CAUSAL_BIAS",
     "HAS_EXPANDED_WEIGHTS_CONV_PICKER",
+    "HAS_LAZY_MODULE_PROTOCOL_ALLOWLIST",
+    "HAS_MASKED_TENSOR_PROTOCOL_TABLE",
     "HAS_DETERMINISTIC_FILL_FLAG",
     "HAS_FP32_PRECISION_CONTROLS",
     "HAS_AMP_GRADSCALER",
@@ -1244,6 +1246,51 @@ def _probe_disabled_torch_function_impl() -> bool:
     return callable(_nested_getattr_or_none(torch, ("_C", "_disabled_torch_function_impl")))
 
 
+def _probe_lazy_module_protocol_allowlist() -> bool:
+    """Return whether the lazy-module materialization allowlist site exists.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``torch.nn.parameter.UninitializedTensorMixin`` defines
+        its own ``__torch_function__`` classmethod and the ``_allowed_methods``
+        allowlist it consults (``UninitializedParameter`` / ``UninitializedBuffer``
+        materialization). The lazy-module identity shim normalizes the
+        protocol-presented Tensor METHOD to that allowlist's original keys.
+    """
+
+    mixin = _nested_getattr_or_none(torch, ("nn", "parameter", "UninitializedTensorMixin"))
+    if mixin is None:
+        return False
+    torch_function = vars(mixin).get("__torch_function__")
+    return (
+        isinstance(torch_function, classmethod)
+        and getattr(mixin, "_allowed_methods", None) is not None
+    )
+
+
+def _probe_masked_tensor_protocol_table() -> bool:
+    """Return whether the MaskedTensor ``__torch_function__`` table site exists.
+
+    NEVER imports ``torch.masked.maskedtensor.core`` (it is imported with torch
+    on the supported range; a process without it holds no MaskedTensor).
+
+    Returns
+    -------
+    bool
+        ``True`` when the already-imported module defines ``MaskedTensor``
+        with its own ``__torch_function__`` classmethod (the handler keyed on
+        import-time Tensor METHOD originals that the masked-tensor identity
+        shim normalizes).
+    """
+
+    module = sys.modules.get("torch.masked.maskedtensor.core")
+    masked_tensor = getattr(module, "MaskedTensor", None) if module is not None else None
+    if masked_tensor is None:
+        return False
+    return isinstance(vars(masked_tensor).get("__torch_function__"), classmethod)
+
+
 def _probe_gradient_edge() -> bool:
     """Return whether torch's GradientEdge surface actually WORKS end to end.
 
@@ -1696,6 +1743,8 @@ HAS_MODULE_CALL_DISPATCH_FRAME: bool = probe_module_call_dispatch_frame(_FORWARD
 HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG: bool = _probe_transformer_activation_fastpath_flag()
 HAS_ATTENTION_CAUSAL_BIAS: bool = _probe_attention_causal_bias()
 HAS_EXPANDED_WEIGHTS_CONV_PICKER: bool = _probe_expanded_weights_conv_picker()
+HAS_LAZY_MODULE_PROTOCOL_ALLOWLIST: bool = _probe_lazy_module_protocol_allowlist()
+HAS_MASKED_TENSOR_PROTOCOL_TABLE: bool = _probe_masked_tensor_protocol_table()
 HAS_DISABLED_TORCH_FUNCTION_IMPL: bool = _probe_disabled_torch_function_impl()
 HAS_GRADIENT_EDGE: bool = False
 _GRADIENT_EDGE_PROBED: bool = False
@@ -1903,6 +1952,8 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG",
     "HAS_ATTENTION_CAUSAL_BIAS",
     "HAS_EXPANDED_WEIGHTS_CONV_PICKER",
+    "HAS_LAZY_MODULE_PROTOCOL_ALLOWLIST",
+    "HAS_MASKED_TENSOR_PROTOCOL_TABLE",
     "HAS_GRADIENT_EDGE",
     "HAS_NODE_PREHOOK",
     "HAS_DETERMINISTIC_FILL_FLAG",
