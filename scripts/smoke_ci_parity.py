@@ -131,30 +131,6 @@ def ensure_venv(venv: Path, reinstall: bool) -> Path:
     return python
 
 
-def smoke_test_files() -> list[str]:
-    """Return the smoke file list (``scripts/tier_durations.py files --tier smoke``).
-
-    Collecting only these files keeps the gate's collection to the smoke tier
-    instead of the whole tree, as CI's smoke steps do. ``tests/_tiers_plugin.py``
-    fails any session that collects a smoke item from a file outside the list.
-    """
-
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location(
-        "_torchlens_tier_durations", PROJECT_ROOT / "scripts" / "tier_durations.py"
-    )
-    assert spec is not None and spec.loader is not None
-    tier_durations = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = tier_durations  # dataclasses resolve the module by name
-    spec.loader.exec_module(tier_durations)
-    return [
-        file
-        for file in tier_durations.test_files_on_disk(PROJECT_ROOT / "tests")
-        if tier_durations.on_smoke_file_list(PROJECT_ROOT / file)
-    ]
-
-
 def serial_test_files() -> list[str]:
     """Return the test files carrying the ``serial`` marker, as CI collects them."""
 
@@ -189,7 +165,7 @@ def run_gate(python: Path, workers: int, extra_args: list[str]) -> int:
     with tempfile.TemporaryDirectory(prefix="torchlens-ci-smoke-") as tmp:
         junit = str(Path(tmp) / "smoke.junit.xml")
         commands = [
-            [*pytest, *smoke_test_files(), "-m", "smoke", "-n", str(workers), "--tb=short", "-q"]
+            [*pytest, "tests/", "-m", "smoke", "-n", str(workers), "--tb=short", "-q"]
             + [f"--junitxml={junit}", *extra_args],
             [*pytest, *serial_test_files(), "-m", "serial and not slow and not rare and not heavy"]
             + ["--tb=short", "-q"],

@@ -6,8 +6,9 @@ partition mistake; this plugin checks every item the session selects (after
 ``-m`` deselection, as the former lint test did) and fails the session before
 the first test runs. It also fails any session that collects a smoke item
 from a file outside the smoke file list (``scripts/tier_durations.py files
---tier smoke``), the files every smoke run collects. The marker names themselves are
-declared in ``pyproject.toml`` (``[tool.pytest.ini_options] markers``), in
+--tier smoke``), and a smoke session (``-m smoke``) skips every test module
+off that list before import, so smoke runs collect only the listed files.
+The marker names themselves are declared in ``pyproject.toml`` (``[tool.pytest.ini_options] markers``), in
 lockstep with ``tests/composition_expectations/marker_algebra.py``.
 
 Registered by ``tests/conftest.py`` through ``pytest_plugins``.
@@ -25,7 +26,7 @@ from typing import Any
 
 import pytest
 
-from scripts.tier_durations import on_smoke_file_list
+from scripts.tier_durations import TESTS_DIR, on_smoke_file_list
 
 #: Markers that may never combine with ``smoke`` on one resolved item.
 #: ``heavy``/``slow``: additive markers keep the item in ``-m smoke`` despite
@@ -129,6 +130,28 @@ def pytest_itemcollected(item: pytest.Item) -> None:
 @functools.cache
 def _on_smoke_file_list(path: str) -> bool:
     return on_smoke_file_list(Path(path))
+
+
+def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool | None:
+    """Skip, before import, a test module off the smoke file list in a smoke session.
+
+    Under ``-m smoke`` (or ``-m "smoke and ..."``) a ``test_*.py`` module under
+    ``tests/`` that is not on the smoke file list cannot hold a smoke item, so
+    collecting ``tests/`` imports only the listed modules. Passing the listed
+    files as arguments instead selects the same tests but costs more: pytest
+    re-walks the parent directory for every file argument (measured 2026-11-02,
+    459 file arguments: about 130 s to collect against about 65 s for the whole
+    tree). A module named on the command line is always collected.
+    """
+
+    if (
+        collection_path.suffix != ".py"
+        or not collection_path.name.startswith("test_")
+        or not smoke_only_session(config)
+        or not collection_path.resolve().is_relative_to(TESTS_DIR.resolve())
+    ):
+        return None
+    return None if _on_smoke_file_list(str(collection_path)) else True
 
 
 @pytest.hookimpl(trylast=True)

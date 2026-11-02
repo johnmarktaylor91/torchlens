@@ -1350,6 +1350,31 @@ def test_item_collection_records_smoke_items_off_the_file_list(tmp_path: Path) -
     fail_on_off_list_smoke_items([])
 
 
+def test_smoke_session_skips_test_modules_off_the_file_list(tmp_path: Path) -> None:
+    """Under ``-m smoke`` only listed test modules under ``tests/`` are collected."""
+
+    from _tiers_plugin import pytest_ignore_collect
+
+    tests_dir = Path(__file__).resolve().parent
+    off_list = next(
+        path for path in sorted(tests_dir.glob("test_*.py")) if not on_smoke_file_list(path)
+    )
+    outside = tmp_path / "test_outside.py"
+    outside.write_text("def test_x(): ...\n")
+
+    def _ignored(path: Path, markexpr: str) -> bool | None:
+        config = SimpleNamespace(option=SimpleNamespace(markexpr=markexpr))
+        return pytest_ignore_collect(path, config)  # type: ignore[arg-type]
+
+    for markexpr in ("smoke", "smoke and not slow"):
+        assert _ignored(off_list, markexpr) is True
+        assert _ignored(Path(__file__), markexpr) is None
+        assert _ignored(outside, markexpr) is None
+        assert _ignored(tests_dir / "conftest.py", markexpr) is None
+    for markexpr in ("", "not rare", "not smoke", "heavy or smoke"):
+        assert _ignored(off_list, markexpr) is None
+
+
 @pytest.mark.smoke
 def test_smoke_tier_stays_under_its_size_ceiling(request: pytest.FixtureRequest) -> None:
     """A smoke-only session selects at most ``SMOKE_TIER_SIZE_CEILING`` items.

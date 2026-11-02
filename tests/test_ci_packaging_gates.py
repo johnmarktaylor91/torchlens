@@ -154,29 +154,29 @@ def test_local_ci_smoke_script_matches_the_enforcing_row() -> None:
 _SMOKE_SELECTION_RE = re.compile(r"\bpytest\b.*\s-m\s+[\"']?smoke\b")
 
 
-def test_every_smoke_step_collects_the_smoke_file_list() -> None:
-    """CI's smoke steps collect the smoke file list, never the whole tree.
+def test_every_smoke_step_collects_tests_through_the_smoke_skip() -> None:
+    """CI's smoke steps collect ``tests/`` and let the tiers plugin narrow it.
 
-    A whole-tree ``pytest tests/ -m smoke`` imports every test module to select
-    the ~1,500 smoke tests. Every smoke step passes the files
-    ``scripts/tier_durations.py files --tier smoke`` prints (the list the commit
-    gate ``scripts/smoke_ci_parity.py`` collects), computed from the tree at run
-    time, so no hand-maintained list exists to go stale.
+    Under ``-m smoke`` ``tests/_tiers_plugin.py`` skips, before import, every
+    test module off the smoke file list, so ``pytest tests/ -m smoke`` imports
+    only the listed files. Passing the listed files as arguments instead costs
+    more: pytest re-walks the parent directory for every file argument. The
+    commit gate ``scripts/smoke_ci_parity.py`` runs the same command.
     """
 
     seen = {}
     for workflow in ("pr.yml", "nightly.yml", "weekly.yml"):
         for job_name, job in _load_yaml(_WORKFLOWS / workflow)["jobs"].items():
             for step in job.get("steps", []):
-                run = step.get("run", "")
-                for line in run.splitlines():
-                    if not _SMOKE_SELECTION_RE.search(line):
-                        continue
-                    where = f"{workflow} {job_name}: {line.strip()}"
-                    assert '"${smoke_files[@]}"' in line and " tests/ " not in line, where
-                    assert "python scripts/tier_durations.py files --tier smoke" in run, where
-                    seen[workflow] = seen.get(workflow, 0) + 1
+                for line in step.get("run", "").splitlines():
+                    if _SMOKE_SELECTION_RE.search(line):
+                        assert re.search(r"\bpytest tests/ -m smoke\b", line), (
+                            f"{workflow} {job_name}: {line.strip()}"
+                        )
+                        seen[workflow] = seen.get(workflow, 0) + 1
     assert seen == {"pr.yml": 1, "nightly.yml": 3}, seen
+    parity = (_PROJECT_ROOT / "scripts" / "smoke_ci_parity.py").read_text()
+    assert '[*pytest, "tests/", "-m", "smoke",' in parity
 
 
 def test_agent_docs_name_the_ci_parity_script_as_the_commit_gate() -> None:
