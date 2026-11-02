@@ -676,7 +676,10 @@ _DECODERS: dict[str, Callable[[dict[str, Any], str], Any]] = {
     "bytes": lambda data, at: base64.b64decode(str(data["base64"]), validate=True),
     "float": lambda data, at: float(str(data["v"])),
     "int": lambda data, at: int(str(data["v"])),
-    "complex": lambda data, at: complex(float(data["re"]), float(data["im"])),
+    "complex": lambda data, at: complex(
+        float(decode_value(data["re"], at=f"{at}.re")),
+        float(decode_value(data["im"], at=f"{at}.im")),
+    ),
     "dtype": _decode_dtype,
     "device": lambda data, at: torch.device(str(data["name"])),
     "type": lambda data, at: str(data["name"]),

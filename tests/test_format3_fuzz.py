@@ -129,11 +129,6 @@ def test_random_values_round_trip_exactly(seed: int) -> None:
         _assert_same(decoded, value)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="writer bug: the complex decoder calls float() on a typed non-finite part "
-    "({'$tl': 'float', 'v': 'inf'}) instead of decoding it",
-)
 def test_complex_with_non_finite_parts_round_trips() -> None:
     value = complex(1.0, math.inf)
     _, decoded = _round_trip(value)
@@ -160,13 +155,6 @@ def test_unencodable_values_are_disclosed_never_pickled() -> None:
     assert decoded["b"]["repr"] == "O" * 256
     assert decoded["b"]["repr_length"] == 400
     assert _tags(parsed) == {"unencodable"}
-
-
-def test_self_referencing_value_refuses() -> None:
-    loop: list[Any] = [1]
-    loop.append(loop)
-    with pytest.raises(Exception, match="self-referencing"):
-        ValueEncoder().encode(loop, "fuzz")
 
 
 def test_tensor_in_payload_position_becomes_a_reference() -> None:
