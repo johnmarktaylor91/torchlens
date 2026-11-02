@@ -633,8 +633,6 @@ docs-md	docs/agent-reference/current-2-x-surface.md	1_1
 docs-md	docs/agent-reference/current-2-x-surface.md	2.0
 docs-md	docs/agent-reference/current-2-x-surface.md	2.16
 docs-md	docs/agent-reference/current-2-x-surface.md	2.3.22
-docs-md	docs/agent-reference/current-2-x-surface.md	2.31.0
-docs-md	docs/agent-reference/current-2-x-surface.md	2.33
 docs-md	docs/agent-reference/current-2-x-surface.md	2.36.
 docs-md	docs/agent-reference/current-2-x-surface.md	2.4.1,
 docs-md	docs/agent-reference/current-2-x-surface.md	2.5
@@ -699,7 +697,6 @@ docs-md	docs/agent-reference/current-2-x-surface.md	657
 docs-md	docs/agent-reference/current-2-x-surface.md	79
 docs-md	docs/agent-reference/current-2-x-surface.md	83
 docs-md	docs/agent-reference/current-2-x-surface.md	873
-docs-md	docs/agent-reference/current-2-x-surface.md	88
 docs-md	docs/agent-reference/current-2-x-surface.md	9.2.2
 docs-md	docs/agent-reference/current-2-x-surface.md	921,
 docs-md	docs/agent-reference/current-2-x-surface.md	947
@@ -735,7 +732,6 @@ docs-md	docs/agent-reference/package/public-surface.md	2.16
 docs-md	docs/agent-reference/package/public-surface.md	37
 docs-md	docs/agent-reference/package/public-surface.md	39
 docs-md	docs/agent-reference/package/public-surface.md	42
-docs-md	docs/agent-reference/package/public-surface.md	88
 docs-md	docs/agent-reference/package/public-surface.md	83
 docs-md	docs/agent-reference/package/subpackages.md	10
 docs-md	docs/agent-reference/package/subpackages.md	11
@@ -850,7 +846,6 @@ docs-md	docs/for-ai-agents.md	2020
 docs-md	docs/for-ai-agents.md	25,000
 docs-md	docs/for-ai-agents.md	4,000
 docs-md	docs/for-ai-agents.md	64
-docs-md	docs/for-ai-agents.md	88
 docs-md	docs/for-ai-agents.md	83
 docs-md	docs/gradient_contract.md	64
 docs-md	docs/guides/fast_paths.md	0.17
@@ -2081,7 +2076,6 @@ docs-md	docs/migration/scoped_detached_patching.md	27
 docs-md	docs/migration/v2.0_api_changes.md	2.0
 docs-md	docs/migration/v2.0_api_changes.md	2026
 docs-md	docs/migration/v2.0_api_changes.md	42
-docs-md	docs/migration/v2.0_api_changes.md	88
 docs-md	docs/migration/v2.0_api_changes.md	83
 docs-md	docs/monitor_training.md	10
 docs-md	docs/monitor_training.md	100
@@ -4604,25 +4598,6 @@ package-docstrings	torchlens/_postprocess/__init__.py	20
 package-docstrings	torchlens/_postprocess/__init__.py	20,
 package-docstrings	torchlens/_postprocess/__init__.py	256
 package-docstrings	torchlens/_postprocess/_buffer_addresses.py	83
-package-docstrings	torchlens/_postprocess/_executor.py	10
-package-docstrings	torchlens/_postprocess/_executor.py	11
-package-docstrings	torchlens/_postprocess/_executor.py	11,
-package-docstrings	torchlens/_postprocess/_executor.py	11.5
-package-docstrings	torchlens/_postprocess/_executor.py	11.75
-package-docstrings	torchlens/_postprocess/_executor.py	12
-package-docstrings	torchlens/_postprocess/_executor.py	13
-package-docstrings	torchlens/_postprocess/_executor.py	14
-package-docstrings	torchlens/_postprocess/_executor.py	15
-package-docstrings	torchlens/_postprocess/_executor.py	15.5
-package-docstrings	torchlens/_postprocess/_executor.py	15.5,
-package-docstrings	torchlens/_postprocess/_executor.py	16
-package-docstrings	torchlens/_postprocess/_executor.py	16,
-package-docstrings	torchlens/_postprocess/_executor.py	16.5
-package-docstrings	torchlens/_postprocess/_executor.py	17
-package-docstrings	torchlens/_postprocess/_executor.py	17.5
-package-docstrings	torchlens/_postprocess/_executor.py	18
-package-docstrings	torchlens/_postprocess/_executor.py	19
-package-docstrings	torchlens/_postprocess/_executor.py	20
 package-docstrings	torchlens/_postprocess/_conditional_records.py	24
 package-docstrings	torchlens/_postprocess/_grouping_stamp.py	4.3
 package-docstrings	torchlens/_postprocess/_ingest_contract.py	12
@@ -4991,10 +4966,6 @@ package-docstrings	torchlens/_user_public_impls.py	38
 package-docstrings	torchlens/_user_public_impls.py	4.5
 package-docstrings	torchlens/_user_public_impls.py	64
 package-docstrings	torchlens/_user_public_impls.py	75
-package-docstrings	torchlens/_utils/__init__.py	1,900
-package-docstrings	torchlens/_utils/__init__.py	26
-package-docstrings	torchlens/_utils/__init__.py	562
-package-docstrings	torchlens/_utils/__init__.py	64
 package-docstrings	torchlens/_utils/_call_site.py	3.10
 package-docstrings	torchlens/_utils/_call_site.py	3.11
 package-docstrings	torchlens/_utils/_callable_safety.py	1842
@@ -8465,12 +8436,6 @@ test-docstrings	tests/test_persist_honesty_streamed_settlement.py	18
 test-docstrings	tests/test_persist_honesty_streamed_settlement.py	20
 test-docstrings	tests/test_pinned_autograd_memory.py	32
 test-docstrings	tests/test_pinned_autograd_memory.py	56
-test-docstrings	tests/test_postprocess_executor.py	13
-test-docstrings	tests/test_postprocess_executor.py	17.5
-test-docstrings	tests/test_postprocess_executor.py	17_5
-test-docstrings	tests/test_postprocess_executor.py	18
-test-docstrings	tests/test_postprocess_executor.py	19
-test-docstrings	tests/test_postprocess_executor.py	20
 test-docstrings	tests/test_postprocess_executor.py	21
 test-docstrings	tests/test_postprocess_executor.py	5.5
 test-docstrings	tests/test_postprocess_r14a_regressions.py	52
@@ -9815,7 +9780,6 @@ test-names	tests/test_large_graphs.py	250
 test-names	tests/test_large_graphs.py	50
 test-names	tests/test_layer_grad_oracle.py	50
 test-names	tests/test_layer_grad_oracle.py	50_
-test-names	tests/test_leverage_div_join_neighbourhood.py	18_
 test-names	tests/test_load_refuses_saved_by_2x.py	2_16_
 test-names	tests/test_lovely_containers_reprs.py	10_
 test-names	tests/test_merged_engine.py	10
@@ -9846,8 +9810,6 @@ test-names	tests/test_onebackward_edgeplumbing.py	10_
 test-names	tests/test_onebackward_realmodel.py	18
 test-names	tests/test_output_decode_read_time.py	1000_
 test-names	tests/test_paddle_payload_codec.py	16_
-test-names	tests/test_postprocess_executor.py	17_5_
-test-names	tests/test_postprocess_executor.py	19_
 test-names	tests/test_preview_grad_tolerance_tripwires.py	16
 test-names	tests/test_preview_grad_tolerance_tripwires.py	16_
 test-names	tests/test_preview_grad_tolerance_tripwires.py	32_

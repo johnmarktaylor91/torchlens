@@ -10,12 +10,12 @@ import types
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, cast
 
+from . import options as _options
 from ._capture.arg_positions import _normalize_func_name
 from ._deprecations import MISSING
 from ._errors import AmbiguousOpLookupError, ArgumentTypeError
 from ._selection.selectors import BaseSelector
 from .backends import registry as _backend_registry
-from .options import _save_transforms_from_capture, _SaveTransforms
 from .recording.options import PredicateFn
 from .recording.types import RecordContext
 
@@ -24,8 +24,8 @@ if TYPE_CHECKING:
 
 
 def _split_save_options_and_predicate(
-    save_value: _SaveTransforms | PredicateFn | BaseSelector | None,
-) -> tuple[_SaveTransforms | None, PredicateFn | None]:
+    save_value: _options._SaveTransforms | PredicateFn | BaseSelector | None,
+) -> tuple[_options._SaveTransforms | None, PredicateFn | None]:
     """Separate grouped save options from ``trace(save=predicate)`` sugar.
 
     Parameters
@@ -41,7 +41,7 @@ def _split_save_options_and_predicate(
 
     if save_value is None:
         return None, None
-    if isinstance(save_value, _SaveTransforms):
+    if isinstance(save_value, _options._SaveTransforms):
         return save_value, None
     from ._selection.selectors import FacetSelector
     from .intervention._facet_save import _facet_save_predicate
@@ -76,11 +76,11 @@ def _resolve_save_transforms(
     grad_transform: Any = MISSING,
     save_raw_activations: Any = MISSING,
     save_raw_grads: Any = MISSING,
-) -> _SaveTransforms:
+) -> _options._SaveTransforms:
     """Return the save transforms: the merged capture fields, flat values winning."""
 
-    base = _save_transforms_from_capture(capture_options)
-    return _SaveTransforms(
+    base = _options._save_transforms_from_capture(capture_options)
+    return _options._SaveTransforms(
         activation_transform=(
             base.activation_transform if activation_transform is MISSING else activation_transform
         ),

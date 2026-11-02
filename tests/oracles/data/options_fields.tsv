@@ -78,7 +78,6 @@ StorageOptions.on_save
 StorageOptions.path
 StorageOptions.retain_in_memory
 VisualizationOptions._specified_fields
-VisualizationOptions.animate
 VisualizationOptions.collapse
 VisualizationOptions.collapse_fn
 VisualizationOptions.collapsed_node_spec_fn

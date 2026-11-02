@@ -138,7 +138,7 @@ def reset_naming_counter(class_name: str | None = None) -> None:
     _state.reset_naming_counter(class_name)
 
 
-def render(*args: Any, **kwargs: Any) -> Any:
+def draw(*args: Any, **kwargs: Any) -> Any:
     """One-call model picture over the quickstart input ladder (F17 B15).
 
     ONE metadata-only eval/no-grad capture (training flags, RNG, and norm

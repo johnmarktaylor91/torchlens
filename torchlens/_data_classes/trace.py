@@ -104,6 +104,7 @@ from ._trace_accessors import (
 )
 from ._trace_missing_attrs import _raise_missing_trace_attribute
 from ._trace_narrate import TraceNarrateMixin
+from ._trace_output import TraceOutputMixin
 from ._transform_repr import _scrubbed_transform_repr
 from .backward_pass import BackwardPass
 from .container import reconstruct_container, reconstruct_output
@@ -814,6 +815,7 @@ class Trace(
     TraceExportMixin,
     TraceVisualizationMixin,
     TraceNarrateMixin,
+    TraceOutputMixin,
     TraceLike,
 ):
     """Top-level container for a logged forward pass.
@@ -891,33 +893,6 @@ class Trace(
         from .._runnable.state import load_trace_state_dict
 
         load_trace_state_dict(self, state_dict)
-
-    @property
-    def output(self) -> Any:
-        """Return the model's exact forward return value, held in memory only.
-
-        This is the original object, independent of saved activations and
-        output transforms. It is never written to a bundle or pickle. The trace
-        keeps it alive for as long as the trace exists (for a Hugging Face
-        model this includes ``past_key_values``); it is released when the
-        trace is dropped.
-
-        Returns
-        -------
-        Any
-            The forward's return value, without copying or reconstruction.
-
-        Raises
-        ------
-        PayloadUnavailableError
-            ``output_not_stored`` when loaded, unpickled, or built without a
-            live forward; ``output_capture_stopped`` when ``stop_after=``
-            ended the capture before the model returned.
-        """
-
-        from ..recording.types import read_output
-
-        return read_output(self._output_slot, owner="Trace")
 
     def find_nan(self) -> Any:
         """Return the first NaN or Inf among saved outputs in execution order.

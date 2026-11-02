@@ -1417,11 +1417,6 @@ CHEAT_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         "file_format, path, open_viewer",
         ("file_format", "path", "open_viewer", "dpi"),
     ),
-    (
-        "Motion",
-        "animate=<site label>",
-        ("animate",),
-    ),
 )
 
 #: Unencoded reasons: the exact legend line and when TorchLens writes it.

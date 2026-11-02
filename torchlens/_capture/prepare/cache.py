@@ -705,7 +705,7 @@ def _curated_cache_config(state: _DoorState) -> dict[str, Any]:
         "intervene": _predicate_cache_key(args.intervene),
         "halt": _predicate_cache_key(state.halt),
         "stop_after": _stable_cache_fragment(state.stop_after_site),
-        # Former door kwargs that now ride CaptureOptions (r2-options) and
+        # Former door kwargs that now ride CaptureOptions and
         # change what is captured: keyed by field name so the static
         # coverage lint sees them (the runtime sweep is invisible to it).
         "grad_options": _stable_cache_fragment(opts.grad_options),

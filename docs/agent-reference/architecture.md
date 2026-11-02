@@ -40,7 +40,7 @@ Key entry points:
   Synthesized rungs persist `InputProvenance` inside the existing
   `Trace.provenance.input_preprocessor` KEEP field; `decode_output`/`output_table`
   refuse `nongold_semantics_unavailable` on synthesized values; first raw
-  read warns once (`nongold_raw_value_read`). `torchlens._user_funcs.render`
+  read warns once (`nongold_raw_value_read`). `torchlens._user_funcs.draw`
   is the one-call facade (metadata-only pinned eval/no-grad, state-hash
   verified restore, `collapse="auto"` there only, detached `Drawing`,
   never auto-opens). Lazy: gold/declared rungs materialize during the one

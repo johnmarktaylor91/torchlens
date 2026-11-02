@@ -248,8 +248,7 @@ SENTINELS: tuple[Sentinel, ...] = (
         ("BranchConv",),
         "The first picture a new user sees: the one-call facade, default collapse auto.",
         (_panel("a", "BranchConv", "quickstart.render(model, x)", call="quickstart_render"),),
-        note="pending name: tl.render (naming sprint, defaults.8); renders "
-        "torchlens._quickstart.render today",
+        note="tl.draw, the one-call picture (glossary); renders torchlens._quickstart.draw",
     ),
     Sentinel(
         "SN14",
