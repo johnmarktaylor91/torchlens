@@ -8,7 +8,6 @@ import os
 import re
 import shutil
 import uuid
-from hashlib import sha256
 from pathlib import Path
 from typing import Any, Literal
 
@@ -17,16 +16,11 @@ import torch
 from .. import __version__ as TORCHLENS_VERSION
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
-from ..backends.registry import get_backend_spec
 from . import TLSPEC_VERSION, ArtifactError, refuse_bundle_exists
 from ._durability import _restrict_mode, fsync_dir, fsync_tree
-from ._tlspec_json_helpers import (
-    _hash_named_tensor_meta,
-    _json_int_or_none,
-    _json_str_or_none,
-    _utc_timestamp,
-)
-from .format3.writer import envelope_fields
+from ._tlspec_identity import _backend_v2_fields, _model_fingerprint, _model_signature, _safe_len
+from ._tlspec_json_helpers import _json_int_or_none, _json_str_or_none, _utc_timestamp
+from .format3.writer import EnvelopeSpec, envelope_fields
 from .manifest import Manifest, TensorEntry, _runtime_python_version
 from .paths import reject_symlink_path
 
@@ -60,28 +54,6 @@ TLSPEC_MANIFEST_FILENAME = "manifest.json"
 TLSPEC_VALID_SAVE_LEVELS = ("audit", "executable_with_callables", "portable", "runnable")
 TlspecKind = Literal["intervention", "trace", "bundle"]
 TlspecSaveLevel = Literal["audit", "executable_with_callables", "portable", "runnable"]
-
-_EMPTY_META_HASH = sha256(repr([]).encode("utf-8")).hexdigest()
-
-
-def _safe_len(value: Any) -> int:
-    """Return ``len(value)`` or zero when unavailable.
-
-    Parameters
-    ----------
-    value:
-        Object to measure.
-
-    Returns
-    -------
-    int
-        Length or zero.
-    """
-
-    try:
-        return len(value)
-    except TypeError:
-        return 0
 
 
 def _member_slug(name: object) -> str:
@@ -143,25 +115,10 @@ class _TlSpecWriter:
         manifest.update(unified_fields)
         backend_name = str(trace._provenance_backend if is_live_trace(trace) else "torch")
         if backend_name != "torch" or sparse_run is not None:
-            spec = get_backend_spec(backend_name)
             manifest.update(
-                {
-                    "schema_version": 2,
-                    "backend": backend_name,
-                    "backend_runtime": cls._backend_runtime(trace, backend_name=backend_name),
-                    "torch_version": torch.__version__ if backend_name == "torch" else None,
-                    "model_fingerprint": cls._backend_model_fingerprint(
-                        trace,
-                        backend_name=backend_name,
-                    ),
-                    "body_format": spec.serialization_policy.body_format,
-                    "backward_summary": None,
-                    "derived_gradient_summary": cls._derived_gradient_summary(trace),
-                    "payload_policy": cls._payload_policy(
-                        backend_name=backend_name,
-                        tensor_entries=legacy_manifest.tensors,
-                    ),
-                }
+                _backend_v2_fields(
+                    trace, backend_name=backend_name, tensor_entries=legacy_manifest.tensors
+                )
             )
         if sparse_run is not None:
             manifest["run"] = sparse_run
@@ -320,28 +277,7 @@ class _TlSpecWriter:
             cls._add_preserved_sections(bundle, bundle_metadata)
             cls.write_json(tmp_path / BUNDLE_RELATIONS_FILE, bundle_metadata)
 
-            manifest = cls.build_manifest(
-                kind="bundle",
-                source=bundle,
-                tensor_entries=[],
-                save_level=level,
-                spec_compat_info=None,
-                intervention_compat_metadata=None,
-            )
-            manifest.pop("body_index", None)
-            # 3.0 envelope: members are 3.0 trace artifacts under
-            # ``members/<index>-<name>/``; the container manifest carries the
-            # envelope and digests every file, members included.
-            manifest.update(
-                envelope_fields(
-                    tmp_path,
-                    kind="bundle",
-                    save_level=level,
-                    payload_policy={},
-                    records={},
-                    codecs=(),
-                )
-            )
+            manifest = cls._bundle_manifest(bundle, tmp_path=tmp_path, save_level=level)
             cls.write_json(tmp_path / TLSPEC_MANIFEST_FILENAME, manifest)
             _restrict_mode(tmp_path / BUNDLE_RELATIONS_FILE, 0o600)
             _restrict_mode(tmp_path / TLSPEC_MANIFEST_FILENAME, 0o600)
@@ -395,6 +331,27 @@ class _TlSpecWriter:
                 with contextlib.suppress(OSError):
                     os.replace(backup_path, target_path)
             raise
+
+    @classmethod
+    def _bundle_manifest(cls, bundle: Any, *, tmp_path: Path, save_level: str) -> dict[str, Any]:
+        """Build the container manifest of a staged bundle directory.
+
+        Members are 3.0 trace artifacts under ``members/<index>-<name>/``; the
+        container manifest carries the 3.0 envelope and digests every staged
+        file, members included, so it is built after the members are written.
+        """
+
+        manifest = cls.build_manifest(
+            kind="bundle",
+            source=bundle,
+            tensor_entries=[],
+            save_level=save_level,
+            spec_compat_info=None,
+            intervention_compat_metadata=None,
+        )
+        manifest.pop("body_index", None)
+        manifest.update(envelope_fields(tmp_path, EnvelopeSpec("bundle", save_level)))
+        return manifest
 
     @staticmethod
     def _add_gated_member_relations(bundle: Any, bundle_metadata: dict[str, Any]) -> None:
@@ -537,7 +494,7 @@ class _TlSpecWriter:
         """
 
         level = coerce_tlspec_save_level(save_level)
-        model_signature = cls._model_signature(source, kind=kind)
+        model_signature = _model_signature(source, kind=kind)
         return {
             "tlspec_version": TLSPEC_VERSION,
             "kind": kind,
@@ -547,7 +504,7 @@ class _TlSpecWriter:
             "torch_version": torch.__version__,
             "schema_version": TLSPEC_SCHEMA_VERSION,
             "model_signature": model_signature,
-            "model_fingerprint": cls._model_fingerprint(source, model_signature, kind=kind),
+            "model_fingerprint": _model_fingerprint(source, model_signature, kind=kind),
             "sites": cls._sites(source, kind=kind),
             "spec_compat_info": spec_compat_info,
             "body_format": "safetensors",
@@ -575,255 +532,6 @@ class _TlSpecWriter:
             handle.write(text + "\n")
             handle.flush()
             os.fsync(handle.fileno())
-
-    @staticmethod
-    def _backend_runtime(source: Any, *, backend_name: str) -> dict[str, Any]:
-        """Build a schema v2 backend runtime fingerprint.
-
-        Parameters
-        ----------
-        source:
-            Trace being serialized.
-        backend_name:
-            Registered backend name.
-
-        Returns
-        -------
-        dict[str, Any]
-            JSON-ready backend runtime metadata.
-        """
-
-        spec = get_backend_spec(backend_name)
-        runtime_name = spec.serialization_policy.runtime_name or backend_name
-        runtime_config = source._provenance_backend_config
-        if not isinstance(runtime_config, dict):
-            runtime_config = {}
-        device_summary = getattr(source, "backend_runtime_device_summary", None)
-        if not isinstance(device_summary, dict):
-            device_summary = {}
-        runtime_version = source._provenance_backend_version
-        return {
-            "name": runtime_name,
-            "version": None if runtime_version is None else str(runtime_version),
-            "runtime_config": runtime_config,
-            "device_summary": device_summary,
-            "compat_policy": {"policy": "metadata-only"},
-        }
-
-    @staticmethod
-    def _payload_policy(
-        *,
-        backend_name: str,
-        tensor_entries: list[TensorEntry],
-    ) -> dict[str, Any]:
-        """Build a schema v2 payload policy object.
-
-        Parameters
-        ----------
-        backend_name:
-            Registered backend name.
-        tensor_entries:
-            Saved tensor entries used to derive payload kinds.
-
-        Returns
-        -------
-        dict[str, Any]
-            JSON-ready payload policy metadata.
-        """
-
-        spec = get_backend_spec(backend_name)
-        payload_kinds = []
-        if spec.capabilities.payload_materialization:
-            payload_kinds = sorted({entry.kind for entry in tensor_entries})
-        return {
-            "policy": spec.serialization_policy.payload_policy,
-            "materialization_supported": spec.capabilities.payload_materialization,
-            "payload_kinds": payload_kinds,
-        }
-
-    @staticmethod
-    def _derived_gradient_summary(source: Any) -> dict[str, Any] | None:
-        """Build schema-v2 derived-gradient summary metadata.
-
-        Parameters
-        ----------
-        source:
-            Trace being serialized.
-
-        Returns
-        -------
-        dict[str, Any] | None
-            JSON-ready derived-gradient summary, or ``None`` when absent.
-        """
-
-        leaf_records = source._autograd_derived_grads
-        intermediate_records = getattr(
-            getattr(source, "autograd", None), "intermediate_derived_grads", {}
-        )
-        leaf_count = _safe_len(leaf_records)
-        intermediate_count = _safe_len(intermediate_records)
-        if leaf_count == 0 and intermediate_count == 0:
-            return None
-        provenance_kinds = sorted(
-            {
-                str(record.provenance.get("kind"))
-                for accessor in (leaf_records, intermediate_records)
-                for record in getattr(accessor, "values", lambda: ())()
-                if getattr(record, "provenance", None) is not None
-                and record.provenance.get("kind") is not None
-            }
-        )
-        return {
-            "num_leaf_records": leaf_count,
-            "num_intermediate_records": intermediate_count,
-            "provenance_kinds": provenance_kinds,
-        }
-
-    @classmethod
-    def _backend_model_fingerprint(cls, source: Any, *, backend_name: str) -> dict[str, Any]:
-        """Build a schema v2 backend-owned model fingerprint.
-
-        Parameters
-        ----------
-        source:
-            Trace being serialized.
-        backend_name:
-            Registered backend name.
-
-        Returns
-        -------
-        dict[str, Any]
-            JSON-ready backend fingerprint.
-        """
-
-        model_signature = cls._model_signature(source, kind="trace")
-        graph_shape_hash = source._provenance_fingerprint
-        return {
-            "backend_fingerprint": {
-                "backend": backend_name,
-                "model_signature": model_signature,
-                "graph_digest": graph_shape_hash or "metadata-only",
-                "module_identity_mode": getattr(source, "module_identity_mode", None),
-                "param_source": source._provenance_param_source,
-            }
-        }
-
-    @classmethod
-    def _model_signature(cls, source: Any, *, kind: TlspecKind) -> str:
-        """Return the module-qualified model identity for a source object.
-
-        Parameters
-        ----------
-        source:
-            Source object.
-        kind:
-            Public object kind.
-
-        Returns
-        -------
-        str
-            Module-qualified identity string.
-        """
-
-        if kind == "bundle":
-            return "torchlens.intervention.bundle.Bundle"
-        model_class_qualname = source._source_class_qualname if is_live_trace(source) else None
-        if isinstance(model_class_qualname, str) and model_class_qualname:
-            return model_class_qualname
-        model = _source_model(source)
-        if model is not None:
-            model_type = type(model)
-            return f"{model_type.__module__}.{model_type.__qualname__}"
-        source_type = type(source)
-        return f"{source_type.__module__}.{source_type.__qualname__}"
-
-    @classmethod
-    def _model_fingerprint(
-        cls,
-        source: Any,
-        model_signature: str,
-        *,
-        kind: TlspecKind,
-    ) -> dict[str, Any]:
-        """Build the public model fingerprint object.
-
-        Parameters
-        ----------
-        source:
-            Source object.
-        model_signature:
-            Module-qualified model identity.
-        kind:
-            Public object kind.
-
-        Returns
-        -------
-        dict[str, Any]
-            Fingerprint metadata.
-        """
-
-        if kind == "bundle":
-            return cls._bundle_fingerprint(source, model_signature)
-
-        source_fingerprint = getattr(source, "_source_bundle_model_fingerprint", None)
-        if isinstance(source_fingerprint, dict):
-            return dict(source_fingerprint)
-
-        model = _source_model(source)
-        if model is not None:
-            parameter_hash = _hash_named_tensor_meta(model.named_parameters())
-            buffer_hash = _hash_named_tensor_meta(model.named_buffers())
-        else:
-            raw_parameter_hash = (
-                source._provenance_param_hash_quick if is_live_trace(source) else None
-            )
-            if isinstance(raw_parameter_hash, str) and len(raw_parameter_hash) == 64:
-                parameter_hash = raw_parameter_hash
-            else:
-                parameter_hash = _EMPTY_META_HASH
-            buffer_hash = _EMPTY_META_HASH
-        return {
-            "parameter_meta_hash": parameter_hash,
-            "buffer_meta_hash": buffer_hash,
-            "class_qualname": model_signature,
-            "extra_metadata": _extra_metadata_for_source(source),
-        }
-
-    @classmethod
-    def _bundle_fingerprint(cls, bundle: Any, model_signature: str) -> dict[str, Any]:
-        """Build a combined fingerprint for a ``Bundle``.
-
-        Parameters
-        ----------
-        bundle:
-            Bundle object.
-        model_signature:
-            Bundle class identity.
-
-        Returns
-        -------
-        dict[str, Any]
-            Bundle-level fingerprint metadata.
-        """
-
-        members = getattr(bundle, "members", {})
-        member_fingerprints = []
-        if isinstance(members, dict):
-            for name, member in members.items():
-                signature = cls._model_signature(member, kind="trace")
-                member_fingerprints.append(
-                    (name, cls._model_fingerprint(member, signature, kind="trace"))
-                )
-        parameter_hash = sha256(repr(member_fingerprints).encode("utf-8")).hexdigest()
-        return {
-            "parameter_meta_hash": parameter_hash,
-            "buffer_meta_hash": _EMPTY_META_HASH,
-            "class_qualname": model_signature,
-            "extra_metadata": {
-                "member_names": list(members) if isinstance(members, dict) else [],
-                "baseline_name": getattr(bundle, "baseline_name", None),
-            },
-        }
 
     @classmethod
     def _sites(cls, source: Any, *, kind: TlspecKind) -> list[dict[str, Any]]:
@@ -1034,54 +742,6 @@ def coerce_tlspec_save_level(save_level: str) -> TlspecSaveLevel:
             argument="save_level",
         )
     return save_level  # type: ignore[return-value]
-
-
-def _source_model(source: Any) -> torch.nn.Module | None:
-    """Return the weakly-held source model when available.
-
-    Parameters
-    ----------
-    source:
-        Trace-like source object.
-
-    Returns
-    -------
-    torch.nn.Module | None
-        Source model, or ``None`` when unavailable.
-    """
-
-    source_ref = source._source_model_ref if is_live_trace(source) else None
-    if source_ref is None:
-        return None
-    model = source_ref()
-    return model if isinstance(model, torch.nn.Module) else None
-
-
-def _extra_metadata_for_source(source: Any) -> dict[str, Any]:
-    """Return JSON-safe extra metadata for a model-log-like source.
-
-    Parameters
-    ----------
-    source:
-        Source object.
-
-    Returns
-    -------
-    dict[str, Any]
-        Extra metadata object.
-    """
-
-    return {
-        "model_class_name": _json_str_or_none(
-            source._source_class_name if is_live_trace(source) else None
-        ),
-        "graph_shape_hash": _json_str_or_none(
-            source._provenance_fingerprint if is_live_trace(source) else None
-        ),
-        "input_signature_hash": _json_str_or_none(
-            source._provenance_input_signature_hash if is_live_trace(source) else None
-        ),
-    }
 
 
 __all__ = [

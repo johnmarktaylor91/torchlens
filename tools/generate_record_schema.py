@@ -28,11 +28,9 @@ _OUT_PATH = _REPO_ROOT / "torchlens" / "_data_classes" / "_schema_bindings.py"
 
 _HEADER = '''"""GENERATED storage bindings for the declared record schema. DO NOT EDIT.
 
-Regenerate with ``python tools/generate_record_schema.py``; a CI test
-(`tests/test_record_schema_bindings.py`) diffs this file against a fresh
-generation, so hand edits cannot survive. The declared axes live in
-``field_policy.StorageBinding``; classification policy lives in the
-generator.
+Regenerate with ``python tools/generate_record_schema.py``; `tests/test_record_schema_bindings.py`
+diffs this file against a fresh generation, so hand edits cannot survive. The declared axes
+live in ``field_policy.StorageBinding``; classification policy lives in the generator.
 """
 
 from __future__ import annotations

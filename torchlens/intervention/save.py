@@ -24,10 +24,11 @@ from .._io.format3.recipe import (
     PLACEHOLDER_PORTABILITY,
     CallablePlaceholder,
     NestedEdit,
+    RecipeHeader,
     read_recipe,
     recipe_placeholders,
 )
-from .._io.format3.writer import envelope_fields, write_intervention_recipe
+from .._io.format3.writer import EnvelopeSpec, envelope_fields, write_intervention_recipe
 from .._io.format_errors import ArtifactError
 from .._io.paths import reject_symlink_path
 from .._io.tensor_policy import Ok, is_supported_for_save
@@ -49,7 +50,7 @@ from .errors import (
     SiteResolutionError,
     UntrustedCallableError,
 )
-from .helpers import HELPER_REGISTRY_VERSION, rebuild_builtin_helper
+from .helpers import rebuild_builtin_helper
 from .spec_compat import (
     SpecCompat,
     TargetManifestDiff,
@@ -149,46 +150,23 @@ def save_intervention(
         _sync_spec_records_from_log(spec, trace)
         _refuse_unsupported_recipe_tensors(spec)
         target_manifest = _build_target_manifest(trace, spec, save_level)
-
-        # C03 / leverage B7: a spec whose every hook was staged by the
-        # capture-time predicate door carries only DERIVED resolved-label
-        # TARGETS. Stamp the fact so a reload discloses "the persisted
-        # ADDRESSING is derived" instead of presenting derived labels as
-        # authored addressing. The stamp keys the DOOR, never the metadata
-        # riders (spec_where_repr / spec_rule_id never re-resolve).
-        spec_derived = bool(spec.hook_specs) and all(
-            dict(hook_spec.metadata).get("created_by") == "intervene_predicate"
-            for hook_spec in spec.hook_specs
-        )
         store = PayloadStore(tmp_path)
-        intervention_entry, disclosures = write_intervention_recipe(
-            spec,
-            tmp_path,
-            store=store,
+        header = RecipeHeader(
             save_level=save_level.value,
-            helper_registry_version=HELPER_REGISTRY_VERSION,
             append_state=_append_state_for_json(trace),
             function_registry_keys=_serialize_function_registry_keys(trace),
-            spec_derived=spec_derived,
+            spec_derived=_spec_is_predicate_derived(spec),
+        )
+        intervention_entry, disclosures = write_intervention_recipe(
+            spec, tmp_path, store=store, header=header
         )
         chunks = store.close()
         if _write_tensor_blob_fn is not None:
             # Test hook: runs after the recipe and its tensors are on disk, before publish.
             _write_tensor_blob_fn(tmp_path=tmp_path, chunks=chunks)
         recipe = json.loads((tmp_path / INTERVENTION_FILE).read_text(encoding="utf-8"))
-        if save_level is SaveLevel.PORTABLE and not recipe.get("executable", False):
-            # Portable means it rebuilds without user code: a placeholder
-            # (or a disclosed, stringified value) breaks that promise.
-            raise OpaqueCallableError(
-                "A portable intervention spec must rebuild without user code, but this "
-                "recipe holds a user callable (saved only as a placeholder) or a value "
-                "the format cannot carry.",
-                code="intervention_spec_not_portable",
-                remedy=(
-                    "save at level='audit' for an audit-only record, or stage the rule "
-                    "with built-in edits"
-                ),
-            )
+        if save_level is SaveLevel.PORTABLE:
+            _refuse_unportable_recipe(recipe)
         _TlSpecWriter.write_intervention_manifest(
             path=tmp_path / _MANIFEST_FILE,
             log=trace,
@@ -198,12 +176,12 @@ def save_intervention(
             envelope=dict(
                 envelope_fields(
                     tmp_path,
-                    kind="intervention",
-                    save_level=save_level.value,
-                    payload_policy={},
-                    records={},
-                    codecs=store.codecs,
-                    disclosures=disclosures,
+                    EnvelopeSpec(
+                        "intervention",
+                        save_level.value,
+                        codecs=store.codecs,
+                        disclosures=disclosures,
+                    ),
                 ),
                 intervention=intervention_entry,
             ),
@@ -243,6 +221,43 @@ def save_intervention(
                     stacklevel=2,
                 )
         raise
+
+
+def _spec_is_predicate_derived(spec: InterventionSpec) -> bool:
+    """Return whether every hook of ``spec`` was staged by the predicate door.
+
+    C03 / leverage B7: such a spec carries only DERIVED resolved-label TARGETS.
+    The recipe stamps the fact so a reload discloses "the persisted ADDRESSING is
+    derived" instead of presenting derived labels as authored addressing. The
+    stamp keys the DOOR, never the metadata riders (spec_where_repr /
+    spec_rule_id never re-resolve).
+    """
+
+    return bool(spec.hook_specs) and all(
+        dict(hook_spec.metadata).get("created_by") == "intervene_predicate"
+        for hook_spec in spec.hook_specs
+    )
+
+
+def _refuse_unportable_recipe(recipe: Mapping[str, Any]) -> None:
+    """Refuse a portable save whose written recipe needs user code to rebuild.
+
+    Portable means it rebuilds without user code: a callable placeholder (or a
+    disclosed, stringified value) leaves the recipe non-executable and breaks
+    that promise.
+    """
+
+    if recipe.get("executable", False):
+        return
+    raise OpaqueCallableError(
+        "A portable intervention spec must rebuild without user code, but this "
+        "recipe holds a user callable (saved only as a placeholder) or a value "
+        "the format cannot carry.",
+        code="intervention_spec_not_portable",
+        remedy=(
+            "save at level='audit' for an audit-only record, or stage the rule with built-in edits"
+        ),
+    )
 
 
 def load_intervention_spec(

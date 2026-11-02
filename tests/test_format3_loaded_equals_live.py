@@ -20,8 +20,7 @@ paths become their file names, object ids are renumbered one-to-one within each 
 ``_source_trace_ref`` back-reference is written as null.
 
 ``_KNOWN_GAPS`` lists the columns where the current writer's value differs from the live
-one (computed columns evaluated on the scrubbed copy without its trace, and value objects
-written as plain mappings). It may only shrink: a gap that closes fails
+one (today only the runnable level's scrub). It may only shrink: a gap that closes fails
 ``test_known_gaps_still_differ`` until it is removed from the list.
 """
 
@@ -34,6 +33,7 @@ import os
 import re
 import weakref
 from collections import deque
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +42,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._data_classes._accessor_base import Accessor
 from torchlens._data_classes._state_adapter import state_items
 from torchlens._io.format3 import schema as format_schema
 from torchlens._io.format3.contract import TENSOR_REFERENCE_FIELDS
@@ -72,35 +73,10 @@ def _sorted_param_run(match: re.Match[str]) -> str:
     return "_".join(sorted(re.findall(r"param_\d{6}", match.group(0))))
 
 
-_COMPUTED_ON_SCRUBBED_COPY = frozenset(
-    {
-        "module.forward_args_template",
-        "module.func_calls_duration",
-        "module.max_descendant_depth",
-        "module.num_descendant_calls",
-        "module.total_autograd_memory",
-        "module.total_func_calls_duration",
-        "module.total_internal_activation_memory",
-        "module.total_output_activation_memory",
-        "module_call.autograd_memory",
-        "module_call.func_calls_duration",
-        "module_call.has_frozen_params",
-        "module_call.has_trainable_params",
-        "module_call.internal_activation_memory",
-        "module_call.max_descendant_depth",
-        "module_call.module",
-        "module_call.num_descendant_calls",
-        "module_call.num_param_tensors",
-        "module_call.num_param_tensors_frozen",
-        "module_call.num_param_tensors_trainable",
-        "module_call.output_activation_memory",
-        "module_call.param_memory",
-        "op.arg_expressions",
-    }
-)
-_FLATTENED_VALUE_OBJECTS = frozenset(
-    {"module.params", "module.recursive_params", "trace._capture_outcome", "trace._param_logs"}
-)
+#: Computed columns the writer evaluated on the scrubbed copy (no trace link).
+_COMPUTED_ON_SCRUBBED_COPY: frozenset[str] = frozenset()
+#: Value objects the writer flattened to plain mappings.
+_FLATTENED_VALUE_OBJECTS: frozenset[str] = frozenset()
 _RUNNABLE_SCRUB = frozenset(
     {
         "layer.func_config",
@@ -231,6 +207,9 @@ class _Comparison:
         return _PARAM_TOKEN_RUN.sub(_sorted_param_run, text)
 
     def compare(self, decoded: Any, live: Any, at: str) -> None:
+        if isinstance(live, Accessor) and isinstance(decoded, list):
+            # An accessor of records is an edge: written as its member list.
+            live = list(live._list)
         if isinstance(decoded, RowRef):
             if record_kind_of(live) != decoded.record:
                 self.miss(f"{at}: ref {decoded} vs live {type(live).__name__}")
@@ -353,7 +332,9 @@ def _compare_level(trace: Any, root: Path) -> _Comparison:
 
 
 @pytest.fixture(scope="module")
-def comparisons(tmp_path_factory: pytest.TempPathFactory) -> dict[str, _Comparison]:
+def comparisons(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> Iterator[dict[str, _Comparison]]:
     base = tmp_path_factory.mktemp("format3_lel")
     torch.manual_seed(0)
     trace = tl.trace(
@@ -361,11 +342,14 @@ def comparisons(tmp_path_factory: pytest.TempPathFactory) -> dict[str, _Comparis
         torch.randn(2, 1, 6, 6),
         capture=tl.options.CaptureOptions(replayable=True),
     )
-    results = {}
-    for level in _LEVELS:
-        trace.save(base / level, level=level)
-        results[level] = _compare_level(trace, base / level)
-    return results
+    try:
+        results = {}
+        for level in _LEVELS:
+            trace.save(base / level, level=level)
+            results[level] = _compare_level(trace, base / level)
+        yield results
+    finally:
+        trace.cleanup()
 
 
 @pytest.mark.parametrize("level", _LEVELS)

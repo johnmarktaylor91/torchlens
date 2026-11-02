@@ -18,12 +18,11 @@ and the typed decoder before the publish.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 from collections import deque
 from collections.abc import Mapping, Sequence
-from functools import cache
-from importlib import import_module
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +30,6 @@ import torch
 
 from ..._data_classes._state_adapter import state_items
 from .. import _json
-from ..field_registry import RECORD_CONTRACT_CLASSES
 from ..format_errors import ArtifactError
 from ..writer_contract import writer_contract_digest
 from . import reader as _reader
@@ -44,8 +42,8 @@ from .contract import (
     RECORDS_DIR,
 )
 from .payloads import PayloadStore
-from .recipe import build_recipe, write_recipe
-from .schema import level_columns, record_schema
+from .recipe import RecipeHeader, build_recipe, write_recipe
+from .schema import LiveCells, level_columns, record_kind_of, record_schema
 from .values import ValueEncoder, decode_value, object_state, record_type_table, tagged
 
 #: Root files the digest table leaves out: the manifest itself and the
@@ -70,29 +68,6 @@ _DISCLOSURE_PATHS_SHOWN = 16
 _EMPTY_MAP_OP_KEYS = ("edge_substitutions", "edge_replacement_stamps")
 #: Values the discovery walk never descends into.
 _LEAF_TYPES = (str, bytes, bytearray, int, float, complex, bool, type(None), torch.Tensor)
-
-
-@cache
-def _record_kinds_by_class() -> dict[type, str]:
-    """Return record class to record kind for the twelve record contracts."""
-
-    return {
-        getattr(import_module(module), name): kind
-        for kind, (module, name) in RECORD_CONTRACT_CLASSES.items()
-    }
-
-
-def record_kind_of(value: Any) -> str | None:
-    """Return the record kind of a record object, or ``None`` for any other value."""
-
-    kinds = _record_kinds_by_class()
-    kind = kinds.get(type(value))
-    if kind is not None:
-        return kind
-    for cls in type(value).__mro__[1:]:
-        if cls in kinds:
-            return kinds[cls]
-    return None
 
 
 def _container_items(value: Any) -> list[Any]:
@@ -203,24 +178,12 @@ def settle_live_side(trace: Any) -> None:
                 setattr(op, key, {})
 
 
-def _cell(record: Any, state: Mapping[str, Any], column: str, storage: str) -> Any:
-    """Return one stored value of a record (computed keys are computed if absent)."""
-
-    if column in state:
-        return state[column]
-    if storage == "computed":
-        try:
-            return getattr(record, column)
-        except (AttributeError, LookupError, RuntimeError, TypeError, ValueError):
-            return None
-    return None
-
-
 def encode_tables(
     state: Mapping[str, Any],
     *,
     encoder_factory: Any,
     payload_policy: Mapping[str, bool],
+    cells: LiveCells | None = None,
 ) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
     """Lay out scrubbed trace state as the twelve record tables.
 
@@ -232,6 +195,8 @@ def encode_tables(
         Callable taking the ``ref`` resolver and returning a ``ValueEncoder``.
     payload_policy:
         Resolved include flags (decide the optional columns).
+    cells:
+        Cell resolver holding the live originals of the scrubbed copies.
 
     Returns
     -------
@@ -240,20 +205,23 @@ def encode_tables(
         disclosures of values written as ``unencodable``.
     """
 
+    cells = cells or LiveCells()
     tables = RecordTables(state)
     tables.discover()
     encoder: ValueEncoder = encoder_factory(tables.reference)
     schema = record_schema("trace")
     fields = {
         name: encoder.encode(
-            state.get(name), f"trace.{name}", payload=schema[name].storage == "payload"
+            cells.cell("trace", state, state, name),
+            f"trace.{name}",
+            payload=schema[name].storage == "payload",
         )
         for name in level_columns("trace", payload_policy)
     }
     files: dict[str, dict[str, Any]] = {
         "trace": {"record": "trace", "tlspec_version": RECORD_CONTRACT_VERSION, "fields": fields}
     }
-    columns = _encode_record_rows(tables, encoder, payload_policy)
+    columns = _encode_record_rows(tables, encoder, payload_policy, cells)
     for kind, _, _ in RECORD_INDEX:
         if kind != "trace" and tables.rows[kind]:
             files[kind] = {
@@ -266,7 +234,10 @@ def encode_tables(
 
 
 def _encode_record_rows(
-    tables: RecordTables, encoder: ValueEncoder, payload_policy: Mapping[str, bool]
+    tables: RecordTables,
+    encoder: ValueEncoder,
+    payload_policy: Mapping[str, bool],
+    cells: LiveCells,
 ) -> dict[str, dict[str, list[Any]]]:
     """Encode every row of every non-trace kind, column by column.
 
@@ -292,12 +263,11 @@ def _encode_record_rows(
                 record = tables.rows[kind][row]
                 state = dict(state_items(record))
                 for name in names[kind]:
-                    storage = schema[name].storage
                     columns[kind][name].append(
                         encoder.encode(
-                            _cell(record, state, name, storage),
+                            cells.cell(kind, record, state, name),
                             f"{kind}[{row}].{name}",
-                            payload=storage == "payload",
+                            payload=schema[name].storage == "payload",
                         )
                     )
                 done[kind] += 1
@@ -369,25 +339,12 @@ def disclosure_summary(disclosures: Sequence[Mapping[str, Any]]) -> dict[str, An
     }
 
 
-def envelope_fields(
-    root: Path,
-    *,
-    kind: str,
-    save_level: str,
-    payload_policy: Mapping[str, bool],
-    records: Mapping[str, Mapping[str, Any]],
-    codecs: Sequence[str],
-    disclosures: Sequence[Mapping[str, Any]] = (),
-) -> dict[str, Any]:
-    """Return the 3.0 envelope fields of a staged artifact.
+@dataclasses.dataclass(frozen=True)
+class EnvelopeSpec:
+    """What the 3.0 envelope of a staged artifact reports about its contents.
 
-    Call it last, after every other file is written: ``files`` digests what
-    is on disk.
-
-    Parameters
+    Attributes
     ----------
-    root:
-        Staged artifact directory.
     kind:
         One of ``contract.ARTIFACT_KINDS``.
     save_level:
@@ -400,6 +357,48 @@ def envelope_fields(
         Codec ids that wrote at least one payload.
     disclosures:
         Values written as ``unencodable``.
+    """
+
+    kind: str
+    save_level: str
+    payload_policy: Mapping[str, bool] = dataclasses.field(default_factory=dict)
+    records: Mapping[str, Mapping[str, Any]] = dataclasses.field(default_factory=dict)
+    codecs: Sequence[str] = ()
+    disclosures: Sequence[Mapping[str, Any]] = ()
+
+
+@dataclasses.dataclass(frozen=True)
+class TraceTables:
+    """The scrubbed state of one staged trace and what its record cells read.
+
+    Attributes
+    ----------
+    scrubbed_state:
+        Scrubbed trace state.
+    tensor_refs:
+        Blob id to reference fields of every stored payload.
+    record_pairs, include_source:
+        ``(scrubbed copy, live original)`` pairs and the source flag (``LiveCells``).
+    """
+
+    scrubbed_state: Mapping[str, Any]
+    tensor_refs: Mapping[str, Mapping[str, Any]]
+    record_pairs: Sequence[tuple[Any, Any]] = ()
+    include_source: bool = True
+
+
+def envelope_fields(root: Path, envelope: EnvelopeSpec) -> dict[str, Any]:
+    """Return the 3.0 envelope fields of a staged artifact.
+
+    Call it last, after every other file is written: ``files`` digests what
+    is on disk.
+
+    Parameters
+    ----------
+    root:
+        Staged artifact directory.
+    envelope:
+        Kind, save level, payload flags, record index, codecs and disclosures.
 
     Returns
     -------
@@ -412,15 +411,15 @@ def envelope_fields(
         "format": FORMAT_NAME,
         "format_version": FORMAT_MAJOR,
         "tlspec_version": RECORD_CONTRACT_VERSION,
-        "kind": kind,
-        "save_level": save_level,
-        "payload_policy": {name: bool(flag) for name, flag in payload_policy.items()},
+        "kind": envelope.kind,
+        "save_level": envelope.save_level,
+        "payload_policy": {name: bool(flag) for name, flag in envelope.payload_policy.items()},
         "contract_digest": writer_contract_digest(),
-        "codecs": list(codecs),
-        "records": {name: dict(entry) for name, entry in records.items()},
+        "codecs": list(envelope.codecs),
+        "records": {name: dict(entry) for name, entry in envelope.records.items()},
         "files": file_digests(root),
     }
-    summary = disclosure_summary(disclosures)
+    summary = disclosure_summary(envelope.disclosures)
     if summary is not None:
         fields["disclosures"] = summary
     return fields
@@ -482,40 +481,21 @@ def make_encoder_factory(tensor_refs: Mapping[str, Mapping[str, Any]]) -> Any:
 
 
 def write_trace_envelope(
-    root: Path,
-    *,
-    base_manifest: Mapping[str, Any],
-    scrubbed_state: Mapping[str, Any],
-    tensor_refs: Mapping[str, Mapping[str, Any]],
-    codecs: Sequence[str],
-    save_level: str,
-    payload_policy: Mapping[str, bool],
-    kind: str = "trace",
-    extra_disclosures: Sequence[Mapping[str, Any]] = (),
+    root: Path, *, base_manifest: Mapping[str, Any], tables: TraceTables, envelope: EnvelopeSpec
 ) -> dict[str, Any]:
     """Write the record tables and 3.0 manifest of one staged trace.
 
     Parameters
     ----------
-    root:
-        Staged artifact directory (payload chunks already written).
-    base_manifest:
-        Manifest fields the save already builds (writer identity, backend,
-        model signature and fingerprint, sites, runnable descriptor).
-    scrubbed_state:
-        Scrubbed trace state.
-    tensor_refs:
-        Blob id to tensor reference fields of every stored payload.
-    codecs:
-        Codec ids that wrote at least one payload.
-    save_level:
-        Resolved save level.
-    payload_policy:
-        Resolved payload flags.
-    kind:
-        Artifact kind recorded in the manifest.
-    extra_disclosures:
-        Disclosures of files written beside the records (the recipe).
+    root, base_manifest:
+        Staged artifact directory (payload chunks written); manifest fields the
+        save already builds (writer identity, backend, signature, sites, runnable).
+    tables:
+        Scrubbed state, payload references and live record pairs to encode.
+    envelope:
+        Kind, save level, payload flags and codecs; its ``disclosures`` are
+        those of files written beside the records (the recipe), and the record
+        index and record disclosures are added here.
 
     Returns
     -------
@@ -524,27 +504,19 @@ def write_trace_envelope(
     """
 
     files, disclosures = encode_tables(
-        scrubbed_state,
-        encoder_factory=make_encoder_factory(tensor_refs),
-        payload_policy=payload_policy,
+        tables.scrubbed_state,
+        encoder_factory=make_encoder_factory(tables.tensor_refs),
+        payload_policy=envelope.payload_policy,
+        cells=LiveCells(tables.record_pairs, include_source=tables.include_source),
     )
     records = write_record_files(root, files)
-    manifest: dict[str, Any] = dict(base_manifest)
-    # The 2.x per-file tensor list becomes the blob-id index: the runnable
-    # descriptor and the weight tables name payloads by blob id.
-    manifest["tensors"] = payload_index(tensor_refs)
+    # Blob-id index: the runnable descriptor and weight tables name payloads by blob id.
+    manifest: dict[str, Any] = {**base_manifest, "tensors": payload_index(tables.tensor_refs)}
     manifest.pop("tensor_entries", None)
-    manifest.update(
-        envelope_fields(
-            root,
-            kind=kind,
-            save_level=save_level,
-            payload_policy=payload_policy,
-            records=records,
-            codecs=codecs,
-            disclosures=[*disclosures, *extra_disclosures],
-        )
+    filled = dataclasses.replace(
+        envelope, records=records, disclosures=[*disclosures, *envelope.disclosures]
     )
+    manifest.update(envelope_fields(root, filled))
     (root / MANIFEST_FILE).write_bytes(_dump(manifest, sort_keys=True))
     return manifest
 
@@ -690,11 +662,7 @@ def write_intervention_recipe(
     path: str | Path,
     *,
     store: PayloadStore | None = None,
-    save_level: str = "portable",
-    helper_registry_version: Any = None,
-    append_state: Mapping[str, Any] | None = None,
-    function_registry_keys: Sequence[Mapping[str, Any]] = (),
-    spec_derived: bool = False,
+    header: RecipeHeader | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Write a staged intervention spec as the typed recipe file.
 
@@ -711,8 +679,9 @@ def write_intervention_recipe(
     store:
         Payload store of the artifact, so recipe keys share its counter; the
         caller closes it. ``None`` opens and closes one here.
-    save_level, helper_registry_version, append_state, function_registry_keys, spec_derived:
-        Recipe header values (``recipe.build_recipe``).
+    header:
+        Recipe header values (``recipe.RecipeHeader``); ``None`` is a portable
+        recipe with no trace context.
 
     Returns
     -------
@@ -730,22 +699,16 @@ def write_intervention_recipe(
     root = Path(path)
     owned = store is None
     payloads = PayloadStore(root) if store is None else store
-    recipe, disclosures = build_recipe(
-        spec,
-        store=payloads,
-        save_level=save_level,
-        helper_registry_version=helper_registry_version,
-        append_state=dict(append_state or {}),
-        function_registry_keys=function_registry_keys,
-        spec_derived=spec_derived,
-    )
+    recipe, disclosures = build_recipe(spec, store=payloads, header=header or RecipeHeader())
     if owned:
         payloads.close()
     return write_recipe(root, recipe), disclosures
 
 
 __all__ = [
+    "EnvelopeSpec",
     "RecordTables",
+    "TraceTables",
     "encode_tables",
     "envelope_fields",
     "file_digests",

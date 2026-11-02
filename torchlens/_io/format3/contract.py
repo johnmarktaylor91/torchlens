@@ -121,6 +121,9 @@ JSON_TYPE_BY_STORAGE_KIND: Final[dict[StorageKind, str]] = {
     StorageKind.RUNTIME: "never",
 }
 
+#: Version of the built-in edit registry a recipe records (``helpers[].version``).
+HELPER_REGISTRY_VERSION: Final = "1"
+
 #: The key that marks a typed JSON object; its value is one of the tags below.
 TYPED_VALUE_KEY: Final = "$tl"
 #: Typed-value tags. Every Python value JSON cannot carry directly is one of

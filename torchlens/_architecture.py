@@ -83,6 +83,9 @@ PACKAGE_LAYERS: dict[str, str] = {
     # (R43 size cap) sit at ITS tier; the module imports its shared refusal/
     # census helpers back from it eagerly.
     "_io._load_validators": "L3",
+    # The tlspec identity and backend-field builders split out of tlspec
+    # (file cap) sit at its tier.
+    "_io._tlspec_identity": "L3",
     # -- L2 ENGINE ----------------------------------------------------------
     "_capture": "L2",
     # The PREPARE stage resolves intervention, autoroute and selective-save

@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -121,7 +122,7 @@ def _walk_json(value: Any):
 
 
 @pytest.fixture(scope="module")
-def saved(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Path]:
+def saved(tmp_path_factory: pytest.TempPathFactory) -> Iterator[dict[str, Path]]:
     """Save the tiny CNN at every save level (plus grads and structure-only variants)."""
 
     base = tmp_path_factory.mktemp("format3_writer")
@@ -145,14 +146,18 @@ def saved(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Path]:
     structure.save(base / "structure_only")
 
     tl.Bundle({"plain": plain, "graded": graded}).save(base / "bundle")
-    return {
-        "portable": base / "portable",
-        "audit": base / "audit",
-        "grads": base / "grads",
-        "runnable": base / "runnable",
-        "structure_only": base / "structure_only",
-        "bundle": base / "bundle",
-    }
+    try:
+        yield {
+            "portable": base / "portable",
+            "audit": base / "audit",
+            "grads": base / "grads",
+            "runnable": base / "runnable",
+            "structure_only": base / "structure_only",
+            "bundle": base / "bundle",
+        }
+    finally:
+        for live in (plain, graded, replayable, structure):
+            live.cleanup()
 
 
 _TRACE_LABELS = ("portable", "audit", "grads", "runnable", "structure_only")
@@ -270,8 +275,8 @@ def _id_array_cell_ok(cell: Any) -> bool:
     return False
 
 
-#: Edge columns the writer fills with record-tagged accessor objects (reported gap).
-_ID_ARRAY_GAPS = frozenset({("layer", "ops"), ("module", "ops"), ("module", "params")})
+#: Edge columns whose live value is an accessor of records; each is an id array.
+_ACCESSOR_EDGE_COLUMNS = frozenset({("layer", "ops"), ("module", "ops"), ("module", "params")})
 
 
 def _cell_type_problem(kind: str, name: str, json_type: str, cell: Any) -> str | None:
@@ -301,8 +306,6 @@ def test_every_record_key_present_with_its_json_type(saved: dict[str, Path], lab
         )
         assert list(cells_by_column) == expected, kind
         for name, cells in cells_by_column.items():
-            if (kind, name) in _ID_ARRAY_GAPS:
-                continue
             for cell in cells:
                 problem = _cell_type_problem(kind, name, schema[name].json_type, cell)
                 if problem:
@@ -310,16 +313,14 @@ def test_every_record_key_present_with_its_json_type(saved: dict[str, Path], lab
     assert not wrong, "\n".join(f"{key}: {text}" for key, text in sorted(wrong.items()))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="writer gap: these edge columns are written as record-tagged accessor objects, "
-    "not id arrays of row references",
+@pytest.mark.parametrize(
+    "column", sorted(f"{kind}.{name}" for kind, name in _ACCESSOR_EDGE_COLUMNS)
 )
-@pytest.mark.parametrize("column", sorted(f"{kind}.{name}" for kind, name in _ID_ARRAY_GAPS))
 def test_accessor_edge_columns_are_id_arrays(saved: dict[str, Path], column: str) -> None:
     kind, name = column.split(".")
     cells = _records(saved["portable"])[kind]["columns"][name]
-    assert all(_id_array_cell_ok(cell) for cell in cells), cells[0]
+    assert all(isinstance(cell, list) and _id_array_cell_ok(cell) for cell in cells), cells[0]
+    assert any(cell for cell in cells), cells
 
 
 @pytest.mark.parametrize("label", (*_TRACE_LABELS, "bundle"))
@@ -448,11 +449,8 @@ def test_disclosures_count_and_first_paths(tmp_path: Path) -> None:
     manifest = format_writer.write_trace_envelope(
         tmp_path,
         base_manifest={},
-        scrubbed_state=state,
-        tensor_refs={},
-        codecs=[],
-        save_level="portable",
-        payload_policy=policy,
+        tables=format_writer.TraceTables(state, {}),
+        envelope=format_writer.EnvelopeSpec("trace", "portable", payload_policy=policy),
     )
     assert manifest == _manifest(tmp_path)
     summary = manifest.get("disclosures")
@@ -501,6 +499,10 @@ def test_is_constant_marks_the_literal_producer(saved: dict[str, Path]) -> None:
     assert any(label.startswith("ones") for label in constants), constants
 
 
+#: A non-pipeline phase timing bucket name (``dispatch_forward_model``, ``ctx_build_*``).
+_SNAKE_CASE = re.compile(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*")
+
+
 @pytest.mark.parametrize("label", _TRACE_LABELS)
 def test_phase_timings_keyed_by_pipeline_step_names(saved: dict[str, Path], label: str) -> None:
     timings = _records(saved[label])["trace"]["fields"]["_phase_timings"]
@@ -508,8 +510,7 @@ def test_phase_timings_keyed_by_pipeline_step_names(saved: dict[str, Path], labe
     step_names = {step.name for step in PIPELINE}
     assert step_names & set(timings)
     for key in timings:
-        assert not key.startswith("postprocess:"), key
-        assert "Step " not in key, key
+        assert key in step_names or _SNAKE_CASE.fullmatch(key), key
 
 
 def test_portable_example_envelope(saved: dict[str, Path]) -> None:

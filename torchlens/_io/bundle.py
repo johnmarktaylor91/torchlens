@@ -45,7 +45,6 @@ from .._utils.display import user_stacklevel
 from .._utils.hashing import sha256_file
 from ..backends.registry import BackendSpec, get_backend_spec
 from ..errors import RunnablePreflightError, TorchLensWarning
-from ..intervention.helpers import HELPER_REGISTRY_VERSION
 from . import (
     TLSPEC_VERSION,
     ArtifactError,
@@ -78,7 +77,13 @@ from .format3.payloads import (
     tensor_reference,
 )
 from .format3.recipe import write_trace_recipe
-from .format3.writer import preflight_reload, settle_live_side, write_trace_envelope
+from .format3.writer import (
+    EnvelopeSpec,
+    TraceTables,
+    preflight_reload,
+    settle_live_side,
+    write_trace_envelope,
+)
 from .lazy import LazyActivationRef
 from .manifest import Manifest, Provenance, TensorEntry, enforce_version_policy
 from .paths import (
@@ -642,17 +647,16 @@ def save(
         tmp_path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path.mkdir()
         (tmp_path / "blobs").mkdir()
-        # B8-10: safetensors blobs are already 0600, but the bundle directories and the
-        # metadata.pkl / manifest.json sidecars (forward source, harvested module
-        # attributes) inherited the ambient umask: group/world readable on umask 002.
-        # Tighten the directories to 0700 up front so no second principal can swap a
-        # blob file in a group-writable dir; the sidecars are tightened to 0600 below.
+        # Bundle directories are 0700 from the start (no second principal can swap
+        # a blob in a group-writable dir); the written files are 0600 below.
         _restrict_mode(tmp_path, 0o700)
         _restrict_mode(tmp_path / "blobs", 0o700)
 
         settle_live_side(trace)
+        record_pairs: list[tuple[Any, Any]] = []
         scrubbed_state, blob_specs, scrub_unsupported_tensors = _scrub_trace_for_bundle(
             trace,
+            record_pairs=record_pairs,
             include_outs=include_outs,
             include_grads=include_grads,
             include_saved_args=include_saved_args,
@@ -766,11 +770,7 @@ def save(
         # io.1: a staged intervention spec persists as intervention.json (its
         # tensors join this artifact's payload store before it closes).
         intervention_entry, recipe_disclosures = write_trace_recipe(
-            tmp_path,
-            trace,
-            store=payload_store,
-            save_level=save_level,
-            helper_registry_version=HELPER_REGISTRY_VERSION,
+            tmp_path, trace, store=payload_store, save_level=save_level
         )
         payload_store.close()
         tensor_entries = seal_tensor_entries(tmp_path, tensor_entries)
@@ -804,10 +804,8 @@ def save(
         )
         _warn_custom_attribute_embedding(custom_attributes_disclosure)
         _warn_buffer_value_embedding(buffer_values_disclosure)
-        # 3.0 saved format (format.1): the scrubbed state is written as typed
-        # JSON record tables beside the safetensors blobs; no pickle file is
-        # written at any level. The staged directory is reloaded once (the
-        # save preflight, late.21) before the publish below.
+        # 3.0 format: typed JSON record tables beside the safetensors blobs, no
+        # pickle at any level; the staged directory is reloaded once before publish.
         base_manifest = _TlSpecWriter.build_trace_manifest(
             trace=trace,
             legacy_manifest=manifest,
@@ -817,14 +815,15 @@ def save(
         )
         if intervention_entry is not None:
             base_manifest["intervention"] = intervention_entry
-        write_trace_envelope(
-            tmp_path,
-            base_manifest=base_manifest,
-            extra_disclosures=recipe_disclosures,
-            scrubbed_state=scrubbed_state,
-            tensor_refs=tensor_refs,
-            codecs=payload_store.codecs,
-            save_level=save_level,
+        tables = TraceTables(
+            scrubbed_state,
+            tensor_refs,
+            record_pairs=[*record_pairs, (scrubbed_state, trace)],
+            include_source=bool(include_source),
+        )
+        envelope = EnvelopeSpec(
+            "trace",
+            save_level,
             payload_policy={
                 "include_outs": bool(include_outs),
                 "include_grads": bool(include_grads),
@@ -834,6 +833,11 @@ def save(
                 "include_custom_attributes": bool(include_custom_attributes),
                 "structure_only": scrubbed_state.get("_options_structure_only") is True,
             },
+            codecs=payload_store.codecs,
+            disclosures=recipe_disclosures,
+        )
+        write_trace_envelope(
+            tmp_path, base_manifest=base_manifest, tables=tables, envelope=envelope
         )
         _restrict_tree_modes(tmp_path)
         preflight_reload(tmp_path)
@@ -842,13 +846,8 @@ def save(
         # bundle directories so a power/OS crash after the rename below cannot
         # publish a bundle holding zero-length or partial files.
         fsync_tree(tmp_path)
-        # Move the existing target aside only NOW, immediately before the
-        # swap (mirroring ``_TlSpecWriter.write_bundle``). Doing it at save
-        # start left the target with NO bundle for the whole (potentially
-        # minutes-long) scrub/blob write: the Python exception nets below
-        # restore it, but SIGKILL/power loss mid-save stranded the old data
-        # under an undocumented ``.bak.<uuid>`` name, and concurrent readers
-        # saw the bundle vanish for the entire save.
+        # Move the existing target aside only now, immediately before the swap
+        # (as ``_TlSpecWriter.write_bundle`` does), so readers never see it vanish.
         if bundle_path.exists():
             if not overwrite:
                 refuse_bundle_exists(bundle_path, overwritable=True)
@@ -871,14 +870,8 @@ def save(
         _run_save_recovery(tmp_path, backup_path, bundle_path, primary=exc)
         raise
     except (ImportError, OSError, TypeError, ValueError, pickle.PickleError) as exc:
-        # ``TypeError`` is caught alongside the other serialization failure
-        # modes because ``pickle.dump()`` raises a bare ``TypeError`` (not
-        # the ``pickle.PickleError`` subclass) for many live-resource objects
-        # (generators, locks, open file handles, sockets, ...). Without this,
-        # the exception propagated past this handler entirely, skipping both
-        # the ``PARTIAL`` sentinel (leaving the ``.tmp`` dir un-sweepable by
-        # ``cleanup_tmp()``) and the backup restore (permanently losing the
-        # pre-overwrite bundle under an undocumented ``.bak.<uuid>`` name).
+        # ``TypeError`` is here because serializers raise it bare for live
+        # resources; every branch marks the staging dir PARTIAL and restores.
         _run_save_recovery(tmp_path, backup_path, bundle_path, primary=exc)
         raise ArtifactError(
             f"Failed to save bundle at {bundle_path}: {type(exc).__name__}: {exc}. "
@@ -889,24 +882,10 @@ def save(
             cause_type=type(exc).__name__,
         ) from exc
     except BaseException as exc:
-        # Safety-net catch-all that closes the whole *class* of bug the
-        # branches above were built to fix one exception type at a time
-        # (``ddd9440f`` added ``TypeError``; this is the third recurrence --
-        # most recently a raw ``KeyError`` from ``safetensors.torch.save_file``
-        # for an allow-listed-but-actually-unwritable ``complex128`` tensor,
-        # cert round 8 BLOCKER). A hand-enumerated except tuple can always be
-        # missing the *next* third-party exception shape; this branch instead
-        # guarantees the recovery contract -- mark the ``.tmp`` dir PARTIAL so
-        # ``cleanup_tmp()`` can sweep it, and restore the pre-overwrite backup
-        # onto ``bundle_path`` if the write left it missing -- for literally
-        # any exception, known or not yet discovered, so the live bundle can
-        # never again be stranded under an unrestored ``.bak.<uuid>`` name.
-        #
-        # ``BaseException`` (not ``Exception``) is used deliberately so this
-        # also covers ``KeyboardInterrupt``/``SystemExit``/``GeneratorExit``
-        # unwinding mid-write; those are re-raised unwrapped below so control
-        # flow semantics are preserved, while ordinary exceptions are wrapped
-        # in ``ArtifactError`` to match the sibling branch above.
+        # Catch-all recovery contract: for any exception, known or not, mark the
+        # staging dir PARTIAL (sweepable by ``cleanup_tmp()``) and restore the
+        # pre-overwrite backup. ``BaseException`` also covers interrupts and
+        # exits, which re-raise unwrapped; ordinary exceptions are wrapped.
         _run_save_recovery(tmp_path, backup_path, bundle_path, primary=exc)
         if isinstance(exc, Exception):
             raise ArtifactError(
@@ -2876,6 +2855,7 @@ def _scrub_trace_for_bundle(
     include_custom_attributes: bool = True,
     include_buffer_values: bool = True,
     sparse_runnable: bool = False,
+    record_pairs: list[tuple[Any, Any]] | None = None,
 ) -> tuple[dict[str, Any], list[BlobSpec], list[dict[str, str]]]:
     """Scrub a model log while excluding transient load-only private attrs.
 
@@ -2883,23 +2863,17 @@ def _scrub_trace_for_bundle(
     ----------
     trace:
         Model log being saved.
-    include_outs:
-        Whether outs should be blobified.
-    include_grads:
-        Whether grads should be blobified.
-    include_saved_args:
-        Whether nested captured args should be blobified.
-    include_rng_states:
-        Whether nested RNG states should be blobified.
+    include_outs, include_grads, include_saved_args, include_rng_states:
+        Whether outs, grads, nested captured args and RNG states are blobified.
     include_source:
         Whether captured model source text and docstrings are embedded; absolute
         source paths are relativized to basenames regardless.
-    include_custom_attributes:
-        Whether harvested public module instance attributes are persisted.
-    include_buffer_values:
-        Whether captured pre-forward buffer values are persisted.
+    include_custom_attributes, include_buffer_values:
+        Whether module instance attributes and pre-forward buffer values persist.
     sparse_runnable:
         Whether all sparse-core tensor payload families must be dropped.
+    record_pairs:
+        Filled with ``(scrubbed copy, live original)`` pairs (``scrub_for_save``).
 
     Returns
     -------
@@ -2927,6 +2901,7 @@ def _scrub_trace_for_bundle(
             sparse_runnable=sparse_runnable,
             backend_name=backend_name,
             payload_materialization=payload_materialization,
+            record_pairs=record_pairs,
         )
     finally:
         for attr_name, attr_value in transient_attrs.items():
@@ -3003,14 +2978,11 @@ def _write_payload_blob(
 
     Parameters
     ----------
-    store:
-        Chunk store of the staged artifact.
-    tensor_refs:
-        Blob id to tensor reference fields; this payload's entry is added.
-    blob_spec:
-        Logical payload selected during scrub.
-    codec:
-        Backend payload codec for ``blob_spec``.
+    store, tensor_refs:
+        Chunk store of the staged artifact; blob id to tensor reference fields
+        (this payload's entry is added).
+    blob_spec, codec:
+        Logical payload selected during scrub and its backend payload codec.
 
     Returns
     -------
@@ -3020,26 +2992,15 @@ def _write_payload_blob(
 
     if blob_spec.logical_backend == "torch" and isinstance(blob_spec.value, torch.Tensor):
         return TensorEntry(
-            **submit_tensor_payload(
-                store=store,
-                tensor_refs=tensor_refs,
-                blob_id=blob_spec.blob_id,
-                tensor=blob_spec.value,
-                kind=blob_spec.kind,
-                label=blob_spec.label,
-            )
+            **submit_tensor_payload(store=store, tensor_refs=tensor_refs, blob_spec=blob_spec)
         )
 
     encoded = codec.to_numpy(blob_spec.value)
     transport_tensor = numpy_to_transport_tensor(encoded.array).contiguous()
     blob, key = store.submit(transport_tensor, codec=NUMPY_CODEC)
     manifest_fields = codec.manifest_fields(blob_spec.value, encoded)
-    reference = tensor_reference(
-        transport_tensor,
-        blob=blob,
-        key=key,
-        codec={"id": NUMPY_CODEC, **manifest_fields},
-    )
+    codec_fields = {"id": NUMPY_CODEC, **manifest_fields}
+    reference = tensor_reference(transport_tensor, blob=blob, key=key, codec=codec_fields)
     reference["device"] = encoded.logical_device
     tensor_refs[blob_spec.blob_id] = reference
     return TensorEntry(
@@ -3272,14 +3233,10 @@ def _fast_copy_tensor_blob(
 
     Parameters
     ----------
-    store:
-        Chunk store of the staged artifact.
-    tensor_refs:
-        Blob id to tensor reference fields; this payload's entry is added.
-    fast_copy_spec:
-        Fast-copy instruction for the destination field.
-    manifest_index:
-        Source manifest entries indexed by blob id.
+    store, tensor_refs:
+        Chunk store of the staged artifact; blob id to tensor reference fields.
+    fast_copy_spec, manifest_index:
+        Fast-copy instruction; source manifest entries indexed by blob id.
 
     Returns
     -------

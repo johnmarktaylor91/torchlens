@@ -80,7 +80,8 @@ def tagged(tag: str, **fields: Any) -> dict[str, Any]:
 #: TorchLens value-object classes the format holds inline that declare no
 #: ``_PORTABLE_STATE_SPEC`` of their own (so ``component_spec_tables`` does not
 #: list them): unit quantities, neutral dtype and device refs, edge-use rows,
-#: source text, container walk results, facet and intervention value objects.
+#: source text, container walk results, the capture outcome, facet and
+#: intervention value objects.
 #: Enums are not here (the ``enum`` tag carries them); records are tables.
 _VALUE_CLASSES_BEYOND_COMPONENT_SPECS: tuple[tuple[str, str], ...] = (
     ("torchlens._quantities", "Bytes"),
@@ -106,6 +107,7 @@ _VALUE_CLASSES_BEYOND_COMPONENT_SPECS: tuple[tuple[str, str], ...] = (
     ("torchlens._data_classes.trace", "ResolvedPostprocessing"),
     ("torchlens._data_classes.trace", "ResolvedPreprocessing"),
     ("torchlens._capture.stop", "StopDirective"),
+    ("torchlens._capture._outcome_types", "CaptureOutcome"),
     ("torchlens._semantic.facets", "FacetCapabilityFlags"),
     ("torchlens._semantic.facets", "FacetContribution"),
     ("torchlens._semantic.facets", "FacetMenuItem"),
@@ -702,7 +704,10 @@ def enum_table() -> dict[str, type[enum.Enum]]:
     modules.update(module for module, _ in RECORD_CONTRACT_CLASSES.values())
     for module_name in sorted(modules):
         for value in vars(import_module(module_name)).values():
-            if isinstance(value, type) and issubclass(value, enum.Enum):
-                if _is_torchlens_class(value):
-                    table[class_path(value)] = value
+            if (
+                isinstance(value, type)
+                and issubclass(value, enum.Enum)
+                and _is_torchlens_class(value)
+            ):
+                table[class_path(value)] = value
     return table

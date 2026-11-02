@@ -439,7 +439,7 @@ def test_persistence_empty_table_omits_the_key(tiny_trace: Any, tmp_path: Path) 
     bundle = Bundle({"a": tiny_trace})
     target = tmp_path / "plain.tlspec"
     bundle.save(target)
-    metadata = json.loads((target / "bundle.json").read_text(encoding="utf-8"))
+    metadata = json.loads((target / "relations.json").read_text(encoding="utf-8"))
     assert "member_relations" not in metadata
     assert "_tlspec_prerelease" not in metadata
     loaded = tl.load(target)
@@ -453,7 +453,7 @@ def test_persistence_plain_round_trip_byte_faithful(tiny_trace: Any, tmp_path: P
     bundle = _relation_bundle(tiny_trace)
     target = tmp_path / "active.tlspec"
     bundle.save(target)
-    metadata = json.loads((target / "bundle.json").read_text(encoding="utf-8"))
+    metadata = json.loads((target / "relations.json").read_text(encoding="utf-8"))
     assert "_tlspec_prerelease" not in metadata
     expected_payload = MemberRelationTable(bundle.relations).to_payload()
     assert metadata["member_relations"] == expected_payload
@@ -467,7 +467,7 @@ def test_persistence_stale_marker_refuses_typed(tiny_trace: Any, tmp_path: Path)
     bundle = _relation_bundle(tiny_trace)
     target = tmp_path / "tampered.tlspec"
     bundle.save(target)
-    metadata_path = target / "bundle.json"
+    metadata_path = target / "relations.json"
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     metadata["_tlspec_prerelease"] = {
         "marker": PRERELEASE_MARKER,
@@ -484,7 +484,7 @@ def test_persistence_dangling_member_refuses_typed(tiny_trace: Any, tmp_path: Pa
     bundle = _relation_bundle(tiny_trace)
     target = tmp_path / "dangling.tlspec"
     bundle.save(target)
-    metadata_path = target / "bundle.json"
+    metadata_path = target / "relations.json"
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     metadata["member_relations"] = [_pair_row(dst="ghost")]
     metadata_path.write_text(json.dumps(metadata), encoding="utf-8")

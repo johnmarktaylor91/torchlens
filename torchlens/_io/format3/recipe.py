@@ -29,7 +29,7 @@ import torch
 
 from .. import _json
 from ..format_errors import ArtifactError
-from .contract import INTERVENTION_FILE, TYPED_VALUE_KEY
+from .contract import HELPER_REGISTRY_VERSION, INTERVENTION_FILE, TYPED_VALUE_KEY
 from .payloads import PayloadStore, host_tensor, read_tensor, tensor_reference
 from .values import ValueEncoder, build_record, callable_placeholder, decode_value, tagged
 
@@ -300,15 +300,41 @@ def _placeholders_in(data: Any) -> list[dict[str, Any]]:
     return found
 
 
+def _builtin_helpers(rules: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return one helper entry per distinct built-in edit name the rules use."""
+
+    helpers = {
+        rule["edit"]["name"]: {"name": rule["edit"]["name"], "version": HELPER_REGISTRY_VERSION}
+        for rule in rules
+        if rule["edit"]["portability"] == "builtin"
+    }
+    return list(helpers.values())
+
+
+@dataclasses.dataclass(frozen=True)
+class RecipeHeader:
+    """The header values of a recipe document, beside its rules and values.
+
+    Attributes
+    ----------
+    save_level:
+        Resolved save level.
+    append_state:
+        Append provenance of the saved trace.
+    function_registry_keys:
+        Function registry keys of the saved trace's ops.
+    spec_derived:
+        Whether every rule was lowered from a capture-time predicate.
+    """
+
+    save_level: str = "portable"
+    append_state: Mapping[str, Any] = dataclasses.field(default_factory=dict)
+    function_registry_keys: Sequence[Mapping[str, Any]] = ()
+    spec_derived: bool = False
+
+
 def build_recipe(
-    spec: Any,
-    *,
-    store: PayloadStore,
-    save_level: str,
-    helper_registry_version: Any,
-    append_state: Mapping[str, Any],
-    function_registry_keys: Sequence[Mapping[str, Any]],
-    spec_derived: bool,
+    spec: Any, *, store: PayloadStore, header: RecipeHeader
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Return the recipe document of a staged spec and the values it disclosed.
 
@@ -318,16 +344,8 @@ def build_recipe(
         Staged intervention spec (``hook_specs``, ``target_value_specs``).
     store:
         Payload store of the artifact (recipe tensors go to its recipe series).
-    save_level:
-        Resolved save level.
-    helper_registry_version:
-        Version of the built-in edit registry.
-    append_state:
-        Append provenance of the saved trace.
-    function_registry_keys:
-        Function registry keys of the saved trace's ops.
-    spec_derived:
-        Whether every rule was lowered from a capture-time predicate.
+    header:
+        Save level, append provenance, function registry keys and derivation.
 
     Returns
     -------
@@ -341,24 +359,21 @@ def build_recipe(
         _value_rule(i, value_spec, encoder)
         for i, value_spec in enumerate(getattr(spec, "target_value_specs", ()))
     ]
-    helpers = {
-        rule["edit"]["name"]: {"name": rule["edit"]["name"], "version": helper_registry_version}
-        for rule in rules
-        if rule["edit"]["portability"] == "builtin"
-    }
-    executable = save_level != _AUDIT_LEVEL and not encoder.placeholders and not encoder.disclosures
+    executable = (
+        header.save_level != _AUDIT_LEVEL and not encoder.placeholders and not encoder.disclosures
+    )
     recipe = {
         "format": RECIPE_FORMAT,
         "format_version": RECIPE_FORMAT_VERSION,
-        "helper_registry_version": helper_registry_version,
-        "save_level": save_level,
+        "helper_registry_version": HELPER_REGISTRY_VERSION,
+        "save_level": header.save_level,
         "executable": executable,
-        "spec_derived": bool(spec_derived),
-        "append_state": ValueEncoder().encode(dict(append_state), "append_state"),
+        "spec_derived": bool(header.spec_derived),
+        "append_state": ValueEncoder().encode(dict(header.append_state), "append_state"),
         "rules": rules,
         "values": values,
-        "helpers": list(helpers.values()),
-        "function_registry_keys": [dict(entry) for entry in function_registry_keys],
+        "helpers": _builtin_helpers(rules),
+        "function_registry_keys": [dict(entry) for entry in header.function_registry_keys],
     }
     return recipe, list(encoder.disclosures)
 
@@ -604,7 +619,6 @@ def write_trace_recipe(
     *,
     store: PayloadStore,
     save_level: str,
-    helper_registry_version: Any,
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     """Write the recipe of a trace's staged spec beside its records.
 
@@ -618,8 +632,6 @@ def write_trace_recipe(
         The artifact's payload store (call before it closes).
     save_level:
         Resolved save level.
-    helper_registry_version:
-        Version of the built-in edit registry.
 
     Returns
     -------
@@ -631,13 +643,8 @@ def write_trace_recipe(
     spec = getattr(trace, "_intervention_spec", None)
     if not has_rules(spec):
         return None, []
-    recipe, disclosures = build_recipe(
-        spec,
-        store=store,
-        save_level=save_level,
-        helper_registry_version=helper_registry_version,
-        **trace_recipe_context(trace),
-    )
+    header = RecipeHeader(save_level=save_level, **trace_recipe_context(trace))
+    recipe, disclosures = build_recipe(spec, store=store, header=header)
     return write_recipe(root, recipe), disclosures
 
 
@@ -652,6 +659,7 @@ __all__ = [
     "RECIPE_FORMAT",
     "RECIPE_FORMAT_VERSION",
     "CallablePlaceholder",
+    "RecipeHeader",
     "build_recipe",
     "has_rules",
     "manifest_entry",
