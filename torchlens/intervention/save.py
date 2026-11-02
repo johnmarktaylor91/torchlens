@@ -17,15 +17,18 @@ import torch
 from .._errors import InvalidArgumentError
 from .._io._durability import fsync_dir, fsync_tree
 from .._io._json import read_bounded
+from .._io._pre3_module_paths import pre_3_artifact_error
 from .._io.format3.contract import INTERVENTION_FILE
 from .._io.format3.payloads import PayloadStore
 from .._io.format3.recipe import (
     PLACEHOLDER_PORTABILITY,
     CallablePlaceholder,
+    NestedEdit,
     read_recipe,
     recipe_placeholders,
 )
 from .._io.format3.writer import envelope_fields, write_intervention_recipe
+from .._io.format_errors import ArtifactError
 from .._io.paths import reject_symlink_path
 from .._io.tensor_policy import Ok, is_supported_for_save
 from .._io.tlspec import _TlSpecWriter
@@ -35,12 +38,13 @@ from ..intervention._resolver_registry import (
     resolve_function_registry_key,
 )
 from ._helper_fingerprint import refuse_changed_staged_helpers
-from ._spec_codec import _target_spec_to_json
+from ._spec_codec import _target_spec_to_json, _validate_format_version
 from ._spec_values import SaveLevel, _coerce_save_level
 from .errors import (
     DirectActivationWriteWarning,
     DirectWriteSaveError,
     MultiMatchWarning,
+    OpaqueCallableError,
     ReplayPreconditionError,
     SiteResolutionError,
     UntrustedCallableError,
@@ -78,6 +82,8 @@ def _reject_symlink_path(path: Path, *, context: str) -> None:
 
 
 _MANIFEST_FILE = "manifest.json"
+#: The 2.x spec document; its presence without ``intervention.json`` marks a 2.x spec.
+_LEGACY_SPEC_FILE = "spec.json"
 _BLOB_TENSOR_KEY = "data"
 
 
@@ -170,6 +176,19 @@ def save_intervention(
             # Test hook: runs after the recipe and its tensors are on disk, before publish.
             _write_tensor_blob_fn(tmp_path=tmp_path, chunks=chunks)
         recipe = json.loads((tmp_path / INTERVENTION_FILE).read_text(encoding="utf-8"))
+        if save_level is SaveLevel.PORTABLE and not recipe.get("executable", False):
+            # Portable means it rebuilds without user code: a placeholder
+            # (or a disclosed, stringified value) breaks that promise.
+            raise OpaqueCallableError(
+                "A portable intervention spec must rebuild without user code, but this "
+                "recipe holds a user callable (saved only as a placeholder) or a value "
+                "the format cannot carry.",
+                code="intervention_spec_not_portable",
+                remedy=(
+                    "save at level='audit' for an audit-only record, or stage the rule "
+                    "with built-in edits"
+                ),
+            )
         _TlSpecWriter.write_intervention_manifest(
             path=tmp_path / _MANIFEST_FILE,
             log=trace,
@@ -259,11 +278,19 @@ def load_intervention_spec(
     # symlink rejection before opening either file.
     _reject_symlink_path(spec_path / INTERVENTION_FILE, context="intervention.json")
     _reject_symlink_path(spec_path / _MANIFEST_FILE, context="intervention manifest.json")
+    _refuse_2x_spec_layout(spec_path)
     manifest = _read_json_file(spec_path / _MANIFEST_FILE)
     recipe = read_recipe(spec_path)
     spec = _spec_with_recipe_metadata(recipe, spec_path)
     compat = manifest.get("intervention_compat_metadata")
     target_manifest = compat.get("target_manifest", []) if isinstance(compat, dict) else []
+    if not isinstance(target_manifest, list):
+        raise ArtifactError(
+            f"The intervention manifest at {spec_path} carries a target_manifest that is "
+            f"not an array ({type(target_manifest).__name__}).",
+            code="manifest_schema_invalid",
+            remedy="re-save the spec with save_intervention; do not hand-edit the manifest",
+        )
     metadata = {**spec.metadata, "target_manifest": target_manifest}
     spec.metadata = metadata
     _verify_loaded_function_keys(
@@ -272,6 +299,27 @@ def load_intervention_spec(
         allowed_custom_callable_modules=allowed_custom_callable_modules,
     )
     return spec
+
+
+def _refuse_2x_spec_layout(spec_path: Path) -> None:
+    """Refuse a torchlens 2.x intervention spec (``spec.json``, no ``intervention.json``).
+
+    A 2.x spec is never read: format ``1`` refuses through the spec format table
+    and the 2.29-2.36 format ``2`` refuses here, both with the one 2.x error
+    (``artifact_version_below_floor``).
+    """
+
+    legacy = spec_path / _LEGACY_SPEC_FILE
+    if (spec_path / INTERVENTION_FILE).exists() or not legacy.exists():
+        return
+    _reject_symlink_path(legacy, context="intervention spec.json")
+    format_version = _read_json_file(legacy).get("format_version")
+    _validate_format_version(format_version, path=spec_path)
+    raise pre_3_artifact_error(
+        f"intervention format_version={format_version}",
+        path=str(spec_path),
+        code="artifact_version_below_floor",
+    )
 
 
 def _load_trace_recipe_spec(path: str | Path) -> InterventionSpec:
@@ -370,7 +418,23 @@ def _edit(edit: Mapping[str, Any]) -> Edit:
     inner = recipe_placeholders({"rules": [{"args": edit["args"], "kwargs": edit["kwargs"]}]})
     if inner:
         return _audit_only_edit(edit, inner[0])
-    return rebuild_builtin_helper(str(edit["name"]), tuple(edit["args"]), dict(edit["kwargs"]))
+    args = tuple(_rebuilt_value(arg) for arg in edit["args"])
+    kwargs = {key: _rebuilt_value(item) for key, item in dict(edit["kwargs"]).items()}
+    return rebuild_builtin_helper(str(edit["name"]), args, kwargs)
+
+
+def _rebuilt_value(value: Any) -> Any:
+    """Return a decoded recipe value with every nested edit rebuilt as an ``Edit``."""
+
+    if isinstance(value, NestedEdit):
+        return _edit(value.edit)
+    if isinstance(value, list):
+        return [_rebuilt_value(item) for item in value]
+    if isinstance(value, tuple) and type(value) is tuple:
+        return tuple(_rebuilt_value(item) for item in value)
+    if isinstance(value, dict) and type(value) is dict:
+        return {key: _rebuilt_value(item) for key, item in value.items()}
+    return value
 
 
 def spec_from_recipe(recipe: Mapping[str, Any]) -> InterventionSpec:
@@ -403,7 +467,7 @@ def spec_from_recipe(recipe: Mapping[str, Any]) -> InterventionSpec:
         spec.target_value_specs.append(
             TargetValueSpec(
                 site_target=_target(entry["selector"]),
-                value=entry.get("value"),
+                value=_rebuilt_value(entry.get("value")),
                 metadata=dict(entry.get("metadata") or {}),
             )
         )

@@ -217,7 +217,7 @@ def test_tampered_basis_refuses_at_load(tmp_path: Path) -> None:
     session = _edited(_ROTATION[:2], tl.scale(2.0))
     path = tmp_path / "tampered.tlspec"
     tl.io.save_intervention(session, path, level="portable")
-    spec_json = path / "spec.json"
+    spec_json = path / "intervention.json"
     text = spec_json.read_text(encoding="utf-8")
     digest = _basis_digest(_ROTATION[:2].contiguous())
     assert digest in text
@@ -277,6 +277,6 @@ def _coded(error: BaseException) -> Any:
 def test_saved_spec_json_carries_the_fields(tmp_path: Path) -> None:
     path = tmp_path / "fields.tlspec"
     tl.io.save_intervention(_edited(_ROTATION[:4], tl.scale(2.0)), path, level="portable")
-    text = json.dumps(json.loads((path / "spec.json").read_text(encoding="utf-8")))
+    text = json.dumps(json.loads((path / "intervention.json").read_text(encoding="utf-8")))
     for field in ("subspace_edit", "basis_sha256", "origin_sha256", "source_dtype", _ORIGIN):
         assert field in text

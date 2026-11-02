@@ -197,7 +197,7 @@ def test_tampered_mask_refuses_at_load_and_the_remedy_runs(tmp_path: Path) -> No
     session = _session(tl.intervention.set_affine_coordinates(_W, bias=_B))
     path = tmp_path / "tampered.tlspec"
     tl.io.save_intervention(session, path, level="portable")
-    spec_json = path / "spec.json"
+    spec_json = path / "intervention.json"
     text = spec_json.read_text(encoding="utf-8")
     digest = _mask_digest(_mask())
     assert digest in text

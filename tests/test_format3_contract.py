@@ -136,11 +136,20 @@ def test_recipe_door_refuses_a_non_spec_typed() -> None:
     assert info.value.fields["remedy"]
 
 
+@pytest.mark.parametrize("door", [writer.write_trace, writer.write_bundle])
+def test_built_save_doors_refuse_a_non_saveable_typed(door) -> None:  # type: ignore[no-untyped-def]
+    """The built trace and bundle doors refuse a value with no save door, typed."""
+
+    with pytest.raises(ArtifactError) as info:
+        door(None, "x")
+    assert info.value.fields["code"] == "bundle_save_failed"
+    assert info.value.fields["remedy"]
+    assert "NoneType" in str(info.value)
+
+
 @pytest.mark.parametrize(
     ("door", "code"),
     [
-        (lambda: writer.write_trace(None, "x"), "bundle_save_failed"),
-        (lambda: writer.write_bundle(None, "x"), "bundle_save_failed"),
         (lambda: runnable.write_runnable(None, "x"), "bundle_save_failed"),
         (lambda: reader.read_manifest("x"), "bundle_load_failed"),
         (lambda: reader.validate_artifact("x"), "bundle_load_failed"),

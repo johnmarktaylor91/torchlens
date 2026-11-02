@@ -650,6 +650,7 @@ def write_trace(
         the level refuse typed.
     """
 
+    _require_saveable("write_trace", trace, "a live Trace")
     trace.save(path, level=level, overwrite=overwrite, **dict(payload_policy or {}))
 
 
@@ -669,7 +670,19 @@ def write_bundle(bundle: Any, path: str | Path, *, level: str = "portable") -> N
         Save level applied to every member.
     """
 
+    _require_saveable("write_bundle", bundle, "a live Bundle")
     bundle.save(path, level=level)
+
+
+def _require_saveable(door: str, value: Any, expected: str) -> None:
+    """Refuse a value without a ``save`` door, typed (``bundle_save_failed``)."""
+
+    if not callable(getattr(value, "save", None)):
+        raise ArtifactError(
+            f"{door} needs {expected}, got {type(value).__name__}.",
+            code="bundle_save_failed",
+            remedy=f"pass {expected} to {door}",
+        )
 
 
 def write_intervention_recipe(

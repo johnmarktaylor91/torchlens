@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Final, NamedTuple
 
@@ -31,7 +31,7 @@ from .. import _json
 from ..format_errors import ArtifactError
 from .contract import INTERVENTION_FILE, TYPED_VALUE_KEY
 from .payloads import PayloadStore, host_tensor, read_tensor, tensor_reference
-from .values import ValueEncoder, decode_value
+from .values import ValueEncoder, build_record, callable_placeholder, decode_value, tagged
 
 #: ``format`` of the recipe file.
 RECIPE_FORMAT: Final = "torchlens.intervention_recipe"
@@ -43,6 +43,8 @@ _AUDIT_LEVEL: Final = "audit"
 PLACEHOLDER_PORTABILITY: Final = "callable_placeholder"
 #: Edit name of a rule staged from a raw callable hook.
 _CUSTOM_EDIT_NAME: Final = "custom"
+#: Dotted class of ``Edit``: a nested edit is a ``record`` of this type.
+_EDIT_CLASS_PATH: Final = "torchlens.intervention.types.Edit"
 
 
 class CallablePlaceholder(NamedTuple):
@@ -61,6 +63,22 @@ class CallablePlaceholder(NamedTuple):
     position: int | str
     qualname: str
     repr_length: int
+
+
+class NestedEdit(NamedTuple):
+    """A built-in edit held inside another edit's arguments or a value rule, decoded.
+
+    The intervention package rebuilds it through the helper registry, like a
+    rule's edit.
+
+    Attributes
+    ----------
+    edit:
+        The edit object (``name``, ``args``, ``kwargs`` and the other identity
+        fields) with its tensors bound.
+    """
+
+    edit: dict[str, Any]
 
 
 def _pairs_to_dict(value: Any) -> dict[str, Any]:
@@ -131,22 +149,24 @@ def _edit(index: int, edit: Any, encoder: _RecipeEncoder) -> dict[str, Any]:
 
     if not _is_edit(edit) or edit.portability != "builtin":
         return _placeholder_edit(index, edit, encoder)
+    return _edit_fields(edit, encoder.encode, str(index))
+
+
+def _edit_fields(edit: Any, encode: Callable[[Any, str], Any], at: str) -> dict[str, Any]:
+    """Return the identity fields of a built-in edit, each value encoded at ``at``."""
+
     kwargs = _pairs_to_dict(edit.kwargs)
     return {
         "name": str(edit.name),
-        "args": [encoder.encode(arg, f"{index}.args.{i}") for i, arg in enumerate(edit.args)],
-        "kwargs": {
-            key: encoder.encode(item, f"{index}.kwargs.{key}") for key, item in kwargs.items()
-        },
+        "args": [encode(arg, f"{at}.args.{i}") for i, arg in enumerate(edit.args)],
+        "kwargs": {key: encode(item, f"{at}.kwargs.{key}") for key, item in kwargs.items()},
         "portability": "builtin",
         "signal": getattr(edit, "signal", None),
         "is_batch_independent": bool(getattr(edit, "is_batch_independent", False)),
         "is_compatible_with_append": bool(getattr(edit, "is_compatible_with_append", False)),
-        "metadata": encoder.encode(
-            _pairs_to_dict(getattr(edit, "metadata", ())), f"{index}.metadata"
-        ),
-        "selection_recipe": encoder.encode(
-            getattr(edit, "selection_recipe", None), f"{index}.selection_recipe"
+        "metadata": encode(_pairs_to_dict(getattr(edit, "metadata", ())), f"{at}.metadata"),
+        "selection_recipe": encode(
+            getattr(edit, "selection_recipe", None), f"{at}.selection_recipe"
         ),
     }
 
@@ -194,7 +214,7 @@ def _value_rule(index: int, value_spec: Any, encoder: _RecipeEncoder) -> dict[st
     value = getattr(value_spec, "value", None)
     encoded = (
         encoder.callable_placeholder(value, position=f"values.{index}")
-        if callable(value) and not isinstance(value, torch.Tensor)
+        if callable(value) and not isinstance(value, torch.Tensor) and not _is_edit(value)
         else encoder.encode(value, f"values.{index}.value")
     )
     return {
@@ -221,6 +241,28 @@ class _RecipeEncoder(ValueEncoder):
         encoded = super().encode(value, at, payload=payload)
         self.placeholders.extend(_placeholders_in(encoded))
         return encoded
+
+    def _encode(self, value: Any, at: str, depth: int) -> Any:
+        """Encode one value; an ``Edit`` is a nested edit, never a pickled factory.
+
+        A built-in edit is a ``record`` of its identity fields (its factory is
+        rebuilt from the helper registry on load); any other edit is a
+        placeholder at its argument path.
+        """
+
+        if not _is_edit(value) or isinstance(value, type):
+            return super()._encode(value, at, depth)
+        if value.portability != "builtin":
+            return callable_placeholder(getattr(value, "factory", None) or value, position=at)
+
+        def encode_nested(item: Any, path: str) -> Any:
+            """Encode one field value one level deeper."""
+
+            return super(_RecipeEncoder, self)._encode(item, path, depth + 1)
+
+        return tagged(
+            "record", type=_EDIT_CLASS_PATH, fields=_edit_fields(value, encode_nested, at)
+        )
 
     def callable_placeholder(self, value: Any, *, position: int | str) -> dict[str, Any]:
         """Return (and record) the rule-level placeholder of a callable."""
@@ -369,6 +411,10 @@ def write_recipe(root: Path, recipe: Mapping[str, Any]) -> dict[str, Any]:
     return manifest_entry(recipe)
 
 
+#: Typed tags whose members the recipe reader binds (tensors inside become tensors).
+_BOUND_CONTAINER_TAGS: Final = frozenset({"tuple", "set", "frozenset", "dict", "record"})
+
+
 def _bind(data: Any, root: Path, at: str) -> Any:
     """Decode recipe data, reading tensors and keeping placeholders typed."""
 
@@ -387,10 +433,21 @@ def _bind(data: Any, root: Path, at: str) -> Any:
     if tag == "tensor":
         tensor = read_tensor(root, blob=str(data["blob"]), key=str(data["key"]))
         return torch.view_as_complex(tensor) if data.get("complex") else tensor
-    if tag in {"tuple", "set", "frozenset"}:
-        items = [_bind(item, root, f"{at}[{i}]") for i, item in enumerate(data["items"])]
-        return {"tuple": tuple, "set": set, "frozenset": frozenset}[tag](items)
-    return decode_value(data, at=at)
+    if tag not in _BOUND_CONTAINER_TAGS:
+        return decode_value(data, at=at)
+    decode_value(data, at=at)  # structural refusals first; then bind the tensors inside
+    if tag == "record":
+        fields = {name: _bind(item, root, f"{at}.{name}") for name, item in data["fields"].items()}
+        if data["type"] == _EDIT_CLASS_PATH:
+            return NestedEdit(fields)
+        return build_record(str(data["type"]), fields, at=at)
+    if tag == "dict":
+        return {
+            _bind(key, root, f"{at}<key {i}>"): _bind(item, root, f"{at}[{i}]")
+            for i, (key, item) in enumerate(data["items"])
+        }
+    items = [_bind(item, root, f"{at}[{i}]") for i, item in enumerate(data["items"])]
+    return {"tuple": tuple, "set": set, "frozenset": frozenset}[tag](items)
 
 
 def read_recipe(root: str | Path) -> dict[str, Any]:
@@ -436,7 +493,39 @@ def read_recipe(root: str | Path) -> dict[str, Any]:
             code="bundle_load_failed",
             remedy="re-save the recipe with this TorchLens version",
         )
+    problem = _recipe_shape_problem(data)
+    if problem is not None:
+        detail, code = problem
+        raise ArtifactError(
+            f"{path} is not a well-formed intervention recipe: {detail}.",
+            code=code,
+            remedy="re-save the recipe with save_intervention or trace.save; do not hand-edit it",
+        )
     return {key: _bind(value, Path(root), key) for key, value in data.items()}
+
+
+#: Save levels a recipe may carry.
+_RECIPE_SAVE_LEVELS: Final = frozenset({"audit", "executable_with_callables", "portable"})
+#: Keys every rule object carries.
+_RULE_KEYS: Final = frozenset({"index", "selector", "edit"})
+
+
+def _recipe_shape_problem(data: Mapping[str, Any]) -> tuple[str, str] | None:
+    """Return ``(detail, code)`` for the first structural fault of a recipe, else ``None``."""
+
+    if data.get("save_level") not in _RECIPE_SAVE_LEVELS:
+        return f"save_level {data.get('save_level')!r} is unknown", "artifact_save_level_invalid"
+    rules = data.get("rules")
+    if not isinstance(rules, list):
+        return "rules is missing or not an array", "manifest_schema_invalid"
+    if not isinstance(data.get("values", []), list):
+        return "values is not an array", "manifest_schema_invalid"
+    for position, rule in enumerate(rules):
+        if not isinstance(rule, dict) or not _RULE_KEYS.issubset(rule):
+            return f"rule {position} lacks {sorted(_RULE_KEYS)}", "manifest_schema_invalid"
+        if not isinstance(rule["edit"], dict) or not isinstance(rule["selector"], dict):
+            return f"rule {position} edit or selector is not an object", "manifest_schema_invalid"
+    return None
 
 
 def recipe_placeholders(recipe: Mapping[str, Any]) -> list[CallablePlaceholder]:

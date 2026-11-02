@@ -331,9 +331,9 @@ def test_torch_bundle_rejects_non_torch_tensor_codec(tmp_path: Path) -> None:
     bundle_path = _build_torch_bundle(tmp_path)
     manifest = _read_json(bundle_path / "manifest.json")
     assert manifest.get("kind") == "trace"
-    for entry in manifest["tensors"]:
-        entry["logical_backend"] = "jax"
-        entry["codec"] = "numpy_safetensors_v1"
+    # 3.0: the payload codecs are the manifest's ``codecs`` list.
+    assert manifest["codecs"] == ["torch_safetensors_v1"]
+    manifest["codecs"] = ["numpy_safetensors_v1"]
     _write_json(bundle_path / "manifest.json", manifest)
 
     with pytest.raises(ArtifactError, match="non-torch payload codec"):

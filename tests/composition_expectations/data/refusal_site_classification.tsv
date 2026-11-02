@@ -1751,7 +1751,7 @@ torchlens._io.format3.values:_decode_dict:ArtifactError:_refuse_value:1	CONTRACT
 torchlens._io.format3.values:_decode_dtype:ArtifactError:_refuse_value:1	CONTRACTED	manifest_schema_invalid	3.0 typed decode: a dtype name torch does not define
 torchlens._io.format3.values:_decode_enum:ArtifactError:_refuse_value:1	CONTRACTED	manifest_schema_invalid	3.0 typed decode: an enum value that is not a TorchLens enum member
 torchlens._io.format3.values:_decode_items:ArtifactError:_refuse_value:1	CONTRACTED	manifest_schema_invalid	3.0 typed decode: a tuple, set or frozenset whose items are not an array
-torchlens._io.format3.values:_decode_record:ArtifactError:_refuse_value:1	CONTRACTED	manifest_schema_invalid	3.0 typed decode: a record type off the allowlist (field_registry.component_spec_tables)
+torchlens._io.format3.values:build_record:ArtifactError:_refuse_value:1	CONTRACTED	manifest_schema_invalid	3.0 typed decode: a record type off the allowlist (field_registry.component_spec_tables)
 torchlens._io.format3.values:decode_value:ArtifactError:_refuse_value:1	CONTRACTED	manifest_schema_invalid	3.0 typed decode: a $tl tag off the closed vocabulary
 torchlens._io.format3.values:decode_value:ArtifactError:_refuse_value:2	CONTRACTED	manifest_schema_invalid	3.0 typed decode: a tagged value missing a required field
 torchlens._io.format3.writer:make_encoder_factory.tensor_ref:ArtifactError::1	CONTRACTED	bundle_save_failed	3.0 writer: a tensor cell met with no payload store in a payload-writing save (writer bug surfaced typed)
@@ -1779,3 +1779,8 @@ torchlens.experiment._grid:_check_positions:BundleExperimentError::1	CONTRACTED	
 torchlens.experiment._grid:_preflight_grid:BundleExperimentError::1	CONTRACTED	grid_too_large	sweep_grid (ruled 1 Nov 2026): contract row + tests/test_ledger_exp_grid.py
 torchlens.experiment._grid:grid_from_effects:BundleExperimentError::1	CONTRACTED	grid_axes_unavailable	sweep_grid (ruled 1 Nov 2026): contract row + tests/test_ledger_exp_grid.py
 torchlens.experiment._grid:grid_from_effects:BundleExperimentError::2	CONTRACTED	grid_result_shape_mismatch	sweep_grid (ruled 1 Nov 2026): contract row + tests/test_ledger_exp_grid.py
+torchlens._io.format3.recipe:read_recipe:ArtifactError::4	CONTRACTED	manifest_schema_invalid	3.0 recipe read: intervention.json is structurally malformed (rules not an array, a rule lacking index/selector/edit) or carries an unknown save_level (artifact_save_level_invalid); provoked in tests/test_persist_honesty_intervention_spec.py
+torchlens._io.format3.writer:_require_saveable:ArtifactError::1	CONTRACTED	bundle_save_failed	3.0 write_trace / write_bundle door given a value with no save door; provoked in tests/test_format3_contract.py
+torchlens.intervention.save:save_intervention:OpaqueCallableError::1	CONTRACTED	intervention_spec_not_portable	portable save_intervention whose recipe holds a callable placeholder or a disclosed value (not executable); provoked in tests/test_intervention_phase10.py
+torchlens.intervention.save:load_intervention_spec:ArtifactError::1	CONTRACTED	manifest_schema_invalid	intervention manifest target_manifest is not an array; provoked in tests/test_persist_honesty_intervention_spec.py
+torchlens.intervention.save:_refuse_2x_spec_layout:ArtifactTooOldError:pre_3_artifact_error:1	CONTRACTED	artifact_version_below_floor	Load refusal of a 2.29-2.36 format_version-2 intervention spec (spec.json layout); code site-visible; provoked in tests/test_load_refuses_saved_by_2x.py

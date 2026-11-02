@@ -122,6 +122,19 @@ _VALUE_CLASSES_BEYOND_COMPONENT_SPECS: tuple[tuple[str, str], ...] = (
 )
 
 
+class TensorReferenceCell(dict[str, Any]):
+    """A decoded ``tensor`` cell: the reference fields, hashable as a set member.
+
+    A set or frozenset of tensors decodes to a set of references, so the
+    reference hashes by its chunk and key (the pair that names one tensor).
+    """
+
+    def __hash__(self) -> int:  # type: ignore[override]
+        """Hash by the chunk file and safetensors key."""
+
+        return hash((self.get("blob"), self.get("key")))
+
+
 class RowRef(NamedTuple):
     """A decoded ``ref`` cell: row ``row`` of the ``record`` table."""
 
@@ -594,14 +607,40 @@ def _decode_enum(data: dict[str, Any], at: str) -> Any:
 def _decode_record(data: dict[str, Any], at: str) -> Any:
     """Rebuild an allowlisted TorchLens value object from its fields."""
 
-    cls = record_type_table().get(str(data["type"]))
-    if cls is None or not isinstance(data["fields"], dict):
+    raw = data["fields"]
+    fields = (
+        {name: decode_value(item, at=f"{at}.{name}") for name, item in raw.items()}
+        if isinstance(raw, dict)
+        else raw
+    )
+    return build_record(str(data["type"]), fields, at=at)
+
+
+def build_record(type_name: str, fields: Any, *, at: str) -> Any:
+    """Construct an allowlisted TorchLens value object from decoded fields.
+
+    Parameters
+    ----------
+    type_name:
+        Dotted class name from the ``record`` tag's ``type``.
+    fields:
+        Decoded field values (the recipe reader passes bound tensors).
+    at:
+        Position, for refusals.
+
+    Returns
+    -------
+    Any
+        The value object.
+    """
+
+    cls = record_type_table().get(type_name)
+    if cls is None or not isinstance(fields, dict):
         raise _refuse_value(
             at,
-            f"record type {data['type']!r} is not on the allowlist",
+            f"record type {type_name!r} is not on the allowlist",
             code="manifest_schema_invalid",
         )
-    fields = {name: decode_value(item, at=f"{at}.{name}") for name, item in data["fields"].items()}
     if dataclasses.is_dataclass(cls) or isinstance(getattr(cls, "_fields", None), tuple):
         return cls(**fields)
     if _scalar_base(cls) is not None:
@@ -627,9 +666,9 @@ def _decode_dtype(data: dict[str, Any], at: str) -> torch.dtype:
 
 
 _DECODERS: dict[str, Callable[[dict[str, Any], str], Any]] = {
-    "tensor": lambda data, at: {
-        name: data[name] for name in TENSOR_REFERENCE_FIELDS if name in data
-    },
+    "tensor": lambda data, at: TensorReferenceCell(
+        {name: data[name] for name in TENSOR_REFERENCE_FIELDS if name in data}
+    ),
     "tuple": lambda data, at: tuple(_decode_items(data, at)),
     "set": lambda data, at: set(_decode_items(data, at)),
     "frozenset": lambda data, at: frozenset(_decode_items(data, at)),
