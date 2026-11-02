@@ -547,9 +547,6 @@ def _remove_foreign_kernel_interiors(self: "Trace") -> None:
     so the completeness census needs no pruned-op credit for them.
     """
 
-    # The foreign data departure journal (plain-code exports) held its tensors
-    # only for matching re-entries during capture; it ends here with the interiors.
-    self.__dict__.pop("_foreign_departures", None)
     labels = self.__dict__.pop("_foreign_kernel_interior_labels", None)
     if not labels:
         return

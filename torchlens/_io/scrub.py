@@ -1484,11 +1484,10 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_capture_parent_edge_truth",
         "_orphan_pruned_func_call_ids",
         # B1-17: `_tl_predicate_intervention_{spec,target}_keys`,
-        # `_source_bundle_{path,manifest_sha256}` and the output-parent
-        # retention flag (now inside `_rerun_save_request`) moved out of this allowance
-        # into declared `Trace._PORTABLE_STATE_SPEC` DROP rows. This allowance is
-        # consulted BEFORE the spec, so an entry here makes the declared policy
-        # dead code.
+        # `_source_bundle_{path,manifest_sha256}` and the output-parent retention
+        # flag (now inside `_rerun_save_request`) moved out of this allowance into
+        # declared `Trace._PORTABLE_STATE_SPEC` DROP rows. This allowance is consulted
+        # BEFORE the spec, so an entry here makes the declared policy dead code.
         "jax_equation_captures",
         "jax_ordered_captures",
         "jax_region_captures",

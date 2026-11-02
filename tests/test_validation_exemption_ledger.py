@@ -127,7 +127,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="functionless_source_or_boundary",
         tier="early_exit",
         contract="C3 replay-surface completeness",
-        proof="torchlens.validation.core:_is_provable_functionless_source_or_boundary",
+        proof="torchlens.validation._pre_replay:_is_provable_functionless_source_or_boundary",
         refuses=(
             "a functionless COMPUTATIONAL op, which returns failed_result "
             "('functionless_computational_op') -- the 2026-06-02 placeholder class"

@@ -30,7 +30,8 @@ import functools
 import threading
 import time
 import warnings
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
@@ -39,6 +40,12 @@ import torch
 from ... import _state
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._utils.rng import log_current_autocast_state, log_current_rng_states
+from ._foreign_data import (
+    FOREIGN_DATA_EXPORT_WRAPPER_NAME,
+    FOREIGN_DATA_FUNC_NAME,
+    TOLIST_EXPORT_FUNC_NAME,
+    note_plain_export,
+)
 
 FOREIGN_FUNCTION_FUNC_NAME = "autogradfunction"
 """Op type / func name of the boundary op."""
@@ -74,6 +81,13 @@ output in torch and lets its C kernel write through a ``to_dlpack`` export, so t
 alone (no re-entry constructor) must count as leaving torch.
 """
 
+PLAIN_EXPORT_FUNC_NAMES = EXPORT_FUNC_NAMES | frozenset({TOLIST_EXPORT_FUNC_NAME})
+"""Exports that journal a departure in plain forward code (``tolist`` copies values).
+
+Inside a live ``Function.apply`` frame only :data:`EXPORT_FUNC_NAMES` mark the frame
+as leaving torch: ``tolist`` is metadata inside most Functions, never a kernel exit.
+"""
+
 _FRAMES: list[set[str]] = []
 """Export names seen inside each live ``Function.apply`` frame, innermost last."""
 
@@ -87,39 +101,65 @@ _INSTALLED_APPLY: classmethod[Any, Any, Any] | None = None
 _ORIGINAL_APPLY: classmethod[Any, Any, Any] | None = None
 
 
-def note_function_export(name: str) -> None:
-    """Record a numpy / dlpack export made inside the innermost live ``apply`` frame.
+def note_function_export(name: str, args: tuple[Any, ...] = ()) -> None:
+    """Record an export: for the innermost live ``apply`` frame, else the departure journal.
 
     Parameters
     ----------
     name:
-        Export spelling (``numpy``, ``__array__``, ``__dlpack__``, ``to_dlpack``).
+        Export spelling (``numpy``, ``__array__``, ``__dlpack__``, ``to_dlpack``, ``tolist``).
+    args:
+        The export call's positional arguments; the first is the departing tensor.
     """
 
     if _FRAMES:
-        _FRAMES[-1].add(name)
+        if name in EXPORT_FUNC_NAMES:
+            _FRAMES[-1].add(name)
+        return
+    trace = _active_plain_capture()
+    if trace is not None and args:
+        note_plain_export(trace, name, args[0])
+
+
+def _active_plain_capture() -> Any | None:
+    """Return the live capture trace when plain-code exports should be journaled."""
+
+    active_trace, logging_enabled = _state.active_capture()
+    if not logging_enabled or active_trace is None:
+        return None
+    return active_trace
+
+
+@contextmanager
+def _owned_export_dispatches(trace: Any) -> Iterator[None]:
+    """Own every census dispatch inside a plain-code export (``toDLPack``'s strides fix)."""
+
+    state = _active_witness_state(trace)
+    start = len(state.events) if state is not None else 0
+    try:
+        yield
+    finally:
+        if state is not None and len(state.events) > start:
+            token = _accounted_boundary_token(
+                torch.utils.dlpack.to_dlpack,
+                FOREIGN_DATA_EXPORT_WRAPPER_NAME,
+                FOREIGN_DATA_FUNC_NAME,
+            )
+            for event in state.events[start:]:
+                event.owner = token
 
 
 def _make_export_wrapper(original: Callable[..., Any], name: str) -> Callable[..., Any]:
-    """Wrap an unwrapped export entry point so a Function frame learns about it."""
+    """Wrap an unwrapped export entry point so a frame or the journal learns about it."""
 
     @functools.wraps(original)
     def export_wrapper(*args: Any, **kwargs: Any) -> Any:
         """Note the export for the live frame or the plain-code journal, then call through."""
 
-        if _FRAMES:
-            _FRAMES[-1].add(name)
+        if _FRAMES or (trace := _active_plain_capture()) is None:
+            note_function_export(name, args)
             return original(*args, **kwargs)
-        from ._foreign_data import (
-            active_trace_for_export,
-            note_plain_export,
-            owned_export_dispatches,
-        )
-
-        trace = active_trace_for_export()
-        if trace is None:
-            return original(*args, **kwargs)
-        with owned_export_dispatches(trace):
+        with _owned_export_dispatches(trace):
             out = original(*args, **kwargs)
         note_plain_export(trace, name, args[0] if args else None)
         return out
@@ -382,22 +422,32 @@ def _reown_witness_events(
 ) -> None:
     """Hand every dispatch event of the frame to one accounted boundary token."""
 
-    from .escape_detection import ExpectedOriginalToken
-
-    token = ExpectedOriginalToken(
-        raw_id=id(call.spec.original),
-        original=call.spec.original,
-        wrapper_name=call.spec.wrapper_name,
-        wrapper_frame_id=0,
-        owner_thread_id=threading.get_ident(),
-        pending=False,
-        func_name=call.spec.func_name,
-        func_call_id=call.func_call_id,
-        census_scope="expected_opaque",
-        capture_accounted=True,
+    token = _accounted_boundary_token(
+        call.spec.original, call.spec.wrapper_name, call.spec.func_name, call.func_call_id
     )
     for event in state.events[start:stop]:
         event.owner = token
+
+
+def _accounted_boundary_token(
+    original: Callable[..., Any], wrapper_name: str, func_name: str, func_call_id: int | None = None
+) -> Any:
+    """Return the capture-accounted ``expected_opaque`` owner token of one boundary."""
+
+    from .escape_detection import ExpectedOriginalToken
+
+    return ExpectedOriginalToken(
+        raw_id=id(original),
+        original=original,
+        wrapper_name=wrapper_name,
+        wrapper_frame_id=0,
+        owner_thread_id=threading.get_ident(),
+        pending=False,
+        func_name=func_name,
+        func_call_id=func_call_id,
+        census_scope="expected_opaque",
+        capture_accounted=True,
+    )
 
 
 def _snapshot_arg_labels(

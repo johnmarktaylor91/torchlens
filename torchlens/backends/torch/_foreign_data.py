@@ -25,16 +25,15 @@ resolves each parentless host constructor against it (:func:`resolve_host_entry`
   that a consumed DLPack capsule replays from the recorded output value.
 
 Departures and re-entries inside a live ``Function.apply`` frame belong to the
-foreign-kernel boundary (``_function_boundary``) and never reach the journal. The
-export's own dispatches (torch's ``toDLPack`` strides fix) are owned by the audited
-census token ``foreign_data:export`` so the completeness census counts each export once.
+foreign-kernel boundary (``_function_boundary``), which also routes plain-code exports
+into the journal and owns the export's own dispatches (torch's ``toDLPack`` strides
+fix) under the audited census token ``foreign_data:export``. This module imports no
+capture machinery: the transform-metadata setter is handed in by the caller.
 """
 
 from __future__ import annotations
 
-import threading
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -42,6 +41,10 @@ import numpy as np
 import torch
 
 from ... import _state
+from ._tl import get_tensor_label
+
+MetadataSetter = Callable[..., None]
+"""The transform-metadata setter (``_transform_wrappers._set_transform_metadata``)."""
 
 FOREIGN_DATA_FUNC_NAME = "foreigndata"
 """Op type / func name of the round-trip boundary op."""
@@ -154,8 +157,6 @@ def note_plain_export(trace: Any, kind: str, tensor: Any) -> None:
         The departing tensor; anything without a captured label records nothing.
     """
 
-    from ._tl import get_tensor_label
-
     if not isinstance(tensor, torch.Tensor):
         return
     label = get_tensor_label(tensor)
@@ -175,50 +176,18 @@ def note_plain_export(trace: Any, kind: str, tensor: Any) -> None:
     )
 
 
-@contextmanager
-def owned_export_dispatches(trace: Any) -> Iterator[None]:
-    """Own every census dispatch inside a plain-code export (``toDLPack``'s strides fix).
-
-    Parameters
-    ----------
-    trace:
-        Active capture trace.
-    """
-
-    from ._function_boundary import _active_witness_state
-    from .escape_detection import ExpectedOriginalToken
-
-    state = _active_witness_state(trace)
-    start = len(state.events) if state is not None else 0
-    try:
-        yield
-    finally:
-        if state is not None and len(state.events) > start:
-            export = torch.utils.dlpack.to_dlpack
-            token = ExpectedOriginalToken(
-                raw_id=id(export),
-                original=export,
-                wrapper_name=FOREIGN_DATA_EXPORT_WRAPPER_NAME,
-                wrapper_frame_id=0,
-                owner_thread_id=threading.get_ident(),
-                pending=False,
-                func_name=FOREIGN_DATA_FUNC_NAME,
-                func_call_id=None,
-                census_scope="expected_opaque",
-                capture_accounted=True,
-            )
-            for event in state.events[start:]:
-                event.owner = token
-
-
-def _mark(func: Callable[..., Any], resolution: str, entry: str, exits: tuple[str, ...]) -> None:
+def _mark(
+    func: Callable[..., Any],
+    resolution: str,
+    entry: str,
+    exits: tuple[str, ...],
+    mark: MetadataSetter,
+) -> None:
     """Stamp a ``foreigndata`` callable with its marker and transform metadata."""
-
-    from ._transform_wrappers import _set_transform_metadata
 
     setattr(func, FOREIGN_DATA_RECORDER_ATTR, True)
     setattr(func, FOREIGN_DATA_RESOLUTION_ATTR, resolution)
-    _set_transform_metadata(
+    mark(
         func,
         transform_kind=FOREIGN_DATA_TRANSFORM_KIND,
         tags=(FOREIGN_DATA_TRANSFORM_KIND,),
@@ -259,17 +228,18 @@ def _view_gather_index(
     element_size = out.element_size()
     if delta_bytes % element_size:
         return None
-    out_offset = source.storage_offset() + delta_bytes // element_size
+    source_offset = int(source.storage_offset())
+    out_offset = source_offset + delta_bytes // element_size
     if out_offset < 0:
         return None
     if (
-        out_offset == source.storage_offset()
+        out_offset == source_offset
         and out.size() == source.size()
         and out.stride() == source.stride()
     ):
         return "identity", None
     if (
-        out_offset == source.storage_offset()
+        out_offset == source_offset
         and out.numel() == source.numel()
         and out.is_contiguous()
         and source.is_contiguous()
@@ -279,7 +249,7 @@ def _view_gather_index(
     out_positions = _flat_positions(out.size(), out.stride(), out_offset)
     if out_positions.size and int(out_positions.max()) >= storage_numel:
         return None
-    source_positions = _flat_positions(source.size(), source.stride(), source.storage_offset())
+    source_positions = _flat_positions(source.size(), source.stride(), source_offset)
     inverse = np.full((storage_numel,), -1, dtype=np.int64)
     inverse[source_positions] = np.arange(source.numel(), dtype=np.int64)
     index = inverse[out_positions]
@@ -288,7 +258,9 @@ def _view_gather_index(
     return "gather", torch.from_numpy(index)
 
 
-def _view_entry(departure: Departure, out: torch.Tensor, entry: str) -> HostEntry | None:
+def _view_entry(
+    departure: Departure, out: torch.Tensor, entry: str, mark: MetadataSetter
+) -> HostEntry | None:
     """Return the zero-copy round-trip entry for ``out``, if it reads the departed memory."""
 
     described = _view_gather_index(departure, out)
@@ -308,7 +280,7 @@ def _view_entry(departure: Departure, out: torch.Tensor, entry: str) -> HostEntr
         assert index is not None
         return value.reshape(-1)[index.to(value.device)].reshape(size)
 
-    _mark(foreigndata, RESOLUTION_VIEW, entry, (departure.kind,))
+    _mark(foreigndata, RESOLUTION_VIEW, entry, (departure.kind,), mark)
     return HostEntry(replay=foreigndata, args=(departure.tensor,), resolution=RESOLUTION_VIEW)
 
 
@@ -324,7 +296,9 @@ def _values_equal(out: torch.Tensor, source: torch.Tensor) -> bool:
         return False
 
 
-def _copy_entry(departure: Departure, out: torch.Tensor, entry: str) -> HostEntry:
+def _copy_entry(
+    departure: Departure, out: torch.Tensor, entry: str, mark: MetadataSetter
+) -> HostEntry:
     """Return the copy round-trip entry: the output equals the departed tensor's value."""
 
     dtype, device = out.dtype, out.device
@@ -334,11 +308,11 @@ def _copy_entry(departure: Departure, out: torch.Tensor, entry: str) -> HostEntr
 
         return source.detach().to(device=device, dtype=dtype).clone()
 
-    _mark(foreigndata, RESOLUTION_COPY, entry, (departure.kind,))
+    _mark(foreigndata, RESOLUTION_COPY, entry, (departure.kind,), mark)
     return HostEntry(replay=foreigndata, args=(departure.tensor,), resolution=RESOLUTION_COPY)
 
 
-def _unresolved_entry(linked: list[Departure], entry: str) -> HostEntry:
+def _unresolved_entry(linked: list[Departure], entry: str, mark: MetadataSetter) -> HostEntry:
     """Return the entry for a round trip whose foreign step cannot be re-run."""
 
     labels = tuple(dict.fromkeys(departure.label for departure in linked))
@@ -355,7 +329,7 @@ def _unresolved_entry(linked: list[Departure], entry: str) -> HostEntry:
             "constant before the forward pass."
         )
 
-    _mark(foreigndata, RESOLUTION_UNRESOLVED, entry, exits)
+    _mark(foreigndata, RESOLUTION_UNRESOLVED, entry, exits, mark)
     seen: dict[str, torch.Tensor] = {}
     for departure in linked:
         seen.setdefault(departure.label, departure.tensor)
@@ -364,7 +338,7 @@ def _unresolved_entry(linked: list[Departure], entry: str) -> HostEntry:
     )
 
 
-def _constant_entry(out: torch.Tensor, entry: str) -> HostEntry:
+def _constant_entry(out: torch.Tensor, entry: str, mark: MetadataSetter) -> HostEntry:
     """Return the entry for a consumed-capsule re-entry in a capture with no departure."""
 
     value = out.detach().clone()
@@ -374,7 +348,7 @@ def _constant_entry(out: torch.Tensor, entry: str) -> HostEntry:
 
         return value.clone()
 
-    _mark(foreigndata, RESOLUTION_CONSTANT, entry, ())
+    _mark(foreigndata, RESOLUTION_CONSTANT, entry, (), mark)
     return HostEntry(replay=foreigndata, args=(), resolution=RESOLUTION_CONSTANT)
 
 
@@ -405,7 +379,12 @@ def _compatible(departure: Departure, host_argument: Any) -> bool:
 
 
 def resolve_host_entry(
-    trace: Any, func_name: str, args: tuple[Any, ...], kwargs: dict[str, Any], out: Any
+    trace: Any,
+    func_name: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    out: Any,
+    mark: MetadataSetter,
 ) -> HostEntry | None:
     """Resolve a parentless host constructor call against the departure journal.
 
@@ -419,6 +398,8 @@ def resolve_host_entry(
         The call's arguments (no captured tensor among them).
     out:
         The tensor the constructor returned.
+    mark:
+        Transform-metadata setter stamped on the ``foreigndata`` callable.
 
     Returns
     -------
@@ -429,11 +410,16 @@ def resolve_host_entry(
     if not isinstance(out, torch.Tensor):
         return None
     with _state.pause_logging():
-        return _resolve_paused(trace, func_name, args, kwargs, out)
+        return _resolve_paused(trace, func_name, args, kwargs, out, mark)
 
 
 def _resolve_paused(
-    trace: Any, func_name: str, args: tuple[Any, ...], kwargs: dict[str, Any], out: torch.Tensor
+    trace: Any,
+    func_name: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    out: torch.Tensor,
+    mark: MetadataSetter,
 ) -> HostEntry | None:
     """Match ``out`` against the journal; the matching's own torch work is never logged."""
 
@@ -441,32 +427,19 @@ def _resolve_paused(
     journal = departures(trace)
     if not journal:
         if func_name == "from_dlpack" and _is_capsule(host_argument):
-            return _constant_entry(out, func_name)
+            return _constant_entry(out, func_name, mark)
         return None
     for departure in reversed(journal):
         if departure.kind in _BUFFER_DEPARTURE_KINDS:
-            entry = _view_entry(departure, out, func_name)
+            entry = _view_entry(departure, out, func_name, mark)
             if entry is not None:
                 return entry
     for departure in reversed(journal):
         if _values_equal(out, departure.tensor):
-            return _copy_entry(departure, out, func_name)
+            return _copy_entry(departure, out, func_name, mark)
     linked = [departure for departure in journal if _compatible(departure, host_argument)]
     if not linked:
         if func_name == "from_dlpack" and _is_capsule(host_argument):
-            return _constant_entry(out, func_name)
+            return _constant_entry(out, func_name, mark)
         return None
-    return _unresolved_entry(linked, func_name)
-
-
-def active_trace_for_export() -> Any | None:
-    """Return the live capture trace when a plain-code export should be journaled."""
-
-    from ._function_boundary import _FRAMES
-
-    if _FRAMES:
-        return None
-    active_trace, logging_enabled = _state.active_capture()
-    if not logging_enabled or active_trace is None:
-        return None
-    return active_trace
+    return _unresolved_entry(linked, func_name, mark)
