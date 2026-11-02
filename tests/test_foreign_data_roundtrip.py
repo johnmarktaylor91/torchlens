@@ -36,8 +36,6 @@ from torchlens.errors import TorchLensWarning
 from torchlens.validation import last_validation_failure, validate_forward_pass
 from torchlens.validation.diagnostics import CHECK_REPLAY
 
-pytestmark = pytest.mark.smoke
-
 
 class _RoundTripModel(nn.Module):
     """``fc -> detach -> <leave torch> -> <come back> -> relu`` with a pluggable round trip."""
@@ -132,13 +130,15 @@ def _validate(model: nn.Module, x: torch.Tensor) -> bool:
 @pytest.mark.parametrize(
     ("round_trip", "resolution", "parent_type"),
     [
-        (_numpy_round_trip, RESOLUTION_VIEW, "detach"),
+        pytest.param(_numpy_round_trip, RESOLUTION_VIEW, "detach", marks=pytest.mark.smoke),
         (_cpu_numpy_round_trip, RESOLUTION_VIEW, "cpu"),
         (_numpy_transpose_round_trip, RESOLUTION_VIEW, "detach"),
         (_as_tensor_round_trip, RESOLUTION_VIEW, "detach"),
-        (_dlpack_capsule_round_trip, RESOLUTION_VIEW, "detach"),
+        pytest.param(
+            _dlpack_capsule_round_trip, RESOLUTION_VIEW, "detach", marks=pytest.mark.smoke
+        ),
         (_dlpack_numpy_round_trip, RESOLUTION_VIEW, "detach"),
-        (_tolist_round_trip, RESOLUTION_COPY, "detach"),
+        pytest.param(_tolist_round_trip, RESOLUTION_COPY, "detach", marks=pytest.mark.smoke),
         (_tensor_of_ndarray_round_trip, RESOLUTION_COPY, "detach"),
     ],
 )
@@ -170,6 +170,7 @@ def test_round_trip_replay_follows_a_perturbed_parent() -> None:
     assert torch.equal(op.func(departed + 1.0), departed + 1.0)
 
 
+@pytest.mark.smoke
 @pytest.mark.parametrize(
     "round_trip", [_numpy_host_compute_round_trip, _tolist_host_compute_round_trip]
 )
@@ -303,6 +304,7 @@ class _ExportOnlyModel(nn.Module):
         return torch.relu(y)
 
 
+@pytest.mark.smoke
 def test_plain_export_dispatches_are_owned_by_the_export_token() -> None:
     """With the census armed, an export's own dispatches count once, owned by the export."""
 
@@ -320,6 +322,7 @@ def test_plain_export_dispatches_are_owned_by_the_export_token() -> None:
         assert row["capture_accounted"] is True
 
 
+@pytest.mark.smoke
 def test_selector_and_audited_row_are_wired() -> None:
     """The op is selectable by its transform kind and the export token is an audited row."""
 
