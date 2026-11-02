@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import contextlib
 import glob
-import io
 import json
 import os
 import pickle
@@ -55,10 +54,8 @@ from . import (
     refuse_missing_blobs,
 )
 from ._artifact_anchors import check_manifest_metadata_anchors, persisted_anchor_facts
-from ._canonical_pickle import dump_canonical_metadata
 from ._durability import fsync_dir, fsync_tree
 from ._pickle_prescan import OpcodeCeilingExceeded
-from ._portability_preflight import preflight_metadata_portability
 from ._pre3_module_paths import modellog_216_error
 from ._root_manifest import NOT_ROUTED, load_by_root_manifest
 from ._safe_unpickle import SafeBundleUnpickler
@@ -67,6 +64,7 @@ from ._save_gates import (
     _refuse_shard_local_erasure,
     _save_bundle_via_container_door,
 )
+from .format3.writer import preflight_reload, write_trace_envelope
 from .lazy import LazyActivationRef
 from .manifest import Manifest, Provenance, TensorEntry, enforce_version_policy
 from .paths import (
@@ -771,35 +769,36 @@ def save(
         )
         _warn_custom_attribute_embedding(custom_attributes_disclosure)
         _warn_buffer_value_embedding(buffer_values_disclosure)
-        _TlSpecWriter.write_trace_manifest(
-            path=tmp_path / "manifest.json",
-            trace=trace,
-            legacy_manifest=manifest,
-            save_level=save_level,
-            sparse_run=sparse_run_json,
+        # 3.0 saved format (format.1): the scrubbed state is written as typed
+        # JSON record tables beside the safetensors blobs; no pickle file is
+        # written at any level. The staged directory is reloaded once (the
+        # save preflight, late.21) before the publish below.
+        write_trace_envelope(
+            tmp_path,
+            base_manifest=_TlSpecWriter.build_trace_manifest(
+                trace=trace,
+                legacy_manifest=manifest,
+                save_level=save_level,
+                sparse_run=sparse_run_json,
+                scrubbed_state=scrubbed_state,
+            ),
             scrubbed_state=scrubbed_state,
+            tensor_entries=tensor_entries,
+            save_level=save_level,
+            payload_policy={
+                "include_outs": bool(include_outs),
+                "include_grads": bool(include_grads),
+                "include_saved_args": bool(include_saved_args),
+                "include_rng_states": bool(include_rng_states),
+                "include_weights": bool(include_weights),
+                "include_activations": bool(include_activations),
+                "include_source": bool(include_source),
+                "include_custom_attributes": bool(include_custom_attributes),
+                "include_buffer_values": bool(include_buffer_values),
+            },
         )
-        _restrict_mode(tmp_path / "manifest.json", 0o600)
-        # B3R4-R21-2: canonical container bytes (set/frozenset members
-        # sorted), so persisted metadata does not vary with PYTHONHASHSEED.
-        # Dumped ONCE through the ``dump_canonical_metadata`` seam (interrupt /
-        # poisoned-write tests hook it): the canonical pickler is pure Python,
-        # so a second dump for the preflight doubled the dominant save cost.
-        metadata_buffer = io.BytesIO()
-        dump_canonical_metadata(scrubbed_state, metadata_buffer)
-        metadata_bytes = metadata_buffer.getvalue()
-        # Write/read symmetry (AUD-CODE 2.20): exactly these bytes are dry-run
-        # through the loader's restricted unpickler FIRST; an unportable value
-        # refuses typed, naming its key path, and nothing is written.
-        preflight_metadata_portability(
-            scrubbed_state,
-            unpickler_factory=_RenameAwareUnpickler,
-            bundle_path=bundle_path,
-            data=metadata_bytes,
-        )
-        with (tmp_path / "metadata.pkl").open("wb") as handle:
-            handle.write(metadata_bytes)
-        _restrict_mode(tmp_path / "metadata.pkl", 0o600)
+        _restrict_tree_modes(tmp_path)
+        preflight_reload(tmp_path)
 
         # Durability before publish: fsync every written blob/sidecar and the
         # bundle directories so a power/OS crash after the rename below cannot
@@ -4265,6 +4264,19 @@ def _reanchor_visualizer_paths(trace: Trace, bundle_path: Path) -> None:
             layer.visualizer_path = None
             continue
         layer.visualizer_path = str(candidate)
+
+
+def _restrict_tree_modes(root: Path) -> None:
+    """Tighten every directory (0700) and file (0600) the 3.0 envelope wrote.
+
+    Parameters
+    ----------
+    root:
+        Staged artifact directory.
+    """
+
+    for path in root.rglob("*"):
+        _restrict_mode(path, 0o700 if path.is_dir() else 0o600)
 
 
 def _restrict_mode(path: Path, mode: int) -> None:

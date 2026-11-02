@@ -27,6 +27,7 @@ from ._tlspec_json_helpers import (
     _json_str_or_none,
     _utc_timestamp,
 )
+from .format3.writer import envelope_fields
 from .manifest import Manifest, TensorEntry, _runtime_python_version
 from .paths import reject_symlink_path
 
@@ -83,22 +84,21 @@ class _TlSpecWriter:
     """Write unified ``.tlspec`` manifests and bundle payloads."""
 
     @classmethod
-    def write_trace_manifest(
+    def build_trace_manifest(
         cls,
         *,
-        path: Path,
         trace: Any,
         legacy_manifest: Manifest,
         save_level: str,
         sparse_run: dict[str, Any] | None = None,
         scrubbed_state: dict[str, Any] | None = None,
-    ) -> None:
-        """Write a unified manifest for a saved ``Trace`` payload.
+    ) -> dict[str, Any]:
+        """Build the unified manifest fields of a saved ``Trace`` payload.
+
+        The 3.0 writer adds its envelope fields on top and writes the result.
 
         Parameters
         ----------
-        path:
-            Destination ``manifest.json`` path.
         trace:
             Source model log.
         legacy_manifest:
@@ -154,6 +154,44 @@ class _TlSpecWriter:
             )
         if sparse_run is not None:
             manifest["run"] = sparse_run
+        return manifest
+
+    @classmethod
+    def write_trace_manifest(
+        cls,
+        *,
+        path: Path,
+        trace: Any,
+        legacy_manifest: Manifest,
+        save_level: str,
+        sparse_run: dict[str, Any] | None = None,
+        scrubbed_state: dict[str, Any] | None = None,
+    ) -> None:
+        """Write the unified manifest of a saved ``Trace`` payload.
+
+        Parameters
+        ----------
+        path:
+            Destination ``manifest.json`` path.
+        trace:
+            Source model log.
+        legacy_manifest:
+            Existing portable-I/O manifest fields required by the loader.
+        save_level:
+            Save level recorded in the public schema.
+        sparse_run:
+            Authoritative sparse runnable descriptor, or ``None``.
+        scrubbed_state:
+            Portable trace state whose remapped identities must feed public sites.
+        """
+
+        manifest = cls.build_trace_manifest(
+            trace=trace,
+            legacy_manifest=legacy_manifest,
+            save_level=save_level,
+            sparse_run=sparse_run,
+            scrubbed_state=scrubbed_state,
+        )
         cls.write_json(path, manifest)
 
     @classmethod
@@ -293,6 +331,18 @@ class _TlSpecWriter:
                     "sha256": sha256_file(tmp_path / body_filename),
                 }
             ]
+            # 3.0 envelope (format.1): members are 3.0 trace artifacts; the
+            # container manifest carries the envelope and digests every file.
+            manifest.update(
+                envelope_fields(
+                    tmp_path,
+                    kind="bundle",
+                    save_level=level,
+                    payload_policy={},
+                    records={},
+                    unencodable=(),
+                )
+            )
             cls.write_json(tmp_path / TLSPEC_MANIFEST_FILENAME, manifest)
             _restrict_mode(tmp_path / body_filename, 0o600)
             _restrict_mode(tmp_path / "bundle.json", 0o600)
