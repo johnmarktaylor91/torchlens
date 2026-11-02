@@ -147,6 +147,34 @@ def test_check_command_exit_status_and_files_command(
     assert capsys.readouterr().out.split() == ["tests/test_alpha.py"]
 
 
+def test_check_flags_helpers_that_apply_the_smoke_mark_off_the_file_list(
+    planted: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A smoke mark spelled outside a ``test_*.py`` file fails the check; the list skips it."""
+
+    tests = planted / "tests"
+    (tests / "_helpers.py").write_text("SMOKE = pytest.mark.smoke\n")
+    (tests / "sub" / "conftest.py").write_text("def hook(item):\n    item.add_marker('smoke')\n")
+    (tests / "sub" / "alias_test.py").write_text("@pytest.mark.smoke\ndef test_x(): ...\n")
+    (tests / "_tiers_plugin.py").write_text("item.add_marker(pytest.mark.smoke)\n")
+    (tests / "_prose.py").write_text("# the smoke tier\nTIERS = ('smoke', 'heavy')\n")
+    assert td.off_list_smoke_sources() == [
+        "tests/_helpers.py",
+        "tests/sub/alias_test.py",
+        "tests/sub/conftest.py",
+    ]
+    durations = planted / "durations.csv"
+    meta = planted / "durations.meta.json"
+    td.write_rows(_rows(), durations)
+    meta.write_text(json.dumps({"workers": 1}))
+    assert td.main(["check", "--durations", str(durations), "--meta", str(meta)]) == 1
+    assert "FAIL tests/_helpers.py: applies a smoke mark" in capsys.readouterr().out
+    assert td.main(["files", "--tier", "smoke"]) == 0
+    assert capsys.readouterr().out.split() == ["tests/test_alpha.py"]
+    assert not td.on_smoke_file_list(tests / "sub" / "alias_test.py")
+    assert not td.on_smoke_file_list(planted / "scripts" / "test_outside.py")
+
+
 def test_regenerate_writes_the_file_and_its_provenance(planted: Path) -> None:
     junit = planted / "run.junit.xml"
     junit.write_text(JUNIT)
