@@ -86,6 +86,7 @@ class Departure:
 
     label: str
     tensor: torch.Tensor
+    """The departing tensor OBJECT (it carries the label the parent edge is read from)."""
     kind: str
     storage_ptr: int
     storage_nbytes: int
@@ -165,7 +166,7 @@ def note_plain_export(trace: Any, kind: str, tensor: Any) -> None:
     departures(trace).append(
         Departure(
             label=label,
-            tensor=tensor.detach(),
+            tensor=tensor,
             kind=kind,
             storage_ptr=storage_range[0],
             storage_nbytes=storage_range[1],

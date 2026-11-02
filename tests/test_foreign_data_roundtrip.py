@@ -153,7 +153,7 @@ def test_pure_round_trip_is_one_op_with_the_departed_parent_and_validates(
     _assert_one_round_trip(trace, resolution, parent_type)
     op = _foreign_ops(trace)[0]
     # The replay callable rebuilds the re-entered value from the departed tensor alone.
-    departed = trace[op.parents[0]].tensor_contents
+    departed = trace[op.parents[0]].out
     expected = model.round_trip(departed.clone())
     assert torch.equal(op.func(departed), expected)
     assert _validate(model, x) is True
@@ -166,7 +166,7 @@ def test_round_trip_replay_follows_a_perturbed_parent() -> None:
     model = _RoundTripModel(_numpy_round_trip)
     trace = _trace_quiet(model, torch.randn(3, 4))
     op = _foreign_ops(trace)[0]
-    departed = trace[op.parents[0]].tensor_contents
+    departed = trace[op.parents[0]].out
     assert torch.equal(op.func(departed + 1.0), departed + 1.0)
 
 
@@ -298,8 +298,8 @@ class _ExportOnlyModel(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = self.fc(x)
-        # torch's toDLPack normalises the stride of a size-1 dim through as_strided.
-        torch.utils.dlpack.to_dlpack(y.detach()[:, :1].contiguous().expand(-1, 1))
+        # torch.s toDLPack normalises the stride of a size-1 dim through as_strided.
+        torch.utils.dlpack.to_dlpack(y.detach().unsqueeze(0))
         return torch.relu(y)
 
 
