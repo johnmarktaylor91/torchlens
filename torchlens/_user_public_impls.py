@@ -929,9 +929,7 @@ def validate_forward_pass(
     input_kwargs:
         Keyword arguments for model forward pass.
     seed:
-        Fixed RNG seed for reproducibility. Like ``tl.trace``, the call seeds the
-        process-global RNG engines for its runs and restores the caller's streams on
-        return and on error.
+        Fixed RNG seed; like ``tl.trace``, the caller's streams are restored on return.
     verbose:
         If True, print detailed error messages on validation failure.
     validate_metadata:
@@ -1347,10 +1345,8 @@ def _validate_forward_pass_torch(
     input_kwargs:
         Keyword arguments for model forward pass.
     seed:
-        Fixed RNG seed for reproducibility (auto-generated if None). Seeds the
-        process-global RNG engines for the ground-truth and logged runs; the public
-        entries (``torchlens.validation.validate_forward_pass``, ``tl.validate``)
-        restore the caller's streams around this body.
+        Fixed RNG seed (auto-generated if None). Seeds the global RNG engines for the
+        ground-truth and logged runs; the public entries restore the caller's streams.
     verbose:
         If True, print detailed error messages on validation failure.
     validate_metadata:

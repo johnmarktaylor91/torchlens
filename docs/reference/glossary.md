@@ -1421,7 +1421,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `tl.trace`, it seeds the global RNG streams (Python `random`, NumPy, torch CPU and CUDA) for
   its own runs and restores the caller's streams on return and on error; the lower-level
   `torchlens.validation.validate_forward_pass` and `validate_backward_pass` make the same
-  promise.
+  promise, as does `Trace.validate_forward_pass`, which replays each op under its recorded
+  RNG state.
   Keyword-only `output_device` and `save_budget` set the validator capture's save options,
   with the same values and defaults as `CaptureOptions.output_device` (`"same"`) and
   `CaptureOptions.save_budget` (`"auto"`): `output_device="cpu"` lets a GPU model validate
