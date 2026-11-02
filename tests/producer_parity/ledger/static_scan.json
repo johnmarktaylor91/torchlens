@@ -848,6 +848,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "source_trace",
+  "file": "torchlens/_data_classes/_op_aten.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/_data_classes/_op_relations.py",
@@ -867,14 +875,6 @@
   "ambiguous": false,
   "field": "source_trace",
   "file": "torchlens/_data_classes/_op_relations.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "source_trace",
-  "file": "torchlens/_data_classes/_op_aten.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
