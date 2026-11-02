@@ -5,7 +5,7 @@ real artifact per format family (see its README), and this module loads each of 
 checks the one refusal: the 2.x origin and the remedy are named, the code is
 ``artifact_version_below_floor``, and the artifact path travels in the structured fields where
 the loader has it. Two forged variants cover the door a restamped manifest uses: a 2.x payload
-whose manifest names the current format refuses at the unpickler (the pickled module path), and
+whose manifest names the current format refuses at the root listing (its ``metadata.pkl``), and
 a stamp below the oldest known format refuses at the manifest. The 2.16 intervention spec
 format (``format_version`` 1) is its own family: it has no ``tlspec_version`` and refuses at
 its spec stamp, at ``tl.load`` and at ``tl.validation.validate_tlspec``. So is the v1
@@ -77,11 +77,11 @@ def test_genuine_modellog_refusal_names_the_one_release_that_reads_it() -> None:
     assert "torchlens==2.17.0" in error.fields["remedy"]
 
 
-def test_restamped_2x_payload_refuses_at_the_unpickler(tmp_path: Path) -> None:
+def test_restamped_2x_payload_refuses_at_the_root_listing(tmp_path: Path) -> None:
     """A 2.x payload under a manifest that names the current format still refuses as 2.x.
 
-    The module path the payload pickled is the evidence: no manifest edit can make a 2.x
-    pickle look current.
+    The ``metadata.pkl`` at the root is the evidence: no manifest edit can make a 2.x
+    pickle layout look current, and the reader never opens the pickle.
     """
 
     source, _ = _FAMILIES["tlspec_v9"]
@@ -93,7 +93,7 @@ def test_restamped_2x_payload_refuses_at_the_unpickler(tmp_path: Path) -> None:
 
     error = assert_refuses_as_2x(work)
 
-    assert str(error.fields["observed"]).startswith("module_path=torchlens."), error.fields
+    assert error.fields["observed"] == "metadata.pkl at the artifact root", error.fields
 
 
 @pytest.mark.parametrize("stamp", [0, 1, MIN_TLSPEC_VERSION - 1])

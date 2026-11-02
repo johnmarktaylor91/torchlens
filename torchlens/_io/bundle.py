@@ -1311,23 +1311,27 @@ def load(
 
 #: Root files only a 2.x artifact carries; a directory holding one keeps the 2.x
 #: path until that path is deleted. ``spec.json`` is the v2.16 intervention root.
-_PRE3_ROOT_FILES: Final = (*format3_reader.PRE3_ROOT_MARKERS, "spec.json")
+#: Detector answers the 3.0 reader owns: the 3.0 format, the tlspec-stamped 2.x shape (it
+#: refuses by stamp or root listing there) and manifests no 2.x family claims.
+_FORMAT3_READER_SHAPES: Final = frozenset({"v3", "v2.0_unified", "unknown"})
 
 
-def _is_format3_root(bundle_path: Path) -> bool:
+def _is_format3_root(bundle_path: Path, tlspec_format: str) -> bool:
     """Return whether the directory is read by the 3.0 reader.
 
-    Every root ``manifest.json`` without a 2.x root file beside it is the 3.0
-    reader's: it alone decides whether the manifest names the format, and a
-    manifest missing or corrupting the ``format`` key refuses typed there
-    (``artifact_version_below_floor`` or ``manifest_schema_invalid``) instead
-    of falling into the 2.x manifest parser.
+    The reader owns every root ``manifest.json`` that names the 3.0 format and
+    every one the 2.x detector cannot place: there the reader alone decides,
+    and a manifest missing or corrupting the ``format`` key, a 2.x root file
+    beside it, or a stamp below the floor refuses typed
+    (``artifact_version_below_floor`` or ``manifest_schema_invalid``). A
+    manifest the detector recognises as a 2.x family keeps that family's own
+    typed 2.x refusal.
     """
 
     manifest_path = bundle_path / format3_contract.MANIFEST_FILE
     if not (manifest_path.exists() or manifest_path.is_symlink()):
         return False
-    return not any((bundle_path / name).exists() for name in _PRE3_ROOT_FILES)
+    return tlspec_format in _FORMAT3_READER_SHAPES
 
 
 def _load_format3(
@@ -1534,19 +1538,28 @@ def load(
         routed = load_by_root_manifest(bundle_path)
         if routed is not NOT_ROUTED:
             return routed
-        if _is_format3_root(bundle_path):
-            # 3.0 saved format: JSON record tables plus safetensors chunks; the
-            # reader never touches the pickle path below.
-            return _load_format3(
-                bundle_path,
-                lazy=lazy,
-                map_location=map_location,
-                materialize_nested=materialize_nested,
-                payload_hints=payload_hints,
-            )
         from ..io import detect_tlspec_format
 
         tlspec_format = detect_tlspec_format(bundle_path)
+        if _is_format3_root(bundle_path, tlspec_format):
+            # 3.0 saved format: JSON record tables plus safetensors chunks; the
+            # reader never touches the pickle path below.
+            try:
+                return _load_format3(
+                    bundle_path,
+                    lazy=lazy,
+                    map_location=map_location,
+                    materialize_nested=materialize_nested,
+                    payload_hints=payload_hints,
+                )
+            except RecursionError as exc:
+                # A hostile record graph nested deeply enough to blow the C stack
+                # during rehydration surfaces typed, never as a raw RecursionError.
+                raise ArtifactError(
+                    f"Failed to load bundle at {bundle_path}: record nesting exceeded the "
+                    "interpreter recursion limit during rehydration.",
+                    code="rehydrate_recursion_limit",
+                ) from exc
         if tlspec_format in {"v2.16_intervention", "v2.16_intervention_with_kind"}:
             from ..intervention.save import load_intervention_spec
 

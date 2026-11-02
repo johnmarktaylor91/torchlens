@@ -15,6 +15,7 @@ here evaluates, unpickles or imports by a name from the file. Contract:
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Callable, Iterator, Mapping
 from functools import cache
@@ -46,6 +47,7 @@ from .validate import (
     check_version_window,
     integrity_error,
     is_int,
+    legacy_stamp,
     manifest_schema_errors,
     pre3_error,
     read_json_file,
@@ -88,6 +90,36 @@ IDENTITY_FIELDS: Final[dict[str, str]] = {
     "aten_op": "label",
 }
 _BLOB_PATH = re.compile(r"blobs/[A-Za-z0-9_.-]+\.safetensors")
+#: Dtypes a safetensors chunk can hold (a closed vocabulary; quantized, bit-packed and
+#: sub-byte dtypes are in torch's table but have no storable element). Complex tensors are
+#: written as their real view with the ``complex`` flag.
+STORABLE_DTYPES: Final[frozenset[str]] = frozenset(
+    {
+        "bool",
+        "uint8",
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "uint16",
+        "uint32",
+        "uint64",
+        "float16",
+        "bfloat16",
+        "float32",
+        "float64",
+        "float8_e4m3fn",
+        "float8_e5m2",
+        "float8_e4m3fnuz",
+        "float8_e5m2fnuz",
+        "complex32",
+        "complex64",
+        "complex128",
+    }
+)
+#: The most elements one tensor reference may declare (2**48: a petabyte of float32).
+#: A shape bomb declares more and refuses before any allocation.
+MAX_TENSOR_NUMEL: Final = 1 << 48
 _BLOB_KEY = re.compile(r"t\d{1,12}")
 _TORCH_CODEC: Final = contract.PAYLOAD_CODEC_IDS[0]
 #: Construction order: a record's state hook runs after the records it holds.
@@ -136,6 +168,9 @@ def read_manifest(path: str | Path) -> dict[str, Any]:
         )
     manifest_path = root / contract.MANIFEST_FILE
     symlink_guard(manifest_path, "manifest")
+    stamp = legacy_stamp(manifest_path)
+    if stamp is not None:
+        raise pre3_error(root, f"tlspec_version={stamp}", code=BELOW_FLOOR)
     for marker in PRE3_ROOT_MARKERS:
         if (root / marker).exists():
             raise pre3_error(root, f"{marker} at the artifact root", code=BELOW_FLOOR)
@@ -191,6 +226,13 @@ def validate_artifact(path: str | Path) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+@cache
+def _element_size(dtype_name: str) -> int:
+    """Return the storage bytes of one element of a storable dtype."""
+
+    return torch.empty((), dtype=dtype_table()[dtype_name]).element_size()
+
+
 class TensorRefSink:
     """Collects the tensor cells a decode meets, as ``BlobRef`` markers plus lazy-layer entries.
 
@@ -217,9 +259,22 @@ class TensorRefSink:
             )
         if len(shape) > 64:
             raise cell_error(at, "tensor shape has more than 64 dimensions", code=CELL_CODE)
+        numel = math.prod(shape)
+        if numel > MAX_TENSOR_NUMEL:
+            raise cell_error(
+                at,
+                f"tensor shape {shape!r} declares more than {MAX_TENSOR_NUMEL} elements",
+                code=CELL_CODE,
+            )
         device = ref["device"]
         if not isinstance(device, str) or not DEVICE_TEXT.fullmatch(device):
             raise cell_error(at, f"tensor device {device!r} is not a device string", code=CELL_CODE)
+        try:
+            torch.device(device)
+        except (RuntimeError, TypeError, ValueError):
+            raise cell_error(
+                at, f"tensor device {device!r} is not a torch device", code=CELL_CODE
+            ) from None
         is_complex = ref.get("complex", False)
         if not isinstance(ref["requires_grad"], bool) or not isinstance(is_complex, bool):
             raise cell_error(
@@ -234,6 +289,10 @@ class TensorRefSink:
         if not isinstance(dtype_name, str) or dtype_name not in dtype_table():
             raise cell_error(
                 at, f"tensor dtype {dtype_name!r} is outside the dtype table", code=CELL_CODE
+            )
+        if dtype_name not in STORABLE_DTYPES:
+            raise cell_error(
+                at, f"tensor dtype {dtype_name!r} is not a storable dtype", code=CELL_CODE
             )
         blob, key = ref.get("blob"), ref.get("key")
         if blob is None and key is None:
@@ -251,6 +310,13 @@ class TensorRefSink:
         if not isinstance(listed, Mapping):
             raise cell_error(
                 at, f"tensor blob {blob} is not listed in the manifest's files", code=CELL_CODE
+            )
+        declared = numel * _element_size(dtype_name) * (2 if is_complex else 1)
+        if declared > int(listed["bytes"]):
+            raise cell_error(
+                at,
+                f"tensor declares {declared} bytes but its chunk {blob} holds {listed['bytes']}",
+                code=CELL_CODE,
             )
         blob_id = f"{blob}#{key}"
         if blob_id in self.entries:

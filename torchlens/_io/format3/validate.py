@@ -35,6 +35,7 @@ from . import contract
 __all__ = [
     "check_record_anchors",
     "check_version_window",
+    "legacy_stamp",
     "pre3_error",
     "manifest_schema_errors",
     "read_json_file",
@@ -83,6 +84,26 @@ def symlink_guard(path: Path, context: str) -> None:
 
 def pre3_error(root: Path, observed: str, *, code: str) -> ArtifactTooOldError:
     return pre_3_artifact_error(observed, path=str(root), code=code)
+
+
+def legacy_stamp(manifest_path: Path) -> int | None:
+    """Return the manifest's ``tlspec_version`` when it is below the 3.0 floor, else ``None``.
+
+    A lenient, bounded parse (repeated keys tolerated: 2.x manifests carry them) runs before
+    the strict one so an artifact saved by 2.x refuses as 2.x and not at its JSON shape;
+    anything unreadable here is left to the strict reader's own typed refusal.
+    """
+
+    try:
+        data = json.loads(read_bytes_bounded(manifest_path))
+    except (OSError, ValueError, ArtifactError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    stamp = data.get(TLSPEC_KEY)
+    if isinstance(stamp, bool) or not isinstance(stamp, int):
+        return None
+    return stamp if stamp < contract.RECORD_CONTRACT_FLOOR else None
 
 
 def check_version_window(manifest: Mapping[str, Any], root: Path) -> None:

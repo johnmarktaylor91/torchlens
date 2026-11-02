@@ -2,7 +2,7 @@
 
 Byte flips (records and blobs), dropped manifest keys and swapped cell and
 field types are applied one at a time to copies of a saved tiny CNN. A
-mutated artifact either loads back equal to the live trace (the mutation
+mutated artifact either loads back and resaves equal to the original (the mutation
 changed nothing the format reads) or refuses with an ``ArtifactError`` whose
 code is in the contract's refusal table, with no record object built.
 """
@@ -19,13 +19,14 @@ from _format3_envelope import (
     flip_byte,
     read_manifest,
     read_record,
+    record_table_diffs,
     redigest,
+    resave,
     save_tiny,
     set_cell,
     write_manifest,
     write_record,
 )
-from _pickle_compare import _diff
 
 from torchlens._io.format3 import contract
 from torchlens._io.format_errors import ArtifactError
@@ -67,14 +68,19 @@ def _load(root):
     return tl.load(root)
 
 
-def _expect_refusal_or_roundtrip(root, live, built_counter):
+def _expect_refusal_or_roundtrip(root, original, built_counter):
+    """Load the mutated ``root``: a typed refusal, or a load that resaves equal to ``original``."""
+
     try:
         loaded = _load(root)
     except ArtifactError as exc:
         assert exc.fields.get("code") in KNOWN_CODES, exc
         assert not any(cls.__name__ == "Trace" for cls in built_counter), "a Trace was built"
         return "refused"
-    assert _diff(live, loaded, "trace", set()) == []
+    again = resave(
+        loaded, root.parent / (root.name + "-again"), read_manifest(original)["save_level"]
+    )
+    assert record_table_diffs(original, again) == []
     return "roundtrip"
 
 
@@ -84,38 +90,38 @@ def _mutable_files(root):
 
 
 def test_unmodified_copy_round_trips(saved, tmp_path, built_counter):
-    root, live = saved
+    root, _ = saved
     copy = copy_artifact(root, tmp_path / "copy")
-    assert _expect_refusal_or_roundtrip(copy, live, built_counter) == "roundtrip"
+    assert _expect_refusal_or_roundtrip(copy, root, built_counter) == "roundtrip"
 
 
 @pytest.mark.parametrize("offset", [0, 7, 64, 257, 1031, -3])
 def test_byte_flip_in_each_listed_file(saved, tmp_path, built_counter, offset):
-    root, live = saved
+    root, _ = saved
     for index, relpath in enumerate(_mutable_files(root)):
         copy = copy_artifact(root, tmp_path / f"flip-{index}")
         flip_byte(copy / relpath, offset)
-        verdict = _expect_refusal_or_roundtrip(copy, live, built_counter)
+        verdict = _expect_refusal_or_roundtrip(copy, root, built_counter)
         assert verdict == "refused", relpath
 
 
 @pytest.mark.parametrize("offset", [3, 99, 1024])
 def test_byte_flip_in_the_manifest(saved, tmp_path, built_counter, offset):
-    root, live = saved
+    root, _ = saved
     copy = copy_artifact(root, tmp_path / "manifest-flip")
     flip_byte(copy / contract.MANIFEST_FILE, offset)
-    _expect_refusal_or_roundtrip(copy, live, built_counter)
+    _expect_refusal_or_roundtrip(copy, root, built_counter)
 
 
 def test_each_dropped_manifest_key_refuses(saved, tmp_path, built_counter):
-    root, live = saved
+    root, _ = saved
     manifest = read_manifest(root)
     for key in sorted(manifest):
         copy = copy_artifact(root, tmp_path / f"drop-{key}")
         trimmed = dict(manifest)
         del trimmed[key]
         write_manifest(copy, trimmed)
-        verdict = _expect_refusal_or_roundtrip(copy, live, built_counter)
+        verdict = _expect_refusal_or_roundtrip(copy, root, built_counter)
         if key in contract.MANIFEST_REQUIRED_FIELDS:
             assert verdict == "refused", key
 
@@ -125,7 +131,7 @@ SWAPS = [None, True, 0, -1, 2**53 + 1, 1.5, "", "x", [], {}, {"$tl": "pickle"}]
 
 @pytest.mark.parametrize("value", SWAPS, ids=lambda v: json.dumps(v))
 def test_swapped_manifest_field_types_refuse(saved, tmp_path, built_counter, value):
-    root, live = saved
+    root, _ = saved
     manifest = read_manifest(root)
     for key in contract.MANIFEST_REQUIRED_FIELDS:
         if manifest.get(key) == value:
@@ -134,20 +140,20 @@ def test_swapped_manifest_field_types_refuse(saved, tmp_path, built_counter, val
         swapped = dict(manifest)
         swapped[key] = value
         write_manifest(copy, swapped)
-        assert _expect_refusal_or_roundtrip(copy, live, built_counter) == "refused", key
+        assert _expect_refusal_or_roundtrip(copy, root, built_counter) == "refused", key
 
 
 @pytest.mark.parametrize("value", SWAPS, ids=lambda v: json.dumps(v))
 def test_swapped_record_cell_types_refuse_or_roundtrip(saved, tmp_path, built_counter, value):
-    root, live = saved
+    root, _ = saved
     for kind in read_manifest(root)["records"]:
         copy = copy_artifact(root, tmp_path / f"cell-{kind}")
         set_cell(copy, kind, first_column(copy, kind), 0, value)
-        _expect_refusal_or_roundtrip(copy, live, built_counter)
+        _expect_refusal_or_roundtrip(copy, root, built_counter)
 
 
 def test_dropped_and_added_columns_refuse(saved, tmp_path, built_counter):
-    root, live = saved
+    root, _ = saved
     for kind in read_manifest(root)["records"]:
         payload = read_record(root, kind)
         table = payload["fields"] if kind == "trace" else payload["columns"]
@@ -155,7 +161,7 @@ def test_dropped_and_added_columns_refuse(saved, tmp_path, built_counter):
         trimmed = json.loads(json.dumps(payload))
         del (trimmed["fields"] if kind == "trace" else trimmed["columns"])[next(iter(table))]
         write_record(dropped, kind, trimmed)
-        assert _expect_refusal_or_roundtrip(dropped, live, built_counter) == "refused", kind
+        assert _expect_refusal_or_roundtrip(dropped, root, built_counter) == "refused", kind
         added = copy_artifact(root, tmp_path / f"addcol-{kind}")
         extra = json.loads(json.dumps(payload))
         rows = 1 if kind == "trace" else extra["rows"]
@@ -163,11 +169,11 @@ def test_dropped_and_added_columns_refuse(saved, tmp_path, built_counter):
             "os.system" if kind == "trace" else ["os.system"] * rows
         )
         write_record(added, kind, extra)
-        assert _expect_refusal_or_roundtrip(added, live, built_counter) == "refused", kind
+        assert _expect_refusal_or_roundtrip(added, root, built_counter) == "refused", kind
 
 
 def test_row_count_mismatch_refuses(saved, tmp_path, built_counter):
-    root, live = saved
+    root, _ = saved
     for kind, delta in itertools.product(read_manifest(root)["records"], (-1, 1)):
         if kind == "trace":
             continue
@@ -175,20 +181,20 @@ def test_row_count_mismatch_refuses(saved, tmp_path, built_counter):
         payload = read_record(copy, kind)
         payload["rows"] = max(0, payload["rows"] + delta)
         write_record(copy, kind, payload)
-        assert _expect_refusal_or_roundtrip(copy, live, built_counter) == "refused", kind
+        assert _expect_refusal_or_roundtrip(copy, root, built_counter) == "refused", kind
 
 
 def test_blob_digest_mismatch_refuses(saved, tmp_path, built_counter):
-    root, live = saved
+    root, _ = saved
     blobs = [p for p in _mutable_files(root) if p.startswith(contract.BLOBS_DIR + "/")]
     for index, relpath in enumerate(blobs):
         copy = copy_artifact(root, tmp_path / f"blob-{index}")
         manifest = read_manifest(copy)
         manifest["files"][relpath]["sha256"] = "0" * 64
         write_manifest(copy, manifest)
-        assert _expect_refusal_or_roundtrip(copy, live, built_counter) == "refused", relpath
+        assert _expect_refusal_or_roundtrip(copy, root, built_counter) == "refused", relpath
     if blobs:
         copy = copy_artifact(root, tmp_path / "blob-rewrite")
         flip_byte(copy / blobs[0], 5)
         redigest(copy, blobs[0])
-        _expect_refusal_or_roundtrip(copy, live, built_counter)
+        _expect_refusal_or_roundtrip(copy, root, built_counter)

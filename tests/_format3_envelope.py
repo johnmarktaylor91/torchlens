@@ -112,3 +112,70 @@ def flip_byte(path: Path, offset: int) -> None:
     offset %= len(data)
     data[offset] ^= 0x01
     path.write_bytes(bytes(data))
+
+
+def resave(trace: Any, target: Path, level: str) -> Path:
+    """Save a (loaded) trace again at ``level``; return the new artifact root."""
+
+    trace.save(target, level=level)
+    return target
+
+
+def _columns(root: Path, kind: str) -> dict[str, list[Any]]:
+    payload = read_record(root, kind)
+    if kind == "trace":
+        return {name: [value] for name, value in payload["fields"].items()}
+    return payload["columns"]
+
+
+def _blob_digests(manifest: dict[str, Any]) -> dict[str, str]:
+    prefix = contract.BLOBS_DIR + "/"
+    return {k: v["sha256"] for k, v in manifest["files"].items() if k.startswith(prefix)}
+
+
+def record_table_diffs(left: Path, right: Path, *, limit: int = 40) -> list[str]:
+    """Cell-level differences between two artifacts' record tables and blob chunks.
+
+    Manifest identity fields (timestamps, host) are not compared; every record
+    kind, column and cell is, and every blob chunk by its listed digest, so an
+    empty list means the two artifacts persist the same records and tensors.
+    """
+
+    left_manifest, right_manifest = read_manifest(left), read_manifest(right)
+    diffs: list[str] = []
+    for kind in sorted(set(left_manifest["records"]) | set(right_manifest["records"])):
+        if kind not in left_manifest["records"] or kind not in right_manifest["records"]:
+            diffs.append(f"{kind}: record file only on one side")
+            continue
+        a, b = _columns(left, kind), _columns(right, kind)
+        for name in sorted(set(a) | set(b)):
+            if name not in a or name not in b:
+                diffs.append(f"{kind}.{name}: column only on one side")
+            elif len(a[name]) != len(b[name]):
+                diffs.append(f"{kind}.{name}: {len(a[name])} vs {len(b[name])} rows")
+            elif a[name] != b[name]:
+                row = next(
+                    i for i, (x, y) in enumerate(zip(a[name], b[name], strict=True)) if x != y
+                )
+                shown = (json.dumps(a[name][row])[:100], json.dumps(b[name][row])[:100])
+                diffs.append(f"{kind}.{name}[{row}]: {shown[0]} != {shown[1]}")
+        if len(diffs) >= limit:
+            return diffs[:limit]
+    left_blobs, right_blobs = _blob_digests(left_manifest), _blob_digests(right_manifest)
+    for relpath in sorted(set(left_blobs) | set(right_blobs)):
+        if left_blobs.get(relpath) != right_blobs.get(relpath):
+            diffs.append(f"{relpath}: chunk digests differ or chunk missing")
+    return diffs[:limit]
+
+
+def tensor_columns(root: Path, kind: str) -> list[str]:
+    """Columns of ``kind`` whose first row with a tensor cell carries a blob reference."""
+
+    names = []
+    for name, cells in _columns(root, kind).items():
+        for cell in cells:
+            if isinstance(cell, dict) and cell.get(contract.TYPED_VALUE_KEY) == "tensor":
+                if "blob" in cell:
+                    names.append(name)
+                break
+    return names
