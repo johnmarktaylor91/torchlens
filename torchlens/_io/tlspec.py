@@ -494,6 +494,7 @@ class _TlSpecWriter:
             raise ArtifactError("Bundle writer expected a mapping of members.")
         members_path = tmp_path / "members"
         members_path.mkdir()
+        _restrict_mode(members_path, 0o700)
         records: list[dict[str, str]] = []
         for index, (name, trace) in enumerate(members.items()):
             relative_path = Path("members") / f"{index:04d}-{_member_slug(name)}"
