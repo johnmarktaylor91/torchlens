@@ -1,9 +1,9 @@
 """Field-admission gate for the v12 writer contract.
 
-Every field the v12 contract of record carries over the frozen v11 one
-(persisted or DROP) must be registered here under its policy. An unregistered
-new field fails this test, so a field never reaches the stored shape by
-accident.
+Every key the v12 contract of record persists beyond the frozen v11 one (a new
+field, or a v11 DROP field flipped to KEEP) must be registered here under its
+policy. An unregistered key fails this test, so a field never reaches the
+stored shape by accident.
 """
 
 from __future__ import annotations
@@ -17,7 +17,8 @@ V11_CONTRACT = SCHEMAS / "writer_contract_v11.json"
 V12_CONTRACT = SCHEMAS / "writer_contract_v12.json"
 
 #: The v12 FIELD REGISTRY: record contract key -> {field name -> policy value}
-#: for every field added over v11.
+#: for every field newly PERSISTED over v11: a new field, or a v11 DROP field
+#: whose policy flipped to KEEP (``arg_expressions`` was a v11 DROP field).
 V12_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
     "op": {"arg_expressions": "keep", "is_constant": "keep"},
 }
@@ -35,22 +36,20 @@ def _field_names(record: dict) -> set[str]:
     return set(record["persisted_field_names"]) | set(record["field_policies"])
 
 
-def test_v11_to_v12_additions_are_exactly_the_registered_ones() -> None:
-    """The fields added over v11 are the registry, under the registered policies.
-
-    DROP fields never enter ``persisted_field_names`` but do enter the policy
-    table, so the gate reads both.
-    """
+def test_v11_to_v12_persisted_additions_are_exactly_the_registered_ones() -> None:
+    """The keys newly persisted over v11 are the registry, under the registered policies."""
 
     old = _record_contracts(V11_CONTRACT)
     new = _record_contracts(V12_CONTRACT)
     assert set(old) == set(new), "no record contract may appear or disappear at v12"
     assert set(V12_FIELD_ADMISSIONS) <= set(new), "admissions name unknown record contracts"
     for record_key in sorted(new):
-        added = _field_names(new[record_key]) - _field_names(old[record_key])
+        added = set(new[record_key]["persisted_field_names"]) - set(
+            old[record_key]["persisted_field_names"]
+        )
         admitted = V12_FIELD_ADMISSIONS.get(record_key, {})
         assert added == set(admitted), (
-            f"{record_key}: v12 adds {sorted(added)} but the registry admits "
+            f"{record_key}: v12 persists {sorted(added)} newly but the registry admits "
             f"{sorted(admitted)}; update V12_FIELD_ADMISSIONS in the same change"
         )
         policies = new[record_key]["field_policies"]
@@ -61,17 +60,22 @@ def test_v11_to_v12_additions_are_exactly_the_registered_ones() -> None:
             )
 
 
-def test_v12_admissions_are_persisted() -> None:
-    """Both v12 additions are KEEP fields that every save writes."""
+def test_v12_policy_changes_are_only_the_arg_expressions_flip() -> None:
+    """The only v11 field whose policy moved is ``op.arg_expressions``, DROP to KEEP."""
 
+    old = _record_contracts(V11_CONTRACT)
     new = _record_contracts(V12_CONTRACT)
-    for record_key, admitted in sorted(V12_FIELD_ADMISSIONS.items()):
-        persisted = set(new[record_key]["persisted_field_names"])
-        assert set(admitted) <= persisted, f"{record_key}: {sorted(set(admitted) - persisted)}"
+    moved = {
+        (record_key, name): (policy, new[record_key]["field_policies"].get(name))
+        for record_key in sorted(old)
+        for name, policy in old[record_key]["field_policies"].items()
+        if new[record_key]["field_policies"].get(name) != policy
+    }
+    assert moved == {("op", "arg_expressions"): ("drop", "keep")}
 
 
 def test_v12_removes_no_field() -> None:
-    """Nothing persisted at v11 leaves the stored shape at v12."""
+    """No v11 field leaves the stored shape or the policy table at v12."""
 
     old = _record_contracts(V11_CONTRACT)
     new = _record_contracts(V12_CONTRACT)
