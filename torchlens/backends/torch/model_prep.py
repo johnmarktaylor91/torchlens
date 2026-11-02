@@ -11,6 +11,7 @@ import time
 import weakref
 from collections import defaultdict, deque
 from collections.abc import Callable
+from contextlib import AbstractContextManager, nullcontext
 from functools import wraps
 from typing import TYPE_CHECKING, Any, cast
 
@@ -96,6 +97,7 @@ from .escape_detection import (
     expected_original_call,
     mark_expected_original_accounted,
 )
+from .fastpath_flags import fused_fastpath_flag_context
 from .prehook_provenance import bind_invocation
 from .sources import log_closure_constant_if_known, log_source_tensor
 from .tensor_tracking import _append_module_suffix_to_equivalence_class
@@ -2081,15 +2083,18 @@ def module_forward_decorator(
                 echo_session.emit_module_enter(frame.address, _module_type(module))
             expected_token = None
             try:
-                if (
-                    _state._escape_detector_mode == "shadow"
-                    or _state._completeness_witness_mode == "shadow"
-                ):
-                    with expected_original_call(
-                        orig_forward, "module_forward:exhaustive"
-                    ) as expected_token:
-                        out = orig_forward(*args, **kwargs)
-                else:
+                # The shadow token binds THIS frame (the one that calls the
+                # original), so it is entered here, not in a helper.
+                shadow_call: AbstractContextManager[Any] = (
+                    expected_original_call(orig_forward, "module_forward:exhaustive")
+                    if (
+                        _state._escape_detector_mode == "shadow"
+                        or _state._completeness_witness_mode == "shadow"
+                    )
+                    else nullcontext()
+                )
+                flags = fused_fastpath_flag_context(trace, module, args, kwargs)
+                with flags, shadow_call as expected_token:
                     out = orig_forward(*args, **kwargs)
                 from ...intervention.runtime import _apply_module_boundary_live_hooks
 
