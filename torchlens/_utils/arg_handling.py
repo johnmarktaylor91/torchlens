@@ -871,9 +871,8 @@ def safe_copy_input_tree(
     tensors without autograd history, PyTorch's deepcopy protocol copies each
     underlying storage once and rebuilds every view with its original size,
     stride, and storage offset. Grad-tracked tensors use the historical clone
-    path so gradients still reach the caller's input (a LEAF is deepcopied inside
-    :func:`leaf_preserving_input_copies`). Every path shares one memo, so the
-    same tensor repeated at multiple call sites remains one object.
+    path so gradients still reach the caller's input (:mod:`input_leaves` deepcopies
+    a LEAF in validation). Every path shares one memo, so a repeated tensor stays one object.
 
     The tree walk itself is INERT (b3-opus-R12-1): containers are copied by
     :func:`_copy_input_tree_node` through the ``_input_walk`` contract, never
