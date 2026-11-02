@@ -32,7 +32,7 @@ __all__ = [
 ]
 
 
-def annotate(
+def annotate(  # noqa: PLR0913 - mirrors Trace.annotate: every axis is a named keyword
     trace: Trace,
     selector: Any,
     *,
@@ -45,6 +45,8 @@ def annotate(
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     selector:
         Selector, target spec, frozen target spec, or non-strict bare string.
     data:
@@ -68,7 +70,7 @@ def annotate(
     """
 
     target = trace.fork(name=None) if copy else trace
-    target._annotate_in_place(selector, data=data, image=image, max_fanout=max_fanout)
+    annotate_in_place(target, selector, data=data, image=image, max_fanout=max_fanout)
     return target
 
 
@@ -84,6 +86,8 @@ def annotate_in_place(
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     selector:
         Selector resolved against this trace.
     data:
@@ -125,6 +129,8 @@ def annotation_data_kind(trace: Trace, data: Any) -> str:
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     data:
         Candidate annotation payload.
 
@@ -148,6 +154,8 @@ def validate_annotation_tensor(trace: Trace, tensor: torch.Tensor) -> None:
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     tensor:
         Tensor annotation candidate.
 
@@ -211,6 +219,8 @@ def annotation_key_for_site(trace: Trace, site: Any) -> str:
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     site:
         Resolved layer-pass record.
 
@@ -253,6 +263,8 @@ def store_annotation_blob(trace: Trace, key: str, data: Any) -> None:
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     key:
         Namespaced annotation key.
     data:
@@ -274,6 +286,8 @@ def store_annotation_breadcrumb(trace: Trace, site: Any, name: str, value: Any) 
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     site:
         Resolved layer-pass record.
     name:

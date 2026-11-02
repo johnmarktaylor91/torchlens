@@ -36,7 +36,7 @@ def test_file_saved_by_an_earlier_major_release_refuses_at_load(
 
     path, saved = _saved_trace(tmp_path)
     next_major = int(saved.split(".", 1)[0]) + 1
-    monkeypatch.setattr(tl._version, "__version__", f"{next_major}.0.0")
+    monkeypatch.setattr(tl, "__version__", f"{next_major}.0.0")
 
     with pytest.raises(ArtifactTooOldError) as excinfo:
         tl.load(path)

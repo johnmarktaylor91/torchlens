@@ -114,11 +114,11 @@ def capture_backward(trace: Trace) -> Any:
 def sync_backward_projection_if_needed(trace: Trace) -> None:
     """Synchronize lazy backward projections from runtime sidecar events."""
 
-    if getattr(trace, "_tl_active_backward_bracket", False):
+    if trace.__dict__.get("_tl_active_backward_bracket", False):
         return
     if not getattr(trace, "backward_events", ()):
         return
-    from ..backends.torch.backward import (
+    from .backward import (
         _backward_finalize_pending,
         _close_implicit_backward_pass_if_open,
         _materialize_backward_projections,

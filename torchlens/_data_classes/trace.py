@@ -3503,7 +3503,9 @@ class Trace(TraceLike):
     def add_node_overlay(self, scores: "Mapping[str, Any]", *, name: "str" = "overlay") -> "Trace":
         """Register external per-node overlay scores for later rendering."""
 
-        return _doors.visualization()._trace_draw.add_node_overlay(self, scores=scores, name=name)
+        self._node_overlay_scores = dict(scores)
+        self._node_overlay_name = name
+        return self
 
     def animate_ops(self, site: "Any") -> "str":
         """Return a minimal HTML animation for repeated ops at ``site``."""
@@ -3626,7 +3628,7 @@ class Trace(TraceLike):
 
         return _doors.report()._trace_summary.repr_html(self)
 
-    def summary(
+    def summary(  # noqa: PLR0913 - the ratified public grammar: every axis is a named keyword
         self,
         level: "str | None" = None,
         *,

@@ -17,7 +17,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, NamedTuple
 
-from .. import _version
 from ._field_policy import FieldPolicy as FieldPolicy
 from ._pre3_module_paths import pre_3_artifact_error
 from .format_errors import (
@@ -183,11 +182,6 @@ def raise_if_manifest_below_floor(raw_version: Any, path: str) -> None:
         )
 
 
-def _running_version() -> str:
-    """Return the running torchlens version (read from the leaf module, never the package root)."""
-    return _version.__version__
-
-
 def _major_version(version: Any) -> int | None:
     """Return the leading integer of a ``MAJOR.MINOR...`` version string, else ``None``."""
 
@@ -220,13 +214,15 @@ def raise_if_saved_by_older_major(saved_version: Any, path: str) -> None:
         When the saving release's major version is below the running one.
     """
 
-    running = _major_version(_running_version())
+    import torchlens
+
+    running = _major_version(torchlens.__version__)
     saved = _major_version(saved_version)
     if running is None or saved is None or saved >= running:
         return
     remedy = (
         f"load it with torchlens {saved}.x (pip install 'torchlens<{running}'), or "
-        f"capture the model again with torchlens {_running_version()} and save that."
+        f"capture the model again with torchlens {torchlens.__version__} and save that."
     )
     raise ArtifactTooOldError(
         f"This artifact was saved by torchlens {saved_version}; torchlens {running}.x "

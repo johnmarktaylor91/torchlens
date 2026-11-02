@@ -184,19 +184,6 @@ def draw(  # noqa: PLR0913 - mirrors the ratified public grammar of Trace.draw
     )
 
 
-def add_node_overlay(
-    trace: Trace,
-    scores: Mapping[str, Any],
-    *,
-    name: str = "overlay",
-) -> Trace:
-    """Body of ``Trace.add_node_overlay``; the method docstring is the contract."""
-
-    trace._node_overlay_scores = dict(scores)
-    trace._node_overlay_name = name
-    return trace
-
-
 def animate_ops(trace: Trace, site: Any) -> str:
     """Body of ``Trace.animate_ops``; the method docstring is the contract."""
 
@@ -424,7 +411,6 @@ def visualization_field_audit(trace: Trace) -> TorchLensRenderAudit:
 
 
 __all__ = [
-    "add_node_overlay",
     "animate_ops",
     "draw",
     "draw_backward",

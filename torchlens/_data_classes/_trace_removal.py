@@ -56,6 +56,8 @@ def release_param_refs(trace: Trace, *, allow_iter_rehydrate: bool = False) -> N
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     allow_iter_rehydrate:
         If ``True``, iterating ``param_logs`` may lazily restore live
         references from the source model. Public explicit releases leave
@@ -84,6 +86,8 @@ def remove_log_entry(
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     log_entry:
         Entry to remove.
     remove_references:
@@ -110,6 +114,8 @@ def batch_remove_log_entries(
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     entries_to_remove:
         Entries to remove.
     remove_references:

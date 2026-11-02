@@ -479,6 +479,8 @@ def module_calls_with_output_in(trace: Trace, op_labels: set[str]) -> Accessor[A
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     op_labels:
         Pass-qualified Op labels to match against each call's outputs.
 
@@ -522,6 +524,8 @@ def find_sites(trace: Trace, selector: Any, *, strict: bool = False, max_fanout:
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     selector:
         Selector, target spec, frozen target spec, or non-strict bare string.
     strict:
@@ -545,6 +549,8 @@ def find_layers(trace: Trace, selector: str, *, limit: int = 10) -> list[str]:
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     selector:
         Layer-label substring or approximate layer name.
     limit:
@@ -607,6 +613,8 @@ def check_plan(trace: Trace, plan: Any) -> Any:
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     plan:
         Iterable of selector entries or ``(selector, replacement)``
         pairs.
@@ -659,6 +667,8 @@ def resolve_site_table(
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     selector:
         Selector, target spec, frozen target spec, or non-strict bare string.
     strict:

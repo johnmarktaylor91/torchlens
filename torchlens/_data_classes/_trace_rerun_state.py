@@ -20,7 +20,22 @@ from ._trace_accessors import (
 if TYPE_CHECKING:
     from .trace import Trace
 
+
+def stateful_run_warning_was_emitted(trace: Trace) -> bool:
+    """Whether ``trace`` already carried its once-only stateful-run warning."""
+
+    return bool(trace.__dict__.get("_stateful_run_warning_emitted", False))
+
+
+def mark_stateful_run_warning_emitted(trace: Trace) -> None:
+    """Record on ``trace`` that its once-only stateful-run warning was emitted."""
+
+    trace.__dict__["_stateful_run_warning_emitted"] = True
+
+
 __all__ = [
+    "mark_stateful_run_warning_emitted",
+    "stateful_run_warning_was_emitted",
     "replace_state_from",
     "refresh_matching_rerun_state_from",
     "refresh_rerun_op_from",
@@ -55,6 +70,8 @@ def replace_state_from(target: Trace, trace: Trace) -> None:
 
     Parameters
     ----------
+    target:
+        The trace that receives the state.
     trace:
         Fully postprocessed fresh log whose graph, layer containers,
         accessors, output metadata, shape/hash fields, and per-pass entries
@@ -125,6 +142,8 @@ def refresh_matching_rerun_state_from(trace: Trace, new_log: Trace) -> bool:
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     new_log:
         Fully captured and postprocessed rerun candidate.
 
@@ -167,6 +186,8 @@ def refresh_rerun_op_from(trace: Trace, layer: Any, new_layer: Any) -> None:
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     layer:
         Existing operation record retained by the fast path.
     new_layer:
@@ -230,6 +251,8 @@ def refresh_rerun_layer_logs_from(trace: Trace, new_log: Trace) -> None:
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     new_log:
         Fresh rerun trace with layer aggregates already postprocessed.
     """
@@ -261,6 +284,8 @@ def copy_user_annotations(trace: Trace, annotations: Any) -> dict[str, Any] | No
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     annotations:
         Existing annotation mapping.
 
@@ -287,6 +312,8 @@ def merge_user_annotations(
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     fresh_annotations:
         Annotation mapping from the fresh rerun.
     preserved_user_annotations:
@@ -309,6 +336,8 @@ def refresh_rerun_trace_fields_from(trace: Trace, new_log: Trace) -> None:
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     new_log:
         Fresh rerun trace supplying current run metadata.
     """
@@ -358,6 +387,8 @@ def copy_rerun_value(trace: Trace, value: Any) -> Any:
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     value:
         Value copied from the fresh rerun trace.
 
@@ -393,6 +424,8 @@ def append_state_from(target: Trace, trace: Trace) -> None:
 
     Parameters
     ----------
+    target:
+        The trace that receives the state.
     trace:
         Freshly captured append chunk whose topology and tensor metadata
         have already been validated against this log.
@@ -407,12 +440,12 @@ def append_state_from(target: Trace, trace: Trace) -> None:
     for layer, new_layer in zip(target._layer_list, trace._layer_list, strict=True):
         if not (
             getattr(layer, "is_buffer", False)
-            or target._is_append_buffer_side_effect_layer(layer, old_by_label)
+            or is_append_buffer_side_effect_layer(target, layer, old_by_label)
         ):
             layer._append_tensor_from(new_layer, "out")
             layer._append_tensor_from(new_layer, "transformed_out")
-        target._copy_append_last_chunk_fields(layer, new_layer)
-        target._refresh_appended_tensor_metadata(layer)
+        copy_append_last_chunk_fields(target, layer, new_layer)
+        refresh_appended_tensor_metadata(target, layer)
     target._autograd_has_grads = target._autograd_has_grads or trace._autograd_has_grads
     target._options_seed = trace._options_seed
     target._provenance_input_object_id = trace._provenance_input_object_id
@@ -427,6 +460,8 @@ def is_append_buffer_side_effect_layer(
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     layer:
         Candidate layer being considered for append tensor concatenation.
     layer_by_label:
@@ -461,6 +496,8 @@ def copy_append_last_chunk_fields(trace: Trace, layer: Any, new_layer: Any) -> N
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     layer:
         Existing accumulated layer pass.
     new_layer:
@@ -497,6 +534,8 @@ def copy_append_metadata_value(trace: Trace, value: Any) -> Any:
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     value:
         Metadata value from the new chunk.
 
@@ -530,6 +569,8 @@ def refresh_appended_tensor_metadata(trace: Trace, layer: Any) -> None:
 
     Parameters
     ----------
+    trace:
+        The owning trace.
     layer:
         Layer pass whose tensor fields may have been concatenated.
     """
