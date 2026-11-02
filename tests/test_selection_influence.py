@@ -19,9 +19,11 @@ import torch.nn as nn
 from torch.nn import functional
 
 import torchlens as tl
+from torchlens._selection.selection import _join_relation
 from torchlens.errors import SelectionError
 from torchlens.receptive_field import _influence as influence
 from torchlens.receptive_field._influence import _basis_of, _field_status_of, _influence
+from torchlens.receptive_field._types import ReceptiveFieldStatus
 
 # ---------------------------------------------------------------------------
 # Fixtures.
@@ -66,7 +68,7 @@ class _ConvBranchy(nn.Module):
 
 
 class _GlobalMix(nn.Module):
-    """A conv whose output is scaled by its own row mean: one axis goes global."""
+    """A conv whose output is scaled by its own row mean: the column axis goes global."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -102,7 +104,7 @@ def _armed(model: nn.Module, inputs: torch.Tensor):
     """Capture with autograd retained so the gradient method can probe."""
 
     capture = tl.options.CaptureOptions(backward_ready=True)
-    return tl.trace(model, inputs, capture=capture, save_mode="reference")
+    return tl.trace(model, inputs.requires_grad_(True), capture=capture, save_mode="reference")
 
 
 @pytest.fixture(scope="module")
@@ -188,10 +190,10 @@ def _patch(rows: range, cols: range) -> list[tuple[int, int, int, int]]:
     return [(0, 0, row, col) for row in rows for col in cols]
 
 
-def _union_of_units(trace, seed_op, units, target, direction: str) -> torch.Tensor:
-    """OR the shipped per-unit ``.at()`` lifts over the seed units at ``target``."""
+def _lifted_units(trace, seed_op, units, target, direction: str):
+    """Resolve the shipped per-unit ``.at()`` lift at ``target`` for every seed unit."""
 
-    folded = torch.zeros(tuple(target.shape), dtype=torch.bool)
+    rows = []
     for unit in units:
         if direction == "projective":
             box = seed_op.projective_field.at(unit, target=target)
@@ -199,8 +201,26 @@ def _union_of_units(trace, seed_op, units, target, direction: str) -> torch.Tens
             box = seed_op.receptive_field.at(unit, input_op=target)
         else:
             box = seed_op.receptive_field.at(unit, source=target)
-        folded |= _entry(trace[box.__selection__()], target).mask
+        rows.append(_entry(trace[box.__selection__()], target))
+    return rows
+
+
+def _union_of_units(trace, seed_op, units, target, direction: str) -> torch.Tensor:
+    """OR the shipped per-unit lifts over the seed units at ``target``."""
+
+    folded = torch.zeros(tuple(target.shape), dtype=torch.bool)
+    for row in _lifted_units(trace, seed_op, units, target, direction):
+        folded |= row.mask
     return folded
+
+
+def _lifted_relation(trace, seed_op, units, target, direction: str) -> str:
+    """Join the shipped per-unit lifts' relations the way the engine folds them."""
+
+    relation = "exact"
+    for row in _lifted_units(trace, seed_op, units, target, direction):
+        relation = _join_relation(relation, row.provenance.relation)
+    return relation
 
 
 # ---------------------------------------------------------------------------
@@ -263,11 +283,15 @@ def test_projective_hull_from_input_matches_hand_computation(stack) -> None:
         conv2.label: _slices_mask((1, 1, 8, 8), slice(None), slice(None), slice(3, 6), slice(3, 6)),
         conv3.label: _slices_mask((1, 1, 6, 6), slice(None), slice(None), slice(1, 6), slice(1, 6)),
     }
+    units = [(7, 7), (7, 8), (8, 7), (8, 8)]
     for op in (conv1, conv2, conv3):
         entry = _entry(resolved, op)
         assert torch.equal(entry.mask, expected[op.label]), op.label
-        assert entry.provenance.relation == "exact"
-        assert _field_status_of(entry) == "exact"
+        # The engine inherits the shipped grading: the relation equals the join of
+        # the per-unit lifts' relations (the stride-2 transposition is graded
+        # upper_bound by the field engine, so no exactness is invented here).
+        assert entry.provenance.relation == _lifted_relation(stack, source, units, op, "projective")
+        assert _field_status_of(entry) in {"exact", "upper_bound"}
 
 
 def test_projective_default_target_is_the_model_output(stack) -> None:
@@ -299,8 +323,12 @@ def test_union_of_per_unit_lifts_equals_the_set_answer(stack, direction: str) ->
     seed = tl.units(seed_op.label, [(0, 0, *unit) for unit in units])
     resolved = stack[_influence(seed, within=targets, direction=direction)]
     for target in targets:
+        entry = _entry(resolved, target)
         expected = _union_of_units(stack, seed_op, units, target, direction)
-        assert torch.equal(_entry(resolved, target).mask, expected), target.label
+        assert torch.equal(entry.mask, expected), target.label
+        assert entry.provenance.relation == _lifted_relation(
+            stack, seed_op, units, target, direction
+        ), target.label
 
 
 # ---------------------------------------------------------------------------
@@ -336,7 +364,7 @@ def test_batch_row_seed_stays_on_its_row(branchy) -> None:
     entry = _entry(resolved, branchy.output_ops[0])
     mask = entry.mask
     assert not mask[0].any()
-    assert torch.equal(mask[1], _slices_mask((1, 8, 8), slice(None), slice(0, 4), slice(0, 4))[0])
+    assert torch.equal(mask[1], _slices_mask((1, 8, 8), slice(None), slice(0, 4), slice(0, 4)))
 
 
 def test_two_seed_sites_fold_per_target(branchy) -> None:
@@ -365,12 +393,17 @@ def test_seed_at_the_target_site_is_the_identity(branchy) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Fixture 3: a global-mixing block carries field_status whole_input.
+# Fixture 3: a global-mixing block; the full axis covers the whole extent.
 # ---------------------------------------------------------------------------
+#
+# The field engine's ``whole_input`` status means every non-pointwise axis is
+# full, which leaves no windowed axis to seed, and per-unit geometry refuses
+# such descriptors (pure attention below). A block with one global axis beside
+# a windowed one is graded ``exact`` with the global axis covered whole.
 
 
-def test_global_axis_reports_whole_input_status(mixed) -> None:
-    """A row-mean broadcast makes the column axis global and says so."""
+def test_global_axis_is_covered_whole_beside_a_windowed_axis(mixed) -> None:
+    """A row-mean broadcast makes every column reachable while rows stay windowed."""
 
     output = mixed.output_ops[0]
     seed = tl.units(output.label, _patch(range(3, 5), range(3, 5)))
@@ -379,7 +412,7 @@ def test_global_axis_reports_whole_input_status(mixed) -> None:
         entry.mask, _slices_mask((1, 1, 8, 8), slice(None), slice(None), slice(2, 6), slice(None))
     )
     assert entry.provenance.relation == "exact"
-    assert _field_status_of(entry) == "whole_input"
+    assert _field_status_of(entry) == "exact"
 
 
 def test_whole_site_seed_on_a_global_block_is_a_whole_site_mask(mixed) -> None:
@@ -391,7 +424,19 @@ def test_whole_site_seed_on_a_global_block_is_a_whole_site_mask(mixed) -> None:
     )
     assert bool(entry.mask.all())
     assert entry.provenance.relation == "exact"
-    assert _field_status_of(entry) == "whole_input"
+    assert _field_status_of(entry) == "exact"
+
+
+def test_status_fold_is_worst_of_in_the_documented_order() -> None:
+    """EXACT < WHOLE_INPUT < UPPER_BOUND; an empty fold reads ``none``."""
+
+    worst = influence._worst_status
+    assert worst(()) == "none"
+    assert worst((ReceptiveFieldStatus.EXACT,)) == "exact"
+    assert worst((ReceptiveFieldStatus.EXACT, ReceptiveFieldStatus.WHOLE_INPUT)) == "whole_input"
+    assert (
+        worst((ReceptiveFieldStatus.WHOLE_INPUT, ReceptiveFieldStatus.UPPER_BOUND)) == "upper_bound"
+    )
 
 
 # ---------------------------------------------------------------------------
