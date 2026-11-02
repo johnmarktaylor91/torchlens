@@ -31,12 +31,13 @@ from .._selection.errors import SelectionError
 from .._selection.selection import Selection, Selector, _apply_invalid, _lift
 from .._selection.selectors import label as label_selector
 from ._replay_context import journal_replay_state, restore_replay_state
+from ._replay_transaction import push_from_handles
 from .audit import build_fire_record
 from .edge_substitution import apply_edge_substitution_do
 from .errors import EngineDispatchError
 from .hooks import make_hook_context
 from .param_substitution import apply_param_substitution_do, buffer_operand_selection
-from .replay import _commit_replay_updates, _replay_site_key, push_from, push_from_handles
+from .replay import _commit_replay_updates, _replay_site_key, push_from
 from .stochastic import assign_batch_donor_groups
 from .types import Edit
 
@@ -212,10 +213,9 @@ def apply_cross_kind_batch_do(
         for kind, step in steps:
             if kind == "ACT":
                 items = [item for _resolved, plan, _audit in step for item in plan]
-                step_handles = attach_selection_plan_hooks(trace, items, strict=strict)
-                attached.extend(step_handles)
+                attached.extend(handles := attach_selection_plan_hooks(trace, items, strict=strict))
                 trace.intervention_audit.extend(audit for _resolved, _plan, audit in step)
-                push_from_handles(trace, step_handles, strict=strict)
+                push_from_handles(trace, handles, strict=strict)
                 continue
             mutation_kind, handles = apply_selection_do(trace, *step, engine=engine, strict=strict)
             attached.extend(handles)

@@ -50,6 +50,7 @@ from .._runnable import refuse_poisoned_trace
 from .._selection.selection import Selection, Selector, _trace_edge_records
 from ..options import suppress_mutate_warnings
 from ._param_fingerprint import changed_param_scope
+from ._replay_transaction import push_from_handles
 from .audit import (
     fire_records_since,
     record_intervention_event,
@@ -59,7 +60,6 @@ from .audit import (
 from .errors import EngineDispatchError, ModelMismatchError, SpecMutationError, TraceMutationWarning
 from .hooks import is_facet_target, lower_record_site_target
 from .injection import injected_ops as _injected_op_records
-from .replay import push_from_handles
 from .save import save_intervention as _save_intervention_recipe
 from .spec import Recipe as PublicInterventionSpec, _canonical_repr, addresses_autograd_nodes
 
@@ -471,19 +471,14 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
         settle_selection_do(trace, txn, selected_engine, mutation_kind)
         return trace
     try:
-        if selected_engine == "replay" and attached_handles:
-            # Propagate from THIS call's hooks only: older rules fire inside
-            # the cone but open no cone of their own.
+        if selected_engine == "replay":
             result = push_from_handles(trace, attached_handles, strict=strict_value)
-        elif selected_engine == "replay":
-            result = trace.push(replay=ReplayOptions(strict=strict_value))
         else:
             assert model is not None
             result = trace.run(model, x, replay=ReplayOptions(strict=strict_value))
     except BaseException as exc:
-        # A failed do() must not leave its sticky hooks attached: the
-        # next push would silently re-fire them (contamination). Detach
-        # exactly the hooks THIS call attached, then re-raise.
+        # A failed do() must not leave its sticky hooks attached (the next push
+        # would silently re-fire them): detach exactly this call's hooks, re-raise.
         for handle_id in attached_handles:
             clear_edits(trace, handle=handle_id, confirm_mutation=True)
         record_do_intervention_event(trace, txn, status="error", error=repr(exc))
