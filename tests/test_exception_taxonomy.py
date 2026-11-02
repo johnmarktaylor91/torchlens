@@ -50,6 +50,7 @@ OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
     ("torchlens._errors", "KeywordConflictError", errors.ConfigurationError, "subclass"),
     ("torchlens._errors", "CaptureNotActiveError", errors.CaptureError, "subclass"),
     ("torchlens._errors", "UserTransformError", errors.CaptureError, "subclass"),
+    ("torchlens._errors", "TraceCaptureError", errors.CaptureError, "subclass"),
     ("torchlens._errors", "ParamReleasedError", errors.CaptureError, "subclass"),
     ("torchlens._io", "ArtifactError", errors.CompatibilityError, "subclass"),
     (
@@ -465,7 +466,6 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "ReplayValueMismatchError": ("RuntimeError",),
     "OpaqueCallableError": ("ValueError",),
     "OutputAttributionError": ("RuntimeError",),
-    "PartialCaptureLookupError": ("ValueError",),
     "PathDivergenceError": ("ValueError", "RuntimeError"),
     "PayloadUnavailableError": ("ValueError",),
     "PoisonedRunError": ("RuntimeError",),
@@ -516,6 +516,7 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "ArtifactError": ("RuntimeError",),
     "TorchLensInterventionError": ("RuntimeError",),
     "InterventionWarning": ("Warning",),
+    "TraceCaptureError": (),
     "TransformContractError": ("RuntimeError",),
     "UserTransformError": ("RuntimeError",),
     "TorchLensWarning": ("Warning",),

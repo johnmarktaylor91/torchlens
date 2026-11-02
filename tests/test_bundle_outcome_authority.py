@@ -37,7 +37,7 @@ from torchlens._capture.outcome import (
 )
 from torchlens._data_classes.trace import Trace
 from torchlens.bundle import Bundle, _fold_member_outcomes
-from torchlens.errors import InvalidArgumentError
+from torchlens.errors import InvalidArgumentError, TraceCaptureError
 
 # Least -> most severe; the fold picks the maximum over members.
 SEVERITY_ORDER = [
@@ -72,8 +72,9 @@ def _failed_trace() -> Trace:
     try:
         with torch.no_grad():
             tl.trace(ExplodingModel(), torch.ones(1, 3))
-    except RuntimeError as exc:
-        return tl._partial.from_failed_capture(exc).trace
+    except TraceCaptureError as exc:
+        assert isinstance(exc.__cause__, RuntimeError)
+        return exc.partial_trace.trace
     raise AssertionError("capture unexpectedly succeeded")
 
 

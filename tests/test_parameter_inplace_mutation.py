@@ -21,7 +21,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._utils.tensor_leaves import iter_tensors
 from torchlens.backends.torch import param_mutation, wrappers
-from torchlens.errors import TorchLensWarning
+from torchlens.errors import TorchLensWarning, TraceCaptureError
 from torchlens.options import CaptureOptions
 from torchlens.validation import last_validation_failure
 from torchlens.validation.diagnostics import CHECK_BACKWARD
@@ -319,8 +319,9 @@ def test_trainable_parameter_mutated_without_no_grad_still_raises_like_eager() -
     x = torch.randn(3, 4)
     with pytest.raises(RuntimeError, match="leaf Variable that requires grad"):
         _FrozenMutator(requires_grad=True)(x)
-    with pytest.raises(RuntimeError, match="leaf Variable that requires grad"):
+    with pytest.raises(TraceCaptureError, match="leaf Variable that requires grad") as _tce_info2:
         tl.trace(_FrozenMutator(requires_grad=True), x)
+    assert isinstance(_tce_info2.value.__cause__, RuntimeError)
 
 
 class _FrozenGradOperandMutator(nn.Module):

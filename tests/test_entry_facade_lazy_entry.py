@@ -22,7 +22,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._runnable.state import snapshot_capture_state
 from torchlens._utils.lazy_state import has_uninitialized_lazy_state, pending_lazy_state
-from torchlens.errors import CaptureNotActiveError
+from torchlens.errors import CaptureNotActiveError, TraceCaptureError
 
 
 def _lazy_mlp() -> nn.Sequential:
@@ -157,9 +157,10 @@ def test_capture_failure_advisory_scopes_the_restoration_claim() -> None:
 
     with (
         pytest.warns(Warning) as caught,
-        pytest.raises(RuntimeError, match="mid-forward failure"),
+        pytest.raises(TraceCaptureError, match="mid-forward failure") as _tce_info,
     ):
         tl.trace(_Boom(), torch.randn(2, 4))
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
     advisories = [
         str(w.message) for w in caught if "TorchLens capture attempt failed" in str(w.message)
     ]

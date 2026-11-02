@@ -214,8 +214,9 @@ failures exclude the failing call; TL-side capture failures may include a skippe
 current-call event. Failed partials are not topology-complete, so `Recording.to_trace()` and
 `Recording.backward()` reject them.
 
-For full `tl.trace(...)` failures, inspect `exc.partial_log` directly or call
-`tl._partial.from_failed_capture(exc)`.
+A full `tl.trace(...)` whose forward raises raises `tl.errors.TraceCaptureError`, chained
+`from` the forward's own exception (`exc.__cause__`); inspect the partial capture on
+`exc.partial_trace`.
 
 ## Trace Mutators
 

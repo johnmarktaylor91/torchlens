@@ -13,6 +13,7 @@ from example_models import TinyReluAdd as ReluAdd
 
 import torchlens as tl
 from torchlens._capture_state_helpers import reset_compiled_model_unwrap_warning_state
+from torchlens.errors import TraceCaptureError
 from torchlens.intervention.errors import (
     ControlFlowDivergenceError,
     ControlFlowDivergenceWarning,
@@ -279,8 +280,9 @@ def test_rerun_failure_leaves_original_log_unchanged() -> None:
     log.run(ReluAdd(), x)
     history_after_success = list(log.state_history)
 
-    with pytest.raises(RuntimeError, match="boom"):
+    with pytest.raises(TraceCaptureError, match="boom") as _tce_info:
         log.run(BadModel(), x)
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
     assert log.state is TraceState.RERUN_PROPAGATED
     assert log.provenance.fingerprint == original_hash

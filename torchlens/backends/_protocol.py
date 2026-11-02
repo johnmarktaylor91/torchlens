@@ -330,13 +330,15 @@ class CaptureBackend(Protocol):
         prepared_model:
             Backend-prepared model object, or a backend-specific cleanup tuple.
         exc:
-            Exception raised by the forward capture.
+            Exception the capture door is about to raise: a
+            ``TraceCaptureError`` wrapping the forward's exception, or a
+            TorchLens error propagating as itself.
 
         Returns
         -------
         None
-            Session metadata is cleared in place and exception diagnostics may
-            be attached to ``exc``.
+            Session metadata is cleared in place and the partial capture may
+            be attached to ``exc`` as ``partial_trace``.
         """
         ...
 

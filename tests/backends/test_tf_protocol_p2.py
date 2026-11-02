@@ -28,9 +28,6 @@ pytestmark = [
     ),
 ]
 
-#: Reasons this backend emits beyond the shared closed list (requested additions).
-_TF_STRUCTURAL_REASONS = frozenset({"op_unclassified", "capture_inconsistent"})
-
 
 def _protocol() -> Any:
     """The registered tf protocol object."""
@@ -195,7 +192,7 @@ def test_tf_tampered_payload_fails_naming_the_op_and_reason() -> None:
     failed = [r for r in status.decisions if r["decision"] == "failed"]
     assert failed
     assert failed[0]["op_label"] in {relu.label, relu.layer_label}
-    assert failed[0]["reason"] in VALIDATION_REASONS | _TF_STRUCTURAL_REASONS
+    assert failed[0]["reason"] in VALIDATION_REASONS
 
 
 def test_tf_initializer_fill_without_consumers_still_fails_closed() -> None:

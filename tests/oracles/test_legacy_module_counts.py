@@ -27,6 +27,7 @@ from tests.oracles.test_legacy_graph_counts import (
     LoopedBatchNorm,
     Mixed,
 )
+from torchlens.errors import TraceCaptureError
 
 
 class Block(nn.Module):
@@ -297,7 +298,8 @@ def test_root_forward_arguments_do_not_outlive_the_capture() -> None:
         assert root.num_forward_pos_args == 2  # the count survives the release
     finally:
         trace.cleanup()
-    with pytest.raises(RuntimeError) as failure:
+    with pytest.raises(TraceCaptureError) as failure:
         tl.trace(Boom(), torch.randn(2, 4))
-    partial = getattr(failure.value, "partial_log", None)
+    assert isinstance(failure.value.__cause__, RuntimeError)
+    partial = getattr(failure.value, "partial_trace", None)
     assert _root_args_held(partial) is None

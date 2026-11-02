@@ -20,6 +20,7 @@ from torchlens.backends.torch._tl import (
     set_tensor_label,
 )
 from torchlens.backends.torch.model_prep import _tag_untagged_buffers
+from torchlens.errors import TraceCaptureError
 from torchlens.intervention.runtime import _copy_tl_replacement_attrs
 from torchlens.options import CaptureOptions, SaveOptions
 from torchlens.types import PartialTrace
@@ -131,10 +132,11 @@ def test_failed_capture_cleans_partial_outputs_buffers_and_params() -> None:
     x = torch.randn(2, 3)
     original_requires_grad = {name: p.requires_grad for name, p in model.named_parameters()}
 
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(TraceCaptureError) as exc_info:
         tl.trace(model, x)
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
 
-    partial = getattr(exc_info.value, "partial_log", None)
+    partial = getattr(exc_info.value, "partial_trace", None)
     assert isinstance(partial, PartialTrace)
     for layer in partial.raw_layers:
         _assert_tensor_tree_clean(getattr(layer, "out", None))

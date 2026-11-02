@@ -22,9 +22,6 @@ jnp = pytest.importorskip("jax.numpy")
 
 pytestmark = [pytest.mark.backend_jax]
 
-#: Reasons this backend emits beyond the shared closed list (requested additions).
-_JAX_STRUCTURAL_REASONS = frozenset({"capture_inconsistent"})
-
 
 def _protocol() -> Any:
     """The registered jax protocol object."""
@@ -166,4 +163,4 @@ def test_jax_tampered_payload_fails_naming_the_op_and_reason() -> None:
     failed = [r for r in status.decisions if r["decision"] == "failed"]
     assert failed
     assert failed[0]["op_label"] in {mul.label, mul.layer_label}
-    assert failed[0]["reason"] in VALIDATION_REASONS | _JAX_STRUCTURAL_REASONS
+    assert failed[0]["reason"] in VALIDATION_REASONS

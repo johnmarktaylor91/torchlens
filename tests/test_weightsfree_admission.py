@@ -21,6 +21,7 @@ from test_weightsfree_fixtures import (
 
 import torchlens as tl
 from torchlens._robustness import UnsupportedTensorVariantError
+from torchlens.errors import TraceCaptureError
 
 
 def _meta_model() -> nn.Module:
@@ -204,8 +205,9 @@ def test_failed_admitted_capture_restores_wrappers_and_flags() -> None:
     with torch.device("meta"):
         model = Boom()
     model.eval()
-    with pytest.raises(ValueError, match="user forward failure"):
+    with pytest.raises(TraceCaptureError, match="user forward failure") as _tce_info:
         weightsfree_trace(model, torch.empty(1, 2, device="meta"))
+    assert isinstance(_tce_info.value.__cause__, ValueError)
     # The factory-device slot must not leak past the failed capture: an
     # ordinary capture right after must complete with factory tensors on CPU.
     from torchlens.backends.torch._weightsfree_ctx import active_factory_device

@@ -46,6 +46,7 @@ from torchlens._errors import CaptureGapWarning
 from torchlens.backends.torch import rescue
 from torchlens.backends.torch._tl import is_decorated_function
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
+from torchlens.errors import TraceCaptureError
 from torchlens.options import CaptureOptions
 from torchlens.types import AttributeWrite
 
@@ -374,8 +375,9 @@ def test_held_reference_is_restored_when_the_forward_raises(
     model = Boom()
     held = model.act
     wrap_torch()
-    with pytest.raises(RuntimeError, match="boom"):
+    with pytest.raises(TraceCaptureError, match="boom") as _tce_info:
         tl.trace(model, torch.randn(2, 4))
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
     assert model.act is held
     assert held.func is raw.gelu

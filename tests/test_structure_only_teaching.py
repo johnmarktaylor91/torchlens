@@ -26,6 +26,7 @@ from torchlens._capture.structure_only import (
     ValueDependentBranchError,
 )
 from torchlens._utils._torch_compat import get_meta_item_guard_support
+from torchlens.errors import TraceCaptureError
 from torchlens.options import CaptureOptions
 
 STRUCTURE = CaptureOptions(structure_only=True)
@@ -251,13 +252,15 @@ class UserRaisesNIE(nn.Module):
 
 @pytest.mark.smoke
 def test_user_raised_notimplementederror_propagates_unchanged() -> None:
-    """C-HONESTY: user exceptions stay user exceptions — annotated (3.11+)
-    or warned (3.10), never wrapped."""
+    """C-HONESTY: the user's exception is chained unchanged under the door's
+    TraceCaptureError, never reclassified; the structure-only note rides the
+    raised error (3.11+) or a warning (3.10)."""
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        with pytest.raises(NotImplementedError, match="user's own refusal") as excinfo:
+        with pytest.raises(TraceCaptureError, match="user's own refusal") as excinfo:
             _structure_trace(UserRaisesNIE(), torch.randn(2))
+        assert isinstance(excinfo.value.__cause__, NotImplementedError)
     if sys.version_info >= (3, 11):
         notes = getattr(excinfo.value, "__notes__", [])
         assert any("structure-only" in note for note in notes)
@@ -336,8 +339,9 @@ def test_both_layers_dead_returns_the_bare_torch_error(
 
     _neutralize_layer1(monkeypatch)
     _neutralize_layer2(monkeypatch)
-    with pytest.raises(RuntimeError) as excinfo:
+    with pytest.raises(TraceCaptureError) as excinfo:
         _structure_trace(MetaContextBranch(), torch.randn(2, 4))
+    assert isinstance(excinfo.value.__cause__, RuntimeError)
     assert not isinstance(excinfo.value, ValueDependentBranchError)
 
 

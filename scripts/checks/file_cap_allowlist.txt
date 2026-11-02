@@ -1357,8 +1357,8 @@ torchlens/receptive_field/rules/interpolation.py::interpolate	63
 torchlens/receptive_field/rules/transforms.py::getitem	76
 torchlens/receptive_field/rules/transforms.py::pad	73
 torchlens/recording/_record_one_shot.py::record	206
-torchlens/recording/_recorder.py	867
-torchlens/recording/_recorder.py::Recorder.__init__	179
+torchlens/recording/_recorder.py	866
+torchlens/recording/_recorder.py::Recorder.__init__	178
 torchlens/recording/_recorder.py::Recorder._run_unified_capture	153
 torchlens/recording/_recorder.py::Recorder._stamp_failed_recording	93
 torchlens/recording/_storage_resolver.py::_resolve_storage	172

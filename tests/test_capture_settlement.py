@@ -21,6 +21,7 @@ import torchlens as tl
 import torchlens._capture.run as capture_run
 import torchlens._postprocess as pp
 from torchlens._capture.outcome import CapturePhase, CaptureStatus, FailureOrigin
+from torchlens.errors import TraceCaptureError
 from torchlens.recording import Recorder
 from torchlens.recording._halt import StopSignal
 
@@ -139,9 +140,10 @@ def test_forward_failure_settles_failed_forward_user_op() -> None:
             _ = self.linear(x)
             raise RuntimeError("user forward boom")
 
-    with pytest.raises(RuntimeError, match="user forward boom") as exc_info:
+    with pytest.raises(TraceCaptureError, match="user forward boom") as exc_info:
         tl.trace(Exploding(), torch.ones(1, 3))
-    partial = tl._partial.from_failed_capture(exc_info.value)
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
+    partial = exc_info.value.partial_trace
     outcome = partial.trace.outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.FAILED
@@ -158,9 +160,10 @@ def test_finalize_failure_settles_failed_finalize(monkeypatch) -> None:
         raise ValueError("planted finalize failure")
 
     monkeypatch.setattr(TorchBackend, "finalize_forward_session", _boom)
-    with pytest.raises(ValueError, match="planted finalize failure") as exc_info:
+    with pytest.raises(TraceCaptureError, match="planted finalize failure") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
-    partial = tl._partial.from_failed_capture(exc_info.value)
+    assert isinstance(exc_info.value.__cause__, ValueError)
+    partial = exc_info.value.partial_trace
     outcome = partial.trace.outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.FAILED
@@ -172,9 +175,10 @@ def test_postprocess_failure_settles_failed_postprocess(monkeypatch) -> None:
         raise ValueError("planted step1")
 
     monkeypatch.setattr(pp.graph_traversal, "_add_output_layers", _boom)
-    with pytest.raises(ValueError, match="planted step1") as exc_info:
+    with pytest.raises(TraceCaptureError, match="planted step1") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
-    outcome = tl._partial.from_failed_capture(exc_info.value).trace.outcome
+    assert isinstance(exc_info.value.__cause__, ValueError)
+    outcome = exc_info.value.partial_trace.trace.outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.FAILED
     assert outcome.phase is CapturePhase.POSTPROCESS
@@ -197,8 +201,9 @@ def test_freeze_failure_stamps_failed_postprocess(monkeypatch) -> None:
         raise ValueError("planted freeze")
 
     monkeypatch.setattr(pp, "_freeze_relation_views", _boom)
-    with pytest.raises(ValueError, match="planted freeze"):
+    with pytest.raises(TraceCaptureError, match="planted freeze") as _tce_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
+    assert isinstance(_tce_info.value.__cause__, ValueError)
     assert captured
     outcome = captured[0].outcome
     assert outcome is not None
@@ -230,7 +235,7 @@ def test_nonfinite_abort_settles_aborted_nonfinite() -> None:
             torch.ones(1, 3),
             capture=tl.options.CaptureOptions(raise_on_nan=True),
         )
-    outcome = tl._partial.from_failed_capture(exc_info.value).trace.outcome
+    outcome = exc_info.value.partial_trace.trace.outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.ABORTED_NONFINITE
     assert outcome.boundary_kind == "op"
@@ -533,13 +538,14 @@ def test_hostile_str_forward_keeps_identity_and_settles_failed() -> None:
     Before the fix ``settle_failed``'s ``reason=str(exc)`` re-raised inside the
     guaranteed-settlement ``finally``: the secondary RuntimeError escaped, the
     user exception survived only as ``__context__``, and no settled product or
-    ``partial_log`` existed.
+    ``partial_trace`` existed.
     """
 
-    with pytest.raises(_HostileStrError) as exc_info:
+    with pytest.raises(TraceCaptureError) as exc_info:
         tl.trace(_HostileStrModel(), torch.ones(1, 3))
+    assert isinstance(exc_info.value.__cause__, _HostileStrError)
     exc = exc_info.value
-    partial = tl._partial.from_failed_capture(exc)
+    partial = exc.partial_trace
     outcome = partial.outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.FAILED
@@ -581,12 +587,13 @@ def test_hostile_repr_fastlog_return_partial_records_fallback_repr() -> None:
 def test_hostile_str_fastlog_raise_path_keeps_identity() -> None:
     """The default raise disposition aborts storage without a secondary raise."""
 
-    with pytest.raises(_HostileStrError):
+    with pytest.raises(TraceCaptureError) as _tce_info2:
         tl.record(
             _HostileStrModel(),
             torch.ones(1, 3),
             save=lambda ctx: ctx.kind == "op",
         )
+    assert isinstance(_tce_info2.value.__cause__, _HostileStrError)
 
 
 def test_hostile_str_teardown_failure_still_demotes(monkeypatch) -> None:

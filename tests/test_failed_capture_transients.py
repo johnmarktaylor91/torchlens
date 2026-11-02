@@ -3,7 +3,7 @@
 The success arms pop ``_output_attribution_input_tensors`` (live USER INPUT
 tensors) and postprocess replaces the mutable ``capture_events`` alias with the
 payload-free ``_capture_events`` home. The failure/interrupt arms reached
-neither, so the trace escaping on ``exc.partial_log``:
+neither, so the trace escaping on ``exc.partial_trace``:
 
 * pickled the user's live input tensors through an undeclared attribute
   (``_output_attribution_input_tensors``), and
@@ -27,6 +27,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes.trace import Trace
+from torchlens.errors import TraceCaptureError
 
 # Facade plumbing that legitimately owns no declared field (mirrors the
 # lockstep gate's allowance; kept local so this file stays self-contained).
@@ -62,10 +63,11 @@ class _BoomBase(nn.Module):
 
 
 def _failed_partial() -> tl.types.PartialTrace:
-    with pytest.raises(RuntimeError) as excinfo:
+    with pytest.raises(TraceCaptureError) as excinfo:
         tl.trace(_Boom().eval(), torch.ones(1, 3))
-    partial = getattr(excinfo.value, "partial_log", None)
-    assert partial is not None, "failed torch capture must attach partial_log"
+    assert isinstance(excinfo.value.__cause__, RuntimeError)
+    partial = getattr(excinfo.value, "partial_trace", None)
+    assert partial is not None, "failed torch capture must attach partial_trace"
     return partial
 
 

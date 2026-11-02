@@ -24,6 +24,7 @@ from torchlens._capture.outcome import (
     CapturePhase,
     CaptureStatus,
 )
+from torchlens.errors import TraceCaptureError
 
 TORCHLENS_DIR = pathlib.Path(tl.__file__).resolve().parent
 
@@ -73,7 +74,7 @@ def test_raw_nan_aborts_even_when_transform_sanitizes() -> None:
             capture=tl.options.CaptureOptions(raise_on_nan=True),
             save=tl.options.SaveOptions(activation_transform=sanitize),
         )
-    outcome = tl._partial.from_failed_capture(exc_info.value).trace.outcome
+    outcome = exc_info.value.partial_trace.trace.outcome
     assert outcome.status is CaptureStatus.ABORTED_NONFINITE
 
 
@@ -171,8 +172,9 @@ def test_memory_error_in_postprocess_settles_failed(monkeypatch) -> None:
         raise MemoryError("planted OOM")
 
     monkeypatch.setattr(pp.graph_traversal, "_add_output_layers", _boom)
-    with pytest.raises(MemoryError):
+    with pytest.raises(TraceCaptureError) as _tce_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
+    assert isinstance(_tce_info.value.__cause__, MemoryError)
     outcome = captured[0].outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.FAILED

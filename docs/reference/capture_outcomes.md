@@ -32,6 +32,22 @@ record is unavailable or non-failed) and the legacy `partial_error`
 derivation on deserialized recordings. The coherence matrix permits the
 absent phase; no gate consults it.
 
+## The raised error
+
+A FAILED capture whose forward raised a non-TorchLens exception (the model's
+code, a user hook, or a torch op the forward called) raises one typed
+`tl.errors.TraceCaptureError` (a `CaptureError`) from every capture door,
+chained `from` the original (`exc.__cause__`, traceback intact; the original
+object is never mutated). Its message names the original type and text, the
+committed op count and the last captured op, and states the origin.
+`exc.partial_trace` is the `PartialTrace`; `exc.origin` is the same
+`FailureOrigin` the settled outcome records (classified on the original
+exception). TorchLens's own errors (a `TorchLensError`, or any exception
+class defined in the `torchlens` package) propagate as themselves, also
+carrying `exc.partial_trace`. The outcome's `reason` and `error_type`
+describe the original exception in both cases. Interrupts (`KeyboardInterrupt`,
+`SystemExit`) are never wrapped.
+
 ## Where to read it
 
 - `Trace.outcome` — the sidecar (settle stamp on live products; adopted or
@@ -120,7 +136,7 @@ Row rationales, stated once:
 - **UNKNOWN** refusals replace what was previously an ungated pass-through of
   provably-unfinished artifacts (`Trace.save` of failed partials) or an
   undefined crash on unbuilt structures. The nearest legitimate workflows
-  (partial inspection, `draw`, `tl._partial.from_failed_capture`) all remain
+  (partial inspection, `draw`, the raised error's `.partial_trace`) all remain
   open.
 - **N5** converted two broken behaviors into typed refusals: halted refresh
   crashed with a misleading "computational graph changed" error, and halted
@@ -264,7 +280,7 @@ sits inside a region whose only success exit reaches an authority stamp.
   escaped object derives UNATTESTED. The torch orchestrator instead settles
   FAILED in its `finally` (and demotes on post-settlement teardown failure),
   so the same failure class on torch yields a settled FAILED product with
-  `exc.partial_log`. Net semantics are equivalent on the never-COMPLETE
+  `exc.partial_trace`. Net semantics are equivalent on the never-COMPLETE
   guarantee (path 7 minus the demoted record); the missing settled record on
   previews is the disclosed residual.
 
@@ -272,8 +288,7 @@ sits inside a region whose only success exit reaches an authority stamp.
 
 `Trace.outcome`, `Recording.outcome`, `PartialTrace.outcome`;
 `tl.types.{CaptureOutcome, CaptureStatus, CapturePhase, FailureOrigin}`;
-`tl.errors.{CaptureOutcomeError, StopSignalSwallowedError,
-PartialCaptureLookupError}`; `RunnableErrorCode.HALTED_CAPTURE_NOT_RUNNABLE`;
+`tl.errors.{CaptureOutcomeError, StopSignalSwallowedError, TraceCaptureError}`; `RunnableErrorCode.HALTED_CAPTURE_NOT_RUNNABLE`;
 two additive `StopSignal.__init__` kwargs (`boundary_kind`,
 `boundary_label`); the stored `Recording._outcome` field; the persisted
 `_capture_outcome` Trace field (tlspec v7). Zero renames; nothing enters

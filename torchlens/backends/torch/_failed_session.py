@@ -10,6 +10,7 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING, Any, cast
 
+from torchlens._errors import TraceCaptureError, attach_partial_trace, original_exception
 from torchlens._utils._exception_notes import annotate_guarded
 from torchlens.backends.torch import _tl
 
@@ -81,12 +82,18 @@ def _attach_partial_trace(
     session: object,
     exc: Exception,
     partial_trace_cls: Any,
-    register_failed_capture: Any,
 ) -> None:
-    """Build the partial trace and attach it to ``exc``, warning without masking."""
+    """Build the partial trace and attach it to the escaping ``exc``, warning without masking.
 
+    ``exc`` is the exception the capture door raises: a ``TraceCaptureError``
+    wrapping the forward's exception, or a TorchLens error propagating as
+    itself. The partial is built from the forward's own exception and lands on
+    ``exc.partial_trace``; the forward's exception is never mutated.
+    """
     try:
-        partial_log = partial_trace_cls.from_trace(cast("Trace", session), exc)
+        partial_trace = partial_trace_cls.from_trace(
+            cast("Trace", session), original_exception(exc)
+        )
     except Exception as construction_error:
         self._warn_without_masking(
             exc,
@@ -104,35 +111,26 @@ def _attach_partial_trace(
             )
     else:
         try:
-            exc.partial_log = partial_log  # type: ignore[attr-defined]
-            # B8-45: the SUCCESS path must tell the user the recovery
-            # exists too -- only the two attachment-FAILURE arms did.
-            with contextlib.suppress(Exception):
-                annotate_guarded(
-                    exc,
-                    "TorchLens attached partial capture diagnostics: inspect "
-                    "exc.partial_log, or recover it with "
-                    "torchlens._partial.from_failed_capture(exception).",
-                )
+            attach_partial_trace(exc, partial_trace)
+            # B8-45: the SUCCESS path tells the user the recovery exists. A
+            # TraceCaptureError says so in its message; a TorchLens error
+            # propagating as itself gets a note.
+            if not isinstance(exc, TraceCaptureError):
+                with contextlib.suppress(Exception):
+                    annotate_guarded(
+                        exc,
+                        "TorchLens attached the partial capture to this error: "
+                        "inspect exc.partial_trace.",
+                    )
         except Exception as attachment_error:
-            register_failed_capture(exc, partial_log)
             self._warn_without_masking(
                 exc,
-                "The forward exception rejected TorchLens partial_log attachment; "
-                "recovery remains available through "
-                "torchlens._partial.from_failed_capture(exception). "
-                f"Attachment error: {type(attachment_error).__name__}: "
-                f"{attachment_error}",
+                "TorchLens could not attach the partial trace to the "
+                f"{type(exc).__name__} it raises: "
+                f"{type(attachment_error).__name__}: {attachment_error}",
                 RuntimeWarning,
                 stacklevel=3,
             )
-            with contextlib.suppress(Exception):
-                annotate_guarded(
-                    exc,
-                    "TorchLens retained partial capture recovery in its bounded "
-                    "exception-identity registry; call "
-                    "torchlens._partial.from_failed_capture(exception).",
-                )
 
 
 def _clear_raw_graph_meta(session: object) -> None:
@@ -165,13 +163,13 @@ def _capture_attempt_failed_message(exc: Exception) -> str:
     # materialized a module and then failed.
     return (
         "TorchLens capture attempt failed "
-        f"({type(exc).__name__}); TorchLens instrumentation is removed "
+        f"({type(original_exception(exc)).__name__}); TorchLens instrumentation is removed "
         "from the model and the torch environment restored. A default "
         "capture also rolls back the buffers, random state, training "
         "modes and plain attributes the partial forward changed; under "
         "CaptureOptions(carry_state=True) they are not rolled back, and "
-        "materialized lazy modules never are. Partial diagnostics ride the exception "
-        "(exc.partial_log / torchlens._partial.from_failed_capture)."
+        "materialized lazy modules never are. The partial capture rides the "
+        "raised error's .partial_trace."
     )
 
 
@@ -181,11 +179,18 @@ def cleanup_failed_forward_session(
     prepared_model: object,
     exc: Exception,
 ) -> None:
-    """Attach partial trace diagnostics and clean up failed torch capture state."""
+    """Attach the partial trace to the escaping error and clean up capture state.
+
+    ``exc`` is the exception the capture door is about to raise: a
+    :class:`~torchlens.errors.TraceCaptureError` wrapping a forward
+    exception, or a TorchLens error propagating as itself. The partial
+    capture lands on its ``partial_trace``; the forward's own exception
+    is never mutated.
+    """
     # active_logging's __exit__ already turned off the toggle.
     # Clean up model session state and strip TorchLens metadata from any
     # partially-constructed tensor entries to avoid stale references (#110).
-    from ..._partial import PartialTrace, _register_failed_capture
+    from ..._partial import PartialTrace
 
     _stamp_actual_buffer_writes(session, exc)
 
@@ -198,7 +203,7 @@ def cleanup_failed_forward_session(
     # installed buffer tracker. The ``finally`` guarantees teardown without
     # swallowing the interruption.
     try:
-        _attach_partial_trace(self, session, exc, PartialTrace, _register_failed_capture)
+        _attach_partial_trace(self, session, exc, PartialTrace)
     finally:
         self.cleanup_model_session(session, prepared_model)
     _clear_raw_graph_meta(session)
