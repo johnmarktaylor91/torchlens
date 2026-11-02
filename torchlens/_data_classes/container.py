@@ -18,13 +18,13 @@ from .._ir.container import (
     rebuild_container_from_spec,
 )
 from .._ir.container_registry import (
+    DISTRIBUTION_CONTAINER_KIND,
     ContainerLeafOccurrence,
     ContainerRecord,
     ContainerSnapshot,
     Role,
     Site,
 )
-from .._ir.distribution_container import DISTRIBUTION_CONTAINER_KIND
 from ._container_labels import (
     _display_key,
     _leaf_reference,
