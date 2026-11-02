@@ -647,6 +647,47 @@ class BackwardStreamUnavailableError(CaptureError, RuntimeError):
     """
 
 
+class AtenOpsUnavailableError(_ActionableErrorMixin, CaptureError, RuntimeError):
+    """Raised when ``aten_ops`` accessors are read on a trace that recorded none.
+
+    ATen operation recording is opt-in (``CaptureOptions(aten_ops=True)``): a
+    capture without the switch, a loaded artifact saved without it, and a
+    fast re-run carry no profile, so the accessors refuse typed instead of
+    returning an empty answer that looks like "this op dispatched nothing".
+    Branch on ``exc.fields["code"] == "aten_ops_unavailable"``.
+    """
+
+    def __init__(
+        self,
+        problem: str,
+        *,
+        code: str = "aten_ops_unavailable",
+        remedy: str = (
+            "re-capture with tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))"
+        ),
+        **context: object,
+    ) -> None:
+        """Initialize an actionable ATen-recording refusal.
+
+        Parameters
+        ----------
+        problem:
+            Why no ATen rows are available for the record being read.
+        code:
+            Stable machine-readable refusal code.
+        remedy:
+            Concrete caller action that resolves the refusal.
+        **context:
+            Structured, non-authoritative diagnostic context.
+        """
+        super().__init__(
+            _actionable_message(problem, remedy),
+            code=code,
+            remedy=remedy,
+            **context,
+        )
+
+
 class MutatedReferenceError(CaptureError, RuntimeError):
     """Raised when a reference-mode saved tensor changed before it was read."""
 

@@ -242,7 +242,11 @@ def test_cpu_host_records_unavailable_views_and_drop_gated_annotation(tmp_path: 
         pytest.skip("CPU-only NOT-RUN disclosure row applies only without CUDA")
 
     trace = telemetry._profile_trace_with_cuda_kernels(
-        lambda: tl.trace(_CudaTelemetryModel(), torch.ones(2, 2))
+        lambda: tl.trace(
+            _CudaTelemetryModel(),
+            torch.ones(2, 2),
+            capture=tl.options.CaptureOptions(aten_ops=True),
+        )
     )
     primitive_rows = trace._primitive_op_profile.primitive_ops
     assert primitive_rows
@@ -338,7 +342,11 @@ def test_real_cuda_cupti_correlation_matrix() -> None:
 
     device = torch.device("cuda")
     trace = telemetry._profile_trace_with_cuda_kernels(
-        lambda: tl.trace(_CudaTelemetryModel().to(device), torch.ones(32, 32, device=device))
+        lambda: tl.trace(
+            _CudaTelemetryModel().to(device),
+            torch.ones(32, 32, device=device),
+            capture=tl.options.CaptureOptions(aten_ops=True),
+        )
     )
     launches = [
         launch

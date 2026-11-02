@@ -101,6 +101,7 @@ from ._trace_accessors import (
     _invalidate_trace_module_call_accessor_cache,
     _invalidate_trace_op_layer_accessor_caches,
 )
+from ._trace_aten import TraceAtenMixin
 from ._trace_missing_attrs import _raise_missing_trace_attribute
 from ._trace_narrate import TraceNarrateMixin
 from ._transform_repr import _scrubbed_transform_repr
@@ -239,6 +240,7 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "track_nonfinite": False,
     "track_device_memory": False,
     "measure_host_peak_memory": False,
+    "_options_aten_ops": False,
     "_options_structure_only": False,
     "intervention_audit": [],
     "_options_keep_orphans": False,
@@ -368,6 +370,7 @@ _MODEL_LOG_DEFAULT_FILL["tlspec_version"] = TLSPEC_VERSION
 _SESSION_BOOL_KNOBS = (
     "measure_python_peak_memory",
     "measure_host_peak_memory",
+    "_options_aten_ops",
     "track_nonfinite",
     "track_device_memory",
 )
@@ -812,6 +815,7 @@ class Trace(
     TraceExportMixin,
     TraceVisualizationMixin,
     TraceNarrateMixin,
+    TraceAtenMixin,
     TraceLike,
 ):
     """Top-level container for a logged forward pass.
@@ -1263,6 +1267,7 @@ class Trace(
         # process facts of the capturing run; load restores the default.
         "track_device_memory": FieldPolicy.DROP,
         "measure_host_peak_memory": FieldPolicy.DROP,  # session knob
+        "_options_aten_ops": FieldPolicy.DROP,  # session knob
         "_device_memory_samples": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
         "_provenance_observer_spans": FieldPolicy.KEEP,
@@ -1794,6 +1799,7 @@ class Trace(
         self.track_nonfinite: bool = False
         self.track_device_memory: bool = False
         self.measure_host_peak_memory: bool = False
+        self._options_aten_ops: bool = False
         self.annotations: dict[str, Any] = {}
         self._source_frames: list[FuncCallLocation] = []
         self._graph_manual_tensor_connections: list[tuple[str, str]] = []
@@ -3073,23 +3079,13 @@ class Trace(
             "output_id2label": None,
             "output_num_classes": None,
             "_activation_transform_repr": None,
-            "_options_module_identity_mode": "torch_module",
-            "_provenance_param_source": "native-module",
             # Session-time (DROP): a restored trace carries no optimizer handle.
             "_optimizer": None,
             "_options_save_raw_activations": True,
             "_options_save_mode": "copy",
-            "transformed_output": None,
-            "_output_transform": None,
-            "_options_save_transformed_output": "small",
-            "layer_visualizers": None,
-            "save_visualizations": False,
-            "_visualizer_dir": None,
             "_provenance_input_annotations": {},
             "_options_grad_transform": None,
             "_options_save_raw_grads": True,
-            "_options_save_grads": None,
-            "capture_tensor_grad_hooks": True,
             "_grad_op_nums_to_save": [],
             "_autograd_has_backward_pass": False,
             "_grad_fn_logs": OrderedDict(),
@@ -3100,7 +3096,6 @@ class Trace(
             "_num_backward_passes": 0,
             "_cost_backward_peak_memory": 0,
             "_provenance_backward_memory_backend": "unknown",
-            "backward_peak_memory_reason": None,
             "_cost_total_autograd_memory": None,
             "_cost_pinned_autograd_memory": None,
             "_buffer_accessor": None,
@@ -3109,51 +3104,10 @@ class Trace(
             "_keep_outs_in_memory": True,
             "_defer_streaming_bundle_finalization": False,
             "_out_sink": None,
-            "_append_history": [],
             "_source_code_blob": {},
             "_source_model_ref": None,
             "_options_backward_ready": False,
-            "_options_inference_only": False,
-            "_options_chunk_size": False,
-            "_module_filter": None,
-            "_options_on_nonfinite": False,
-            "track_nonfinite": False,
-            "track_device_memory": False,
-            "measure_host_peak_memory": False,
-            "_options_structure_only": False,
-            "intervention_audit": [],
-            "_options_keep_orphans": False,
-            "annotations": {},
-            "_provenance_observer_spans": [],
-            "_graph_manual_tensor_connections": [],
-            "_source_forward_file": None,
-            "_source_forward_line": None,
-            "_source_class_file": None,
-            "_source_class_line": None,
-            "_source_init_file": None,
-            "_source_init_line": None,
-            "_source_class_docstring": None,
-            "_source_init_signature": None,
-            "_source_init_docstring": None,
-            "_source_forward_signature": None,
-            "_source_forward_docstring": None,
-            "_source_frames": [],
-            "_provenance_cache_hit": False,
-            "_provenance_cache_key": None,
-            "_provenance_cache_path": None,
-            "_provenance_recording_kept": True,
-            "_out_dedup_mode": "identity",
-            "_out_identity_cache": {},
-            "_out_hash_cache": {},
-            "_code_context_cache": {},
-            "_last_hook_handle_ids": (),
             "_graph_conditionals": ConditionalAccessor(),
-            "_cost_total_grad_memory": 0,
-            "_cost_saved_grad_memory": 0,
-            "_cost_total_param_grad_memory": 0,
-            "_cost_forward_peak_memory": 0,
-            "_provenance_forward_memory_backend": "unknown",
-            "_cost_forward_peak_memory_reason": None,
             "_postprocessing_active": False,
             # `_backward_gradfn_refs` is `FieldPolicy.DROP` (never part of
             # `MODEL_LOG_FIELD_ORDER`) and `__getstate__` always emits an

@@ -133,6 +133,10 @@ class TestFieldOrderSync:
             # measure.2: sixth session knob, DROP, unordered, load restores the
             # default (CaptureOptions.measure_host_peak_memory).
             "measure_host_peak_memory",
+            # aten-public: seventh session knob, DROP, unordered, load restores
+            # the default (CaptureOptions.aten_ops); the recorded rows persist
+            # in _primitive_op_profile, so has_aten_ops survives a load.
+            "_options_aten_ops",
         }
         portable_unordered = {
             "checkpoint_invocation_witness",

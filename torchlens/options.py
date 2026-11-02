@@ -113,6 +113,7 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "structure_only",
     "log_injections",
     "measure_host_peak_memory",
+    "aten_ops",
 )
 _SAVE_FIELDS: Final[tuple[str, ...]] = (
     "activation_transform",
@@ -591,6 +592,14 @@ class CaptureOptions:
             ``ru_maxrss`` readings and cannot be undone, so it is opt-in. The default
             ``False`` writes nothing: CPU peaks read ``None`` with a reason naming this
             option. CUDA peaks and the MPS allocator delta ignore it.
+        aten_ops:
+            Whether the capture records the public ATen operations that each logged
+            torch call dispatched to, served by ``Op.aten_ops`` and ``Trace.aten_ops``
+            (a session-time knob; ``Trace.has_aten_ops`` reports it after capture or
+            load). Recording installs a dispatch mode for the forward pass and for
+            ``Trace.backward()`` with ``backward_ready=True``, so it is opt-in. The
+            default ``False`` installs no dispatch mode and the accessors raise
+            ``AtenOpsUnavailableError``. GPU kernel recording is out of scope.
 
         Examples
         --------
@@ -648,6 +657,7 @@ class CaptureOptions:
     structure_only: bool = False
     log_injections: bool = False
     measure_host_peak_memory: bool = False
+    aten_ops: bool = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
@@ -702,6 +712,7 @@ class CaptureOptions:
         structure_only: bool | MissingType = MISSING,
         log_injections: bool | MissingType = MISSING,
         measure_host_peak_memory: bool | MissingType = MISSING,
+        aten_ops: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen capture option bundle."""
 
@@ -849,6 +860,7 @@ class CaptureOptions:
             "measure_host_peak_memory": _resolve_option_value(
                 "measure_host_peak_memory", measure_host_peak_memory, False, specified_fields
             ),
+            "aten_ops": _resolve_option_value("aten_ops", aten_ops, False, specified_fields),
         }
         _validate_capture_values(values)
         _set_frozen_fields(self, _CAPTURE_FIELDS, values)
