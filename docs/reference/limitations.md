@@ -174,7 +174,8 @@ HYPOTHESIS until discharged against a real capture.
 ## CI-attested platforms
 
 Continuous integration executes the full tiered suite on Linux/CPU only
-(Python 3.10–3.13, torch floor through newest-admitted). macOS and Windows
+(Python 3.10–3.13, torch floor through newest-admitted, plus a gating torch
+2.15.0 row on Python 3.11). macOS and Windows
 run a nightly import + capture + save/load canary, not the suite. CUDA and
 MPS behavior — device peak memory reporting, `save_budget="auto"` device
 measurement, `map_location` transport, and the CUDA-artifact-on-CPU-host

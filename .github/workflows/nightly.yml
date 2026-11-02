@@ -126,6 +126,20 @@ jobs:
             # nothing (grind r5, b10 R85-1). The classifier<->matrix lockstep
             # test in tests/test_ci_packaging_gates.py now requires a real
             # row per advertised interpreter, so dropping this row goes red.
+          # The one gating row above the pinned torch: the torch 2.14-and-later
+          # capability flags (HAS_GENERATOR_PHILOX_STATE,
+          # HAS_CHECKPOINT_INTERNAL_HOOK_CLASS) are true only from 2.14, so
+          # without this row only the non-gating latest canary ran them. Smoke
+          # scope, not enforcing (the byte goldens enforce on pr.yml's pinned
+          # row only). The mypy, checks, packaging and audit jobs keep pinning
+          # the newest-admitted torch, not this one.
+          - track: forward
+            python: "3.11"
+            torch: "2.15.0+cpu"
+            torchvision: "0.30.0+cpu"
+            transformers: "5.18.0"
+            numpy: numpy
+            scope: smoke
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -225,28 +239,17 @@ jobs:
           # single-process collection costs ~95 s.
           mapfile -t serial_files < <(grep -rlE --include="test_*.py" "mark\.serial" tests)
           pytest "${serial_files[@]}" -m "serial and not slow and not rare and not heavy" --tb=short -q
-          pytest tests/test_torch_compat.py --tb=short -q
+          # The compat file's smoke tests ran in the selection above.
+          pytest tests/test_torch_compat.py -m "not smoke" --tb=short -q
 
       - name: Declare the executed-test floor (smoke suite)
         if: matrix.scope == 'smoke'
-        # Executed-floor attestation on EVERY smoke row (previously only the
-        # nightly preview-backend legs had one): a row where collection drift,
-        # a conftest guard, or mass importorskip/oracle skipping hollows out
-        # the suite must go red, not green. The smoke tier selects ~1,420
-        # tests (re-trued 2026-10-02 to 710 from 1,421 collected, when the tier
-        # was cut from ~9,900 to a coverage-chosen subset; 2026-09-01 it was
-        # 4609 from 9218, AUD-CODE 0.3:
-        # the 2,830 literal sat at 30.7% of the live tier; before that,
-        # 2026-08-26, megaplan D13: the 2,500 floor had lagged
-        # the tier again, tolerating a silent 56% hollow-out against a comment
-        # intending ~50% -- the same drift class as r7 R41's "~3900"/1900
-        # pair); the floor is roughly half so normal churn and per-torch-
-        # version skips never trip it, the 15% skip-fraction bound scales
-        # with the selection, and tests/test_gate_infra_floor_drift.py now
-        # RE-DERIVES the floor from the live selection count so this class
-        # of drift goes red instead of waiting for the next audit.
+        # Same attestation as pr.yml's smoke row: `tier:smoke` is half the
+        # smoke count recorded in tests/tiers/collection.json, with the 15%
+        # skip-fraction bound (tests/test_gate_infra_floor_drift.py keeps the
+        # artifact's count in step with the live selection).
         run: |
-          echo "smoke.junit.xml 710 0.15" >> "${{ runner.temp }}/junit/legs.floor"
+          echo "smoke.junit.xml tier:smoke 0.15" >> "${{ runner.temp }}/junit/legs.floor"
 
       - name: R0 real-model gate (blocking; PASSED-count attested)
         if: matrix.transformers != ''
@@ -278,8 +281,13 @@ jobs:
   tier:
     name: Not-slow tier (shard ${{ matrix.shard }} of 8)
     # The tier test-tiers.json declares as pre_merge: 'not rare and not slow'
-    # in 8 single-process pytest-split shards with one seed, so serial and
-    # heavy tests run here safely, on the pinned environment.
+    # in 8 single-process shards with one seed, so serial and heavy tests run
+    # here safely, on the pinned environment. `--tier-shard INDEX/COUNT`
+    # (tests/_tiers_plugin.py) keeps whole test files, balanced by the tracked
+    # per-file durations in tests/tiers/durations.csv exactly as
+    # `python scripts/tier_durations.py shards --count 8` prints them;
+    # regenerate that file with `tier_durations.py regenerate` from a tier
+    # run's junit.
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -316,7 +324,6 @@ jobs:
             --extra-index-url https://pypi.org/simple \
             --index-strategy unsafe-best-match \
             -e ".[dev,test,tabular,viz]" \
-            -r requirements-test-tiers.txt \
             "torch==2.13.0+cpu" \
             "torchvision==0.28.0+cpu" \
             "transformers==5.18.0"
@@ -326,15 +333,17 @@ jobs:
       - name: Run the shard
         env:
           OMP_NUM_THREADS: "1"
+          SHARD: ${{ matrix.shard }}
         run: |
           pytest tests/ -o addopts= -m "not rare and not slow" \
-            --splits 8 --group "${{ matrix.shard }}" --splitting-algorithm least_duration \
+            --tier-shard "$(( SHARD - 1 ))/8" \
             -p randomly --randomly-seed=20261003 --tb=short \
-            --junitxml="${{ runner.temp }}/junit/tier-${{ matrix.shard }}.xml"
+            --junitxml="${{ runner.temp }}/junit/tier-${SHARD}.xml"
 
       - name: Declare the executed-test floor
-        # About half the shard's selection (24,810 tests over 8 shards,
-        # measured 2026-10-30), the same margin the smoke floor keeps.
+        # Under the smallest shard's measured selection (2,314 of the 24,819
+        # tests in tests/tiers/durations.csv; the shards average about 3,000),
+        # about the half margin the smoke floor keeps.
         run: echo "tier-${{ matrix.shard }}.xml 1500" >> "${{ runner.temp }}/junit/legs.floor"
 
       - name: Fresh-seed generative property sweep
@@ -432,18 +441,18 @@ jobs:
           # `serial` tests run without xdist (see tests.yml smoke step).
           mapfile -t serial_files < <(grep -rlE --include="test_*.py" "mark\.serial" tests)
           pytest "${serial_files[@]}" -m "serial and not slow and not rare and not heavy" --tb=short -q
-          pytest tests/test_torch_compat.py --tb=short -q
+          # The compat file's smoke tests ran in the selection above.
+          pytest tests/test_torch_compat.py -m "not smoke" --tb=short -q
 
       - name: Declare the executed-test floor (canary suite)
         # Same executed-floor attestation as every tests.yml smoke row: an
         # unattended leg where a new torch mass-skips or hollows collection
-        # must go red, not green (grind r3, R82). Floor is roughly half the
-        # ~1,420-test smoke selection (re-trued 2026-10-02 when the tier was cut
-        # to a coverage-chosen subset); the
+        # must go red, not green (grind r3, R82). The floor is half the smoke
+        # count recorded in tests/tiers/collection.json (`tier:smoke`); the
         # canary runs an UNADMITTED torch, so no skip-fraction bound — extra
         # per-version skips are exactly what it exists to surface loudly.
         run: |
-          echo "canary-smoke.junit.xml 710" >> "${{ runner.temp }}/junit/legs.floor"
+          echo "canary-smoke.junit.xml tier:smoke" >> "${{ runner.temp }}/junit/legs.floor"
 
       - name: R0 real-model sweep on latest transformers (PASSED-count attested)
         # Testing MEMO A6: the 14-family config-built sweep runs against the

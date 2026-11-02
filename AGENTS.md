@@ -27,7 +27,7 @@ extras gate appliance and bridge namespaces; see `pyproject.toml` for the curren
 
 ## Torch Version Compatibility
 
-TorchLens supports torch 2.1 -> 2.12+ for eager torch capture. The declared floor stays
+TorchLens supports torch 2.1 -> 2.15 for eager torch capture (the newest gating CI row; newer releases run in the non-gating nightly canary). The declared floor stays
 `torch>=2.1`; torch 2.0 may work best-effort through guarded fallbacks, but it is not a
 declared support floor.
 
