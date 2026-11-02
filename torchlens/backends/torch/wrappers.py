@@ -117,12 +117,7 @@ from ._transform_wrappers import (  # noqa: F401  (re-exported by their pre-spli
     direct_transform_decorator,
     transform_builder_decorator,
 )
-from ._view_writeback import (
-    bind_setitem_writeback_base_to_prior_label,
-    overlapping_labeled_aliases,
-    record_view_mutation_prior_label,
-    view_mutation_propagation_enabled,
-)
+from ._view_writeback import overlapping_labeled_aliases, view_mutation_propagation_enabled
 from ._weightsfree_ctx import active_factory_device as _active_factory_device
 from ._wrappers_refusals import _raise_if_subclass_ctor_under_dispatch_mode
 from .aliasing import _tensors_alias
@@ -768,7 +763,6 @@ def _propagate_mutation_label_to_storage_aliases(
     # pattern as ``completeness_witness``'s storage-site indexers.
     with _state.pause_logging(), internal_scalar_read():
         for alias, alias_label in overlapping_labeled_aliases(mutated, out_label):
-            record_view_mutation_prior_label(alias, out_label, alias_label)
             set_tensor_label(alias, out_label)
             _register_inplace_live_grad_hook(trace, alias, out_label)
             _record_label_version_snapshot(alias, mutated_via=(mutated, alias_label))
@@ -1408,9 +1402,6 @@ def torch_func_decorator(
             or _call_requests_inplace(inplace_param_index, args, kwargs)
         ):
             materialize_deferred_for_call(arg_tensorlike)
-
-        if func_name == "__setitem__":
-            bind_setitem_writeback_base_to_prior_label(args)
 
         # ---- Execute the original function ----
         # Write a unique barcode BEFORE the call. If any inner wrapped functions
