@@ -4,7 +4,7 @@ Exercises the private producer in ``torchlens.receptive_field._influence``
 (no public spelling yet) on four fixtures: a three-layer conv stack with
 hand-computed hulls in both directions, a conv skip model where the skip
 widens the union past the conv-only box and a one-row batch seed stays on
-its row, a global-mixing block whose field status is ``whole_input``, and a
+its row, a global-mixing block whose global axis is covered whole, and a
 data-dependent routing case that refuses geometry typed and answers under
 the gradient method. Every geometric answer is cross-checked against the
 union over seed units of the shipped per-unit ``.at()`` lift, and every
