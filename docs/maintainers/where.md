@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1341 modules, 624504 lines, 0 modules without a docstring.
+84 packages, 1340 modules, 624466 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -62,7 +62,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 98 | 51423 |
 | `torchlens.bridge` | External-tool bridge namespace. | 25 | 8013 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2700 |
-| `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 24 | 7995 |
+| `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 23 | 7917 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
 | `torchlens.checks` | Training sanity checks -- the torcheck niche, honestly redefined. | 11 | 3824 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.x. | 5 | 2017 |
@@ -77,7 +77,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 2 | 950 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 15 | 5233 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3005 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 68 | 31773 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 68 | 31813 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1857 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 790 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 328 |
@@ -1339,11 +1339,11 @@ LIT (Google PAIR Language Interpretability Tool) bridge. (6 modules, 2700 lines)
 
 ### `torchlens.bundle`
 
-Single Bundle type for intervention-ready TorchLens model logs. (24 modules, 7995 lines)
+Single Bundle type for intervention-ready TorchLens model logs. (23 modules, 7917 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Single Bundle type for intervention-ready TorchLens model logs. | 1993 |
+| `__init__` | Single Bundle type for intervention-ready TorchLens model logs. | 1984 |
 | `_aligned_sites` | Cross-member site pairing for Bundle site reads. | 85 |
 | `_alternatives` | ''Bundle.add_alternative'': merge a steered re-run of the user's harness. | 357 |
 | `_bytes` | Bundle-level retained-bytes aggregation + retention preflight ( item 5c). | 120 |
@@ -1355,8 +1355,7 @@ Single Bundle type for intervention-ready TorchLens model logs. (24 modules, 799
 | `_labels` | Label-shape heuristics behind ''Bundle.at(label)''. | 198 |
 | `_lineage` | Bundle lineage: bundle_id, member-construction anchors, BundleOperation rows. | 488 |
 | `_lookup` | Bundle member lookup functions moved off ''Bundle'' (record rebuild destination; empty until its bodies move in). | 5 |
-| `_measure` | ''Bundle.measure_members'': recompute a metric over the members that still exist. | 95 |
-| `_members` | Member-list coercion behind ''Bundle'' construction, ''add'' and ''remove''. | 187 |
+| `_members` | Member-list coercion behind ''Bundle'' construction, ''add'' and ''remove''. | 213 |
 | `_operations` | Bundle member operation functions moved off ''Bundle'' (record rebuild destination; empty until its bodies move in). | 5 |
 | `_outcome_fold` | Derived worst-of-members capture-outcome fold for ''Bundle'' (foldB ). | 102 |
 | `_provenance` | The provenance join: ''bundle.why'' / ''bundle.provenance'' ( item 4). | 411 |
@@ -1578,7 +1577,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3005 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (68 modules, 31773 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (68 modules, 31813 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1645,11 +1644,11 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `save` | Persistence for TorchLens intervention specifications. | 1056 |
 | `site_keys` | Live site-key minting (surgery memo Build 0c). | 159 |
 | `sites` | Structured intervention site collections for sweeps. | 200 |
-| `spec` | The ONE immutable public intervention spec ( substrate). | 752 |
+| `spec` | The ONE immutable public intervention spec ( substrate). | 794 |
 | `spec_compat` | Saved intervention-spec compatibility checking (site-key-first). | 302 |
 | `stochastic` | Stochastic/population edit verbs and the derived-seed law (edits memo). | 1379 |
 | `sweep` | Convenience constructor for value-sweep intervention bundles. | 552 |
-| `types` | Shared dataclass ownership for TorchLens intervention schemas. | 861 |
+| `types` | Shared dataclass ownership for TorchLens intervention schemas. | 859 |
 
 ### `torchlens.intervention._super`
 
