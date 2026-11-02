@@ -79,9 +79,9 @@ def test_set_on_a_pass_qualified_label_applies_on_rerun() -> None:
     value = torch.full_like(trace[second].out, 0.25)
     trace.set(second, value, confirm_mutation=True)
     result = trace.run(model, x)
-    assert result is not trace
-    assert torch.equal(result[second].out, value)
-    assert torch.count_nonzero(trace[second].out - 0.25) > 0
+    assert result is trace
+    assert result.last_run["hooks_unfired"] == 0
+    assert torch.equal(trace[second].out, value)
 
 
 def test_substring_selector_on_a_final_label_still_refuses_live() -> None:
