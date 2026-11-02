@@ -38,6 +38,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
+import numpy as np
 import torch
 
 from ... import _state
@@ -226,6 +227,21 @@ def _mark(func: Callable[..., Any], resolution: str, entry: str, exits: tuple[st
     )
 
 
+def _flat_positions(size: tuple[int, ...], stride: tuple[int, ...], offset: int) -> np.ndarray:
+    """Return each element's storage position for a (size, stride, offset) geometry, flattened.
+
+    Host-side integer arithmetic on purpose: it runs inside the capture, where a torch
+    computation would be logged and a tensor-to-scalar read counts as an escape.
+    """
+
+    positions = np.full(tuple(size), offset, dtype=np.int64)
+    for axis, (extent, step) in enumerate(zip(size, stride, strict=True)):
+        shape = [1] * len(size)
+        shape[axis] = extent
+        positions = positions + (np.arange(extent, dtype=np.int64) * step).reshape(shape)
+    return positions.reshape(-1)
+
+
 def _view_gather_index(
     departure: Departure, out: torch.Tensor
 ) -> tuple[str, torch.Tensor | None] | None:
@@ -260,22 +276,16 @@ def _view_gather_index(
     ):
         return "reshape", None
     storage_numel = departure.storage_nbytes // element_size
-    last = out_offset + sum(
-        (size - 1) * stride for size, stride in zip(out.size(), out.stride(), strict=True)
-    )
-    if last >= storage_numel:
+    out_positions = _flat_positions(out.size(), out.stride(), out_offset)
+    if out_positions.size and int(out_positions.max()) >= storage_numel:
         return None
-    positions = torch.arange(storage_numel, dtype=torch.int64)
-    source_positions = positions.as_strided(
-        source.size(), source.stride(), source.storage_offset()
-    ).reshape(-1)
-    inverse = torch.full((storage_numel,), -1, dtype=torch.int64)
-    inverse[source_positions] = torch.arange(source.numel(), dtype=torch.int64)
-    out_positions = positions.as_strided(out.size(), out.stride(), out_offset).reshape(-1)
+    source_positions = _flat_positions(source.size(), source.stride(), source.storage_offset())
+    inverse = np.full((storage_numel,), -1, dtype=np.int64)
+    inverse[source_positions] = np.arange(source.numel(), dtype=np.int64)
     index = inverse[out_positions]
-    if bool((index < 0).any()):
+    if index.size and int(index.min()) < 0:
         return None
-    return "gather", index
+    return "gather", torch.from_numpy(index)
 
 
 def _view_entry(departure: Departure, out: torch.Tensor, entry: str) -> HostEntry | None:
@@ -418,6 +428,15 @@ def resolve_host_entry(
 
     if not isinstance(out, torch.Tensor):
         return None
+    with _state.pause_logging():
+        return _resolve_paused(trace, func_name, args, kwargs, out)
+
+
+def _resolve_paused(
+    trace: Any, func_name: str, args: tuple[Any, ...], kwargs: dict[str, Any], out: torch.Tensor
+) -> HostEntry | None:
+    """Match ``out`` against the journal; the matching's own torch work is never logged."""
+
     host_argument = args[0] if args else kwargs.get("data", kwargs.get("obj"))
     journal = departures(trace)
     if not journal:
