@@ -2,21 +2,18 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from .trace import Trace
-
-    _TraceMixinBase = Trace
-else:
-    _TraceMixinBase = object
+from typing import Any
 
 
-class TraceOutputMixin(_TraceMixinBase):
-    """Expose the forward's exact return object, held in memory only."""
+class TraceOutputMixin:
+    """Expose the forward's exact return object, held in memory only.
+
+    ``self`` is typed ``Any``: importing ``Trace`` here, even for type checking,
+    adds a module cycle the checker resolves in a different order.
+    """
 
     @property
-    def output(self: Trace) -> Any:
+    def output(self: Any) -> Any:
         """Return the model's exact forward return value, held in memory only.
 
         This is the original object, independent of saved activations and
