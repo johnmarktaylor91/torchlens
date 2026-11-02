@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ._errors import ArgumentTypeError
+from ._options_removed import _REMOVED_CAPTURE_OPTION_MEMBERS
 
 
 def _coerce_input(model: Any, x: Any) -> Any:
@@ -78,17 +79,29 @@ def _reject_unrouted_forward_kwargs(forward_kwargs: dict[str, Any]) -> None:
         return
 
     unknown = ", ".join(sorted(forward_kwargs))
-    raise ArgumentTypeError(
-        f"trace() got model-input keyword(s) it does not route: {unknown}. "
-        "Forward keyword arguments travel through input_kwargs=",
-        code="trace_forward_kwargs_unrouted",
-        remedy=(
+    removed = [key for key in sorted(forward_kwargs) if key in _REMOVED_CAPTURE_OPTION_MEMBERS]
+    if removed:
+        # A removed capture option is never a model input: name its replacement.
+        message = f"trace() got removed capture option keyword(s): {', '.join(removed)}" + (
+            f" (and unrouted keyword(s): {unknown})" if len(removed) < len(forward_kwargs) else ""
+        )
+        remedy = "; ".join(f"{key}: {_REMOVED_CAPTURE_OPTION_MEMBERS[key]}" for key in removed)
+    else:
+        message = (
+            f"trace() got model-input keyword(s) it does not route: {unknown}. "
+            "Forward keyword arguments travel through input_kwargs="
+        )
+        remedy = (
             "pass them as tl.trace(model, (), input_kwargs={"
             + ", ".join(f"{key!r}: ..." for key in sorted(forward_kwargs))
             + "}); for HuggingFace text models, "
             "torchlens.bridge.transformers.trace_text(model, 'prompt') builds the "
             "inputs for you"
-        ),
+        )
+    raise ArgumentTypeError(
+        message,
+        code="trace_forward_kwargs_unrouted",
+        remedy=remedy,
         unrouted_keywords=sorted(forward_kwargs),
     )
 

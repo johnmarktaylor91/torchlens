@@ -3131,9 +3131,13 @@ deprecation shim owed*
 : The typed refusal `tl.errors.DecodeStyleUnknownError` (an `InvalidArgumentError`
   subclass) for a `Trace.decode_output(style=...)` no built-in or registered custom output
   detector resolves, with a did-you-mean over the built-in styles (`classification`,
-  `imagenet`, `imagenet1k`, `hf_text`). The same code refuses `style="hf_text"` without a
-  usable `tokenizer=`. Output decoding is read-time only: the capture runs the automatic
-  detector pass with no option, and `CaptureOptions` has no decode field.
+  `imagenet`, `imagenet1k`, `hf_text`). The same code refuses `style="hf_text"` when no
+  rank-2 or rank-3 logits are retained. `style="hf_text"` without a `tokenizer=` is not a
+  refusal: the rows carry the argmax `token_ids` and `text` is `None` (the trace was
+  captured without a tokenizer). Output decoding is read-time only: the capture runs the
+  automatic detector pass with no option, and `CaptureOptions` has no decode field;
+  `CaptureOptions(output_style=...)`, `CaptureOptions(output_head=...)` and the same
+  keywords on `tl.trace` refuse naming `trace.decode_output(...)`.
 
 **`decode_head_unknown`** — *unstable — no deprecation shim owed*
 : `Trace.decode_output(head=...)` named a head that is not one of the trace's output heads
@@ -4412,7 +4416,7 @@ alphabetical order.
 | `Trace.collapse_order` | Return each module's smart-collapse score as (module address, score) pairs, highest first, for the chosen policy |
 | `Trace.completeness_diagnostics` | List of reports of ATen dispatch events the completeness witness could not account for; empty when capture was complete |
 | `Trace.compute_coverage` | Counts of layer-list rows in each of four compute-coverage categories, as a dict |
-| `Trace.decode_output` | Return the decoded output rows captured during tracing, up to `k` ranks per batch item; with `style=`, `head=` or `tokenizer=` decode again on demand from the retained output tensors without touching `decoded_output`; raise if nothing was captured and no output tensor is retained |
+| `Trace.decode_output` | Return the decoded output rows captured during tracing, up to `k` ranks per batch item; with `style=`, `head=` or `tokenizer=` decode again on demand from the retained output tensors without touching `decoded_output` (`style="hf_text"` without a tokenizer returns the argmax `token_ids` with `text` `None`); raise if nothing was captured and no output tensor is retained |
 | `Trace.disarm_triggers` | Detach this Trace from global autograd backward interception so plain backward calls no longer record into it |
 | `Trace.escape_diagnostics` | List of reports of raw torch callables that ran outside their registered wrapper during capture, each with file, line and function |
 | `Trace.factcore` | The single numbers substrate for this trace: counts, identity spine, parameter totals, compute aggregation and memory figures |

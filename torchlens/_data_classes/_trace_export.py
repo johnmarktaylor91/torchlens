@@ -578,7 +578,9 @@ class TraceExportMixin(_TraceMixinBase):
             Output head to decode, as an output container path such as
             ``"logits"``, ``"0"`` or ``"0.logits"``.
         tokenizer:
-            Tokenizer with a ``decode`` method, required by ``"hf_text"``.
+            Tokenizer with a ``decode`` method, used by ``"hf_text"``. Without one
+            (a trace captured outside the transformers bridge) the ``"hf_text"``
+            rows carry the argmax ``token_ids`` and ``text`` is ``None``.
 
         Returns
         -------
