@@ -116,8 +116,8 @@ def draw(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input lad
         + one printed line) while ``BARE_RENDER_WRITES_FILE_IN_SCRIPTS`` is
         True.
     file_format:
-        Output format (``"pdf"``, ``"svg"``, ...). Defaults to ``"svg"``
-        for inline notebook display and ``"pdf"`` otherwise.
+        Format for a path with no extension (an extension picks the format):
+        ``"svg"`` for inline notebook display and ``"pdf"`` otherwise.
     open_viewer:
         Explicit opt-in to open the written file with the system viewer.
         Never the default (memo D14).
@@ -189,7 +189,8 @@ def _render_finished_trace(  # noqa: PLR0913 -- mirrors the facade's spec'd dial
     if depth is not None:
         call_kwargs["depth"] = depth
     call_kwargs["open_viewer"] = False  # never auto-open (D14); open_viewer= is handled below
-    call_kwargs["file_format"] = fileformat
+    # An explicit path keeps the caller's file_format: Trace.draw takes the format from its extension.
+    call_kwargs["file_format"] = fileformat if path is None else file_format
 
     target: Path | None
     data: bytes | None = None
@@ -209,11 +210,10 @@ def _render_finished_trace(  # noqa: PLR0913 -- mirrors the facade's spec'd dial
             rendered = Path(tmpdir) / f"graph.{fileformat}"
             data = rendered.read_bytes() if rendered.exists() else None
     else:
-        outpath = str(target)
-        if outpath.endswith(f".{fileformat}"):
-            outpath = outpath[: -(len(fileformat) + 1)]
-        call_kwargs["path"] = outpath
-        dot = str(trace.draw(**call_kwargs))
+        call_kwargs["path"] = str(target)
+        drawn = trace.draw(**call_kwargs)
+        dot, fileformat = str(drawn), drawn.file_format
+        target = drawn.path if drawn.path is not None else target
         print(f"TorchLens graph written to {target}")
         if open_viewer:
             _open_viewer(target)

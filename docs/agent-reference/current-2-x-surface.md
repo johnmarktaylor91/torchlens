@@ -333,9 +333,10 @@
   `.reader_positions`, `.coverage`, `.excluded` (dicts with side/start/end/reason/row_index);
   only re-verified one-to-one positions pair, declared/retokenized spans stay correspondences.
   Slicing is a docs recipe: `b["draft"][site].out[0, pairs.source_positions]`.
-  `torchlens._visualization.show_bundle_graph(b, nodes="members")` draws members and relation rows;
-  `torchlens._visualization.show_bundle_graph(b, theme="dark", show_legend=True)` takes draw's skin, shapes, fills
-  and key (member lists only where members differ), and `trace.draw(graph="backward", theme="dark")`
+  `b.draw("bundle.svg")` draws the merged bundle graph (the shared model graph, member lists only where
+  members differ; `b.show()` defaults to it, `b.show(kind="strip")` draws each member on its own);
+  `b.draw("members.svg", nodes="members")` draws members and relation rows;
+  `b.draw("bundle.svg", theme="dark", show_legend=True)` takes draw's skin, shapes, fills and key, and `trace.draw(graph="backward", theme="dark")`
   takes the same skin names as `draw`; `tl.load(path, lazy=True)` reaches bundle members.
 - EXPERIMENTS REMEMBER (F03; every spelling DOCUMENTED-UNSTABLE pending
   naming-session ratification; doc of record `docs/reference/experiment_ledger.md`):

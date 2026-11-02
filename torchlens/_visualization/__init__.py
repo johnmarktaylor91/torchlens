@@ -7,7 +7,6 @@ The experimental Dagua renderer is available from
 from typing import Any
 
 _USER_FUNC_EXPORTS = {
-    "show_bundle_graph",
     "show_model_graph",
 }
 
@@ -61,6 +60,5 @@ def __getattr__(name: str) -> Any:
 
 __all__ = [
     "render_surgery",
-    "show_bundle_graph",
     "show_model_graph",
 ]

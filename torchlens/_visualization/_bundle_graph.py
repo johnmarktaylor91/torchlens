@@ -1,9 +1,9 @@
-"""Graphviz construction helpers for ``torchlens._visualization.show_bundle_graph``.
+"""The merged bundle graph behind ``Bundle.draw``.
 
 These walk a bundle's forward supergraph (and, when present, its backward
-graph) and add nodes, module clusters and edges to a Graphviz digraph. The
-public entry point and its argument checks stay in
-:mod:`torchlens._user_public_impls`.
+graph) and add nodes, module clusters and edges to a Graphviz digraph.
+:func:`torchlens.bundle._draw.bundle_draw` checks ``Bundle.draw``'s keywords (the
+``Trace.draw`` spellings) and translates them to the renderer's options.
 """
 
 from __future__ import annotations
@@ -440,7 +440,7 @@ def bundle_header_label(
 
 @dataclass(frozen=True)
 class BundlePictureOptions:
-    """The checked ``torchlens._visualization.show_bundle_graph`` arguments the bundle picture needs."""
+    """The checked ``Bundle.draw`` arguments the bundle picture needs."""
 
     outpath: str
     vis_mode: str
@@ -456,15 +456,15 @@ class BundlePictureOptions:
     show_legend: bool
 
 
-def render_bundle_graph(bundle: Any, options: BundlePictureOptions) -> str | None:
-    """Build and render the bundle picture behind ``torchlens._visualization.show_bundle_graph``.
+def render_bundle_graph(bundle: Any, options: BundlePictureOptions) -> str:
+    """Build and render the bundle picture behind ``Bundle.draw``.
 
-    Arguments are documented on :func:`torchlens._visualization.show_bundle_graph`, which
+    Arguments are documented on :meth:`torchlens.Bundle.draw`; :func:`draw_bundle`
     checks them first.
 
     Returns
     -------
-    str | None
+    str
         DOT source.
     """
 

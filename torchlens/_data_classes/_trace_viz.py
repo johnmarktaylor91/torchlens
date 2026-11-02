@@ -134,7 +134,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         show_grad_values: bool = False,
         backward_node_spec_fn: Callable[..., Any] | None = None,
         intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
-        file_format: str = "pdf",
+        file_format: str | None = None,
         open_viewer: bool = False,
     ) -> "Drawing":
         """Draw this trace and return the picture as a :class:`~torchlens.viz.Drawing`.
@@ -146,12 +146,13 @@ class TraceVisualizationMixin(_TraceMixinBase):
         Parameters
         ----------
         path:
-            Output path stem. ``None`` (the default) writes a collision-safe
-            file in the current directory (``modelgraph.<format>``, then
-            ``modelgraph-2.<format>``, ...) and prints its path, so a bare
-            ``draw()`` never overwrites an earlier picture. An explicit path is
-            written exactly (overwriting) and printed only when the trace is
-            verbose. Backward and combined graphs default to
+            Output path; its extension picks the format (``"g.png"`` writes PNG).
+            An explicit path is always written (overwriting), printed only when
+            the trace is verbose. ``None`` (the default): inside a Jupyter kernel
+            the picture displays inline and no file is written; elsewhere a
+            collision-safe file is written in the current directory
+            (``modelgraph.<format>``, then ``modelgraph-2.<format>``, ...) and
+            its path printed. Backward and combined graphs write
             ``backward_modelgraph`` and ``combined_modelgraph``.
         graph:
             Which graph: ``"forward"`` (the ops), ``"backward"`` (the captured
@@ -280,7 +281,8 @@ class TraceVisualizationMixin(_TraceMixinBase):
             Combined graph: placement of backward-only nodes (``"upstream"``,
             ``"outside"``, ``"downstream"`` or ``"own"``).
         file_format:
-            Output file format (``"pdf"`` default, ``"svg"``, ``"png"``, ...).
+            Format for a path with no extension, or a bare call (``"pdf"``, or
+            ``"svg"`` inline); a different format than the path's extension refuses.
         open_viewer:
             ``True`` opens the written picture in the system viewer; the
             default never opens anything.
@@ -292,9 +294,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             path when a file was written, and the resolved policy.
         """
 
-        from pathlib import Path
-
-        from ..viz._drawing import Drawing
+        from ..viz._drawing import resolve_draw_target
 
         if graph not in ("forward", "backward", "combined"):
             raise InvalidArgumentError(
@@ -313,10 +313,13 @@ class TraceVisualizationMixin(_TraceMixinBase):
             "depth": depth,
         }
         from .._visualization._render_utils import (
+            _KNOWN_EXTS,
             DEFAULT_DRAW_STEM,
             collision_safe_outpath,
-            strip_known_extension,
         )
+
+        target = resolve_draw_target(path, file_format, _KNOWN_EXTS)
+        path, file_format = target.path, target.file_format
 
         vis_mode: VisModeLiteral = "rolled" if rolled else "unrolled"
         if graph == "backward":
@@ -415,14 +418,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
                 show_redundant_args=show_redundant_args,
                 show_saved_for_backward=show_saved_for_backward,
             )
-        written = Path(f"{strip_known_extension(str(outpath))}.{file_format}")
-        return Drawing(
-            dot=str(rendered),
-            file_format=file_format,
-            path=written if written.exists() else None,
-            num_ops=num_ops,
-            policy=policy,
-        )
+        return target.finish(str(rendered), str(outpath), num_ops=num_ops, policy=policy)
 
     def animate(
         self: "Trace",
