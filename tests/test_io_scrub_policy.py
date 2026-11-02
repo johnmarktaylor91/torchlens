@@ -343,6 +343,8 @@ def test_intervention_ready_accessor_sweep_still_saves(tmp_path: Path) -> None:
 #: reason must name why the call is unsafe or out of scope for a read-only
 #: pre-save sweep; "we forgot" is not representable in this table.
 _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
+    "animate": "pass-animation renderer: needs a multi-pass site and writes a movie file "
+    "(options.3 ruling); its reads are draw's, swept above",
     "annotate": "user annotation writer (mutates trace annotations by contract)",
     "using": "appliance door: returns what a registered factory builds; it writes nothing "
     "on the trace (each appliance's own reads are its owner's to sweep)",

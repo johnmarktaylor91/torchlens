@@ -695,7 +695,7 @@ docs-md	docs/agent-reference/current-2-x-surface.md	64
 docs-md	docs/agent-reference/current-2-x-surface.md	64,
 docs-md	docs/agent-reference/current-2-x-surface.md	657
 docs-md	docs/agent-reference/current-2-x-surface.md	79
-docs-md	docs/agent-reference/current-2-x-surface.md	83
+docs-md	docs/agent-reference/current-2-x-surface.md	84
 docs-md	docs/agent-reference/current-2-x-surface.md	873
 docs-md	docs/agent-reference/current-2-x-surface.md	9.2.2
 docs-md	docs/agent-reference/current-2-x-surface.md	921,
@@ -732,7 +732,7 @@ docs-md	docs/agent-reference/package/public-surface.md	2.16
 docs-md	docs/agent-reference/package/public-surface.md	37
 docs-md	docs/agent-reference/package/public-surface.md	39
 docs-md	docs/agent-reference/package/public-surface.md	42
-docs-md	docs/agent-reference/package/public-surface.md	83
+docs-md	docs/agent-reference/package/public-surface.md	84
 docs-md	docs/agent-reference/package/subpackages.md	10
 docs-md	docs/agent-reference/package/subpackages.md	11
 docs-md	docs/agent-reference/package/subpackages.md	11,
@@ -846,7 +846,7 @@ docs-md	docs/for-ai-agents.md	2020
 docs-md	docs/for-ai-agents.md	25,000
 docs-md	docs/for-ai-agents.md	4,000
 docs-md	docs/for-ai-agents.md	64
-docs-md	docs/for-ai-agents.md	83
+docs-md	docs/for-ai-agents.md	84
 docs-md	docs/gradient_contract.md	64
 docs-md	docs/guides/fast_paths.md	0.17
 docs-md	docs/guides/fast_paths.md	0.18
@@ -2076,7 +2076,7 @@ docs-md	docs/migration/scoped_detached_patching.md	27
 docs-md	docs/migration/v2.0_api_changes.md	2.0
 docs-md	docs/migration/v2.0_api_changes.md	2026
 docs-md	docs/migration/v2.0_api_changes.md	42
-docs-md	docs/migration/v2.0_api_changes.md	83
+docs-md	docs/migration/v2.0_api_changes.md	84
 docs-md	docs/monitor_training.md	10
 docs-md	docs/monitor_training.md	100
 docs-md	docs/monitor_training.md	125

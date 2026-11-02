@@ -7,8 +7,12 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from .trace import Trace
 
+    _TraceMixinBase = Trace
+else:
+    _TraceMixinBase = object
 
-class TraceOutputMixin:
+
+class TraceOutputMixin(_TraceMixinBase):
     """Expose the forward's exact return object, held in memory only."""
 
     @property

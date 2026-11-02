@@ -94,8 +94,10 @@ CAPABILITY_REQUESTS: dict[str, CapabilityRequest] = {
     "structure_only_capture": CapabilityRequest("capture_option", "structure_only", lambda: True),
     "has_validation_replay": CapabilityRequest("validate"),
     "payload_materialization": CapabilityRequest("save"),
+    # grad_options is a CaptureOptions field (the options restructure); the dispatcher
+    # refuses an explicit field a backend lacks with its capability code.
     "intermediate_derived_grads": CapabilityRequest(
-        "trace_option", "grad_options", lambda: {"derived": True}
+        "capture_option", "grad_options", lambda: {"derived": True}
     ),
 }
 

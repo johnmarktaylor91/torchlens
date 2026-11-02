@@ -36,7 +36,6 @@ GAP-035	cache_key_coverage	VisualizationOptions.edge_overrides	2026-08-26	oracle
 GAP-036	cache_key_coverage	VisualizationOptions.file_format	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
 GAP-037	cache_key_coverage	VisualizationOptions.fold_repeats	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
 GAP-038	cache_key_coverage	VisualizationOptions.font_size	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
-GAP-039	cache_key_coverage	VisualizationOptions.animate	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
 GAP-040	cache_key_coverage	VisualizationOptions.grad_edge_overrides	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
 GAP-041	cache_key_coverage	VisualizationOptions.graph_overrides	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row
 GAP-042	cache_key_coverage	VisualizationOptions.intervention_mode	2026-08-26	oracles-6b	non-capture option group field; item 6b decides witnessed dont-care vs key row

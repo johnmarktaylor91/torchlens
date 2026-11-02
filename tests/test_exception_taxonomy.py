@@ -1606,7 +1606,7 @@ def test_layers_to_save_type_invalid_provoked() -> None:
         tl.trace(model, torch.ones(2), None, torch.ones(2))  # type: ignore[misc]
     assert excinfo.value.fields["code"] == "extra_positional_input_invalid"
     with pytest.raises(ArgumentTypeError) as excinfo:
-        from torchlens._user_funcs import _trace_torch_model
+        from torchlens._capture.prepare.door import _trace_torch_model
 
         _trace_torch_model(model, torch.ones(2), layers_to_save=torch.ones(2))  # type: ignore[arg-type]
     assert excinfo.value.fields["code"] == "layers_to_save_type_invalid"

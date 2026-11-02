@@ -72,9 +72,14 @@ _TRACE_IDENTIFIERS = frozenset(
     }
 )
 
-#: The Trace group prefixes, one per group view (``TraceCost`` -> ``cost``).
+#: Group views whose private stores keep an older prefix: ``TraceSettings`` (the
+#: options.4 ruling renamed the view, not its ``_options_*`` stores).
+_GROUP_STORE_PREFIXES = {"settings": "options"}
+
+#: The Trace group store prefixes, one per group view (``TraceCost`` -> ``cost``).
 _TRACE_GROUP_PREFIXES = frozenset(
-    cls.__name__.removeprefix("Trace").lower() for cls in _TraceGroup.__subclasses__()
+    _GROUP_STORE_PREFIXES.get(name, name)
+    for name in (cls.__name__.removeprefix("Trace").lower() for cls in _TraceGroup.__subclasses__())
 )
 
 #: The v11-rest private stores: Trace collections and counters whose public

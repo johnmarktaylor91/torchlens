@@ -52,7 +52,7 @@ unaffected.
 | `render_lines_to_html` | none (no longer public) | removed |
 | `render_trace_with_dagua` | none (no longer public) | removed |
 | `reset_naming_counter` | `torchlens.io.reset_naming_counter` | removed |
-| `resolve_sites` | `torchlens.validation.resolve_sites` | removed |
+| `resolve_sites` | `torchlens.Trace` indexing (`trace[selector]` returns every matching site as a `torchlens.Selection`) | removed |
 | `save_intervention` | `torchlens.io.save_intervention` | removed |
 | `suppress_mutate_warnings` | `torchlens.io.suppress_mutate_warnings` | removed |
 | `unwrap_torch` | `torchlens.backends.torch.wrappers.unwrap_torch` | removed |
