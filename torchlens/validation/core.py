@@ -2405,6 +2405,7 @@ def _execute_func_with_restored_state(
     layer: Op,
     input_args: dict[str, Any],
     layers_to_perturb: list[str],
+    layer_label: str,
     verbose: bool,
     exception_sink: list[Exception] | None = None,
 ) -> Any:
@@ -2437,7 +2438,7 @@ def _execute_func_with_restored_state(
         if verbose:
             print(
                 f"Perturbation of {layers_to_perturb} for layer "
-                f"{layer.label} caused {type(e).__name__}: {e}"
+                f"{layer_label} caused {type(e).__name__}: {e}"
             )
         return None
 
@@ -2665,6 +2666,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         layers_to_perturb = []
 
     layer = _op_for_validation_label(self, layer_to_validate_parents_for_label)
+    validated_label = layer_to_validate_parents_for_label
     _raise_if_replay_arg_version_data_incomplete(self, layer)
 
     # Early exits for layers that cannot or should not be replayed.
@@ -2704,7 +2706,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
 
     replay_exceptions: list[Exception] = []
     recomputed_output = _execute_func_with_restored_state(
-        layer, input_args, layers_to_perturb, verbose, replay_exceptions
+        layer, input_args, layers_to_perturb, validated_label, verbose, replay_exceptions
     )
 
     # A perturbed execution that RAISES proves the op read the perturbed value
@@ -2724,7 +2726,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
             if retry_args is None:
                 break
             recomputed_output = _execute_func_with_restored_state(
-                layer, retry_args, layers_to_perturb, verbose, replay_exceptions
+                layer, retry_args, layers_to_perturb, validated_label, verbose, replay_exceptions
             )
             if recomputed_output is not None:
                 input_args = retry_args
@@ -2791,10 +2793,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
             )
             snapshot_output = (
                 _execute_func_with_restored_state(
-                    layer,
-                    snapshot_args,
-                    layers_to_perturb,
-                    verbose,
+                    layer, snapshot_args, layers_to_perturb, validated_label, verbose
                 )
                 if snapshot_args is not None
                 else None
@@ -2872,7 +2871,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
             if retry_args is None:
                 break
             retry_output = _execute_func_with_restored_state(
-                layer, retry_args, layers_to_perturb, verbose
+                layer, retry_args, layers_to_perturb, validated_label, verbose
             )
             if retry_output is not None and not tensor_nanequal(
                 retry_output, layer.out, allow_tolerance=False
