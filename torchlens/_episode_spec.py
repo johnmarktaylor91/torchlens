@@ -121,7 +121,7 @@ class EpisodeOptions:
         halts capture at the next step entry -- the first observable point
         (one-step detection latency) -- with typed
         ``episode_feed_closed_violation`` and the partial product on
-        ``exc.partial_log``, and a DECLARED crossing stops before entry
+        ``exc.partial_trace``, and a DECLARED crossing stops before entry
         (``episode_declared_crossing_stop``).
     on_feed_break:
         The FORK-4 arm switch (both arms built; the ruling selects the
@@ -129,7 +129,7 @@ class EpisodeOptions:
         the one Trace with the break marked and claims refused across it.
         ``"refuse"``: the settlement write raises typed
         ``episode_feed_break_exogenous`` carrying the settled product on
-        ``exc.partial_log`` (recoverable partial evidence).
+        ``exc.partial_trace`` (recoverable partial evidence).
     crossings:
         DECLARED exogenous crossings: step indices (1-based joins into
         steps 1+) whose entries are declared to come from outside the

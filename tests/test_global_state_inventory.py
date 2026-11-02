@@ -19,6 +19,7 @@ import torchlens as tl
 from torchlens import _state
 from torchlens._capture import projections, trace as capture_trace
 from torchlens.backends.torch import _tl as torch_tl, completeness_witness, rescue
+from torchlens.errors import TraceCaptureError
 
 MUTATING_METHODS = frozenset(
     {
@@ -670,8 +671,13 @@ def test_mid_capture_failure_restores_process_state(
     tl.trace(nn.ReLU(), torch.ones(2))
     before = _capture_scope_snapshot()
 
-    with pytest.raises(error_type, match="injected mid-capture failure"):
+    # An ordinary forward exception escapes as the door's TraceCaptureError
+    # chained from it; an interrupt-class BaseException is never wrapped.
+    expected = TraceCaptureError if issubclass(error_type, Exception) else error_type
+    with pytest.raises(expected, match="injected mid-capture failure") as excinfo:
         tl.trace(_RaiseMidCapture(error_type), torch.ones(2))
+    if expected is TraceCaptureError:
+        assert type(excinfo.value.__cause__) is error_type
 
     assert _capture_scope_snapshot() == before
     recovered = tl.trace(nn.ReLU(), torch.ones(2))
@@ -962,8 +968,9 @@ def test_capture_reservation_is_released_on_failure_and_nested_same_thread() -> 
     refuses typed (R55), as does a foreign thread's claim.
     """
 
-    with pytest.raises(RuntimeError, match="injected mid-capture failure"):
+    with pytest.raises(TraceCaptureError, match="injected mid-capture failure") as _tce_info:
         tl.trace(_RaiseMidCapture(RuntimeError), torch.ones(2))
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
     assert _state._capture_reserved_by is None
     recovered = tl.trace(nn.ReLU(), torch.ones(2))
     assert any(op.func_name == "relu" for op in recovered.compute_ops)

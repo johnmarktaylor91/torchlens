@@ -36,6 +36,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
+from torchlens.errors import TraceCaptureError
 
 _X = torch.tensor([[1.0, -2.0, 0.5]])
 _FILL = 0.5
@@ -324,6 +325,11 @@ _DOCUMENTED_CHANGES: dict[str, frozenset[str]] = {
     "validate": frozenset({"torch_rng", "python_rng"}),
 }
 
+# Doors whose failing forward runs outside a capture: ``bind`` is a capture-free
+# executor, and ``tl.validate`` runs its uncaptured ground-truth forward first, so
+# the model's own exception propagates unwrapped there.
+_UNCAPTURED_FAILURE_DOORS: frozenset[str] = frozenset({"bind", "validate"})
+
 _FAILURES: dict[str, type[BaseException] | None] = {
     "normal": None,
     "runtime_error": RuntimeError,
@@ -341,8 +347,10 @@ _FAILURES: dict[str, type[BaseException] | None] = {
 def test_entry_point_returns_the_model_unchanged(door: str, failure: str) -> None:
     """The model state fingerprint is identical before and after every call.
 
-    A failing call must also preserve the exception type, and a deepcopy taken
-    afterwards must be independent of the original.
+    A failing call must also preserve the forward's exception type (as the
+    ``__cause__`` of the door's TraceCaptureError for an ordinary exception raised
+    during a capture, or unchanged where the forward runs outside a capture), and a
+    deepcopy taken afterwards must be independent of the original.
     """
 
     model = _fresh()
@@ -354,8 +362,15 @@ def test_entry_point_returns_the_model_unchanged(door: str, failure: str) -> Non
         if exc_type is None:
             _DOORS[door](model)
         else:
-            with pytest.raises(exc_type, match="injected model failure"):
+            # An ordinary forward exception raised during a capture escapes as
+            # TraceCaptureError chained from it; interrupts are never wrapped, and
+            # a forward run outside any capture raises the model's own exception.
+            wrapped = issubclass(exc_type, Exception) and door not in _UNCAPTURED_FAILURE_DOORS
+            expected = TraceCaptureError if wrapped else exc_type
+            with pytest.raises(expected, match="injected model failure") as excinfo:
                 _DOORS[door](model)
+            if expected is TraceCaptureError:
+                assert type(excinfo.value.__cause__) is exc_type
     _assert_fingerprints_equal(
         before, _model_fingerprint(model), skip=_DOCUMENTED_CHANGES.get(door, frozenset())
     )

@@ -23,7 +23,7 @@ recording = tl.record(model, x, narrate=True)          # the one-liner replaceme
 | `snoop(depth=N)` | module-depth indentation is built in; scope with `tl.in_module(...)` |
 | `snoop(prefix=...)` per-line prefix | callable sink (`NarrationOptions(sink=my_logger)`) -- the seam to loggers/trackers |
 | `normalize=True` diffable output | transcripts are byte-stable by default (no addresses/wall-clock on lines) |
-| last lines before a crash | `exc.partial_log.narrate(20)` -- works with echo OFF, plus the live tail when echo is armed |
+| last lines before a crash | `exc.partial_trace.narrate(20)` -- works with echo OFF, plus the live tail when echo is armed |
 
 Their construct (torchsnooper, line-level tracing via `sys.settrace`),
 executable:
@@ -93,7 +93,7 @@ RESULT = sum(1 for line in sink.getvalue().splitlines() if line.lstrip().startsw
   `torch/nn/modules/module.py`).
 - **Crash tails without foresight**: crashes are not scheduled. The partial
   TorchLens already attaches to a failed capture renders the last lines
-  RETROACTIVELY -- `exc.partial_log.narrate(last=20)` -- with graph coordinates
+  RETROACTIVELY -- `exc.partial_trace.narrate(last=20)` -- with graph coordinates
   and module context. Live narration remains for the deaths Python cannot
   survive (segfault, OOM kill): file sinks flush per line, so only-on-disk
   bytes survive.

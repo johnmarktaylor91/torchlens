@@ -10,6 +10,7 @@ import torch
 import torchlens as tl
 from torchlens._selection.selectors import output_at
 from torchlens._trace_state import TraceState
+from torchlens.errors import TraceCaptureError
 from torchlens.intervention.errors import LiveModeLabelError, SiteResolutionError
 from torchlens.options import CaptureOptions
 
@@ -414,12 +415,13 @@ def test_hook_body_type_error_is_not_reclassified() -> None:
         del out, ctx
         raise TypeError("body bug")
 
-    with pytest.raises(TypeError, match="body bug"):
+    with pytest.raises(TraceCaptureError, match="body bug") as _tce_info:
         tl.trace(
             _ReluReturnModel(),
             torch.randn(2, 3),
             intervene=tl.when(tl.func("relu"), broken_hook),
         )
+    assert isinstance(_tce_info.value.__cause__, TypeError)
 
 
 def test_live_regex_and_output_at_selectors_execute() -> None:

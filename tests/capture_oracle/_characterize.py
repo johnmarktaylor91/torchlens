@@ -771,8 +771,12 @@ def _run_capture(
                 input_tensor,
                 capture=tl.options.CaptureOptions(layers_to_save="all", seed=_SEED),
             )
-        except RuntimeError as exc:
-            return tl._partial.from_failed_capture(exc), exc, None
+        except tl.errors.TraceCaptureError as exc:
+            # The door raises TraceCaptureError from the forward's exception;
+            # the oracle characterizes the forward's own error (type and
+            # text, as the failed-record arm does) and the attached partial.
+            assert isinstance(exc.__cause__, RuntimeError)
+            return exc.partial_trace, exc.__cause__, None
         raise AssertionError("intentional failing trace unexpectedly completed")
     raise KeyError(f"unknown capture-oracle config: {config}")
 
@@ -1113,10 +1117,10 @@ def _partial_product_from_exception(exception: Exception) -> Any | None:
     partial_recording = getattr(exception, "partial_recording", None)
     if partial_recording is not None:
         return partial_recording
-    if getattr(exception, "partial_log", None) is None:
+    if getattr(exception, "partial_trace", None) is None:
         return None
     try:
-        return tl._partial.from_failed_capture(exception)
+        return exception.partial_trace
     except Exception:
         return None
 

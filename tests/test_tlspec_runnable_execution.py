@@ -29,6 +29,7 @@ from torchlens.errors import (
     PoisonedRunError,
     RunCapabilityUnavailableError,
     RunPreconditionError,
+    TraceCaptureError,
 )
 from torchlens.options import CaptureOptions
 
@@ -1101,8 +1102,9 @@ def test_live_run_forward_failure_unregisters_transactional_fork() -> None:
     trace = tl.trace(model, torch.ones(3))
     prior_log_ids = {id(log) for log in _state.list_logs()}
 
-    with pytest.raises(RuntimeError, match="intentional live rerun failure"):
+    with pytest.raises(TraceCaptureError, match="intentional live rerun failure") as _tce_info:
         trace.run(inputs=-torch.ones(3))
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
     transactional_forks = tuple(
         log

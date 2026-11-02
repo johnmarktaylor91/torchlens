@@ -12,6 +12,7 @@ from _stale_holders import OpaqueCallable
 import torchlens as tl
 from torchlens import Recording, Trace, _state
 from torchlens.backends.torch.wrappers import wrap_torch
+from torchlens.errors import TraceCaptureError
 from torchlens.io import load_intervention_spec
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
@@ -954,8 +955,9 @@ def test_raw_transform_escape_does_not_validate_vacuously_without_metadata() -> 
 def test_raising_inner_transform_cleans_up_logging_state() -> None:
     """Exceptions from transform bodies leave logging state sane."""
 
-    with pytest.raises(RuntimeError, match="inner transform failure"):
+    with pytest.raises(TraceCaptureError, match="inner transform failure") as _tce_info:
         tl.trace(RaisingInnerFnModel().eval(), torch.randn(3, 4))
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
     assert _state._logging_enabled is False
     log = tl.trace(VmapMaskModel().eval(), torch.randn(3, 4))

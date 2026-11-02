@@ -18,6 +18,7 @@ import torch
 
 from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING
+from ..._errors import TraceCaptureError, original_exception
 from ..._trace_state import TraceState
 from ...errors._base import TorchLensError
 from ...intervention.errors import (
@@ -127,8 +128,9 @@ def _typed_chunk_forward(chunk_index: int, chunk_size: int, plan: Any) -> Iterat
     """Run one chunk's capture, yielding its row count; a failure refuses typed.
 
     ``AppendMismatchError`` from chunk assembly means an activation is not row-wise over the
-    batch; any other error is the forward failing on a partial batch. Both become
-    ``ChunkedForwardConfigError`` (``trace_option_unsupported``) pointing at a plain capture.
+    batch; any other error (the capture's ``TraceCaptureError`` unwrapped to the forward's own
+    exception) is the forward failing on a partial batch. Both become
+    ``ChunkedForwardConfigError`` (``chunked_forward_batch_coupled``) pointing at a plain capture.
     """
 
     total_rows = int(plan.total_size)
@@ -136,6 +138,7 @@ def _typed_chunk_forward(chunk_index: int, chunk_size: int, plan: Any) -> Iterat
     where = f"chunk {chunk_index} ({chunk_rows} of {total_rows} rows)"
     try:
         yield chunk_rows
+        return
     except AppendMismatchError as exc:
         raise ChunkedForwardConfigError(
             f"chunk_size: assembling {where} found an activation that is not row-wise "
@@ -145,19 +148,23 @@ def _typed_chunk_forward(chunk_index: int, chunk_size: int, plan: Any) -> Iterat
             remedy="run without chunk_size",
             chunk_index=chunk_index,
         ) from exc
+    except TraceCaptureError as exc:
+        # The chunk's capture wrapped the forward's own failure; refuse from that failure.
+        forward_exc: BaseException = original_exception(exc)
     except TorchLensError:
         raise
     except Exception as exc:  # noqa: BLE001 - the model's own failure on a partial batch
-        raise ChunkedForwardConfigError(
-            f"chunk_size: the forward failed on {where} with {type(exc).__name__}: {exc}; "
-            "a forward that needs the whole batch cannot run in chunks.",
-            code="chunked_forward_batch_coupled",
-            remedy=(
-                "run without chunk_size (a forward that also fails on the whole batch "
-                "is failing on its own)"
-            ),
-            chunk_index=chunk_index,
-        ) from exc
+        forward_exc = exc
+    raise ChunkedForwardConfigError(
+        f"chunk_size: the forward failed on {where} with {type(forward_exc).__name__}: "
+        f"{forward_exc}; a forward that needs the whole batch cannot run in chunks.",
+        code="chunked_forward_batch_coupled",
+        remedy=(
+            "run without chunk_size (a forward that also fails on the whole batch "
+            "is failing on its own)"
+        ),
+        chunk_index=chunk_index,
+    ) from forward_exc
 
 
 def _validate_chunk_append_candidate(old_trace: Trace, new_trace: Trace) -> None:

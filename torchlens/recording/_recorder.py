@@ -28,7 +28,7 @@ from .._capture.stop import StopDirective, stop_directive_for_trace
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.trace import Trace
 from .._deprecations import MISSING, MissingType
-from .._errors import CaptureNotActiveError, KeywordConflictError
+from .._errors import CaptureNotActiveError, KeywordConflictError, original_exception
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from .._utils._torch_compat import get_fsdp_wrapper_type
 from ..intervention.predicates import InterventionPredicate
@@ -235,11 +235,10 @@ class Recorder:
         on_predicate_error, storage, streaming, seed:
             Fastlog recording options.
         on_forward_error:
-            Controls failed-forward handling. ``"raise"`` preserves the
-            historical behavior. ``"attach_partial"`` attaches a failed partial
-            ``Recording`` to ``exc.partial_recording`` and re-raises.
-            ``"return_partial"`` returns ``None`` from the failed ``log()`` and
-            exposes the failed partial on ``recorder.recording``.
+            Controls failed-forward handling: ``"raise"`` raises the capture's ``TraceCaptureError``;
+            ``"attach_partial"`` also hangs the failed partial ``Recording`` on it as
+            ``exc.partial_recording`` before re-raising. ``"return_partial"`` returns ``None`` from
+            the failed ``log()`` and exposes the failed partial on ``recorder.recording``.
         halt:
             Optional predicate evaluated after each event's save decision. Returning
             ``True`` stops the active forward pass and marks the recording halted.
@@ -571,11 +570,11 @@ class Recorder:
                     if add_note is not None:
                         add_note(echo_note)
             if forward_disposition == "raise":
-                self._state.abort_storage(safe_exception_str(exc))
+                self._state.abort_storage(safe_exception_str(original_exception(exc)))
                 raise
             partial_build_failed = False
             try:
-                partial = self._mark_recording_failed(trace, exc)
+                partial = self._mark_recording_failed(trace, original_exception(exc))
                 self._failed = True
                 self._recording = partial
                 if forward_disposition == "attach_partial":

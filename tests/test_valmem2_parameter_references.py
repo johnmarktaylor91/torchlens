@@ -25,6 +25,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _user_public_impls, _validation_argument_references as arg_references
+from torchlens.errors import TraceCaptureError
 from torchlens.validation.diagnostics import get_validation_diagnostics
 
 
@@ -229,7 +230,8 @@ def test_the_reference_context_is_cleared_when_the_capture_raises() -> None:
         warnings.simplefilter("ignore")
         try:
             _user_public_impls._validate_forward_pass_torch(model, torch.randn(2, 4))
-        except ValueError as exc:
+        except TraceCaptureError as exc:
+            assert isinstance(exc.__cause__, ValueError)
             assert "inside the validation capture" in str(exc)
     # The ground truth runs outside the context; the raising forward ran inside it.
     assert seen[0] is None

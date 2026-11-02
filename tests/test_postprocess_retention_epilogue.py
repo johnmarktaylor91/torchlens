@@ -26,6 +26,7 @@ from torch import nn
 import torchlens as tl
 import torchlens._postprocess as pp
 from torchlens._postprocess import ast_branches
+from torchlens.errors import TraceCaptureError
 
 # Markers are per-test, not module-level: every case here is smoke-fast EXCEPT the
 # `-O` gate proof, which spawns a fresh interpreter that pays a full cold torchlens
@@ -89,12 +90,13 @@ def test_failed_postprocess_still_releases_the_hot_tier(monkeypatch) -> None:
 
     monkeypatch.setattr(pp.finalization, "_build_module_logs", _boom)
 
-    with pytest.raises(RuntimeError, match="injected postprocess failure"):
+    with pytest.raises(TraceCaptureError, match="injected postprocess failure") as _tce_info:
         tl.trace(
             _Conditional().eval(),
             torch.ones(1, 3),
             capture=tl.options.CaptureOptions(save_source_context=True),
         )
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
     assert _hot_tier_files() == []
 
 
@@ -107,12 +109,13 @@ def test_repeated_postprocess_failures_do_not_accumulate_hot_tiers(monkeypatch) 
     monkeypatch.setattr(pp.finalization, "_build_module_logs", _boom)
 
     for _ in range(3):
-        with pytest.raises(RuntimeError, match="injected postprocess failure"):
+        with pytest.raises(TraceCaptureError, match="injected postprocess failure") as _tce_info2:
             tl.trace(
                 _Conditional().eval(),
                 torch.ones(1, 3),
                 capture=tl.options.CaptureOptions(save_source_context=True),
             )
+        assert isinstance(_tce_info2.value.__cause__, RuntimeError)
     assert _hot_tier_files() == []
 
 

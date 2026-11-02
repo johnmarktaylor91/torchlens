@@ -35,7 +35,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
-from torchlens.errors import RunCapabilityUnavailableError
+from torchlens.errors import RunCapabilityUnavailableError, TraceCaptureError
 from torchlens.intervention.errors import (
     ControlFlowDivergenceError,
     ControlFlowDivergenceWarning,
@@ -531,8 +531,13 @@ def test_failed_rerun_engine_do_then_retry_applies_once(net, failure: type[BaseE
     for fork in forks:
         model.fc2.forward = _failing_forward(failure)
         try:
-            with pytest.raises(failure):
+            # An ordinary forward exception escapes as the capture's
+            # TraceCaptureError chained from it; interrupts are never wrapped.
+            raised = TraceCaptureError if issubclass(failure, Exception) else failure
+            with pytest.raises(raised) as excinfo:
                 fork.do(tl.module("fc1"), tl.scale(2.0), model=model, inputs=x, intervention=rerun)
+            if raised is TraceCaptureError:
+                assert type(excinfo.value.__cause__) is failure
         finally:
             model.fc2.forward = original
         assert len(fork._intervention_spec.hook_specs) == 0, "a failed do() left a hook staged"
@@ -698,8 +703,9 @@ def test_entry_point_leaves_model_and_globals_pristine(net, door: str) -> None:
         def boom(_out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
             raise ValueError("boom")
 
-        with pytest.raises(ValueError):
+        with pytest.raises(TraceCaptureError) as _tce_info:
             tl.trace(model, x, intervene=tl.when(tl.module("fc1"), boom))
+        assert isinstance(_tce_info.value.__cause__, ValueError)
     assert _model_state(model) == before
     assert _process_state() == before_process
 

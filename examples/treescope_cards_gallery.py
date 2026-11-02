@@ -106,8 +106,8 @@ def _config_built_entries(entries: list[tuple[str, str]]) -> None:
 
     try:
         tl.trace(_MidwayFailure(), torch.randn(2, 8))
-    except Exception as error:  # noqa: BLE001 - the failure IS the fixture
-        partial = tl._partial.from_failed_capture(error)
+    except tl.errors.TraceCaptureError as error:  # the failure IS the fixture
+        partial = error.partial_trace
         if partial is not None:
             _write("partial_card.html", partial._repr_html_(), entries)
             tl.export.html(partial, OUT_DIR / "report_partial.html", options=_DETERMINISTIC)

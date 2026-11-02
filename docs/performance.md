@@ -87,8 +87,8 @@ current-call event. Failed partials cannot be converted with `Recording.to_trace
 `Recording.backward()`. `MemoryError` is swallowed like any other forward exception under
 `"return_partial"`/`"attach_partial"`, and materializing the partial allocates *more* memory
 inside an already-exhausted heap — under genuine memory pressure keep the default
-`on_forward_error="raise"`. Full `tl.trace(...)` failures expose `exc.partial_log`, recoverable
-with `tl._partial.from_failed_capture(exc)`.
+`on_forward_error="raise"`. Full `tl.trace(...)` failures raise `tl.errors.TraceCaptureError`
+with the partial capture on `exc.partial_trace`.
 
 ## Speed knobs
 

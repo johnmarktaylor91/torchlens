@@ -1104,7 +1104,7 @@ def _run_request(request: CaptureRequest) -> ForwardResult:
     # TorchLens instrumentation; one settlement path for every escape (a
     # KeyboardInterrupt or SystemExit is released exactly like a RuntimeError).
     # The capture slot was released as the exception unwound the inner finally,
-    # so the public release door is legal there; exc.partial_log keeps its
+    # so the public release door is legal there; exc.partial_trace keeps its
     # already-materialized records and stays recoverable after the release.
     with capture_observer_bracket(
         model,

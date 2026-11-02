@@ -36,6 +36,7 @@ from torchlens._utils.tensor_utils import (
     safe_to,
 )
 from torchlens.backends.torch._tl import get_tensor_label, set_tensor_label
+from torchlens.errors import TraceCaptureError
 
 
 class TestFieldOrderSync:
@@ -477,15 +478,17 @@ class TestModuleExceptionCleanup:
         """Model that raises should propagate exception."""
         model = _FailingForwardModel()
         x = torch.randn(2, 10)
-        with pytest.raises(RuntimeError, match="Intentional test error"):
+        with pytest.raises(TraceCaptureError, match="Intentional test error") as _tce_info:
             trace_fn(model, x)
+        assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
     def test_failing_model_cleanup(self):
         """After a failed forward pass, subsequent calls should work."""
         model = _FailingForwardModel()
         x = torch.randn(2, 10)
-        with pytest.raises(RuntimeError):
+        with pytest.raises(TraceCaptureError) as _tce_info2:
             trace_fn(model, x)
+        assert isinstance(_tce_info2.value.__cause__, RuntimeError)
         good_model = _SimpleLinear()
         log = trace_fn(good_model, torch.randn(2, 10))
         assert log is not None
