@@ -34,8 +34,13 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from ..backends.torch._autograd_grad_boundary import is_autograd_grad_recorder
-from .diagnostics import CHECK_DEGENERATE_FORWARD, CHECK_PERTURBATION, ValidationFailure
+from ..backends.torch._autograd_grad_marker import is_autograd_grad_recorder
+from .diagnostics import (
+    CHECK_DEGENERATE_FORWARD,
+    CHECK_PERTURBATION,
+    ValidationFailure,
+    record_validation_failure,
+)
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -201,8 +206,6 @@ def fail_if_final_outputs_non_finite(trace: Any, ground_truth_outputs: Sequence[
     tensors = list(_out_tensors(list(ground_truth_outputs)))
     if not _all_non_finite(tensors):
         return False
-    from .diagnostics import record_validation_failure
-
     output_layers = [str(label) for label in getattr(trace, "output_layers", []) or []]
     record_validation_failure(
         trace,

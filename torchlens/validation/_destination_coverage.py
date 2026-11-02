@@ -12,12 +12,13 @@ Split from ``validation/exemptions.py`` along this seam (R43 file-size ratchet);
 the proofs are unchanged.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
 
-from .._data_classes.op import Op
+if TYPE_CHECKING:
+    from .._data_classes.op import Op
 
 
 def _setitem_index_targets_are_unique(index: Any) -> bool:

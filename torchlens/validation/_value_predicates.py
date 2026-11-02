@@ -9,12 +9,14 @@ the predicates are unchanged.
 """
 
 from numbers import Number
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .._data_classes.op import Op
 from .._utils.tensor_utils import tensor_all_nan
+
+if TYPE_CHECKING:
+    from .._data_classes.op import Op
 
 
 def _tensor_or_number_is_constant(value: Any) -> bool:
