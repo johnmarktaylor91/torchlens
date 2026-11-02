@@ -118,6 +118,7 @@ LOAD_ORDER: Final[tuple[str, ...]] = (
 #: and the accessor class, named in the member class's module (``None`` where the
 #: owner's state hook wraps a plain mapping itself).
 _ACCESSOR_COLUMNS: Final[dict[tuple[str, str], tuple[str, str, str | None]]] = {
+    ("layer", "ops"): ("op", "pass_number", "OpAccessor"),
     ("module", "ops"): ("module_call", "call_index", None),
     ("module", "params"): ("param", "address", "ParamAccessor"),
     ("grad_fn", "calls"): ("grad_fn_call", "call_index", None),
