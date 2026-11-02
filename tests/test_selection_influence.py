@@ -8,7 +8,8 @@ its row, a global-mixing block whose field status is ``whole_input``, and a
 data-dependent routing case that refuses geometry typed and answers under
 the gradient method. Every geometric answer is cross-checked against the
 union over seed units of the shipped per-unit ``.at()`` lift, and every
-gradient answer is contained in the geometric one.
+gradient answer is contained in the geometric one. Every test here runs well
+under a second on the gate workers, so none carries a tier mark.
 """
 
 from __future__ import annotations
@@ -470,7 +471,6 @@ def test_attention_without_windowed_axes_refuses_geometry_typed() -> None:
         trace.cleanup()
 
 
-@pytest.mark.heavy
 def test_gradient_method_routes_through_the_index_list(routed) -> None:
     """Gradient probes OR into the rows the index list sends the conv rows to."""
 
@@ -488,7 +488,6 @@ def test_gradient_method_routes_through_the_index_list(routed) -> None:
     assert "probes=1" in entry.provenance.source
 
 
-@pytest.mark.heavy
 @pytest.mark.parametrize("direction", ["receptive", "projective"])
 def test_gradient_answer_is_contained_in_the_geometric_answer(stack, direction: str) -> None:
     """Empirical support never leaves the geometric hull (zero-tolerance containment)."""
@@ -506,7 +505,6 @@ def test_gradient_answer_is_contained_in_the_geometric_answer(stack, direction: 
     assert not bool((gradient & ~geometric).any())
 
 
-@pytest.mark.heavy
 def test_gradient_batch_row_seed_stays_on_its_row(branchy) -> None:
     """Gradient probes report no cross-batch influence for a pointwise batch."""
 
