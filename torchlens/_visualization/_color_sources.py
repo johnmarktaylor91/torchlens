@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from ._encoding import EncodingChannelRequest
+from ._encoding_request import EncodingChannelRequest
 
 
 def _attribution_kind(value: Any) -> str | None:

@@ -33,6 +33,7 @@ from ..._ir.op_record import amend_preview_output_parent_rebind
 from ..._ir.predicate import RecordContext
 from ..._ir.refs import DeviceRef, DtypeRef, ParamRef, ReservedLabel, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
+from ..._output_slot import returned
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
     apply_static_label_save_policy,
@@ -533,7 +534,6 @@ class TinygradBackend:
                 "tinygrad backend preview requires at least one tinygrad Tensor output."
             )
         trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
-        from ...recording.types import returned
 
         trace._output_slot = returned(output)
         trace.transformed_output = output_transform(output) if callable(output_transform) else None

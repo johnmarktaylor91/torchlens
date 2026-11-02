@@ -52,12 +52,12 @@ if TYPE_CHECKING:
     from torchlens._runnable import ReadinessReport
 
     from .._io.streaming import BundleStreamWriter
+    from .._output_slot import OutputSlot
     from .._runnable import (
         ArchivedActivation,
         SparseRunDescriptor,
     )
     from ..debug._audit import HealthReport
-    from ..recording.types import OutputSlot
     from ._op_dedup import IdentityCacheEntry
     from .func_call_location import FuncCallLocation
 

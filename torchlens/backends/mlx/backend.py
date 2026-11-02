@@ -39,6 +39,7 @@ from ..._ir.predicate import _DEFERRED_VALUE, RecordContext
 from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
 from ..._ir.workspaces import RawGraphWorkspace
+from ..._output_slot import returned, stopped
 from ..._postprocess._materialize import materialize_from_events
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
@@ -1117,7 +1118,6 @@ class MLXBackend:
                     stacklevel=2,
                 )
             trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
-            from ...recording.types import returned, stopped
 
             if halt_signal is not None:
                 trace._output_slot = stopped(halt_signal.reason)

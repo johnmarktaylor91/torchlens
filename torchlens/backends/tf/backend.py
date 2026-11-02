@@ -14,6 +14,7 @@ from ..._data_classes.param import ParamAccessor
 from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING, MissingType
 from ..._ir.capture_events import CaptureEvents
+from ..._output_slot import returned
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
     _STATIC_SELECTOR_KINDS,
@@ -427,7 +428,6 @@ class TFBackend:
             # silently with zero payloads (R17 parity with sibling previews).
             warn_zero_match_save_predicate("tf")
         trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
-        from ...recording.types import returned
 
         trace._output_slot = returned(result.output)
         trace.transformed_output = (

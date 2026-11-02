@@ -60,6 +60,7 @@ from ._fast_live_until import (
 )
 from ._fast_sparse_state import _compile_sparse_call, _CompiledSparseCall, _state_mutating_call_ids
 from ._ir.container import ContainerSpec, rebuild_container_from_spec
+from ._output_slot import returned, stopped
 from ._runnable import (
     DivergencePolicy,
     NumericAttestationStatus,
@@ -1194,7 +1195,6 @@ class _FastLiveSession:
             self._poison_and_raise(self.failure)
         if truncation is not None:
             truncation = self._settle_truncated_prefix(until, input_args, input_kwargs)
-            from .recording.types import stopped
 
             self.trace._output_slot = stopped("live run ended at until=")
         else:
@@ -1506,7 +1506,6 @@ class _FastLiveSession:
         # is stored when an output transform exists; the save scope is
         # otherwise untouched, so a sparse save stays sparse on a rerun.
         transform = self.output_transform
-        from .recording.types import returned
 
         self.trace._output_slot = returned(output)
         self.trace.transformed_output = transform(output) if transform is not None else None

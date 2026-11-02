@@ -40,6 +40,7 @@ from ..._ir.predicate import RecordContext
 from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
 from ..._ir.workspaces import _init_module_hierarchy_data
+from ..._output_slot import returned
 from ..._postprocess._grouping_stamp import build_grouping_policy_stamp
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
@@ -747,7 +748,6 @@ class JAXBackend:
         output_leaf_paths = self._output_leaf_paths(output)
         output_container_spec = self._builtin_output_container_spec(output)
         trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
-        from ...recording.types import returned
 
         trace._output_slot = returned(output)
         trace.transformed_output = output_transform(output) if callable(output_transform) else None
