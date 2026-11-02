@@ -80,10 +80,7 @@ def validate_tlspec(
             raise ValueError(f".tlspec manifest at {manifest_path} must be a JSON object.")
 
     tlspec_format = detect_tlspec_format(tlspec_path)
-    if tlspec_format in {
-        "v2.16_intervention_with_kind",
-        "v2.16_intervention",
-    }:
+    if tlspec_format in ("v2.16_intervention_with_kind", "v2.16_intervention"):
         from ..intervention import _spec_codec as _codec, save as _spec_save
 
         # The spec format torchlens 2.x wrote (format_version 1) refuses with the one 2.x
@@ -96,9 +93,7 @@ def validate_tlspec(
 
         raise modellog_216_error(str(tlspec_path), code="artifact_version_below_floor")
     if tlspec_format == "v3":
-        # The 3.0 envelope: the manifest schema, the version window and every
-        # listed file's digest, the same validators ``tl.load`` runs first.
-        _validate_format3_artifact(tlspec_path)
+        _validate_format3_artifact(tlspec_path)  # the manifest, version window and digests
         return
     if tlspec_format != "v2.0_unified":
         raise ValueError(f"Unrecognized TorchLens .tlspec format at {tlspec_path}.")

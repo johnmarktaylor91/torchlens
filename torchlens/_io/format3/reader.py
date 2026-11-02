@@ -170,16 +170,7 @@ def read_manifest(path: str | Path) -> dict[str, Any]:
         )
     if "format" not in manifest:
         raise pre3_error(root, "manifest.json without a format key", code=BELOW_FLOOR)
-    errors = manifest_schema_errors(manifest)
-    if errors:
-        shown = "; ".join(errors[:8]) + (f" (+{len(errors) - 8} more)" if len(errors) > 8 else "")
-        raise artifact_error(
-            f"Artifact manifest {manifest_path} fails the 3.0 manifest schema: {shown}.",
-            code=_CODES["manifest_invalid"],
-            remedy="re-save the trace with trace.save(); the manifest was edited or corrupted",
-            file_path=str(manifest_path),
-            errors=tuple(errors),
-        )
+    _refuse_schema_errors(manifest_path, manifest_schema_errors(manifest))
     check_version_window(manifest, root)
     if manifest["save_level"] not in contract.SAVE_LEVELS:
         raise artifact_error(
@@ -190,6 +181,21 @@ def read_manifest(path: str | Path) -> dict[str, Any]:
             file_path=str(manifest_path),
         )
     return manifest
+
+
+def _refuse_schema_errors(manifest_path: Path, errors: list[str]) -> None:
+    """Raise ``manifest_schema_invalid`` naming the first eight schema violations."""
+
+    if not errors:
+        return
+    shown = "; ".join(errors[:8]) + (f" (+{len(errors) - 8} more)" if len(errors) > 8 else "")
+    raise artifact_error(
+        f"Artifact manifest {manifest_path} fails the 3.0 manifest schema: {shown}.",
+        code=_CODES["manifest_invalid"],
+        remedy="re-save the trace with trace.save(); the manifest was edited or corrupted",
+        file_path=str(manifest_path),
+        errors=tuple(errors),
+    )
 
 
 def validate_artifact(path: str | Path) -> dict[str, Any]:
@@ -231,72 +237,18 @@ class TensorRefSink:
         self._files = files
 
     def add(self, ref: Mapping[str, Any], at: str) -> Any:
-        shape = ref["shape"]
-        if not isinstance(shape, list) or not all(is_int(d) and d >= 0 for d in shape):
-            raise cell_error(
-                at, "tensor shape must be an array of non-negative integers", code=CELL_CODE
-            )
-        if len(shape) > 64:
-            raise cell_error(at, "tensor shape has more than 64 dimensions", code=CELL_CODE)
-        numel = math.prod(shape)
-        if numel > MAX_TENSOR_NUMEL:
-            raise cell_error(
-                at,
-                f"tensor shape {shape!r} declares more than {MAX_TENSOR_NUMEL} elements",
-                code=CELL_CODE,
-            )
-        device = ref["device"]
-        if not isinstance(device, str) or not DEVICE_TEXT.fullmatch(device):
-            raise cell_error(at, f"tensor device {device!r} is not a device string", code=CELL_CODE)
-        try:
-            torch.device(device)
-        except (RuntimeError, TypeError, ValueError):
-            raise cell_error(
-                at, f"tensor device {device!r} is not a torch device", code=CELL_CODE
-            ) from None
-        is_complex = ref.get("complex", False)
-        if not isinstance(ref["requires_grad"], bool) or not isinstance(is_complex, bool):
-            raise cell_error(
-                at, "tensor requires_grad and complex must be booleans", code=CELL_CODE
-            )
+        shape, numel, device, is_complex, dtype_name = _tensor_geometry(ref, at)
         codec_id, codec_metadata = _split_codec(ref["codec"], at=at)
         if codec_id not in self._codecs:
             raise cell_error(
                 at, f"tensor codec {codec_id!r} is not among the manifest's codecs", code=CELL_CODE
             )
-        dtype_name = ref["dtype"]
-        if not isinstance(dtype_name, str) or dtype_name not in dtype_table():
-            raise cell_error(
-                at, f"tensor dtype {dtype_name!r} is outside the dtype table", code=CELL_CODE
-            )
-        if dtype_name not in STORABLE_DTYPES:
-            raise cell_error(
-                at, f"tensor dtype {dtype_name!r} is not a storable dtype", code=CELL_CODE
-            )
         blob, key = ref.get("blob"), ref.get("key")
         if blob is None and key is None:
             self.structure_only_refs += 1
             return None
-        if not isinstance(blob, str) or not _BLOB_PATH.fullmatch(blob):
-            raise cell_error(
-                at,
-                f"tensor blob {blob!r} is not a blobs/<codec>-<nnnn>.safetensors path",
-                code=CELL_CODE,
-            )
-        if not isinstance(key, str) or not _BLOB_KEY.fullmatch(key):
-            raise cell_error(at, f"tensor key {key!r} is not an opaque t<k> key", code=CELL_CODE)
-        listed = self._files.get(blob)
-        if not isinstance(listed, Mapping):
-            raise cell_error(
-                at, f"tensor blob {blob} is not listed in the manifest's files", code=CELL_CODE
-            )
         declared = numel * _element_size(dtype_name) * (2 if is_complex else 1)
-        if declared > int(listed["bytes"]):
-            raise cell_error(
-                at,
-                f"tensor declares {declared} bytes but its chunk {blob} holds {listed['bytes']}",
-                code=CELL_CODE,
-            )
+        listed = self._listed_chunk(blob, key, at, declared)
         blob_id = f"{blob}#{key}"
         declaration = (list(shape), dtype_name, device, ref["requires_grad"], codec_id)
         seen = self.entries.get(blob_id)
@@ -338,6 +290,69 @@ class TensorRefSink:
             "codec_metadata": codec_metadata,
         }
         return BlobRef(blob_id, kind)
+
+    def _listed_chunk(self, blob: Any, key: Any, at: str, declared: int) -> Mapping[str, Any]:
+        """Return the manifest ``files`` entry of ``blob`` once the reference is well formed."""
+
+        if not isinstance(blob, str) or not _BLOB_PATH.fullmatch(blob):
+            raise cell_error(
+                at,
+                f"tensor blob {blob!r} is not a blobs/<codec>-<nnnn>.safetensors path",
+                code=CELL_CODE,
+            )
+        if not isinstance(key, str) or not _BLOB_KEY.fullmatch(key):
+            raise cell_error(at, f"tensor key {key!r} is not an opaque t<k> key", code=CELL_CODE)
+        listed = self._files.get(blob)
+        if not isinstance(listed, Mapping):
+            raise cell_error(
+                at, f"tensor blob {blob} is not listed in the manifest's files", code=CELL_CODE
+            )
+        if declared > int(listed["bytes"]):
+            raise cell_error(
+                at,
+                f"tensor declares {declared} bytes but its chunk {blob} holds {listed['bytes']}",
+                code=CELL_CODE,
+            )
+        return listed
+
+
+def _tensor_geometry(ref: Mapping[str, Any], at: str) -> tuple[list[int], int, str, bool, str]:
+    """Check a tensor cell's shape, device, flags and dtype; return them with the element count."""
+
+    shape = ref["shape"]
+    if not isinstance(shape, list) or not all(is_int(d) and d >= 0 for d in shape):
+        raise cell_error(
+            at, "tensor shape must be an array of non-negative integers", code=CELL_CODE
+        )
+    if len(shape) > 64:
+        raise cell_error(at, "tensor shape has more than 64 dimensions", code=CELL_CODE)
+    numel = math.prod(shape)
+    if numel > MAX_TENSOR_NUMEL:
+        raise cell_error(
+            at,
+            f"tensor shape {shape!r} declares more than {MAX_TENSOR_NUMEL} elements",
+            code=CELL_CODE,
+        )
+    device = ref["device"]
+    if not isinstance(device, str) or not DEVICE_TEXT.fullmatch(device):
+        raise cell_error(at, f"tensor device {device!r} is not a device string", code=CELL_CODE)
+    try:
+        torch.device(device)
+    except (RuntimeError, TypeError, ValueError):
+        raise cell_error(
+            at, f"tensor device {device!r} is not a torch device", code=CELL_CODE
+        ) from None
+    is_complex = ref.get("complex", False)
+    if not isinstance(ref["requires_grad"], bool) or not isinstance(is_complex, bool):
+        raise cell_error(at, "tensor requires_grad and complex must be booleans", code=CELL_CODE)
+    dtype_name = ref["dtype"]
+    if not isinstance(dtype_name, str) or dtype_name not in dtype_table():
+        raise cell_error(
+            at, f"tensor dtype {dtype_name!r} is outside the dtype table", code=CELL_CODE
+        )
+    if dtype_name not in STORABLE_DTYPES:
+        raise cell_error(at, f"tensor dtype {dtype_name!r} is not a storable dtype", code=CELL_CODE)
+    return shape, numel, device, is_complex, dtype_name
 
 
 def _split_codec(codec: Any, *, at: str) -> tuple[str, dict[str, Any] | None]:

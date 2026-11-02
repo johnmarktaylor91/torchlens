@@ -125,8 +125,7 @@ class TensorEntry:
     codec_metadata:
         Optional best-effort JSON-ready codec metadata.
     key:
-        Key of the tensor inside a packed safetensors chunk (3.0 saved format,
-        ``blobs/<codec>-<nnnn>.safetensors``); ``None`` for a one-tensor blob.
+        Tensor key inside a packed 3.0 safetensors chunk; ``None`` for a one-tensor blob.
     """
 
     blob_id: str
@@ -158,11 +157,6 @@ class TensorEntry:
         ----------
         data:
             Raw decoded JSON mapping.
-
-        Returns
-        -------
-        TensorEntry
-            Validated tensor entry.
 
         Raises
         ------
@@ -218,9 +212,9 @@ class TensorEntry:
             )
         }
         codec_metadata = data.get("codec_metadata")
-        if codec_metadata is not None and not isinstance(codec_metadata, dict):
-            raise _schema_refuse("Manifest tensor entry 'codec_metadata' must be an object.")
         if codec_metadata is not None:
+            if not isinstance(codec_metadata, dict):
+                raise _schema_refuse("Manifest tensor entry 'codec_metadata' must be an object.")
             codec_metadata = _restore_codec_metadata_value(codec_metadata)
             if not isinstance(codec_metadata, dict):
                 raise _schema_refuse(
@@ -410,19 +404,7 @@ class Provenance:
 
 
 def _optional_str(data: dict[str, Any], field_name: str) -> str | None:
-    """Return an optional manifest string field after validation.
-
-    Parameters
-    ----------
-    data:
-        Manifest entry mapping.
-    field_name:
-        Optional field to read.
-
-    Returns
-    -------
-    str | None
-        Field value, or ``None`` when omitted.
+    """Return the optional string field ``field_name`` of ``data`` (``None`` when omitted).
 
     Raises
     ------

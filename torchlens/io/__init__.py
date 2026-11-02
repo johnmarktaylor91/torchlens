@@ -51,8 +51,7 @@ def reset_naming_counter(class_name: str | None = None) -> None:
 def detect_tlspec_format(path: str | Path) -> str:
     """Detect the on-disk TorchLens ``.tlspec`` format.
 
-    Detection is ordered from the newest, most explicit schema markers to older
-    legacy markers. The first matching marker wins.
+    Detection runs from the newest, most explicit markers to the oldest; the first match wins.
 
     Parameters
     ----------
@@ -62,9 +61,8 @@ def detect_tlspec_format(path: str | Path) -> str:
     Returns
     -------
     str
-        One of ``"v3"`` (the 3.0 saved format), ``"v2.0_unified"``,
-        ``"v2.16_intervention_with_kind"``, ``"v2.16_intervention"``,
-        ``"v2.16_modellog_portable"``, or ``"unknown"``.
+        One of ``"v3"`` (the 3.0 saved format), ``"v2.0_unified"``, ``"v2.16_intervention"``,
+        ``"v2.16_intervention_with_kind"``, ``"v2.16_modellog_portable"`` or ``"unknown"``.
     """
 
     tlspec_path = Path(path)

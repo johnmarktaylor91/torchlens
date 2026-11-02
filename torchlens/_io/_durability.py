@@ -19,8 +19,12 @@ from __future__ import annotations
 
 import io
 import os
+import warnings
 from pathlib import Path
 from typing import Any
+
+from .._utils.hashing import sha256_file
+from ..errors import TorchLensWarning
 
 __all__ = ["fsync_file", "fsync_dir", "fsync_tree"]
 
@@ -166,3 +170,83 @@ def _restrict_tree_modes(root: Path) -> None:
 
     for path in root.rglob("*"):
         _restrict_mode(path, 0o700 if path.is_dir() else 0o600)
+
+
+def _directories_content_equal(left: Path, right: Path) -> bool:
+    """Return whether two directory trees hold byte-identical file contents.
+
+    Used by :func:`cleanup_tmp` to decide whether an orphaned ``.bak.*``
+    bundle directory is a provable duplicate of the live bundle (safe to
+    delete) versus genuinely distinct data that must not be silently
+    destroyed. Compares the set of relative file paths and, for each,
+    the file's SHA-256 digest via :func:`sha256_file`.
+
+    Parameters
+    ----------
+    left:
+        First directory to compare.
+    right:
+        Second directory to compare.
+
+    Returns
+    -------
+    bool
+        ``True`` if both directories contain the same relative file paths
+        with byte-identical contents, ``False`` otherwise (including on
+        any I/O error while comparing, to fail closed toward "not proven
+        redundant").
+    """
+
+    try:
+        left_files = sorted(p.relative_to(left) for p in left.rglob("*") if p.is_file())
+        right_files = sorted(p.relative_to(right) for p in right.rglob("*") if p.is_file())
+    except OSError:
+        return False
+    if left_files != right_files:
+        return False
+    try:
+        return all(sha256_file(left / rel) == sha256_file(right / rel) for rel in left_files)
+    except OSError:
+        return False
+
+
+def _restore_backup(backup_path: Path, bundle_path: Path, *, warn_on_failure: bool = True) -> bool:
+    """Best-effort restore an overwritten bundle after a failed replacement.
+
+    On a DOUBLE fault (the save failed AND this restore also fails -- permissions,
+    disk-full, a cross-device backup), the user's previous artifact is gone from its
+    canonical ``bundle_path`` but still exists under the ``.bak.<uuid>`` backup name.
+    Silently swallowing that left the prior artifact stranded under a hidden name the
+    error never mentioned; disclose the backup path so it is recoverable (matching the
+    save handler's stated intent). No behavior change on the single-fault path, where
+    the restore succeeds.
+
+    Parameters
+    ----------
+    backup_path:
+        Backup path holding the previous bundle contents.
+    bundle_path:
+        Final bundle path to restore.
+    warn_on_failure:
+        Emit a warning naming the stranded backup when the restore fails. Callers that
+        do their own disclosure (``cleanup_tmp``) pass ``False``.
+
+    Returns
+    -------
+    bool
+        ``True`` when the backup was restored onto ``bundle_path``.
+    """
+
+    try:
+        backup_path.rename(bundle_path)
+    except OSError as exc:
+        if warn_on_failure:
+            warnings.warn(
+                f"Could not restore the previous bundle from its backup after a failed "
+                f"save ({exc}). Your prior artifact is NOT lost: it remains at "
+                f"{backup_path}. Move it back to {bundle_path} to recover it.",
+                TorchLensWarning,
+                stacklevel=2,
+            )
+        return False
+    return True

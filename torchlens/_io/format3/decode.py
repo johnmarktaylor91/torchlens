@@ -429,7 +429,7 @@ def build_component(cls: type, fields: Mapping[str, Any], *, at: str = "value") 
         raise cell_error(
             at, f"{class_path(cls)} rejects its fields: {exc}", code=CELL_CODE
         ) from None
-    obj = state_new(cls)
+    obj: Any = state_new(cls)
     setstate = getattr(cls, "__setstate__", None)
     if setstate is not None and setstate is not getattr(object, "__setstate__", None):
         setstate(obj, state)

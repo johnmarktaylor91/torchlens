@@ -71,7 +71,7 @@ def rehydrate_trace(
     materialize_nested: bool,
     payload_hints: PayloadLoadHints | Mapping[str, Any] | None = None,
     resolved_blobs_dir: Path | None = None,
-    trace: Any = None,
+    trace: Any = None,  # the 3.0 reader's record object to restore into
 ) -> Trace:
     """Restore a scrubbed portable ``Trace`` state.
 
@@ -88,13 +88,11 @@ def rehydrate_trace(
     map_location:
         Target device passed through to ``safetensors`` materialization.
     materialize_nested:
-        Whether nested blob refs inside containers should be materialized when
-        ``lazy=True``.
+        Whether nested blob refs inside containers materialize under ``lazy=True``.
     payload_hints:
         Optional backend payload hints used during materialization.
     resolved_blobs_dir:
-        Canonical blob containment root already resolved for this load
-        operation. When omitted, it is resolved once here.
+        Canonical blob containment root for this load; resolved once here when omitted.
 
     Returns
     -------
