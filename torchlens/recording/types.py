@@ -17,7 +17,7 @@ import torch
 from .._captured_run import TraceLike
 from .._errors import CaptureNotActiveError, InvalidArgumentError
 from .._ir.predicate import EventKind, ModuleStackFrame, RecordContext, RetroactiveCaptureDecision
-from .._output_slot import read_output
+from .._output_slot import read_output, returned as returned, stopped as stopped
 from .._utils.tensor_utils import SaveMode
 
 __all__ = [
@@ -459,8 +459,7 @@ _RAW_METADATA_FIELDS = (
 
 
 # --- Model-output readback (Recording.output / Trace.output) ---------------
-# The slot type and its constructors live in ``torchlens._output_slot`` (a leaf
-# module every capture path imports at module top); they stay reachable here.
+# The output slot and its constructors live in ``torchlens._output_slot`` (vocabulary).
 
 #: ``RecordingSettings`` field -> the ``_RecordingConfig`` slot it reads. The
 #: record speaks the public spellings: the capture knobs keep their

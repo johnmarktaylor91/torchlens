@@ -32,7 +32,6 @@ from ..._ir.intervention import FireResult, FunctionEventInput
 from ..._ir.predicate import RecordContext
 from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
-from ..._output_slot import returned, stopped
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
     apply_static_label_save_policy,
@@ -43,7 +42,7 @@ from ..._trace_core.relation_views import freeze_trace_relation_views
 from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
 from ...options import CaptureOptions, merge_capture_options
 from ...recording._halt import StopSignal
-from ...recording.types import CaptureSpec
+from ...recording.types import CaptureSpec, returned, stopped
 from ...validation.status import ValidationReplaySource, ValidationStatus
 from .._finalize import (
     attach_function_root_module,
