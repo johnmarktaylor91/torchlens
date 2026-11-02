@@ -72,7 +72,7 @@ from .format3.payloads import (
     host_tensor,
     tensor_reference,
 )
-from .format3.writer import preflight_reload, write_trace_envelope
+from .format3.writer import preflight_reload, settle_live_side, write_trace_envelope
 from .lazy import LazyActivationRef
 from .manifest import Manifest, Provenance, TensorEntry, enforce_version_policy
 from .paths import (
@@ -644,6 +644,7 @@ def save(
         _restrict_mode(tmp_path, 0o700)
         _restrict_mode(tmp_path / "blobs", 0o700)
 
+        settle_live_side(trace)
         scrubbed_state, blob_specs, scrub_unsupported_tensors = _scrub_trace_for_bundle(
             trace,
             include_outs=include_outs,

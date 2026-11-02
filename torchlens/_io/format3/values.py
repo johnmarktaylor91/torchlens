@@ -598,7 +598,7 @@ def _decode_record(data: dict[str, Any], at: str) -> Any:
         instance = cls(fields.pop("value"))
         instance.__dict__.update(fields)
         return instance
-    instance = cls.__new__(cls)
+    instance: Any = object.__new__(cls)
     setstate = getattr(instance, "__setstate__", None)
     if callable(setstate):
         setstate(fields)

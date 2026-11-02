@@ -512,6 +512,7 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "min_distance_to_output",
     "max_distance_to_output",
     "is_buffer",
+    "is_constant",
     "address",
     "buffer_pass",
     "buffer_source",

@@ -47,6 +47,7 @@ from .._ir.container_registry import _iter_tensor_leaves
 from .._quantities import Bytes, Duration, Flops
 from .._utils._torch_symbols import torch_dtype_named
 from .._utils.hashing import sha256_file
+from ..backends._constants import is_constant_op
 from ..backends.torch._tl import clear_meta
 from ._conditional_records import (
     _find_conditional_evaluation_entry_edge,
@@ -1227,6 +1228,9 @@ def _build_layer_logs(self: "Trace") -> None:
 
     for pass_log in self._layer_list:
         no_call_label = pass_log.layer_label
+        # The shared constants rule's stamp (backends.2): backends that run
+        # ``apply_constants_rule`` have set it already; torch eager is stamped here.
+        pass_log.is_constant = bool(pass_log.is_constant) or is_constant_op(pass_log)
 
         if no_call_label not in layer_logs:
             # First pass: create Layer from this pass's data.

@@ -59,13 +59,18 @@ def host_tensor(tensor: torch.Tensor) -> torch.Tensor:
     Returns
     -------
     torch.Tensor
-        Contiguous CPU tensor; a complex tensor becomes its real view.
+        Contiguous CPU tensor that owns its storage exactly (safetensors
+        refuses two keys of one file sharing memory, and views of one
+        activation do); a complex tensor becomes its real view.
     """
 
-    host = tensor.detach().resolve_conj().resolve_neg()
-    if host.is_complex():
-        host = torch.view_as_real(host)
-    return host.contiguous().cpu()
+    source = tensor.detach().resolve_conj().resolve_neg()
+    host = torch.view_as_real(source) if source.is_complex() else source
+    host = host.contiguous().cpu()
+    owns_storage = host.untyped_storage().nbytes() == host.numel() * host.element_size()
+    if owns_storage and host.untyped_storage().data_ptr() != tensor.untyped_storage().data_ptr():
+        return host
+    return host.clone()
 
 
 class ChunkWriter:

@@ -64,6 +64,9 @@ _SEED_KEYS: tuple[tuple[str, str], ...] = (
 )
 #: Disclosure paths listed in the manifest (the full list is in the cells).
 _DISCLOSURE_PATHS_SHOWN = 16
+#: Op keys whose absent map is written as an empty object (contract page,
+#: "Values settled on the live side"); the live op is settled the same way.
+_EMPTY_MAP_OP_KEYS = ("edge_substitutions", "edge_replacement_stamps")
 #: Values the discovery walk never descends into.
 _LEAF_TYPES = (str, bytes, bytearray, int, float, complex, bool, type(None), torch.Tensor)
 
@@ -175,6 +178,30 @@ class RecordTables:
         return tagged("ref", record=kind, row=row)
 
 
+def settle_live_side(trace: Any) -> None:
+    """Settle the live-side keys on the live trace before it is written.
+
+    ``contract.LIVE_SIDE_VALUE_KEYS``: a value the loader used to settle after
+    loading is settled here, on the live trace, so the loaded value equals the
+    live one. An absent ``edge_substitutions`` or ``edge_replacement_stamps``
+    map becomes ``{}``. ``func_duration`` and ``equivalence_class`` are
+    written as they are (a ``Duration`` round-trips through the typed value
+    encoding; the barcode remap of ``equivalence_class`` stays the writer's
+    privacy policy). ``_options_grouping_policy`` is stamped at capture by
+    loop detection on every live trace, so the writer writes it unchanged.
+
+    Parameters
+    ----------
+    trace:
+        Live trace about to be saved.
+    """
+
+    for op in list(getattr(trace, "_layer_list", None) or ()):
+        for key in _EMPTY_MAP_OP_KEYS:
+            if getattr(op, key, None) is None:
+                setattr(op, key, {})
+
+
 def _cell(record: Any, state: Mapping[str, Any], column: str, storage: str) -> Any:
     """Return one stored value of a record (computed keys are computed if absent)."""
 
@@ -248,7 +275,9 @@ def _encode_record_rows(
     """
 
     names = {kind: level_columns(kind, payload_policy) for kind, _, _ in RECORD_INDEX}
-    columns = {kind: {name: [] for name in names[kind]} for kind in names}
+    columns: dict[str, dict[str, list[Any]]] = {
+        kind: {name: [] for name in names[kind]} for kind in names
+    }
     done = dict.fromkeys(names, 0)
     progressed = True
     while progressed:
@@ -661,6 +690,7 @@ __all__ = [
     "record_kind_of",
     "record_type_table",
     "reload_check",
+    "settle_live_side",
     "write_bundle",
     "write_intervention_recipe",
     "write_record_files",

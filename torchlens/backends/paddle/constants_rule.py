@@ -104,9 +104,9 @@ def constant_labels(captures: Iterable[Any]) -> frozenset[str]:
 def constant_layer_labels(trace: Any) -> frozenset[str]:
     """Public labels of every op the constants rule marks on a Paddle trace.
 
-    Closure constants and literal producers both count. This is the one place
-    the Paddle backend answers "is this a constant layer" until the shared
-    ``is_constant_layer`` record field lands.
+    Closure constants and literal producers both count. This is the capture-side
+    answer Paddle validation uses; the record carries the shared rule's stamp
+    as ``Op.is_constant``.
 
     Parameters
     ----------
