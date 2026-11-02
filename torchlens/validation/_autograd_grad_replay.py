@@ -28,7 +28,8 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._utils.rng import execute_with_restored_rng_autocast
-from ..backends.torch._autograd_grad_boundary import grad_signature, is_autograd_grad_recorder
+from ..backends.torch._autograd_grad_boundary import grad_signature
+from ..backends.torch._autograd_grad_marker import is_autograd_grad_recorder
 from ._replay_device import align_parent_to_slot_device, saved_args_on_consumed_devices
 
 if TYPE_CHECKING:
