@@ -598,7 +598,7 @@ def find_nan(trace: Trace) -> Any:
 
 
 def check_plan(trace: Trace, plan: Any) -> Any:
-    """Audit-only plan check (weightsfree memo D14; nnsight-scan parity).
+    """Audit-only plan check (nnsight-scan parity).
 
     Resolves each plan entry's selector against this trace, checks
     multiplicity, and compares declared replacement geometry (a meta

@@ -357,7 +357,7 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     # The per-trace columnar Op row store (torchlens._trace_core). Never
     # portable: plain pickle re-materializes each Op as a detached row
     # from its own state, and .tlspec artifacts stay object-shaped until
-    # the M11 direct semantic serialization.
+    # the direct semantic serialization.
     "_trace_core": FieldPolicy.DROP,
     # L3 primitive-op profile: persists as of tlspec v8; loaded profiles
     # validate through validate_loaded_primitive_profile whenever present.
@@ -454,7 +454,7 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     # the live intervention spec, so it is also dropped at the postprocess seam.
     "_tl_predicate_intervention_spec_keys": FieldPolicy.DROP,
     "_tl_predicate_intervention_target_keys": FieldPolicy.DROP,
-    "_tl_injection_state": FieldPolicy.DROP,  # F01 session transient
+    "_tl_injection_state": FieldPolicy.DROP,  # session transient
     # Streaming-bundle provenance (STREAMING axes). Already popped and
     # restored around the scrub by `_io/bundle.py` and cleared by
     # `data_classes/cleanup.py`; a load rebinds them fresh, so DROP is the

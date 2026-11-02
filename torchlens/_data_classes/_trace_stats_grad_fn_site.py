@@ -131,7 +131,7 @@ def grad_fn_site_summary(trace: "Trace") -> "OrderedDict[str | None, dict[str, A
 def grad_fn_fire_timings(trace: "Trace") -> "OrderedDict[str, Duration | None]":
     """Return live per-fire backward timing spans keyed like ``grad_fn_calls``.
 
-    DOCUMENTED-UNSTABLE spelling (L9 memo 1.3; pending naming-session
+    DOCUMENTED-UNSTABLE spelling (pending naming-session
     ratification). Serves the paired ``time.perf_counter()`` stamps
     carried by the runtime ``GradFnFired`` events: a timed fire yields
     its span as a :class:`~torchlens._quantities.Duration`, an untimed

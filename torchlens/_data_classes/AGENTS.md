@@ -37,7 +37,7 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `_op_save.py` | Op tensor-save and payload functions (record rebuild destination) |
 | `_op_relations.py` | Op relation functions: parents, children, siblings, containment (record rebuild destination) |
 | `_op_cost.py` | Op cost functions: FLOPs, bytes, timing (record rebuild destination) |
-| `_layer_views.py` | Layer view functions: pass delegation and graph unions (record rebuild destination) |
+| `_layer_views.py` | Layer view functions: per-pass aggregation, graph unions, row export and mirror materialization moved off `Layer` |
 | `trace.py` | `Trace` (the dataclass and every public method as a thin door call), conditional event records |
 | `_trace_docs.py` | Binds the full `Trace` method docstrings from the `_trace_docs_*.py` tables at class definition |
 | `_trace_docs_stats.py` | Docstring table: `Trace` stats, views and inventory methods |
@@ -78,7 +78,6 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `interface.py` | Imported `Trace` access/query custom_methods |
 | `_lookup_keys.py` | Lookup help and fuzzy key feedback |
 | `_module_role_hints.py` | Module input/output role hint helpers |
-| `_op_card_html.py` | `OpCardHtmlMixin`: the notebook `_repr_html_` hook on `Op`, the record layer's one reach into `_notebook` |
 | `_repr.py` | Shared formatting helpers for user-facing reprs |
 | `_runtime_handles.py` | Runtime object handle resolution helpers |
 | `_state_adapter.py` | Class-agnostic live-state enumeration/restore adapters (`state_items`/`state_new`/`state_restore`; the flat build-state they once adapted dissolved in M10) |

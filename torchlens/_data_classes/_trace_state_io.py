@@ -274,7 +274,7 @@ def _drop_runtime_only_caches(state: dict[str, Any]) -> None:
     # The recorded save request can hold a raw user save callable.
     state.pop("_rerun_save_request", None)
     # Same runtime-only class: the last draw's layout-execution geometry
-    # record (vizmech D24) rebuilds on the next draw and never serializes.
+    # record rebuilds on the next draw and never serializes.
     state.pop("_last_render_geometry", None)
     state.pop("_container_ordinals_by_output_op_label", None)
     state.pop("_container_ordinals_by_input_func_call_id", None)

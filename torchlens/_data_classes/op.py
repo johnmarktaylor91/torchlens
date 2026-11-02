@@ -36,7 +36,6 @@ Field categories (matching the LAYER_PASS_LOG_FIELD_ORDER in constants.py):
     bottom-level submodule output status.
 """
 
-import copy
 import warnings
 import weakref
 from collections import defaultdict
@@ -51,14 +50,13 @@ from typing import (
 
 import torch
 
-from .._constants import _RAW_LABEL_SUFFIX, ARG_EXPRESSIONS_FIELD, LAYER_PASS_LOG_FIELD_ORDER
+from .._constants import ARG_EXPRESSIONS_FIELD, LAYER_PASS_LOG_FIELD_ORDER
 from .._errors import (
     ArgumentTypeError,
     InvalidArgumentError,
     MutatedReferenceError,
     PayloadUnavailableError,
     RecordBindingError,
-    UserTransformError,
 )
 from .._io import (
     TLSPEC_VERSION,
@@ -77,9 +75,7 @@ from .._quantities import (
     as_bytes,
     as_duration,
     as_flops,
-    as_macs,
 )
-from .._save_budget import SaveBudgetExceededError
 from .._selection.selection import _SelectionOperand
 from .._trace_core.fact_blocks import OP_FACT_FIELDS
 from .._trace_core.groups import GroupRef
@@ -103,34 +99,44 @@ from .._trace_state import TraceState
 from .._utils._torch_compat import tensor_version_or_none
 from .._utils.arg_handling import copy_arg_tree
 from .._utils.tensor_utils import (
-    SaveMode,
     concatenate_batch_tensors,
-    copy_tensor_payload,
-    get_memory_amount,
     get_memory_amount_from_metadata,
     print_override,
-    safe_to,
 )
-from ..backends.torch._tl import mark_detached_saved_activation
 from ..intervention.errors import DirectActivationWriteWarning
 from ..intervention.types import (
     LAYER_PASS_LOG_FIELD_FORK_POLICY,
     EdgeUseRecord,
     FunctionRegistryKey,
 )
+from . import _doors, _labels, _op_cost, _op_relations, _op_save
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
-from ._op_card_html import OpCardHtmlMixin
-from ._op_dedup import _dedup_cached_identity_out, _dedup_saved_activation_out
-from ._op_grad_stream import stream_grad_blobs
-from ._op_transforms import (
+from ._layer_accessors import OpAccessor
+from ._op_dedup import (  # noqa: F401  (re-exported for backends.torch importers)
+    _dedup_cached_identity_out,
+    _dedup_saved_activation_out,
+)
+from ._op_save import (  # noqa: F401  (re-exported for backends and postprocess importers)
+    _dtype_or_none,
+    _effective_activation_save_mode,
+    _memory_or_none,
+    _shape_or_none,
+    _stamp_reference_out,
+)
+from ._op_transforms import (  # noqa: F401  (re-exported for backends.torch importers)
     apply_transform,
     train_mode_tripwire_armed,
-    transform_error_message,
     validate_streaming_transform_output,
     validate_train_mode_transform_output,
 )
 from ._state_adapter import state_items, state_restore
+from .container import (
+    container_from_op,
+    containers_from_op,
+    input_containers_from_op,
+    output_containers_from_op,
+)
 from .field_policy import (
     build_record_field_policy_table,
     default_fill_state_from_policy,
@@ -164,7 +170,6 @@ _LAZY_READ_FIELDS = frozenset({"grad", "out"})
 # ``GroupRef`` and reads resolve to the group's cached IMMUTABLE view
 # (``_GroupViewField``), so sharing is alias-safe without per-read copies.
 _INTERCEPTED_READ_FIELDS = _LAZY_READ_FIELDS
-_WARNED_REFERENCE_SAVE_MODE = False
 _LAYER_PASS_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_source_trace_ref": None,
     "out_ref": None,
@@ -490,134 +495,6 @@ _POOLABLE_DEFAULT_FACTORIES = frozenset({list, set, dict, int, tuple})
 #: simply refuse to pool).
 _CONTAINER_KEY_MAX_DEPTH = 4
 _CONTAINER_KEY_MAX_MEMBERS = 1024
-
-_DEEPCOPY_IMMUTABLE_TYPES = (
-    str,
-    bytes,
-    int,
-    float,
-    bool,
-    type(None),
-    torch.dtype,
-    torch.device,
-    Bytes,
-    Duration,
-    Flops,
-)
-
-_OUTPUT_NODE_REPLACED_FIELDS = frozenset(
-    {
-        "_edge_uses",
-        "_label_raw",
-        "_layer_label_raw",
-        "_param_barcodes",
-        "_param_logs",
-        "activation_memory",
-        "annotations",
-        "arg_names",
-        "atomic_module_call",
-        "autograd_memory",
-        "bytes_delta_at_call",
-        "bytes_peak_at_call",
-        "children",
-        "code_context",
-        "container_path",
-        "container_spec",
-        "dropped_edge_tensor_args",
-        "dtype",
-        "equivalence_class",
-        "equivalent_ops",
-        "func",
-        "func_config",
-        "func_duration",
-        "func_name",
-        "func_non_tensor_args",
-        "func_rng_states",
-        "grad_fn_class_name",
-        "has_children",
-        "has_out_variations",
-        "has_output_descendant",
-        "input_to_module_calls",
-        "internal_source_parents",
-        "is_edited",
-        "edits",
-        "io_role",
-        "is_atomic_module",
-        "is_buffer",
-        "is_final_output",
-        "is_input",
-        "is_internal_source",
-        "is_module_output",
-        "is_output",
-        "is_transform",
-        "type",
-        "module",
-        "module_call_stack",
-        "modules",
-        "non_tensor_kwargs",
-        "non_tensor_pos_args",
-        "num_args_total",
-        "num_autograd_tensors",
-        "num_kwargs",
-        "num_params",
-        "num_params_frozen",
-        "num_params_trainable",
-        "num_passes",
-        "num_pos_args",
-        "out",
-        "out_versions_by_child",
-        "output_descendants",
-        "output_of_module_calls",
-        "output_of_modules",
-        "param_memory",
-        "param_shapes",
-        "parent_arg_positions",
-        "parent_param_ops",
-        "parent_params",
-        "parents",
-        "pass_number",
-        "raw_index",
-        "recurrent_ops",
-        "saved_args",
-        "saved_kwargs",
-        "shape",
-        "transform_chain",
-        "transform_config",
-        "transform_fn_name",
-        "transform_fn_qualname",
-        "transform_fn_source",
-        "transform_kind",
-        "transformed_activation_memory",
-        "transformed_out",
-        "transformed_out_dtype",
-        "transformed_out_shape",
-        "unattributed_tensor_args",
-        "var_names",
-    }
-)
-
-
-def _copy_op_field_value(value: Any) -> Any:
-    """Copy one Op field without deep-copy dispatch for immutable values.
-
-    Parameters
-    ----------
-    value:
-        Stored field value.
-
-    Returns
-    -------
-    Any
-        The original immutable value or an independent deep copy.
-    """
-
-    if isinstance(value, _DEEPCOPY_IMMUTABLE_TYPES):
-        return value
-    if isinstance(value, tuple) and all(
-        isinstance(member, _DEEPCOPY_IMMUTABLE_TYPES) for member in value
-    ):
-        return value
-    return copy.deepcopy(value)
 
 
 def _container_pool_key(
@@ -1021,18 +898,6 @@ def _recursive_safe_copy(val: Any) -> Any:
     return copy_arg_tree(val)
 
 
-def _shape_or_none(value: Any) -> tuple[int, ...] | None:
-    """Return a tensor shape tuple, or ``None`` for non-tensor values."""
-
-    return tuple(value.shape) if isinstance(value, torch.Tensor) else None
-
-
-def _dtype_or_none(value: Any) -> torch.dtype | None:
-    """Return a tensor dtype, or ``None`` for non-tensor values."""
-
-    return value.dtype if isinstance(value, torch.Tensor) else None
-
-
 def _dtype_ref_or_none(value: Any) -> DtypeRef | None:
     """Return a neutral dtype reference for a dtype-like value."""
 
@@ -1047,14 +912,6 @@ def _device_ref_from_metadata(out: Any, output_device: Any) -> DeviceRef | None:
     if output_device in (None, "same"):
         return None
     return DeviceRef.from_value(output_device)
-
-
-def _memory_or_none(value: Any) -> Bytes | None:
-    """Return tensor memory in bytes, or ``None`` for non-tensor values."""
-
-    if not isinstance(value, torch.Tensor):
-        return None
-    return as_bytes(get_memory_amount_from_metadata(value, tuple(value.shape), value.dtype))
 
 
 def _summarize_value(value: Any) -> str:
@@ -1290,56 +1147,6 @@ def _set_saved_out_metadata(entry: "Op", tensor: torch.Tensor) -> None:
     entry._internal_set("transformed_activation_memory", _memory_or_none(entry.transformed_out))
 
 
-def _warn_reference_save_mode_once() -> None:
-    """Emit the reference-mode mutation warning once per process."""
-
-    global _WARNED_REFERENCE_SAVE_MODE
-    if _WARNED_REFERENCE_SAVE_MODE:
-        return
-    warnings.warn(
-        "save_mode='reference' stores source tensors by reference; reading a mutated "
-        "saved tensor raises MutatedReferenceError.",
-        UserWarning,
-        stacklevel=3,
-    )
-    _WARNED_REFERENCE_SAVE_MODE = True
-
-
-def _effective_activation_save_mode(
-    trace: "Trace | None",
-    *,
-    func_name: str | None,
-    is_inplace: bool = False,
-) -> SaveMode:
-    """Return the effective saved-activation mode for one operation."""
-
-    save_mode = cast(SaveMode, trace._options_save_mode if trace is not None else "copy")
-    if save_mode not in {"copy", "reference", "view", "cpu_async"}:
-        raise InvalidArgumentError(
-            "save_mode must be one of 'copy', 'reference', 'view', or 'cpu_async'; "
-            f"received {save_mode!r}",
-            code="save_mode_invalid",
-            remedy="set save_mode to 'copy', 'reference', 'view', or 'cpu_async'",
-            argument="save_mode",
-        )
-    if save_mode == "reference":
-        _warn_reference_save_mode_once()
-        if is_inplace or (func_name is not None and func_name.endswith("_")):
-            return "copy"
-    return save_mode
-
-
-def _stamp_reference_out(
-    annotations: dict[str, Any], raw_out: torch.Tensor, save_mode: SaveMode
-) -> None:
-    """Store reference-mode mutation metadata for a saved output."""
-
-    if save_mode != "reference":
-        return
-    annotations["save_mode"] = "reference"
-    annotations["saved_out_version"] = tensor_version_or_none(raw_out)
-
-
 def _validate_reference_out_not_mutated(state: dict[str, Any]) -> None:
     """Raise if a reference-mode saved output has changed since capture."""
 
@@ -1366,13 +1173,13 @@ if TYPE_CHECKING:
     from .._io.lazy import LazyActivationRef
     from ..receptive_field._view import ReceptiveFieldView
     from .func_call_location import FuncCallLocation
-    from .layer import Layer, OpAccessor
+    from .layer import Layer
     from .module import Module
     from .param import Param
     from .trace import Trace
 
 
-class Op(OpCardHtmlMixin, _SelectionOperand):
+class Op(_SelectionOperand):
     """Metadata for a single tensor operation (one pass of one layer).
 
     Constructed from a dict whose keys must exactly match
@@ -2142,128 +1949,51 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
     @property
     def compute_record(self) -> Any | None:
-        """Two-term compute record (fma_macs / other_flops), derived on read.
+        """Two-term compute record (fma_macs / other_flops), derived on read."""
 
-        DOCUMENTED-UNSTABLE spelling (A07 numbers-truth lane; the C02 FactCore
-        substrate consumes this). ``None`` for boundary pseudo-rows and ops
-        with unknown FLOPs. See ``torchlens._capture.flops.ComputeRecord``.
-        """
-
-        from .._capture.compute_record import derive_compute_record_for_op
-
-        return derive_compute_record_for_op(self)
+        return _op_cost.compute_record(self)
 
     @property
     def macs_forward(self) -> Macs | None:
-        """TRUE forward multiply-accumulate count, never ``flops // 2``.
+        """TRUE forward multiply-accumulate count, never ``flops // 2``."""
 
-        A ReLU has ZERO MACs; a biased Linear's bias adds are not MACs. Ops
-        whose exact MAC split cannot be derived (user-registered rules,
-        unresolvable attention argument shapes) return ``None`` and are named
-        in the summary's MAC coverage disclosure.
-        """
-
-        record = self.compute_record
-        if record is None or record.fma_macs is None:
-            return None
-        return as_macs(record.fma_macs)
+        return _op_cost.macs_forward(self)
 
     @property
     def macs_backward(self) -> Macs | None:
-        """Backward MACs are not derivable and always ``None``.
+        """Backward MACs are not derivable and always ``None``."""
 
-        Backward FLOPs are multiplier ESTIMATES on forward FLOPs; no analytic
-        backward op record exists to split them, and a relabeled
-        ``flops // 2`` is exactly the fake-MACs disease this surface removed.
-        """
-
-        return None
+        return _op_cost.macs_backward(self)
 
     @property
     def flops_total(self) -> Flops:
-        """Approximate total FLOPs for this Op.
+        """Approximate total FLOPs for this Op."""
 
-        Returns
-        -------
-        Flops
-            Forward plus backward FLOPs, treating unknown halves as zero.
-        """
-
-        return Flops((self.flops_forward or 0) + (self.flops_backward or 0))
+        return _op_cost.flops_total(self)
 
     @property
     def macs_total(self) -> Macs | None:
-        """Total MACs are not derivable and always ``None``.
+        """Total MACs are not derivable and always ``None``."""
 
-        The backward component is a multiplier estimate with no MAC split
-        (see ``macs_backward``); a forward-only figure under a "total" name
-        would silently under-claim instead.
-        """
-
-        return None
+        return _op_cost.macs_total(self)
 
     @property
     def bytes_read(self) -> Bytes | None:
-        """Theoretical ideal read-once traffic for this operation.
+        """Theoretical ideal read-once traffic for this operation."""
 
-        This access-time model uses only recorded shape/dtype metadata. It is
-        not measured hardware traffic and can diverge under caching, kernel
-        fusion, or backend implementation details. Logical view/alias operations
-        report zero bytes moved; insufficient metadata returns ``None``.
-
-        Returns
-        -------
-        Bytes | None
-            Theoretical bytes read once from inputs and parameters.
-        """
-
-        from ..debug._cost import theoretical_op_bytes
-
-        return theoretical_op_bytes(self)[0]
+        return _doors.debug()._cost.theoretical_op_bytes(self)[0]
 
     @property
     def bytes_written(self) -> Bytes | None:
-        """Theoretical ideal write-once traffic for this operation.
+        """Theoretical ideal write-once traffic for this operation."""
 
-        This access-time model uses only recorded shape/dtype metadata. It is
-        not measured hardware traffic and can diverge under caching, kernel
-        fusion, or backend implementation details. Logical view/alias operations
-        report zero bytes moved; insufficient metadata returns ``None``.
-
-        Returns
-        -------
-        Bytes | None
-            Theoretical bytes written once for the logical output.
-        """
-
-        from ..debug._cost import theoretical_op_bytes
-
-        return theoretical_op_bytes(self)[1]
+        return _doors.debug()._cost.theoretical_op_bytes(self)[1]
 
     @property
     def arithmetic_intensity(self) -> float | None:
-        """Return theoretical forward FLOPs per ideal traffic byte.
+        """Return theoretical forward FLOPs per ideal traffic byte."""
 
-        The value is ``flops_forward / (bytes_read + bytes_written)`` using the
-        theoretical ideal read-once/write-once model. It is not measured roofline
-        intensity and can diverge under kernel fusion, caching, or real memory
-        transactions. Missing FLOPs/traffic and zero-traffic logical views return
-        ``None``.
-
-        Returns
-        -------
-        float | None
-            Theoretical forward arithmetic intensity in FLOPs per byte.
-        """
-
-        bytes_read = self.bytes_read
-        bytes_written = self.bytes_written
-        if self.flops_forward is None or bytes_read is None or bytes_written is None:
-            return None
-        total_bytes = int(bytes_read) + int(bytes_written)
-        if total_bytes == 0:
-            return None
-        return float(self.flops_forward) / total_bytes
+        return _op_cost.arithmetic_intensity(self)
 
     @property
     def param_names(self) -> list[str]:
@@ -2323,9 +2053,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     def fx_label(self) -> str | None:
         """Return a torch.fx-style label for this Op when module context is available."""
 
-        if self.fx_qualpath is None:
-            return None
-        return f"{self.fx_qualpath.replace('.', '_')}_{self.fx_call_index}"
+        return _labels.fx_label(self.fx_qualpath, self.fx_call_index)
 
     @property
     def trace(self) -> "Trace":
@@ -2351,50 +2079,14 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
     @property
     def derived_grad(self) -> Any | None:
-        """Return this op's derived intermediate gradient payload, if available.
+        """Return this op's derived intermediate gradient payload, if available."""
 
-        Returns
-        -------
-        Any | None
-            Backend-owned gradient payload from ``trace.autograd.intermediate_derived_grads``,
-            or ``None`` when this op has no exact intermediate-derived record.
-        """
-
-        trace = self._source_trace
-        records = getattr(getattr(trace, "autograd", None), "intermediate_derived_grads", None)
-        if records is None:
-            return None
-        if self.label not in records:
-            return None
-        record = records[self.label]
-        if record.provenance.get("status") != "exact":
-            return None
-        return record.grad
+        return _doors.intervention()._op_edits.derived_grad(self)
 
     def grad_for(self, *, bwd: int) -> torch.Tensor:
-        """Return the saved gradient tensor for one backward pass.
+        """Return the saved gradient tensor for one backward pass."""
 
-        Parameters
-        ----------
-        bwd:
-            One-based backward pass number.
-
-        Returns
-        -------
-        torch.Tensor
-            Saved raw gradient tensor for the requested pass.
-        """
-
-        record = self.grads.for_pass(bwd)
-        if record.grad is None:
-            raise PayloadUnavailableError(
-                f"op {self.label} has no saved gradient payload for backward pass {bwd}",
-                code="gradient_not_saved",
-                remedy="capture with gradient saving enabled for this op and pass",
-                label=str(self.label),
-                backward_pass=bwd,
-            )
-        return record.grad
+        return _doors.intervention()._op_edits.grad_for(self, bwd=bwd)
 
     def _record_gradient(
         self,
@@ -2510,102 +2202,31 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
     @property
     def multi_output_type(self) -> type | str | None:
-        """Python class of the multi-output container this Op came from.
+        """Python class of the multi-output container this Op came from."""
 
-        Resolves ``container_spec.type_module``/``type_qualname`` to a runtime class
-        through the single default-deny container resolver in
-        ``torchlens._ir.container`` -- the SAME resolver used by output-container
-        reconstruction. That resolver NEVER imports an attacker-named module (the
-        ``ContainerSpec`` fields are portable, bundle-controlled strings that ride
-        through the safe unpickler untouched, so importing one would execute its
-        top-level code = arbitrary-code-execution); it resolves only from a module
-        already present in ``sys.modules`` and only to a type that structurally
-        matches the recorded container kind. When the type cannot be resolved
-        WITHOUT importing (its defining module is not loaded), fall back to the
-        qualified name string exactly as before, rather than importing it. ``None``
-        when this Op is not from a multi-output container.
-
-        Raises
-        ------
-        ContainerReconstructionError
-            If the reference resolves to an already-loaded type that is not
-            admissible for the recorded container kind (a tampered spec). This is
-            the security tripwire firing, not a legit-capture path.
-        """
-
-        from .._ir.container import resolve_container_type
-
-        if not self.in_multi_output:
-            return None
-        spec = self.container_spec
-        if spec is None:
-            return None
-        resolved = resolve_container_type(spec)
-        if resolved is not None:
-            return resolved
-        # Unresolvable without importing an untrusted, bundle-controlled module
-        # name. Preserve the historical graceful string fallback WITHOUT importing.
-        type_module = getattr(spec, "type_module", None)
-        type_qualname = getattr(spec, "type_qualname", None)
-        if type_qualname is None:
-            return None
-        if type_module:
-            return f"{type_module}.{type_qualname}"
-        return type_qualname
+        return _op_relations.multi_output_type(self)
 
     @property
     def container(self) -> Any:
-        """Return the runtime container view for this op, when available.
-
-        Returns
-        -------
-        Container | None
-            Computed container view, degraded path-only view, or ``None``.
-        """
-
-        from .container import container_from_op
+        """Return the runtime container view for this op, when available."""
 
         return container_from_op(self)
 
     @property
     def output_containers(self) -> tuple[Any, ...]:
-        """Return output container views associated with this op.
-
-        Returns
-        -------
-        tuple[Container, ...]
-            Registry-backed output container views, or a legacy single view.
-        """
-
-        from .container import output_containers_from_op
+        """Return output container views associated with this op."""
 
         return output_containers_from_op(self)
 
     @property
     def input_containers(self) -> tuple[Any, ...]:
-        """Return input container views consumed by this op.
-
-        Returns
-        -------
-        tuple[Container, ...]
-            Registry-backed input container views keyed by this call site.
-        """
-
-        from .container import input_containers_from_op
+        """Return input container views consumed by this op."""
 
         return input_containers_from_op(self)
 
     @property
     def containers(self) -> tuple[Any, ...]:
-        """Return all input and output container views associated with this op.
-
-        Returns
-        -------
-        tuple[Container, ...]
-            Deduplicated union of input and output container views.
-        """
-
-        from .container import containers_from_op
+        """Return all input and output container views associated with this op."""
 
         return containers_from_op(self)
 
@@ -2645,22 +2266,9 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
     @property
     def atomic_module(self) -> "Module | None":
-        """Module record resolved from ``atomic_module_address``, or ``None``.
+        """Module record resolved from ``atomic_module_address``, or ``None``."""
 
-        Returns ``None`` when this Op is not an atomic-module output or when the
-        owning Trace is unavailable.
-        """
-
-        address = self.atomic_module_address
-        if address is None:
-            return None
-        trace = self._source_trace
-        if trace is None:
-            return None
-        try:
-            return cast("Module", trace.modules[address])
-        except (KeyError, TypeError):
-            return None
+        return _op_relations.atomic_module(self)
 
     @property
     def has_parents(self) -> bool:
@@ -2681,57 +2289,15 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         return tuple(self._slot("_edge_uses") or ())
 
     def _own_label_spellings(self) -> set[str]:
-        """Return every spelling a relation list may use for THIS op.
+        """Return every spelling a relation list may use for THIS op."""
 
-        On a finished trace a parent's ``children`` (or a child's ``parents``)
-        may record this op under either its bare ``layer_label`` or -- on a
-        multi-pass layer -- its pass-qualified ``layer_label:pass`` spelling,
-        so self-exclusion in ``siblings``/``co_parents`` must cover BOTH
-        (excluding only the bare spelling appended the op itself on every
-        multi-pass layer). Unfinished traces still use raw labels.
-        """
-
-        _finished_trace = self._source_trace_or_none()
-        _finished = self._tracing_finished or (
-            _finished_trace is not None and _finished_trace._tracing_finished
-        )
-        if not _finished:
-            return {self._label_raw}
-        spellings = {self.layer_label}
-        pass_index = self.pass_number
-        if isinstance(pass_index, int):
-            spellings.add(f"{self.layer_label}:{pass_index}")
-        return spellings
+        return _labels.own_label_spellings(self)
 
     @property
     def siblings(self) -> list[str]:
         """Layers sharing at least one parent (excluding output layers and this op)."""
-        ml = self._source_trace
-        if ml is None:
-            return []
-        siblings = []
-        seen = self._own_label_spellings()
-        for parent_label in self.parents:
-            try:
-                parent = ml[parent_label]
-            except (KeyError, ValueError):
-                try:
-                    parent = ml.graph.orphans[parent_label]
-                except KeyError:
-                    continue
-            for child_label in parent.children:
-                if child_label not in seen:
-                    seen.add(child_label)
-                    try:
-                        child = ml[child_label]
-                    except (KeyError, ValueError):
-                        try:
-                            child = ml.graph.orphans[child_label]
-                        except KeyError:
-                            continue
-                    if not child.is_output:
-                        siblings.append(child_label)
-        return siblings
+
+        return _op_relations.siblings(self)
 
     @property
     def has_siblings(self) -> bool:
@@ -2741,32 +2307,8 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     @property
     def co_parents(self) -> list[str]:
         """Layers sharing at least one child (excluding output layers and this op)."""
-        ml = self._source_trace
-        if ml is None:
-            return []
-        spouses = []
-        seen = self._own_label_spellings()
-        for child_label in self.children:
-            try:
-                child = ml[child_label]
-            except (KeyError, ValueError):
-                try:
-                    child = ml.graph.orphans[child_label]
-                except KeyError:
-                    continue
-            for parent_label in child.parents:
-                if parent_label not in seen:
-                    seen.add(parent_label)
-                    try:
-                        parent = ml[parent_label]
-                    except (KeyError, ValueError):
-                        try:
-                            parent = ml.graph.orphans[parent_label]
-                        except KeyError:
-                            continue
-                    if not parent.is_output:
-                        spouses.append(parent_label)
-        return spouses
+
+        return _op_relations.co_parents(self)
 
     @property
     def has_co_parents(self) -> bool:
@@ -2825,17 +2367,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     def input_ops(self) -> "OpAccessor":
         """Accessor over graph-parent Op records in ``parents`` order."""
 
-        from .layer import OpAccessor
-
-        trace = self._source_trace_or_error()
-        parent_ops = {}
-        for parent_index, parent_label in enumerate(self.parents, start=1):
-            try:
-                parent_ops[parent_index] = trace.ops[parent_label]
-            except KeyError:
-                if parent_label in trace._layer_dict_all_keys:
-                    parent_ops[parent_index] = trace._layer_dict_all_keys[parent_label]
-        return OpAccessor(parent_ops)
+        return OpAccessor(_op_relations.input_ops_by_index(self))
 
     @input_ops.deleter
     def input_ops(self) -> None:
@@ -2845,20 +2377,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     def buffer_source_ops(self) -> "OpAccessor":
         """Accessor over buffer source Ops that feed this Op."""
 
-        from .layer import OpAccessor
-
-        trace = self._source_trace_or_error()
-        source_ops = {}
-        for parent_index, parent_label in enumerate(self.parents, start=1):
-            try:
-                parent = trace.ops[parent_label]
-            except KeyError:
-                if parent_label not in trace._layer_dict_all_keys:
-                    continue
-                parent = trace._layer_dict_all_keys[parent_label]
-            if parent.is_buffer and parent.buffer_write_kind is None:
-                source_ops[parent_index] = parent
-        return OpAccessor(source_ops)
+        return OpAccessor(_op_relations.buffer_source_ops_by_index(self))
 
     @buffer_source_ops.deleter
     def buffer_source_ops(self) -> None:
@@ -2868,20 +2387,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     def buffer_sink_ops(self) -> "OpAccessor":
         """Accessor over buffer sink Ops directly consuming this Op."""
 
-        from .layer import OpAccessor
-
-        trace = self._source_trace_or_error()
-        sink_ops = {}
-        for child_index, child_label in enumerate(self.children, start=1):
-            try:
-                child = trace.ops[child_label]
-            except KeyError:
-                if child_label not in trace._layer_dict_all_keys:
-                    continue
-                child = trace._layer_dict_all_keys[child_label]
-            if child.is_buffer and child.buffer_write_kind is not None:
-                sink_ops[child_index] = child
-        return OpAccessor(sink_ops)
+        return OpAccessor(_op_relations.buffer_sink_ops_by_index(self))
 
     @buffer_sink_ops.deleter
     def buffer_sink_ops(self) -> None:
@@ -2889,44 +2395,9 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
     @property
     def input_activations(self) -> tuple[torch.Tensor | None, ...]:
-        """Saved parent activations consumed by this Op, as references.
+        """Saved parent activations consumed by this Op, as references."""
 
-        Returned tensors are not copied. Mutating them mutates TorchLens saved
-        state. For in-place-modified parents, the per-child version consumed by
-        this Op is returned when available.
-        """
-
-        trace = self._source_trace_or_error()
-        activations: list[torch.Tensor | None] = []
-        child_labels = (
-            self.layer_label,
-            self.label,
-            self._label_raw,
-            self._layer_label_raw,
-        )
-        # ``Trace.ops`` is a cache-checking property, so resolving it per parent
-        # made a wide fan-in operation (concatenation) pay that check once per
-        # parent; the accessor cannot change while this loop runs.
-        ops = trace.ops
-        for parent_label in self.parents:
-            parent: Op | None
-            try:
-                parent = ops[parent_label]
-            except KeyError:
-                parent = cast("Op | None", trace._layer_dict_all_keys.get(parent_label))
-            if parent is None:
-                activations.append(None)
-                continue
-            if not parent.has_saved_activation:
-                activations.append(None)
-                continue
-            child_versions = getattr(parent, "out_versions_by_child", {}) or {}
-            consumed = next(
-                (child_versions[label] for label in child_labels if label in child_versions),
-                parent.out,
-            )
-            activations.append(consumed if isinstance(consumed, torch.Tensor) else None)
-        return tuple(activations)
+        return _op_relations.input_activations(self)
 
     @input_activations.deleter
     def input_activations(self) -> None:
@@ -3001,19 +2472,9 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
     @property
     def input_to_modules(self) -> list[str]:
-        """Module addresses (no ``:N``) whose input this Op's output fed.
+        """Module addresses (no ``:N``) whose input this Op's output fed."""
 
-        Derived from ``input_to_module_calls`` by stripping the ``:N`` pass suffix
-        and de-duplicating, mirroring the ``output_of_modules`` /
-        ``output_of_module_calls`` split. Use ``input_to_module_calls`` for the
-        ModuleCall-label list.
-        """
-
-        seen: dict[str, None] = {}
-        for call_label in self.input_to_module_calls:
-            address = str(call_label).rsplit(":", 1)[0]
-            seen.setdefault(address, None)
-        return list(seen)
+        return _op_relations.input_to_modules(self)
 
     @property
     def gradient_transform(self) -> Callable[..., Any] | None:
@@ -3049,23 +2510,9 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
     @property
     def _streaming_label(self) -> str:
-        """Best available label for sink/writer callbacks during or after postprocess.
+        """Best available label for sink/writer callbacks during or after postprocess."""
 
-        Returns
-        -------
-        str
-            Pass-qualified label when available, otherwise the current layer label.
-        """
-
-        for candidate in (
-            self.label,
-            self.layer_label,
-            self._layer_label_raw,
-            self._label_raw,
-        ):
-            if candidate is not None:
-                return str(candidate)
-        return "<unknown>"
+        return _labels.streaming_label(self)
 
     @property
     def source_trace(self) -> "Trace":
@@ -3154,31 +2601,10 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         inputs: Any = None,
         intervention: Any = None,
     ) -> "Trace":
-        """Apply an intervention to this op through the owning Trace.
+        """Apply an intervention to this op through the owning Trace."""
 
-        Parameters
-        ----------
-        input_transform:
-            Transform or hook to apply to this operation's output.
-        model:
-            Model required when ``intervention.engine="rerun"``.
-        inputs:
-            Input required when ``intervention.engine="rerun"``.
-        intervention:
-            Grouped intervention options (``InterventionOptions``).
-
-        Returns
-        -------
-        Trace
-            Source Trace after applying the intervention.
-        """
-
-        return self._source_trace_or_error().do(
-            self.layer_label,
-            input_transform,
-            model=model,
-            inputs=inputs,
-            intervention=intervention,
+        return _doors.intervention()._op_edits.do(
+            self, input_transform, model=model, inputs=inputs, intervention=intervention
         )
 
     def set(
@@ -3188,28 +2614,10 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         strict: bool = False,
         confirm_mutation: bool = False,
     ) -> "Trace":
-        """Set this op's out recipe through the owning Trace.
+        """Set this op's out recipe through the owning Trace."""
 
-        Parameters
-        ----------
-        value:
-            Static replacement value or one-shot callable.
-        strict:
-            Whether site resolution should reject non-portable selectors.
-        confirm_mutation:
-            Suppress root mutation warnings when intentionally mutating.
-
-        Returns
-        -------
-        Trace
-            Source Trace with a stale intervention recipe.
-        """
-
-        return self._source_trace_or_error().set(
-            self.layer_label,
-            value,
-            strict=strict,
-            confirm_mutation=confirm_mutation,
+        return _doors.intervention()._op_edits.set(
+            self, value, strict=strict, confirm_mutation=confirm_mutation
         )
 
     def attach_hooks(
@@ -3220,29 +2628,10 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         prepend: bool = False,
         confirm_mutation: bool = False,
     ) -> Any:
-        """Attach sticky hooks to this op through the owning Trace.
+        """Attach sticky hooks to this op through the owning Trace."""
 
-        Parameters
-        ----------
-        hook:
-            Hook or helper to attach to this operation.
-        *extra_hooks:
-            Additional hooks to compose on this operation in left-to-right order.
-        strict:
-            Whether site resolution should reject non-portable selectors.
-        prepend:
-            Whether new sticky hooks should run before existing sticky hooks.
-        confirm_mutation:
-            Suppress root mutation warnings when intentionally mutating.
-
-        Returns
-        -------
-        Any
-            Trace or scoped removable hook handle, matching ``Trace.attach_hooks``.
-        """
-
-        return self._source_trace_or_error().attach_hooks(
-            self.layer_label,
+        return _doors.intervention()._op_edits.attach_hooks(
+            self,
             hook,
             *extra_hooks,
             strict=strict,
@@ -3473,25 +2862,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     def receptive_field(self) -> "ReceptiveFieldView":
         """Return the lazy receptive-field query view for this Op."""
 
-        from ..receptive_field import _engine
-        from ..receptive_field._view import ReceptiveFieldView
-
-        trace = self.source_trace
-        solution = _engine.solve(trace)
-        cache = self._slot("_receptive_field_cache")
-        if cache is not None and cache._solution is not solution:
-            for op in trace._layer_list:
-                if op._slot("_receptive_field_cache") is not None:
-                    object.__setattr__(
-                        op,
-                        "_receptive_field_cache",
-                        ReceptiveFieldView(op, solution),
-                    )
-            cache = self._slot("_receptive_field_cache")
-        if cache is None:
-            cache = ReceptiveFieldView(self, solution)
-            object.__setattr__(self, "_receptive_field_cache", cache)
-        return cache
+        return _doors.receptive_field()._op_fields.receptive_field(self)
 
     @receptive_field.deleter
     def receptive_field(self) -> None:
@@ -3506,14 +2877,7 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     def projective_field(self) -> "ReceptiveFieldView":
         """Return the lazy source-anchored projective-field query view."""
 
-        from ..receptive_field._view import ReceptiveFieldView
-
-        cache = self._slot("_projective_field_cache")
-        current = ReceptiveFieldView.projective(self)
-        if cache is None or cache._solution is not current._solution:
-            cache = current
-            object.__setattr__(self, "_projective_field_cache", cache)
-        return cache
+        return _doors.receptive_field()._op_fields.projective_field(self)
 
     @projective_field.deleter
     def projective_field(self) -> None:
@@ -3526,18 +2890,9 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
 
     @property
     def raw_label(self) -> str:
-        """Return the public raw ordinal label without the raw-label suffix.
+        """Return the public raw ordinal label without the raw-label suffix."""
 
-        Returns
-        -------
-        str
-            Realtime ordinal identity for this op before equivalent-op grouping.
-        """
-
-        label = self._label_raw
-        if isinstance(label, str) and label.endswith(_RAW_LABEL_SUFFIX):
-            return label[: -len(_RAW_LABEL_SUFFIX)]
-        return str(label)
+        return _labels.public_raw_label(self._label_raw)
 
     @raw_label.setter
     def raw_label(self, value: Any) -> None:
@@ -3622,20 +2977,9 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     # ********************************************
 
     def _copy_for_output(self, *, _store: Any = None) -> "Op":
-        """Clone this op for immediate conversion into a synthetic output node.
+        """Clone this op for immediate conversion into a synthetic output node."""
 
-        Parameters
-        ----------
-        _store:
-            Optional owning row store for the synthesized node.
-
-        Returns
-        -------
-        Op
-            Clone whose soon-to-be-replaced fields avoid unnecessary deep copies.
-        """
-
-        return self._copy_with_shallow_fields(_OUTPUT_NODE_REPLACED_FIELDS, _store=_store)
+        return _op_save._copy_for_output(self, _store=_store)
 
     def _copy_with_shallow_fields(
         self,
@@ -3643,55 +2987,9 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         *,
         _store: Any = None,
     ) -> "Op":
-        """Clone this op while sharing fields the caller replaces immediately.
+        """Clone this op while sharing fields the caller replaces immediately."""
 
-        Parameters
-        ----------
-        extra_shallow_fields:
-            Additional fields safe to share for this construction path.
-        _store:
-            Optional owning row store for the clone.
-
-        Returns
-        -------
-        Op
-            Selective-depth clone.
-        """
-
-        fields_dict = {}
-        fields_not_to_deepcopy = {
-            "func",
-            "grad_fn_class_name",
-            "grad_fn_handle",
-            "source_trace",
-            "func_rng_states",
-            "saved_args",
-            "saved_kwargs",
-            "args_template",
-            "kwargs_template",
-            "parent_params",
-            "out",
-            "transformed_out",
-            "transformed_grad",
-            "out_versions_by_child",
-            "container_spec",
-        } | extra_shallow_fields
-        from .._trace_core.op_store import row_clone_scope
-
-        # The whole-schema getattr loop is a ROW-CLONE read, not a set of
-        # per-column dependencies: under a combined step audit these reads
-        # are tagged category (d) via the clone scope (design-ppdag-v3
-        # §2.4d) — legal on row-creating steps, a finding elsewhere. The
-        # scope is one dict lookup when no audit is armed; clone WRITES
-        # bypass interception entirely (adopt_row).
-        with row_clone_scope(object.__getattribute__(self, "_core")):
-            for field in LAYER_PASS_LOG_FIELD_ORDER:
-                if field not in fields_not_to_deepcopy:
-                    fields_dict[field] = _copy_op_field_value(getattr(self, field, None))
-                else:
-                    fields_dict[field] = getattr(self, field, None)
-        copied_entry = type(self)(fields_dict, _store=_store)
-        return copied_entry
+        return _op_save._copy_with_shallow_fields(self, extra_shallow_fields, _store=_store)
 
     def save_activation(
         self,
@@ -3701,171 +2999,9 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         save_args: bool,
         activation_transform: Callable[..., Any] | None = None,
     ) -> None:
-        """Save the output tensor (and optionally args) for this operation.
+        """Save the output tensor (and optionally args) for this operation."""
 
-        Flow:
-        1. Clone the tensor via ``safe_copy`` (strips tl_ attributes to avoid
-           logging the copy operation).
-        2. Move to ``output_device`` if different from the tensor's current device.
-        3. Apply ``activation_transform`` inside ``pause_logging()`` to prevent
-           the transform's own tensor ops from being logged.
-        4. Optionally deep-copy function args/kwargs via ``_recursive_safe_copy``.
-
-        Args:
-            t: The output tensor of the operation.
-            t_args: Positional arguments passed to the operation.
-            t_kwargs: Keyword arguments passed to the operation.
-            save_args: Whether to deep-copy and store args/kwargs.
-            activation_transform: Optional transform applied to the tensor
-                before storing (e.g. detach, to-numpy, normalize).
-        """
-        trace = self._source_trace
-        writer = getattr(trace, "_out_writer", None) if trace is not None else None
-        try:
-            save_mode = _effective_activation_save_mode(
-                trace,
-                func_name=self.func_name,
-                is_inplace=bool(self.is_inplace),
-            )
-            budget = getattr(trace, "_save_budget_accountant", None)
-            target_device = t.device
-            if save_mode == "cpu_async":
-                target_device = torch.device("cpu")
-            elif self.output_device not in ("same", str(t.device)):
-                target_device = torch.device(self.output_device)
-            save_raw_activations = (
-                trace._options_save_raw_activations if trace is not None else True
-            )
-            store_raw = save_raw_activations or activation_transform is None
-            # Explorer P2 (same gate as the exhaustive hot path): a declared
-            # summary reducer with raw retention off skips the transient
-            # clone; the reducer sees a detached view of the live output.
-            from .._ir.summary_role import is_summary_transform
-
-            reduce_only = not store_raw and is_summary_transform(activation_transform)
-            budget_reservation = (
-                None
-                if budget is None or reduce_only
-                else budget.admit(
-                    self._layer_label_raw,
-                    target_device,
-                    get_memory_amount_from_metadata(t, tuple(t.shape), t.dtype),
-                )
-            )
-            # Pre-copy identity probe (dedup-after-copy ordering): a hit
-            # reuses the already-saved payload and skips the clone entirely.
-            # Restricted to plain "copy" mode -- reference/view copies are
-            # free and cpu_async has fence side effects.
-            dedup_cached_out = (
-                _dedup_cached_identity_out(trace, t, self.annotations, save_args)
-                if store_raw and save_mode == "copy"
-                else None
-            )
-            if reduce_only:
-                raw_out = t
-            elif dedup_cached_out is not None:
-                raw_out = dedup_cached_out
-            else:
-                # Clone the tensor, optionally detaching from autograd graph.
-                raw_out = copy_tensor_payload(
-                    t,
-                    detach_tensor=self.detach_saved_activations,
-                    save_mode=save_mode,
-                )
-                # Move to the user-requested output device if needed.
-                if self.output_device not in [str(raw_out.device), "same"]:
-                    raw_out = safe_to(raw_out, self.output_device)
-                _stamp_reference_out(self.annotations, raw_out, save_mode)
-
-            self.shape = tuple(raw_out.shape)
-            self.dtype = raw_out.dtype
-            self.activation_memory = Bytes(
-                get_memory_amount_from_metadata(raw_out, self.shape, self.dtype)
-            )
-
-            if store_raw:
-                if dedup_cached_out is None:
-                    raw_out = _dedup_saved_activation_out(
-                        trace,
-                        t,
-                        raw_out,
-                        self._layer_label_raw,
-                        self.annotations,
-                        save_args,
-                    )
-                if isinstance(raw_out, torch.Tensor):
-                    mark_detached_saved_activation(t, raw_out, self._layer_label_raw)
-            self._internal_set("out", raw_out if store_raw else None)
-
-            self._internal_set("transformed_out", None)
-            self.transformed_out_shape = None
-            self.transformed_out_dtype = None
-            self.transformed_activation_memory = None
-            if activation_transform is not None:
-                transformed_out = self._apply_transform(
-                    raw_out,
-                    activation_transform,
-                    transform_kind="activation",
-                    streaming_active=writer is not None,
-                )
-                if reduce_only:
-                    from .._ir.summary_role import ensure_summary_output_owns_storage
-
-                    transformed_out = ensure_summary_output_owns_storage(transformed_out, t)
-                self._internal_set("transformed_out", transformed_out)
-                self._validate_train_mode_transform_output(
-                    raw_out,
-                    self.transformed_out,
-                    transform_kind="activation",
-                    transform=activation_transform,
-                )
-                self._validate_streaming_transform_output(
-                    self.transformed_out,
-                    transform_kind="activation",
-                    streaming_active=writer is not None,
-                )
-                self.transformed_out_shape = _shape_or_none(self.transformed_out)
-                self.transformed_out_dtype = _dtype_or_none(self.transformed_out)
-                self.transformed_activation_memory = _memory_or_none(self.transformed_out)
-            if budget is not None:
-                if reduce_only:
-                    # No source-sized admission happened (no clone allocated);
-                    # charge the retained summary output directly.
-                    budget.charge_retained(str(self._layer_label_raw), (self.transformed_out,))
-                else:
-                    budget.commit(budget_reservation, (self.out, self.transformed_out))
-        except Exception as exc:
-            if writer is not None:
-                writer.abort(f"Failed while saving out for {self._streaming_label}: {exc}")
-                if isinstance(exc, (SaveBudgetExceededError, UserTransformError)):
-                    raise
-                raise ArtifactError(
-                    f"Streaming out save failed for {self._streaming_label}."
-                ) from exc
-            raise
-
-        self.has_saved_activation = True
-
-        if trace is not None:
-            out_sink = getattr(trace, "_out_sink", None)
-            if out_sink is not None and isinstance(self.out, torch.Tensor):
-                out_sink(self._streaming_label, self.out)
-
-            if writer is not None and trace._wrapper_runtime_ws.in_exhaustive_pass:
-                self._stream_tensor_blob(
-                    writer,
-                    tensor_field="out",
-                    pending_field="_pending_blob_id",
-                    kind="out",
-                )
-                self._stream_tensor_blob(
-                    writer,
-                    tensor_field="transformed_out",
-                    pending_field="_pending_transformed_out_blob_id",
-                    kind="transformed_out",
-                )
-
-        self._save_call_args(t_args, t_kwargs, save_args)
+        _op_save.save_activation(self, t, (t_args, t_kwargs), save_args, activation_transform)
 
     def _save_call_args(
         self,
@@ -3891,105 +3027,11 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         grad: torch.Tensor,
         prebuilt: "tuple[torch.Tensor | None, Any | None] | None" = None,
     ) -> None:
-        """Save the grad tensor for this layer's output.
+        """Save the grad tensor for this layer's output."""
 
-        Called by the backward hook registered during the forward pass. The
-        saved value is the gradient of this op's output after TorchLens's edit
-        chain at this site (``tl.grad(site)`` edits run first), so ``.grad``
-        and an edit agree.
-        The grad is ``detach().clone()``'d - a bare copy, not deep-copied -
-        so it's independent of the autograd graph but cheap to store.
-
-        Args:
-            grad: The grad tensor flowing back through this operation.
-            prebuilt: Budget-charged ``(raw_payload, transformed_payload)``
-                pair already built (and transform-validated) by the
-                event-sidecar path for this exact grad. When given, the slot
-                REUSES those objects: no second clone, no second
-                ``grad_transform`` execution, no uncharged retention
-                (grind-r6 b5 R34-N1/R35-N1).
-        """
-        trace = self._source_trace
-        raw_grad = grad
-        self.grad_shape = tuple(raw_grad.shape)
-        self.grad_dtype = raw_grad.dtype
-        self.gradient_memory = Bytes(get_memory_amount(raw_grad))
-        grad_transform = trace._options_grad_transform if trace is not None else None
-        self._internal_set("transformed_grad", None)
-        self.transformed_grad_shape = None
-        self.transformed_grad_dtype = None
-        self.transformed_gradient_memory = None
-        writer = getattr(trace, "_out_writer", None) if trace is not None else None
-        if prebuilt is not None:
-            raw_payload, transformed_payload = prebuilt
-            if grad_transform is not None:
-                self._internal_set("transformed_grad", transformed_payload)
-                self.transformed_grad_shape = _shape_or_none(self.transformed_grad)
-                self.transformed_grad_dtype = _dtype_or_none(self.transformed_grad)
-                self.transformed_gradient_memory = _memory_or_none(self.transformed_grad)
-            self._internal_set("grad", raw_payload)
-            self.has_grad = True
-            stream_grad_blobs(self, trace, writer)
-            return
-        # Admit BEFORE the transform/clone allocate (r8 R34, fable F1): a
-        # policy-DENIED label reaching this legacy slot (callable/selector
-        # save_grads with _grad_op_nums_to_save == "all") used to retain a
-        # full uncharged grad clone -- invisible to a tight save_budget.
-        # Source-sized reservation, transform delta reconciled at commit,
-        # exactly the primary-site contract.
-        budget = getattr(trace, "_save_budget_accountant", None) if trace is not None else None
-        grad_reservation = None
-        if budget is not None:
-            grad_reservation = budget.admit(
-                str(getattr(self, "_layer_label_raw", "<grad>")),
-                raw_grad.device,
-                int(raw_grad.numel() * raw_grad.element_size()),
-                site="primary",
-            )
-        if grad_transform is not None:
-            self._internal_set(
-                "transformed_grad",
-                self._apply_transform(
-                    raw_grad,
-                    grad_transform,
-                    transform_kind="grad",
-                    streaming_active=writer is not None,
-                ),
-            )
-            self._validate_train_mode_transform_output(
-                raw_grad,
-                self.transformed_grad,
-                transform_kind="grad",
-                transform=grad_transform,
-            )
-            self._validate_streaming_transform_output(
-                self.transformed_grad,
-                transform_kind="grad",
-                streaming_active=writer is not None,
-            )
-            self.transformed_grad_shape = _shape_or_none(self.transformed_grad)
-            self.transformed_grad_dtype = _dtype_or_none(self.transformed_grad)
-            self.transformed_gradient_memory = _memory_or_none(self.transformed_grad)
-
-        save_raw_gradients = trace._options_save_raw_grads if trace is not None else True
-        store_raw = save_raw_gradients or grad_transform is None
-        # Gradient payloads are ALWAYS genuine snapshots: under
-        # save_mode="reference"/"view" an aliased payload would be silently
-        # rewritten by later user mutation of the seed gradient or by
-        # AccumulateGrad accumulating in place on the next backward, and no
-        # wrapped in-place op exists on the grad path to disclose it. Route
-        # through the same chokepoint the event-sidecar path uses.
         from ..backends.torch.tensor_tracking import _copy_grad_payload
 
-        save_mode = cast(SaveMode, trace._options_save_mode if trace is not None else "copy")
-        self._internal_set(
-            "grad",
-            _copy_grad_payload(raw_grad, save_mode=save_mode) if store_raw else None,
-        )
-        self.has_grad = True
-        if budget is not None and grad_reservation is not None:
-            budget.commit(grad_reservation, (self.grad, self.transformed_grad))
-        stream_grad_blobs(self, trace, writer)
+        _op_save._log_tensor_grad(self, grad, _copy_grad_payload, prebuilt)
 
     def _apply_transform(
         self,
@@ -4001,12 +3043,10 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     ) -> Any:
         """Apply a user transform with logging paused and rich error context."""
 
-        return apply_transform(
-            label=self._streaming_label,
-            raw_label=self._layer_label_raw,
-            func_name=self.func_name,
-            tensor=tensor,
-            transform=transform,
+        return _op_save._apply_transform(
+            self,
+            tensor,
+            transform,
             transform_kind=transform_kind,
             streaming_active=streaming_active,
         )
@@ -4020,13 +3060,8 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     ) -> str:
         """Build context for an out or grad transform failure."""
 
-        return transform_error_message(
-            label=self._streaming_label,
-            raw_label=self._layer_label_raw,
-            func_name=self.func_name,
-            tensor=tensor,
-            transform_kind=transform_kind,
-            streaming_active=streaming_active,
+        return _op_save._transform_error_message(
+            self, transform_kind=transform_kind, tensor=tensor, streaming_active=streaming_active
         )
 
     def _validate_train_mode_transform_output(
@@ -4039,16 +3074,8 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     ) -> None:
         """Validate differentiability requirements for train-mode transform outputs."""
 
-        trace = self._source_trace
-        validate_train_mode_transform_output(
-            raw_tensor=raw_tensor,
-            transformed_tensor=output,
-            transform_kind=transform_kind,
-            tripwire_armed=train_mode_tripwire_armed(
-                backward_ready=trace._options_backward_ready if trace is not None else False,
-                transform=transform,
-            ),
-            label=self._streaming_label,
+        _op_save._validate_train_mode_transform_output(
+            self, raw_tensor, output, transform_kind=transform_kind, transform=transform
         )
 
     def _validate_streaming_transform_output(
@@ -4058,57 +3085,16 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
         transform_kind: str,
         streaming_active: bool,
     ) -> None:
-        """Validate transformed tensors before streaming bundle finalization.
+        """Validate transformed tensors before streaming bundle finalization."""
 
-        Parameters
-        ----------
-        output:
-            Value returned by the user transform.
-        transform_kind:
-            Transform kind, either ``"out"`` or ``"grad"``.
-        streaming_active:
-            Whether a streaming bundle writer is active for this trace.
-
-        Returns
-        -------
-        None
-            Raises if streaming cannot serialize the transformed value.
-
-        Raises
-        ------
-        ArtifactError
-            If streaming is active and the transform returns a non-tensor or sparse tensor.
-        """
-
-        try:
-            validate_streaming_transform_output(
-                transformed_tensor=output,
-                transform_kind=transform_kind,
-                streaming_active=streaming_active,
-                label=self._streaming_label,
-            )
-        except ArtifactError as exc:
-            self._abort_streaming_writer(str(exc))
-            raise
+        _op_save._validate_streaming_transform_output(
+            self, output, transform_kind=transform_kind, streaming_active=streaming_active
+        )
 
     def _abort_streaming_writer(self, message: str) -> None:
-        """Abort the active streaming writer when one is attached.
+        """Abort the active streaming writer when one is attached."""
 
-        Parameters
-        ----------
-        message:
-            Reason written to the partial bundle marker.
-
-        Returns
-        -------
-        None
-            Mutates the writer state if present.
-        """
-
-        trace = self._source_trace
-        writer = getattr(trace, "_out_writer", None) if trace is not None else None
-        if writer is not None:
-            writer.abort(message)
+        _op_save._abort_streaming_writer(self, message)
 
     def _stream_tensor_blob(
         self,
@@ -4120,35 +3106,8 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     ) -> None:
         """Stream one tensor field when present."""
 
-        tensor = getattr(self, tensor_field)
-        if tensor is None:
-            return
-        if not isinstance(tensor, torch.Tensor):
-            if kind == "transformed_out":
-                message = (
-                    "Streaming save requires activation_transform outputs to be torch.Tensor "
-                    f"instances, but layer {self._streaming_label} produced "
-                    f"{type(tensor).__name__}."
-                )
-            elif kind == "transformed_grad":
-                message = (
-                    "Streaming save requires grad_transform outputs to be torch.Tensor "
-                    f"instances, but layer {self._streaming_label} produced "
-                    f"{type(tensor).__name__}."
-                )
-            else:
-                message = (
-                    f"{tensor_field} expected a tensor for streaming, got {type(tensor).__name__}."
-                )
-            writer.abort(message)
-            raise ArtifactError(message)
-        blob_id = writer.next_blob_id()
-        setattr(self, pending_field, blob_id)
-        writer.submit_blob(
-            blob_id,
-            tensor,
-            kind=kind,
-            label=self._streaming_label,
+        _op_save._stream_tensor_blob(
+            self, writer, tensor_field=tensor_field, pending_field=pending_field, kind=kind
         )
 
     # ********************************************
@@ -4156,47 +3115,34 @@ class Op(OpCardHtmlMixin, _SelectionOperand):
     # ********************************************
 
     def _resolve_relation_record(self, label: str) -> "Op | None":
-        """Resolve one relation label through the mainline, then orphans.
+        """Resolve one relation label through the mainline, then orphans."""
 
-        The 62aba742 orphan tolerance stopped at the label aggregates: on a
-        ``keep_orphans=True`` trace the aggregates include an orphan's label
-        while the OBJECT-resolving surfaces crashed on the bare mainline
-        lookup (b3 R05-N2). Mirror the per-op ``siblings`` behavior: fold
-        the ``orphans`` fallback, skip what neither surface resolves.
-        """
-
-        trace = self.source_trace
-        try:
-            return cast("Op", trace[label])
-        except (KeyError, ValueError):
-            try:
-                return cast("Op", trace.graph.orphans[label])
-            except KeyError:
-                return None
+        return _op_relations._resolve_relation_record(self, label)
 
     def get_children(self) -> list["Op"]:
-        """Return child Op objects for this pass.
+        """Return child Op objects for this pass."""
 
-        Returns
-        -------
-        list[Op]
-            Child ops resolved through the owning model log; orphan-relation
-            labels resolve through ``trace.graph.orphans`` (unresolvable skipped).
-        """
-        resolved = (self._resolve_relation_record(label) for label in self.children)
-        return [record for record in resolved if record is not None]
+        return _op_relations.get_children(self)
 
     def get_parents(self) -> list["Op"]:
-        """Return parent Op objects for this pass.
+        """Return parent Op objects for this pass."""
 
-        Returns
-        -------
-        list[Op]
-            Parent ops resolved through the owning model log; orphan-relation
-            labels resolve through ``trace.graph.orphans`` (unresolvable skipped).
+        return _op_relations.get_parents(self)
+
+    def _repr_html_(self) -> str:
+        """Return the notebook Op card (treescope memo B2).
+
+        Identity / value / context zones with the PROOF row; cost wrappers
+        pass through ``str()`` untouched; the budgeted array view rides the
+        ported truncation protocol. Never raises: any internal failure
+        degrades to a one-line ``card unavailable`` fragment, and the
+        treescope-bridge suppression sentinel replaces the card exactly
+        when the bridge just rendered this object (memo 3.6).
         """
-        resolved = (self._resolve_relation_record(label) for label in self.parents)
-        return [record for record in resolved if record is not None]
+
+        from .._notebook.cards import op_repr_html
+
+        return op_repr_html(self)
 
     def show(
         self,

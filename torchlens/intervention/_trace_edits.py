@@ -34,6 +34,7 @@ from .._data_classes._trace_intervention_records import (
     record_operation,
 )
 from .._errors import InvalidArgumentError
+from .._runnable import RunResult
 from ..options import InterventionOptions, ReplayOptions, merge_intervention_options
 from ._trace_selection_edits import apply_selection_batch_do, apply_selection_do, is_selection_batch
 from .types import InterventionSpec, TargetSpec
@@ -474,7 +475,10 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
             result = trace.push(replay=ReplayOptions(strict=strict_value))
         else:
             assert model is not None
-            result = trace.run(model, x, replay=ReplayOptions(strict=strict_value))
+            replayed = trace.run(model, x, replay=ReplayOptions(strict=strict_value))
+            # do() replays through the rerun path, which hands back the Trace; only the
+            # runnable-provider path wraps it in a RunResult.
+            result = replayed.trace if isinstance(replayed, RunResult) else replayed
     except BaseException as exc:
         # A failed do() must not leave its sticky hooks attached: the
         # next push would silently re-fire them (contamination). Detach

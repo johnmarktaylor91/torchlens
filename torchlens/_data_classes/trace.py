@@ -2198,7 +2198,7 @@ class Trace(TraceLike):
 
     @property
     def episode_coupling(self) -> "Any | None":
-        """Return the attested coupling verdict, or ``None`` (lane F42)."""
+        """Return the attested coupling verdict, or ``None``."""
 
         return _doors.report()._trace_facts.episode_coupling(self)
 
@@ -2238,13 +2238,13 @@ class Trace(TraceLike):
 
     @property
     def factcore(self) -> "Any":
-        """The ONE numbers substrate for this trace (C02; sumfam D1/D6)."""
+        """The ONE numbers substrate for this trace."""
 
         return _doors.report()._trace_facts.factcore(self)
 
     @property
     def health_facts(self) -> "Any":
-        """Normalized, serializable health observations (C02; sumfam D9)."""
+        """Normalized, serializable health observations."""
 
         return _doors.report()._trace_facts.health_facts(self)
 
@@ -2355,7 +2355,7 @@ class Trace(TraceLike):
         return _doors.report()._trace_facts.explain(self, audience=audience, max_tokens=max_tokens)
 
     def capabilities(self) -> "Any":
-        """Return the report-family capability card for THIS trace (F09/D24)."""
+        """Return the report-family capability card for THIS trace."""
 
         return _doors.report()._trace_facts.capabilities(self)
 
@@ -2766,13 +2766,13 @@ class Trace(TraceLike):
 
     @property
     def injected_ops(self) -> "tuple[Any, ...]":
-        """Injected-op records from ``log_injections=True`` hooks (F01 stage 1)."""
+        """Injected-op records from ``log_injections=True`` hooks."""
 
         return _doors.intervention()._trace_edits.injected_ops(self)
 
     @property
     def model_ops(self) -> "tuple[Any, ...]":
-        """The MODEL half of the injections query split (F01 stage 1)."""
+        """The MODEL half of the injections query split."""
 
         return tuple(self._layer_list)
 
@@ -3722,7 +3722,7 @@ class Trace(TraceLike):
         return _doors.visualization()._trace_draw.visualization_field_audit(self)
 
     def narrate(self, last: "int | None" = None, *, select: "Any" = None) -> "str":
-        """Render this trace's events in the live-narration grammar (snoop D5)."""
+        """Render this trace's events in the live-narration grammar."""
         return _doors.report()._narrate.narrate(self, last=last, select=select)
 
 
