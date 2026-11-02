@@ -317,7 +317,7 @@ def test_direct_trace_validate_forward_pass_fails_all_nan_outputs() -> None:
             detach_saved_activations=False,
             save_grads=False,
             save_args=True,
-            random_seed=0,
+            seed=0,
             save_rng_states=True,
         )
     try:

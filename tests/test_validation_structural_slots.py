@@ -30,7 +30,7 @@ def _capture(model: nn.Module, *inputs: torch.Tensor) -> Any:
     return tl.trace(
         model.eval(),
         list(inputs) if len(inputs) > 1 else inputs[0],
-        capture=CaptureOptions(layers_to_save="all", save_args=True, random_seed=0),
+        capture=CaptureOptions(layers_to_save="all", save_args=True, seed=0),
     )
 
 

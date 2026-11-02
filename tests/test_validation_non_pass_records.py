@@ -43,7 +43,7 @@ def _capture(model: nn.Module, x: torch.Tensor) -> Any:
         detach_saved_activations=False,
         save_grads=False,
         save_args=True,
-        random_seed=0,
+        seed=0,
         save_rng_states=True,
     )
 
@@ -78,21 +78,60 @@ def test_every_status_exit_of_validate_saved_outs_goes_through_the_recorder() ->
             and node.func.attr == "as_status"
         ]
         assert not builders, f"{path.name} builds a status directly at lines {builders}"
-    tree = ast.parse((_VALIDATION_DIR / "core.py").read_text())
-    entry = next(
-        node
-        for node in tree.body
-        if isinstance(node, ast.FunctionDef) and node.name == "validate_saved_outs"
-    )
+    functions = _module_functions("core.py") | _module_functions("_saved_outs_steps.py")
+    offenders = _status_exits_outside_recorder("validate_saved_outs", functions, set())
+    assert not offenders, f"status exits outside the failure recorder: {offenders}"
+
+
+def _module_functions(name: str) -> dict[str, ast.FunctionDef]:
+    """Return the module-level functions of ``validation/<name>`` by name."""
+
+    tree = ast.parse((_VALIDATION_DIR / name).read_text())
+    return {node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)}
+
+
+def _status_exits_outside_recorder(
+    name: str, functions: dict[str, ast.FunctionDef], seen: set[str]
+) -> list[str]:
+    """Return the ``<function>:<line>`` exits of ``name`` that bypass the recorder.
+
+    Every ``return`` must be ``None`` (a helper's "no failure" branch), a call to
+    the recorder (``_finish_run_status`` / ``finish_validation_status``), a call to
+    another function of the two modules whose exits are checked in turn, or a name
+    bound in the function to such a call (``failed_status = _check_...(...)``).
+    """
+
+    if name in seen or name not in functions:
+        return []
+    seen.add(name)
+    entry = functions[name]
+    bound: dict[str, str] = {}
+    for node in ast.walk(entry):
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
+            callee = node.value.func
+            if isinstance(callee, ast.Name):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        bound[target.id] = callee.id
+    offenders: list[str] = []
     returns = [node for node in ast.walk(entry) if isinstance(node, ast.Return)]
-    assert returns
+    assert returns, name
     for node in returns:
         value = node.value
-        assert (
-            isinstance(value, ast.Call)
-            and isinstance(value.func, ast.Name)
-            and value.func.id == "_finish_validation_status"
-        ), f"validate_saved_outs line {node.lineno} returns without the failure recorder"
+        if isinstance(value, ast.Constant) and value.value is None:
+            continue
+        callee = None
+        if isinstance(value, ast.Call) and isinstance(value.func, ast.Name):
+            callee = value.func.id
+        elif isinstance(value, ast.Name):
+            callee = bound.get(value.id)
+        if callee in {"_finish_run_status", "finish_validation_status"}:
+            continue
+        if callee in functions:
+            offenders.extend(_status_exits_outside_recorder(callee, functions, seen))
+            continue
+        offenders.append(f"{name}:{node.lineno}")
+    return offenders
 
 
 def test_unrecorded_replay_failure_is_recorded_with_its_op(

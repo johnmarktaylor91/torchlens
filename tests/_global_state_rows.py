@@ -551,10 +551,6 @@ _WEAK_SUBJECT_TABLES = frozenset(
         # timing/token/finalization bookkeeping. They must disappear with
         # that Trace and never become process-lifetime caches.
         ("torchlens/backends/torch/backward.py", "_BACKWARD_TRACE_SLOTS"),
-        # View-writeback prior labels: base alias -> (session token, view-mutation
-        # label, the base's label before it); WeakIdKeyDictionary keyed by the
-        # base tensor, dies with it, read once by the setitem writeback binder.
-        ("torchlens/backends/torch/_view_writeback.py", "_VIEW_MUTATION_PRIOR_LABELS"),
         # Backward-ready rerun results -> the rerun capture whose tensor grad
         # hooks route to them; weak on the result, dies with it.
         ("torchlens/intervention/rerun.py", "_RERUN_GRAPH_SOURCES"),
@@ -879,7 +875,6 @@ _WEAKLY_HELD = frozenset(
         ("torchlens/_capture/_weightsfree_admission.py", "_ADMISSIONS"),
         ("torchlens/_capture/_weightsfree_admission.py", "_META_ACTIVE"),
         ("torchlens/_capture/_weightsfree_admission.py", "_WRAP_GENERATIONS"),
-        ("torchlens/backends/torch/_view_writeback.py", "_VIEW_MUTATION_PRIOR_LABELS"),
         # Kind memos re-keyed weakly by the value TYPE so dynamically created
         # classes stay collectable; lifecycle class stays _PROCESS_CACHES (the
         # ledger is orthogonal: weakness is a storage fact).

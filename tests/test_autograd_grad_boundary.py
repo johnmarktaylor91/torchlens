@@ -378,5 +378,5 @@ def test_identically_zero_grad_still_fails_its_input_perturbation() -> None:
     torch.manual_seed(0)
     assert _validate(model, torch.randn(2, 3), torch.randn(2, 3)) is False
     failure = last_validation_failure()
-    assert failure is not None and failure.check == "perturbation"
+    assert failure is not None and failure.check_name == "perturbation"
     assert failure.op_label is not None and failure.op_label.startswith("autogradgrad")

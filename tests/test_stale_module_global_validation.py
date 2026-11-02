@@ -69,7 +69,7 @@ def test_stale_module_global_validates_and_captures_the_op(
         assert tl.validate(model, x, scope="forward") is True, last_validation_failure()
         trace = tl.trace(model, x)
     assert "bmm" in [op.func_name for op in trace.ops]
-    assert trace.rescue_rerun is None
+    assert trace._rescue_rerun is None
     assert stale_module.bmm is _state._orig_to_decorated[id(pristine)]
 
 
