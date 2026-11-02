@@ -155,7 +155,6 @@ def test_show_containers_removed_spellings_refuse_naming_the_replacement(
     with pytest.raises(InvalidArgumentError, match="was removed") as excinfo:
         trace.draw(
             show_containers=removed,  # type: ignore[arg-type]
-            vis_save_only=True,
             file_format="dot",
             path=str(tmp_path / removed),
         )
