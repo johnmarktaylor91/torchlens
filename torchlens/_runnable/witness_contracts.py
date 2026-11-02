@@ -10,6 +10,12 @@ import torch
 
 from .._ir.container import (
     ContainerSpec,
+    get_registered_container,
+)
+from .._ir.distribution_container import (
+    DISTRIBUTION_CONTAINER_KIND,
+    distribution_children,
+    is_distribution,
 )
 from . import (
     ControlWitness,
@@ -56,8 +62,6 @@ def _hybrid_registered_flatten_children(value: Any) -> list[Any] | None:
 
     if not isinstance(value, (Mapping, list, tuple)):
         return None
-    from torchlens._ir.container import get_registered_container
-
     registration = get_registered_container(type(value))
     if registration is None:
         return None
@@ -91,9 +95,6 @@ def _tensor_leaf_paths(
         for index, child in enumerate(registered_children):
             paths.extend(_tensor_leaf_paths(child, (*path, index)))
         return tuple(paths)
-    # Local import: this function is rebound into _runnable_execution's globals.
-    from torchlens._ir.distribution_container import distribution_children, is_distribution
-
     if is_distribution(value):
         paths = []
         for name, child in distribution_children(value):
@@ -271,9 +272,6 @@ def _container_leaf_paths(
         for index, child in enumerate(registered_children):
             paths.extend(_container_leaf_paths(child, (*path, index)))
         return tuple(paths)
-    # Local import: this function is rebound into _runnable_execution's globals.
-    from torchlens._ir.distribution_container import distribution_children, is_distribution
-
     if is_distribution(value):
         paths = []
         for name, child in distribution_children(value):
@@ -319,8 +317,6 @@ def _container_kind(value: Any) -> str:
     honest identical run then false-DIVERGED with OUTPUT_STRUCTURE_MISMATCH.
     """
 
-    from torchlens._ir.container import get_registered_container
-
     if isinstance(value, torch.Tensor):
         return "tensor"
     # Registration is checked by TYPE (mirroring classify_input_container and the
@@ -334,8 +330,6 @@ def _container_kind(value: Any) -> str:
     # "dataclass" against its recorded "hf_model_output" witness, so every
     # honest identical run false-DIVERGED with OUTPUT_STRUCTURE_MISMATCH --
     # the same bug class as the r67 C2 registered-branch fix above).
-    from torchlens._ir.distribution_container import DISTRIBUTION_CONTAINER_KIND, is_distribution
-
     if is_distribution(value):
         return DISTRIBUTION_CONTAINER_KIND
     if _is_hf_model_output(value):

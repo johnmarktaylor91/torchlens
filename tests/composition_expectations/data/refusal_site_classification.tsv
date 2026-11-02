@@ -349,7 +349,7 @@ torchlens.intervention.binding:BoundModel._preflight:BindingPreflightError::1	CO
 torchlens.intervention.binding:BoundModel._preflight:BindingPreflightError::2	CONTRACTED	bind_spec_empty	F01 surgery live lanes: typed + code + contract-doc row, classified in its own change
 torchlens.intervention.binding:BoundModel._preflight:BindingPreflightError::3	CONTRACTED	bind_model_invalid	F01 surgery live lanes: typed + code + contract-doc row, classified in its own change
 torchlens.intervention.binding:BoundModel._run:BindingRuntimeError::1	CONTRACTED	binding_reentrant_call	F01 surgery live lanes: typed + code + contract-doc row, classified in its own change
-torchlens.intervention.binding:BoundModel._refuse_zero_fire._raise:BindingRuntimeError::1	CONTRACTED	bind_zero_fire	F01 surgery live lanes: typed + code + contract-doc row, classified in its own change
+torchlens.intervention._zero_fire_doors:refuse_bound_zero_fire._raise:BindingRuntimeError::1	CONTRACTED	bind_zero_fire	F01 surgery live lanes: typed + code + contract-doc row, classified in its own change
 torchlens.intervention.binding:BoundModel.generate:BindingRuntimeError::1	CONTRACTED	bind_generate_unavailable	F01 surgery live lanes: typed + code + contract-doc row, classified in its own change
 torchlens.intervention.binding:_ArmedRuntime.__exit__:BindingRuntimeError::1	CONTRACTED	bind_cleanup_failed	F01 surgery live lanes: typed + code + contract-doc row, classified in its own change
 torchlens.intervention.binding:_RulePlan.__init__:BindingPreflightError::1	CONTRACTED	bind_rule_unsupported	F01 surgery live lanes: typed + code + contract-doc row, classified in its own change

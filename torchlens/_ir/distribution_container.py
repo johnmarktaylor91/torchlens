@@ -24,10 +24,18 @@ from __future__ import annotations
 
 import copy
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Final
 
 import torch
+
+from ._container_type_probes import (
+    _fields_are_inert_settable,
+    _inert_new,
+    _metaclass_defines_foreign_call,
+    _type_has_safe_new,
+)
 
 DISTRIBUTION_CONTAINER_KIND: Final = "distribution"
 """``ContainerSpec.kind`` for a ``torch.distributions`` output."""
@@ -146,8 +154,6 @@ def distribution_layout(value: Any) -> DistributionLayout:
         The recorded fields, literal state, aliases and the lossy reason.
     """
 
-    from ._container_type_probes import _fields_are_inert_settable, _type_has_safe_new
-
     instance_dict = getattr(value, "__dict__", None)
     if not isinstance(instance_dict, dict):
         return DistributionLayout((), (), (), _unrecordable(value, "__dict__"))
@@ -249,7 +255,6 @@ def rebuild_distribution(
         If the type is not loaded or the recorded data is not admissible.
     """
 
-    from ._container_type_probes import _inert_new
     from .container import ContainerReconstructionError
 
     state, aliases, problem = _parse_aux_data(spec.aux_data, tuple(spec.fields))
@@ -276,12 +281,6 @@ def distribution_type_rebuild_is_lossy(container_type: type[Any], spec: Any) -> 
     not inert, whose recorded names are data descriptors, which has no instance
     dictionary, or whose metaclass defines its own ``__call__``.
     """
-
-    from .container import (
-        _fields_are_inert_settable,
-        _metaclass_defines_foreign_call,
-        _type_has_safe_new,
-    )
 
     state, aliases, problem = _parse_aux_data(spec.aux_data, tuple(spec.fields))
     if problem:
@@ -326,35 +325,41 @@ __all__ = (
 )
 
 
-def rebuild_distribution_node(spec: Any, child_by_key: dict[Any, Any], leaf_iter: Any) -> Any:
+def rebuild_distribution_node(
+    spec: Any, rebuild_field: Callable[[str], Any], container_type: type[Any] | None
+) -> Any:
     """Rebuild a ``torch.distributions`` node from its recorded fields (inert, exact).
 
     The type must resolve to a loaded, admissible ``Distribution`` subclass; an
     unresolvable type has no plain stand-in that would not change what the
     caller receives, so ``rebuild_distribution`` refuses rather than substituting one.
+
+
+    ``rebuild_field`` rebuilds one recorded field by name from the container walk and
+    ``container_type`` is the resolved type; the container module owns both, and
+    passing them in keeps this module free of an import back into it.
     """
 
-    from .container import NamedField, _rebuild_child_or_leaf, _resolve_container_type
-
-    field_values = {
-        name: _rebuild_child_or_leaf(child_by_key, NamedField(name), leaf_iter)
-        for name in spec.fields
-    }
-    return rebuild_distribution(_resolve_container_type(spec), spec, field_values)
+    field_values = {name: rebuild_field(name) for name in spec.fields}
+    return rebuild_distribution(container_type, spec, field_values)
 
 
 def build_distribution_spec(
-    value: Any, type_module: str | None, type_qualname: str | None, child_specs: tuple[Any, ...]
+    spec_type: type[Any],
+    value: Any,
+    type_module: str | None,
+    type_qualname: str | None,
+    child_specs: tuple[Any, ...],
 ) -> Any:
-    """Return the ``ContainerSpec`` for a distribution whose children are already built.
+    """Return the spec (an instance of ``spec_type``) for a distribution whose children are built.
 
-    Lossy when the layout cannot record an attribute or any child rebuilds lossy.
+    ``spec_type`` is ``ContainerSpec``, passed in by the registry so this module does not
+    import the container module that imports it. Lossy when the layout cannot record an
+    attribute or any child rebuilds lossy.
     """
 
-    from .container import ContainerSpec
-
     layout = distribution_layout(value)
-    return ContainerSpec(
+    return spec_type(
         kind=DISTRIBUTION_CONTAINER_KIND,
         length=len(layout.fields),
         fields=layout.fields,

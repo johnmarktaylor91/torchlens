@@ -13,8 +13,18 @@ from typing import Any
 from torchlens._data_classes.trace import Trace
 from torchlens._errors import ArgumentTypeError, InvalidArgumentError
 from torchlens._selection.selectors import BaseSelector
-from torchlens.intervention._zero_fire import settle_capture_zero_fire
-from torchlens.intervention.audit import rule_signal as _rule_signal
+from torchlens.intervention._zero_fire import (
+    non_tensor_reason_fields,
+    recorded_non_tensor_details,
+    settle_capture_zero_fire,
+)
+from torchlens.intervention.audit import (
+    EventStatus,
+    record_intervention_event,
+    rule_signal as _rule_signal,
+    rules_payload,
+    site_keys_for_labels,
+)
 from torchlens.intervention.hooks import split_site_branches as _split_site_branches
 
 from ..._trace_selector_helpers import (
@@ -253,13 +263,6 @@ def _record_capture_intervention_event(trace: Trace, intervene_request: Any) -> 
 
     if intervene_request is None:
         return
-    from ...intervention.audit import (
-        EventStatus,
-        record_intervention_event,
-        rules_payload,
-        site_keys_for_labels,
-    )
-
     fired_labels, fire_count, fired_records = _fired_capture_records(trace)
     zero_fire_rule_ids: tuple[str, ...] = ()
     if isinstance(intervene_request, Recipe):
@@ -300,8 +303,6 @@ def _record_capture_intervention_event(trace: Trace, intervene_request: Any) -> 
         # Some rules fired and some did not: the fact is on the audit row above;
         # the capture's on_zero_fire policy settles the rest. (A request that fired
         # nowhere at all settles at the zero-match selector disclosure instead.)
-        from ...intervention._zero_fire import settle_capture_zero_fire
-
         names = ", ".join(zero_fire_rule_ids)
         settle_capture_zero_fire(
             f"Capture-time intervention rule(s) [{names}] fired at zero sites while "
@@ -599,7 +600,6 @@ def _non_tensor_zero_fire_fields(trace: Any, selector: Any) -> dict[str, Any]:
     keeps the generic zero-fire message.
     """
 
-    from ...intervention._zero_fire import non_tensor_reason_fields, recorded_non_tensor_details
     from ..predicates import _plain_module_union
 
     addresses = _plain_module_union(selector)

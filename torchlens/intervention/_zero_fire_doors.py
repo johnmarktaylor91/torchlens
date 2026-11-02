@@ -12,9 +12,12 @@ from collections.abc import Callable, Sequence
 from typing import Any, NoReturn
 
 from .._errors import TorchLensWarning
+from .._ir.distribution_container import is_distribution
 from ._zero_fire import (
     current_zero_fire_policy,
     external_stacklevel,
+    live_distribution_leaf_paths,
+    non_tensor_module_output_detail,
     non_tensor_reason_fields,
     raise_rerun_zero_fire,
     recorded_non_tensor_details,
@@ -30,9 +33,6 @@ def note_non_tensor_module_output(details: dict[str, str], address: str, output:
     parameters capture records as their own output ops) is not a tensor there,
     so the rule fires at zero sites and the reason names the parameter paths.
     """
-
-    from .._ir.distribution_container import is_distribution
-    from ._zero_fire import live_distribution_leaf_paths, non_tensor_module_output_detail
 
     if not is_distribution(output):
         return False

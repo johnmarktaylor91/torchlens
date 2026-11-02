@@ -429,7 +429,11 @@ def _rebuild_container_from_spec(spec: ContainerSpec, leaf_iter: Any) -> Any:
             return _construct_model_output_without_init(container_type, key_values)
         return key_values
     if spec.kind == DISTRIBUTION_CONTAINER_KIND:
-        return rebuild_distribution_node(spec, child_by_key, leaf_iter)
+        return rebuild_distribution_node(
+            spec,
+            lambda name: _rebuild_child_or_leaf(child_by_key, NamedField(name), leaf_iter),
+            _resolve_container_type(spec),
+        )
     if spec.kind == "registered":
         return _rebuild_registered_node(spec, child_by_key, leaf_iter)
     raise ValueError(f"Unsupported ContainerSpec kind {spec.kind!r}.")

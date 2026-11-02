@@ -19,6 +19,10 @@ from .._ir.container import (
     reconstruction_is_lossy_by_type,
     resolve_container_type,
 )
+from .._ir.distribution_container import (
+    DISTRIBUTION_CONTAINER_KIND,
+    distribution_type_rebuild_is_lossy,
+)
 from .._utils._torch_compat import tensor_version_or_none
 from ..errors import (
     RunPreconditionError,
@@ -518,11 +522,6 @@ def _distribution_node_lossy(spec: Any) -> bool | None:
     distribution carrying a transform list) is lossy even when the op-level
     ``container_spec`` of a default capture is absent.
     """
-
-    from .._ir.distribution_container import (
-        DISTRIBUTION_CONTAINER_KIND,
-        distribution_type_rebuild_is_lossy,
-    )
 
     if spec.kind != DISTRIBUTION_CONTAINER_KIND:
         return None

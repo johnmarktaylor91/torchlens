@@ -41,6 +41,7 @@ from . import _state
 from ._fast_live_steer import apply_steer_paused, session_is_active
 from ._runnable import RunnableErrorCode
 from ._runnable.verification import _contract_check
+from ._utils.introspection import get_vars_of_type_from_obj
 from .backends.torch.model_prep import shared_module_addresses
 from .backends.torch.wrappers import _MUTATING_TENSOR_PROPERTY_SETTERS
 from .errors import RunCapabilityUnavailableError
@@ -104,7 +105,6 @@ def _pair_output_leaves(
 
     # Module import: the dotted spelling of this path matches the layer lint's
     # torch-private pattern, but the walker is TorchLens's own, not a torch private.
-    from ._utils.introspection import get_vars_of_type_from_obj
     from .backends.torch import _ops_containers
 
     native = [
@@ -673,9 +673,11 @@ def _lossy_output_failure(output: Any, output_labels: Sequence[str]) -> Any:
     root rather than accept a boundary it knows is incomplete; ``None`` otherwise.
     """
 
-    from .backends.torch._ops_containers import lossy_distribution_output_reason
+    # Module import: the dotted spelling of this path matches the layer lint's
+    # torch-private pattern, but the prover is TorchLens's own, not a torch private.
+    from .backends.torch import _ops_containers
 
-    lossy_reason = lossy_distribution_output_reason(output)
+    lossy_reason = _ops_containers.lossy_distribution_output_reason(output)
     if not lossy_reason:
         return None
     return _contract_check(

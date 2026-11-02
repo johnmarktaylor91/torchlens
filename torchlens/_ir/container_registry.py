@@ -791,7 +791,7 @@ def _distribution_spec(
     module, qualname = _container_type_ref(value)
     if not _children_are_reconstructable(children, child_specs):
         return ContainerSpec(kind="opaque", type_module=module, type_qualname=qualname)
-    return build_distribution_spec(value, module, qualname, tuple(child_specs))
+    return build_distribution_spec(ContainerSpec, value, module, qualname, tuple(child_specs))
 
 
 def _hf_output_spec(

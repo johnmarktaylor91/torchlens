@@ -26,6 +26,13 @@ from pathlib import Path
 from typing import Any, Final, Literal, NoReturn
 
 from .._errors import InvalidArgumentError, TorchLensWarning
+from .._ir.container import NamedField
+from .._ir.distribution_container import (
+    DISTRIBUTION_CONTAINER_KIND,
+    distribution_children,
+    is_distribution,
+)
+from .._selection.errors import SiteResolutionError
 
 __all__ = (
     "DEFAULT_ZERO_FIRE_POLICY",
@@ -119,8 +126,6 @@ def recorded_non_tensor_details(trace: Any, addresses: Any) -> list[str]:
         Sentences from :func:`non_tensor_module_output_detail`, in target order.
     """
 
-    from .._ir.distribution_container import DISTRIBUTION_CONTAINER_KIND
-
     modules = getattr(trace, "modules", None)
     details: list[str] = []
     for target in sorted({str(address).rsplit(":", 1)[0] for address in addresses or ()}):
@@ -146,8 +151,6 @@ def _distribution_leaf_paths(spec: Any, prefix: str = "") -> tuple[str, ...]:
     (``.base_dist.loc``), so the paths name ops the user can target.
     """
 
-    from .._ir.container import NamedField
-
     children = dict(getattr(spec, "child_specs", ()) or ())
     paths: list[str] = []
     for name in getattr(spec, "fields", ()) or ():
@@ -159,13 +162,20 @@ def _distribution_leaf_paths(spec: Any, prefix: str = "") -> tuple[str, ...]:
     return tuple(paths)
 
 
-def live_distribution_leaf_paths(output: Any) -> tuple[str, ...]:
-    """Return the tensor-leaf attribute paths capture records for a live distribution."""
+def live_distribution_leaf_paths(output: Any, prefix: str = "") -> tuple[str, ...]:
+    """Return the tensor-leaf attribute paths capture records for a live distribution.
 
-    from ..backends.torch._ops_container_base import _try_build_container_spec
+    Walks the distribution's recorded fields the way the container registry does, so
+    the paths equal :func:`_distribution_leaf_paths` of the spec capture would build.
+    """
 
-    spec = _try_build_container_spec(output)
-    return _distribution_leaf_paths(spec) if spec is not None else ()
+    paths: list[str] = []
+    for name, child in distribution_children(output):
+        if is_distribution(child):
+            paths.extend(live_distribution_leaf_paths(child, f"{prefix}.{name}"))
+        else:
+            paths.append(f"{prefix}.{name}")
+    return tuple(paths)
 
 
 def non_tensor_reason_fields(details: Any) -> dict[str, Any]:
@@ -330,8 +340,6 @@ def settle_capture_zero_fire(message: str, **fields: Any) -> None:
     def _raise() -> NoReturn:
         """Refuse the capture under ``on_zero_fire='error'``."""
 
-        from .errors import SiteResolutionError
-
         raise SiteResolutionError(
             f"{message} tl.trace(..., on_zero_fire='error') refuses the capture.",
             code="trace_zero_fire",
@@ -357,8 +365,6 @@ def raise_rerun_zero_fire(message: str, unfired_plan_ids: list[str]) -> NoReturn
     SiteResolutionError
         Always, with code ``rerun_zero_fire``.
     """
-
-    from .errors import SiteResolutionError
 
     raise SiteResolutionError(
         f"{message} Trace.run(..., on_zero_fire='error') refuses the run.",
