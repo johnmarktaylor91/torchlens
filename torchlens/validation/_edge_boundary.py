@@ -277,7 +277,7 @@ def _parent_arg_evidence(
         return ValidationCheckResult.unverified("replay_recomputed_parent_unattested")
     parent_outs = _saved_out_payload(parent_layer)
     if parent_outs is None:
-        return ValidationCheckResult.unverified("missing_saved_parent_payload")
+        return ValidationCheckResult.unverified("parent_payload_missing")
     return parent_outs, capture_digest
 
 

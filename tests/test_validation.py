@@ -2903,7 +2903,7 @@ def test_validate_forward_pass_metadata_off_rejects_functionless_op_laundering()
         assert bool(result) is False
         assert trace.validation_replay_status.state == "failed"
         assert any(
-            decision.get("reason") == "functionless_computational_op"
+            decision.get("reason") == "no_replayable_function"
             and decision.get("decision") == "failed"
             for decision in trace.validation_replay_status.decisions
         )
@@ -5323,7 +5323,7 @@ def test_funcless_placeholder_unselected_where_branch_still_fails_metadata() -> 
 
         # Layer 2: end-to-end validation also FAILS. cert10 catches the
         # placeholder in the replay phase first (dedicated
-        # 'functionless_computational_op' decision), before the metadata step
+        # 'no_replayable_function' decision), before the metadata step
         # gets its turn, so the run fails without the invariant raising here.
         ground_truth = [model(x).detach().clone()]
         result = trace.validate_forward_pass(ground_truth, validate_metadata=True)
@@ -5331,7 +5331,7 @@ def test_funcless_placeholder_unselected_where_branch_still_fails_metadata() -> 
         status = trace.validation_replay_status
         assert status.state == "failed"
         assert any(
-            decision.get("reason") == "functionless_computational_op"
+            decision.get("reason") == "no_replayable_function"
             and decision.get("decision") == "failed"
             for decision in status.decisions
         )

@@ -16,6 +16,7 @@ from .._capture.outcome import require_capture_capability
 from .._capture.structure_only import require_structure_only_capability
 from .._capture_state_helpers import unwrap_compiled_model
 from .._runnable import refuse_poisoned_trace
+from .._utils.rng import restores_rng_streams
 from ..backends.registry import get_backend_spec
 from ..backends.torch._trace_backward import _refuse_stats_capture
 from . import _degenerate_forward
@@ -99,6 +100,7 @@ def save_new_outs(  # noqa: PLR0913  (the thin Trace.save_new_outs shell keeps t
     )
 
 
+@restores_rng_streams
 def validate_forward_pass(
     trace: Trace,
     ground_truth_output_tensors: list[torch.Tensor] | torch.Tensor,

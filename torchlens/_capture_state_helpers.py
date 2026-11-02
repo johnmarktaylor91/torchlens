@@ -23,6 +23,7 @@ import torch
 from torch import nn
 
 from . import _state
+from ._capture._fused_attention_hold import hold_fused_attention_fastpath_off
 from ._data_classes.trace import Trace
 from ._plain_attr_fidelity import (
     _PLAIN_ATTR_IGNORED_NAMES,
@@ -41,6 +42,7 @@ from ._utils._torch_compat import (
 )
 from ._utils.input_leaves import move_input_tensor
 from ._utils.tensor_leaves import iter_tensors
+from ._utils.tensor_utils import _is_uninitialized_lazy_tensor as _is_uninitialized_param
 from ._validation_state_snapshot import describe_copy_failure, warn_copy_failed
 
 # Content-fingerprint / attribute-fragment family: split to _capture_fingerprint.py
@@ -115,10 +117,16 @@ class CompiledCapturePrep:
         original eager Python and their interiors are logged with full verified
         semantics; when ``False`` (torch < 2.6, or the stance failed to
         engage), inventoried sites keep the honest bypass-and-disclose path.
+    fused_attention_held:
+        Dotted addresses of the ``nn.MultiheadAttention`` /
+        ``nn.TransformerEncoderLayer`` modules whose fused fast path
+        :func:`hold_fused_attention_fastpath_off` holds off for the capture
+        scope; empty when the model has none or torch lacks the public switch.
     """
 
     sites: tuple[str, ...]
     force_eager_stance: bool
+    fused_attention_held: tuple[str, ...] = ()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -533,16 +541,20 @@ def prepare_compiled_capture(model: nn.Module) -> Iterator[CompiledCapturePrep]:
     ``dynamo_region_not_logged`` ceiling.
     """
 
-    with unwrap_compiled_submodules(model):
+    with unwrap_compiled_submodules(model), hold_fused_attention_fastpath_off(model) as held:
         sites = compiled_plain_callable_sites(model)
         with force_eager_stance_scope() as stance_active:
             if stance_active:
                 if sites:
                     _warn_compiled_plain_callables_forced_eager_once(sites)
-                yield CompiledCapturePrep(sites=sites, force_eager_stance=True)
+                yield CompiledCapturePrep(
+                    sites=sites, force_eager_stance=True, fused_attention_held=held
+                )
             else:
                 with bypass_compiled_plain_callables(model):
-                    yield CompiledCapturePrep(sites=sites, force_eager_stance=False)
+                    yield CompiledCapturePrep(
+                        sites=sites, force_eager_stance=False, fused_attention_held=held
+                    )
 
 
 @contextmanager
@@ -1410,19 +1422,6 @@ def _fingerprint_model_weights(model: nn.Module) -> str:
             continue
         entries.append((name, tuple(param.shape), str(param.dtype)))
     return hashlib.sha256(repr(entries).encode("utf-8")).hexdigest()
-
-
-def _is_uninitialized_param(value: Any) -> bool:
-    """Return whether ``value`` is a lazy (uninitialized) parameter or buffer.
-
-    Shape/numel/storage access on such values raises until the first forward
-    materializes them in place. One implementation, shared with the payload
-    copy path (see ``utils.tensor_utils._is_uninitialized_lazy_tensor``).
-    """
-
-    from ._utils.tensor_utils import _is_uninitialized_lazy_tensor
-
-    return _is_uninitialized_lazy_tensor(value)
 
 
 def _input_id_for_relationship_evidence(input_args: Any) -> int:

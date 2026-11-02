@@ -112,16 +112,78 @@ def pytest_itemcollected(item: pytest.Item) -> None:
             return
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Register ``--tier-shard INDEX/COUNT`` (the not-slow tier's file shards)."""
+
+    parser.addoption(
+        "--tier-shard",
+        metavar="INDEX/COUNT",
+        default=None,
+        help=(
+            "run only the test files of shard INDEX (0-based) of COUNT, balanced by the "
+            "tracked per-file durations (python scripts/tier_durations.py shards)"
+        ),
+    )
+
+
+def parse_tier_shard(spec: str) -> tuple[int, int]:
+    """Return ``(index, count)`` from ``INDEX/COUNT``; raise ``pytest.UsageError`` otherwise."""
+
+    match = re.fullmatch(r"(\d+)/(\d+)", spec.strip())
+    if match is None or not 0 <= int(match.group(1)) < int(match.group(2)):
+        raise pytest.UsageError(f"--tier-shard wants INDEX/COUNT with 0 <= INDEX < COUNT: {spec!r}")
+    return int(match.group(1)), int(match.group(2))
+
+
+def tier_shard_items(
+    items: list[pytest.Item], index: int, count: int, root: Path
+) -> tuple[list[pytest.Item], list[pytest.Item]]:
+    """Split ``items`` into this shard's and the rest, by whole test file.
+
+    The files on disk are balanced exactly as ``tier_durations.py shards`` prints
+    them, so the shards are disjoint and together cover every file; an item
+    from a file outside that list (none today) runs in shard 0, never nowhere.
+    """
+
+    from scripts.tier_durations import balanced_shards, read_rows, test_files_on_disk
+
+    on_disk = test_files_on_disk()
+    mine = set(balanced_shards(read_rows(), count, on_disk)[index])
+    known = set(on_disk)
+    kept: list[pytest.Item] = []
+    dropped: list[pytest.Item] = []
+    for item in items:
+        file = Path(str(item.path)).resolve().relative_to(root).as_posix()
+        in_shard = file in mine or (file not in known and index == 0)
+        (kept if in_shard else dropped).append(item)
+    return kept, dropped
+
+
+def apply_tier_shard(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Keep only this ``--tier-shard``'s test files when the option is given."""
+
+    spec = config.getoption("--tier-shard", default=None)
+    if spec is None:
+        return
+    index, count = parse_tier_shard(spec)
+    kept, dropped = tier_shard_items(items, index, count, Path(str(config.rootpath)).resolve())
+    if dropped:
+        config.hook.pytest_deselected(items=dropped)
+    items[:] = kept
+
+
 @pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Fail the session when any SELECTED item carries a contradictory tier combination.
+    """Apply ``--tier-shard``, then fail on any SELECTED contradictory tier combination.
 
     Runs after the mark plugin's deselection, so a session judges the items it
     will run (targeted runs included); items the session deselects are not
-    judged, as the former lint test's ``session.items`` census did.
+    judged, as the former lint test's ``session.items`` census did. The shard
+    filter keeps the invocation rooted at ``tests/``, so the conftest gates that
+    arm only on an unfiltered ``tests/`` run stay armed in every shard.
     """
 
-    del config
+    apply_tier_shard(config, items)
     fail_on_tier_violations(items)
 
 

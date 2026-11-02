@@ -20,6 +20,7 @@ Selector	toy	referenced	F36-freeze
 Trace	R1	referenced	F36-freeze
 add	R1	referenced	F36-freeze
 add_noise	toy	referenced	F36-freeze
+all_sites	toy	referenced	late.9
 at_step	toy	referenced	3.0-rename
 between	toy	referenced	F36-freeze
 changed	R1	referenced	F36-freeze

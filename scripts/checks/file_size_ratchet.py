@@ -318,7 +318,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # capability warning stay here); measured 4968. Debloat target: 3450.
     # 5000 -> 4700 (compat table): the attribute-only capability probes moved
     # to declarative rows in _utils/_torch_compat_table.py; measured 4676.
-    "torchlens/_utils/_torch_compat.py": 4700,
+    "torchlens/_utils/_torch_compat.py": 4600,
     # 3400 -> 3300 (2026-08-26 shim removal): the crawler-era no-op stubs and
     # patch_policy/patch_modules warn kwargs left; next 50-line step down.
     # 3300 -> 3320 (F24 observe): the device-memory bracket at the one
@@ -351,7 +351,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # next 50-line step above the merged measurement.
     # 3500 -> 3400 (2026-10-29 tensordict prewrap): the storage-overlap geometry
     # moved to _storage_overlap.py (measured 3389); next 50-line step above it.
-    "torchlens/backends/torch/wrappers.py": 3000,
+    "torchlens/backends/torch/wrappers.py": 2900,
     # 3300 -> 3301 (2026-08-27 C01 item 5): same relocation import re-sort (+1).
     # 3301 -> 3400 (2026-10-01 ci-fix ratchet settle): "give the preview
     # backends torch's label convention" (8e5f966d8) landed the same

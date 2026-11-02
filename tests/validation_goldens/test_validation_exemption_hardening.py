@@ -2034,7 +2034,7 @@ def test_functionless_computational_op_fails_loudly() -> None:
     status = trace.validation_replay_status
     assert status.state == "failed"
     assert any(
-        decision["decision"] == "failed" and decision["reason"] == "functionless_computational_op"
+        decision["decision"] == "failed" and decision["reason"] == "no_replayable_function"
         for decision in status.decisions
     )
 
@@ -2070,7 +2070,7 @@ def test_selective_save_interior_gap_is_unverified() -> None:
     assert isinstance(result, ValidationStatus)
     assert result.state == "unverified"
     status = trace.validation_replay_status
-    assert status.unverified_reason_counts["missing_saved_parent_payload"] >= 1
+    assert status.unverified_reason_counts["parent_payload_missing"] >= 1
     assert "not_saved_by_user" not in status.exempted_reason_counts
     computational_ops = [op for op in trace._layer_list if op.func is not None]
     assert computational_ops
@@ -2141,7 +2141,7 @@ def test_missing_parent_payload_yields_reason_coded_unverified() -> None:
 
     assert isinstance(result, ValidationStatus)
     assert result.state == "unverified"
-    assert result.unverified_reason_counts["missing_saved_parent_payload"] >= 1
+    assert result.unverified_reason_counts["parent_payload_missing"] >= 1
 
 
 def test_replay_mismatch_with_missing_nonperturbed_parent_still_fails() -> None:
@@ -2182,7 +2182,7 @@ def test_replay_mismatch_with_missing_nonperturbed_parent_still_fails() -> None:
     assert result is False
     status = trace.validation_replay_status
     assert status.state == "failed"
-    assert status.unverified_reason_counts["missing_saved_parent_payload"] >= 1
+    assert status.unverified_reason_counts["parent_payload_missing"] >= 1
     assert any(decision["reason"] == "replay_mismatch" for decision in status.decisions)
 
 
