@@ -28,15 +28,17 @@ Split from ``validation/exemptions.py`` (R43 file-size ratchet), which dispatche
 here from its posthoc value-proof decision.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
 
-from .._data_classes.op import Op
+from ._posthoc_decision import PosthocPerturbDecision
 from ._sdpa_value_proofs import _output_equals_value_rows, sdpa_softmax_rows_well_defined
 from ._value_predicates import _is_all_zero_value, _saved_output_all_finite
-from .exemptions import PosthocPerturbDecision
+
+if TYPE_CHECKING:
+    from .._data_classes.op import Op
 
 _NOT_PROVED = PosthocPerturbDecision(False, "not_value_proved")
 
@@ -81,13 +83,6 @@ DISJUNCTION_FUNC_NAMES = frozenset(
     }
 )
 POW_FUNC_NAMES = frozenset({"__pow__", "__ipow__", "pow", "pow_"})
-VALUE_PROOF_FUNC_NAMES = (
-    DIVISION_FUNC_NAMES
-    | CONJUNCTION_FUNC_NAMES
-    | DISJUNCTION_FUNC_NAMES
-    | POW_FUNC_NAMES
-    | frozenset({"__setitem__", "scaled_dot_product_attention"})
-)
 
 
 def _perturbed_arg_keys(layer: Op, layers_to_perturb: list[str]) -> set[Any] | None:

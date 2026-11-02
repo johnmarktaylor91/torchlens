@@ -30,7 +30,6 @@ casting, special-value args like all-zeros making perturbation irrelevant).
 # unintended value-sensitive case.
 
 from collections.abc import Callable
-from dataclasses import dataclass
 from numbers import Number
 from typing import TYPE_CHECKING, Any
 
@@ -65,7 +64,9 @@ from ._norm_zero_weight_proof import (
     norm_input_annihilated_by_zero_weight,
 )
 from ._operand_value_proofs import operand_value_proof_decision
+from ._posthoc_decision import PosthocPerturbDecision
 from ._replay_warnings import replay_warnings_ignored
+from ._saved_value_proofs import saved_value_proof_decision
 from ._sdpa_value_proofs import sdpa_value_proof_decision
 from ._structural_slot_checks import (  # noqa: F401  (the table resolves these through globals())
     check_expand_pinned_size_exempt,
@@ -119,23 +120,11 @@ STRUCTURAL_ARG_POSITIONS: dict[str, set[int]] = declared_structural_positions()
 STRUCTURAL_ARG_KWARG_ALIASES: dict[str, dict[int, set[str]]] = declared_structural_kwarg_aliases()
 
 
-@dataclass(frozen=True)
-class PosthocPerturbDecision:
-    """Structured decision returned by posthoc perturbation predicates.
-
-    Attributes
-    ----------
-    exempt:
-        Whether the unchanged perturbation output is justified.
-    reason:
-        Stable reason code for diagnostics and golden snapshots.
-    justification:
-        Optional human-readable proof for design exemptions.
-    """
-
-    exempt: bool
-    reason: str
-    justification: str | None = None
+_VALUE_PROOFS = (
+    operand_value_proof_decision,
+    sdpa_value_proof_decision,
+    saved_value_proof_decision,
+)  # dispatch order: the operand and sdpa proofs decide first
 
 
 def _check_index_domain_degenerate(self: "Trace", layer: Op, layers_to_perturb: list[str]) -> bool:
@@ -415,12 +404,9 @@ def _check_setitem_exempt(self: "Trace", layer: Op, layers_to_perturb: list[str]
         return True
 
     # Case 2b: a bool mask at any slot of the index tuple (``x[:, mask] = v``).
-    if setitem_bool_mask_at_index_slot(layer, layers_to_perturb):
-        return True
-
     # Case 3: perturbed layer is the destination, but the indexed destination
     # slice is fully overwritten by the replacement value.
-    return bool(
+    return setitem_bool_mask_at_index_slot(layer, layers_to_perturb) or bool(
         _perturbed_parent_is_arg_position(layer, layers_to_perturb, 0)
         and _setitem_destination_slice_is_fully_overwritten(perturbed_tensor, args)
     )
@@ -475,17 +461,16 @@ def _setitem_destination_coverage_is_total(
     args:
         Saved ``__setitem__`` positional arguments.
     broadcast_replacement:
-        Accept a tensor replacement that broadcasts onto the selected shape
-        (the posthoc decision, after a perturbed replay already left the output
-        unchanged); the pre-execution gate keeps the exact-shape match.
+        Accept a tensor replacement that broadcasts onto the selected shape (the
+        posthoc decision); the pre-execution gate keeps the exact-shape match.
 
     Returns
     -------
     bool
         True when the perturbed tensor is the destination, ``destination[index]``
         selects every destination element exactly once, and a tensor replacement
-        (when present) matches the selected shape, or broadcasts onto it when
-        ``broadcast_replacement``.
+        (when present) matches the selected shape (or broadcasts onto it when
+        ``broadcast_replacement``).
     """
 
     if len(args) < 3:
@@ -2032,14 +2017,8 @@ def _posthoc_value_proof_decision(
             "non-zero weight, so (input - running_mean) is zero and running_var cannot reach "
             "the output",
         )
-    for value_proof in (operand_value_proof_decision, sdpa_value_proof_decision):
+    for value_proof in _VALUE_PROOFS:
         decision = value_proof(layer, layers_to_perturb, args)
-        if decision.exempt:
-            return decision
-    from ._saved_value_proofs import VALUE_PROOF_FUNC_NAMES, saved_value_proof_decision
-
-    if layer.func_name in VALUE_PROOF_FUNC_NAMES:
-        decision = saved_value_proof_decision(layer, layers_to_perturb, args)
         if decision.exempt:
             return decision
     if norm_input_annihilated_by_zero_weight(layer, layers_to_perturb, args):
