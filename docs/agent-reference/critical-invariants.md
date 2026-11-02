@@ -97,9 +97,17 @@
     `backends/torch/_function_boundary.py`): its interior ops are dropped in postprocess step
     3, every dispatch inside it is owned by the audited `autograd_function:foreign` token, and
     validation replays it by calling the Function's `apply` again. An ordinary custom Function
-    (interior in torch) is captured op by op exactly as before; a plain round trip outside a
-    Function is never collapsed: its `from_numpy` stays a parentless source op and the census
-    keeps reporting any unowned dispatch it makes. A `torch.jit.ScriptFunction` called from an
+    (interior in torch) is captured op by op exactly as before. A round trip outside any
+    Function is never collapsed into a boundary that hides ops: the export is journaled as a
+    departure (`backends/torch/_foreign_data.py`; its own dispatches owned by the audited
+    `foreign_data:export` token) and the host constructor that brings data back is one
+    `foreigndata` op (`transform_kind="foreign_data"`) whose logged arguments are the departed
+    tensors. A zero-copy or copy round trip (`resolution` `view` / `copy`) replays exactly from
+    the departed tensor; a re-entry after host computation TorchLens did not see
+    (`resolution` `unresolved`) is linked to every compatible departure and validation records
+    the typed failure `foreign_data_roundtrip_unreplayable` for it, never a constant; only a
+    `from_dlpack` of a consumed capsule in a capture with NO departure replays its recorded
+    value (`resolution` `constant`). A `torch.jit.ScriptFunction` called from an
     eager forward is one `jitscript` boundary op (`transform_kind="jit.script"`,
     `backends/torch/_script_boundary.py`, same core): its dispatches are owned by the audited
     `jit_script:boundary` token and replay calls the function again; a call that writes into a

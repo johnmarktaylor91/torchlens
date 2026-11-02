@@ -1443,6 +1443,37 @@ def _not_saved_by_user_justification(
     )
 
 
+def _record_unresolved_foreign_data_failure(trace: Any, layer: "Op", op_label: str) -> None:
+    """Record the typed failure of a foreign data round trip that cannot be re-run."""
+
+    from ..backends.torch._foreign_data import FOREIGN_DATA_REPLAY_REASON
+    from .diagnostics import CHECK_REPLAY, ValidationFailure, record_validation_failure
+
+    config = dict(getattr(layer, "transform_config", None) or {})
+    parents = tuple(getattr(layer, "parents", ()) or ())
+    record_validation_failure(
+        trace,
+        ValidationFailure(
+            check_name=CHECK_REPLAY,
+            op_label=op_label,
+            func_name=getattr(layer, "func_name", None),
+            message=(
+                f"foreign data round trip {op_label} ({config.get('entry')}) re-entered torch "
+                f"after host computation TorchLens did not see (left through "
+                f"{', '.join(config.get('exits', ()))} from {', '.join(parents)}); the recorded "
+                "value is not replayed as a constant. Wrap the foreign step in an "
+                "autograd.Function or build the constant before the forward pass."
+            ),
+            extra={
+                "reason": FOREIGN_DATA_REPLAY_REASON,
+                "entry": config.get("entry"),
+                "exits": list(config.get("exits", ())),
+                "parents": list(parents),
+            },
+        ),
+    )
+
+
 def _is_provable_functionless_source_or_boundary(layer: "Op") -> bool:
     """Return whether a functionless op is a structural source or boundary.
 
@@ -2684,6 +2715,18 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         if _is_provable_functionless_source_or_boundary(layer):
             return ValidationCheckResult.exempted("functionless_source_or_boundary")
         return ValidationCheckResult.failed_result("functionless_computational_op")
+    from ..backends.torch._foreign_data import (
+        FOREIGN_DATA_REPLAY_REASON,
+        is_unresolved_foreign_data,
+    )
+
+    if is_unresolved_foreign_data(layer.func):
+        # A foreign data round trip whose host step TorchLens did not see: the
+        # recorded value is never replayed as a constant (validation integrity).
+        if perturb:
+            return ValidationCheckResult.unverified(FOREIGN_DATA_REPLAY_REASON)
+        _record_unresolved_foreign_data_failure(self, layer, layer_to_validate_parents_for_label)
+        return ValidationCheckResult.failed_result(FOREIGN_DATA_REPLAY_REASON)
 
     # Registry 1: skip ALL validation for nondeterministic ops (e.g., empty_like).
     # Membership is proved PER CALL: Tensor.new's value-bearing overloads

@@ -987,6 +987,7 @@ def test_expected_opaque_boundary_table_is_exact_and_budgeted() -> None:
         "torch_func:__index__:logged",
         "autograd:grad",
         "autograd_function:foreign",
+        "foreign_data:export",
         "jit_script:boundary",
     }
     scalar_rows = [row for row in AUDITED_COMPLETENESS_BOUNDARIES if row.operator is not None]

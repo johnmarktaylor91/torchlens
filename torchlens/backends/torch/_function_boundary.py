@@ -105,11 +105,24 @@ def _make_export_wrapper(original: Callable[..., Any], name: str) -> Callable[..
 
     @functools.wraps(original)
     def export_wrapper(*args: Any, **kwargs: Any) -> Any:
-        """Note the export for the live frame, then call through unchanged."""
+        """Note the export for the live frame or the plain-code journal, then call through."""
 
         if _FRAMES:
             _FRAMES[-1].add(name)
-        return original(*args, **kwargs)
+            return original(*args, **kwargs)
+        from ._foreign_data import (
+            active_trace_for_export,
+            note_plain_export,
+            owned_export_dispatches,
+        )
+
+        trace = active_trace_for_export()
+        if trace is None:
+            return original(*args, **kwargs)
+        with owned_export_dispatches(trace):
+            out = original(*args, **kwargs)
+        note_plain_export(trace, name, args[0] if args else None)
+        return out
 
     return export_wrapper
 

@@ -1111,7 +1111,11 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   (including `autogradgrad`, an in-forward `torch.autograd.grad` call, with
   `transform_kind="autograd.grad"`, and `autogradfunction`, a custom `autograd.Function`
   whose forward left torch through a numpy or dlpack round trip, with
-  `transform_kind="autograd.Function"`, and `jitscript`, one call to a
+  `transform_kind="autograd.Function"`, `foreigndata`, a host constructor (`from_numpy`,
+  `from_dlpack`, `frombuffer`, or a tensorless `tensor` / `as_tensor` / `asarray`) that brings
+  data back into torch after a plain-code `numpy` / `__array__` / `__dlpack__` / `to_dlpack` /
+  `tolist` export outside any Function, with `transform_kind="foreign_data"` and
+  `transform_config["resolution"]` of `view`, `copy`, `constant` or `unresolved`, and `jitscript`, one call to a
   `torch.jit.ScriptFunction` from an eager forward, with `transform_kind="jit.script"`);
   `tl.model_output` selects model outputs, and
   `tl.model_input` selects a nested model-input path.

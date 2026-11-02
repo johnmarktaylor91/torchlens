@@ -71,6 +71,14 @@ from ._completeness_cross_thread import (
 from ._completeness_dispatch import record_uncaptured_owner_callsite
 from ._completeness_escape_state import record_data_alias_mutation
 from ._completeness_origins import internal_scalar_read
+from ._foreign_data import (
+    FOREIGN_DATA_FUNC_NAME,
+    HOST_CONSTRUCTOR_FUNC_NAMES,
+    TOLIST_EXPORT_FUNC_NAME,
+    active_trace_for_export,
+    note_plain_export,
+    resolve_host_entry,
+)
 from ._function_boundary import (
     _BARCODE_TRANSPARENT_FUNCS,
     EXPORT_FUNC_NAMES,
@@ -350,6 +358,14 @@ def _maybe_inject_device_kwarg(func_name: str, kwargs: dict[str, Any]) -> dict[s
         if device is not None:
             return {**kwargs, "device": device}
     return kwargs
+
+
+def _note_plain_departure(func_name: str, args: tuple[Any, ...]) -> None:
+    """Journal a numpy / tolist export made in plain forward code (no Function frame)."""
+
+    trace = active_trace_for_export()
+    if trace is not None and args:
+        note_plain_export(trace, func_name, args[0])
 
 
 def _collect_tensor_args(args: tuple[Any, ...], kwargs: dict[str, Any]) -> list[torch.Tensor]:
@@ -1119,6 +1135,10 @@ def torch_func_decorator(
     # Decoration-time constant: only the numpy / dlpack export spellings tell a live
     # ``autograd.Function`` frame that its forward left torch (foreign-kernel boundary).
     is_export_func = func_name in EXPORT_FUNC_NAMES
+    # A ``tolist`` in plain forward code is a copy departure for the foreign data
+    # round-trip journal (never a Function exit: it is metadata inside most Functions).
+    is_plain_export_func = is_export_func or func_name == TOLIST_EXPORT_FUNC_NAME
+    is_host_constructor = func_name in HOST_CONSTRUCTOR_FUNC_NAMES
     mutates_receiver = mutates_first_arg or _func_mutates_receiver(func_name)
     inplace_param_index = _positional_inplace_index(func)
     reconstructs_receiver_output = func_name in {"__setitem__", "zero_", "__delitem__"}
@@ -1319,8 +1339,12 @@ def torch_func_decorator(
                     func_name=func_name,
                     census_scope=completeness_scope_for_wrapper(wrapper_name),
                 ):
-                    return func(*args, **kwargs)
-            return func(*args, **kwargs)
+                    out = func(*args, **kwargs)
+            else:
+                out = func(*args, **kwargs)
+            if is_export_func:
+                _note_plain_departure(func_name, args)
+            return out
 
         # Inline tensor extraction — avoids BFS crawl for the common case
         # where args are flat tensors. Falls back to BFS only for nested containers.
@@ -1513,6 +1537,8 @@ def torch_func_decorator(
 
                 _record_mode_paused_interior(trace, owner_func_call_id=func_call_id)
         func_exec_duration = time.time() - func_exec_start
+        if is_plain_export_func:
+            _note_plain_departure(func_name, args)
         if device_memory_before is not None or getattr(trace, "track_device_memory", False):
             from ..._observe._device_memory import settle_op_bracket
 
@@ -1622,7 +1648,19 @@ def torch_func_decorator(
         # op's label through the same-object in-place propagation below.
         log_args, log_kwargs = args, kwargs
         log_arg_copies, log_kwarg_copies = arg_copies, kwarg_copies
-        if is_storage_rebinding_setter and len(args) >= 2:
+        host_entry = (
+            resolve_host_entry(trace, func_name, args, kwargs, out_orig)
+            if is_host_constructor and not arg_tensorlike
+            else None
+        )
+        if host_entry is not None:
+            # Foreign data round trip: the departed tensor(s) are the logged
+            # arguments, so the parent edge, saved args and replay follow the
+            # generic op path; the callable carries the resolution.
+            capture_func, capture_func_name = host_entry.replay, FOREIGN_DATA_FUNC_NAME
+            log_args, log_kwargs = host_entry.args, {}
+            log_arg_copies, log_kwarg_copies = host_entry.args, {}
+        elif is_storage_rebinding_setter and len(args) >= 2:
             log_args = (args[1],)
             log_kwargs = {}
             log_arg_copies = (arg_copies[1],) if len(arg_copies) >= 2 else log_args

@@ -88,6 +88,15 @@ AUDITED_COMPLETENESS_BOUNDARIES: tuple[AuditedCompletenessBoundary, ...] = (
         ),
     ),
     AuditedCompletenessBoundary(
+        wrapper_name="foreign_data:export",
+        operator=None,
+        reason=(
+            "a tensor leaving torch in plain forward code (numpy / dlpack export outside any "
+            "autograd.Function) is journaled as a departure of the foreign data round trip; "
+            "the dispatches inside the export itself (toDLPack's strides fix) belong to it"
+        ),
+    ),
+    AuditedCompletenessBoundary(
         wrapper_name="jit_script:boundary",
         operator=None,
         reason=(
