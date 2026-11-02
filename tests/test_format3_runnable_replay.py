@@ -44,7 +44,7 @@ from torchlens._io.format3 import (
     writer as writer3,
 )
 from torchlens._io.format_errors import ArtifactError
-from torchlens.errors import RunnablePreflightError
+from torchlens.errors import RunnablePreflightError, TorchLensError
 from torchlens.intervention.errors import EngineDispatchError
 from torchlens.options import CaptureOptions
 
@@ -184,8 +184,32 @@ def _assert_identical(replayed: Any, live: Any, where: str) -> None:
             assert got == want, f"{where}: leaf {index}"
 
 
+def _attempt(action: Any) -> tuple[Any, TorchLensError | None]:
+    """Run one step; return its value, or the typed TorchLens refusal it raised."""
+
+    try:
+        return action(), None
+    except TorchLensError as refusal:
+        return None, refusal
+
+
+def _assert_same_refusal(new: BaseException | None, old: BaseException | None, where: str) -> None:
+    """Assert the 3.0 path and the tlspec 11 path refused with the same type and code."""
+
+    assert new is not None and old is not None, f"{where}: 3.0 refused {new!r}, tlspec 11 {old!r}"
+    assert type(new) is type(old), f"{where}: {type(new).__name__} != {type(old).__name__}"
+    new_code = getattr(new, "fields", {}).get("code")
+    assert new_code == getattr(old, "fields", {}).get("code"), where
+
+
 def _assert_replays_like_live(model: nn.Module, inputs: Any, tmp_path: Path, where: str) -> None:
-    """Capture, save at the runnable level, load, replay; compare with the live rerun."""
+    """Capture, save at the runnable level, load, replay; compare with the live rerun.
+
+    The tlspec 11 runnable save of the same capture is the reference: where it
+    refuses at save, load or replay, the 3.0 component must refuse with the same
+    exception type and code; where it replays, the 3.0 replay must equal both it
+    and the live rerun element for element.
+    """
 
     trace = tl.trace(model, inputs, capture=_CAP)
     try:
@@ -196,20 +220,24 @@ def _assert_replays_like_live(model: nn.Module, inputs: Any, tmp_path: Path, whe
             _save_and_load_runnable(trace, tmp_path)
         assert saved_refusal.value.fields.get("code") == live_refusal.fields.get("code"), where
         return
-    try:
-        loaded, _artifact = _save_and_load_runnable(trace, tmp_path)
-    except RunnablePreflightError as refusal:
-        # Parity: the tlspec 11 runnable save refuses this capture identically.
-        with pytest.raises(RunnablePreflightError) as old_refusal:
-            _quiet_save(trace, tmp_path / "old.tlspec", level="runnable", include_weights=True)
-        assert old_refusal.value.fields.get("code") == refusal.fields.get("code"), where
+    old_path = tmp_path / "old.tlspec"
+
+    def _old_load() -> Any:
+        _quiet_save(trace, old_path, level="runnable", include_weights=True)
+        return tl.load(old_path)
+
+    old_loaded, old_refusal = _attempt(_old_load)
+    loaded, refusal = _attempt(lambda: _save_and_load_runnable(trace, tmp_path)[0])
+    if old_refusal is not None or refusal is not None:
+        _assert_same_refusal(refusal, old_refusal, f"{where} (save and load)")
         return
-    replayed = loaded.run(inputs=inputs)
+    old_replay, old_refusal = _attempt(lambda: old_loaded.run(inputs=inputs))
+    replayed, refusal = _attempt(lambda: loaded.run(inputs=inputs))
+    if old_refusal is not None or refusal is not None:
+        _assert_same_refusal(refusal, old_refusal, f"{where} (replay)")
+        return
     _assert_identical(replayed.output, live.output, where)
     assert replayed.report.path_faithfulness == live.report.path_faithfulness, where
-    old_path = tmp_path / "old.tlspec"
-    _quiet_save(trace, old_path, level="runnable", include_weights=True)
-    old_replay = tl.load(old_path).run(inputs=inputs)
     _assert_identical(replayed.output, old_replay.output, where)
     assert replayed.report.numeric_attestation == old_replay.report.numeric_attestation, where
     assert replayed.report.path_faithfulness == old_replay.report.path_faithfulness, where
@@ -466,25 +494,6 @@ def test_missing_family_file_refuses(tmp_path: Path) -> None:
     assert _refusal_code(artifact, written.manifest, written.files) == "bundle_load_failed"
 
 
-@pytest.mark.parametrize(
-    ("edit", "where"),
-    [
-        (lambda m, f: m.update(callables={"fc": "pickled"}), "unknown key"),
-        (lambda m, f: m.pop("state_dict_family"), "family without schema"),
-        (lambda m, f: m.update(call_recipe_version="v0"), "stale version"),
-        (lambda m, f: m.update(descriptor="runnable/other.json"), "descriptor path"),
-        (lambda m, f: m.update(state_dict=["../../outside.safetensors"]), "outside path"),
-        (lambda m, f: m.update(state_dict=["runnable/state_dict-0002.safetensors"]), "numbering"),
-        (lambda m, f: m.update(state_dict=[]), "empty family"),
-        (lambda m, f: f.pop("runnable/buffers.safetensors"), "no files row"),
-        (lambda m, f: m.pop("buffers_tensors"), "family without references"),
-        (lambda m, f: m.update(buffers_tensors={}), "empty references"),
-        (lambda m, f: _edit_reference(m, "blob", "runnable/buffers.safetensors"), "other file"),
-        (lambda m, f: _edit_reference(m, "codec", "pickle"), "codec"),
-        (lambda m, f: _edit_reference(m, "loader", "x"), "unknown reference key"),
-        (lambda m, f: _edit_reference(m, "complex", False), "complex false"),
-    ],
-)
 def _edit_reference(manifest: dict[str, Any], key: str, value: Any) -> None:
     """Set one field of the ``fc.weight`` tensor reference in a copied manifest."""
 
@@ -520,6 +529,25 @@ def test_reference_disagreeing_with_its_file_refuses(tmp_path: Path, edit: Any, 
     ), where
 
 
+@pytest.mark.parametrize(
+    ("edit", "where"),
+    [
+        (lambda m, f: m.update(callables={"fc": "pickled"}), "unknown key"),
+        (lambda m, f: m.pop("state_dict_family"), "family without schema"),
+        (lambda m, f: m.update(call_recipe_version="v0"), "stale version"),
+        (lambda m, f: m.update(descriptor="runnable/other.json"), "descriptor path"),
+        (lambda m, f: m.update(state_dict=["../../outside.safetensors"]), "outside path"),
+        (lambda m, f: m.update(state_dict=["runnable/state_dict-0002.safetensors"]), "numbering"),
+        (lambda m, f: m.update(state_dict=[]), "empty family"),
+        (lambda m, f: f.pop("runnable/buffers.safetensors"), "no files row"),
+        (lambda m, f: m.pop("buffers_tensors"), "family without references"),
+        (lambda m, f: m.update(buffers_tensors={}), "empty references"),
+        (lambda m, f: _edit_reference(m, "blob", "runnable/buffers.safetensors"), "other file"),
+        (lambda m, f: _edit_reference(m, "codec", "pickle"), "codec"),
+        (lambda m, f: _edit_reference(m, "loader", "x"), "unknown reference key"),
+        (lambda m, f: _edit_reference(m, "complex", False), "complex false"),
+    ],
+)
 def test_malformed_runnable_object_refuses(tmp_path: Path, edit: Any, where: str) -> None:
     """The manifest's runnable object is closed, versioned and names fixed files."""
 
@@ -583,8 +611,11 @@ def test_family_present_against_descriptor_refuses(tmp_path: Path) -> None:
     _quiet_save(trace, records, level="runnable")
     loaded = tl.load(records)
     stray = {"fc.weight": torch.zeros(4, 3)}
+    buffers = {"scale": torch.full((4,), 0.5)}
     with pytest.raises(ArtifactError) as info:
-        runnable3.bind_runnable_families(loaded, {"state_dict": stray})
+        runnable3.bind_runnable_families(
+            loaded, {"nonpersistent_buffers": buffers, "state_dict": stray}
+        )
     assert info.value.fields["code"] == "bundle_metadata_integrity_refused"
 
 
