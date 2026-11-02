@@ -147,11 +147,11 @@ class BundleStreamWriter:
         self._payload_store = PayloadStore(self.tmp_path)
         self._store_lock = threading.Lock()
         self._async_engine: AsyncWriteEngine | None = None
-        # WT1 A-IV item 18: finalize STAGES the bundle (chunks closed, manifest
-        # base built, scrubbed state held) and the publish, which writes the
-        # record tables with the settled capture outcome, waits for settlement.
-        # A capture that settles FAILED never publishes (PARTIAL debris).
+        # WT1 A-IV item 18: finalize STAGES the bundle (chunks closed, manifest base built,
+        # scrubbed state held); the publish writes the record tables once the capture
+        # outcome settles. A capture that settles FAILED never publishes (PARTIAL debris).
         self._staged_scrubbed_state: dict[str, Any] | None = None
+        self._staged_record_pairs: list[tuple[Any, Any]] = []
         self._staged_base_manifest: dict[str, Any] = {}
         self._staged_payload_policy: dict[str, bool] = {}
         self._staged_trace: Any = None
@@ -364,7 +364,6 @@ class BundleStreamWriter:
         *,
         trace: Any,
         payload_policy: dict[str, bool] | None = None,
-        record_pairs: list[tuple[Any, Any]] | None = None,
     ) -> Path:
         """Write remaining payloads, close the chunks, build the manifest; hold the state.
 
@@ -392,8 +391,6 @@ class BundleStreamWriter:
             Include flags the scrub used (``include_outs``, ``include_grads``,
             ...); ``None`` derives them from the written payloads and the
             scrubbed options.
-        record_pairs:
-            ``(scrubbed copy, live record)`` pairs from the scrub (live cells).
 
         Returns
         -------
@@ -437,10 +434,14 @@ class BundleStreamWriter:
             if isinstance(exc, Exception):
                 raise ArtifactError(reason) from exc
             raise
-        self._staged_record_pairs = [*(record_pairs or ()), (scrubbed_state, trace)]
+        self._staged_record_pairs = [*self._staged_record_pairs, (scrubbed_state, trace)]
         self._staged_scrubbed_state = scrubbed_state
         self._staged_trace = _weak_reference(trace)
         return self.final_path
+
+    def hold_live_records(self, record_pairs: list[tuple[Any, Any]]) -> None:
+        """Keep the scrub's ``(scrubbed copy, live record)`` pairs for the live cells."""
+        self._staged_record_pairs = list(record_pairs)
 
     def _resolve_payload_policy(
         self, scrubbed_state: dict[str, Any], payload_policy: dict[str, bool] | None
@@ -551,9 +552,8 @@ class BundleStreamWriter:
         if self._finalized:
             raise ArtifactError(f"Streaming bundle already published: {self.final_path}")
         if self._closed:
-            # An abort between staging and settlement already marked the temp
-            # bundle PARTIAL; publishing it would rename failure debris into a
-            # final-named artifact.
+            # An abort between staging and settlement already marked the temp bundle
+            # PARTIAL; publishing it would rename failure debris into a final-named artifact.
             raise ArtifactError(
                 f"Streaming bundle at {self.tmp_path} was aborted; refusing to publish it."
             )

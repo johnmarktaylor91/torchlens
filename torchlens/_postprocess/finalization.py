@@ -1542,13 +1542,13 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
         scrubbed_state, blob_specs = _reuse_streamed_blob_ids(
             self, scrubbed_state=scrubbed_state, blob_specs=blob_specs, writer=writer
         )
+        writer.hold_live_records(record_pairs)
         final_path = writer.stage_for_settlement(
             scrubbed_state=scrubbed_state,
             blob_specs=blob_specs,
             unsupported=unsupported_tensor_records,
             trace=self,
             payload_policy=_streamed_payload_flags(self, writer),
-            record_pairs=record_pairs,
         )
         settled = outcome_for(self)
         if settled is not None:

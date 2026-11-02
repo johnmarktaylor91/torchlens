@@ -284,8 +284,8 @@ torchlens/_io/state_contract.py::inspect_state_contract	108
 torchlens/_io/streaming.py	995
 torchlens/_io/streaming.py::BundleStreamWriter.__init__	83
 torchlens/_io/streaming.py::BundleStreamWriter._validate_blob_submission	62
-torchlens/_io/streaming.py::BundleStreamWriter.publish_staged	72
-torchlens/_io/streaming.py::BundleStreamWriter.stage_for_settlement	85
+torchlens/_io/streaming.py::BundleStreamWriter.publish_staged	71
+torchlens/_io/streaming.py::BundleStreamWriter.stage_for_settlement	82
 torchlens/_io/streaming.py::BundleStreamWriter.submit_blob	78
 torchlens/_io/tlspec.py::_TlSpecWriter.write_bundle	117
 torchlens/_ir/capture_events.py	1226
