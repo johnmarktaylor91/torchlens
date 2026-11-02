@@ -181,10 +181,10 @@ the record, row and column.
 | `callable_placeholder` | `CALLABLE_PLACEHOLDER_FIELDS`: `position`, `qualname`, `repr_length` | the placeholder object (section 8) |
 
 The `record` allowlist: the writer contract's `component_specs` table (50 classes at v11,
-`field_registry.component_spec_tables()`), not the restricted unpickler's TorchLens rows as
-`RECORD_TYPE_ALLOWLIST_SOURCE` says today. The two lists name the same value objects; the
-unpickler is deleted by this design (section 10), and the writer contract is already the digested
-source of every nested class the format may hold. Filed as an amendment (section 15).
+`field_registry.component_spec_tables()`), which `RECORD_TYPE_ALLOWLIST_SOURCE` now names, not
+the restricted unpickler's TorchLens rows it named first. The two lists name the same value
+objects; the unpickler is deleted by this design (section 10), and the writer contract is already
+the digested source of every nested class the format may hold (section 15).
 
 Rules the decoder enforces and the encoder guarantees:
 
@@ -566,7 +566,7 @@ provisional mapping):
   `unknown`. Recommend: the function is public (`tl.io.detect_tlspec_format`), so the label
   change is a public word change and needs the lockstep edits.
 
-## 15. Where this design and the contract page differ
+## 15. Where this design and the contract page differed
 
 Adopted from the contract page (`saved_format_3.md`) after this design's first draft
 disagreed: columnar record files and
@@ -574,22 +574,23 @@ label-string cross references (section 3); no inline tensors (section 6); `type`
 its dotted name; `record` as the tag for TorchLens value objects; the runnable and bundle
 layouts and the recipe `format_version` (sections 2, 7, 8); no `schema_digest`.
 
-Where this page extends the contract page, each with the exact change:
+Corrections this design made to the contract's first draft, each with the exact change, since
+folded into `contract.py` and the contract page so the two documents now agree:
 
 1. Blob keys are opaque (`t<k>`), chunks are per codec (`blobs/<codec>-<nnnn>.safetensors`)
    with the contract's 256 MiB cap; not per field family under `<record>.<row>.<field>` keys.
    Reason: the streaming writer does not know the row at write time and safetensors keys
    cannot be renamed (section 6). Builders: `payloads.py` owns the key counter; the record
    cell carries the key; `relabel_blob` edits the cell only.
-2. `RECORD_TYPE_ALLOWLIST_SOURCE` becomes the writer contract's `component_specs`
-   (`torchlens._io.field_registry.component_spec_tables`), not `torchlens._io._safe_unpickle`,
+2. `RECORD_TYPE_ALLOWLIST_SOURCE` is the writer contract's `component_specs`
+   (`torchlens._io.field_registry.component_spec_tables`), not the restricted unpickler module,
    which this design deletes (section 10). Same classes; a digested, surviving source.
 3. Manifest gains the optional `disclosures` object (section 2) so `tl.load` can attach the
    `unencodable_values_stringified` advisory and `tl.io.inspect` can show the count without
    decoding every cell.
 4. The intervention recipe's rule-level `callable_placeholder` is also allowed inside
    `args`/`kwargs` of a built-in edit (a callable argument), with `position` as
-   `<rule index>.<arg path>` (section 8); the contract page (e) places it at the edit's
+   `<rule index>.<arg path>` (section 8); the contract page (e) first placed it at the edit's
    `portability` only. Both forms refuse rerun with the same code.
 
 Everything else in `contract.py` and the contract page (names, codes, levels, record index, planned

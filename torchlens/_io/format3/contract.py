@@ -147,10 +147,10 @@ TYPED_VALUE_TAGS: Final[tuple[str, ...]] = (
     "unencodable",
     "callable_placeholder",
 )
-#: Where the ``record`` tag's type allowlist comes from: the TorchLens rows of
-#: the restricted unpickler's class allowlist (value objects such as ``OpRef``,
-#: ``FireRecord`` and ``Edit``); a ``record`` object of any other type refuses.
-RECORD_TYPE_ALLOWLIST_SOURCE: Final = "torchlens._io._safe_unpickle"
+#: Where the ``record`` tag's type allowlist comes from: the writer contract's
+#: component spec tables (value objects such as ``OpRef``, ``FireRecord`` and
+#: ``Edit``); a ``record`` object of any other type refuses.
+RECORD_TYPE_ALLOWLIST_SOURCE: Final = "torchlens._io.field_registry.component_spec_tables"
 #: Fields of a tensor reference object (tag ``tensor``). ``blob`` and ``key``
 #: are absent in a structure-only artifact; ``complex`` marks a tensor stored
 #: as its real view.
