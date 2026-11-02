@@ -11,7 +11,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens._data_classes import op as op_module
+from torchlens._data_classes import _op_save as op_save_module
 from torchlens.backends.torch._ops_activations import _save_activation_fields
 from torchlens.options import CaptureOptions
 
@@ -275,7 +275,7 @@ def test_trace_reference_save_mode_raises_if_saved_out_mutates(
 ) -> None:
     """Reference-mode saved outputs fail loudly after mutation."""
 
-    monkeypatch.setattr(op_module, "_WARNED_REFERENCE_SAVE_MODE", False)
+    monkeypatch.setattr(op_save_module, "_WARNED_REFERENCE_SAVE_MODE", False)
     with pytest.warns(UserWarning, match="save_mode='reference'"):
         log = tl.trace(torch.nn.ReLU(), torch.ones(1, 2), save_mode="reference")
     op = next(layer for layer in log._layer_list if layer.func_name == "relu")

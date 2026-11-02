@@ -4,7 +4,7 @@ Lane F39 (WALKTHROUGH B-IV) promotes the shipped-but-hidden surfaces into the
 declared story: ``tl.stats``/``tl.stats.aggregate`` enter ``__all__`` (conflict-ledger
 row 8 -- the promotion five memos claimed), and README/docs surface
 ``trace.profile()``, ``emit_nvtx=True``, ``register_op_rule``,
-``fastlog.Recorder``, ``utils.list_modules``/``list_ops``, the
+``fastlog.Recorder``, ``torchlens.inventory.list_sites``, the
 verification-backed receptive-field story, and the already-interactive HTML
 export. These tests pin the promotion both directions (a rename or a quiet
 re-hide fails here, not in a launch review) and EXECUTE the new stats doc's
@@ -74,8 +74,8 @@ def test_readme_keeps_the_unhidden_surfaces_visible() -> None:
         "emit_nvtx=True",
         "register_op_rule",
         "Recorder",
-        "list_modules",
-        "list_ops",
+        "torchlens.inventory",
+        "list_sites",
         "docs/reference/stats.md",
         "tl.export.html",
         "interactive",

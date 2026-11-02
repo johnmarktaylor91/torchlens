@@ -56,7 +56,7 @@ log = tl.trace(lm, "The quick brown fox")            # HF models: a string is a 
 **Quick Links**
 
 - [Paper](https://www.nature.com/articles/s41598-023-40807-0) |
-  [10-minute tutorial notebook](notebooks/torchlens_in_10_minutes.ipynb) |
+  [Learn TorchLens: eleven notebooks](notebooks/learn/README.md) |
   [Facets tutorial](notebooks/facets_tutorial.ipynb) |
   [5-minute gallery](examples/5min/README.md) |
   [50-minute gallery](examples/50min/README.md)
@@ -528,15 +528,15 @@ For training loops, build the sparse recorder once and log whichever steps
 you like; discovery helpers list what there is to ask for:
 
 ```python
+import torchlens.inventory as inv
 from torchlens.recording import Recorder
-from torchlens._utils import list_modules, list_ops
 
 with Recorder(model, save=tl.func('relu')) as rec:
     for step in range(2):                    # your optimizer loop
         rec(torch.rand(1, 3, 64, 64))        # sparse capture of this step
 
-print(list_modules(model)[:3])               # every module address + class
-print(list_ops(model, torch.randn(1, 3, 64, 64))[:3])   # op counts per forward
+print(inv.list_sites(model).rows[:3])        # no forward: every module address + class
+print(inv.list_sites(model, torch.randn(1, 3, 64, 64)).rows[:3])   # one forward: executed sites
 ```
 
 FLOP totals follow a declared convention (fma=2 by default; `flop_convention="fma1"`
@@ -668,7 +668,19 @@ saved activations are unaffected either way.
 
 | Resource | Description |
 |---|---|
-| [torchlens_in_10_minutes.ipynb](notebooks/torchlens_in_10_minutes.ipynb) | Core workflow: trace, index, visualize |
+| [Learn TorchLens](notebooks/learn/README.md) | Start here: eleven notebooks in order, each runs on a laptop CPU in about a minute |
+| [00_quickstart.ipynb](notebooks/learn/00_quickstart.ipynb) | You have a model and want to see inside it |
+| [01_capture_and_look.ipynb](notebooks/learn/01_capture_and_look.ipynb) | A model in hand |
+| [02_address_and_read.ipynb](notebooks/learn/02_address_and_read.ipynb) | You want a number out |
+| [03_see_it.ipynb](notebooks/learn/03_see_it.ipynb) | The summary is too long to read |
+| [04_keep_what_you_need.ipynb](notebooks/learn/04_keep_what_you_need.ipynb) | Memory or time ran out |
+| [05_change_and_rerun.ipynb](notebooks/learn/05_change_and_rerun.ipynb) | Does this layer matter? |
+| [06_gradients.ipynb](notebooks/learn/06_gradients.ipynb) | What drives this unit? |
+| [07_compare_runs.ipynb](notebooks/learn/07_compare_runs.ipynb) | You ran it twice |
+| [08_semantic_shortcuts.ipynb](notebooks/learn/08_semantic_shortcuts.ipynb) | You keep typing "head 3's query" |
+| [09_scale.ipynb](notebooks/learn/09_scale.ipynb) | Thousands of batches |
+| [10_beyond_one_forward.ipynb](notebooks/learn/10_beyond_one_forward.ipynb) | Your field's experiment |
+| [torchlens_in_10_minutes.ipynb](notebooks/torchlens_in_10_minutes.ipynb) | Older tutorial: trace, index, visualize |
 | [facets_tutorial.ipynb](notebooks/facets_tutorial.ipynb) | Attention heads, LSTM facets, patching |
 | [backward_tutorial.ipynb](notebooks/backward_tutorial.ipynb) | Gradient capture and backward visualization |
 | [training_tutorial.ipynb](notebooks/training_tutorial.ipynb) | Training with captured activations |
