@@ -26,7 +26,7 @@
   beside `FireRecord`; fields `verb`, `base_seed`, `derived_seed`, `share_draw`,
   `logical_firing_coordinate`, `eligible_count`, `population_count`, `population_identity`,
   `donor_group_id`, `draw_indices`, `realized_draw_digest`), carried on
-  `FireRecord.sampling_records`.
+  `FireRecord.sampling`.
 - Value helpers `tl.add_noise` and `tl.project_out` take `allow_shape_change=`. There are no
   gradient-only helpers: `tl.grad(site)` addresses the gradient of the site's OUTPUT, and the
   ordinary edits (`tl.scale`, `tl.zero_ablate`, `tl.clamp`, `tl.add_noise`, `tl.clip_norm(max_norm,
