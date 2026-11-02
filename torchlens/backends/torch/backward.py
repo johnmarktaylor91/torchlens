@@ -3963,13 +3963,31 @@ def install_autograd_wrappers() -> None:
                     return original(*args, **kwargs)
             return original(*args, **kwargs)
 
-        return _capture_autograd_engine_call(
-            roots,
-            run,
-            trigger="autograd_backward",
-            engine_flags=dict(kwargs),
-            forward_op_count_at_trigger=forward_op_count_at_trigger,
-        )
+        def engine() -> Any:
+            """Run the original call inside the backward capture of its engine pass."""
+            return _capture_autograd_engine_call(
+                roots,
+                run,
+                trigger="autograd_backward",
+                engine_flags=dict(kwargs),
+                forward_op_count_at_trigger=forward_op_count_at_trigger,
+            )
+
+        # An in-forward backward whose roots reach the logging capture is a
+        # recorded boundary: one ``autogradbackward`` op per leaf grad it writes
+        # (its interior dispatches, including the accumulation ``add_`` of a
+        # retained-graph second pass, belong to that op). A backward on tensors
+        # the capture never saw runs as before.
+        active_trace, logging_enabled = _state.active_capture()
+        if (
+            logging_enabled
+            and active_trace is not None
+            and any(trace is active_trace for trace in _traces_for_roots(roots))
+        ):
+            from ._autograd_backward_boundary import record_autograd_backward_boundary
+
+            return record_autograd_backward_boundary(active_trace, engine, original, args, kwargs)
+        return engine()
 
     def wrapped_grad(*args: Any, **kwargs: Any) -> Any:
         """Route ``torch.autograd.grad`` through TorchLens when roots match."""

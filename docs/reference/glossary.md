@@ -1121,7 +1121,11 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   module;
   `tl.func_transform` selects `torch.func` and `torch.autograd` transform boundary ops
   (including `autogradgrad`, an in-forward `torch.autograd.grad` call, with
-  `transform_kind="autograd.grad"`, and `autogradfunction`, a custom `autograd.Function`
+  `transform_kind="autograd.grad"`; `autogradbackward`, an in-forward `loss.backward()` or
+  `torch.autograd.backward` call, with `transform_kind="autograd.backward"`, one op per leaf
+  gradient the pass writes, parented on the roots and, when the leaf already held a grad, on
+  that previous grad as its in-place receiver, so a later `param.grad` read has a producer;
+  and `autogradfunction`, a custom `autograd.Function`
   whose forward left torch through a numpy or dlpack round trip, with
   `transform_kind="autograd.Function"`, and `jitscript`, one call to a
   `torch.jit.ScriptFunction` from an eager forward, with `transform_kind="jit.script"`);

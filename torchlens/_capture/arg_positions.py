@@ -1621,6 +1621,13 @@ FUNC_ARG_SPECS["stack"] = ArgSpec(sequence_positions=(0,), tensor_kwargs=("tenso
 FUNC_ARG_SPECS["autogradgrad"] = ArgSpec(
     positions=(0, 1, 2), tensor_kwargs=("outputs", "inputs", "grad_outputs")
 )
+# In-forward ``torch.autograd.backward`` boundary op: the receiver (the leaf's previous
+# grad, or None), the roots ``tensors`` and ``grad_tensors`` (a tensor or a shallow
+# sequence) and the one written leaf in ``inputs``.
+FUNC_ARG_SPECS["autogradbackward"] = ArgSpec(
+    positions=(0, 1, 2, 3),
+    tensor_kwargs=("accumulate_into", "tensors", "grad_tensors", "inputs"),
+)
 FUNC_ARG_SPECS["where"] = ArgSpec(
     positions=(0, 1, 2), tensor_kwargs=("condition", "input", "other")
 )

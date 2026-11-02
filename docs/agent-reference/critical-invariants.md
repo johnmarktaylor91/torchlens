@@ -89,7 +89,16 @@
     `torch.autograd.grad` called inside forward is an `autogradgrad` boundary op
     (`transform_kind="autograd.grad"`, one op per returned gradient, selected by
     `tl.func_transform("autograd.grad")`); validation re-derives its gradients by replaying
-    the recorded subgraph from its `inputs` to its `outputs`, never by exemption. A custom
+    the recorded subgraph from its `inputs` to its `outputs`, never by exemption.
+    `loss.backward()` / `torch.autograd.backward` called inside forward is an
+    `autogradbackward` boundary op (`transform_kind="autograd.backward"`, one op per leaf
+    gradient the pass writes, parented on the roots and on the leaf's previous grad when the
+    pass accumulates into one, so the second pass through a retained graph is an in-place op
+    and a later `param.grad` read has a producer; selected by
+    `tl.func_transform("autograd.backward")`); validation re-derives each written gradient by
+    replaying the recorded subgraph from the leaf to the roots and adding the previous grad.
+    The engine's interior dispatches (including the accumulation `add_`) belong to that op,
+    so the dispatch census balances without any exemption. A custom
     `autograd.Function` whose forward LEAVES torch (a `numpy` / `__array__` / `__dlpack__` /
     `to_dlpack` export, or a `from_numpy` / `from_dlpack` / `frombuffer` or parentless
     `as_tensor` / `asarray` op, inside its `apply`) is one

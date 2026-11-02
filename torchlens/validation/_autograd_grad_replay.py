@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._utils.rng import execute_with_restored_rng_autocast
+from ..backends.torch._autograd_backward_boundary import is_autograd_backward_recorder
 from ..backends.torch._autograd_grad_boundary import grad_signature, is_autograd_grad_recorder
 from ._replay_device import align_parent_to_slot_device, saved_args_on_consumed_devices
 
@@ -323,6 +324,10 @@ class _SubgraphReplay:
                 # A recorded grad inside this grad's subgraph: replay it against this
                 # replay's leaves so its gradients stay connected to them.
                 output = _select_output(op, _replay_boundary(op, input_args, [], self.param_leaves))
+            elif is_autograd_backward_recorder(op.func):
+                from ._autograd_backward_replay import _replay_backward_boundary
+
+                output = _replay_backward_boundary(op, input_args, [], self.param_leaves)
             else:
                 output = _execute_func_with_restored_state(op, input_args, [], op.label, False)
         if not isinstance(output, torch.Tensor):
@@ -460,7 +465,7 @@ def replay_autograd_grad_boundary(
 
 
 def execute_replay_func(layer: Op, input_args: dict[str, Any], layers_to_perturb: list[str]) -> Any:
-    """Run one op's replay: its recorded func, or the autograd.grad subgraph replay.
+    """Run one op's replay: its recorded func, or a boundary op's subgraph replay.
 
     Parameters
     ----------
@@ -482,6 +487,11 @@ def execute_replay_func(layer: Op, input_args: dict[str, Any], layers_to_perturb
         # ambient one would leave the rebuilt subgraph without autograd graph.
         with torch.inference_mode(False):
             return replay_autograd_grad_boundary(layer, input_args, layers_to_perturb)
+    if is_autograd_backward_recorder(layer.func):
+        from ._autograd_backward_replay import replay_autograd_backward_boundary
+
+        with torch.inference_mode(False):
+            return replay_autograd_backward_boundary(layer, input_args, layers_to_perturb)
     grad_enabled, inference_mode = captured_grad_modes(layer)
     with torch.inference_mode(inference_mode), torch.set_grad_enabled(grad_enabled):
         return execute_with_restored_rng_autocast(
