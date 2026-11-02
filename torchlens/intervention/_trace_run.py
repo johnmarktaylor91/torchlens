@@ -31,7 +31,12 @@ from .._data_classes._trace_validation import (
 from .._deprecations import MISSING, MissingType
 from .._errors import InvalidArgumentError, KeywordConflictError, RecordBindingError
 from .._fast_live_steer import refusal_code
-from .._fast_run import _FastLiveSession, _FastSparseSession, close_fast_run_session
+from .._fast_run import (
+    _FastLiveSession,
+    _FastSparseSession,
+    close_fast_run_session,
+    live_source_model,
+)
 from .._runnable import (
     DivergencePolicy,
     PathFaithfulness,
@@ -77,19 +82,9 @@ __all__ = [
 def run_fast_loaded_trace(trace: Any, inputs: Any, *, seed: int | None) -> RunResult:
     """Run or initialize the explicit verify-once loaded sparse fast path.
 
-    Parameters
-    ----------
-    trace:
-        Loaded sparse source Trace.
-    inputs:
-        Runtime input tree.
-    seed:
-        Seed pinned for the lifetime of the fast session.
-
-    Returns
-    -------
-    RunResult
-        First ordinary verified result or a later compiled fast result.
+    ``trace`` is the loaded sparse source Trace, ``inputs`` the runtime input tree
+    and ``seed`` is pinned for the lifetime of the fast session. Returns the first
+    ordinary verified result or a later compiled fast result.
     """
 
     session = trace.__dict__.get("_fast_run_session")
@@ -121,9 +116,8 @@ def run_fast_live_trace(
 ) -> RunResult:
     """Run the explicit native-forward targeted-collection live fast path."""
 
-    source_ref = getattr(trace, "_source_model_ref", None)
-    model = source_ref() if source_ref is not None else None
-    if not isinstance(model, nn.Module):
+    model = live_source_model(trace)
+    if model is None:
         raise RunCapabilityUnavailableError(
             "The live Trace no longer retains its source model: the trace "
             "holds it only weakly, so live-run availability depends on the "

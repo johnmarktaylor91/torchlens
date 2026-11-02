@@ -6,7 +6,7 @@ import sys
 import threading
 import time
 import weakref
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager, nullcontext
 from typing import Any, cast
 
@@ -1432,16 +1432,10 @@ def build_direct_forward_routes(
 ) -> tuple[DirectForwardRoute, ...]:
     """Build one route per live module a capture entered by a direct ``forward()`` call.
 
-    Parameters
-    ----------
-    model:
-        Live root model (never routed: capture leaves the root undecorated).
-    modules:
-        Every live address, alias spellings included.
-    plan_addresses:
-        Addresses the session collects through a forward hook.
-    steer_modules:
-        Steered address to live module, as the steer plan resolved them.
+    ``model`` is the live root (never routed: capture leaves the root undecorated),
+    ``modules`` every live address with alias spellings, ``plan_addresses`` the
+    addresses the session collects through a forward hook and ``steer_modules``
+    the steered address to live module map the steer plan resolved.
     """
 
     routes: list[DirectForwardRoute] = []
@@ -1467,25 +1461,16 @@ def build_direct_forward_routes(
 
 
 class _RoutedForward(_SessionForward):
-    """A per-run ``forward`` that runs the session hook work on a direct call only."""
+    """A per-run ``forward`` that runs the session hook work on a direct call only.
 
-    def __init__(
-        self,
-        direct: Callable[..., Any],
-        module: nn.Module,
-        original: Callable[..., Any],
-        prior: Any,
-    ) -> None:
-        """Hold the direct-call delegate and the module's own ``forward``."""
-
-        super().__init__(direct, module, original, prior)
-        self._original = original
+    The base records the module's own ``forward`` as ``__wrapped__``.
+    """
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Pass a ``Module.__call__`` call through; route a direct call."""
 
         if forward_entered_through_module_call(sys._getframe(1)):
-            return self._original(*args, **kwargs)
+            return self.__wrapped__(*args, **kwargs)
         return self._delegate(*args, **kwargs)
 
 
@@ -1521,6 +1506,14 @@ def direct_forward_routes_installed(
                 module.__dict__.pop("forward", None)
             else:
                 module.__dict__["forward"] = prior
+
+
+def live_source_model(trace: Any) -> nn.Module | None:
+    """Return the live model a Trace retains weakly, or ``None`` once it is collected."""
+
+    source_ref = getattr(trace, "_source_model_ref", None)
+    model = source_ref() if source_ref is not None else None
+    return model if isinstance(model, nn.Module) else None
 
 
 def close_fast_run_session(trace: Any) -> None:
