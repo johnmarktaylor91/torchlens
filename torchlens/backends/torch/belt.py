@@ -404,14 +404,18 @@ def _evict_live_id(entry_id: int) -> Callable[[Any], None]:
     return _evict
 
 
-def _wrapped_callable_replacement(value: Any) -> Any | None:
+def _wrapped_callable_replacement(value: Any, member_map: dict[int, Any] | None) -> Any | None:
     """Return the live wrapper when ``value`` is a pristine wrapped torch callable.
 
-    The reverse registry check guards against a recycled ``id``: the entry
-    counts only when the wrapper still maps back to this exact object. Classes
-    are never replaced (a module-global ``Tensor`` must stay a type).
+    A belt member (protocol-invisible) answers from ``member_map``; every other
+    wrapped callable from the epoch ledgers. The reverse registry check guards
+    against a recycled ``id``: the entry counts only when the wrapper still maps
+    back to this exact object. Classes are never replaced (a module-global
+    ``Tensor`` must stay a type).
     """
 
+    if member_map and (member := member_map.get(id(value))) is not None:
+        return member
     if isinstance(value, type) or not callable(value):
         return None
     decorated_to_orig, orig_to_decorated = _state.wrap_epoch_ledgers()
@@ -423,10 +427,6 @@ def _wrapped_callable_replacement(value: Any) -> Any | None:
 
 def sweep_stale_belt_references() -> int:
     """Patch stale module-level references to wrapped torch callables, with a ledger.
-
-    Belt members (protocol-invisible) and every other wrapped torch callable
-    are patched alike; see the module docstring for why the mode-visible ones
-    are covered here too.
 
     Scans each live module identity ONCE per wrapper epoch (new imports are
     picked up on the next sweep). Only module ``__dict__`` slots are
@@ -450,7 +450,6 @@ def sweep_stale_belt_references() -> int:
     report = belt_report()
     if report is None:
         return 0
-    member_map = _member_map or {}
     # O(new-modules) pre-filter: every id in ``_swept_ids_live`` is a module
     # this epoch's loop already scanned AND that is provably still the same
     # object (death callbacks evict dead ids, so a reused id reads as new).
@@ -486,9 +485,7 @@ def sweep_stale_belt_references() -> int:
         except TypeError:
             continue
         for attr_name, attr_val in list(module_dict.items()):
-            replacement = member_map.get(id(attr_val))
-            if replacement is None:
-                replacement = _wrapped_callable_replacement(attr_val)
+            replacement = _wrapped_callable_replacement(attr_val, _member_map)
             if replacement is None:
                 continue
             try:

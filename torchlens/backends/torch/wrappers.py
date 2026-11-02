@@ -1339,25 +1339,21 @@ def torch_func_decorator(
         )
 
         # ---- Deferred-clone interception (clone-on-write) ----
-        # Any wrapped call that can WRITE through a tensor argument must first
-        # copy out pending deferred payload aliases sharing those storages —
-        # this runs BEFORE the mutation, so saved bytes stay capture-time
-        # exact. Triggers cover every wrapped mutation surface: in-place
+        # Any wrapped call that can WRITE through a tensor argument must first copy out pending
+        # deferred payload aliases sharing those storages — this runs BEFORE the mutation, so saved
+        # bytes stay capture-time exact. Triggers cover every wrapped mutation surface: in-place
         # methods and augmented-assignment dunders (``mutates_receiver``),
-        # ``__setitem__``/``zero_``/``__delitem__``, mutating property setters,
-        # ``out=`` destinations, and ``inplace=True`` conveniences (``F.relu``
-        # / ``F.dropout``) whose actual underscore mutation may run below this
-        # wrapper — including POSITIONALLY-passed ``inplace`` (torch's
+        # ``__setitem__``/``zero_``/``__delitem__``, mutating property setters, ``out=`` destinations,
+        # and ``inplace=True`` conveniences (``F.relu`` / ``F.dropout``) whose actual underscore
+        # mutation may run below this wrapper — including POSITIONALLY-passed ``inplace`` (torch's
         # ``Hardswish.forward`` runs ``F.hardswish(input, self.inplace)``, and
-        # ``torch._C._nn.hardswish_`` below it is not a wrapped surface, so
-        # this wrapper is the ONLY interception point; missing it left stale
-        # pending aliases that tripped the belt at the next mutating call —
-        # the mobilenet_v3_small failure). NOT ``has_inplace_signature`` —
-        # that flag is true for EVERY dunder (``"__add__".endswith("_")``)
-        # and is only ever meaningful gated behind a same-object return.
-        # Storage-rebinding ``.data=`` writes no bytes but rides along via its
-        # property-setter signature — a spurious materialization is merely a
-        # wasted clone, never a correctness risk.
+        # ``torch._C._nn.hardswish_`` below it is not a wrapped surface, so this wrapper is the ONLY
+        # interception point; missing it left stale pending aliases that tripped the belt at the next
+        # mutating call — the mobilenet_v3_small failure). NOT ``has_inplace_signature`` — that flag
+        # is true for EVERY dunder (``"__add__".endswith("_")``) and is only ever meaningful gated
+        # behind a same-object return. Storage-rebinding ``.data=`` writes no bytes but rides along
+        # via its property-setter signature — a spurious materialization is merely a wasted clone,
+        # never a correctness risk.
         if _COW_PENDING and (
             mutates_receiver
             or is_mutating_property_setter

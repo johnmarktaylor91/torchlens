@@ -791,6 +791,7 @@ Shared helpers used by two or more TorchLens packages. (33 modules, 15713 lines)
 | `facade` | Shared five-step lazy-facade resolution for TorchLens namespaces. | 294 |
 | `fail_open` | The one audited fail-open chokepoint for degrade-not-raise surfaces. | 42 |
 | `hashing` | Barcode generation and graph hash helpers. | 571 |
+| `input_leaves` | Leaf-preserving input copy policy: ''move_input_tensor'' and the validation-time leaf deepcopy toggle. | 123 |
 | `introspection` | Object introspection: recursive type search, nested attribute access, and call-stack filtering. | 1104 |
 | `lazy_state` | Shared detection and enumeration of un-materialized lazy module state. | 167 |
 | `tensor_leaves` | Tensor-leaf helpers: walk a nest for tensors and read a tensor's raw payload. | 100 |
@@ -1223,6 +1224,7 @@ Torch backend implementation package for TorchLens capture. (98 modules, 51529 l
 | `_gradfn_markers` | grad_fn-fire marker sink helpers (torchnative). | 149 |
 | `_held_refs` | Held torch-function reference normalization for ''release_model''. | 231 |
 | `_held_refs_capture` | Capture-scoped rebinding of module-held pristine torch functions. | 306 |
+| `_held_plain_holders` | Tensors held on plain (non-Module) objects a module holds, stamped as buffer sources. | 87 |
 | `_held_tensor_scan` | Bounded scan of the plain tensors a module holds outside ''register_buffer''. | 315 |
 | `_identity_cache` | Per-tensor metadata caches that stay correct when a tensor's ''id'' is reused. | 63 |
 | `_internal_read` | The explicit marker for TorchLens-internal scalar reads during capture. | 54 |
