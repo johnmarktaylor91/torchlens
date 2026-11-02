@@ -171,8 +171,8 @@ def replay_record(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[dict]]:
     execute = core._execute_func_with_restored_state
     check = core._check_whether_func_on_saved_parents_yields_saved_tensor
 
-    def spy_execute(layer, input_args, layers_to_perturb, layer_label, verbose, *rest):
-        output = execute(layer, input_args, layers_to_perturb, layer_label, verbose, *rest)
+    def spy_execute(layer, input_args, layers_to_perturb, layer_label, verbose):
+        output = execute(layer, input_args, layers_to_perturb, layer_label, verbose)
         if getattr(layer, "func_name", None) in _INDEX_DOMAIN_ARG_SPECS:
             index, size = _index_arg(layer, input_args), _index_domain_size(layer)
             ignore = (layer.saved_kwargs or {}).get("ignore_index")

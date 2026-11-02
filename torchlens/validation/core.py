@@ -64,7 +64,9 @@ from ._edge_boundary import (
     _tensor_content_digest,
 )
 from ._index_domain import (
+    _INDEX_SINGLE_ENTRY_STRATEGY,
     _parent_is_index_domain_arg,
+    _raise_retry_strategies,
     index_domain_rotation_values,
     index_domain_single_entry_values,
     layer_has_index_domain_parent,
@@ -81,7 +83,11 @@ from ._replay_storage_context import (
     restore_receiver_storage_context,
     write_replay_slot,
 )
-from ._replay_warnings import replay_warnings_ignored
+from ._replay_warnings import (
+    collecting_replay_exceptions,
+    note_replay_exception,
+    replay_warnings_ignored,
+)
 from ._saved_outs_steps import (
     _fail_bfs_incomplete,
     _fail_dispatch_census,
@@ -2407,7 +2413,6 @@ def _execute_func_with_restored_state(
     layers_to_perturb: list[str],
     layer_label: str,
     verbose: bool,
-    exception_sink: list[Exception] | None = None,
 ) -> Any:
     """Execute a layer's function with restored RNG and autocast state.
 
@@ -2419,8 +2424,7 @@ def _execute_func_with_restored_state(
     The caller treats ``None`` as a failed replay execution for normal replay
     and an unverified perturbation execution exception for perturbation replay.
 
-    Returns the recomputed output tensor, or None on exception; the exception
-    is appended to ``exception_sink`` when one is given.
+    Returns the recomputed output tensor, or None on exception (filed via ``note_replay_exception``).
     """
     layer_func = layer.func
 
@@ -2433,8 +2437,7 @@ def _execute_func_with_restored_state(
         # Broad catch: perturbed values can trigger any exception (shape
         # mismatch, index OOB, dtype error, etc.).  Returning None lets the
         # caller decide whether this is acceptable.
-        if exception_sink is not None:
-            exception_sink.append(e)
+        note_replay_exception(e)
         if verbose:
             print(
                 f"Perturbation of {layers_to_perturb} for layer "
@@ -2705,32 +2708,33 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         return ValidationCheckResult.unverified(unverified_reason or "missing_saved_args")
 
     replay_exceptions: list[Exception] = []
-    recomputed_output = _execute_func_with_restored_state(
-        layer, input_args, layers_to_perturb, validated_label, verbose, replay_exceptions
-    )
+    with collecting_replay_exceptions(replay_exceptions):
+        recomputed_output = _execute_func_with_restored_state(
+            layer, input_args, layers_to_perturb, validated_label, verbose
+        )
 
-    # A perturbed execution that RAISES proves the op read the perturbed value
-    # but leaves the sensitivity check unrun. Retry with minimal deterministic
-    # step perturbations (+1/-1 for integers, one representable step for
-    # floats): domain-constrained control parents (``softmax`` dim, ``view``
-    # sizes -- round-31 H2 records them as real parents) usually admit an
-    # adjacent valid value even when the wide random draw does not. The retry
-    # result flows through the SAME pass/fail comparison as a first-try
-    # perturbation, so this can only convert ``unverified`` into an
-    # evidence-backed verdict (validated OR failed), never mask one.
-    if recomputed_output is None and perturb:
-        for retry_strategy in _raise_retry_strategies(layer, layers_to_perturb):
-            retry_args, _retry_reason = _prepare_input_args_for_validating_layer(
-                self, layer, layers_to_perturb, perturb_strategy=retry_strategy
-            )
-            if retry_args is None:
-                break
-            recomputed_output = _execute_func_with_restored_state(
-                layer, retry_args, layers_to_perturb, validated_label, verbose, replay_exceptions
-            )
-            if recomputed_output is not None:
-                input_args = retry_args
-                break
+        # A perturbed execution that RAISES proves the op read the perturbed value
+        # but leaves the sensitivity check unrun. Retry with minimal deterministic
+        # step perturbations (+1/-1 for integers, one representable step for
+        # floats): domain-constrained control parents (``softmax`` dim, ``view``
+        # sizes -- round-31 H2 records them as real parents) usually admit an
+        # adjacent valid value even when the wide random draw does not. The retry
+        # result flows through the SAME pass/fail comparison as a first-try
+        # perturbation, so this can only convert ``unverified`` into an
+        # evidence-backed verdict (validated OR failed), never mask one.
+        if recomputed_output is None and perturb:
+            for retry_strategy in _raise_retry_strategies(layer, layers_to_perturb):
+                retry_args, _retry_reason = _prepare_input_args_for_validating_layer(
+                    self, layer, layers_to_perturb, perturb_strategy=retry_strategy
+                )
+                if retry_args is None:
+                    break
+                recomputed_output = _execute_func_with_restored_state(
+                    layer, retry_args, layers_to_perturb, validated_label, verbose
+                )
+                if recomputed_output is not None:
+                    input_args = retry_args
+                    break
 
     # None means execution raised an exception (see _execute_func_with_restored_state).
     if recomputed_output is None:
@@ -3481,31 +3485,6 @@ def _op_is_value_discretizing(layer: Op) -> bool:
         and not out.dtype.is_complex
         and out.dtype is not torch.bool
     )
-
-
-_INDEX_SINGLE_ENTRY_STRATEGY = "index_single_entry"
-
-
-def _raise_retry_strategies(layer: Op, layers_to_perturb: list[str]) -> tuple[str, ...]:
-    """Return the retries for a first perturbation whose execution raised.
-
-    Parameters
-    ----------
-    layer:
-        Child op being validated.
-    layers_to_perturb:
-        Labels of the parents this check perturbs.
-
-    Returns
-    -------
-    tuple of str
-        ``step_up``/``step_down``; only the in-domain single-entry move for an
-        index-domain parent (see ``_perturbation_retry_strategies``).
-    """
-
-    if any(_parent_is_index_domain_arg(layer, label) for label in layers_to_perturb):
-        return (_INDEX_SINGLE_ENTRY_STRATEGY,)
-    return ("step_up", "step_down")
 
 
 def _perturbation_retry_strategies(
