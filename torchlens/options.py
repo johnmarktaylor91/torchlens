@@ -40,7 +40,7 @@ from ._option_receipt import (
     _resolve_option_value,
     _set_frozen_fields,
 )
-from ._options_removed import _refuse_removed_keywords, _refuse_removed_member_of
+from ._options_removed import REMOVED_CAPTURE_MEMBERS, REMOVED_VISUALIZATION_MEMBERS
 from ._options_validation import (
     _normalize_layout,
     _validate_buffer_visibility,
@@ -53,6 +53,7 @@ from ._options_validation import (
     visualization_to_render_kwargs as visualization_to_render_kwargs,
 )
 from ._save_budget import SaveBudgetOption
+from ._utils.facade import refuse_removed_keywords, refuse_removed_member
 from ._utils.tensor_utils import SaveMode
 from ._vocab.node_spec import NodeSpec
 
@@ -707,7 +708,7 @@ class CaptureOptions:
     chunk_size: int | None = None
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
-    @_refuse_removed_keywords("CaptureOptions")
+    @refuse_removed_keywords("CaptureOptions", REMOVED_CAPTURE_MEMBERS)
     def __init__(
         self,
         input_transform: Callable[[Any], Any] | None | MissingType = MISSING,
@@ -948,7 +949,7 @@ class CaptureOptions:
         def __getattr__(self, name: str) -> Any:
             """Name the replacement for a removed public member, else fail as usual."""
 
-            _refuse_removed_member_of("CaptureOptions", name)
+            refuse_removed_member("CaptureOptions", name, REMOVED_CAPTURE_MEMBERS)
             return object.__getattribute__(self, name)
 
     def as_dict(self) -> dict[str, Any]:
@@ -1339,7 +1340,7 @@ class VisualizationOptions:
         def __getattr__(self, name: str) -> Any:
             """Name the replacement for a removed public member, else fail as usual."""
 
-            _refuse_removed_member_of("VisualizationOptions", name)
+            refuse_removed_member("VisualizationOptions", name, REMOVED_VISUALIZATION_MEMBERS)
             return object.__getattribute__(self, name)
 
     def to_dict(self) -> dict[str, Any]:

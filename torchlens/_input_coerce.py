@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ._errors import ArgumentTypeError
-from ._options_removed import _REMOVED_CAPTURE_OPTION_MEMBERS
+from ._options_removed import REMOVED_CAPTURE_MEMBERS
 
 
 def _coerce_input(model: Any, x: Any) -> Any:
@@ -79,13 +79,13 @@ def _reject_unrouted_forward_kwargs(forward_kwargs: dict[str, Any]) -> None:
         return
 
     unknown = ", ".join(sorted(forward_kwargs))
-    removed = [key for key in sorted(forward_kwargs) if key in _REMOVED_CAPTURE_OPTION_MEMBERS]
+    removed = [key for key in sorted(forward_kwargs) if key in REMOVED_CAPTURE_MEMBERS]
     if removed:
         # A removed capture option is never a model input: name its replacement.
         message = f"trace() got removed capture option keyword(s): {', '.join(removed)}" + (
             f" (and unrouted keyword(s): {unknown})" if len(removed) < len(forward_kwargs) else ""
         )
-        remedy = "; ".join(f"{key}: {_REMOVED_CAPTURE_OPTION_MEMBERS[key]}" for key in removed)
+        remedy = "; ".join(f"{key}: {REMOVED_CAPTURE_MEMBERS[key]}" for key in removed)
     else:
         message = (
             f"trace() got model-input keyword(s) it does not route: {unknown}. "

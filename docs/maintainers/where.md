@@ -5,20 +5,20 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1346 modules, 625077 lines, 0 modules without a docstring.
+84 packages, 1346 modules, 625066 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 66 | 31554 |
-| `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1239 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 66 | 31509 |
+| `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1238 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 44 | 24928 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1525 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4564 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 78 | 38702 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 78 | 38700 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10552 |
@@ -38,7 +38,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2937 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2118 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 12 | 4092 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 33 | 15712 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 33 | 15749 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6299 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 68 | 42386 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1146 |
@@ -100,7 +100,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (66 modules, 31554 lines)
+TorchLens - extract outs and metadata from PyTorch models. (66 modules, 31509 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -139,7 +139,7 @@ TorchLens - extract outs and metadata from PyTorch models. (66 modules, 31554 li
 | `_model_wrappers` | Pre-flight detection of model wrappers TorchLens cannot instrument. | 91 |
 | `_mutate_warnings` | Session-level suppression of mutate-in-place warnings. | 81 |
 | `_option_receipt` | Option explicitness readers, the frozen option-group kit, and :class:'NarrationOptions'. | 228 |
-| `_options_removed` | Public option members removed with no alias, and the hooks that name their replacement. | 97 |
+| `_options_removed` | Public option members removed with no alias, with the remedy each one names. | 51 |
 | `_options_validation` | Value validators for the grouped option dataclasses in ''options.py''. | 414 |
 | `_plain_attr_fidelity` | Plain-attribute fidelity facts for the validation deepcopy and fallback paths. | 334 |
 | `_quantities` | Numeric quantity types with unit-aware display. | 680 |
@@ -168,18 +168,18 @@ TorchLens - extract outs and metadata from PyTorch models. (66 modules, 31554 li
 | `fingerprint` | Provisional public structural-hash helpers. | 307 |
 | `inventory` | Site inventory: the audience's "what can I extract?" answer (tvscope B6). | 457 |
 | `observers` | User observer helpers for taps, scalar logs, and record spans. | 530 |
-| `options` | Grouped option dataclasses for public TorchLens APIs. | 1913 |
+| `options` | Grouped option dataclasses for public TorchLens APIs. | 1914 |
 | `types` | Public TorchLens type aliases and rarely used data classes. | 174 |
 
 ### `torchlens._autoroute`
 
-TorchLens auto-routing registries. (6 modules, 1239 lines)
+TorchLens auto-routing registries. (6 modules, 1238 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | TorchLens auto-routing registries. | 7 |
 | `_builtin_input` | Built-in input auto-route detectors. | 52 |
-| `_builtin_output` | Built-in output auto-route detectors and decoders. | 742 |
+| `_builtin_output` | Built-in output auto-route detectors and decoders. | 741 |
 | `_decode_heads` | Torch-only helpers of the output decoders. | 192 |
 | `_decode_spellings` | Public spellings of the read-time output decode, declared once. | 30 |
 | `_registry` | Direction-agnostic priority registry for TorchLens auto-routing. | 216 |
@@ -279,7 +279,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (78 modules, 38702 lines)
+Core data structures for representing a logged forward pass. (78 modules, 38700 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -318,7 +318,7 @@ Core data structures for representing a logged forward pass. (78 modules, 38702 
 | `_trace_accessors` | Trace accessor helpers. | 658 |
 | `_trace_annotations` | Trace annotation family: user notes and tags on a finished trace (record rebuild destination; empty until its bodies move in). | 5 |
 | `_trace_components` | Declared Trace field-to-component ownership map ( decomposition). | 614 |
-| `_trace_export` | Trace export mixin. | 732 |
+| `_trace_export` | Trace export mixin. | 730 |
 | `_trace_fork` | COW Trace fork: fresh facades over shared frozen storage. | 846 |
 | `_trace_grad_sites` | Gradient sites at the trace doors: the armed read side and the plan seam. | 334 |
 | `_trace_groups` | Concern-group views of a ''Trace'': ''trace.cost'', ''trace.graph'', ''trace.autograd'', ''trace.provenance''. | 734 |
@@ -758,7 +758,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (12 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (33 modules, 15712 lines)
+Shared helpers used by two or more TorchLens packages. (33 modules, 15749 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -788,7 +788,7 @@ Shared helpers used by two or more TorchLens packages. (33 modules, 15712 lines)
 | `collections` | Iterable helpers: type checks, list/dict manipulation, nested indexing. | 234 |
 | `display` | Human-readable formatting, print overrides, and environment detection. | 662 |
 | `env_flags` | Closed-vocabulary parsing for torchlens-owned boolean environment knobs. | 269 |
-| `facade` | Shared five-step lazy-facade resolution for TorchLens namespaces. | 294 |
+| `facade` | Shared five-step lazy-facade resolution for TorchLens namespaces. | 331 |
 | `fail_open` | The one audited fail-open chokepoint for degrade-not-raise surfaces. | 42 |
 | `hashing` | Barcode generation and graph hash helpers. | 571 |
 | `introspection` | Object introspection: recursive type search, nested attribute access, and call-stack filtering. | 1104 |

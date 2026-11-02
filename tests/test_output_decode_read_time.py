@@ -76,7 +76,7 @@ def test_capture_options_have_no_decode_fields() -> None:
 
 @pytest.mark.smoke
 def test_trace_door_names_the_read_time_call_for_removed_decode_keywords() -> None:
-    """``tl.trace(..., output_style=)`` is never routed to the model: it names the new call."""
+    """A removed decode keyword at the trace door is never routed to the model: it names the new call."""
 
     model = _Fixed(torch.zeros(1, 3)).eval()
     with pytest.raises(tl.errors.ArgumentTypeError) as excinfo:
