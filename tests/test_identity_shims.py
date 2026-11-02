@@ -19,7 +19,7 @@ these runtime sites:
 4. Tensor METHOD dispatch -- torch's C parser presents ``torch.Tensor.<name>``
    read at call time (the wrapper), so ``UninitializedTensorMixin``'s
    ``_allowed_methods`` allowlist refused ``model.to()`` on an uninitialized
-   lazy module, and MaskedTensor's method-keyed reduction table missed.
+   lazy module.
 
 These tests pin the identity shims that keep each site behaving exactly as
 unwrapped eager torch. Flag gates use ``getattr`` so the module also imports
@@ -290,31 +290,6 @@ class TestLazyModuleProtocolAllowlist:
             wrap_torch()
         handler = vars(UninitializedTensorMixin)["__torch_function__"]
         assert getattr(handler.__func__, "_torchlens_identity_shim", False)
-
-
-@pytest.mark.skipif(
-    not _flag("HAS_MASKED_TENSOR_PROTOCOL_TABLE"),
-    reason="torch build lacks MaskedTensor's __torch_function__ table",
-)
-class TestMaskedTensorProtocolTable:
-    @pytest.mark.smoke
-    def test_method_reduction_dispatches_through_the_table(self):
-        import warnings
-
-        from torch.masked import masked_tensor
-
-        _ensure_wrapped()
-        data = torch.arange(6.0).reshape(2, 3)
-        mask = torch.tensor([[True, False, True], [False, True, True]])
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")  # the prototype-API notice
-            mt = masked_tensor(data, mask)
-            via_method = mt.sum()
-            via_function = torch.sum(mt)
-        expected = data.masked_fill(~mask, 0).sum()
-        assert torch.equal(via_method.get_data(), expected)
-        assert torch.equal(via_function.get_data(), expected)
-        assert bool(via_method.get_mask())
 
 
 class TestDisclosedResiduals:
@@ -739,6 +714,5 @@ class TestShimLifecycle:
             "HAS_ATTENTION_CAUSAL_BIAS",
             "HAS_EXPANDED_WEIGHTS_CONV_PICKER",
             "HAS_LAZY_MODULE_PROTOCOL_ALLOWLIST",
-            "HAS_MASKED_TENSOR_PROTOCOL_TABLE",
         ):
             assert name in snapshot

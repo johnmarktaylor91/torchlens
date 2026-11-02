@@ -50,9 +50,12 @@ torch's C argument parser presents ``getattr(torch.Tensor, name)`` read at
 CALL time, the torchlens wrapper during the wrap epoch, so a torch-internal
 ``__torch_function__`` keyed on import-time method originals misses --
 ``UninitializedTensorMixin._allowed_methods`` (a user's ``model.to()`` on a
-not-yet-materialized lazy module raised ValueError after the first capture)
-and MaskedTensor's reduction table. Each such handler gets a shim that
-normalizes ``func`` to the ledger original before delegating.
+not-yet-materialized lazy module raised ValueError after the first capture).
+The handler gets a shim that normalizes ``func`` to the ledger original
+before delegating. MaskedTensor's method-keyed function table is the
+documented unshimmed residual of the same shape: its ``_ops_refs`` module is
+imported lazily on the first dispatch, so the table's key basis follows the
+import epoch, and a miss falls through to its aten dispatch table.
 
 Strategy: NEVER re-implement torch's decision logic. Each shim normalizes
 the identity operand to the basis the immediately-following torch comparison
@@ -321,7 +324,6 @@ def install_identity_shims() -> None:
         late_records: list[tuple[Any, str, Any]] = []
         try:
             _install_causal_bias_shim(late_records)
-            _install_masked_tensor_protocol_shim(late_records)
         except Exception:
             _restore(late_records)
             raise
@@ -338,7 +340,6 @@ def install_identity_shims() -> None:
         _install_overrides_membership_shims(records)
         _install_protocol_identity_shims(records)
         _install_lazy_module_protocol_shim(records)
-        _install_masked_tensor_protocol_shim(records)
     except Exception:
         _restore(records)
         raise
@@ -1035,7 +1036,7 @@ def _install_protocol_identity_shims(records: list[tuple[Any, str, Any]]) -> Non
 
 
 # ---------------------------------------------------------------------------
-# Site 9: torch-internal __torch_function__ handlers keyed on Tensor METHOD originals
+# Site 9: the lazy-module __torch_function__ handler keyed on Tensor METHOD originals
 # ---------------------------------------------------------------------------
 
 
@@ -1108,26 +1109,6 @@ def _install_lazy_module_protocol_shim(records: list[tuple[Any, str, Any]]) -> N
     if mixin is None:
         return
     _install_original_presenting_torch_function(mixin, records)
-
-
-def _install_masked_tensor_protocol_shim(records: list[tuple[Any, str, Any]]) -> None:
-    """Shim MaskedTensor's handler, keyed on import-time Tensor method originals.
-
-    ``MaskedTensor.__torch_function__`` looks ``func`` up in a table built at
-    import time (``torch.Tensor.sum`` and the other reductions beside their
-    ``torch.*`` twins); a wrapped method call presented the wrapper, missed
-    the table and fell through to the generic path. Resolved only through
-    ``sys.modules``: the module is imported with torch, and a process that
-    never imported it holds no MaskedTensor.
-    """
-
-    if not _torch_compat.HAS_MASKED_TENSOR_PROTOCOL_TABLE:
-        return
-    module = sys.modules.get("torch.masked.maskedtensor.core")
-    masked_tensor = getattr(module, "MaskedTensor", None) if module is not None else None
-    if masked_tensor is None:
-        return
-    _install_original_presenting_torch_function(masked_tensor, records)
 
 
 def _make_conv_picker_shim(orig_picker: Callable[..., Any]) -> Callable[..., Any]:

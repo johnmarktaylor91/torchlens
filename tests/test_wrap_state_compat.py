@@ -861,15 +861,19 @@ _MEMBERSHIP_TABLE_REVIEWED: dict[tuple[str, str], str] = {
         "membership answers stay correct on both paths."
     ),
     ("torch.masked.maskedtensor.reductions", "TORCH_REDUCE_MAP"): (
-        "MaskedTensor reduction dispatch; eagerly imported with torch, and the "
-        "C-level __torch_function__ protocol supplies the ORIGINAL func operand "
-        "for torch.* functions (read from the unpatched _VariableFunctions table)."
+        "MaskedTensor reduction dispatch keyed on torch.* ORIGINALS; eagerly "
+        "imported with torch, and the C-level protocol reads a torch.* function "
+        "from the unpatched _VariableFunctions table, so the handler sees the "
+        "original."
     ),
     ("torch.masked.maskedtensor.reductions", "TENSOR_REDUCE_MAP"): (
-        "MaskedTensor reduction dispatch keyed on Tensor METHOD originals; the "
+        "MaskedTensor reduction dispatch keyed on Tensor METHOD originals. The "
         "C parser presents getattr(torch.Tensor, name) read at CALL time (the "
-        "wrapper), so the site-9 MaskedTensor.__torch_function__ identity shim "
-        "normalizes func to the ledger original (identity_shims.py)."
+        "wrapper during the wrap epoch), so a method call misses this table and "
+        "falls through to MaskedTensor's aten dispatch table, which computes the "
+        "same reduction (mt.sum() observed equal). Documented unshimmed residual: "
+        "the function table itself lives in the lazily imported _ops_refs, so a "
+        "fixed identity basis cannot be chosen at wrap time."
     ),
     ("torch._jit_internal", "boolean_dispatched"): (
         "TorchScript boolean-dispatch table; deliberately DUAL-KEYED by "
