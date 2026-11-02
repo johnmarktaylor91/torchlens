@@ -88,7 +88,7 @@ def _assert_materialization_is_audited(trace: tl.Trace) -> None:
     assert len(operators) == 4
     assert all(op.startswith(("aten.detach", "aten.alias")) for op in operators)
     assert trace.completeness_diagnostics == []
-    assert trace.capture_verified is True
+    assert trace.provenance.verified is True
 
 
 def test_the_audited_row_is_the_wrapper_wide_materialization_boundary() -> None:
