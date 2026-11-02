@@ -227,7 +227,7 @@ _S1_EXTENSION_POINTS: dict[str, tuple[str, ...]] = {
         "parse_sparse_run_descriptor",
         "attach_sparse_run_readiness",
     ),
-    "torchlens._fast_run": ("run_fast_loaded_trace", "run_fast_live_trace"),
+    "torchlens.intervention._trace_run": ("run_fast_loaded_trace", "run_fast_live_trace"),
 }
 
 # Trace.run keyword-conflict matrix, bound as the CODE LIST (S1 contract:

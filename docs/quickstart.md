@@ -141,6 +141,13 @@ with torch.no_grad():
 Un-materialized lazy BUFFERS (`nn.LazyBatchNorm2d` before any forward)
 refuse at entry with the same teach (`lazy_uninitialized`).
 
+A lazy module the forward itself builds (`self.lazy = nn.LazyLinear(4)`
+inside `forward`) is registered when the forward first consumes its
+materialized parameters, and the trace discloses the creation as a
+`parameter_created_in_forward` row in
+`trace.annotations["capture_advisories"]`; see
+[Limitations](reference/limitations.md).
+
 ## Execution policy per surface
 
 `tl.summary` and `render` pin eval + no-grad and restore everything they

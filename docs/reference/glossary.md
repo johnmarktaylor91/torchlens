@@ -1594,9 +1594,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   autograd saved for that op's backward (each storage once within the op; a view counts in full),
   and `Layer.total_autograd_memory`, `ModuleCall.autograd_memory`,
   `Module.total_autograd_memory` and `Trace.cost.total_autograd_memory` sum those per-op bands, so a
-  tensor two ops save counts twice. Capture runs floating Parameters with `requires_grad=True`
-  unless `backward_ready=True`, so on frozen Parameters these and `Trace.cost.pinned_autograd_memory`
-  exceed what an eager forward saves; with `backward_ready=True` they match eager.
+  tensor two ops save counts twice. Capture never changes a Parameter's `requires_grad`, so on
+  frozen Parameters these and `Trace.cost.pinned_autograd_memory` match what an eager forward saves.
 
 **Module and call counts**
 : `len(ModuleCall.ops)` counts the call's pass-qualified Ops (the root call included: a Layer it
