@@ -67,5 +67,7 @@ def test_plain_object_held_tensor_is_a_named_buffer_source() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         trace = tl.trace(_ScheduleUser().eval(), torch.randn(3, 4))
-    buffer_addresses = [op.address for op in trace.ops if op.is_buffer]
+    # ``trace.ops`` is the counted view (no input, output or buffer rows); buffer
+    # sources are listed by label on ``trace.buffer_layers``.
+    buffer_addresses = [trace._layer_dict_all_keys[label].address for label in trace.buffer_layers]
     assert buffer_addresses == ["schedule[final_alpha_cumprod]"]
