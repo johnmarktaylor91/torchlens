@@ -61,7 +61,7 @@
 /torchlens/report/                   @johnmarktaylor91
 /torchlens/schemas/                  @johnmarktaylor91
 /torchlens/semantic/                 @johnmarktaylor91
-/torchlens/_snoop/                    @johnmarktaylor91
+/torchlens/debug/_snoop/                    @johnmarktaylor91
 /torchlens/stats/                    @johnmarktaylor91
 /torchlens/trackers/                 @johnmarktaylor91
 /torchlens/transforms/               @johnmarktaylor91

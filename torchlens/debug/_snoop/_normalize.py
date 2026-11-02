@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..options import NarrationOptions
+from ...options import NarrationOptions
 from ._errors import NarrationConfigError
 
 __tl_layer__ = "L5"
@@ -27,7 +27,7 @@ _FINALIZED_SELECTOR_KINDS = frozenset({"output", "identity"})
 def _refuse_finalized_selector(selector: Any) -> None:
     """Refuse selectors whose evaluation needs finalized graph facts."""
 
-    from .._ir.selector_eval import walk_selector
+    from ..._ir.selector_eval import walk_selector
 
     try:
         kinds = {
@@ -125,7 +125,7 @@ def _validate_select(select: Any) -> None:
             code="echo_argument_invalid",
             remedy="use True, 'modules', or a live selector",
         )
-    from .._selection.selectors import BaseSelector
+    from ..._selection.selectors import BaseSelector
 
     if isinstance(select, BaseSelector):
         _refuse_finalized_selector(select)

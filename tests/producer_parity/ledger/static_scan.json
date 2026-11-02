@@ -3858,7 +3858,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/_snoop/_format.py",
+  "file": "torchlens/debug/_snoop/_format.py",
   "has_default": false,
   "sites": 4,
   "via_getattr": false
@@ -3866,7 +3866,7 @@
  {
   "ambiguous": false,
   "field": "pass_index",
-  "file": "torchlens/_snoop/_format.py",
+  "file": "torchlens/debug/_snoop/_format.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -3874,7 +3874,7 @@
  {
   "ambiguous": true,
   "field": "policy",
-  "file": "torchlens/_snoop/_format.py",
+  "file": "torchlens/debug/_snoop/_format.py",
   "has_default": false,
   "sites": 4,
   "via_getattr": false
@@ -3882,7 +3882,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/_snoop/_narrate.py",
+  "file": "torchlens/debug/_snoop/_narrate.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -3890,7 +3890,7 @@
  {
   "ambiguous": false,
   "field": "layer_type",
-  "file": "torchlens/_snoop/_narrate.py",
+  "file": "torchlens/debug/_snoop/_narrate.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -3898,7 +3898,7 @@
  {
   "ambiguous": false,
   "field": "module_stack",
-  "file": "torchlens/_snoop/_narrate.py",
+  "file": "torchlens/debug/_snoop/_narrate.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -3906,7 +3906,7 @@
  {
   "ambiguous": true,
   "field": "modules",
-  "file": "torchlens/_snoop/_narrate.py",
+  "file": "torchlens/debug/_snoop/_narrate.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -3914,7 +3914,7 @@
  {
   "ambiguous": false,
   "field": "step_index",
-  "file": "torchlens/_snoop/_narrate.py",
+  "file": "torchlens/debug/_snoop/_narrate.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -3922,7 +3922,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/_snoop/_session.py",
+  "file": "torchlens/debug/_snoop/_session.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -3930,7 +3930,7 @@
  {
   "ambiguous": false,
   "field": "layer_type",
-  "file": "torchlens/_snoop/_session.py",
+  "file": "torchlens/debug/_snoop/_session.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -3938,7 +3938,7 @@
  {
   "ambiguous": false,
   "field": "pass_index",
-  "file": "torchlens/_snoop/_session.py",
+  "file": "torchlens/debug/_snoop/_session.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -3946,7 +3946,7 @@
  {
   "ambiguous": false,
   "field": "step_index",
-  "file": "torchlens/_snoop/_session.py",
+  "file": "torchlens/debug/_snoop/_session.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false

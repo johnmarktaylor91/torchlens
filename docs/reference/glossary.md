@@ -3734,8 +3734,21 @@ The sections above describe each surface in depth.
 | `tl.debug.BackwardNanReport` | Result of `tl.debug.bisect_nan_backward`: the backward pass walked, the earliest provable non-finite birth and the full transition ledger |
 | `tl.debug.BisectNanReport` | Result of `tl.debug.bisect_nan` |
 | `tl.debug.BisectPrecisionReport` | Result of `tl.debug.bisect_precision` |
+| `tl.debug.CheckFinding` | One finding recorded by a training-loop check |
+| `tl.debug.CheckReport` | The findings a `tl.debug.ChecksSession` collected, as a report |
+| `tl.debug.ChecksSession` | Capture-free training-loop checks bound to a model and optimizer; see `docs/reference/checks_kit.md` |
+| `tl.debug.ClipLedger` | Ledger of gradient-clipping events across steps |
+| `tl.debug.ClipLedgerSnapshot` | Point-in-time read of a `tl.debug.ClipLedger` |
 | `tl.debug.GuessInputShapeReport` | Result of `tl.debug.guess_input_shape` |
 | `tl.debug.LineageReport` | Result of `tl.debug.lineage` |
+| `tl.debug.LivenessProbe` | Per-site recorder of zero-fraction and running maximum across fires; a statistic, never a verdict |
+| `tl.debug.OptimizerFacts` | Adapter-read facts about one optimizer; `is_known` gates every derived band |
+| `tl.debug.RangeProbe` | Opt-in live semantic range check per site |
+| `tl.debug.ScaleLedger` | Ledger of grad-scaler scale and skipped-step history across steps |
+| `tl.debug.ScaleLedgerSnapshot` | Point-in-time read of a `tl.debug.ScaleLedger` |
+| `tl.debug.ScanRow` | Health facts for one unique tensor in a parameter scan; `aliases` keeps every other name bound to the same tensor |
+| `tl.debug.Watchdog` | Death-spiral watchdog: warns when no optimizer step is ever accepted |
+| `tl.debug.WatchdogSnapshot` | Point-in-time read of a `tl.debug.Watchdog` |
 | `tl.debug.guess_input_shape` | Infer a synthetic input shape while leaving the caller's global RNG untouched |
 | `tl.differential.DiffReport` | The settled two-capture differential: rows plus honest totals |
 | `tl.differential.diff` | Settle two captures into the guarded differential projection |

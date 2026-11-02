@@ -497,9 +497,9 @@ torchlens/_semantic/recipes/attention.py	801
 torchlens/_semantic/recipes/attention.py::_eager_result_checked	68
 torchlens/_semantic/recipes/lm_head.py::language_model_head	62
 torchlens/_semantic/reconstruction.py::_result_or_missing	65
-torchlens/_snoop/_entry.py::resolve_echo_capture_options	66
-torchlens/_snoop/_stats.py::reuse_stats	70
-torchlens/_snoop/_stats.py::sampled_stats	67
+torchlens/debug/_snoop/_entry.py::resolve_echo_capture_options	66
+torchlens/debug/_snoop/_stats.py::reuse_stats	70
+torchlens/debug/_snoop/_stats.py::sampled_stats	67
 torchlens/_state.py	1394
 torchlens/_trace_core/core.py::TraceCore.fork	61
 torchlens/_trace_core/fact_blocks.py::convert_fact_cells	98

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .._record_type import record_type
+from ..._record_type import record_type
 from ._event import NarrationEvent
 from ._format import compact_device, compact_dtype, render_line
 

@@ -495,7 +495,7 @@ def _finish_run_entry(trace: Trace, r: SimpleNamespace, echo_session: Any) -> No
         for output_label in trace.output_layers:
             for output_op in trace[output_label].ops:
                 output_op.tl_authored_root = True
-    from .._snoop._entry import finish_echo
+    from ..debug._snoop._entry import finish_echo
 
     finish_echo(echo_session, trace)
     _warn_zero_match_capture_selectors(
@@ -541,7 +541,7 @@ def _build_trace_for_run(r: SimpleNamespace, release_slot: Callable[[], None]) -
     later than ``configure_capture_runtime_context()``.
     """
 
-    from .._snoop._entry import open_echo_session
+    from ..debug._snoop._entry import open_echo_session
 
     try:
         trace = _construct_trace(r)
@@ -587,7 +587,7 @@ def _run_resolved_request(r: SimpleNamespace) -> Trace:
     except BaseException:
         _release_capture_slot()
         raise
-    from .._snoop._entry import echo_forward_failure
+    from ..debug._snoop._entry import echo_forward_failure
 
     trace, echo_session = _build_trace_for_run(r, _release_capture_slot)
     try:
