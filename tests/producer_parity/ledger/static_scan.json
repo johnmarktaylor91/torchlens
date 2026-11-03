@@ -6536,6 +6536,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/backends/torch/arg_names.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "func_call_id",
   "file": "torchlens/backends/torch/backend.py",
@@ -6988,7 +6996,7 @@
   "field": "kind",
   "file": "torchlens/backends/torch/wrappers.py",
   "has_default": false,
-  "sites": 3,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -7117,22 +7125,6 @@
   "file": "torchlens/bundle/_lineage.py",
   "has_default": false,
   "sites": 10,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/bundle/_measure.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "seq",
-  "file": "torchlens/bundle/_measure.py",
-  "has_default": false,
-  "sites": 2,
   "via_getattr": false
  },
  {

@@ -217,13 +217,14 @@ def test_mlx_shape_changing_hook_refuses_typed() -> None:
         del ctx
         return mx.zeros((7, 7))
 
-    with pytest.raises(BackendUnsupportedError, match="shape"):
+    with pytest.raises(BackendUnsupportedError, match="shape") as info:
         tl.trace(
             _TwoLayerMLP(),
             _input(),
             backend="mlx",
             intervene=tl.when(tl.func("relu"), _grow),
         )
+    assert info.value.code == "intervention_result_invalid"
 
 
 def test_mlx_recipes_refuses_typed() -> None:
@@ -246,13 +247,14 @@ def test_mlx_grad_options_with_intervene_refuses_typed() -> None:
     from torchlens.backends.mlx import GradOptions
 
     model = _TwoLayerMLP()
-    with pytest.raises(BackendUnsupportedError, match="grad_options"):
+    with pytest.raises(BackendUnsupportedError, match="grad_options") as info:
         MLXBackend().capture_trace(
             model,
             _input(),
             grad_options=GradOptions(loss_fn=lambda out: out.sum()),
             intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
         )
+    assert info.value.code == "intervention_with_derived_grads_unsupported"
 
 
 def test_mlx_interventions_flag_false_refuses_the_surface() -> None:

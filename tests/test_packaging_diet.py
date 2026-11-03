@@ -616,7 +616,12 @@ def test_newest_admitted_torch_literal_lockstep() -> None:
         *pr_jobs["smoke"]["strategy"]["matrix"]["include"],
         *nightly_jobs["smoke-matrix"]["strategy"]["matrix"]["include"],
     ]
-    matrix_versions = [str(row["torch"]).split("+", 1)[0] for row in rows]
+    # The `forward` row runs a torch above the newest admitted one on purpose
+    # (it gates the newer-torch capability flags); the tooling jobs follow the
+    # newest-admitted rows.
+    matrix_versions = [
+        str(row["torch"]).split("+", 1)[0] for row in rows if row.get("track") == "newest-admitted"
+    ]
     inline_jobs = [pr_jobs[name] for name in ("type-check", "checks", "packaging")]
     inline_jobs += [nightly_jobs[name] for name in ("dep-audit", "dep-audit-extras")]
     inline_versions = torch_re.findall("".join(str(job) for job in inline_jobs))

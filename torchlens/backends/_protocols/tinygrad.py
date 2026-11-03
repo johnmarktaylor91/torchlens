@@ -46,6 +46,11 @@ class TinygradProtocol(SpecBackedProtocol):
                 "foreign_tensor_input",
                 "constant_unrealizable",
                 "rng_state_in_graph",
+                "input_mutation_unsupported",
+                "tensor_output_required",
+                "tinygrad_input_required",
+                "live_payloads_required",
+                "mid_capture_execution_unsupported",
             ),
         )
 

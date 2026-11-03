@@ -940,8 +940,11 @@
   the seed family) and `tl.between(sources, sinks)` (the executed sub-DAG on
   at least one directed source-to-sink path, endpoints included; operands
   accept lists; no path = EMPTY selection, disclosure not error) select by
-  STRUCTURAL POSITION — whole-site masks, `relation="exact"`, element masks
-  never shrink a graph region (family semantics), PARAM/EDGE operands refuse
+  STRUCTURAL POSITION — whole-site masks, `relation="exact"`, a partial
+  element mask never shrinks a graph region while a site whose mask is EMPTY
+  (left by `-` or `~`) seeds nothing (so `tl.neighborhood(tl.all_sites() -
+  region, ...)` grows from the sites outside `region`; `trace.subgraph` takes
+  the same member set), PARAM/EDGE operands refuse
   `selection_kind_incompatible`. Both are pure functions over the ONE
   executed-DAG substrate (`selection_graph._TraceGraph`, adjacency shared
   verbatim with the influence-geometry path machinery) — a future graph-

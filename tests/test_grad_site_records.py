@@ -2,13 +2,14 @@
 
 Packet-P2 criteria of the gradient-sites spec: one fire per output slot of a
 multi-output op with forward labels, ``Edit.signal`` replacing ``kind`` and
-``direction``, ``FireRecord.signal`` and the audit ``signal`` key, and the removed
-gradient-only helpers refusing typed on load.
+``direction``, ``FireRecord.signal`` and the audit ``signal`` key, ``Rule`` with no
+``direction`` field, and the removed gradient-only helpers refusing typed on load.
 """
 
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 
 import pytest
 import torch
@@ -89,6 +90,27 @@ def test_fire_record_and_audit_payload_carry_signal() -> None:
     assert row["signal"] == "forward" and "direction" not in row
     assert rule_signal(tl.grad("relu_1")) == "backward"
     assert rule_signal(tl.grad("relu_1") | "relu_1") == "both"
+
+
+def test_rule_has_no_direction_field_and_the_site_decides_the_pass() -> None:
+    rule_cls = tl.intervention.Rule
+    assert "direction" not in {field.name for field in dataclasses.fields(rule_cls)}
+    rule = rule_cls(tl.func("relu"), tl.scale(0.5))
+    assert rule.signal == "forward" and "direction" not in repr(rule)
+    assert rule_cls(tl.grad(tl.func("relu")), tl.scale(0.5)).signal == "backward"
+    # The rule id keeps the digest it had while the field was always None.
+    tail = f"{rule.where_repr}||{rule.action_repr}||None"
+    assert rule.rule_id == f"r-{hashlib.sha256(tail.encode()).hexdigest()[:10]}"
+    stale_spellings = (
+        lambda: rule_cls(tl.func("relu"), tl.scale(0.5), direction="backward"),
+        lambda: rule_cls(tl.func("relu"), tl.scale(0.5), direction=None),
+        lambda: rule_cls(tl.func("relu"), tl.scale(0.5), "both"),
+    )
+    for build in stale_spellings:
+        with pytest.raises(InvalidArgumentError) as exc_info:
+            build()
+        assert exc_info.value.fields["code"] == "intervention_direction_invalid"
+        assert "tl.grad(site)" in exc_info.value.fields["remedy"]
 
 
 @pytest.mark.parametrize(

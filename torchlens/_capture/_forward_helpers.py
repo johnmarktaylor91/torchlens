@@ -14,6 +14,7 @@ from torchlens import _state
 from torchlens._capture import peak_memory
 from torchlens.backends.registry import BackendUnsupportedError
 
+from .._capture_honesty import ADVISORY_FUSED_ATTENTION_FASTPATH_HELD, append_capture_advisory
 from .._quantities import Bytes
 from ..backends.registry import (
     BackendName,
@@ -543,6 +544,27 @@ def _warn_unlogged_dynamo_region(
         "arise).",
         UserWarning,
         stacklevel=4,
+    )
+
+
+def _record_fused_attention_hold(
+    self: "Trace", compiled_prep: "CompiledCapturePrep | None"
+) -> None:
+    """Record the fused attention fast-path hold as a capture advisory."""
+
+    held = compiled_prep.fused_attention_held if compiled_prep is not None else ()
+    if not held:
+        return
+
+    append_capture_advisory(
+        self,
+        ADVISORY_FUSED_ATTENTION_FASTPATH_HELD,
+        [
+            f"{address}: torch's fused attention fast path was held off, so the "
+            "forward, its replay and the validation ground truth run the unfused "
+            "attention program"
+            for address in held
+        ],
     )
 
 

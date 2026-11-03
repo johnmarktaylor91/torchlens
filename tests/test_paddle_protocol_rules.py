@@ -13,7 +13,6 @@ import torchlens as tl  # noqa: E402
 from torchlens.backends import REFUSAL_CODES  # noqa: E402
 from torchlens.backends._backend_protocol import VALIDATION_REASONS  # noqa: E402
 from torchlens.backends._protocols.paddle import (  # noqa: E402
-    PADDLE_CODES_PENDING_REGISTRATION,
     paddle_package_refusal_codes,
 )
 from torchlens.backends.paddle import PaddleBackend  # noqa: E402
@@ -252,9 +251,7 @@ def test_refusal_codes_registered_and_raised() -> None:
     codes = _protocol().refusal_codes()
     assert codes <= REFUSAL_CODES
     assert paddle_package_refusal_codes() <= codes
-    assert not (PADDLE_CODES_PENDING_REGISTRATION & REFUSAL_CODES) or (
-        codes >= PADDLE_CODES_PENDING_REGISTRATION & REFUSAL_CODES
-    )
+    assert {"inplace_op_unsupported", "runtime_mode_unsupported"} <= codes
     assert {"backward_capture_unsupported", "rng_replay_unsupported"} <= codes
     backend = PaddleBackend()
     with pytest.raises(BackendUnsupportedError) as seed_error:
