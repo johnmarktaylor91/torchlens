@@ -23,12 +23,12 @@ def test_stats_table_rows_carry_kernel_numbers() -> None:
     ok_rows = [row for row in table.rows if row.state == "ok"]
     assert ok_rows
     for row in ok_rows:
-        assert row.stats is not None
-        assert row.stats.numel > 0
+        assert row.value_stats is not None
+        assert row.value_stats.numel > 0
         assert row.row_id == f"op:{row.label}"
     relu_row = next(row for row in table.rows if "relu" in row.label)
     payload = trace[relu_row.label.split(":")[0]].out
-    assert relu_row.stats.num_zero == int((payload == 0).sum())
+    assert relu_row.value_stats.num_zero == int((payload == 0).sum())
     assert "basis: observations of ONE captured batch" in str(table)
 
 
@@ -42,7 +42,7 @@ def test_stats_table_typed_states_never_hollow_zero() -> None:
     for row in table.rows:
         assert row.state in STATS_ROW_STATES
         if row.state != "ok":
-            assert row.stats is None
+            assert row.value_stats is None
             assert row.reason
     saved_labels = {row.label for row in table.rows if row.state == "ok"}
     assert any("relu" in label for label in saved_labels)
@@ -111,7 +111,7 @@ def test_batched_and_sequential_scans_agree() -> None:
     table_hits = {
         row.label
         for row in trace.summary(view="stats").rows
-        if row.stats is not None and (row.stats.num_nonfinite or 0) > 0
+        if row.value_stats is not None and (row.value_stats.num_nonfinite or 0) > 0
     }
     scan_hits = set(trace.nonfinite_ops)
     sequential_hits = {

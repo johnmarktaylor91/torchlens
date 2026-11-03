@@ -103,7 +103,6 @@ def test_classifier_is_slot0_only() -> None:
     assert classify_view_or_copy("reshape", (0,)) == "unknown"  # may copy
 
 
-@pytest.mark.smoke
 def test_stats_table_marks_budget_sort_fold(zoo_trace) -> None:
     """Item 9: marks from D28 only; budget typed; sorts disclosed."""
 
@@ -120,7 +119,7 @@ def test_stats_table_marks_budget_sort_fold(zoo_trace) -> None:
     assert "unscanned" in states
     assert "budget: max_scan_elements=20" in str(budgeted)
     unscanned = next(row for row in budgeted.rows if row.state == "unscanned")
-    assert unscanned.stats is None and "budget" in unscanned.reason
+    assert unscanned.value_stats is None and "budget" in unscanned.reason
 
     ranked = table.sort_rows("mean")
     assert "sorted by mean" in repr(ranked)
@@ -141,7 +140,6 @@ def test_marks_never_fold_by_default(zoo_trace) -> None:
     assert "rows folded" not in str(zoo_trace.summary(view="stats"))
 
 
-@pytest.mark.smoke
 def test_to_pandas_carries_relation_columns(zoo_trace) -> None:
     """The tabular exit preserves the mark and its proof provenance."""
 

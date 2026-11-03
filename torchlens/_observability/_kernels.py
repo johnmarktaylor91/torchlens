@@ -107,7 +107,7 @@ class HistogramDescriptor:
     """The immutable signed-log2 grid descriptor (D9).
 
     The manifest records the full descriptor
-    ``(base, bins_per_octave, lo_exp, hi_exp, signed, encoding)`` so a
+    ``(base, bins_per_octave, lo_exp, hi_exp, signed, bin_encoding)`` so a
     resolution or window change is a VALUE change, never a format change.
     Merging refuses across unequal descriptors; there is no rebinning path.
 
@@ -125,7 +125,7 @@ class HistogramDescriptor:
     lo_exp: int = -48
     hi_exp: int = 16
     signed: bool = True
-    encoding: str = "dense"
+    bin_encoding: str = "dense"
 
     def __post_init__(self) -> None:
         """Validate the closed grid geometry."""
@@ -145,12 +145,12 @@ class HistogramDescriptor:
                 code="sketch_descriptor_invalid",
                 remedy="Fix the grid geometry values.",
             )
-        if self.encoding != "dense":
+        if self.bin_encoding != "dense":
             raise StatKernelError(
-                f"HistogramDescriptor encoding={self.encoding!r} is unknown; "
+                f"HistogramDescriptor bin_encoding={self.bin_encoding!r} is unknown; "
                 "'dense' is the only v1 encoding.",
                 code="sketch_descriptor_invalid",
-                remedy="Use encoding='dense'.",
+                remedy="Use bin_encoding='dense'.",
             )
 
     @property

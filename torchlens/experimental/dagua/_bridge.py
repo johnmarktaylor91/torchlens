@@ -21,6 +21,7 @@ from ..._visualization.node_spec import (
     INTERVENTION_SITE_COLOR,
     intervention_site_and_cone_labels,
 )
+from ._clusters import _add_module_clusters
 
 COMMUTATIVE_FUNCS = {"add", "mul", "cat", "eq", "ne"}
 
@@ -495,32 +496,6 @@ def _base_node_type(entry: Any) -> str:
     return "default"
 
 
-def _module_chain(entry: Any, vis_mode: str, vis_call_depth: int) -> list[str]:
-    """Return module cluster addresses retained for a rendered entry.
-
-    Parameters
-    ----------
-    entry:
-        Layer-pass or layer aggregate entry.
-    vis_mode:
-        Active visualization mode.
-    vis_call_depth:
-        Maximum number of nested modules to include.
-
-    Returns
-    -------
-    list[str]
-        Module addresses ordered from outer to inner.
-    """
-
-    modules = list(getattr(entry, "modules", None) or [])
-    if vis_mode == "rolled":
-        modules = [str(m).split(":")[0] for m in modules]
-    if vis_call_depth > 0:
-        modules = modules[:vis_call_depth]
-    return modules
-
-
 def _labels_match(label: str, candidate: str) -> bool:
     """Return whether two labels match exactly or by layer-level prefix.
 
@@ -755,13 +730,16 @@ def _torchlens_layout_config(num_nodes: int, direction: str) -> Any:
 
 def trace_to_dagua_graph(
     trace: Any,
-    vis_mode: str = "unrolled",
-    vis_call_depth: int = 1000,
+    rolled: bool = False,
+    depth: int = 1000,
     show_buffers: bool = False,
     direction: str = "bottomup",
     include_grad_edges: bool | None = None,
 ) -> Any:
     """Translate a TorchLens Trace into a DaguaGraph.
+
+    ``rolled=True`` draws each repeated module once (layer aggregates);
+    ``False`` draws every pass. ``depth`` caps how deep module boxes nest.
 
     Examples
     --------
@@ -771,6 +749,7 @@ def trace_to_dagua_graph(
     'DaguaGraph'"""
     import dagua
 
+    vis_mode = "rolled" if rolled else "unrolled"
     g = dagua.DaguaGraph(direction=_to_dagua_direction(direction))
     entries = _entries_for_mode(trace, vis_mode)
     if not show_buffers:
@@ -871,38 +850,7 @@ def trace_to_dagua_graph(
                 g.add_edge(child_id, parent_label, type="back")
                 g.edge_container_role.append(None)
 
-    kept_modules: dict[str, list[str]] = {}
-    for entry in entries:
-        mods = _module_chain(entry, vis_mode, vis_call_depth)
-        if not mods:
-            continue
-        node_id = getattr(entry, "layer_label")
-        for mod in mods:
-            kept_modules.setdefault(mod, []).append(node_id)
-
-    module_logs = {}
-    if hasattr(trace, "modules"):
-        try:
-            module_logs = {
-                m.address: m for m in trace.modules if getattr(m, "address", "self") != "self"
-            }
-        except Exception:
-            module_logs = {}
-
-    for mod, members in kept_modules.items():
-        if not members:
-            continue
-        parent = None
-        parts = mod.split(".")
-        for depth in range(len(parts) - 1, 0, -1):
-            candidate = ".".join(parts[:depth])
-            if candidate in kept_modules:
-                parent = candidate
-                break
-        module_log = module_logs.get(mod)
-        class_name = getattr(module_log, "class_name", "") if module_log is not None else ""
-        label = f"@{mod} ({class_name})" if class_name else f"@{mod}"
-        g.add_cluster(mod, members, label=label, parent=parent, strict=False)
+    _add_module_clusters(g, trace, entries, vis_mode, depth)
 
     return g
 
@@ -923,8 +871,8 @@ def render_trace_with_dagua(
 
     graph = trace_to_dagua_graph(
         trace,
-        vis_mode=vis_mode,
-        vis_call_depth=vis_call_depth,
+        rolled=vis_mode == "rolled",
+        depth=vis_call_depth,
         show_buffers=show_buffers,
         direction=vis_direction,
     )

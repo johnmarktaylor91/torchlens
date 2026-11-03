@@ -105,7 +105,6 @@ def test_successor_of_bare_row_still_valid() -> None:
     assert rebuilt == row
 
 
-@pytest.mark.smoke
 def test_successor_of_admits_optional_evidence_carry_mode_state_source() -> None:
     row = _successor_row(
         evidence=_evidence(), carry_mode="summarized", state_source="optimizer_checkpoint"
@@ -186,7 +185,6 @@ def test_unchecked_grade_requires_contracted_reason() -> None:
         )
 
 
-@pytest.mark.smoke
 def test_no_param_snapshot_is_admitted() -> None:
     row = _successor_row(
         evidence=_evidence(
@@ -287,7 +285,6 @@ def test_reserved_sidecar_family_ids_registered() -> None:
     } == RESERVED_SIDECAR_FAMILY_IDS
 
 
-@pytest.mark.smoke
 def test_torchlens_sidecar_namespace_refuses_foreign_provider() -> None:
     """Squat prevention: only the TorchLens provider registers torchlens.*."""
 
@@ -303,7 +300,6 @@ def test_torchlens_sidecar_namespace_refuses_foreign_provider() -> None:
     assert excinfo.value.fields["code"] == "sidecar_family_namespace_reserved"
 
 
-@pytest.mark.smoke
 def test_torchlens_provider_can_register_reserved_family() -> None:
     """The reservation is a squat guard, not a slot: the owner still can."""
 
@@ -326,7 +322,6 @@ def _foreign_kind_payload() -> dict[str, object]:
     return {"kind": "someorg.custody_of", "anchor": "ckpt_100", "note": {"chain": [1, 2]}}
 
 
-@pytest.mark.smoke
 def test_unknown_namespaced_kind_loads_opaque_and_preserves() -> None:
     payload = [_successor_row().to_payload(), _foreign_kind_payload()]
     table = MemberRelationTable.from_payload(payload, unknown_kinds="opaque")
@@ -351,7 +346,6 @@ def test_bare_unknown_kind_refuses_under_both_policies() -> None:
             MemberRelationTable.from_payload(payload, unknown_kinds=policy)  # type: ignore[arg-type]
 
 
-@pytest.mark.smoke
 def test_construction_always_refuses_unknown_kinds(two_member_bundle: Bundle) -> None:
     """Opaque rows enter from artifacts only; relate() refuses unknown kinds."""
 
@@ -412,6 +406,7 @@ def test_loader_leg_a_end_to_end(tmp_path, two_member_bundle: Bundle) -> None:
     assert excinfo.value.fields["code"] == "bundle_relation_schema_invalid"
 
 
+@pytest.mark.smoke
 def test_loader_leg_c_namespaced_section_preserves(tmp_path, two_member_bundle: Bundle) -> None:
     path = _saved_bundle_dir(tmp_path, two_member_bundle)
     metadata_path = tmp_path / "bundle.tlspec" / "bundle.json"
@@ -436,7 +431,6 @@ def test_loader_leg_c_namespaced_section_preserves(tmp_path, two_member_bundle: 
     assert resaved_metadata["someorg.experiment_index"] == {"runs": [1, 2, 3]}
 
 
-@pytest.mark.smoke
 def test_loader_leg_c_bare_unknown_section_refuses(tmp_path, two_member_bundle: Bundle) -> None:
     """The historical silent load-then-destroy is banned in both directions."""
 

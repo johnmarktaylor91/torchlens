@@ -90,7 +90,7 @@ class ModuleInputSnapshot:
     ----------
     _args, _kwargs:
         Reconstructed detached input values.
-    structure:
+    input_structure:
         Immutable compact description of the input container topology.
     tensor_observations:
         Ordered tensor observations keyed by typed input paths.
@@ -114,7 +114,7 @@ class ModuleInputSnapshot:
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "_args": FieldPolicy.BLOB_RECURSIVE,
         "_kwargs": FieldPolicy.BLOB_RECURSIVE,
-        "structure": FieldPolicy.KEEP,
+        "input_structure": FieldPolicy.KEEP,
         "tensor_observations": FieldPolicy.KEEP,
         "is_capture_complete": FieldPolicy.KEEP,
         "incomplete_reasons": FieldPolicy.KEEP,
@@ -123,7 +123,7 @@ class ModuleInputSnapshot:
 
     _args: tuple[Any, ...]
     _kwargs: dict[str, Any]
-    structure: tuple[Any, ...]
+    input_structure: tuple[Any, ...]
     tensor_observations: tuple[TensorInputObservation, ...]
     is_capture_complete: bool
     incomplete_reasons: tuple[str, ...]

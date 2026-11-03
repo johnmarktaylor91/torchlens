@@ -28,8 +28,8 @@ internal capture seam; it is not the backend contract.
 decision; `stable` requires every graduation item below to be met in the backend's shipped
 scorecard. Each page has a runnable tutorial, a can and cannot table and the backend's framework
 requirement (supported version range, the version the per-change CI leg pins, and the install
-extra). `tests/test_backend_docs_lockstep.py` holds this table to the registry and each page's
-can and cannot table to the backend's shipped capability summary.
+extra). The repository check `scripts/checks/backend_docs_lockstep.py` holds this table to the
+registry and each page's can and cannot table to the backend's shipped capability summary.
 
 Shared rules every backend follows:
 
@@ -46,8 +46,9 @@ Shared rules every backend follows:
   `constant_unrealizable`.
 - **Realize-once.** On lazy frameworks the forward runs once to its outputs and every recorded
   value is evaluated in one framework evaluation before any payload is read, so random-number
-  consumption equals one eager forward. A lazy backend that cannot do this yet refuses graphs that
-  carry lazy random-number state with `rng_state_in_graph`.
+  consumption equals one eager forward. Random state created before the forward (a
+  default-initialized weight) is realized in that evaluation; random numbers drawn inside the
+  traced forward refuse with `rng_state_in_graph`, because replay would draw them again.
 - **Validation reasons.** `validate` returns a `ValidationStatus` whose per-op decisions name a
   reason from `tl.backends.VALIDATION_REASONS`; a failure names the first offending op.
 
@@ -125,7 +126,7 @@ Two cross-backend honesty notes apply to every preview row above:
   hop distances plus ancestor/descendant sets) defaults to `True` on every backend — the same
   torch `CaptureOptions` default — and `=False` disables the flood on every backend, torch and all
   five previews alike.
-- **Preview replay validation scope.** Preview `validation_replay` replays each CAPTURED op from
+- **Preview replay validation scope.** Preview replay validation (the `has_validation_replay` capability) replays each CAPTURED op from
   its declared parents' saved payloads and perturbation-checks the dependency; unlike torch's
   validator it does not independently re-run the model against a ground-truth output, so an op the
   preview failed to wrap is outside the replay denominator entirely. Calls with no perturbable
@@ -332,7 +333,7 @@ perturbation oracle, and only records with `status == "exact"` reach
 These derived gradients are not true backward capture, and `op.grads` /
 `trace.saved_grad_ops` stay true-backward-only.
 
-MLX supports static-label live interventions and halt. `trace(intervene=tl.when(static_selector,
+MLX supports static-label live interventions and `stop_after=`. `trace(intervene=tl.when(static_selector,
 action))` substitutes matched output arrays at the wrapper boundary — the replacement genuinely
 flows into downstream ops — and `trace(stop_after=static_selector)` finalizes an honest partial trace at
 the matched frontier (`trace.is_stopped`, `trace.stop_reason`; parameter accounting is restricted to

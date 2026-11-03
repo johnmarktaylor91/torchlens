@@ -331,6 +331,7 @@ from ._invariants_payloads import (  # noqa: E402
     _check_payload_metadata_invariants,
 )
 from ._invariants_primitive_ops import (  # noqa: E402
+    _check_aten_values_consistent,
     _check_non_torch_primitive_op_inert,
     _check_primitive_op_invariants,
 )
@@ -424,6 +425,11 @@ METADATA_INVARIANT_CONTRACTS: tuple[MetadataInvariantContract, ...] = (
     MetadataInvariantContract(
         "primitive_op_invariants",
         _check_primitive_op_invariants,
+        "torch",
+    ),
+    MetadataInvariantContract(
+        "aten_values_consistent",
+        _check_aten_values_consistent,
         "torch",
     ),
     MetadataInvariantContract(

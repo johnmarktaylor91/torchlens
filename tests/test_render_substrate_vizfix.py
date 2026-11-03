@@ -81,7 +81,6 @@ def test_report_explain_under_inference_mode_does_not_raise(inference_trace: tl.
     assert "inference tensors" in text
 
 
-@pytest.mark.smoke
 def test_capture_basis_still_checks_inference_tensors() -> None:
     # Capture-time verdicts settle at record time and need no revalidation,
     # so ``track_nonfinite=True`` is the remedy for real verdicts under
@@ -295,7 +294,6 @@ def test_rank_layout_renders_batchnorm_buffers_all_modes(tmp_path, mode) -> None
     assert artifact.exists() and artifact.stat().st_size > 0
 
 
-@pytest.mark.smoke
 def test_hidden_buffer_edges_leave_the_typed_edge_list() -> None:
     from torchlens._visualization.node_universe import build_node_universe
     from torchlens._visualization.request import ResolvedRenderRequest

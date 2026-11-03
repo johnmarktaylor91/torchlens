@@ -336,10 +336,6 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
         frozenset({"node_style_domain"}),
         "pytest.raises absence pin: 'vision'/'attention' presets refuse typed",
     ),
-    "tests/test_trace_autoroute_kwarg_forwarding.py": (
-        frozenset({"trace_flat"}),
-        "docstring records the 2026-08-19 incident in its then-live spelling",
-    ),
     "notebooks/audit/09_fastlog_record.ipynb": (
         frozenset({"keep_op"}),
         "audit cell demos the removal: try/except TypeError on keep_op=",

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import warnings
 
+import pytest
 import torch
 from torch import nn
 
@@ -41,6 +42,7 @@ def _trace() -> tl.Trace:
     return tl.trace(_TestThenBodyRepeat().eval(), torch.randn(3, 4))
 
 
+@pytest.mark.smoke
 def test_body_roles_only_on_passes_inside_the_body() -> None:
     trace = _trace()
     lt_passes = [op for op in trace.ops if op.func_name == "__lt__"]

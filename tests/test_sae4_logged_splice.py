@@ -73,7 +73,7 @@ def test_logging_off_is_the_replayed_fork_with_no_latent_nodes(setup) -> None:
         assert torch.equal(left, right)
     # The replayed fork is the base mechanism: splice_module(input_route="out") at the site.
     fork = default.clean.fork("by_hand")
-    fork.attach_hooks(tl.label("linear_1_1:1"), tl.splice_module(_Recon(sae), input_route="out"))
+    fork._attach_hooks(tl.label("linear_1_1:1"), tl.splice_module(_Recon(sae), input_route="out"))
     fork.push()
     assert torch.equal(fork[fork.output_layers[0]].out, default.spliced_outputs[0])
 

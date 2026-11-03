@@ -139,7 +139,7 @@ def payload_core(record: Any, *, identity: str | None = None, max_width: int | N
     from ..stats._stats_render import render_core_line
     from ..stats._tensor_stats import tensor_stats
 
-    return render_core_line(tensor_stats(payload, identity=identity), max_width=max_width)
+    return render_core_line(tensor_stats(payload, _identity=identity), max_width=max_width)
 
 
 def _edited_token(op: Any) -> str | None:
@@ -389,7 +389,7 @@ def param_repr_line(param: Any) -> str:
 
     live = fail_open(lambda: param._peek_live_param(cache=False), lambda _error: None)
     if isinstance(live, torch.Tensor):
-        stats = tensor_stats(live, identity=getattr(param, "address", None))
+        stats = tensor_stats(live, _identity=getattr(param, "address", None))
         version = stats.tensor_version
         core = render_core_line(stats)
         if version is not None:
@@ -448,7 +448,7 @@ def buffer_repr_line(buffer: Any) -> str:
         from ..stats._stats_render import render_core_line
         from ..stats._tensor_stats import tensor_stats
 
-        core = render_core_line(tensor_stats(initial, identity=getattr(buffer, "address", None)))
+        core = render_core_line(tensor_stats(initial, _identity=getattr(buffer, "address", None)))
         basis = "snapshot at capture"
     else:
         core = _metadata_core(buffer)

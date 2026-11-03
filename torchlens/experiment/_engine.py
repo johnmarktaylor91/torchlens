@@ -12,7 +12,7 @@ under policy, and appends one effect row per candidate — including released,
 refused, and failed candidates, which are table rows and NEVER falsely
 members (D3c).
 
-Lane ruling (D3d): default ``engine="live_hook"`` — fork + attach_hooks +
+Lane ruling (D3d): default ``engine="live_hook"`` — fork + _attach_hooks +
 run(model, x), a real forward with hooks attached. ``engine="replay"`` is
 the cone-recompute opt-in (fork + do on saved payloads). The lane is stamped
 in every event envelope and effect table; escalation is never silent.
@@ -328,7 +328,7 @@ def _run_live_candidate(
     """Run one candidate on the live_hook lane, with the DISCLOSED door split.
 
     Structural terms (facet selectors, func/in_module, predicates) ride the
-    rerun door (fork + attach_hooks + run). Site-key terms cannot be matched
+    rerun door (fork + _attach_hooks + run). Site-key terms cannot be matched
     mid-attach (final structural numbering is absent), so they ride the
     CAPTURE door (``trace(model, x, intervene=spec)``, which arms the live
     site-key minter) — the same real forward with the edit installed, and the
@@ -342,7 +342,7 @@ def _run_live_candidate(
         import time as _time
 
         member = baseline.fork(name=candidate.candidate_id)
-        member.attach_hooks(spec)
+        member._attach_hooks(spec)
         started = _time.monotonic()
         member.run(model, x)
         _record_run_envelope(member, spec, started=started)
@@ -362,7 +362,7 @@ def _run_live_candidate(
 def _record_run_envelope(member: Any, spec: Any, *, started: float) -> None:
     """Write the run-door transaction envelope (the historical fourth-door gap).
 
-    ``attach_hooks`` stages the spec and ``run()`` fires it, but the run door
+    ``_attach_hooks`` stages the spec and ``run()`` fires it, but the run door
     wrote no InterventionEvent before this engine — exactly the design memo's
     3.1 finding ("three of the four write doors record nothing"). The engine
     is the run door's first experiment customer, so it writes the envelope
@@ -765,7 +765,7 @@ def sweep_sites(
         ``retain_ceiling_bytes=`` for the typed BEFORE-the-first-candidate
         byte preflight.
     engine:
-        ``"live_hook"`` (default; fork + attach_hooks + run(model, x) — a
+        ``"live_hook"`` (default; fork + _attach_hooks + run(model, x) — a
         real forward) or ``"replay"`` (fork + do on saved payloads). The
         lane is stamped in the envelope and the effect table.
     model, x:

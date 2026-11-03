@@ -560,7 +560,7 @@ def test_fast_second_pass_preserves_exhaustive_provenance_once() -> None:
 
     model.child.register_forward_pre_hook(mutate)
     trace = tl.trace(model, torch.ones(1))
-    trace.save_new_outs(model, torch.ones(1), save="all")
+    trace._save_new_outs(model, torch.ones(1), save="all")
 
     assert count == 2
     assert len(_call(trace).forward_pre_hook_effects) == 1
@@ -579,7 +579,7 @@ def test_record_to_trace_ram_and_disk_preserve_provenance(tmp_path: Path) -> Non
             model,
             torch.ones(1),
             storage=streaming,
-            default_op=True,
+            recording=tl.options.RecordingOptions(default_op=True),
         )
         trace = recording.to_trace()
         assert torch.equal(_call(trace).inputs_after_pre_hooks.args[0], torch.tensor([2.0]))

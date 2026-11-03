@@ -57,7 +57,6 @@ def _pair() -> tuple[tl.Trace, tl.Trace]:
     return donor, base
 
 
-@pytest.mark.smoke_cells("test_patch_from_delivers_the_addressed_pass[2]")
 @pytest.mark.parametrize("pass_index", [1, 2])
 def test_patch_from_delivers_the_addressed_pass(pass_index: int) -> None:
     """Each addressed pass receives ITS donor value, never the last pass's."""

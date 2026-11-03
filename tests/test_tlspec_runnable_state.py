@@ -132,7 +132,6 @@ def _codes(error: StateBindingError) -> set[RunnableErrorCode]:
     return {diagnostic.code for diagnostic in diagnostics}
 
 
-@pytest.mark.smoke
 def test_load_state_dict_maps_names_to_slots_and_does_not_execute(
     runnable_artifact: tuple[Path, dict[str, torch.Tensor]],
 ) -> None:
@@ -305,7 +304,6 @@ def test_failed_restage_preserves_prior_binding_and_success_replaces_atomically(
     assert torch.equal(second_prepared.slot_values["state:linear.weight"], second["linear.weight"])
 
 
-@pytest.mark.smoke
 @pytest.mark.filterwarnings(
     # A08 random-role-init disclosure (runnable_random_init_run): this test
     # exercises a weight-free runnable run DELIBERATELY; the warning is the

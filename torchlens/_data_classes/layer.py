@@ -1629,44 +1629,6 @@ class Layer(_SelectionOperand):
             confirm_mutation=confirm_mutation,
         )
 
-    def attach_hooks(
-        self,
-        hook: Any = None,
-        *extra_hooks: Any,
-        strict: bool = False,
-        prepend: bool = False,
-        confirm_mutation: bool = False,
-    ) -> Any:
-        """Attach sticky hooks to this layer through the owning Trace.
-
-        Parameters
-        ----------
-        hook:
-            Hook or helper to attach to this layer.
-        *extra_hooks:
-            Additional hooks to compose on this layer in left-to-right order.
-        strict:
-            Whether site resolution should reject non-portable selectors.
-        prepend:
-            Whether new sticky hooks should run before existing sticky hooks.
-        confirm_mutation:
-            Suppress root mutation warnings when intentionally mutating.
-
-        Returns
-        -------
-        Any
-            Trace or scoped removable hook handle, matching ``Trace.attach_hooks``.
-        """
-
-        return self._source_trace_or_error().attach_hooks(
-            self._intervention_site(),
-            hook,
-            *extra_hooks,
-            strict=strict,
-            prepend=prepend,
-            confirm_mutation=confirm_mutation,
-        )
-
     def to_pandas(self) -> "pd.DataFrame":
         """Export this Layer as a one-row pandas DataFrame.
 

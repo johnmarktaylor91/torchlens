@@ -167,7 +167,7 @@ def test_n1_failed_recording_refuses_save_not_attributeerror(tmp_path) -> None:
         ExplodingModel(),
         torch.ones(1, 3),
         save=tl.func("linear"),
-        on_forward_error="return_partial",
+        recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
     )
     assert recording.is_failed is True
     assert not hasattr(recording, "_runnable")
@@ -246,7 +246,7 @@ def test_complete_capture_surfaces_stay_open(tmp_path) -> None:
     # (a bool or a replay-status object depending on replay coverage).
     result = trace.validate_forward_pass([model(x)])
     assert result is not None
-    trace.save_new_outs(model, x)
+    trace._save_new_outs(model, x)
 
 
 # ---------------------------------------------------------------------------
@@ -359,7 +359,7 @@ def test_failed_partial_recording_outcome_stamped() -> None:
         ExplodingModel(),
         torch.ones(1, 3),
         save=lambda ctx: ctx.kind == "op",
-        on_forward_error="return_partial",
+        recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
     )
     assert recording.status == "partial_error"
     assert recording.outcome.status is CaptureStatus.FAILED
@@ -500,7 +500,7 @@ def test_f2_refresh_rearms_raise_on_nan() -> None:
     )
     assert trace.outcome.status is CaptureStatus.COMPLETE
     with pytest.raises(CaptureError, match="non-finite"):
-        trace.save_new_outs(model, torch.zeros(1, 3))
+        trace._save_new_outs(model, torch.zeros(1, 3))
 
 
 def test_f3a_halted_frontier_recovery_precedes_cleanup(monkeypatch) -> None:

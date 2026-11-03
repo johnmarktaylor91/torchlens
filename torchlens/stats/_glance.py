@@ -74,5 +74,5 @@ def glance(
     from ._tensor_stats import tensor_stats
 
     identity = f"glance:{tuple(tensor.shape)}:{tensor.dtype}"
-    stats = tensor_stats(tensor, identity=identity)
+    stats = tensor_stats(tensor, _identity=identity)
     return render_core_line(stats, style=style, max_width=max_width)

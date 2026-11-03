@@ -46,7 +46,6 @@ def test_object_arg_hash_distinguishes_types() -> None:
     assert generator_hash != marker_hash
 
 
-@pytest.mark.smoke
 def test_set_and_frozenset_args_hash_identically() -> None:
     """Equal members must produce one fingerprint regardless of container."""
 

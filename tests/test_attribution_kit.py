@@ -404,7 +404,6 @@ def _overlay_model() -> nn.Sequential:
     )
 
 
-@pytest.mark.smoke
 def test_overlay_paints_attributed_module_outputs_and_nothing_else() -> None:
     """Layer-scoped results color their module-output nodes; others stay None."""
 
@@ -423,7 +422,6 @@ def test_overlay_paints_attributed_module_outputs_and_nothing_else() -> None:
         trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_overlay_accepts_mappings_and_refuses_unknown_keys() -> None:
     """Mapping keys resolve by module name or layer label; misses refuse typed."""
 

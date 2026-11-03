@@ -1640,9 +1640,9 @@ def adding(*facets: RecipeFunc | Iterable[RecipeFunc]) -> Iterator[None]:
 
 
 def functions(
-    scope: str | None = None, class_name: str | None = None
+    target_scope: str | None = None, class_name: str | None = None
 ) -> builtins.list[FacetFunction]:
-    """List registered recipes, optionally filtered by scope and class-name glob.
+    """List registered facet functions, optionally filtered by target scope and class-name glob.
 
     Examples
     --------
@@ -1655,7 +1655,7 @@ def functions(
     return [
         recipe.public
         for recipe in _REGISTRY
-        if _scope_matches(recipe.public.target_scope, scope)
+        if _scope_matches(recipe.public.target_scope, target_scope)
         and _class_filter_matches(recipe.public.class_names, class_name)
     ]
 

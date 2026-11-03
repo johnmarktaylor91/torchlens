@@ -334,7 +334,7 @@ def _tensor_version(tensor: torch.Tensor) -> int | None:
 def tensor_stats(
     tensor: torch.Tensor,
     *,
-    identity: str | None = None,
+    _identity: str | None = None,
     role: str | None = None,
 ) -> TensorStats:
     """Compute (or serve cached) TensorStats for one dense torch tensor.
@@ -343,8 +343,8 @@ def tensor_stats(
     ----------
     tensor:
         Payload to summarize. Never mutated; autograd state untouched.
-    identity:
-        Stable record identity (op label / site key) seeding the gathered
+    _identity:
+        Internal: stable record identity (op label / site key) seeding the gathered
         sampler (D21) so sampled families are deterministic per record.
     role:
         Graph-proven semantic role passthrough (``embedding_index`` etc.);
@@ -368,7 +368,7 @@ def tensor_stats(
     cached = _STATS_CACHE.get(cache_id)
     if cached is not None and cached[0]() is tensor and cached[1] == key and cached[2].role == role:
         return cached[2]
-    record = _record_from_kernel(tensor, run_kernel(tensor, identity=identity), version)
+    record = _record_from_kernel(tensor, run_kernel(tensor, identity=_identity), version)
     if role is not None:
         record = _with_role(record, role)
 

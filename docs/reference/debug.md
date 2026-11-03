@@ -308,8 +308,8 @@ Output:
 
 ## `dead_neurons`
 
-`tl.debug.dead_neurons(trace, *, dim=None, threshold=0.0)` reports units whose maximum
-activation is at most `threshold` or whose value has zero variance in this trace. One
+`tl.debug.dead_neurons(trace, *, dim=None, max_activation=0.0)` reports units whose maximum
+activation is at most `max_activation` or whose value has zero variance in this trace. One
 trace is only one sample; aggregate runs before making a dataset-level claim. With
 `dim=None` the unit axis is picked per op: the last axis of a 2-D or 3-D activation
 (a linear layer's `(batch, features)`, a transformer block's `(batch, tokens, features)`),
@@ -479,7 +479,7 @@ Output:
 `tl.debug.guess_input_shape(model, *, batch_size=1, input_dtype=None, channels=None,
 spatial_rank="auto", seq_len=None, square=True, min_size=1, max_size=512,
 preferred_sizes=(224, 256, 384, 299, 128, 96, 64, 32, 28), max_probes=64, device=None,
-seed=0, return_trace=False, on_failure="return", input_specs=None)` probes a module and
+seed=0, on_failure="return", input_specs=None)` probes a module and
 returns an `GuessInputShapeReport` with a verified synthetic shape or a diagnostic failure.
 
 ```python

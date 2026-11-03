@@ -220,7 +220,7 @@ class TestHistogramMerge:
         with pytest.raises(StatKernelError):
             HistogramDescriptor(lo_exp=4, hi_exp=4)
         with pytest.raises(StatKernelError):
-            HistogramDescriptor(encoding="sparse")
+            HistogramDescriptor(bin_encoding="sparse")
 
 
 class TestDtypes:
@@ -286,7 +286,6 @@ class TestCountWidth:
 class TestRngIsolation:
     """Kernels never consume model or global RNG."""
 
-    @pytest.mark.smoke
     def test_global_rng_state_bitwise_unchanged(self) -> None:
         torch.manual_seed(1234)
         before = torch.get_rng_state().clone()

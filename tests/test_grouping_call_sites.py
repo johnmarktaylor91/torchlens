@@ -211,7 +211,6 @@ class SelfChainLoop(nn.Module):
         return x
 
 
-@pytest.mark.smoke
 def test_row03_one_op_loop_at_root() -> None:
     """Row 3: a one-op root loop `x = tanh(x)` gives tanh 3p."""
     assert _shape(SelfChainLoop) == _expect("tanh:3")
@@ -295,7 +294,6 @@ def test_row10_two_residual_adds_in_block_called_once() -> None:
     assert _shape(lambda: Wrap(body=ResidualPair())) == _expect("linear:1x2 __add__:1x2")
 
 
-@pytest.mark.smoke
 def test_row11_block_called_three_times_keeps_adds_apart() -> None:
     """Row 11: a block with two adds called 3x keeps add1 and add2 apart, 3 passes each."""
     trace = _capture(lambda: BlockLoop(block=ResidualPair()), _x())
@@ -801,7 +799,6 @@ class WhileData(nn.Module):
         return x
 
 
-@pytest.mark.smoke
 def test_row44_tensor_op_in_while_condition() -> None:
     """Row 44: tensor ops in a `while` condition give (N+1)p on every Python version."""
     assert _shape(WhileData) == _expect("sum:4 __gt__:4 __mul__:3")

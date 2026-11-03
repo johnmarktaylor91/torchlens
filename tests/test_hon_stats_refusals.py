@@ -1,4 +1,4 @@
-"""U25.2: CKA refuses non-finite input typed and warns on zero variance.
+"""CKA refuses non-finite input typed and warns on zero variance.
 
 ``tl.stats.cka`` and the streaming ``tl.stats.CKA`` used to pass NaN/Inf
 through to a NaN score and return NaN silently for a zero-variance

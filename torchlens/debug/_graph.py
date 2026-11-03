@@ -566,7 +566,7 @@ def first_divergence(
 
 
 def dead_neurons_rows(
-    trace: Trace, *, dim: int | None = None, threshold: float = 0.0
+    trace: Trace, *, dim: int | None = None, max_activation: float = 0.0
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Pandas-free core of :func:`dead_neurons` (agent stage-0 item 4).
 
@@ -577,7 +577,7 @@ def dead_neurons_rows(
     dim:
         Unit axis forced on every op, or ``None`` to pick it per op (see
         :func:`dead_neurons`).
-    threshold:
+    max_activation:
         Maximum activation value for post-activation death.
 
     Returns
@@ -620,7 +620,7 @@ def dead_neurons_rows(
         else:
             max_by_unit = out.detach()
             var_by_unit = torch.zeros_like(out.detach())
-        dead_mask = (max_by_unit <= threshold) | (var_by_unit == 0)
+        dead_mask = (max_by_unit <= max_activation) | (var_by_unit == 0)
         dead_indices = torch.nonzero(dead_mask, as_tuple=False).flatten().tolist()
         total_units = int(out.shape[feature_dim])
         dead_count = len(dead_indices)
@@ -640,7 +640,7 @@ def dead_neurons_rows(
 
     attrs: dict[str, Any] = {
         "skipped": skipped,
-        "threshold": threshold,
+        "max_activation": max_activation,
         "dim": dim,
         "note": "single-trace zero-variance is insufficient sample",
         "torchlens_capture_honesty": capture_honesty_facts(trace),
@@ -659,7 +659,7 @@ def _feature_dim(
     return feature_dim if 0 <= feature_dim < out.ndim else None
 
 
-def dead_neurons(trace: Trace, *, dim: int | None = None, threshold: float = 0.0) -> Report:
+def dead_neurons(trace: Trace, *, dim: int | None = None, max_activation: float = 0.0) -> Report:
     """Find units that are inactive or zero-variance in one completed trace.
 
     A single trace is a single example; zero-variance here is an insufficient-sample
@@ -678,7 +678,7 @@ def dead_neurons(trace: Trace, *, dim: int | None = None, threshold: float = 0.0
         the same-shaped ops it feeds (an activation after a convolution), and
         axis 1 for four or more dimensions. Activations under two dimensions
         get ``reason="invalid-dim"``. An int forces that axis on every op.
-    threshold:
+    max_activation:
         Maximum activation value for post-activation death.
 
     Returns
@@ -699,7 +699,7 @@ def dead_neurons(trace: Trace, *, dim: int | None = None, threshold: float = 0.0
     True
     """
 
-    rows, attrs = dead_neurons_rows(trace, dim=dim, threshold=threshold)
+    rows, attrs = dead_neurons_rows(trace, dim=dim, max_activation=max_activation)
     pd = _require_pandas()
     frame = pd.DataFrame(
         rows,

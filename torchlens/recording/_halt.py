@@ -36,7 +36,7 @@ class StopSignal(BaseException):
         reason:
             User-facing halt reason.
         frontier_output:
-            Optional live output object used by ``trace(halt=...)`` to finalize
+            Optional live output object used by ``trace(stop_after=...)`` to finalize
             a partial graph at the halt boundary.
         boundary_kind:
             Event kind at the halt boundary (settlement metadata); ``None``

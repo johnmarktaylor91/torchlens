@@ -59,7 +59,6 @@ def chain():
     return _Chain().eval(), torch.randn(2, 4)
 
 
-@pytest.mark.smoke
 def test_nested_trace_inside_hook_refuses_reentrant(chain) -> None:
     """A tl.trace inside a hook refuses typed, logged or not."""
 
@@ -135,7 +134,6 @@ def test_replay_fork_do_records_nothing_and_preserves_records(chain) -> None:
     assert len(fork_records) <= len(before)
 
 
-@pytest.mark.smoke
 def test_record_has_no_injection_spelling_and_cooked_traces_are_empty(chain) -> None:
     """The fastlog recorder exposes no log_injections door (pinned)."""
 

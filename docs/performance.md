@@ -127,6 +127,14 @@ print(trace.health.num_escape_detector_events, trace.health.escape_detector_call
 unwrap_torch()
 ```
 
+`CaptureOptions(aten_ops=True)` records the ATen rows behind each op and `aten_ops="values"` also
+keeps what each ATen call returned (`AtenOp.out`). Measured on one 4-thread CPU worker (torch 2.13,
+medians of 3): ResNet-18 at 224px, plain trace 0.53 s, rows 0.64 s, rows with values 0.61 s
+(107 rows, 44 MiB of ATen values against 31 MiB of `Op.out`); GPT-2 small at 1x32 tokens, plain
+trace 2.18 s, rows 2.9 s, rows with values 2.8 s (518 rows, 256 MiB against 96 MiB). The dispatch
+mode is the cost; the values add memory (roughly 1.4x to 2.7x the saved `Op.out` bytes, since every
+intermediate ATen result is kept), not time. With the switch off nothing is installed.
+
 The independent aten-level completeness witness is also opt-in and can run alone or alongside the
 callable detector. **This is the only route to `capture_verified=True`.** A plain `tl.trace()` never
 arms it: every default capture reads `capture_verified=None`, which every honesty surface renders as
@@ -334,7 +342,7 @@ assert torch.count_nonzero(patched.find_sites(tl.func("relu")).first().out) == 0
 ```
 
 Use `intervene=` when the edited value must affect downstream execution. For post-hoc experiments
-on an existing trace, prefer `trace.fork()`, `set(...)` or `attach_hooks(...)`, and `push()`
+on an existing trace, prefer `trace.fork()` with `set(...)` and `push()`, or `do(...)`, which stages the edit and replays it in one call
 (which engine fits which question: [intervention explainers](intervention_explainers.md#which-engine-when)).
 
 ## Long sequences and long contexts

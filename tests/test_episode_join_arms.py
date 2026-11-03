@@ -183,6 +183,7 @@ def _envelope(log) -> dict:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke_cells("test_continuous_feeds_grade_continuous[GreedyRunner]")
 @pytest.mark.parametrize("runner_cls", [GreedyRunner, LastTokenRunner, WindowedRunner])
 def test_continuous_feeds_grade_continuous(runner_cls) -> None:
     model = TinyLM()
@@ -230,7 +231,6 @@ def test_captured_transform_grades_transformed_via_graph_witness() -> None:
     assert envelope["break_step"] is None
 
 
-@pytest.mark.smoke
 def test_context_replacement_grades_exogenous() -> None:
     model = Denoiser()
     log = tl.trace(
@@ -271,6 +271,7 @@ def test_default_arm_returns_trace_and_marks_break() -> None:
     assert log.outcome.status.name == "COMPLETE"
 
 
+@pytest.mark.smoke
 def test_default_arm_series_read_refuses_with_verbatim_teaching_text() -> None:
     log = _broken_capture()
     with pytest.raises(EpisodeJoinError) as excinfo:
@@ -303,7 +304,6 @@ def test_default_arm_blessing_fold_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "episode_feed_break_exogenous"
 
 
-@pytest.mark.smoke
 def test_default_arm_escalation_refuses() -> None:
     log = _broken_capture()
     model = TinyLM()
@@ -355,7 +355,6 @@ def test_refuse_arm_raises_at_settlement_with_partial_evidence() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_closed_feed_halts_at_next_step_entry_with_verbatim_text() -> None:
     """One-step detection latency, pinned by the row geometry."""
 
@@ -400,7 +399,6 @@ def test_closed_feed_continuous_episode_captures_normally() -> None:
     assert log.outcome.status.name == "COMPLETE"
 
 
-@pytest.mark.smoke
 def test_closed_feed_with_declared_crossing_stops_before_entry() -> None:
     model = TinyLM()
     with pytest.raises(EpisodeJoinError) as excinfo:
@@ -459,7 +457,6 @@ def test_oversize_entries_degrade_to_digest_basis_never_a_guess(monkeypatch) -> 
     assert ENTRY_SNAPSHOT_ELEMENT_CEILING > 0  # the real ceiling is positive
 
 
-@pytest.mark.smoke
 def test_unchecked_join_refuses_series_claim() -> None:
     """A hand-built envelope with an unchecked join refuses the series read."""
 

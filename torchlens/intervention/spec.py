@@ -2,7 +2,7 @@
 
 Surgery memo section 3.1: ``tl.when(...)`` is promoted to return the
 immutable, public :class:`InterventionSpec` -- one multi-clause noun accepted
-unchanged by ``fork.do``, ``fork.attach_hooks``, ``intervene=``, Bundle
+unchanged by ``fork.do``, ``intervene=``, Bundle
 operations, generalized ``sweep``, save/load, and (F01) ``spec.bind(model)``.
 Lane options (``strict``, ``log_injections``, fast tiers) never enter the
 spec: a spec means the same experiment in every lane.
@@ -29,7 +29,6 @@ runtime-only predicate (:func:`refuse_unreplayable_rules`).
 
 from __future__ import annotations
 
-import dataclasses
 import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -45,6 +44,7 @@ from ._content_identity import (
     render_value,
     tensor_version,
 )
+from ._rule_match import _match_rules, _rule_decision
 from ._site_signal import (
     _selector_children,
     addresses_autograd_nodes as addresses_autograd_nodes,
@@ -520,17 +520,7 @@ class Recipe:
         rule = self.match(ctx)
         if rule is None:
             return None
-        # Leverage B7: thread the matched rule's provenance through the
-        # decision so the capture-door staging site persists the USER'S
-        # EXPRESSION, never only the lowered per-site label targets.
-        decision = rule.decision
-        if decision is not None and decision.rule_id is None:
-            decision = dataclasses.replace(
-                decision,
-                rule_id=rule.rule_id,
-                where_repr=rule.where_repr,
-            )
-        return decision
+        return _rule_decision(rule)
 
     def match(self, ctx: Any) -> Rule | None:
         """Return the single rule matching one op context, or ``None``.
@@ -551,28 +541,7 @@ class Recipe:
             ``spec_rules_overlap`` when more than one rule matches one op.
         """
 
-        matched: list[Rule] = []
-        for rule in self.rules:
-            # A forward predicate sees only each rule's activation half: a
-            # tl.grad(...) or autograd-node half edits the backward pass and is
-            # mounted there by the capture and bind doors.
-            forward_target = rule._forward_target
-            if forward_target is not None and forward_target(ctx):
-                matched.append(rule)
-        if not matched:
-            return None
-        if len(matched) > 1:
-            names = ", ".join(rule.rule_id for rule in matched)
-            raise InvalidArgumentError(
-                f"intervention rules [{names}] all match op "
-                f"{getattr(ctx, 'label', ctx)!r}; a spec never implicitly "
-                "chains two edits at one site",
-                code="spec_rules_overlap",
-                remedy="compose the actions explicitly with tl.compose(...), "
-                "or narrow the WHERE terms so at most one rule matches each op",
-                argument="rules",
-            )
-        return matched[0]
+        return _match_rules(self.rules, ctx)
 
     # ------------------------------------------------------------------
     # single-rule sugar compatibility with the historical when() closure

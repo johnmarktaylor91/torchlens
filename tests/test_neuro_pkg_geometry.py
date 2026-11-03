@@ -7,7 +7,7 @@ Pins:
   euclidean distances, bandwidth = mean(D) over the full matrix, kernel
   ``exp(-D / mean(D))``, dissimilarity ``1 - kernel``. All-identical
   stimuli refuse typed where the reference would silently NaN. The
-  similarity-repository oracle (U56.3) checked the same equality against
+  similarity-repository oracle checked the same equality against
   the catalogued ``rdm/*/gaussian``; an analytic literal pin keeps it from
   drifting back to the earlier ``2 * mean(D)`` bandwidth.
 - ``rank_transform_rdm``: the Nili et al. 2014 display convention --
@@ -58,7 +58,7 @@ def test_gaussian_metric_matches_thingsvision_reference() -> None:
 
 
 def test_gaussian_metric_analytic_literal_pin() -> None:
-    """Hand-derived values for 1-D points 0, 1, 3 (U56.3 oracle-matched).
+    """Hand-derived values for 1-D points 0, 1, 3 (oracle-matched).
 
     Squared distances are 1, 9 and 4; their full-matrix mean (zero
     diagonal included) is ``2 * (1 + 9 + 4) / 9 = 28 / 9``, so each
@@ -76,7 +76,6 @@ def test_gaussian_metric_analytic_literal_pin() -> None:
     np.testing.assert_allclose(ours, expected, rtol=0, atol=1e-12)
 
 
-@pytest.mark.smoke
 def test_gaussian_metric_refuses_identical_stimuli() -> None:
     """A zero data-derived bandwidth refuses typed, never NaN."""
 
@@ -85,7 +84,6 @@ def test_gaussian_metric_refuses_identical_stimuli() -> None:
         rdm(features, metric="gaussian")
 
 
-@pytest.mark.smoke
 def test_rank_transform_percentile_and_ties() -> None:
     """Item 13: average ranks for ties; percentile max is exactly 100."""
 
@@ -123,7 +121,6 @@ def test_rank_transform_refusals() -> None:
         rank_transform_rdm(np.zeros((1, 1)))
 
 
-@pytest.mark.smoke
 def test_rdm_node_spec_display_vocabulary() -> None:
     """The render kwarg accepts raw/rank/percentile and refuses others."""
 
@@ -135,7 +132,6 @@ def test_rdm_node_spec_display_vocabulary() -> None:
         rdm_node(display="log")
 
 
-@pytest.mark.smoke
 def test_cka_method_contract_pins() -> None:
     """Item 14: linear/biased/CPU-f64 contract with literal reference values.
 

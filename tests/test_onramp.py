@@ -11,6 +11,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _utils as utils
+from torchlens._data_classes._trace_views import suggest_layer_labels
 from torchlens._record_type import record_type
 from torchlens.experimental import attribute_walk
 
@@ -189,18 +190,18 @@ def test_list_ops_on_three_architectures(architecture: tuple[nn.Module, torch.Te
     assert set(both) == {"eval", "train"}
 
 
-def test_find_layers_and_suggest_on_three_architectures(
+def test_suggest_layer_labels_and_suggest_on_three_architectures(
     architecture: tuple[nn.Module, torch.Tensor],
 ) -> None:
-    """``Trace.find_layers`` and ``suggest`` return useful labels."""
+    """The did-you-mean candidates and ``suggest`` return useful labels."""
 
     model, x = architecture
     log = _metadata_log(model, x)
     label = _first_saved_label(model, x)
     base_label = label.split(":", 1)[0]
     prefix = base_label.split("_", 1)[0]
-    assert base_label in log.find_layers(prefix)
-    assert log.find_layers(prefix)
+    assert base_label in suggest_layer_labels(log, prefix)
+    assert suggest_layer_labels(log, prefix)
     # The capture layer discloses the zero-match layers_to_save request with a
     # UserWarning (cdcf7d89) before pluck's own lookup raises the suggestion
     # error; both signals are part of the contract here.

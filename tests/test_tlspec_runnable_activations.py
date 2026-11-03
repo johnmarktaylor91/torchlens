@@ -359,6 +359,9 @@ def test_rng_model_activation_attestation_is_not_applicable_instead_of_failing(
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
+@pytest.mark.smoke_cells(
+    "test_seeded_rng_operations_skip_original_input_numeric_attestation[randint]"
+)
 @pytest.mark.parametrize(
     "operation",
     (
@@ -442,7 +445,6 @@ def test_inplace_internal_activation_attestation_uses_production_snapshot(
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
 
 
-@pytest.mark.smoke
 def test_corrupt_archived_digest_fails_tripwire_and_rolls_back(tmp_path: Path) -> None:
     """Fail on the first declared byte-digest mismatch without mutating the source Trace.
 

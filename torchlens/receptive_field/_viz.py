@@ -9,6 +9,7 @@ import torch
 from PIL import Image, ImageDraw
 
 from .._vocab.node_spec import NodeSpec, NodeSpecFn
+from ..errors import InvalidArgumentError
 from ..viz import node_plots
 from ._errors import (
     AmbiguousInputError,
@@ -543,7 +544,12 @@ def _rendered_labels(layer: Any) -> frozenset[str]:
 
     values = set(getattr(layer, "op_labels", ()))
     for name in ("label", "layer_label", "_layer_label_raw"):
-        value = getattr(layer, name, None)
+        try:
+            value = getattr(layer, name, None)
+        except InvalidArgumentError:
+            # A multi-pass Layer refuses its single-pass fields; its ops are
+            # already represented through ``op_labels``.
+            continue
         if isinstance(value, str):
             values.add(value)
     return frozenset(values)

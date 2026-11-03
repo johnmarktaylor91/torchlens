@@ -172,7 +172,7 @@ def test_one_position_edit_saves_portable_and_reapplies_bit_identically(tmp_path
     spec = tl.io.load_intervention_spec(path)
     fresh = _ready().fork()
     for hook_spec in spec.hook_specs:
-        fresh.attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
+        fresh._attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
     assert torch.equal(fresh.push()[_SITE].out, staged[_SITE].out)
 
 

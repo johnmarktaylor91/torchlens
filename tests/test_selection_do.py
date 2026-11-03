@@ -238,6 +238,7 @@ def test_mask_never_enters_keep_fields_and_recipe_policy(log):
     assert derived.portability == "opaque_audit"
 
 
+@pytest.mark.smoke
 def test_patch_from_identity_and_discriminating_twin(log):
     """patch_from: identity patch is exact; a perturbed source is consumed."""
 

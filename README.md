@@ -518,6 +518,10 @@ if torch.cuda.is_available():
 aten_log = tl.trace(model, torch.randn(1, 3, 64, 64),
                     capture=tl.options.CaptureOptions(aten_ops=True))
 print([row.operator for row in aten_log.ops[0].aten_ops])
+# ... and keep what each ATen call returned (snapshots, under the same save= policy)
+aten_vals = tl.trace(model, torch.randn(1, 3, 64, 64),
+                     capture=tl.options.CaptureOptions(aten_ops="values"))
+print([(row.operator, tuple(row.out.shape)) for row in aten_vals.ops[0].aten_ops])
 ```
 
 Dataset-level statistics stream in constant memory -- including *exact*

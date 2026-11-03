@@ -185,7 +185,6 @@ def test_member_construction_tracks_add_and_remove() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_bundle_operation_round_trip_and_tamper_refusal() -> None:
     row = BundleOperation(
         operation_id="abc123", seq=1, kind="fork", member_names=("a",), params={"x": 1}
@@ -206,7 +205,6 @@ def test_bundle_operation_refuses_unknown_kind_and_bad_seq() -> None:
         BundleOperation(operation_id="a", seq=0, kind="fork")
 
 
-@pytest.mark.smoke
 def test_operation_chain_break_refuses_typed() -> None:
     first = BundleOperation(operation_id="a", seq=1, kind="fork")
     # A second row that does not chain from the first.
@@ -216,7 +214,6 @@ def test_operation_chain_break_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "bundle_lineage_invalid"
 
 
-@pytest.mark.smoke
 def test_member_construction_validator_fail_closed() -> None:
     good = {"m": {"origin": "forked", "source_bundle_id": "abc", "source_member": "m"}}
     validated = validate_member_construction(good, member_names=["m"])
@@ -230,7 +227,6 @@ def test_member_construction_validator_fail_closed() -> None:
         validate_member_construction({"m": {"origin": "added", "extra_key": 1}}, member_names=["m"])
 
 
-@pytest.mark.smoke
 def test_effect_table_round_trip_and_refusals() -> None:
     table = MemberEffectTable(
         operation_id="op1",

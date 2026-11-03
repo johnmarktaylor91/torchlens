@@ -127,7 +127,6 @@ def _log(model: nn.Module | None = None, x: torch.Tensor | None = None) -> tl.Tr
     return tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
-@pytest.mark.smoke
 def test_audit_save_load_and_compat(tmp_path: Path) -> None:
     """Audit save writes the tlspec directory and loaded specs compare cleanly."""
 
@@ -224,7 +223,7 @@ def test_where_hook_save_manifest_tolerates_nonportable_predicate(tmp_path: Path
     """Live ``tl.where`` hook specs are audit-only when the predicate is opaque."""
 
     log = _log(_ReluModel(), torch.randn(2, 3))
-    log.attach_hooks(
+    log._attach_hooks(
         tl.where(lambda ctx: ctx.func_name == "relu", name_hint="relu predicate"),
         tl.zero_ablate(),
         strict=False,
@@ -274,7 +273,7 @@ def test_loaded_forward_hook_spec_executes_on_fresh_trace(tmp_path: Path) -> Non
 
     x = torch.ones(1, 3)
     log = _log(_ReluModel(), x)
-    log.attach_hooks(tl.func("relu"), tl.scale(0.0), confirm_mutation=True)
+    log._attach_hooks(tl.func("relu"), tl.scale(0.0), confirm_mutation=True)
     path = tmp_path / "forward_execute.tlspec"
 
     log.save_intervention(path, level="portable")
@@ -294,7 +293,7 @@ def test_loaded_output_at_and_regex_hook_specs_execute_on_fresh_trace(
     x = torch.ones(1, 4)
     output_log = _log(_ChunkModel(), x)
     with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
-        output_log.attach_hooks(output_at(1), tl.zero_ablate(), confirm_mutation=True)
+        output_log._attach_hooks(output_at(1), tl.zero_ablate(), confirm_mutation=True)
     output_path = tmp_path / "loaded_output_at.tlspec"
     output_log.save_intervention(output_path, level="portable")
     output_spec = load_intervention_spec(output_path)
@@ -306,7 +305,7 @@ def test_loaded_output_at_and_regex_hook_specs_execute_on_fresh_trace(
     assert torch.count_nonzero(output_tensor) == 0
 
     regex_log = _log(_ReluModel(), torch.ones(1, 3))
-    regex_log.attach_hooks(tl.label_matches("relu"), tl.scale(0.0), confirm_mutation=True)
+    regex_log._attach_hooks(tl.label_matches("relu"), tl.scale(0.0), confirm_mutation=True)
     regex_path = tmp_path / "loaded_regex.tlspec"
     regex_log.save_intervention(regex_path, level="portable")
     regex_spec = load_intervention_spec(regex_path)
@@ -377,7 +376,7 @@ def test_loaded_import_ref_has_no_load_side_effect_until_execution(tmp_path: Pat
         import side_effect_mod
 
         log = _log(_ReluModel(), torch.ones(1, 3))
-        log.attach_hooks(tl.func("relu"), side_effect_mod.hook, confirm_mutation=True)
+        log._attach_hooks(tl.func("relu"), side_effect_mod.hook, confirm_mutation=True)
         path = tmp_path / "lazy_import.tlspec"
         log.save_intervention(path, level="executable_with_callables")
         sentinel.unlink()
@@ -436,7 +435,7 @@ def test_loaded_helper_import_ref_preserves_identity_and_executes_lazily(
             factory=side_effect_helper_mod.make_hook,
         )
         log = _log(_ReluModel(), torch.ones(1, 3))
-        log.attach_hooks(tl.func("relu"), helper, confirm_mutation=True)
+        log._attach_hooks(tl.func("relu"), helper, confirm_mutation=True)
         path = tmp_path / "lazy_helper_import.tlspec"
         log.save_intervention(path, level="executable_with_callables")
         sentinel.unlink()
@@ -471,7 +470,6 @@ def test_loaded_helper_import_ref_preserves_identity_and_executes_lazily(
             sys.path.remove(str(tmp_path))
 
 
-@pytest.mark.smoke
 def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path) -> None:
     """Live backward hook records survive intervention spec save/load."""
 
@@ -481,7 +479,7 @@ def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0), confirm_mutation=True)
+    log._attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0), confirm_mutation=True)
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_records.tlspec"
 
@@ -503,7 +501,7 @@ def test_loaded_backward_grad_fn_spec_executes_after_round_trip(tmp_path: Path) 
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(name="relu"), tl.scale(2.0), confirm_mutation=True)
+    log._attach_hooks(tl.grad_fn(name="relu"), tl.scale(2.0), confirm_mutation=True)
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_execute.tlspec"
 
@@ -534,7 +532,7 @@ def test_backward_hook_spec_saves_before_first_backward_and_executes(
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(name="relu"), tl.scale(2.0), confirm_mutation=True)
+    log._attach_hooks(tl.grad_fn(name="relu"), tl.scale(2.0), confirm_mutation=True)
     path = tmp_path / "backward_before_pass.tlspec"
 
     log.save_intervention(path, level="portable")
@@ -653,7 +651,6 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
     assert spec.records == [first, distinct_tuple]
 
 
-@pytest.mark.smoke
 def test_portable_rejects_opaque_hook(tmp_path: Path) -> None:
     """Portable saves fail closed for opaque local callables."""
 
@@ -678,12 +675,11 @@ def test_portable_rejects_opaque_hook(tmp_path: Path) -> None:
         del ctx
         return out
 
-    log.attach_hooks({tl.func("relu"): opaque_hook}, confirm_mutation=True)
+    log._attach_hooks({tl.func("relu"): opaque_hook}, confirm_mutation=True)
     with pytest.raises(OpaqueCallableError):
         log.save_intervention(tmp_path / "opaque.tlspec", level="portable")
 
 
-@pytest.mark.smoke
 def test_function_resolution_failure_raises() -> None:
     """Unresolvable function registry keys raise replay precondition errors."""
 
@@ -822,7 +818,6 @@ def test_loaded_custom_key_is_denied_at_execution_until_trusted(
     assert resolved(3) == -3
 
 
-@pytest.mark.smoke
 def test_custom_function_key_trust_gate_and_allowlist() -> None:
     """Trusted custom keys resolve, while a supplied allowlist stays restrictive."""
 
@@ -1073,7 +1068,7 @@ def test_save_intervention_allows_more_than_eight_matching_sites(tmp_path: Path)
     x = torch.randn(2, 3)
     log = _log(_DeepReluStack(), x)
     with pytest.warns(MultiMatchWarning, match="fan out"):
-        log.attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+        log._attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
     path = tmp_path / "deep_relu.tlspec"
 
     log.save_intervention(path, level="portable")
@@ -1091,7 +1086,7 @@ def test_check_spec_compat_allows_saved_selectors_with_more_than_eight_sites(
     x = torch.randn(2, 3)
     log = _log(_DeepReluStack(), x)
     with pytest.warns(MultiMatchWarning, match="fan out"):
-        log.attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+        log._attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
     path = tmp_path / "deep_relu_compat.tlspec"
 
     log.save_intervention(path, level="portable")
@@ -1102,7 +1097,6 @@ def test_check_spec_compat_allows_saved_selectors_with_more_than_eight_sites(
     assert compat.outcome == "EXACT"
 
 
-@pytest.mark.smoke
 def test_atomic_save_cleans_up_after_tensor_write_failure(tmp_path: Path) -> None:
     """A tensor-sidecar write exception leaves no final partial tlspec dir."""
 

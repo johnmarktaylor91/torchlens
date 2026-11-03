@@ -59,19 +59,19 @@ def _attention_modules(trace: Any) -> list[Any]:
     return modules
 
 
-def _select_layers(modules: list[Any], layers: Any) -> list[Any]:
+def _select_layers(modules: list[Any], selector: Any) -> list[Any]:
     """Filter attention modules by index or address."""
 
-    if layers is None:
+    if selector is None:
         return modules
     selected = []
-    wanted = [layers] if isinstance(layers, (int, str)) else list(layers)
+    wanted = [selector] if isinstance(selector, (int, str)) else list(selector)
     for entry in wanted:
         if isinstance(entry, int):
             if not -len(modules) <= entry < len(modules):
                 refuse(
                     code="mi_head_geometry_unavailable",
-                    message=f"layers= index {entry} outside the {len(modules)} attention "
+                    message=f"modules= index {entry} outside the {len(modules)} attention "
                     "modules found.",
                     remedy=f"pass indices inside [-{len(modules)}, {len(modules)})",
                     n_layers=len(modules),
@@ -82,7 +82,7 @@ def _select_layers(modules: list[Any], layers: Any) -> list[Any]:
             if not match:
                 refuse(
                     code="mi_head_geometry_unavailable",
-                    message=f"layers= address {entry!r} is not an attention module with "
+                    message=f"modules= address {entry!r} is not an attention module with "
                     "head facets.",
                     remedy="pass an attention module address exposing result/attn_out",
                     address=str(entry),
@@ -243,7 +243,7 @@ def _layer_rows(
 
 def attention_head_contributions(
     trace: Any,
-    layers: Any = None,
+    modules: Any = None,
     *,
     onto: torch.Tensor | None = None,
     positions: Any = None,
@@ -254,7 +254,7 @@ def attention_head_contributions(
     ----------
     trace:
         A finished torchlens trace.
-    layers:
+    modules:
         Attention-module selector: ``None`` (all), index/address, or a list.
     onto:
         Optional direction vector(s) ``[d_model]`` or ``[d_model, n]``: rows
@@ -285,8 +285,8 @@ def attention_head_contributions(
     (1, 6, 8)
     """
 
-    modules = _attention_modules(trace)
-    if not modules:
+    candidates = _attention_modules(trace)
+    if not candidates:
         refuse(
             code="mi_head_geometry_unavailable",
             message="No module in the trace exposes the attention head vocabulary "
@@ -294,7 +294,7 @@ def attention_head_contributions(
             remedy="capture with the builtin attention recipes (import torchlens._semantic); "
             "attention-free architectures have no head rows",
         )
-    selected = _select_layers(modules, layers)
+    selected = _select_layers(candidates, modules)
 
     direction = None
     if onto is not None:
@@ -318,7 +318,7 @@ def attention_head_contributions(
         refuse(
             code="mi_head_geometry_unavailable",
             message="No attention layer was selected.",
-            remedy="pass layers=None (all) or a non-empty selector",
+            remedy="pass modules=None (all) or a non-empty selector",
         )
     if direction is not None:
         target_total = target_total.to(torch.float32) @ direction.to(torch.float32)

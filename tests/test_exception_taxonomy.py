@@ -998,7 +998,7 @@ def test_save_argument_door_is_typed_and_names_runnable_spellings() -> None:
     """The ``save=`` type door refuses typed and its remedy names spellings that run.
 
     ``save='all'`` and the ``save=[...]`` list form are documented ``tl.trace``
-    spellings and run (U26.3-fix bug 6); an unsupported type still refuses with a
+    spellings and run; an unsupported type still refuses with a
     code and a remedy. Historical ``TypeError`` lineage is preserved.
     """
 

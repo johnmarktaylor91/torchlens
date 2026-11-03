@@ -142,6 +142,7 @@ def test_every_replay_door_refuses_after_an_edit(door: str) -> None:
     assert excinfo.value.fields["code"] == CODE
 
 
+@pytest.mark.smoke_cells("test_opt_in_replays_current_weights_and_records_it[differentiable_push]")
 @pytest.mark.parametrize("door", sorted(DOORS))
 def test_opt_in_replays_current_weights_and_records_it(door: str) -> None:
     model, x, trace = _capture()

@@ -162,7 +162,6 @@ def test_unsupported_devices_produce_typed_absence(monkeypatch) -> None:
         captured.cleanup()
 
 
-@pytest.mark.smoke
 def test_provider_never_resets_counters(monkeypatch) -> None:
     """The no-reset law (R36-2): sampling reads and only reads."""
 
@@ -213,7 +212,6 @@ def test_pass_peak_observation_independent_of_sampling(monkeypatch) -> None:
         sampled.cleanup()
 
 
-@pytest.mark.smoke
 def test_oom_settles_an_attempted_call_row(monkeypatch) -> None:
     """A CUDA OOM inside a bracketed op lands an exception-side attempted row.
 

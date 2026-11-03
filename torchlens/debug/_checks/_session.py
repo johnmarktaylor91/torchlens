@@ -377,23 +377,23 @@ class ChecksSession:
         self,
         names: Any,
         *,
-        evidence: str = "clone",
+        snapshot_kind: str = "clone",
         action: str = "raise",
     ) -> None:
         """Register the declared-frozen invariant (memo D5).
 
-        ``evidence="clone"`` (default) keeps exact detached dtype-preserving
-        snapshots and can SHOW the offending delta; ``evidence="digest"`` is
+        ``snapshot_kind="clone"`` (default) keeps exact detached dtype-preserving
+        snapshots and can SHOW the offending delta; ``snapshot_kind="digest"`` is
         the labeled opt-in (content digests; a differing digest PROVES
         change, equality is probabilistic and may never emit an exact pass).
         """
 
-        if evidence not in ("clone", "digest"):
+        if snapshot_kind not in ("clone", "digest"):
             raise CheckConfigError(
-                f"frozen evidence={evidence!r} must be 'clone' or 'digest'.",
+                f"frozen snapshot_kind={snapshot_kind!r} must be 'clone' or 'digest'.",
                 code="check_vocab_invalid",
-                field="evidence",
-                remedy="Pass evidence='clone' (exact) or evidence='digest' (labeled opt-in).",
+                field="snapshot_kind",
+                remedy="Pass snapshot_kind='clone' (exact) or snapshot_kind='digest' (labeled opt-in).",
             )
         validated = self._validate_within("names", names)
         if not validated:
@@ -404,7 +404,7 @@ class ChecksSession:
             )
         self._frozen = FrozenCheck(
             names=validated,
-            evidence=evidence,
+            evidence=snapshot_kind,
             action=validate_action(action),
         )
 

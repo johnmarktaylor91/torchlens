@@ -12,7 +12,6 @@ path-scoped, so DAG-shaped outputs stay fully walked.
 
 from __future__ import annotations
 
-import pytest
 import torch
 from torch import nn
 
@@ -65,7 +64,6 @@ def test_deep_output_captures_instead_of_recursion_error() -> None:
     assert len(log) > 0
 
 
-@pytest.mark.smoke
 def test_cyclic_output_captures_instead_of_recursion_error() -> None:
     """A self-referential forward output degrades honestly instead of crashing."""
 
@@ -83,7 +81,6 @@ def test_dag_output_walks_every_occurrence() -> None:
     assert len(result.leaf_occurrences) == 2
 
 
-@pytest.mark.smoke
 def test_overdeep_spec_degrades_to_opaque_and_unreconstructable() -> None:
     """The registry spec builder records the over-deep subtree as opaque."""
 

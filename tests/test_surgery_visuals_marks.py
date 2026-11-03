@@ -485,7 +485,6 @@ def test_diff_positional_cohort_join_is_heuristic() -> None:
     assert joins["relu_1_2:1"].basis == "fact"
 
 
-@pytest.mark.smoke
 def test_diff_absence_is_disclosed_never_ghosted(chain_capture) -> None:
     """A one-side op is a full-strength disclosure, never execution removal."""
 

@@ -55,7 +55,6 @@ def net_payload(net_log: Any) -> dict[str, Any]:
     return tl.export.to_model_explorer_dict(net_log)
 
 
-@pytest.mark.smoke
 def test_standard_providers_write_sidecars(net_log: Any, tmp_path: Path) -> None:
     """overlays=('standard',) writes the four-provider packet + manifest."""
 
@@ -73,7 +72,6 @@ def test_standard_providers_write_sidecars(net_log: Any, tmp_path: Path) -> None
     assert path.exists()
 
 
-@pytest.mark.smoke
 def test_values_join_by_node_id(net_log: Any, net_payload: dict[str, Any]) -> None:
     """Provider results key on the payload's node ids."""
 
@@ -109,7 +107,6 @@ def test_public_profile_refuses_value_derived(net_log: Any, net_payload: dict[st
     assert excinfo.value.fields["code"] == "model_explorer_overlay_public_conflict"
 
 
-@pytest.mark.smoke
 def test_callable_escape_hatch_and_typed_error(net_log: Any, net_payload: dict[str, Any]) -> None:
     """Callables serialize per node; their exceptions surface typed."""
 
@@ -133,7 +130,6 @@ def test_callable_escape_hatch_and_typed_error(net_log: Any, net_payload: dict[s
     assert excinfo.value.fields["code"] == "model_explorer_overlay_callable_error"
 
 
-@pytest.mark.smoke
 def test_field_source_and_nonnumeric_refusal(net_log: Any, net_payload: dict[str, Any]) -> None:
     """field:<name> resolves record fields; non-numeric values refuse."""
 
@@ -144,7 +140,6 @@ def test_field_source_and_nonnumeric_refusal(net_log: Any, net_payload: dict[str
     assert excinfo.value.fields["code"] == "model_explorer_overlay_value_invalid"
 
 
-@pytest.mark.smoke
 def test_rolled_varying_values_are_omitted_and_counted() -> None:
     """Per-pass-varying values on rolled nodes are omitted, never averaged
     (composition row 3)."""

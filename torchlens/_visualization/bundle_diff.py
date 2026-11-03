@@ -33,7 +33,7 @@ def bundle_diff(
     baseline: str | Trace | None = None,
     on: DiffTensorField = "out",
     path: str = "bundle_diff",
-    vis_save_only: bool = False,
+    open_viewer: bool = False,
     file_format: str = "svg",
     theme: str = "paper",
     max_pairs: int | None = 16,
@@ -59,8 +59,8 @@ def bundle_diff(
         Tensor field compared at each site.
     path:
         Output path, with or without a recognised extension.
-    vis_save_only:
-        Whether to suppress opening the rendered artifact.
+    open_viewer:
+        ``True`` opens the written picture in a viewer; the default never does.
     file_format:
         Output format. Any Graphviz-supported format (e.g., ``"svg"``,
         ``"pdf"``, ``"png"``). Accessibility metadata is only embedded for
@@ -125,7 +125,7 @@ def bundle_diff(
         include_unmatched=include_unmatched,
     )
     outpath = strip_known_extension(path)
-    source = render_dot_to_file(dot, outpath, file_format, vis_save_only)
+    source = render_dot_to_file(dot, outpath, file_format, not open_viewer)
     if file_format == "svg":
         _add_svg_accessibility(
             f"{outpath}.{file_format}",

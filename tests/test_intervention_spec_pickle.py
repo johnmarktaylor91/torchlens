@@ -105,7 +105,6 @@ def test_intervened_trace_pickles_like_it_saves(intervened_trace: tl.Trace, tmp_
     assert tl.load(path)["relu_1_2"] is not None
 
 
-@pytest.mark.smoke
 def test_intervened_fork_pickles(intervened_trace: tl.Trace) -> None:
     """A fork carrying the deep-copied intervention spec also pickles."""
 
@@ -125,7 +124,6 @@ def test_pickled_trace_matches_loaded_predicate_carrier_form(
     assert restored.__dict__.get("_predicate_save_options") is None
 
 
-@pytest.mark.smoke
 def test_add_and_replace_with_pickle_round_trip() -> None:
     """R10-1: ``add``/``replace_with`` mint portability="builtin" specs but
     were missing from the rebuild registry -- pickling (and therefore
