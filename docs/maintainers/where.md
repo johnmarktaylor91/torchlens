@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1421 modules, 633913 lines, 0 modules without a docstring.
+83 packages, 1421 modules, 633919 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 13 | 4188 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 40 | 16213 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6316 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 74 | 43888 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 74 | 43894 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1146 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 753 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 7 | 2297 |
@@ -856,7 +856,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (74 modules, 43888 lines)
+Computational graph visualization via Graphviz. (74 modules, 43894 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -922,7 +922,7 @@ Computational graph visualization via Graphviz. (74 modules, 43888 lines)
 | `collapse_plan` | Diagnostic collapse-plan AST and renderer-faithful count helpers. | 624 |
 | `fastlog_live` | Live visualization helpers for fastlog dry-run traces. | 307 |
 | `fastlog_preview` | Preview fastlog predicate decisions on a full Trace graph. | 360 |
-| `modes` | Node-mode presets for TorchLens graph visualization. | 491 |
+| `modes` | Node-mode presets for TorchLens graph visualization. | 497 |
 | `node_spec` | NodeSpec helpers for TorchLens graph visualization labels. | 464 |
 | `node_universe` | Presentation-free visible node universe for forward visualization. | 359 |
 | `overlays` | Per-node overlay helpers for TorchLens graph rendering. | 425 |
