@@ -106,7 +106,7 @@ def test_ddp_bundle_path_gets_rank_prefix(process_group: None, tmp_path: Path) -
         ddp_model,
         torch.ones(1, 2),
         default_op=True,
-        streaming=tl.options.StorageOptions(path=requested, retain_in_memory=False),
+        storage=tl.options.StorageOptions(path=requested, retain_in_memory=False),
     )
 
     assert recording.path == tmp_path / "rank_00" / "bundle.tlfast"

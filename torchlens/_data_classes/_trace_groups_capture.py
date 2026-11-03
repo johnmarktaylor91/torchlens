@@ -13,7 +13,7 @@ from typing import Any
 from ._trace_groups import _TraceGroup
 
 
-class TraceOptions(_TraceGroup):
+class TraceSettings(_TraceGroup):
     """The capture options this Trace ran with (the stored snapshot)."""
 
     __slots__ = ()

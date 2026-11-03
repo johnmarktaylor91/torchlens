@@ -805,3 +805,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
 recorded: 2026-11-01T11:30:33.616616+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (field_order_dataframe_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: c2-rulings fixq2 on 02e30d758706eb98f3ed2f540962a0000505de35
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 02e30d758706eb98f3ed2f540962a0000505de35 (clean)
+recorded: 2026-11-03T01:20:30.815752+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (field_order_dataframe_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: max-push lane typed-capture-options: Trace._output_slot (options.1 Trace.output, c2-rulings) joins FIELD_ORDER after the train regenerated the digest
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: cfb6c3cdc71c2a40da5f26cf451f5290ae81020d (dirty)
+recorded: 2026-11-02T10:21:03.351369+00:00

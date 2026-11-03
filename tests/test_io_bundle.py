@@ -101,7 +101,7 @@ def _build_conv_log(seed: int = 0) -> Trace:
     torch.manual_seed(seed)
     model = _ConvBundleModel()
     x = torch.randn(1, 3, 8, 8)
-    return trace_fn(model, x, capture=tl.options.CaptureOptions(layers_to_save="all", seed=seed))
+    return trace_fn(model, x, capture=tl.options.CaptureOptions(seed=seed), save="all")
 
 
 def _build_transform_log(transform: Callable[[torch.Tensor], Any]) -> Trace:
@@ -124,8 +124,8 @@ def _build_transform_log(transform: Callable[[torch.Tensor], Any]) -> Trace:
     return trace_fn(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", seed=0),
-        save=tl.options.SaveOptions(activation_transform=transform),
+        capture=tl.options.CaptureOptions(seed=0, activation_transform=transform),
+        save="all",
     )
 
 
@@ -281,9 +281,7 @@ def test_manifest_provenance_roundtrip_and_hash_determinism(tmp_path: Path) -> N
     torch.manual_seed(44)
     model = _InputTransformModel().eval()
     inputs = torch.arange(12, dtype=torch.float32).reshape(3, 4)
-    captured = trace_fn(
-        model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", seed=44)
-    )
+    captured = trace_fn(model, inputs, capture=tl.options.CaptureOptions(seed=44), save="all")
     first_path = tmp_path / "first.tlspec"
     second_path = tmp_path / "second.tlspec"
 
@@ -371,7 +369,7 @@ def test_manifest_git_commit_is_absent_outside_repository(
     captured = trace_fn(
         _InputTransformModel(),
         torch.ones(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     bundle_path = tmp_path / "outside.tlspec"
 

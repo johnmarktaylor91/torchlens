@@ -84,7 +84,7 @@ REFUSAL_ROWS: tuple[RefusalRow, ...] = (
         lambda: _tl().trace(
             _model(),
             _x(),
-            capture=_tl().options.CaptureOptions(structure_only=True, raise_on_nan=True),
+            capture=_tl().options.CaptureOptions(structure_only=True, on_nonfinite="raise"),
         ),
     ),
     RefusalRow(
@@ -111,7 +111,7 @@ REFUSAL_ROWS: tuple[RefusalRow, ...] = (
         "HALTED",
         lambda: (
             _tl()
-            .trace(_model(), _x(), halt=_tl().func("relu"))
+            .trace(_model(), _x(), stop_after=_tl().func("relu"))
             .save("/tmp/proofnet-halted-runnable-refused.tlspec", level="runnable")
         ),
     ),

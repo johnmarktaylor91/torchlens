@@ -770,7 +770,7 @@ def _build_trace_fork_policy() -> dict[str, ForkFieldPolicy]:
         # MUTATION surface, so carrying the parent's blessed attestation by identity would let a
         # hand-edited fork save as a bit-identical attested COMPLETE. ``build_fork`` settles a
         # DERIVED outcome via ``capture.outcome.stamp_forked`` instead.
-        reconstruct={"_parent_run", "_capture_outcome"},
+        reconstruct={"_parent_run", "_capture_outcome", "_output_slot"},
     )
     # `_trace_core` (the columnar op row store) is not in MODEL_LOG_FIELD_ORDER (private runtime
     # storage, FieldPolicy.DROP). The generic field pass reconstructs (drops) it; the M11 COW fork

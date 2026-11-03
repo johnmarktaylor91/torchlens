@@ -30,6 +30,7 @@ dead	declared
 debug	submodule
 differential	submodule
 distributed	submodule
+draw	declared
 errors	submodule
 examples	submodule
 experiment	submodule

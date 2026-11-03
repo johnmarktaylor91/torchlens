@@ -61,7 +61,7 @@ _MODULE_IDENTITY = _BackendCapability(
     "module_identity_mode", ("module_identity_mode",), public_spine=True
 )
 _CODEC_MATERIALIZATION = _BackendCapability(
-    "codec_materialization", ("payload_policy", "save_preview"), public_spine=True
+    "codec_materialization", ("payload_policy",), public_spine=True
 )
 _CONTAINER_STRUCTURE = _BackendCapability(
     "container_structure", ("capture_container_structure",), public_spine=True

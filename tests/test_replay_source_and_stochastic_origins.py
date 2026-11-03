@@ -22,7 +22,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens.intervention.errors import ReplayPreconditionError
 
-_READY = tl.options.CaptureOptions(layers_to_save="all", replayable=True)
+_READY = tl.options.CaptureOptions(replayable=True)
 
 
 class _Affine(nn.Module):
