@@ -167,8 +167,8 @@ Key entry points:
   statistic; the single-capture form is `sign(site,'zero')`); graph
   producers `tl.neighborhood(of, hops=, direction=)` / `tl.between(sources,
   sinks)` (structural position on the executed DAG: n-hop region and the
-  source-to-sink influence sub-DAG; whole-site exact masks, family
-  semantics, empty = disclosure; pure functions over the one
+  source-to-sink influence sub-DAG; whole-site exact masks, seeded from the
+  sites with a nonempty element mask, empty = disclosure; pure functions over the one
   `selection_graph._TraceGraph` substrate a future motif producer extends).
   `trace.between(sources, sinks)` presents the same region as a
   `TraceSlice` (frozen presenter, never a Trace: member ops, internal

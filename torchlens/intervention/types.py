@@ -31,8 +31,6 @@ InterventionAction: TypeAlias = Literal["replace", "add_hook", "scale", "transfo
 
 #: The pass a record, edit or event belongs to (SPEC section 0, THE_FIELD).
 Signal: TypeAlias = Literal["forward", "backward"]
-#: ``Signal`` plus ``"both"``, used only by summaries of plans and spans.
-HelperDirection: TypeAlias = Literal["forward", "backward", "both"]
 HelperPortability: TypeAlias = Literal["builtin", "import_ref", "opaque_audit"]
 
 

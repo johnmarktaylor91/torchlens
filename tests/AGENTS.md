@@ -33,7 +33,7 @@ pytest config excludes `rare` tests via `addopts = -m 'not rare'`.
 pytest tests/test_toy_models.py            # single file — targeted suites ARE the per-step gate
 pytest tests/test_toy_models.py::test_name # single test
 python scripts/smoke_ci_parity.py -n 4     # commit-level gate: smoke in CI's pinned enforcing environment
-pytest tests/ -m smoke -n 4                # quick smoke in your own venv (~1.4k tests; not the gate)
+pytest tests/ -m smoke -n 4                # quick smoke in your own venv (~1.5k tests; not the gate)
 pytest tests/ -m "not rare and not slow and not heavy" -x --tb=short  # mid backstop
 pytest tests/ -m "not rare and not slow"   # phase-boundary backstop (keeps rare excluded)
 pytest tests/                              # default suite excluding rare
@@ -47,12 +47,12 @@ Run memory-heavy real-world tests sequentially. Optional dependency tests should
 
 | Marker | Meaning |
 | --- | --- |
-| `smoke` | Critical-path checks, <5s each (measured); the commit-level gate, not per-step. A coverage-chosen set of about 1,400 tests, capped at `SMOKE_TIER_SIZE_CEILING` (1,500) in `tests/conftest.py`. |
+| `smoke` | Critical-path checks, <5s each (measured); the commit-level gate, not per-step. A coverage-chosen set of about 1,470 tests, capped at `SMOKE_TIER_SIZE_CEILING` (1,500) in `tests/conftest.py`. |
 | `smoke_cells` | `smoke_cells("test_x[a]", ...)` on a function, class or module applies `smoke` to exactly the named items, so a parametrized family keeps one or two representative smoke cells. |
 | `heavy` | Mid-cost (5-20s) tests, excluded from smoke and the mid backstop. |
 | `slow` | Long-running (>20s) real-world tests. |
 | `serial` | Load-sensitive tests that should run away from parallel worker load. NOT a budget exemption: a file's duration tier is its loosest tier marker, and `serial` is not one. |
-| (none) | Unmarked tests — a majority (21,566/37,032, 58%, measured 2026-11-01) — run only in the backstops, never the commit gate, but are budgeted at the same <5s tier as smoke. |
+| (none) | Unmarked tests — a majority (22,483/39,361, 57%, measured 2026-11-02) — run only in the backstops, never the commit gate, but are budgeted at the same <5s tier as smoke. |
 | `rare` | Always excluded by default unless explicitly selected. |
 | `optional` | Requires an optional dependency or runtime. |
 | `backend_parity` | Active backend-substrate parity gate. |
@@ -104,15 +104,18 @@ env-fingerprinted golden family (those enforce
 only on the canonical smoke CI row). Everything else that used to be smoke is unmarked or
 `heavy` and still runs in the backstops and the nightly and weekly CI tiers. A new test stays
 unmarked unless it covers a critical path nothing in smoke reaches; the size ceiling keeps the
-tier from regrowing. The tier holds 1,482 tests (`tests/tiers/collection.json`, collected
-2026-11-01; per-tier counts, wall estimates and the collect commands are there).
+tier from regrowing. The tier holds 1,474 tests (`tests/tiers/collection.json`, collected
+2026-11-02; per-tier counts, wall estimates and the collect commands are there).
 
-`scripts/smoke_ci_parity.py` passes `pytest` only the test files whose source spells
-`mark.smoke` or `mark.smoke_cells` (`python scripts/tier_durations.py files --tier smoke`
-prints the list); whole-tree collection otherwise costs 3-4 minutes. Spell smoke marks in the
-test file itself, never through an imported alias:
-`tests/test_marker_lint.py::test_smoke_file_list_never_hides_a_smoke_test` fails any session in
-which a smoke item sits in a file that list would skip.
+Smoke runs collect only the smoke file list, the test files whose source spells `mark.smoke`
+or `mark.smoke_cells`: under `-m smoke` `tests/_tiers_plugin.py` skips every other test module
+before import (`TORCHLENS_SMOKE_PREFILTER=0` turns the skip off). `python
+scripts/tier_durations.py files --tier smoke` prints the list, recomputed from the tree on every
+call, so nothing needs regenerating. Measured 2026-11-02 on a 4-core Linux worker: smoke
+collection took about 40-45 s against about 60-65 s for the whole tree. Spell smoke marks in the
+test file itself, never through an imported alias or a hook: the tiers plugin fails any session
+that collects a smoke item from a file off the list, and the `tier-durations` check of
+`scripts/checks/run_all.py` fails a helper module under `tests/` that applies the mark.
 
 Byte goldens enforce only in the pinned environment (python 3.10, torch 2.13.0), so the
 commit-level gate is `python scripts/smoke_ci_parity.py [-n N]`, not a plain

@@ -312,12 +312,12 @@ def test_typed_backend_refusal_scores_unsupported() -> None:
 
 
 #: MLX's red cells on its packet roster, keyed ``(case_id, family)``, with the cause
-#: substring each detail must carry. Two causes, neither an MLX capture gap:
-#: the MLX module tree addresses Sequential children ``block.layers.0`` while the
-#: shared finalization derives ``address_parent`` by splitting the address (the
-#: module-hierarchy invariant catches it); loaded non-torch traces drop the runtime
-#: capture replay needs. The shared preview option policy now refuses with the
-#: per-cause code, so every ``c1_refusal_*`` cell passes.
+#: substring each detail must carry. One cause, not an MLX capture gap: loaded
+#: non-torch traces drop the runtime capture replay needs. The list holding a
+#: Sequential's children has its own module record (``block.layers``, class
+#: ``list``), so ``mod_nested_residual`` passes the module-hierarchy invariant. The
+#: shared preview option policy refuses with the per-cause code, so every
+#: ``c1_refusal_*`` cell passes.
 _MLX_ROSTER_FAMILIES: tuple[str, ...] = (
     "fn_chain_branch",
     "fn_multi_output",
@@ -331,8 +331,6 @@ _MLX_ROSTER_FAMILIES: tuple[str, ...] = (
     "mod_nested_residual",
 )
 MLX_KNOWN_RED_CELLS: dict[tuple[str, str], str] = {
-    ("c1_validation_passes", "mod_nested_residual"): "[module_hierarchy]",
-    ("c1_validation_names_reason", "mod_nested_residual"): "[module_hierarchy]",
     **{
         ("c2_validation_after_load", family): "runtime capture data was stripped"
         for family in _MLX_ROSTER_FAMILIES
@@ -480,8 +478,8 @@ def test_tf_pack_earns_c0_with_its_named_red_cells(
 
 @pytest.mark.heavy
 @pytest.mark.backend_mlx
-def test_mlx_pack_earns_c0_with_its_named_red_cells(tmp_path: Path) -> None:
-    """The mlx pack on its ten-row packet roster earns C0; every red cell is named.
+def test_mlx_pack_earns_c1_with_its_named_red_cells(tmp_path: Path) -> None:
+    """The mlx pack on its ten-row packet roster earns C1; every red cell is named.
 
     The set of non-passed cells must equal ``MLX_KNOWN_RED_CELLS`` exactly, each
     with its cause: a new red or a fixed one both fail here, and the fix removes
@@ -505,9 +503,12 @@ def test_mlx_pack_earns_c0_with_its_named_red_cells(tmp_path: Path) -> None:
         assert red[key].state == "failed", red[key]
         assert cause in red[key].detail, (key, red[key].detail)
     assert card.counts["denominator"] == _preview_denominator("mlx")
-    # The module-hierarchy validation reds sit in C1, so the ladder stops at C0.
-    assert card.highest_tier == "C0"
-    assert claim_string(report) == "TorchLens provider API compatible, C0"
+    # Only the after-load reds remain and they sit in C2, so the ladder stops at C1.
+    assert card.highest_tier == "C1"
+    # C1 needs the pretrained-family floor; the config-built roster has none.
+    with pytest.raises(ConfigurationError) as excinfo:
+        claim_string(report)
+    assert excinfo.value.fields["code"] == "conformance_claim_unearned"
     assert "conformant" not in card.to_json().lower()
 
 
