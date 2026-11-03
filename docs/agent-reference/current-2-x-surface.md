@@ -963,7 +963,7 @@
   region, ...)` grows from the sites outside `region`; `trace.subgraph` takes
   the same member set), PARAM/EDGE operands refuse
   `selection_kind_incompatible`. Both are pure functions over the ONE
-  executed-DAG substrate (`selection_graph._TraceGraph`, adjacency shared
+  executed-DAG substrate (`selection_graph._ExecutedDag`, adjacency shared
   verbatim with the influence-geometry path machinery) — a future graph-
   MOTIF producer is one more pure function over the same object, not a
   rewrite. `trace.between(sources, sinks)` returns the SAME region as a

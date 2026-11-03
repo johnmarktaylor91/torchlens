@@ -2013,7 +2013,7 @@ class Trace(TraceLike):
 
     @property
     def source(self) -> "TraceSource":
-        """Source facts of the traced model class: locations, signatures, docstrings."""
+        """Where the traced model's source lives: class, ``__init__`` and ``forward`` facts."""
 
         return TraceSource(self)
 
