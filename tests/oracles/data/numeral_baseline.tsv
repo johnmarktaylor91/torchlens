@@ -10,6 +10,7 @@ docs-md	AGENTS.md	2.13.0
 docs-md	AGENTS.md	2.15
 docs-md	AGENTS.md	20
 docs-md	AGENTS.md	2026
+docs-md	AGENTS.md	26,610
 docs-md	AGENTS.md	26.04
 docs-md	AGENTS.md	28
 docs-md	AGENTS.md	3.10,
@@ -1664,6 +1665,7 @@ docs-md	docs/maintainers/where.md	537
 docs-md	docs/maintainers/where.md	539
 docs-md	docs/maintainers/where.md	54
 docs-md	docs/maintainers/where.md	540
+docs-md	docs/maintainers/where.md	54048
 docs-md	docs/maintainers/where.md	541
 docs-md	docs/maintainers/where.md	544
 docs-md	docs/maintainers/where.md	545
@@ -1734,6 +1736,7 @@ docs-md	docs/maintainers/where.md	63
 docs-md	docs/maintainers/where.md	630
 docs-md	docs/maintainers/where.md	631
 docs-md	docs/maintainers/where.md	6316
+docs-md	docs/maintainers/where.md	632692
 docs-md	docs/maintainers/where.md	634
 docs-md	docs/maintainers/where.md	635
 docs-md	docs/maintainers/where.md	636
@@ -7586,6 +7589,7 @@ test-docstrings	tests/test_checks_kit_scan.py	32
 test-docstrings	tests/test_checks_kit_scan.py	4.0
 test-docstrings	tests/test_checks_kit_scan.py	4.4
 test-docstrings	tests/test_checks_kit_scan.py	64
+test-docstrings	tests/test_checks_kit_session.py	203
 test-docstrings	tests/test_checks_kit_session.py	21
 test-docstrings	tests/test_checks_kit_session.py	4.2
 test-docstrings	tests/test_chunk_size.py	10
@@ -8885,8 +8889,11 @@ test-docstrings	tests/test_subspace_spec_portable.py	64
 test-docstrings	tests/test_summary_rebuild_charset.py	11
 test-docstrings	tests/test_summary_rebuild_config.py	17
 test-docstrings	tests/test_summary_rebuild_config.py	3.10
+test-docstrings	tests/test_summary_rebuild_ladder.py	19
 test-docstrings	tests/test_summary_rebuild_ladder.py	3.1
 test-docstrings	tests/test_summary_rebuild_ladder.py	3.4
+test-docstrings	tests/test_summary_rebuild_ladder.py	3.4,
+test-docstrings	tests/test_summary_rebuild_ladder.py	48
 test-docstrings	tests/test_summary_rebuild_pins.py	1,019,805,696
 test-docstrings	tests/test_summary_rebuild_pins.py	10
 test-docstrings	tests/test_summary_rebuild_pins.py	12
@@ -9848,8 +9855,3 @@ test-names	tests/workflow_gallery/test_proofnet_rg_vision.py	12_
 test-names	tests/workflow_gallery/test_proofnet_rg_vision.py	13_
 test-names	tests/workflow_gallery/test_proofnet_rg_vision.py	16_
 test-names	tests/workflow_gallery/test_proofnet_rg_vision.py	20_
-test-docstrings	tests/test_checks_kit_session.py	203
-test-docstrings	tests/test_summary_rebuild_ladder.py	19
-test-docstrings	tests/test_summary_rebuild_ladder.py	3.4,
-test-docstrings	tests/test_summary_rebuild_ladder.py	48
-docs-md	AGENTS.md	26,610
