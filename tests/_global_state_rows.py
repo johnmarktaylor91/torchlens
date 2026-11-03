@@ -483,6 +483,12 @@ _CAPABILITY_PROBE_STATE = frozenset(
         # fired by the RNG monitor BEFORE its window arms (hunt-b8 F1).
         ("torchlens/_utils/_torch_compat.py", "_LAZY_TORCH_IMPORTS_WARMED"),
         ("torchlens/_utils/_cuda_probe.py", "_cuda_available"),
+        # cairosvg (SVG rasterizer for PDF/PNG highlighter and code panels):
+        # one lazy HAS_* probe shared by every renderer and the doctor row,
+        # latched once with the reason it is unavailable.
+        ("torchlens/_visualization/_cairosvg.py", "HAS_CAIROSVG"),
+        ("torchlens/_visualization/_cairosvg.py", "_CAIROSVG_PROBED"),
+        ("torchlens/_visualization/_cairosvg.py", "_CAIROSVG_UNAVAILABLE_REASON"),
         # floor2 fix (2026-10-01): torch 2.1.2-floor capability probes --
         # GradientEdge (one-backward tuple-output signature), the
         # tuple-dim overload of reduce ops, CPU half-precision kernel
@@ -495,6 +501,8 @@ _CAPABILITY_PROBE_STATE = frozenset(
         ("torchlens/_utils/_torch_compat.py", "_REDUCE_TUPLE_DIM_PROBED"),
         ("torchlens/_utils/_torch_compat.py", "HAS_CPU_HALF_KERNELS"),
         ("torchlens/_utils/_torch_compat.py", "_CPU_HALF_KERNELS_PROBED"),
+        ("torchlens/_utils/_torch_compat.py", "HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL"),
+        ("torchlens/_utils/_torch_compat.py", "_EVAL_BATCH_NORM_MEAN_RESIDUAL_PROBED"),
         ("torchlens/_utils/_torch_compat.py", "HAS_CPU_FLOAT8_DETERMINISTIC_FILL"),
         ("torchlens/_utils/_torch_compat.py", "_CPU_FLOAT8_DETERMINISTIC_FILL_PROBED"),
         # torch.sparse.spsolve on CUDA (needs a cuDSS build): the same lazy

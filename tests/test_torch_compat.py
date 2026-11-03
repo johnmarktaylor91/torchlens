@@ -413,6 +413,10 @@ def test_torch_capability_snapshot_contract() -> None:
         "HAS_AMP_GRADSCALER": tc.HAS_AMP_GRADSCALER,
         "HAS_NN_ATTENTION_MODULE": tc.HAS_NN_ATTENTION_MODULE,
         "HAS_RMSNORM_MODULE": tc.HAS_RMSNORM_MODULE,
+        # torch.mps memory queries postdate the torch>=2.1 floor (torch 2.5):
+        # absence leaves an MPS save budget honestly unmeasured. Build-dependent,
+        # so mirror the live post-snapshot capability.
+        "HAS_MPS_MEMORY_QUERY": tc.HAS_MPS_MEMORY_QUERY,
         # torch.backends.mha (the nn.MultiheadAttention / TransformerEncoderLayer
         # fused fast-path switch) postdates the torch>=2.1 floor too: absence is a
         # healthy old install with a real fallback (force_mha_slow_path flips the
@@ -426,6 +430,10 @@ def test_torch_capability_snapshot_contract() -> None:
         # mirror the live post-snapshot capability.
         "HAS_CPU_HALF_KERNELS": tc.HAS_CPU_HALF_KERNELS,
         "HAS_CPU_FLOAT8_DETERMINISTIC_FILL": tc.HAS_CPU_FLOAT8_DETERMINISTIC_FILL,
+        # Whether the CPU eval batch_norm kernel leaves a running_var residual
+        # at a non-zero mean (x86 yes, Apple ARM no): kernel-dependent, so
+        # mirror the live post-snapshot capability.
+        "HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL": tc.HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL,
         # torch.sparse.spsolve on CUDA needs a cuDSS build, which official wheels
         # lack. Build- and device-dependent, so mirror the live post-snapshot
         # capability.
@@ -786,6 +794,8 @@ def test_fill_uninitialized_memory_flag_visible_in_capability_snapshot() -> None
     assert snapshot["HAS_MHA_FASTPATH_SWITCH"] == tc.HAS_MHA_FASTPATH_SWITCH
     assert snapshot["HAS_REDUCE_TUPLE_DIM"] == tc.HAS_REDUCE_TUPLE_DIM
     assert snapshot["HAS_CPU_HALF_KERNELS"] == tc.HAS_CPU_HALF_KERNELS
+    assert snapshot["HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL"] == tc.HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL
+    assert snapshot["HAS_MPS_MEMORY_QUERY"] == tc.HAS_MPS_MEMORY_QUERY
     assert snapshot["HAS_CPU_FLOAT8_DETERMINISTIC_FILL"] == tc.HAS_CPU_FLOAT8_DETERMINISTIC_FILL
     assert snapshot["HAS_SPARSE_SPSOLVE_CUDA"] == tc.HAS_SPARSE_SPSOLVE_CUDA
 
@@ -1017,6 +1027,7 @@ def test_get_gradient_edge_support_is_lazy_and_caches(monkeypatch: pytest.Monkey
     [
         "get_reduce_tuple_dim_support",
         "get_cpu_half_kernels_support",
+        "get_eval_batch_norm_mean_residual_support",
         "get_cpu_float8_deterministic_fill_support",
         "get_sparse_spsolve_cuda_support",
     ],
@@ -1039,18 +1050,21 @@ def test_real_op_probe_getters_are_lazy_and_cache(
     probe_name = {
         "get_reduce_tuple_dim_support": "_probe_reduce_tuple_dim",
         "get_cpu_half_kernels_support": "_probe_cpu_half_kernels",
+        "get_eval_batch_norm_mean_residual_support": "_probe_eval_batch_norm_mean_residual",
         "get_cpu_float8_deterministic_fill_support": "_probe_cpu_float8_deterministic_fill",
         "get_sparse_spsolve_cuda_support": "_probe_sparse_spsolve_cuda",
     }[getter_name]
     probed_name = {
         "get_reduce_tuple_dim_support": "_REDUCE_TUPLE_DIM_PROBED",
         "get_cpu_half_kernels_support": "_CPU_HALF_KERNELS_PROBED",
+        "get_eval_batch_norm_mean_residual_support": "_EVAL_BATCH_NORM_MEAN_RESIDUAL_PROBED",
         "get_cpu_float8_deterministic_fill_support": "_CPU_FLOAT8_DETERMINISTIC_FILL_PROBED",
         "get_sparse_spsolve_cuda_support": "_SPARSE_SPSOLVE_CUDA_PROBED",
     }[getter_name]
     flag_name = {
         "get_reduce_tuple_dim_support": "HAS_REDUCE_TUPLE_DIM",
         "get_cpu_half_kernels_support": "HAS_CPU_HALF_KERNELS",
+        "get_eval_batch_norm_mean_residual_support": "HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL",
         "get_cpu_float8_deterministic_fill_support": "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
         "get_sparse_spsolve_cuda_support": "HAS_SPARSE_SPSOLVE_CUDA",
     }[getter_name]

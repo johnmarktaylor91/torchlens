@@ -144,6 +144,7 @@ _ROWS: tuple[CapabilityRow, ...] = (
         "HAS_CPU_FLOAT8_DETERMINISTIC_FILL", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1", "2.5.1")
     ),
     _row("HAS_CPU_HALF_KERNELS", absent_on=("2.1.2", "2.2.2")),
+    _row("HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL"),
     _row("HAS_CUDA_GRAPHS"),
     _row("HAS_CURRENT_AUTOGRAD_NODE"),
     _row("HAS_CURRENT_GRAPH_TASK_ID"),
@@ -219,6 +220,7 @@ _ROWS: tuple[CapabilityRow, ...] = (
     ),
     _row("HAS_PIPELINING"),
     _row("HAS_REDUCE_TUPLE_DIM", absent_on=("2.1.2",)),
+    _row("HAS_MPS_MEMORY_QUERY", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1")),
     _row("HAS_RMSNORM_MODULE", absent_on=("2.1.2", "2.2.2", "2.3.1")),
     _row("HAS_SAFE_WEIGHTS_ONLY_LOAD", absent_on=("2.1.2", "2.2.2", "2.3.1", "2.4.1", "2.5.1")),
     _row("HAS_SAVED_TENSORS_HOOKS_PATCHABLE"),

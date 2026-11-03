@@ -506,7 +506,7 @@ torchlens/_utils/_callable_safety.py	1562
 torchlens/_utils/_callable_safety.py::_pure_view	67
 torchlens/_utils/_callable_safety.py::is_inert_first_party_callable	63
 torchlens/_utils/_callable_safety.py::is_pure_forward_callable	91
-torchlens/_utils/_torch_compat.py	4588
+torchlens/_utils/_torch_compat.py	4520
 torchlens/_utils/_torch_compat.py::apply_ambient_execution_context	81
 torchlens/_utils/_torch_compat.py::get_torch_capability_snapshot	63
 torchlens/_utils/_torch_compat.py::kineto_events_from_profiler	69
@@ -585,7 +585,7 @@ torchlens/_visualization/_render_edges.py::_add_intervention_hook_nodes	67
 torchlens/_visualization/_render_edges.py::_label_rolled_call_indexs	77
 torchlens/_visualization/_render_entrypoints.py::render_backward_graph	266
 torchlens/_visualization/_render_entrypoints.py::render_combined_graph	254
-torchlens/_visualization/_render_flow.py	2064
+torchlens/_visualization/_render_flow.py	2061
 torchlens/_visualization/_render_flow.py::_base_rendered_node_emission	86
 torchlens/_visualization/_render_flow.py::_build_module_focus_entries	107
 torchlens/_visualization/_render_flow.py::_build_skip_filtered_edge_map	75

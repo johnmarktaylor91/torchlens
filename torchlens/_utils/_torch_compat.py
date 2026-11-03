@@ -44,7 +44,6 @@ import sys
 import types
 import warnings
 from collections.abc import Callable, Iterable, Iterator
-from dataclasses import dataclass
 from importlib.machinery import PathFinder
 from typing import Any
 
@@ -53,6 +52,7 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
 from ._module_call_dispatch import probe_module_call_dispatch_frame
+from ._runnable_torch_aliases import _RUNNABLE_TORCH_ALIASES, RunnableTorchAlias
 from ._torch_structseq import torch_structseq_field_names
 from ._torch_symbols import shadowed_torch_submodule, torch_attr
 
@@ -138,9 +138,11 @@ __all__ = [
     "HAS_AMP_GRADSCALER",
     "HAS_NN_ATTENTION_MODULE",
     "HAS_RMSNORM_MODULE",
+    "HAS_MPS_MEMORY_QUERY",
     "HAS_MHA_FASTPATH_SWITCH",
     "HAS_REDUCE_TUPLE_DIM",
     "HAS_CPU_HALF_KERNELS",
+    "HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL",
     "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
     "HAS_SPARSE_SPSOLVE_CUDA",
     "HAS_META_ITEM_GUARD",
@@ -251,209 +253,6 @@ class _ParameterAsSubclassProbeMode(TorchDispatchMode):
         return func(*args, **(kwargs or {}))
 
 
-@dataclass(frozen=True, slots=True)
-class RunnableTorchAlias:
-    """One monotonic callable move used by sparse runnable reattachment.
-
-    The table is capability-bounded rather than selected by parsing
-    ``torch.__version__``. Source absence is established by the caller's
-    allowlisted exact-resolution pass, which runs first and only reaches the
-    alias stage when the recorded path does not resolve through a safe public
-    namespace; the private/internal recorded paths in this table are therefore
-    redirected to their public equivalents (a present internal binding such as
-    ``torch._C._nn.linear`` is intentionally routed to its public wrapper for
-    replay safety). This resolver additionally probes that an entry's *target*
-    exists in the current runtime (:func:`_runtime_alias_target_exists`) and
-    never hands back an alias whose target is absent -- so an unbounded/legacy
-    version key can never manufacture a dead alias. A ``None`` maximum leaves
-    a monotonic alias open above its minimum; target existence remains the
-    capability gate in that case.
-    """
-
-    source: str
-    target_namespace: str
-    target_qualname: str | None
-    provenance: str
-    recorded_min_version: tuple[int, int]
-    recorded_max_version: tuple[int, int] | None
-    strip_target_prefix: str = ""
-
-
-_RUNNABLE_TORCH_ALIASES: tuple[RunnableTorchAlias, ...] = (
-    RunnableTorchAlias(
-        "torch._C._nn.linear",
-        "torch.nn.functional",
-        "linear",
-        "private_to_public:_C._nn.linear->torch.nn.functional.linear",
-        (2, 1),
-        (2, 14),
-    ),
-    RunnableTorchAlias(
-        "_C._nn.linear",
-        "torch.nn.functional",
-        "linear",
-        "private_to_public:_C._nn.linear->torch.nn.functional.linear",
-        (2, 1),
-        (2, 14),
-    ),
-    RunnableTorchAlias(
-        "torch._VF.linear",
-        "torch.nn.functional",
-        "linear",
-        "private_to_public:_VF.linear->torch.nn.functional.linear",
-        (2, 1),
-        (2, 12),
-    ),
-    RunnableTorchAlias(
-        "_VF.linear",
-        "torch.nn.functional",
-        "linear",
-        "private_to_public:_VF.linear->torch.nn.functional.linear",
-        (2, 1),
-        (2, 12),
-    ),
-    RunnableTorchAlias(
-        "torch._C._nn.gelu",
-        "torch.nn.functional",
-        "gelu",
-        "private_to_public:_C._nn.gelu->torch.nn.functional.gelu",
-        (2, 1),
-        (2, 12),
-    ),
-    RunnableTorchAlias(
-        "torch._C._nn.softplus",
-        "torch.nn.functional",
-        "softplus",
-        "private_to_public:_C._nn.softplus->torch.nn.functional.softplus",
-        (2, 1),
-        (2, 12),
-    ),
-    RunnableTorchAlias(
-        "torch._C._nn.cross_entropy_loss",
-        "torch.nn.functional",
-        "cross_entropy",
-        "private_to_public:_C._nn.cross_entropy_loss->torch.nn.functional.cross_entropy",
-        (2, 1),
-        (2, 12),
-    ),
-    RunnableTorchAlias(
-        "torch._C._special.*",
-        "torch.special",
-        None,
-        "private_to_public:_C._special.special_*->torch.special.*",
-        (2, 1),
-        (2, 12),
-        "special_",
-    ),
-    RunnableTorchAlias(
-        "torch._C._fft.*",
-        "torch.fft",
-        None,
-        "private_to_public:_C._fft.fft_*->torch.fft.*",
-        (2, 1),
-        (2, 12),
-        "fft_",
-    ),
-    RunnableTorchAlias(
-        "torch._C._linalg.*",
-        "torch.linalg",
-        None,
-        "private_to_public:_C._linalg.linalg_*->torch.linalg.*",
-        (2, 1),
-        (2, 14),
-        "linalg_",
-    ),
-    RunnableTorchAlias(
-        "torch._C._TensorBase.*",
-        "torch.Tensor",
-        None,
-        "tensor_base_drift:torch._C._TensorBase->torch.Tensor",
-        (2, 1),
-        (2, 12),
-    ),
-    RunnableTorchAlias(
-        "torch._C.TensorBase.*",
-        "torch.Tensor",
-        None,
-        "tensor_base_drift:torch._C.TensorBase->torch.Tensor",
-        (2, 1),
-        (2, 12),
-    ),
-    RunnableTorchAlias(
-        "torch.TensorBase.*",
-        "torch.Tensor",
-        None,
-        "tensor_base_drift:torch.TensorBase->torch.Tensor",
-        (2, 1),
-        (2, 12),
-    ),
-    RunnableTorchAlias(
-        "torch.Tensor.*",
-        "torch.Tensor",
-        None,
-        "tensor_prefix_drift:torch.Tensor->torch.Tensor",
-        (2, 1),
-        (2, 12),
-    ),
-    RunnableTorchAlias(
-        "_TensorBase.*",
-        "torch.Tensor",
-        None,
-        "tensor_base_drift:_TensorBase->torch.Tensor",
-        (2, 1),
-        (2, 12),
-    ),
-    RunnableTorchAlias(
-        "TensorBase.*",
-        "torch.Tensor",
-        None,
-        "tensor_base_drift:TensorBase->torch.Tensor",
-        (2, 1),
-        (2, 12),
-    ),
-    RunnableTorchAlias(
-        "Tensor.*",
-        "torch.Tensor",
-        None,
-        "tensor_prefix_drift:Tensor->torch.Tensor",
-        (2, 1),
-        (2, 12),
-    ),
-    RunnableTorchAlias(
-        "torch._C._VariableFunctions.*",
-        "torch",
-        None,
-        "private_to_public:torch._C._VariableFunctions->torch",
-        (2, 1),
-        (2, 12),
-    ),
-    RunnableTorchAlias(
-        "torch._C._VariableFunctionsClass.*",
-        "torch",
-        None,
-        "private_to_public:torch._C._VariableFunctionsClass->torch",
-        (2, 1),
-        None,
-    ),
-    RunnableTorchAlias(
-        "torch._VariableFunctionsClass.*",
-        "torch",
-        None,
-        "private_to_public:torch._VariableFunctionsClass->torch",
-        (2, 1),
-        None,
-    ),
-    RunnableTorchAlias(
-        "_VariableFunctionsClass.*",
-        "torch",
-        None,
-        "private_to_public:_VariableFunctionsClass->torch",
-        (2, 1),
-        None,
-    ),
-)
-
-
 def _runtime_alias_target_exists(target_namespace: str, target_qualname: str) -> bool:
     """Return whether an alias target resolves in the running torch.
 
@@ -493,6 +292,87 @@ def _runtime_alias_target_exists(target_namespace: str, target_qualname: str) ->
     return True
 
 
+def _runtime_alias_identity_holds(
+    source_qualname: str, target_namespace: str, target_qualname: str
+) -> bool:
+    """Return whether a recorded source path and its alias target are one object now.
+
+    Capability probe (feature detection, not a ``torch.__version__`` parse) for
+    an alias whose recorded upper bound the running torch has passed: the move
+    the alias records is monotonic, so when both paths still resolve and the
+    source *is* the target in the running torch (``torch.nn.functional.linear``
+    is the ``torch._C._nn.linear`` binding on every torch this probe has met),
+    the alias stays valid beyond the version the table last measured. A path
+    that no longer resolves, or two distinct objects, answers ``False`` and the
+    recorded bound stands.
+
+    Parameters
+    ----------
+    source_qualname:
+        Recorded callable path, with or without its ``torch.`` prefix.
+    target_namespace:
+        Public namespace of the alias target (always rooted at ``torch``).
+    target_qualname:
+        Attribute path of the alias target within ``target_namespace``.
+
+    Returns
+    -------
+    bool
+        True only when both paths resolve to the same non-``None`` object.
+    """
+
+    source_path = (
+        source_qualname if source_qualname.startswith("torch.") else f"torch.{source_qualname}"
+    )
+    source = _resolve_runtime_torch_path(source_path)
+    target = _resolve_runtime_torch_path(f"{target_namespace}.{target_qualname}")
+    return source is not None and source is target
+
+
+def _resolve_runtime_torch_path(dotted: str) -> Any:
+    """Return the object at a ``torch``-rooted dotted path, or ``None`` when any hop is missing."""
+
+    parts = dotted.split(".")
+    if parts[0] != "torch":
+        return None
+    current: Any = torch
+    for part in parts[1:]:
+        current = torch_attr(part) if current is torch else getattr(current, part, None)
+        if current is None:
+            return None
+    return current
+
+
+def _alias_target_qualname(
+    alias: RunnableTorchAlias, source_qualname: str
+) -> tuple[bool, str | None]:
+    """Return ``(matched, target_qualname)`` for one alias row against a recorded path.
+
+    A wildcard row (``source`` ending in ``.*``) matches any path under its prefix
+    and maps the remainder, minus ``strip_target_prefix``; an exact row matches
+    its own path and maps to its recorded target qualname. ``matched`` False
+    means the row does not apply; ``matched`` True with an empty qualname means
+    the path named the namespace itself (no callable to alias).
+    """
+
+    if alias.source.endswith(".*"):
+        prefix = alias.source[:-1]
+        if not source_qualname.startswith(prefix):
+            return False, None
+        target_qualname: str | None = source_qualname[len(prefix) :]
+    elif alias.source == source_qualname:
+        target_qualname = alias.target_qualname
+    else:
+        return False, None
+    if (
+        target_qualname
+        and alias.strip_target_prefix
+        and target_qualname.startswith(alias.strip_target_prefix)
+    ):
+        target_qualname = target_qualname[len(alias.strip_target_prefix) :]
+    return True, target_qualname
+
+
 def resolve_runnable_torch_alias(
     source_qualname: str,
     recorded_version: str | None = None,
@@ -506,8 +386,11 @@ def resolve_runnable_torch_alias(
     recorded_version:
         Torch version that produced the registry key. Aliases may be bounded to
         supported minor releases; monotonic moves with an open upper bound rely on
-        the live target-existence capability probe. Unknown versions retain
-        compatibility behavior for descriptors that predate this metadata.
+        the live target-existence capability probe, and a version past an alias's
+        recorded upper bound is accepted only when the live identity probe
+        (:func:`_runtime_alias_identity_holds`) shows the move still holds. Unknown
+        versions retain compatibility behavior for descriptors that predate this
+        metadata.
 
     Returns
     -------
@@ -520,28 +403,18 @@ def resolve_runnable_torch_alias(
 
     parsed_version = _torch_minor_version(recorded_version)
     for alias in _RUNNABLE_TORCH_ALIASES:
-        if parsed_version is not None and (
-            parsed_version < alias.recorded_min_version
-            or (
-                alias.recorded_max_version is not None
-                and parsed_version > alias.recorded_max_version
-            )
-        ):
+        if parsed_version is not None and parsed_version < alias.recorded_min_version:
             continue
-        target_qualname: str | None
-        if alias.source.endswith(".*"):
-            prefix = alias.source[:-1]
-            if not source_qualname.startswith(prefix):
-                continue
-            target_qualname = source_qualname[len(prefix) :]
-        elif alias.source == source_qualname:
-            target_qualname = alias.target_qualname
-        else:
+        beyond_recorded_max = (
+            parsed_version is not None
+            and alias.recorded_max_version is not None
+            and parsed_version > alias.recorded_max_version
+        )
+        matched, target_qualname = _alias_target_qualname(alias, source_qualname)
+        if not matched:
             continue
         if not target_qualname:
             return None
-        if alias.strip_target_prefix and target_qualname.startswith(alias.strip_target_prefix):
-            target_qualname = target_qualname[len(alias.strip_target_prefix) :]
         if not _runtime_alias_target_exists(alias.target_namespace, target_qualname):
             # Capability gate: never manufacture an alias whose recorded target
             # is absent from the running torch (the RunnableTorchAlias contract).
@@ -549,6 +422,12 @@ def resolve_runnable_torch_alias(
             # version bounds are skipped, a matched entry can only resolve when
             # its target genuinely exists. A later entry may still match with a
             # live target, so keep scanning.
+            continue
+        if beyond_recorded_max and not _runtime_alias_identity_holds(
+            source_qualname, alias.target_namespace, target_qualname
+        ):
+            # Past the measured upper bound the table is silent; only a live
+            # identity (source is target in this torch) extends the alias.
             continue
         return alias.target_namespace, target_qualname, alias.provenance
     return None
@@ -657,6 +536,10 @@ _ATTRIBUTE_PROBES: dict[str, tuple[str, ...]] = {
     "HAS_FP32_PRECISION_CONTROLS": ("torch:backends.fp32_precision",),
     "HAS_AMP_GRADSCALER": ("torch.amp:GradScaler",),
     "HAS_RMSNORM_MODULE": ("torch:nn.RMSNorm",),
+    "HAS_MPS_MEMORY_QUERY": (
+        "torch.mps:recommended_max_memory",
+        "torch.mps:driver_allocated_memory",
+    ),
 }
 """Declarative presence probes: flag -> ``"module:dotted.attr"`` paths that must all resolve.
 
@@ -745,6 +628,12 @@ def _probe_cpu_half_kernels() -> bool:
     """Return whether CPU Half kernels exist (``False`` on torch 2.1-2.2; see the leaf)."""
 
     return bool(_real_op_probe_leaf().probe_cpu_half_kernels())
+
+
+def _probe_eval_batch_norm_mean_residual() -> bool:
+    """Return whether eval batch_norm at a non-zero mean still moves with running_var (see the leaf)."""
+
+    return bool(_real_op_probe_leaf().probe_eval_batch_norm_mean_residual())
 
 
 def _probe_cpu_float8_deterministic_fill() -> bool:
@@ -1408,6 +1297,30 @@ def get_cpu_half_kernels_support(*, force_probe: bool = False) -> bool:
     return HAS_CPU_HALF_KERNELS
 
 
+def get_eval_batch_norm_mean_residual_support(*, force_probe: bool = False) -> bool:
+    """Return whether the CPU eval batch_norm kernel leaves a running_var residual at a non-zero mean, lazily.
+
+    Parameters
+    ----------
+    force_probe:
+        Run the probe even on first call. Diagnostic surfaces set this; no
+        product code consumes this flag today (test-only), so a plain
+        ``import torchlens`` never pays for the two batch_norm calls.
+
+    Returns
+    -------
+    bool
+        See :func:`_probe_eval_batch_norm_mean_residual`. Cached after the first call.
+    """
+
+    global HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL, _EVAL_BATCH_NORM_MEAN_RESIDUAL_PROBED
+
+    if not _EVAL_BATCH_NORM_MEAN_RESIDUAL_PROBED or force_probe:
+        HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL = _probe_eval_batch_norm_mean_residual()
+        _EVAL_BATCH_NORM_MEAN_RESIDUAL_PROBED = True
+    return HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL
+
+
 def get_cpu_float8_deterministic_fill_support(*, force_probe: bool = False) -> bool:
     """Return whether CPU empty-fill covers Float8 under determinism, lazily.
 
@@ -1453,6 +1366,7 @@ def _force_real_op_probes() -> None:
 
     get_reduce_tuple_dim_support(force_probe=True)
     get_cpu_half_kernels_support(force_probe=True)
+    get_eval_batch_norm_mean_residual_support(force_probe=True)
     get_cpu_float8_deterministic_fill_support(force_probe=True)
     get_sparse_spsolve_cuda_support(force_probe=True)
 
@@ -1699,12 +1613,15 @@ HAS_FP32_PRECISION_CONTROLS: bool = _probe_attribute_paths("HAS_FP32_PRECISION_C
 HAS_AMP_GRADSCALER: bool = _probe_attribute_paths("HAS_AMP_GRADSCALER")
 HAS_NN_ATTENTION_MODULE: bool = _probe_nn_attention_module()
 HAS_RMSNORM_MODULE: bool = _probe_attribute_paths("HAS_RMSNORM_MODULE")
+HAS_MPS_MEMORY_QUERY: bool = _probe_attribute_paths("HAS_MPS_MEMORY_QUERY")
 HAS_MHA_FASTPATH_SWITCH: bool = False
 _MHA_FASTPATH_SWITCH_PROBED: bool = False
 HAS_REDUCE_TUPLE_DIM: bool = False
 _REDUCE_TUPLE_DIM_PROBED: bool = False
 HAS_CPU_HALF_KERNELS: bool = False
 _CPU_HALF_KERNELS_PROBED: bool = False
+HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL: bool = False
+_EVAL_BATCH_NORM_MEAN_RESIDUAL_PROBED: bool = False
 HAS_CPU_FLOAT8_DETERMINISTIC_FILL: bool = False
 _CPU_FLOAT8_DETERMINISTIC_FILL_PROBED: bool = False
 HAS_SPARSE_SPSOLVE_CUDA: bool = False
@@ -1907,9 +1824,11 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_AMP_GRADSCALER",
     "HAS_NN_ATTENTION_MODULE",
     "HAS_RMSNORM_MODULE",
+    "HAS_MPS_MEMORY_QUERY",
     "HAS_MHA_FASTPATH_SWITCH",
     "HAS_REDUCE_TUPLE_DIM",
     "HAS_CPU_HALF_KERNELS",
+    "HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL",
     "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
     "HAS_SPARSE_SPSOLVE_CUDA",
     "HAS_META_ITEM_GUARD",
@@ -1938,6 +1857,7 @@ _LAZY_PROBE_FAMILIES: dict[str, tuple[str, ...]] = {
     "_GRADIENT_EDGE_PROBED": ("HAS_GRADIENT_EDGE",),
     "_REDUCE_TUPLE_DIM_PROBED": ("HAS_REDUCE_TUPLE_DIM",),
     "_CPU_HALF_KERNELS_PROBED": ("HAS_CPU_HALF_KERNELS",),
+    "_EVAL_BATCH_NORM_MEAN_RESIDUAL_PROBED": ("HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL",),
     "_CPU_FLOAT8_DETERMINISTIC_FILL_PROBED": ("HAS_CPU_FLOAT8_DETERMINISTIC_FILL",),
     "_SPARSE_SPSOLVE_CUDA_PROBED": ("HAS_SPARSE_SPSOLVE_CUDA",),
     "_META_ITEM_GUARD_PROBED": ("HAS_META_ITEM_GUARD",),
@@ -2119,6 +2039,12 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         "HAS_AMP_GRADSCALER",
         "HAS_NN_ATTENTION_MODULE",
         "HAS_RMSNORM_MODULE",
+        # torch.mps memory queries (recommended_max_memory /
+        # driver_allocated_memory, torch >= 2.5): absent means the save budget
+        # reports an MPS device as unmeasured and unbudgeted (the honest
+        # fallback it already took for every device without a headroom query),
+        # not a degradation; Linux and CUDA installs never use them.
+        "HAS_MPS_MEMORY_QUERY",
         "HAS_REDUCE_TUPLE_DIM",
         # torch.backends.mha (the nn.MultiheadAttention / nn.TransformerEncoderLayer
         # fused fast-path switch) postdates the torch>=2.1 floor: its absence is a
@@ -2132,6 +2058,12 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # degradations -- tests that need them skip on these flags.
         "HAS_CPU_HALF_KERNELS",
         "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
+        # Whether the CPU eval batch_norm kernel's folded statistics leave a
+        # running_var residual when the input sits exactly at a non-zero
+        # running mean (x86 kernels do, Apple ARM kernels cancel exactly): a
+        # kernel property the running_var value proof's tests read, never a
+        # TorchLens degradation.
+        "HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL",
         # torch.sparse.spsolve has only a CUDA kernel, which needs cuDSS (absent
         # from official wheels): False is the normal CPU or stock-wheel install.
         "HAS_SPARSE_SPSOLVE_CUDA",
