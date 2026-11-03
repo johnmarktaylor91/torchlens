@@ -33,6 +33,7 @@ import torch
 
 from .._errors import InvalidArgumentError
 from .._utils._torch_symbols import torch_attr
+from .._version import __version__
 
 __tl_layer__ = "L5"
 
@@ -429,7 +430,6 @@ def write_trace_safetensors(trace: Any, path: str | Path) -> Path:
 
     from safetensors.torch import save_file
 
-    from .. import __version__
     from .._capture_honesty import capture_honesty_facts
     from .._data_classes._state_adapter import state_items
     from .._data_classes.trace import Trace

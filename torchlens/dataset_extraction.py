@@ -84,6 +84,7 @@ from ._extraction_provenance import (
     coerce_input_preprocessing,
     input_preprocessing_of,
 )
+from ._version import __version__
 from .transforms import TransformPipeline
 from .transforms._coerce import coerce_transform, coerce_transform_mapping
 from .transforms._pipeline import pipeline_record as _pipeline_record
@@ -705,7 +706,6 @@ def relabel_extraction(path: str | Path, new_ids: Iterable[str]) -> dict[str, An
     import json
     import os
 
-    from . import __version__
     from ._data_substrate import STIMULUS_IDS_FILENAME, ArtifactWriter
     from ._io._durability import fsync_dir, fsync_file
 

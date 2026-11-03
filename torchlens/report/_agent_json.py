@@ -25,6 +25,7 @@ from .._capture_honesty import (
     refuse_presenter_subject,
 )
 from .._data_classes._trace_missing_attrs import is_live_trace
+from .._utils.json_safe import json_safe
 from ._explain import _safe_len
 
 #: Schema identifier for the agent trace dump.
@@ -166,7 +167,6 @@ def _json_safe_value(value: Any) -> Any:
         # Non-finite floats are not JSON: tag them the way every agent-surface
         # envelope does (AUD-CODE 2.6) so ``json.dumps(..., allow_nan=False)``
         # -- the documented JSON-serializable promise -- holds.
-        from ..agent._envelope import json_safe
 
         return json_safe(value)
     if value is None or isinstance(value, bool | int | str):

@@ -32,6 +32,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from .._version import __version__
 from ..errors import ConfigurationError
 from ._adapters import RosterModel, default_roster, resolve_adapter
 from ._cases import CaseResult, run_c0_cases, run_c1_cases, run_c2_cases
@@ -147,8 +148,6 @@ def _environment_receipt() -> dict[str, str]:
     """Runtime receipt rows for the report."""
 
     from importlib import metadata as _metadata
-
-    from .. import __version__
 
     return {
         "torchlens_version": __version__,

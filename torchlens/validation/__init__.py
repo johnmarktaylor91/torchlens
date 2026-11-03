@@ -58,10 +58,7 @@ def validate_tlspec(
         If the artifact is a portable ModelLog bundle of torchlens 2.16.
     """
 
-    from ..io import (  # deferred: cycle io (facade-owned detectors)
-        detect_tlspec_format,
-        inspect_tlspec,
-    )
+    from ..io import detect_tlspec_format, inspect_tlspec  # deferred: cycle io
 
     tlspec_path = Path(path)
     if not tlspec_path.exists():

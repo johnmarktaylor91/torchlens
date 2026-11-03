@@ -28,6 +28,7 @@ from typing import Any
 import torch
 
 from .._debug_report import Report
+from .._user_public_impls import trace as _capture_trace
 from ..errors import CaptureError
 
 
@@ -162,14 +163,13 @@ def flops_vs_dispatch(
 
     from torch.utils.flop_counter import FlopCounterMode
 
-    from .. import _user_funcs as user_funcs
     from ..report._compute_truth import compute_aggregation
 
     rng_state = torch.get_rng_state()
     training_flags = {name: module.training for name, module in model.named_modules()}
 
     trace_kwargs.setdefault("save", None)
-    trace = user_funcs.trace(model, input_args, input_kwargs, **trace_kwargs)
+    trace = _capture_trace(model, input_args, input_kwargs, **trace_kwargs)
     try:
         aggregation = compute_aggregation(trace)
         torchlens_total = int(aggregation.partition_total)

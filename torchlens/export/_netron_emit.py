@@ -18,6 +18,7 @@ import base64
 import json as _json
 from typing import Any
 
+from .._version import __version__
 from ._netron_fields import onnx_elem_type  # re-exported for the records layer
 from ._netron_records import (
     NETRON_MODULE_DOMAIN,
@@ -213,8 +214,6 @@ def _torchlens_version() -> str:
     """Return the installed TorchLens version string (stable per install)."""
 
     try:
-        from .. import __version__
-
         return str(__version__)
     except (ImportError, AttributeError):
         return ""

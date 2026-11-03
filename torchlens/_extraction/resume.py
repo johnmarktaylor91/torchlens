@@ -39,6 +39,7 @@ from .._data_substrate import (
 from .._errors import InvalidArgumentError, _actionable_message, _ActionableErrorMixin
 from .._io import _json
 from .._utils.tensor_leaves import tensor_payload_bytes
+from .._version import __version__
 from ..errors._base import ConfigurationError
 from ..transforms._pipeline import OpaqueStep
 from .callable_identity import classify_callable
@@ -488,7 +489,6 @@ def _base_manifest(
         Bounded manifest header with no layer metadata or totals yet.
     """
 
-    from .. import __version__
     from .._extraction_provenance import undeclared_input_block
 
     shard_format = "safetensors" if signature["native_format"] == "safetensors_shards_v1" else "pt"

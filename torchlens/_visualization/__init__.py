@@ -40,9 +40,9 @@ def __getattr__(name: str) -> Any:
     """
 
     if name in _USER_FUNC_EXPORTS:
-        from .. import _user_funcs as user_funcs
+        from .. import _user_public_impls  # deferred: startup cost
 
-        return getattr(user_funcs, name)
+        return getattr(_user_public_impls, name)
     if name == "lenses":
         # Documented subpackage (docs/reference/lenses.md): resolve the
         # attribute lazily so a bare `torchlens._visualization.lenses` read

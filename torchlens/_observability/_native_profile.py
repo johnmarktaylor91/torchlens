@@ -28,6 +28,7 @@ from typing import Any
 
 import torch
 
+from .._user_public_impls import trace as _capture_trace
 from ._join import KinetoJoinResult, join_events, require_availability
 from ._kineto import extract_events
 from ._session import ProfilerSession, session
@@ -134,15 +135,13 @@ def kernel_profile(
         The trace, the joined result, and the session facts.
     """
 
-    from .. import _user_funcs as user_funcs
-
     if activities is None:
         activities = [torch.profiler.ProfilerActivity.CPU]
         if torch.cuda.is_available():  # pragma: no cover - CUDA leg
             activities.append(torch.profiler.ProfilerActivity.CUDA)
     trace_kwargs.setdefault("save", None)
     with session(mode="owned", activities=activities) as active:
-        trace = user_funcs.trace(model, input_args, input_kwargs, **trace_kwargs)
+        trace = _capture_trace(model, input_args, input_kwargs, **trace_kwargs)
         if torch.cuda.is_available():  # pragma: no cover - CUDA leg
             torch.cuda.synchronize()
     result = join_session(active, trace, native_chrome_path=native_chrome_path)
