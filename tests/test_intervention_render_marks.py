@@ -473,7 +473,7 @@ def test_building_the_edit_callback_imports_no_render_module() -> None:
     """Building the intervention callback never first-imports the render modules.
 
     The render modules bind ``node_spec``'s helpers by value when imported, so a
-    first import while a helper is patched (``test_node_spec_api`` monkeypatches
+    first import while a helper is patched (a test that monkeypatches
     ``intervention_site_and_cone_labels``) kept the patch for the rest of the
     process: later ``as_node`` renders lost their hook node. A fresh interpreter
     makes the first import deterministic.
