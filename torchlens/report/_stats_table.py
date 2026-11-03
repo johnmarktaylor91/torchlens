@@ -76,6 +76,15 @@ class StatsTableRow:
     ``parent_mark`` carries the D28 ``= parent`` disclosure (the parent
     label) with its proof provenance in ``relation_basis`` -- populated
     ONLY from a corroborated capture-time distribution verdict.
+
+    Examples
+    --------
+    >>> rows = tl.trace(model, x).summary(view="stats").rows
+    >>> row = [r for r in rows if r.state == "ok"][0]
+    >>> row.row_id == f"op:{row.label}"
+    True
+    >>> row.stats.numel > 0
+    True
     """
 
     row_id: str
@@ -90,7 +99,17 @@ class StatsTableRow:
 
 @dataclass(frozen=True)
 class StatsTable:
-    """The typed observation table (a FactCore projection, session-only)."""
+    """The typed observation table (a FactCore projection, session-only).
+
+    Examples
+    --------
+    >>> rows = tl.trace(model, x).summary(view="stats").rows
+    >>> table = tl.report.StatsTable(rows=rows, basis="demo", scan_cost_policy="demo", capture_fingerprint="demo")
+    >>> len(table.ok_rows) > 0
+    True
+    >>> table.sort_rows("numel").sort_disclosure
+    'sorted by numel (descending)'
+    """
 
     rows: tuple[StatsTableRow, ...]
     basis: str
