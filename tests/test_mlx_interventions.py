@@ -75,6 +75,34 @@ def test_mlx_module_exit_changes_output_and_validates() -> None:
     assert MLXBackend().validate_trace(trace).passed
 
 
+@pytest.mark.parametrize("dtype", [mx.bool_, mx.int32, mx.float32])
+def test_mlx_module_identity_output_preserves_dtype(dtype: Any) -> None:
+    """The boundary copy preserves boolean and numeric identity outputs."""
+
+    class Block(nn.Module):
+        def __call__(self, x: Any) -> Any:
+            return x
+
+    class Model(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.block = Block()
+
+        def __call__(self, x: Any) -> Any:
+            return self.block(x)
+
+    trace = tl.trace(
+        Model(),
+        mx.array([1, 0], dtype=dtype),
+        backend="mlx",
+        intervene=tl.when(tl.module("block"), tl.zero_ablate()),
+    )
+    out = trace._layer_list[-1].out
+    assert out.dtype == dtype
+    assert np.array_equal(np.asarray(out), np.zeros(2))
+    assert MLXBackend().validate_trace(trace).passed
+
+
 @pytest.mark.parametrize("second, factor", [("l1", 1.0), ("l2", 0.5)])
 def test_mlx_module_union_fires_once_per_call(second: str, factor: float) -> None:
     """An overlapping union applies a non-idempotent action only once."""

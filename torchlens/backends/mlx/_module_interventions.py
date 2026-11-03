@@ -65,7 +65,7 @@ def _module_capture_op(trace: Any, frame: Any, op_name: str | None) -> str | Non
 def _copy_leaf(tensor: Any) -> Any:
     """Produce a distinct identity value so aliasing keeps the raw producer intact."""
 
-    return tensor + 0
+    return tensor.astype(tensor.dtype)
 
 
 def _emit_module_leaf(trace: Any, backend: Any, plan: Any, tensor: Any) -> Any:
