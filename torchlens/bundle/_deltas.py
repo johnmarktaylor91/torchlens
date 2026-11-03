@@ -85,9 +85,12 @@ def _pass_tensor_fields(
         One entry per pass, ``None`` where that pass holds no tensor.
     """
 
-    passes = getattr(layer, "ops", None)
-    if int(getattr(layer, "num_passes", 1) or 1) > 1 and isinstance(passes, Sequence):
-        return tuple(_tensor_field(op, field) for op in passes)
+    if int(getattr(layer, "num_passes", 1) or 1) > 1:
+        # ``Layer.ops`` is an accessor that iterates its ops in pass order;
+        # an Op has no ``ops`` and reads its own field below.
+        passes = getattr(layer, "ops", None)
+        if passes is not None:
+            return tuple(_tensor_field(op, field) for op in passes)
     return (_tensor_field(layer, field),)
 
 
