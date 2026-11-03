@@ -161,7 +161,7 @@ def test_draw_independence_matrix_on_real_two_pass_recurrence() -> None:
 
     per_rule = sample_from(donors, seed=13, share_draw="per_rule")
     fork2 = log.fork()
-    fork2.do(fork2[layer].__selection__(), tl.patch_from(per_rule))
+    fork2.do(fork2.layers[layer].__selection__(), tl.patch_from(per_rule))
     records2 = [r for r in sampling_draws(fork2) if r.share_draw == "per_rule"]
     assert len(records2) == 2
     assert records2[0].derived_seed == records2[1].derived_seed
