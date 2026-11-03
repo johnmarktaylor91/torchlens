@@ -33,6 +33,7 @@ capture machinery: the transform-metadata setter is handed in by the caller.
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -41,6 +42,7 @@ import numpy as np
 import torch
 
 from ... import _state
+from ..._utils._foreign_data_replay import foreigndata
 from ._tl import get_tensor_label
 
 MetadataSetter = Callable[..., None]
@@ -101,7 +103,7 @@ class HostEntry:
     """How a parentless host constructor is logged: its callable and its logged args."""
 
     replay: Callable[..., Any]
-    args: tuple[torch.Tensor, ...]
+    args: tuple[Any, ...]
     resolution: str
 
 
@@ -111,7 +113,7 @@ def departures(trace: Any) -> list[Departure]:
     journal = trace.__dict__.get(FOREIGN_DATA_DEPARTURES_ATTR)
     if not isinstance(journal, list):
         journal = []
-        trace.__dict__[FOREIGN_DATA_DEPARTURES_ATTR] = journal
+        trace.__dict__["_foreign_departures"] = journal  # literal: the ownership census reads it
     return journal
 
 
@@ -162,7 +164,11 @@ def note_plain_export(trace: Any, kind: str, tensor: Any) -> None:
     label = get_tensor_label(tensor)
     if not isinstance(label, str):
         return
-    storage_range = _storage_range(tensor)
+    # Bookkeeping, not a user exposure: an unpaused ``untyped_storage().data_ptr()`` read
+    # would trip the completeness witness's raw-pointer escape and poison every runnable
+    # verdict of the capture (``_completeness_storage``).
+    with _state.pause_logging():
+        storage_range = _storage_range(tensor)
     if storage_range is None:
         return
     departures(trace).append(
@@ -211,19 +217,50 @@ def _flat_positions(size: tuple[int, ...], stride: tuple[int, ...], offset: int)
     return positions.reshape(-1)
 
 
-def _view_gather_index(
-    departure: Departure, out: torch.Tensor
-) -> tuple[str, torch.Tensor | None] | None:
+def _contiguous_strides(size: tuple[int, ...]) -> tuple[int, ...]:
+    """Return the row-major strides of ``size`` (elements, not bytes)."""
+
+    strides: list[int] = []
+    step = 1
+    for extent in reversed(size):
+        strides.append(step)
+        step *= max(extent, 1)
+    return tuple(reversed(strides))
+
+
+def _affine_fit(index: np.ndarray) -> tuple[tuple[int, ...], int] | None:
+    """Return ``(stride, offset)`` when ``index`` (shaped like the output) is strided."""
+
+    offset = int(index.reshape(-1)[0])
+    stride: list[int] = []
+    for axis, extent in enumerate(index.shape):
+        step = 0
+        if extent > 1:
+            probe = [0] * index.ndim
+            probe[axis] = 1
+            step = int(index[tuple(probe)]) - offset
+        stride.append(step)
+    if any(step < 0 for step in stride):
+        return None
+    fitted = _flat_positions(tuple(index.shape), tuple(stride), offset)
+    if not np.array_equal(fitted, index.reshape(-1)):
+        return None
+    return tuple(stride), offset
+
+
+def _view_geometry(departure: Departure, out: torch.Tensor) -> tuple[str, tuple[Any, ...]] | None:
     """Describe how ``out`` reads the departed tensor's memory, or ``None`` if it does not.
 
-    Returns ``("identity", None)`` when ``out`` is the departed tensor's own geometry,
-    ``("reshape", None)`` when both are contiguous with the same element count, and
-    ``("gather", index)`` with one flat index per output element otherwise.
+    Returns the replay mode and literals of :func:`foreigndata` over the departed
+    tensor's logical element order: ``("strided", (size, stride, offset))`` for any view
+    a stride pattern describes (its own geometry, a reshape, a transpose, a slice), else
+    ``("gather", (size, index))`` with one logical element index per output element.
     """
 
     source = departure.tensor
     if out.dtype != source.dtype or out.device != source.device or out.numel() == 0:
         return None
+    size = tuple(out.size())
     delta_bytes = out.data_ptr() - source.data_ptr()
     element_size = out.element_size()
     if delta_bytes % element_size:
@@ -232,30 +269,46 @@ def _view_gather_index(
     out_offset = source_offset + delta_bytes // element_size
     if out_offset < 0:
         return None
-    if (
-        out_offset == source_offset
-        and out.size() == source.size()
-        and out.stride() == source.stride()
-    ):
-        return "identity", None
-    if (
-        out_offset == source_offset
-        and out.numel() == source.numel()
-        and out.is_contiguous()
-        and source.is_contiguous()
-    ):
-        return "reshape", None
+    same_start = out_offset == source_offset
+    if same_start and size == tuple(source.size()) and out.stride() == source.stride():
+        return "strided", (size, _contiguous_strides(size), 0)
+    if same_start and out.numel() == source.numel() and out.is_contiguous():
+        if source.is_contiguous():
+            return "strided", (size, _contiguous_strides(size), 0)
     storage_numel = departure.storage_nbytes // element_size
-    out_positions = _flat_positions(out.size(), out.stride(), out_offset)
+    out_positions = _flat_positions(size, tuple(out.stride()), out_offset)
     if out_positions.size and int(out_positions.max()) >= storage_numel:
         return None
-    source_positions = _flat_positions(source.size(), source.stride(), source_offset)
+    source_positions = _flat_positions(tuple(source.size()), tuple(source.stride()), source_offset)
     inverse = np.full((storage_numel,), -1, dtype=np.int64)
     inverse[source_positions] = np.arange(source.numel(), dtype=np.int64)
     index = inverse[out_positions]
     if index.size and int(index.min()) < 0:
         return None
-    return "gather", torch.from_numpy(index)
+    fit = _affine_fit(index.reshape(size))
+    if fit is not None:
+        return "strided", (size, *fit)
+    return "gather", (size, tuple(int(item) for item in index))
+
+
+def _resolved_replay(
+    resolution: str, entry: str, exits: tuple[str, ...], mark: MetadataSetter
+) -> Any:
+    """Return this op's ``foreigndata`` callable: a marked alias of the portable replay.
+
+    The alias keeps :func:`foreigndata`'s module and qualname, so the op's registry key
+    (and a runnable artifact's resolver) names the shared replay function, while the
+    per-op marker and transform metadata live on the alias, never on the shared function.
+    """
+
+    @functools.wraps(foreigndata)
+    def replay(source: torch.Tensor, mode: str, *literals: Any) -> torch.Tensor:
+        """Re-run the resolved round trip (see :func:`foreigndata`)."""
+
+        return foreigndata(source, mode, *literals)
+
+    _mark(replay, resolution, entry, exits, mark)
+    return replay
 
 
 def _view_entry(
@@ -263,25 +316,14 @@ def _view_entry(
 ) -> HostEntry | None:
     """Return the zero-copy round-trip entry for ``out``, if it reads the departed memory."""
 
-    described = _view_gather_index(departure, out)
+    described = _view_geometry(departure, out)
     if described is None:
         return None
-    mode, index = described
-    size = tuple(out.size())
-
-    def foreigndata(source: torch.Tensor) -> torch.Tensor:
-        """Re-read the departed tensor exactly as the host constructor exposed it."""
-
-        value = source.detach()
-        if mode == "identity":
-            return value
-        if mode == "reshape":
-            return value.reshape(size)
-        assert index is not None
-        return value.reshape(-1)[index.to(value.device)].reshape(size)
-
-    _mark(foreigndata, RESOLUTION_VIEW, entry, (departure.kind,), mark)
-    return HostEntry(replay=foreigndata, args=(departure.tensor,), resolution=RESOLUTION_VIEW)
+    mode, literals = described
+    replay = _resolved_replay(RESOLUTION_VIEW, entry, (departure.kind,), mark)
+    return HostEntry(
+        replay=replay, args=(departure.tensor, mode, *literals), resolution=RESOLUTION_VIEW
+    )
 
 
 def _values_equal(out: torch.Tensor, source: torch.Tensor) -> bool:
@@ -301,15 +343,12 @@ def _copy_entry(
 ) -> HostEntry:
     """Return the copy round-trip entry: the output equals the departed tensor's value."""
 
-    dtype, device = out.dtype, out.device
-
-    def foreigndata(source: torch.Tensor) -> torch.Tensor:
-        """Re-copy the departed tensor into the dtype and device the constructor produced."""
-
-        return source.detach().to(device=device, dtype=dtype).clone()
-
-    _mark(foreigndata, RESOLUTION_COPY, entry, (departure.kind,), mark)
-    return HostEntry(replay=foreigndata, args=(departure.tensor,), resolution=RESOLUTION_COPY)
+    replay = _resolved_replay(RESOLUTION_COPY, entry, (departure.kind,), mark)
+    return HostEntry(
+        replay=replay,
+        args=(departure.tensor, "copy", out.dtype, out.device),
+        resolution=RESOLUTION_COPY,
+    )
 
 
 def _unresolved_entry(linked: list[Departure], entry: str, mark: MetadataSetter) -> HostEntry:

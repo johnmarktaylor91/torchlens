@@ -18,6 +18,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._record_type import record_type
+from torchlens._utils._foreign_data_replay import foreigndata
 from torchlens.backends.torch._foreign_data import (
     FOREIGN_DATA_EXPORT_WRAPPER_NAME,
     FOREIGN_DATA_FUNC_NAME,
@@ -152,10 +153,15 @@ def test_pure_round_trip_is_one_op_with_the_departed_parent_and_validates(
     trace = _trace_quiet(model, x)
     _assert_one_round_trip(trace, resolution, parent_type)
     op = _foreign_ops(trace)[0]
-    # The replay callable rebuilds the re-entered value from the departed tensor alone.
+    # The replay callable rebuilds the re-entered value from the departed tensor and the
+    # recorded literals alone, and its key names the portable replay function.
     departed = trace[op.parents[0]].out
     expected = model.round_trip(departed.clone())
-    assert torch.equal(op.func(departed), expected)
+    assert torch.equal(op.func(departed, *op.non_tensor_pos_args), expected)
+    assert (op.func.__module__, op.func.__qualname__) == (
+        foreigndata.__module__,
+        foreigndata.__qualname__,
+    )
     assert _validate(model, x) is True
     assert last_validation_failure() is None
 
@@ -167,7 +173,7 @@ def test_round_trip_replay_follows_a_perturbed_parent() -> None:
     trace = _trace_quiet(model, torch.randn(3, 4))
     op = _foreign_ops(trace)[0]
     departed = trace[op.parents[0]].out
-    assert torch.equal(op.func(departed + 1.0), departed + 1.0)
+    assert torch.equal(op.func(departed + 1.0, *op.non_tensor_pos_args), departed + 1.0)
 
 
 @pytest.mark.smoke
@@ -336,3 +342,24 @@ def test_selector_and_audited_row_are_wired() -> None:
         if row.wrapper_name == FOREIGN_DATA_EXPORT_WRAPPER_NAME
     ]
     assert len(rows) == 1 and rows[0].operator is None
+
+
+def test_replay_function_checks_its_untrusted_literals() -> None:
+    """The portable replay runs each mode and refuses literals that read past the source."""
+
+    base = torch.arange(20.0)
+    source = base[4:16].reshape(3, 4)  # storage larger than the departed tensor
+    assert torch.equal(foreigndata(source, "strided", (4, 3), (1, 4), 0), source.t())
+    assert torch.equal(foreigndata(source, "gather", (2,), (11, 0)), torch.tensor([15.0, 4.0]))
+    copied = foreigndata(source, "copy", torch.float64, torch.device("cpu"))
+    assert copied.dtype == torch.float64 and torch.equal(copied, source.double())
+    with pytest.raises(RuntimeError):
+        foreigndata(source, "strided", (3, 4), (4, 1), 1)  # one past the departed tensor
+    with pytest.raises(RuntimeError):
+        foreigndata(source, "strided", (3, 4), (-4, 1), 0)
+    with pytest.raises(IndexError):
+        foreigndata(source, "gather", (1,), (12,))
+    with pytest.raises(KeyError):
+        foreigndata(source, "eval", "print(1)")
+    with pytest.raises(TypeError):
+        foreigndata(source, "copy", "float64", "cpu")

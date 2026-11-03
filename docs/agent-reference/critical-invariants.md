@@ -103,7 +103,11 @@
     `foreign_data:export` token) and the host constructor that brings data back is one
     `foreigndata` op (`transform_kind="foreign_data"`) whose logged arguments are the departed
     tensors. A zero-copy or copy round trip (`resolution` `view` / `copy`) replays exactly from
-    the departed tensor; a re-entry after host computation TorchLens did not see
+    the departed tensor plus logged literals through the portable
+    `torchlens._utils._foreign_data_replay.foreigndata` (modes `strided`, `gather`, `copy`),
+    which a runnable artifact resolves from the closed synthetic table
+    (`_io/_runnable_synthetic.py`); the departure's storage-range read runs with logging
+    paused so it never poisons the completeness witness; a re-entry after host computation TorchLens did not see
     (`resolution` `unresolved`) is linked to every compatible departure and validation records
     the typed failure `foreign_data_roundtrip_unreplayable` for it, never a constant; only a
     `from_dlpack` of a consumed capsule in a capture with NO departure replays its recorded
