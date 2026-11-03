@@ -474,3 +474,55 @@ def test_unwrap_records_the_alias_scan_count(post_wrap_library: types.ModuleType
     assert count.modules >= expected.modules
     assert count.tables >= expected.tables
     assert count.objects >= expected.objects
+
+
+class _LazyMapping(dict):  # type: ignore[type-arg]
+    """A transformers-style lazy mapping: reading it through its protocol has side effects."""
+
+    reads: list[str] = []
+
+    def _read(self, name: str) -> None:
+        type(self).reads.append(name)
+
+    def __iter__(self) -> Iterator[Any]:
+        self._read("__iter__")
+        return super().__iter__()
+
+    def __len__(self) -> int:
+        self._read("__len__")
+        return super().__len__()
+
+    def __contains__(self, key: object) -> bool:
+        self._read("__contains__")
+        return super().__contains__(key)
+
+    def __getitem__(self, key: Any) -> Any:
+        self._read("__getitem__")
+        return super().__getitem__(key)
+
+    def keys(self) -> Any:
+        self._read("keys")
+        return super().keys()
+
+
+def test_alias_scan_reads_stored_keys_without_driving_a_lazy_subclass() -> None:
+    """The scan never calls a table subclass's read protocol, and still aliases its stored keys."""
+
+    _ensure_wrapped()
+    ledger, _ = _state.wrap_epoch_ledgers()
+    lazy = _LazyMapping()
+    dict.__setitem__(lazy, torch.cat, "cat")
+    dict.__setitem__(lazy, "name", 1)
+    module = types.ModuleType(f"_tl_scan_lazy_{next(_library_ids)}")
+    module.MAPPING = lazy  # type: ignore[attr-defined]
+    _LazyMapping.reads.clear()
+    try:
+        added, count = _protocol_redispatch._alias_module_tables(
+            [(module.__name__, module)], ledger
+        )
+        assert _LazyMapping.reads == []
+        assert (added, count.tables, count.objects) == (1, 1, 2)
+        assert dict.__getitem__(lazy, _resolve(torch.cat)) == "cat"
+    finally:
+        _protocol_redispatch.undo_table_aliases()
+    assert dict(dict.items(lazy)) == {torch.cat: "cat", "name": 1}
