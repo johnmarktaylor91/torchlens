@@ -765,7 +765,9 @@ jobs:
           # per-change pr.yml backend-protocol legs test the pin;
           # tests/test_backend_framework_pins.py holds both to the shells.
           - backend: tf
-            install: '"tensorflow-cpu>=2.16"'
+            # keras-hub: test-only, for the ecosystem roster's text-model
+            # row (TF_ECOSYSTEM_TEST_REQUIREMENTS); this leg only.
+            install: '"tensorflow-cpu>=2.16" "keras-hub>=0.21,<1"'
             marker: tf_backend
             import_check: "import tensorflow, keras"
             executed_floor: 18
@@ -795,7 +797,9 @@ jobs:
             # MLX ships manylinux CPU wheels, so its suite runs on Linux CI;
             # pinned to 0.26.3 because the 0.26.5 manylinux wheel is missing
             # libmlx.so. Metal-path coverage still needs Apple silicon.
-            install: '"mlx==0.26.3"'
+            # mlx-lm: test-only, loads the ecosystem roster's mlx-lm
+            # checkpoints (MLX_ECOSYSTEM_TEST_REQUIREMENTS); this leg only.
+            install: '"mlx==0.26.3" "mlx-lm>=0.26,<0.27"'
             marker: backend_mlx
             import_check: "import mlx.core, mlx.nn"
             executed_floor: 40

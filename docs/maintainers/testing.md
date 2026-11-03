@@ -66,6 +66,17 @@ session that ran an offender. Run `-n N` with `N` equal to the cores you declare
 torch thread per worker; every worker collects the whole suite first, so the gain shrinks
 below four workers.
 
+Preview-backend tests (TensorFlow, JAX, MLX, Paddle and tinygrad) carry `rare` alongside
+their backend marker (`tf_backend`, `backend_jax`, `backend_mlx`, `backend_paddle`,
+`backend_tinygrad`). Without the framework they only skip, so the pull-request tiers leave
+them out. The nightly `preview-backends` legs install each framework and select its tests
+with `-m "<marker> and not slow"`; a command-line `-m` replaces the `addopts` exclusion, so
+the `rare` mark does not hide them there, and the weekly rare leg collects them as well. The
+MLX and TensorFlow legs also install `mlx-lm` and `keras-hub` for the ecosystem roster rows.
+Those two pins live on the nightly legs only, never in a package extra; the declared ranges
+are `MLX_ECOSYSTEM_TEST_REQUIREMENTS` and `TF_ECOSYSTEM_TEST_REQUIREMENTS`, and
+`tests/test_backend_framework_pins.py` keeps them in step with `nightly.yml`.
+
 ```bash
 pytest tests/test_toy_models.py -x --tb=short                 # per-step: the files for the code you touched
 python scripts/smoke_ci_parity.py -n 4                        # commit gate
