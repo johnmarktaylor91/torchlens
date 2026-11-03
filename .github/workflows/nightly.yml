@@ -1087,10 +1087,10 @@ jobs:
           # save/load round-trip plus a draw() puts both on the floor path.
           with tempfile.TemporaryDirectory() as tmp:
               bundle = Path(tmp) / "floor.tlspec"
-              tl.save(trace, str(bundle))
+              trace.save(str(bundle))
               loaded = tl.load(str(bundle))
               assert loaded.num_ops == trace.num_ops
-              loaded.draw(vis_save_only=True, vis_outpath=str(Path(tmp) / "floor_graph"))
+              loaded.draw(path=str(Path(tmp) / "floor_graph"))
               loaded.cleanup()
           print("floor-env capture + save/load + draw OK")
           PY
@@ -1280,7 +1280,7 @@ jobs:
 
           with tempfile.TemporaryDirectory() as tmp:
               path = os.path.join(tmp, "canary.tlspec")
-              tl.save(trace, path)
+              trace.save(path)
               loaded = tl.load(path)
               assert loaded.layer_labels == trace.layer_labels
 
@@ -1304,7 +1304,7 @@ jobs:
               assert mps_trace["relu_1_2"].out.device.type == "mps"
               with tempfile.TemporaryDirectory() as tmp:
                   mps_path = os.path.join(tmp, "canary-mps.tlspec")
-                  tl.save(mps_trace, mps_path)
+                  mps_trace.save(mps_path)
                   mps_loaded = tl.load(mps_path)
                   assert mps_loaded.layer_labels == mps_trace.layer_labels
               print("mps canary OK")
