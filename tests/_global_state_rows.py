@@ -1034,6 +1034,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_extraction/trace_safetensors.py", "__all__"),
         ("torchlens/_extraction/views.py", "__all__"),
         ("torchlens/_extraction_provenance.py", "__all__"),
+        ("torchlens/_fast_live_hooks.py", "__all__"),
         ("torchlens/_fast_live_plans.py", "__all__"),
         ("torchlens/_fast_live_until.py", "__all__"),
         ("torchlens/_input_walk.py", "__all__"),
