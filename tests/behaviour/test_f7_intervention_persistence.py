@@ -240,7 +240,7 @@ def test_callable_rule_saves_a_disclosed_placeholder(callable_saved: Saved) -> N
 _DOORS: dict[str, Callable[[Any, _Toy, torch.Tensor], Any]] = {
     "run": lambda trace, model, inputs: trace.run(model, inputs),
     "staged_rerun": lambda trace, model, inputs: trace.do(
-        tl.func("linear"),
+        tl.module("b"),
         tl.scale(2.0),
         model=model,
         inputs=inputs,

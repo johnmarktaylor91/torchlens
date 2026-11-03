@@ -5,7 +5,7 @@ lists and string-keyed dicts. Everything else is an object whose marker key
 ``contract.TYPED_VALUE_KEY`` names a tag from ``contract.TYPED_VALUE_TAGS``;
 both directions live here so the tags stay symmetric. A value outside the
 vocabulary becomes an ``unencodable`` disclosure (type, bounded repr, length,
-position) and loads back as :class:`UnencodableValue`; nothing is ever pickled,
+position) and loads back through the reader as ``tl.types.UnencodableValue``; nothing is ever pickled,
 and the decoder imports nothing by a name it reads: dtypes, enums and
 value-object classes resolve through tables built from code. Design: ``docs/maintainers/saved_format_3_design.md``, sections 4
 and 5.
@@ -29,9 +29,7 @@ from ..field_registry import RECORD_CONTRACT_CLASSES, component_spec_tables
 from ..format_errors import ArtifactError
 from .contract import (
     CALLABLE_PLACEHOLDER_FIELDS,
-    TENSOR_REFERENCE_FIELDS,
     TYPED_VALUE_KEY,
-    TYPED_VALUE_TAGS,
     UNENCODABLE_FIELDS,
     UNENCODABLE_REPR_LIMIT,
 )
@@ -63,29 +61,6 @@ TAG_FIELDS: dict[str, tuple[str, ...]] = {
     "unencodable": UNENCODABLE_FIELDS,
     "callable_placeholder": CALLABLE_PLACEHOLDER_FIELDS,
 }
-
-
-@dataclasses.dataclass(frozen=True)
-class UnencodableValue:
-    """A saved value TorchLens could not encode, loaded back as its description.
-
-    The writer saves such a value as text (its type and a bounded ``repr``) and
-    counts it in the manifest's ``disclosures``; loading returns this stand-in
-    in its place, never the original object and never ``None``.
-
-    Attributes
-    ----------
-    type_name:
-        Dotted ``module.qualname`` of the original value's type.
-    repr_text:
-        ``repr`` of the original value, cut at 256 characters.
-    at:
-        Where the value was in the saved artifact, e.g. ``op[3].func_config['k']``.
-    """
-
-    type_name: str
-    repr_text: str
-    at: str
 
 
 def class_path(cls: type) -> str:
@@ -553,94 +528,6 @@ def _refuse_value(at: str, detail: str, *, code: str) -> ArtifactError:
     )
 
 
-def decode_value(data: Any, *, schema: Any = None, at: str) -> Any:
-    """Decode one JSON cell; refuses anything off the closed vocabulary.
-
-    This is the structural decoder the writer's reload check uses: every tag
-    is resolved, ``record`` objects are rebuilt from the allowlist table, and
-    tensor references come back as their reference dicts (the reader binds
-    them to payloads). ``schema`` is accepted for the reader's schema nodes.
-
-    Parameters
-    ----------
-    data:
-        JSON data of one cell.
-    schema:
-        Optional schema node (unused by the structural decoder).
-    at:
-        Position, for refusals.
-
-    Returns
-    -------
-    Any
-        The decoded Python value.
-    """
-
-    if isinstance(data, list):
-        return [decode_value(item, at=f"{at}[{i}]") for i, item in enumerate(data)]
-    if not isinstance(data, dict):
-        return data
-    tag = data.get(TYPED_VALUE_KEY)
-    if tag is None:
-        return {key: decode_value(item, at=f"{at}[{key!r}]") for key, item in data.items()}
-    if tag not in TYPED_VALUE_TAGS:
-        raise _refuse_value(at, f"unknown tag {tag!r}", code="record_schema_invalid")
-    missing = [name for name in TAG_FIELDS[tag] if name not in data]
-    if missing and tag != "unencodable":
-        raise _refuse_value(at, f"tag {tag!r} lacks {missing}", code="record_schema_invalid")
-    return _DECODERS[tag](data, at)
-
-
-def _decode_items(data: dict[str, Any], at: str) -> list[Any]:
-    """Decode the ``items`` array of a container tag."""
-
-    items = data["items"]
-    if not isinstance(items, list):
-        raise _refuse_value(at, "items is not an array", code="record_schema_invalid")
-    return [decode_value(item, at=f"{at}[{i}]") for i, item in enumerate(items)]
-
-
-def _decode_dict(data: dict[str, Any], at: str) -> dict[Any, Any]:
-    """Decode a ``dict`` tag from its key/value pairs."""
-
-    result: dict[Any, Any] = {}
-    for index, pair in enumerate(data["items"]):
-        if not isinstance(pair, list) or len(pair) != 2:
-            raise _refuse_value(
-                at, f"dict item {index} is not a [key, value] pair", code="record_schema_invalid"
-            )
-        result[decode_value(pair[0], at=f"{at}<key {index}>")] = decode_value(
-            pair[1], at=f"{at}[{index}]"
-        )
-    return result
-
-
-def _decode_enum(data: dict[str, Any], at: str) -> Any:
-    """Decode an enum member through the TorchLens enum table."""
-
-    cls = enum_table().get(str(data["type"]))
-    member = None if cls is None else cls.__members__.get(str(data["name"]))
-    if member is None:
-        raise _refuse_value(
-            at,
-            f"enum {data['type']}.{data['name']} is not a TorchLens enum member",
-            code="record_schema_invalid",
-        )
-    return member
-
-
-def _decode_record(data: dict[str, Any], at: str) -> Any:
-    """Rebuild an allowlisted TorchLens value object from its fields."""
-
-    raw = data["fields"]
-    fields = (
-        {name: decode_value(item, at=f"{at}.{name}") for name, item in raw.items()}
-        if isinstance(raw, dict)
-        else raw
-    )
-    return build_record(str(data["type"]), fields, at=at)
-
-
 def build_record(type_name: str, fields: Any, *, at: str) -> Any:
     """Construct an allowlisted TorchLens value object from decoded fields.
 
@@ -679,45 +566,6 @@ def build_record(type_name: str, fields: Any, *, at: str) -> Any:
     else:
         instance.__dict__.update(fields)
     return instance
-
-
-def _decode_dtype(data: dict[str, Any], at: str) -> torch.dtype:
-    """Decode a dtype by name through the dtype table."""
-
-    dtype = dtype_table().get(str(data["name"]))
-    if dtype is None:
-        raise _refuse_value(at, f"unknown dtype {data['name']!r}", code="record_schema_invalid")
-    return dtype
-
-
-_DECODERS: dict[str, Callable[[dict[str, Any], str], Any]] = {
-    "tensor": lambda data, at: TensorReferenceCell(
-        {name: data[name] for name in TENSOR_REFERENCE_FIELDS if name in data}
-    ),
-    "tuple": lambda data, at: tuple(_decode_items(data, at)),
-    "set": lambda data, at: set(_decode_items(data, at)),
-    "frozenset": lambda data, at: frozenset(_decode_items(data, at)),
-    "dict": _decode_dict,
-    "bytes": lambda data, at: base64.b64decode(str(data["base64"]), validate=True),
-    "float": lambda data, at: float(str(data["v"])),
-    "int": lambda data, at: int(str(data["v"])),
-    "complex": lambda data, at: complex(
-        float(decode_value(data["re"], at=f"{at}.re")),
-        float(decode_value(data["im"], at=f"{at}.im")),
-    ),
-    "dtype": _decode_dtype,
-    "device": lambda data, at: torch.device(str(data["name"])),
-    "type": lambda data, at: str(data["name"]),
-    "enum": _decode_enum,
-    "record": _decode_record,
-    "ref": lambda data, at: RowRef(str(data["record"]), int(data["row"])),
-    "unencodable": lambda data, at: UnencodableValue(
-        str(data.get("type", "")), str(data.get("repr", "")), str(data.get("at", at))
-    ),
-    "callable_placeholder": lambda data, at: {
-        name: data[name] for name in CALLABLE_PLACEHOLDER_FIELDS
-    },
-}
 
 
 @cache

@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1382 modules, 639467 lines, 0 modules without a docstring.
+85 packages, 1382 modules, 639328 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -23,14 +23,14 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10552 |
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 53 | 35831 |
-| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 15 | 7517 |
+| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 15 | 7367 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 21 | 10969 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5849 |
 | `torchlens._notebook` | Extras-gated notebook namespace with no public objects yet. | 9 | 2412 |
 | `torchlens._observability` | Observability substrates. | 21 | 7920 |
 | `torchlens._observe` | Observe kit: memory truth + diagnostics substrates. | 6 | 1507 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 500 |
-| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 29 | 17190 |
+| `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 29 | 17201 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 2188 |
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 2 | 473 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14711 |
@@ -472,7 +472,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 
 ### `torchlens._io.format3`
 
-The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (15 modules, 7517 lines)
+The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (15 modules, 7367 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -483,14 +483,14 @@ The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (15 
 | `decode` | Typed JSON cells back to Python values: the decoder half of the 3.0 value codec. | 700 |
 | `payloads` | Tensor payloads of the 3.0 saved format: chunked safetensors files and lazy references. | 476 |
 | `reader` | Reader of the 3.0 saved format: manifest first, digests, record tables, records. | 800 |
-| `recipe` | The intervention recipe of the 3.0 saved format: ''intervention.json''. | 671 |
+| `recipe` | The intervention recipe of the 3.0 saved format: ''intervention.json''. | 672 |
 | `route` | Routing of ''bundle.load'' into the 3.0 saved format: the root test and the door dispatch. | 69 |
 | `runnable` | The 3.0 runnable component: descriptor JSON plus safetensors state, no pickle. | 647 |
 | `runnable_families` | Tensor families of the 3.0 runnable component: safetensors files and tensor references. | 304 |
 | `schema` | Record columns and declarative family grammars for the 3.0 saved format. | 799 |
 | `validate` | Cross-record invariants of the 3.0 saved format, run after every table is decoded. | 577 |
-| `values` | The typed-value codec of the 3.0 saved format: Python values to tagged JSON and back. | 738 |
-| `writer` | The 3.0 writer: a trace or bundle to typed JSON record tables plus safetensors chunks. | 726 |
+| `values` | The typed-value codec of the 3.0 saved format: Python values to tagged JSON and back. | 586 |
+| `writer` | The 3.0 writer: a trace or bundle to typed JSON record tables plus safetensors chunks. | 727 |
 
 ### `torchlens._ir`
 
@@ -607,7 +607,7 @@ Partial capture helpers for failed TorchLens forward ops. (1 modules, 500 lines)
 
 ### `torchlens._postprocess`
 
-Postprocessing pipeline for cleaning up the model log after the forward pass. (29 modules, 17190 lines)
+Postprocessing pipeline for cleaning up the model log after the forward pass. (29 modules, 17201 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -623,7 +623,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (2
 | `_materialize` | Step 0 of postprocess: materialize raw Trace state from capture events. | 1768 |
 | `_module_census` | Module-build helpers for the root call's labels, uncalled modules and Layer roles. | 87 |
 | `_multipass_params` | Parameter fields of a layer whose passes consume different parameters (step 14). | 48 |
-| `_orphan_seeds` | Seeds of the orphan-removal flood (postprocess Step 3). | 71 |
+| `_orphan_seeds` | Seeds of the orphan-removal flood (postprocess Step 3). | 125 |
 | `_pipeline` | Postprocess pipeline: the named ordered step table and ''run_pipeline''. | 607 |
 | `_primitive_profile` | Materialize and bind the private wave-0 primitive-operation profile. | 375 |
 | `_recurrence` | Shared preview-backend recurrence grouping feed. | 374 |
@@ -633,7 +633,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (2
 | `ast_branches` | AST indexing for boolean-context classification and branch attribution. | 2235 |
 | `control_flow` | Steps 5-6: Conditional branches and buffer layer fixes. | 1372 |
 | `finalization` | Steps 12-20: Tensor undecoration, timing, param logs, layer/module logs, streaming. | 1843 |
-| `graph_traversal` | Steps 1-3: Output nodes, ancestry tracing, orphan removal (step 4 is ''_layer_depths''). | 957 |
+| `graph_traversal` | Steps 1-3: Output nodes, ancestry tracing, orphan removal (step 4 is ''_layer_depths''). | 914 |
 | `incremental` | Opt-in incremental enrichments for fastlog recordings. | 87 |
 | `labeling` | Steps 8-11: Label mapping, final info logging, renaming, cleanup, and lookup keys. | 1114 |
 | `loop_detection` | Step 7: Adapt Trace state to the backend-neutral recurrence grouper. | 673 |

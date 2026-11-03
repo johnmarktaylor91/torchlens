@@ -1,7 +1,7 @@
 """Seeded fuzz of the 3.0 typed-value codec and of whole saves through the reload check.
 
 Random nested Python values go through ``values.ValueEncoder``, a strict JSON round
-trip (``allow_nan=False``) and ``values.decode_value`` and must come back identical
+trip (``allow_nan=False``) and ``decode.decode_value`` and must come back identical
 (same types, floats by exact repr). Random small models are traced, saved and put
 through ``writer.reload_check``. Every case is seeded, so a failure reproduces.
 """
@@ -22,8 +22,9 @@ import torchlens as tl
 from torchlens._io import ArtifactError
 from torchlens._io.format3 import writer as format_writer
 from torchlens._io.format3.contract import TYPED_VALUE_KEY, TYPED_VALUE_TAGS
-from torchlens._io.format3.values import ValueEncoder, decode_value, enum_table
-from torchlens.io import UnencodableValue
+from torchlens._io.format3.decode import decode_value
+from torchlens._io.format3.values import ValueEncoder, enum_table
+from torchlens.types import UnencodableValue
 
 _VALUE_SEEDS = range(40)
 _MODEL_SEEDS = range(6)

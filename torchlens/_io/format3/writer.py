@@ -41,10 +41,11 @@ from .contract import (
     RECORD_INDEX,
     RECORDS_DIR,
 )
+from .decode import decode_value
 from .payloads import PayloadStore
 from .recipe import RecipeHeader, build_recipe, write_recipe
 from .schema import LiveCells, level_columns, record_kind_of, record_schema
-from .values import ValueEncoder, decode_value, object_state, record_type_table, tagged
+from .values import ValueEncoder, object_state, record_type_table, tagged
 
 #: Root files the digest table leaves out: the manifest itself and the
 #: staging sentinel that comes off right before publish.
