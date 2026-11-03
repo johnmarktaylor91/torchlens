@@ -30,10 +30,208 @@ from ..._data_classes.field_policy import StorageKind
 from ..field_registry import RECORD_CONTRACT_CLASSES, persisted_field_names
 from .contract import JSON_TYPE_BY_STORAGE_KIND, RECORD_INDEX
 
-#: Nested-family sub-schemas, keyed by family name. Empty until the grammar
-#: validators move here from ``_io/forgery_validation.py`` (design section 9);
-#: the checked load still runs those validators until then.
-FAMILIES: dict[str, dict[str, Any]] = {}
+#: Reusable grammar leaves. All nodes are data; decoding never calls a validator
+#: named by an artifact. ``optional`` lists keys that may be absent, ``open``
+#: admits user-owned keys, and ``nullable`` admits an explicit None.
+_ANY: dict[str, Any] = {"kind": "scalar"}
+_STR = {"kind": "scalar", "type": "str"}
+_TEXT = {**_STR, "min_length": 1}
+_INT = {"kind": "scalar", "type": "int"}
+_COUNT = {**_INT, "minimum": 0}
+_POSITIVE = {**_INT, "minimum": 1}
+_BOOL = {"kind": "scalar", "type": "bool"}
+_DIGEST = {**_STR, "pattern": r"^[0-9a-f]{64}$"}
+_STRINGS = {"kind": "list", "items": _STR}
+_RELATION = {**_STR, "vocab": ("exact", "upper_bound", "lower_bound", "unknown")}
+
+#: Nested-family sub-schemas, keyed by family name. A node with ``record`` and
+#: ``column`` binds to that cell; ``path`` selects an optional annotation key.
+#: Nonbinding nodes describe nested rows and are shared by the bound families.
+FAMILIES: dict[str, dict[str, Any]] = {
+    "distributed_scope": {
+        "record": "trace",
+        "column": "_provenance_distributed_scope",
+        "kind": "scalar",
+        "vocab": (None, "rank_local_shard"),
+        "code": "artifact_distributed_scope_invalid",
+    },
+    "timing_provenance": {
+        "record": "trace",
+        "column": "grad_fn_timing_provenance",
+        "kind": "scalar",
+        "vocab": (None, "unmeasured", "perf_counter"),
+        "code": "artifact_grad_fn_timing_provenance_invalid",
+    },
+    "checkpoint_token": {
+        "kind": "object",
+        "keys": {
+            "pack_count": _COUNT,
+            "unpack_evidence_count": _COUNT,
+            "site_key_candidates": {**_STRINGS, "sorted_unique": True},
+            # Windows and retained-op site membership are relational checks.
+            "window_evidence": _ANY,
+        },
+    },
+    "checkpoint_witness": {
+        "record": "trace",
+        "column": "checkpoint_invocation_witness",
+        "kind": "object",
+        "nullable": True,
+        "code": "artifact_checkpoint_witness_invalid",
+        "keys": {
+            "token_count": _COUNT,
+            "tokens": {"kind": "object", "values": {"family": "checkpoint_token"}},
+            "degrade_flags": {
+                **_STRINGS,
+                "sorted_unique": True,
+                "items": {
+                    **_STR,
+                    "vocab": (
+                        "classifier_unavailable",
+                        "patch_unavailable",
+                        "exotic_subclass",
+                        "unmatched_backward_warn",
+                        "reentrant_node_discovered",
+                        "unwitnessed_checkpoint_enter",
+                    ),
+                },
+            },
+            "verdict": {
+                **_STR,
+                "vocab": (
+                    "checkpoint_invocations_observed",
+                    "evidence_incomplete",
+                    "no_checkpoint_invocation_observed",
+                ),
+            },
+        },
+        "ordinal_keys": ("tokens", "token_count"),
+        "rules": (
+            {
+                "when": {"degrade_flags": "truthy"},
+                "keys": {"verdict": {"vocab": ("evidence_incomplete",)}},
+            },
+            {
+                "when": {"degrade_flags": "falsy", "token_count": "truthy"},
+                "keys": {"verdict": {"vocab": ("checkpoint_invocations_observed",)}},
+            },
+            {
+                "when": {"degrade_flags": "falsy", "token_count": "falsy"},
+                "keys": {"verdict": {"vocab": ("no_checkpoint_invocation_observed",)}},
+            },
+        ),
+    },
+    "capture_advisories": {
+        "record": "trace",
+        "column": "annotations",
+        "path": ("capture_advisories",),
+        "kind": "list",
+        "code": "artifact_capture_advisories_invalid",
+        "items": {
+            "kind": "object",
+            "keys": {
+                "kind": _TEXT,
+                "count": _POSITIVE,
+                "first_location": {**_STR, "nullable": True},
+                "message": _STR,
+            },
+        },
+    },
+    "kernel_launch": {
+        "kind": "object",
+        "attributes": True,
+        "keys": {
+            "attribution_status": {
+                **_STR,
+                "vocab": ("ambiguous", "attributed", "unattributed", "unavailable"),
+            },
+            "launch_name": {**_STR, "nullable": True},
+            "device": {**_STR, "nullable": True},
+            "stream": {"kind": "scalar", "type": ("str", "int"), "nullable": True},
+            "runtime_correlation": {"kind": "scalar", "type": ("str", "int"), "nullable": True},
+            "duration": {
+                "kind": "scalar",
+                "type": "number",
+                "minimum": 0,
+                "finite": True,
+                "nullable": True,
+            },
+        },
+    },
+    "kernel_telemetry": {
+        "record": "trace",
+        "column": "annotations",
+        "path": ("_kernel_telemetry",),
+        "kind": "object",
+        "code": "artifact_kernel_telemetry_invalid",
+        "keys": {
+            "_available": _BOOL,
+            "_launches": {"kind": "list", "items": {"family": "kernel_launch"}},
+            "_relations": {"kind": "list"},
+        },
+        "rules": (
+            {
+                "when": {"_available": "falsy"},
+                "keys": {
+                    "_launches": {
+                        "kind": "list",
+                        "length": 1,
+                        "items": {
+                            "kind": "object",
+                            "attributes": True,
+                            "keys": {
+                                "attribution_status": {"vocab": ("unavailable",)},
+                                **{
+                                    key: {"vocab": (None,)}
+                                    for key in (
+                                        "device",
+                                        "duration",
+                                        "launch_name",
+                                        "runtime_correlation",
+                                        "stream",
+                                    )
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        ),
+    },
+    "sidecar_namespace": {
+        "record": "trace",
+        "column": "annotations",
+        "path": ("sidecar",),
+        "kind": "object",
+        "code": "artifact_sidecar_invalid",
+        "key": {**_STR, "pattern": r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$"},
+        "values": {
+            "kind": "object",
+            "keys": {
+                "schema_id": _TEXT,
+                "version": _POSITIVE,
+                "owner": _TEXT,
+                "payload": _ANY,
+            },
+        },
+    },
+    "source_snapshots": {
+        "record": "trace",
+        "column": "_source_snapshots",
+        "kind": "list",
+        "nullable": True,
+        "code": "artifact_source_snapshots_invalid",
+        "unique_by": ("path", "digest"),
+        "items": {
+            "kind": "object",
+            "keys": {
+                "path": _TEXT,
+                "digest": _DIGEST,
+                "text": {**_STR, "nullable": True},
+            },
+        },
+    },
+}
 
 #: Payload include flags and the stored keys each one gates (the scrub's policy
 #: resolver; mirrored by ``tools/docs/persisted_fields.py`` for the page).
