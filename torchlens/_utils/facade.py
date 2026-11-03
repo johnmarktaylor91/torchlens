@@ -255,8 +255,8 @@ def resolve_facade_attr(
     """
 
     # Step 1: underscore short-circuit -- no table lookup, no dependency
-    # check. Only the root's existing public version has a lazy dunder row.
-    if name.startswith("_") and (owner, name) != ("torchlens", "__version__"):
+    # check. Dunder probes from IPython, copyreg, and inspect must fail fast.
+    if name.startswith("_"):
         raise _plain_missing(owner, name)
 
     # Step 2: redirect table -> typed teaching AttributeError, no dep check.
@@ -355,5 +355,5 @@ def facade_dir(
         if name.startswith("__") and name.endswith("__") or not name.startswith("_"):
             names.add(name)
     for name_set in name_sets:
-        names.update(name for name in name_set if not name.startswith("_") or name == "__version__")
+        names.update(name for name in name_set if not name.startswith("_"))
     return sorted(names)

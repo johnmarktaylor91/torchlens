@@ -21,12 +21,12 @@ if _typing.TYPE_CHECKING:
     import torch as _torch
     from torch import nn as _nn
 
+from ._vocab._package_version import __version__ as __version__
+
 if _typing.TYPE_CHECKING:
     from ._data_classes.trace import Trace
-    from ._vocab._package_version import __version__ as __version__
 
 _LAZY_ATTRS = {
-    "__version__": ("torchlens._vocab._package_version", "__version__"),
     # Import cold-start laziness (P4, rebaselined 2026-08-19): the former
     # eager import block (options/captured_run+ir/observers/quantities/errors
     # and their transitive chains) is fully deferred behind these rows -- the
@@ -301,8 +301,8 @@ _REFUSALS: dict[str, str] = {}
 def __getattr__(name: str) -> _typing.Any:
     """Return lazy package attributes through the five-step facade order.
 
-    The order (architecture memo 5.4, testable spec): (1) private underscore
-    names raise plain ``AttributeError``; the public version is active; (2) redirect rows
+    The order (architecture memo 5.4, testable spec): (1) underscore-prefixed
+    names raise plain ``AttributeError`` immediately; (2) redirect-table rows
     raise a typed teaching ``AttributeError`` naming the canonical spelling,
     with no dependency check; (3) refusal-table rows raise a typed
     ``AttributeError``; (4) real active names resolve through their per-name

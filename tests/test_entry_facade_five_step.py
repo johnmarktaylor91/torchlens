@@ -90,9 +90,9 @@ def test_root_reachability_rows_resolve() -> None:
 
 
 def test_root_underscore_rows_are_gone() -> None:
-    """The existing public version is the sole lazy dunder; private names still refuse."""
+    """No underscore name is a lazy row (the version is an eager global); private names refuse."""
 
-    assert {name for name in tl._LAZY_ATTRS if name.startswith("_")} == {"__version__"}
+    assert not any(name.startswith("_") for name in tl._LAZY_ATTRS)
     assert "__version__" in dir(tl)
     from torchlens import __version__
 

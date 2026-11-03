@@ -13,7 +13,6 @@ torchlens.Recording	torchlens.recording.types	L1	core	1	0
 torchlens.Selection	torchlens._selection.selection	L4	core	1	0
 torchlens.Selector	torchlens._selection.selection	L4	core	1	0
 torchlens.Trace	torchlens._data_classes.trace	L1	core	1	0
-torchlens.__version__	torchlens._vocab._package_version	L0	core	0	0
 torchlens.add	torchlens.intervention.predicates	L4	core	1	0
 torchlens.add_noise	torchlens.intervention.helpers	L4	core	1	0
 torchlens.agent	torchlens.agent	FACADE	facade	0	0
