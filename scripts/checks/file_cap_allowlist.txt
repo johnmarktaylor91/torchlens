@@ -315,7 +315,7 @@ torchlens/_observability/_collector.py::HistoryCollector._commit_block	76
 torchlens/_observability/_join.py::join_events	154
 torchlens/_observability/_kernels.py::RunningStats.update	66
 torchlens/_observability/_kernels.py::spine_vector_fused	63
-torchlens/_observability/_op_tier.py::OpTierCollector.discover	79
+torchlens/_observability/_op_tier.py::OpTierCollector.discover	77
 torchlens/_observability/_op_tier.py::OpTierCollector.observe_step	67
 torchlens/_observability/_overhead.py::measure_overhead	83
 torchlens/_observability/_payloads.py::histogram_payload	70
@@ -1327,7 +1327,7 @@ torchlens/receptive_field/_viz.py::show	83
 torchlens/receptive_field/rules/interpolation.py::interpolate	63
 torchlens/receptive_field/rules/transforms.py::getitem	76
 torchlens/receptive_field/rules/transforms.py::pad	73
-torchlens/recording/_record_one_shot.py::record	199
+torchlens/recording/_record_one_shot.py::record	196
 torchlens/recording/_recorder.py	859
 torchlens/recording/_recorder.py::Recorder.__init__	167
 torchlens/recording/_recorder.py::Recorder._run_unified_capture	151
