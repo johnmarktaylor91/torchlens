@@ -60,6 +60,7 @@ PAGES: dict[str, str] = {
     "examples/recipes/clip_text_decomposition_recipe.ipynb": "clip",
     "examples/recipes/probe_accuracy_by_layer_recipe.ipynb": "matplotlib",
     "examples/recipes/cka_rsa_two_models_recipe.ipynb": "matplotlib",
+    "examples/recipes/attribution_graph_transcoders_recipe.ipynb": "transcoders",
 }
 
 #: Pages whose other fences are illustrative: only their headed fences run here,
@@ -85,6 +86,7 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
     "himalaya": ("himalaya",),
     "cornet": ("cornet",),
     "clip": ("transformers", "tokenizers", "PIL", "matplotlib"),
+    "transcoders": ("transformer_lens", "huggingface_hub", "safetensors"),
 }
 
 #: Pages measured above the 5 s tier (heavy, 5-20 s) in the peer-recipe leg, or
@@ -133,12 +135,16 @@ HEAVY_PAGES: frozenset[str] = frozenset(
 #: The two CLIP notebooks download the public ``openai/clip-vit-base-patch32``
 #: checkpoint (about 600 MB) on first use and trace its vision tower on real
 #: pictures, so they sit in the slow tier with the other real-checkpoint pages.
+#: The transcoder attribution-graph notebook downloads GPT-2 small and twelve
+#: transcoders (about 2.2 GB) on a cold cache, and its graph build alone took
+#: 180 s on four cores (8,963 feature nodes).
 SLOW_PAGES: frozenset[str] = frozenset(
     {
         "docs/recipes/acdc_ioi.md",
         "examples/recipes/function_vectors_recipe.ipynb",
         "examples/recipes/clip_head_attention_recipe.ipynb",
         "examples/recipes/clip_text_decomposition_recipe.ipynb",
+        "examples/recipes/attribution_graph_transcoders_recipe.ipynb",
     }
 )
 

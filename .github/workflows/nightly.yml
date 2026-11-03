@@ -1826,7 +1826,7 @@ jobs:
     # which permits this CI use.
     name: Recipe pages with every peer installed
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1876,6 +1876,7 @@ jobs:
             himalaya==0.4.11 scikit-learn==1.7.2 scipy==1.15.3 \
             sae-lens==6.54.0 eai-sparsify==1.3.3 "nnsight>=0.6" wandb \
             timm fancy-einsum "open_clip_torch==3.3.0" line_profiler \
+            "transformer-lens==3.8.0" huggingface_hub safetensors \
             "netrep @ git+https://github.com/ahwillia/netrep@0186b8a77ec1ebaf541cc8f7173cb2556df8a8f0" \
             "torch==$TV" "transformers==$TF" "torchvision==$TVV"
           # These declare dependencies that would move torch, transformers or
@@ -1905,7 +1906,7 @@ jobs:
         # A skip counts as a failure on this leg (maximum skipped fraction 0):
         # every page's peer is installed, so a skip means a page went unrun.
         run: |
-          echo "peer-recipes.junit.xml 51 0" >> "$RUNNER_TEMP/junit/legs.floor"
+          echo "peer-recipes.junit.xml 53 0" >> "$RUNNER_TEMP/junit/legs.floor"
 
       # The SAE export consumers install last and run in their own step: one
       # of them ships a top-level ``tests`` package that shadows the repo's,
