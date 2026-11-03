@@ -2696,7 +2696,11 @@ default-keep); mask-application semantics documented-unstable*
 **tl.patch_from(source_trace, *, source_site=None, positions=None, position_axis=1)** — *unstable — no deprecation shim owed*
 : Edit factory patching targeted sites from another trace's recorded
   post-capture values (activation patching); with a Selection target only
-  the selected elements are patched. Source-to-target mapping (Patchscopes,
+  the selected elements are patched. With a facet or head target
+  (`tl.head(h, "v")`, `tl.facet(name)`) the donor is the same facet view of
+  the source's home-op value, so only that slice is copied (a single head of
+  GPT-2's fused `c_attn`, not the whole output); `positions=` then indexes
+  the facet slice's axes. Source-to-target mapping (Patchscopes,
   SelfIE): `source_site=` reads the donor at another site of the source trace
   (a label, pass-qualified on multi-pass layers, or a selector naming exactly
   one op; else `patch_source_site_unresolved`), and `positions=` (an int, a
@@ -4221,7 +4225,7 @@ The sections above describe each surface in depth.
 | `BisectPrecisionReport.message` | Human-readable summary |
 | `Bundle.comparability` | Return the derived relationship for a pair of members (`tl.types.Relationship`) |
 | `Bundle.comparability_table` | Return pairwise relationships for all member pairs |
-| `Bundle.map` | Apply a function independently to each member; released effect-table candidates read `"unmeasured"` |
+| `Bundle.map` | Apply a function independently to each member; released effect-table candidates read `"unmeasured"`. `fn(member)`; the member name is passed only where `fn` takes it: positionally to a required second parameter or `*args` (`lambda log, name: ...`), by keyword to a parameter called `name`; a defaulted second parameter (`lambda log, k=3: ...`) keeps its default |
 | `Bundle.compare` | Per-site differences between two members as `(site_label, distance)` rows; `metric=` and `on=`. Row keys: a multi-pass op gives one row per pass, keyed by its pass-qualified label (`tanh_1_1:2`); a single-pass op keeps its bare layer label (JMT, Sun 1 Nov 2026) |
 | `Bundle.rank_changes` | Rank sites by their distance from a baseline member; rows keyed like `Bundle.compare` (one row per pass of a multi-pass op) |
 | `BundleComparisonError.severity` | The error's severity class |
@@ -4415,6 +4419,7 @@ The sections above describe each surface in depth.
 | `ReceptiveFieldView.axis_roles` | Axis layout of the viewed op's input grid |
 | `ReceptiveFieldView.of` | Many-unit influence region as a trace-bound `tl.Selection`, one region per `within=` site |
 | `ReceptiveFieldView.probe_grad` | Empirical gradient probe of one unit's receptive field |
+| `ReceptiveFieldView.status` | Field status of the only reachable endpoint, or a read-only mapping from each endpoint's IO role to its status when several are reachable (a projective view of a GPT-2 activation reaches the logits and every later block's cached keys and values) |
 | `Recipe.address_class` | Most restrictive address class over all rules (worst wins) |
 | `Recipe.decision` | The sole rule's normalized decision (`None` on multi-clause specs) |
 | `Recipe.door_pairs` | Lower the spec to `(site, action)` pairs for the hook doors |
