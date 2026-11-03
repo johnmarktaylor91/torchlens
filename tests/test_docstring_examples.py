@@ -89,7 +89,22 @@ def test_census_is_current() -> None:
     )
 
 
-@pytest.mark.parametrize("package", docstring_examples.census_packages())
+#: Package cells whose examples build real small models for most symbols and so run past
+#: the ``heavy`` per-test budget: a per-cell ``slow`` refinement of this heavy family
+#: (``tests/_tiers_plugin.py``). ``mechinterp`` measured 40 s on a two-core worker.
+SLOW_CELLS = frozenset({"mechinterp"})
+
+
+def _cells() -> list[object]:
+    """One parametrize value per census package, the slow ones marked as such."""
+
+    return [
+        pytest.param(package, marks=pytest.mark.slow) if package in SLOW_CELLS else package
+        for package in docstring_examples.census_packages()
+    ]
+
+
+@pytest.mark.parametrize("package", _cells())
 def test_every_example_runs(package: str) -> None:
     """Execute every example filed under ``package`` and report each failure."""
 
