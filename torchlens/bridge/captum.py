@@ -108,10 +108,9 @@ def attribute(
 ) -> Any:
     """Run a Captum attribution method using inputs retained by a TorchLens trace.
 
-    When ``method.layer`` is a site probe from :func:`layer`, the method's
-    forward function runs through a TorchLens capture that splices the probe
-    at that site for the duration of the call, so Captum's layer hooks fire
-    on exactly that tensor; a live module runs the model directly.
+    When ``method.layer`` is a site probe from :func:`layer`, the forward runs
+    through a TorchLens capture that splices the probe at that site, so
+    Captum's layer hooks fire on exactly that tensor.
 
     Parameters
     ----------
@@ -141,10 +140,9 @@ def attribute(
     TypeError
         If ``method`` does not expose ``attribute``.
     InvalidArgumentError
-        ``bridge_captum_inputs_unresolved`` when ``inputs`` is omitted and the
-        logged inputs cannot be replayed positionally;
-        ``bridge_captum_multi_probe_unsupported`` when ``method.layer`` lists
-        more than one site probe (one spliced site per call).
+        ``bridge_captum_inputs_unresolved`` (logged inputs not replayable
+        positionally) or ``bridge_captum_multi_probe_unsupported`` (more than
+        one site probe in ``method.layer``).
     """
 
     _require_captum()
