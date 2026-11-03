@@ -7,11 +7,11 @@ so the wrapper-installed check is resolved lazily here, at call time.
 
 from __future__ import annotations
 
-from ..mlx.wrappers import is_mlx_wrapped
-
 
 def mlx_wrappers_installed() -> bool:
     """Whether the process-global MLX capture wrappers are installed right now."""
+
+    from ..mlx.wrappers import is_mlx_wrapped
 
     return is_mlx_wrapped()
 

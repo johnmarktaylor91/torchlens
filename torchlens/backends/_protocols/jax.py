@@ -8,7 +8,6 @@ from typing import Any
 from .._backend_protocol import FrameworkRequirement, SpecBackedProtocol
 from .._errors import BackendUnsupportedError
 from .._trace_options import JAX_TRACE_OPTIONS
-from ..jax.backend import JAXBackend
 
 #: The JAX requirement, stated once (SPEC 1.2; F-M ``tested_through`` arm).
 #: The ``jax`` extra is unpinned, so the pin is what the CI leg resolved when
@@ -87,6 +86,7 @@ class JAXProtocol(SpecBackedProtocol):
         """
 
         del ground_truth
+        from ..jax.backend import JAXBackend
 
         return JAXBackend().validation_status(trace)
 

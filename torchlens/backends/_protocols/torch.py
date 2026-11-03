@@ -16,7 +16,6 @@ from ...options import CaptureOptions
 from .._backend_protocol import FrameworkRequirement, SpecBackedProtocol
 from .._errors import BackendUnsupportedError
 from .._trace_options import TORCH_TRACE_OPTIONS
-from ..torch._ops_containers import _walk_output_tensors_with_paths
 
 TORCH_FRAMEWORK = FrameworkRequirement(
     distributions=("torch",),
@@ -189,6 +188,8 @@ def _ground_truth_tensors(ground_truth: Any) -> list[Any]:
     its own ground truth), so leaf order and deduplication match how the trace
     recorded its outputs.
     """
+
+    from ..torch._ops_containers import _walk_output_tensors_with_paths
 
     tensors: list[Any] = []
     seen: set[tuple[Any, ...]] = set()
