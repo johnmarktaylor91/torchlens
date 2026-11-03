@@ -27,6 +27,10 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._user_public_impls import _validate_forward_pass_torch
+from torchlens._validation_state_snapshot import (
+    restore_snapshot_if_changed,
+    snapshot_state_for_restore,
+)
 from torchlens.options import CaptureOptions
 from torchlens.validation.core import validate_saved_outs
 from torchlens.validation.diagnostics import get_validation_failure
@@ -149,6 +153,45 @@ class _SetToWholeStorage(nn.Module):
         return x + self.b[2:6]
 
 
+class _ResizeBuffer(nn.Module):
+    """``resize_`` grows a buffer in place (same storage, new size)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("b", torch.rand(4))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            self.b.resize_(8)
+        return x * 2
+
+
+class _UnsqueezeBuffer(nn.Module):
+    """``unsqueeze_`` changes a buffer's shape on its own storage."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("b", torch.rand(4))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            self.b.unsqueeze_(0)
+        return x + self.b[0]
+
+
+class _TransposeBuffer(nn.Module):
+    """``transpose_`` changes a buffer's shape and strides on its own storage."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("b", torch.rand(2, 2))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            self.b.transpose_(0, 1)
+        return x + self.b.reshape(4)
+
+
 class _SetToStorageViewThenOverwrite(_SetToStorageView):
     """The storage overload, then a write to the source storage after the read."""
 
@@ -166,6 +209,7 @@ _SHAPE_CHANGING = [
     _SetToStorageView,
     _SetToWholeStorage,
 ]
+_GEOMETRY_WRITES = [_UnsqueezeBuffer, _TransposeBuffer]
 _VALIDATING_CASES = [
     (model_cls, copy_fails) for model_cls in _SHAPE_CHANGING for copy_fails in (False, True)
 ]
@@ -326,3 +370,32 @@ def test_wrong_storage_view_still_fails_replay(position: int, wrong_value: objec
         assert failure.op_label is not None and failure.op_label.startswith("set_")
     finally:
         trace.cleanup()
+
+
+@pytest.mark.parametrize("model_cls", [*_SHAPE_CHANGING, _ResizeBuffer, *_GEOMETRY_WRITES])
+def test_restore_rebinds_moved_or_reshaped_state_before_loading_values(
+    model_cls: type[nn.Module], failing_model_deepcopy: list[type]
+) -> None:
+    """The snapshot restore puts moved or reshaped state back on its recorded geometry.
+
+    Called directly, ``restore_snapshot_if_changed`` rebinds a ``set_``-moved
+    or resized tensor to its own storage before it loads values. Through the
+    live fallback, an in-place geometry write (``unsqueeze_``, ``transpose_``)
+    reaches the same restore, returns a verdict instead of raising, and leaves
+    the caller's buffer on its recorded shape and strides.
+    """
+
+    torch.manual_seed(0)
+    model = model_cls()
+    objects = _state_by_name(model)
+    values = {name: tensor.detach().clone() for name, tensor in objects.items()}
+    snapshot = snapshot_state_for_restore(model)
+    model(torch.rand(4))
+    restore_snapshot_if_changed(
+        model, snapshot, lambda module, state: module.load_state_dict(state)
+    )
+    _assert_restored(model, objects, values)
+    if model_cls in _GEOMETRY_WRITES:
+        failing_model_deepcopy.append(model_cls)
+        assert isinstance(_quiet_validate(model, torch.rand(4)), bool)
+        _assert_restored(model, objects, values)

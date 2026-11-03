@@ -38,7 +38,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 | _trace_slice | 1 | 0 |
 | _training_validation | 1 | 0 |
 | _user_funcs | 5 | 0 |
-| _user_public_impls | 3 | 0 |
+| _user_public_impls | 2 | 0 |
 | _utils | 1 | 0 |
 | _visualization | 8 | 0 |
 | _vocab | 2 | 0 |
@@ -79,6 +79,6 @@ and how many lack a runnable `Examples` section. Regenerate with
 | transforms | 37 | 0 |
 | validation | 12 | 0 |
 | viz | 12 | 0 |
-| **total** | **1044** | **0** |
+| **total** | **1043** | **0** |
 
-Public callable members of those classes (methods and properties): 1413.
+Public callable members of those classes (methods and properties): 1401.

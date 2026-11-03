@@ -82,6 +82,56 @@ class TestDtypeHonestBands:
         replay = np.nextafter(saved, np.float16(2.0), dtype=np.float16)
         assert close(replay, saved)
 
+    @pytest.mark.parametrize(
+        ("saved", "replay"),
+        [
+            pytest.param(
+                np.full((8,), 1e-2, dtype=np.float16),
+                np.zeros((8,), dtype=np.float16),
+                id="half-zeroed",
+            ),
+            pytest.param(
+                np.array([4e-7, -3e-7, 2e-7, -1e-7], dtype=np.float32),
+                -np.array([4e-7, -3e-7, 2e-7, -1e-7], dtype=np.float32),
+                id="single-sign-flip-of-small-values",
+            ),
+            pytest.param(
+                np.full((8,), 5e-7, dtype=np.float32),
+                np.zeros((8,), dtype=np.float32),
+                id="single-small-values-zeroed",
+            ),
+            pytest.param(
+                np.ones((8,), dtype=np.float64),
+                np.ones((8,), dtype=np.float64) * (1.0 + 1e-6),
+                id="double-relative-corruption",
+            ),
+            pytest.param(
+                np.full((8,), 5e-7, dtype=np.float64),
+                np.zeros((8,), dtype=np.float64),
+                id="double-small-values-zeroed",
+            ),
+            pytest.param(
+                np.array([np.nan, 1.0], dtype=np.float64),
+                np.array([0.0, 1.0], dtype=np.float64),
+                id="number-in-place-of-nan",
+            ),
+        ],
+    )
+    def test_corruption_fails_under_every_dtype_band(
+        self, site: str, close: Any, saved: np.ndarray, replay: np.ndarray
+    ) -> None:
+        """Corruption the dtype-blind decimal pair blessed fails at every oracle site.
+
+        Zeroed or sign-flipped elements below the old absolute floor, relative
+        corruption far above the accumulating dtype's own round-off, and a
+        number standing in for a NaN are all disagreement. The identical
+        payload (NaN pattern included) stays agreement, so the failure is the
+        corruption and not the dtype or the NaN.
+        """
+
+        assert close(saved.copy(), saved)
+        assert not close(replay, saved)
+
     # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/mlx/_grad_oracle.py, backends/paddle/backend.py, backends/tf/derived_grads.py ....
     def test_shape_mismatch_fails(self, site: str, close: Any) -> None:
         """Shape disagreement is corruption, never coerced."""

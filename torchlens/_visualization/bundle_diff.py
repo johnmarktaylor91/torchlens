@@ -83,7 +83,7 @@ def bundle_diff(
     >>> import os, tempfile
     >>> bundle = tl.Bundle({"clean": tl.trace(model, x), "again": tl.trace(model, x)})
     >>> with tempfile.TemporaryDirectory() as tmp:
-    ...     dot = bundle_diff(bundle, path=os.path.join(tmp, "diff"), vis_save_only=True)
+    ...     dot = bundle_diff(bundle, path=os.path.join(tmp, "diff"), open_viewer=False)
     >>> "digraph" in dot
     True
     """

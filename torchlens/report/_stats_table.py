@@ -83,7 +83,7 @@ class StatsTableRow:
     >>> row = [r for r in rows if r.state == "ok"][0]
     >>> row.row_id == f"op:{row.label}"
     True
-    >>> row.stats.numel > 0
+    >>> row.value_stats.numel > 0
     True
     """
 

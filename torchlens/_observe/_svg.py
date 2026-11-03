@@ -111,11 +111,12 @@ def render_timeline_svg(
 
     Examples
     --------
-    >>> import json, pathlib, tempfile
+    >>> import pathlib, tempfile
+    >>> from torchlens._io._json import read_bounded
     >>> trace = tl.trace(model, x)
     >>> with tempfile.TemporaryDirectory() as tmp:
     ...     path = tl.export.memory_timeline_v2(trace, pathlib.Path(tmp) / "timeline.json")
-    ...     artifact = json.loads(path.read_text())
+    ...     artifact = read_bounded(path)
     >>> svg = tl.viz.timeline(artifact)
     >>> svg.startswith("<svg"), svg.rstrip().endswith("</svg>")
     (True, True)

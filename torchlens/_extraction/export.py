@@ -285,7 +285,7 @@ def export_extraction(
     ...     _ = tl.dataset_extraction.extract_dataset(
     ...         model, stimuli, {"relu": "1"}, batch_size=2, path=src, progress=False
     ...     )
-    ...     dest = export_extraction(src, Path(out) / "npy", format="npy")
+    ...     dest = export_extraction(src, Path(out) / "npy", file_format="npy")
     ...     print(dest.name, dest.is_dir())
     npy True
     """
