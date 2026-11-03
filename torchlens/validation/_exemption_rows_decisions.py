@@ -19,6 +19,7 @@ _GAP = "tests/test_replay_gap_value_proofs.py::"
 _RUNG = "tests/test_validation_rung1_class3.py::"
 _EX = "torchlens.validation.exemptions:"
 _CORE = "torchlens.validation.core:"
+_PRE_REPLAY = "torchlens.validation._pre_replay:"
 _C1 = "replay determinism (contract clause 1): the output is not a deterministic function of the saved inputs"
 _C2 = "perturbation sensitivity (contract clause 2): the parent value provably cannot reach the output"
 _C3 = "replay-surface completeness (contract clause 3): the op has no traceable function by design"
@@ -63,7 +64,7 @@ _DECISION_ROWS: tuple[ExemptionRow, ...] = (
     _decision(
         "functionless_source_or_boundary",
         ("early_exit", _C3),
-        _CORE + "_is_provable_functionless_source_or_boundary",
+        _PRE_REPLAY + "_is_provable_functionless_source_or_boundary",
         "a func-less op that is a corroborated intervention replacement, a buffer boundary "
         "with buffer_source and buffer_write_kind set, a parentless source, or a declared "
         "transform boundary; a func-less computational op in plain capture fails",

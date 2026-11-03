@@ -246,7 +246,7 @@ torchlens/_io/runnable.py::assert_sparse_core_has_no_tensor_payload	83
 torchlens/_io/runnable.py::build_sparse_run_descriptor	503
 torchlens/_io/runnable.py::required_witness_family_members	79
 torchlens/_io/runnable_coherence.py::_callable_registry_contradiction	72
-torchlens/_io/runnable_load.py	3793
+torchlens/_io/runnable_load.py	3785
 torchlens/_io/runnable_load.py::_descriptor_version_diagnostics	126
 torchlens/_io/runnable_load.py::_parse_ambient_context	97
 torchlens/_io/runnable_load.py::_parse_call	83
@@ -595,7 +595,7 @@ torchlens/_visualization/_render_edges.py::_add_intervention_hook_nodes	67
 torchlens/_visualization/_render_edges.py::_label_rolled_call_indexs	77
 torchlens/_visualization/_render_entrypoints.py::render_backward_graph	266
 torchlens/_visualization/_render_entrypoints.py::render_combined_graph	254
-torchlens/_visualization/_render_flow.py	2065
+torchlens/_visualization/_render_flow.py	2064
 torchlens/_visualization/_render_flow.py::_base_rendered_node_emission	86
 torchlens/_visualization/_render_flow.py::_build_module_focus_entries	107
 torchlens/_visualization/_render_flow.py::_build_skip_filtered_edge_map	75
@@ -1003,8 +1003,8 @@ torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	115
 torchlens/backends/torch/wrappers.py::_unwrap_torch_locked	129
 torchlens/backends/torch/wrappers.py::_wrap_torch_locked	102
 torchlens/backends/torch/wrappers.py::decorate_all_once	68
-torchlens/backends/torch/wrappers.py::torch_func_decorator	801
-torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	646
+torchlens/backends/torch/wrappers.py::torch_func_decorator	798
+torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	644
 torchlens/bridge/_sae_export.py::write_delphi	93
 torchlens/bridge/_sae_export.py::write_sae_dashboard	112
 torchlens/bridge/_sae_latents.py::logged_splice_trace	86
@@ -1502,11 +1502,11 @@ torchlens/validation/backward.py::_sum_tensors	73
 torchlens/validation/backward.py::validate_backward_pass	283
 torchlens/validation/consolidated.py::_intervention_report	69
 torchlens/validation/consolidated.py::validate	248
-torchlens/validation/core.py	3795
+torchlens/validation/core.py	3767
 torchlens/validation/core.py::_check_arglocs_correct_for_arg	127
 torchlens/validation/core.py::_check_layer_arguments_logged_correctly	80
 torchlens/validation/core.py::_check_unattributed_arg_slots	193
-torchlens/validation/core.py::_check_whether_func_on_saved_parents_yields_saved_tensor	266
+torchlens/validation/core.py::_check_whether_func_on_saved_parents_yields_saved_tensor	264
 torchlens/validation/core.py::_comparator_self_test	64
 torchlens/validation/core.py::_deep_numeric_replay_matches_saved	117
 torchlens/validation/core.py::_directional_step_perturb	112
