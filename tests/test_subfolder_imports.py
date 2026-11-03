@@ -102,7 +102,11 @@ def test_neuro_import_stays_inert() -> None:
     # packages. ``compare`` is numpy-only and the extraction-plan names need
     # no extra, so they are always present.
     expected = {"ExtractionPlan", "PlanSite", "compare", "export_npz", "plan_extraction"}
-    if importlib.util.find_spec("rsatoolbox") is not None:
+    # A diagnosed dependency conflict (rsatoolbox installed but unimportable)
+    # withdraws the rsatoolbox names, read from metadata alone.
+    from torchlens.neuro._conflicts import rsatoolbox_conflict
+
+    if importlib.util.find_spec("rsatoolbox") is not None and rsatoolbox_conflict() is None:
         expected |= {"datasets", "rdms"}
     if importlib.util.find_spec("brainscore_vision") is not None:
         expected |= {"activations_extractor", "get_activations_fn"}

@@ -508,6 +508,7 @@ def test_nested_output(default_input1):
 # =============================================================================
 
 
+@pytest.mark.smoke
 def test_buffer_model():
     model = example_models.BufferModel()
     model_input = torch.rand(12, 12)
@@ -1702,6 +1703,7 @@ def test_gelu_model(default_input1):
 # =============================================================================
 
 
+@pytest.mark.smoke
 def test_trace_layers_to_save(default_input1):
     """Test layers_to_save parameter selectively saves outs."""
     model = example_models.SimpleFF()
@@ -1821,6 +1823,7 @@ def test_trace_layer_labels(default_input1):
     assert all(isinstance(lbl, str) for lbl in mh.op_labels)
 
 
+@pytest.mark.smoke
 def test_rolled_vs_unrolled_visualization(input_2d):
     """Test both rolled and unrolled modes produce output on recurrent model."""
     import os
@@ -1850,6 +1853,7 @@ def test_rolled_vs_unrolled_visualization(input_2d):
 # =============================================================================
 
 
+@pytest.mark.smoke
 @pytest.mark.timeout(30)
 def test_wrapped_input_no_deepcopy_hang():
     """Ensure torchlens handles non-deepcopy-safe input args (issue #18).
@@ -1874,6 +1878,7 @@ def test_wrapped_input_no_deepcopy_hang():
 # =============================================================================
 
 
+@pytest.mark.smoke
 def test_tuple_input_single_arg():
     """Ensure a tuple of tensors passed as a single arg is not unpacked (issue #43).
 
@@ -1940,6 +1945,7 @@ def test_output_layer_saved_with_layers_to_save() -> None:
 # =============================================================================
 
 
+@pytest.mark.smoke
 def test_stochastic_depth_layers_to_save():
     """Two-pass with layers_to_save should reproduce the same graph for
     stochastic depth models by restoring the RNG state (issue #58).
@@ -2163,6 +2169,7 @@ def test_no_grad_block():
     )
 
 
+@pytest.mark.smoke
 def test_while_loop():
     model = example_models.WhileLoopModel()
     x = torch.rand(5, 5) * 10
@@ -2433,6 +2440,7 @@ def test_broadcasting():
     )
 
 
+@pytest.mark.smoke
 def test_packed_sequence():
     model = example_models.PackedSequenceModel()
     x = torch.rand(5, 3, 8)
@@ -2687,6 +2695,7 @@ def test_vanilla_autoencoder():
     )
 
 
+@pytest.mark.smoke
 def test_conv_autoencoder():
     model = example_models.ConvAutoencoder()
     x = torch.rand(2, 1, 28, 28)
@@ -2843,6 +2852,7 @@ def test_siamese_network():
     )
 
 
+@pytest.mark.smoke
 def test_mlp_mixer():
     model = example_models.MLPMixer()
     x = torch.rand(2, 3, 8, 8)
@@ -3058,6 +3068,7 @@ def test_squeeze_excitation():
     )
 
 
+@pytest.mark.smoke
 def test_depthwise_separable():
     model = example_models.DepthwiseSeparableConv()
     x = torch.rand(2, 3, 32, 32)
@@ -3211,6 +3222,7 @@ def test_hyper_network():
     )
 
 
+@pytest.mark.smoke
 def test_deq_model():
     model = example_models.DEQModel()
     x = torch.rand(4, 8)
@@ -3507,6 +3519,7 @@ def test_barlow_twins():
     )
 
 
+@pytest.mark.smoke
 def test_deep_cross_network():
     model = example_models.DeepCrossNetwork()
     x = torch.rand(4, 16)
@@ -3696,6 +3709,7 @@ def test_early_exit_model():
     )
 
 
+@pytest.mark.smoke
 def test_multi_scale_parallel_model():
     model = example_models.MultiScaleParallelModel()
     x = torch.rand(2, 3, 8, 8)
@@ -3710,6 +3724,7 @@ def test_multi_scale_parallel_model():
     )
 
 
+@pytest.mark.smoke
 def test_gumbel_vq_model():
     model = example_models.GumbelVQModel()
     x = torch.rand(4, 16)
@@ -3905,6 +3920,7 @@ def test_aspp_model():
     )
 
 
+@pytest.mark.smoke
 def test_controlnet_model():
     model = example_models.ControlNetModel()
     x = torch.rand(2, 3, 8, 8)
@@ -3970,6 +3986,7 @@ def test_tiny_nerf():
 # =============================================================================
 
 
+@pytest.mark.smoke
 def test_same_tensor_all_args():
     model = example_models.SameTensorAllArgs()
     x = torch.rand(4, 4)
@@ -4024,6 +4041,7 @@ def test_delete_tensor_mid_forward(input_2d):
     )
 
 
+@pytest.mark.smoke
 def test_dynamic_module_creation(input_2d):
     model = example_models.DynamicModuleCreation()
     assert validate_forward_pass(model, input_2d)
@@ -4285,6 +4303,7 @@ def test_loop_compare_varying_loop_with_param(vector_input):
     _render_both(example_models.VaryingLoopWithParam(), vector_input, "varying_loop_with_param")
 
 
+@pytest.mark.smoke
 def test_loop_compare_recurrent_params_simple(vector_input):
     _render_both(example_models.RecurrentParamsSimple(), vector_input, "recurrent_params_simple")
 
@@ -4293,6 +4312,7 @@ def test_loop_compare_recurrent_params_complex(vector_input):
     _render_both(example_models.RecurrentParamsComplex(), vector_input, "recurrent_params_complex")
 
 
+@pytest.mark.smoke
 def test_loop_compare_nested_param_free_loops(vector_input):
     _render_both(example_models.NestedParamFreeLoops(), vector_input, "nested_param_free_loops")
 

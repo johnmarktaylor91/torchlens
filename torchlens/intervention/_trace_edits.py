@@ -9,7 +9,6 @@ Selection-kind ``do`` bodies: ``_trace_selection_edits``; sticky hook attachment
 from __future__ import annotations
 
 import copy
-import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -34,7 +33,9 @@ from .._data_classes._trace_intervention_records import (
 )
 from .._errors import InvalidArgumentError
 from ..options import InterventionOptions, ReplayOptions, merge_intervention_options
+from ._do_target_doors import apply_region_target_do, lift_trace_slice
 from ._edit_guards import select_do_engine, warn_if_root_mutation
+from ._live_hook_plan import retire_live_hook_handles, sticky_handle_ids
 from ._trace_selection_edits import (
     apply_selection_batch_do,
     apply_selection_do,
@@ -273,16 +274,17 @@ def clear_edits(
         if handle is not None
         else (None,)
     )
+    spec = ensure_intervention_spec(trace)
+    handles_before = sticky_handle_ids(spec)
     removed = 0
     for handle_value in handle_values:
-        removed += ensure_intervention_spec(trace).remove_hook(
-            site_target=target_spec,
-            handle=handle_value,
-        )
+        removed += spec.remove_hook(site_target=target_spec, handle=handle_value)
     if removed == 0 and strict:
         raise SpecMutationError("clear_edits did not match any sticky hooks.")
     if removed > 0:
         mark_intervention_spec_mutated(trace)
+        # Removal takes effect at once, in a rerun or backward pass in progress.
+        retire_live_hook_handles(handles_before - sticky_handle_ids(spec))
     record_operation(
         trace,
         "detach_hooks",
@@ -593,25 +595,17 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
             confirm_mutation=confirm_mutation,
         )
 
-    # A RegionTarget (F01) is the region-as-a-unit door: the replay lowering
-    # substitutes the region's derived exit values without replaying the
-    # interior. Distinct from the TraceSlice lift below, which keeps its shipped
-    # member-site family semantics. sys.modules gate keeps do() free of the regions import.
-    regions_module = sys.modules.get("torchlens.intervention.regions")
-    if regions_module is not None and isinstance(hooks_or_site, regions_module.RegionTarget):
-        warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
-        return (
-            regions_module.apply_region_do(
-                trace, hooks_or_site, value_or_hook, engine=engine, strict=strict
-            ),
-            (),
-        )
-    # A TraceSlice targets its member family: lift it to the whole-site
-    # QUERY (re-resolved on THIS trace by site name, so a slice built on the
-    # source log addresses the same sites on a fork). sys.modules gate keeps do() slice-free.
-    slice_module = sys.modules.get("torchlens._trace_slice")
-    if slice_module is not None and isinstance(hooks_or_site, slice_module.TraceSlice):
-        hooks_or_site = hooks_or_site.__selection__()
+    region_result = apply_region_target_do(
+        trace,
+        hooks_or_site,
+        value_or_hook,
+        engine=engine,
+        strict=strict,
+        confirm_mutation=confirm_mutation,
+    )
+    if region_result is not None:
+        return region_result
+    hooks_or_site = lift_trace_slice(hooks_or_site)
     if is_selection_batch(hooks_or_site):
         warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
         if value_or_hook is not None:

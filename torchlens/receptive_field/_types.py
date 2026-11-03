@@ -522,7 +522,7 @@ class GradReceptiveField(_SelectionOperand):
         "cross_batch_influence",
         "atol",
         "rtol",
-        "nonfinite_count",
+        "num_nonfinite",
         "warnings",
     )
 
@@ -537,7 +537,7 @@ class GradReceptiveField(_SelectionOperand):
     cross_batch_influence: bool
     atol: float
     rtol: float
-    nonfinite_count: int
+    num_nonfinite: int
     warnings: tuple[str, ...]
     direction: ReceptiveFieldDirection = field(
         default=ReceptiveFieldDirection.RECEPTIVE, repr=False, kw_only=True
@@ -561,8 +561,8 @@ class GradReceptiveField(_SelectionOperand):
 
         if self.atol < 0 or self.rtol < 0:
             raise ValueError("atol and rtol must be non-negative.")
-        if self.nonfinite_count < 0:
-            raise ValueError("nonfinite_count must be non-negative.")
+        if self.num_nonfinite < 0:
+            raise ValueError("num_nonfinite must be non-negative.")
         if self.support_ranges is not None and any(
             start < 0 or stop < start for start, stop in self.support_ranges
         ):

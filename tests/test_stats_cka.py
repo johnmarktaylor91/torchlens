@@ -164,7 +164,7 @@ def test_aggregate_grad_output_metric_raises_clear_key_error() -> None:
 
 
 def test_cka_results_name_the_measure_variant_they_compute() -> None:
-    """One-shot cka and CKA.compute carry the similarity-repository id (U56.3)."""
+    """One-shot cka and CKA.compute carry the similarity-repository id."""
 
     import json
     import pickle

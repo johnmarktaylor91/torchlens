@@ -62,7 +62,6 @@ def _halt_on_linear(ctx: object) -> bool:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_tracing_finished_writer_inventory_is_exact() -> None:
     """The `_tracing_finished = True` writer set is a reviewed inventory.
 
@@ -255,7 +254,6 @@ def test_halted_trace_fast_run_refuses_typed() -> None:
     assert exc_info.value.fields["code"] == "N5"
 
 
-@pytest.mark.smoke
 def test_halted_trace_runnable_save_refuses_typed() -> None:
     """FLIPPED (N4): halted runnable save is a typed runnable refusal.
 
@@ -314,6 +312,7 @@ def test_halted_bn_buffer_topology_matches_complete_prefix() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_keyboard_interrupt_propagates_without_partial_banner() -> None:
     """BaseException escapes propagate bare: no partial_trace, no banner."""
 
@@ -322,7 +321,6 @@ def test_keyboard_interrupt_propagates_without_partial_banner() -> None:
     assert not hasattr(exc_info.value, "partial_trace")
 
 
-@pytest.mark.smoke
 def test_recorder_keyboard_interrupt_leaves_no_product() -> None:
     """Recorder BaseException: propagates; `.recording` raises typed."""
 
@@ -373,7 +371,6 @@ def test_recorder_mixed_multipass_halt_pins() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_failed_partial_pickle_loads_coreless() -> None:
     """A pickled falsy-finished partial loads coreless (staging surface)."""
 

@@ -139,18 +139,18 @@ def exact_stats(tensor: torch.Tensor, *, identity: str | None = None) -> TensorS
     NarrationStatsError
         When ``tensor.numel()`` exceeds :data:`EXACT_NUMEL_BUDGET` -- the
         live exact rung refuses typed instead of running for minutes; the
-        remedy names ``stats="sampled"``.
+        remedy names ``value_stats="sampled"``.
     """
 
     numel = tensor.numel()
     if numel > EXACT_NUMEL_BUDGET:
         raise NarrationStatsError(
-            f"echo stats='exact' refuses a {numel}-element tensor: the live exact rung "
+            f"echo value_stats='exact' refuses a {numel}-element tensor: the live exact rung "
             f"is budgeted at {EXACT_NUMEL_BUDGET} elements per line and a larger scan "
-            "would stall the forward pass. Remedy: use stats='sampled' (bounded budget, "
+            "would stall the forward pass. Remedy: use value_stats='sampled' (bounded budget, "
             "no finiteness claim) or compute exact stats post-hoc via narrate().",
             code="echo_stats_numel_budget",
-            remedy="use stats='sampled', or compute exact stats post-hoc via narrate()",
+            remedy="use value_stats='sampled', or compute exact stats post-hoc via narrate()",
             numel=numel,
             budget=EXACT_NUMEL_BUDGET,
         )

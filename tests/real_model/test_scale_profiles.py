@@ -1,4 +1,4 @@
-"""Scale-profile budgets hold under their ceilings; SP1 runs under its own (U40.3).
+"""Scale-profile budgets hold under their ceilings; SP1 runs under its own.
 
 The ceilings (10 CPU-minutes a night, 30 a week) and the per-profile budgets
 live in ``tests/real_model/scale_profiles.py``. The SP1 quantities are

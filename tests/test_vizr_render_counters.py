@@ -1,4 +1,4 @@
-"""Render-path counters for the U07.5 profiling pass.
+"""Render-path counters for the profiling pass.
 
 The profile of a default ``draw()`` (counters, then wall clock as a report)
 put two rows on top. By wall time: Graphviz layouts -- the sibling-order
@@ -24,7 +24,7 @@ from torchlens._visualization import _render_ordering, _render_utils
 
 
 def _reference_dot_line_is_complete(line: str) -> bool:
-    """The pre-U07.5 character-by-character scanner, kept as the oracle."""
+    """The earlier character-by-character scanner, kept as the oracle."""
 
     in_quote = False
     html_depth = 0
@@ -99,7 +99,7 @@ def test_dot_line_scanner_visits_only_state_characters(monkeypatch: Any, tmp_pat
     finally:
         trace.cleanup()
     assert counter.scanned_chars > 0, "the sibling-order verifier did not scan the DOT"
-    # Before U07.5 the loop stepped once per character (visited == scanned).
+    # Before the fix the loop stepped once per character (visited == scanned).
     assert counter.visited * 2 < counter.scanned_chars
 
 
@@ -127,7 +127,7 @@ def test_default_draw_reuses_the_verified_layout(monkeypatch: Any, tmp_path: Any
     finally:
         trace.cleanup()
     assert decision.survivor_count > 0, "the fixture must exercise the ordering post-pass"
-    # Before U07.5: baseline -Tplain, ordered -Tplain, final -Tsvg = 3 layouts.
+    # Before the fix: baseline -Tplain, ordered -Tplain, final -Tsvg = 3 layouts.
     assert len(calls) == 2, calls
     assert any("-Tsvg" in cmd for cmd in calls)
     svg = (tmp_path / "reuse.svg").read_text(encoding="utf-8")

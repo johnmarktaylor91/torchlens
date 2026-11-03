@@ -844,7 +844,7 @@ def test_buffer_value_changed_none_fails_closed():
 
 
 def test_state_restore_admits_only_proven_train_mode_norm_writers():
-    """5.2 under U40.1: run() admits a proven train-mode BatchNorm, nothing looser.
+    """5.2 under the pure-observer default: run() admits a proven train-mode BatchNorm, nothing looser.
 
     The default run() restores the declared state it changed and the capture is a
     pure observer, so a train-mode BatchNorm (proven norm writes plus its counter)

@@ -641,6 +641,7 @@ def test_rerun_rejects_fsdp_when_constructible(tmp_path: Path) -> None:
         dist.destroy_process_group()
 
 
+@pytest.mark.smoke
 def test_colliding_plan_identifiers_get_per_entry_occurrence_ids() -> None:
     """One entry's fires can never mask a colliding entry's total miss.
 

@@ -53,6 +53,7 @@ def test_validate_backward_on_stacked_trace_warns() -> None:
         assert validate_backward_pass(trace, torch.randn(1, 3)) is False
 
 
+@pytest.mark.smoke
 def test_validate_backward_pass_fresh_capture_only_still_works() -> None:
     """The normal validator path still captures and validates a fresh trace."""
 

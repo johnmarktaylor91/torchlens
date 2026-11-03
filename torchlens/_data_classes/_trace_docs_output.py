@@ -198,12 +198,13 @@ DOCS: dict[str, str] = {
         Parameters
         ----------
         path:
-            Output path stem. ``None`` (the default) writes a collision-safe
-            file in the current directory (``modelgraph.<format>``, then
-            ``modelgraph-2.<format>``, ...) and prints its path, so a bare
-            ``draw()`` never overwrites an earlier picture. An explicit path is
-            written exactly (overwriting) and printed only when the trace is
-            verbose. Backward and combined graphs default to
+            Output path; its extension picks the format (``"g.png"`` writes PNG).
+            An explicit path is always written (overwriting), printed only when
+            the trace is verbose. ``None`` (the default): inside a Jupyter kernel
+            the picture displays inline and no file is written; elsewhere a
+            collision-safe file is written in the current directory
+            (``modelgraph.<format>``, then ``modelgraph-2.<format>``, ...) and
+            its path printed. Backward and combined graphs write
             ``backward_modelgraph`` and ``combined_modelgraph``.
         graph:
             Which graph: ``"forward"`` (the ops), ``"backward"`` (the captured
@@ -339,10 +340,23 @@ DOCS: dict[str, str] = {
             Combined graph: placement of backward-only nodes (``"upstream"``,
             ``"outside"``, ``"downstream"`` or ``"own"``).
         file_format:
-            Output file format (``"pdf"`` default, ``"svg"``, ``"png"``, ...).
+            Format for a path with no extension, or a bare call (``"pdf"``, or
+            ``"svg"`` inline); a different format than the path's extension refuses.
         open_viewer:
             ``True`` opens the written picture in the system viewer; the
             default never opens anything.
+        highlight:
+            Keyword-only. Named highlight drawn over the graph. ``None`` (the
+            default) draws the plain graph. ``"interventions"`` draws the
+            surgery lens: every recorded intervention is marked on its node
+            (solid border = recorded fact, dashed = heuristic attribution),
+            the caption carries the per-lane census, and when a figure is
+            written the full census text lands beside it as
+            ``<path>.census.txt`` (beside the collision-safe file a bare draw
+            chose). A trace with no recorded intervention refuses
+            ``surgery_evidence_missing``; any other value refuses
+            ``draw_highlight_invalid`` naming the allowed values. The other
+            keywords you pass win over the lens's own settings.
         
         Returns
         -------

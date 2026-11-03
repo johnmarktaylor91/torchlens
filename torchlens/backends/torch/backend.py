@@ -23,6 +23,7 @@ from ..._ir.semantics import BackendSemantics, CapturePolicy
 from ..._utils._cuda_probe import _is_cuda_available
 from ..._utils._exception_notes import annotate_guarded
 from ..._utils.arg_handling import normalize_input_args, safe_copy_input_tree
+from ..._utils.input_leaves import flatten_input_tensor_addresses
 from ..._utils.rng import log_current_rng_states, set_random_seed, set_rng_from_saved_states
 from ..._utils.tensor_utils import safe_copy
 from ...recording.types import ModuleStackFrame
@@ -31,11 +32,6 @@ from ._completeness_finalize import capture_completeness_witness
 from ._completeness_origins import internal_scalar_read
 from ._completeness_storage import capture_scalar_escape_warning
 from ._held_refs_capture import rebind_held_torch_refs, restore_held_torch_refs
-from ._input_tensor_moves import (
-    collect_input_tensor_leaves,
-    flatten_input_tensor_addresses,
-    move_input_tensors_to_device,
-)
 from ._ops_autograd import _get_autograd_saved_stats_for_tensor
 from ._ops_emission import log_function_output_tensors
 from .aliasing import detect_torch_alias_contract
@@ -47,7 +43,11 @@ from .model_prep import (
     _prepare_model_session,
 )
 from .module_stack import pop_frame, push_existing_frame
-from .sources import log_source_tensor as _log_source_tensor
+from .sources import (
+    _collect_input_tensor_leaves,
+    _move_input_tensors_to_device,
+    log_source_tensor as _log_source_tensor,
+)
 from .structure_only_belt import structure_only_escape_belt
 from .wrappers import unwrap_torch, wrap_torch
 
@@ -403,7 +403,7 @@ class TorchBackend:
         Each tensor gets a hierarchical address string like ``"input.x"`` or
         ``"input.x.0.nested"`` that is stored as its ``io_role``.
         """
-        input_arg_tensors, input_kwarg_tensors, traversal_gaps = collect_input_tensor_leaves(
+        input_arg_tensors, input_kwarg_tensors, traversal_gaps = _collect_input_tensor_leaves(
             input_args, input_arg_names, input_kwargs
         )
         _record_input_semantics_gaps(
@@ -411,8 +411,13 @@ class TorchBackend:
             traversal_gaps,
             reason="input_traversal_depth_exceeded",
         )
-        move_input_tensors_to_device(
-            input_args, input_kwargs, input_arg_tensors, input_kwarg_tensors, model_device
+        _move_input_tensors_to_device(
+            input_args,
+            input_kwargs,
+            input_arg_tensors,
+            input_kwarg_tensors,
+            model_device,
+            _assign_nested_input_value,
         )
         return flatten_input_tensor_addresses(
             input_arg_tensors, input_kwarg_tensors, input_arg_names, input_kwargs

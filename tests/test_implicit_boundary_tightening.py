@@ -243,7 +243,6 @@ def test_sync_point_fallback_when_engine_handle_unavailable(monkeypatch) -> None
     trace.cleanup()
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(not _HAS_GRAPH_TASK_ID, reason="no graph-task identity on this torch")
 def test_stale_drain_callback_never_closes_a_newer_pass(monkeypatch) -> None:
     callbacks: list = []

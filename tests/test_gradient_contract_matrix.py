@@ -9,6 +9,14 @@ must agree (both absent, or equal). The recorded outcome must equal the row of
 ``docs/gradient_contract.md``, so the page is the contract and this test keeps
 it true. Outcomes: ``reaches``, ``cut`` (no gradient reaches the parameter),
 or ``raises:<code>`` / ``error:<type>`` for a door that refuses the verb.
+
+Sampling (test-shape ruling tests.4): the parametrized cells are a sample of
+the (door, verb, keep_grad) product: every door with every outcome its page
+row promises, every verb under at least one door, every cell of the rerun
+door's and ``set_direction_mean``'s historical reds that the sample needs,
+and the cells that alone reached a library branch or alone killed a mutant
+(``_EVIDENCE_CELLS``). One property test walks the whole product (about 130
+seconds, so ``slow``) and names every cell whose outcome leaves the page.
 """
 
 from __future__ import annotations
@@ -415,23 +423,124 @@ def _page_rows() -> dict[tuple[str, str], tuple[str, str]]:
 
 
 _CELLS = [(door, verb) for door in _DOORS for verb in _VERBS]
+_KEEPS = (False, True)
 
 
 def test_page_lists_exactly_the_matrix_cells() -> None:
     assert sorted(_page_rows()) == sorted(_CELLS)
 
 
-@pytest.mark.parametrize("keep", [False, True], ids=["keep_grad_off", "keep_grad_on"])
-@pytest.mark.parametrize(("door", "verb"), _CELLS)
-def test_gradient_cell_matches_page_and_eager_hand(door: str, verb: str, keep: bool) -> None:
+def _cell_problem(door: str, verb: str, keep: bool) -> str | None:
+    """How one (door, verb, keep_grad) cell leaves its page row, else ``None``."""
+
     outcome, grad = _measure(door, verb, keep)
     expected = _page_rows()[(door, verb)][1 if keep else 0]
-    assert outcome == expected, (door, verb, keep, outcome)
+    if outcome != expected:
+        return f"outcome {outcome!r}, page says {expected!r}"
     if outcome in {"reaches", "cut"}:
         want = _hand_gradient(door, verb)
-        assert (grad is None) == (want is None), (door, verb, keep)
+        if (grad is None) != (want is None):
+            return f"gradient presence {grad is not None}, eager hand {want is not None}"
         if grad is not None and want is not None:
-            torch.testing.assert_close(grad, want, rtol=1e-10, atol=1e-12)
+            try:
+                torch.testing.assert_close(grad, want, rtol=1e-10, atol=1e-12)
+            except AssertionError as error:
+                return f"gradient differs from the eager hand: {error}"
     if keep and outcome == "raises:edit_detached_from_graph":
         hand = _VERBS[verb][1]
-        assert not hand(_X.clone().requires_grad_()).requires_grad, (door, verb)
+        if hand(_X.clone().requires_grad_()).requires_grad:
+            return "refused as detached, but the eager hand edit keeps the graph"
+    return None
+
+
+def _sampled_cells() -> list[tuple[str, str, bool]]:
+    """Every door with each outcome its page row promises, then every verb once.
+
+    Walks the product in declaration order and keeps the first cell of each
+    unseen (door, outcome) pair, then the first cell of each verb no kept
+    cell covers yet, then the evidence cells.
+    """
+
+    rows = _page_rows()
+    kept: list[tuple[str, str, bool]] = []
+    seen: set[tuple[str, str]] = set()
+    for door, verb in _CELLS:
+        for keep in _KEEPS:
+            outcome = rows[(door, verb)][1 if keep else 0]
+            if (door, outcome) not in seen:
+                seen.add((door, outcome))
+                kept.append((door, verb, keep))
+    covered = {verb for _door, verb, _keep in kept}
+    for index, verb in enumerate(_VERBS):
+        if verb not in covered:
+            door = list(_DOORS)[index % len(_DOORS)]
+            kept.append((door, verb, bool(index % 2)))
+    kept.extend(cell for cell in _EVIDENCE_CELLS if cell not in kept)
+    return kept
+
+
+#: Cells the sample keeps on evidence: the only killers of a mutant, the only
+#: reachers of a library branch, or a historically red cell (test-shape lane).
+_EVIDENCE_CELLS: tuple[tuple[str, str, bool], ...] = (
+    # Sole killers of a recorded mutant.
+    ("capture intervene=", "resample_rows_from", False),
+    ("push(differentiable=True)", "hook callable", True),
+    ("capture InterventionDecision", "mean_ablate(population, dim=(0, 1))", False),
+    ("capture InterventionDecision", "mean_ablate(population, dim=(0, 1))", True),
+    ("do(tl.subspace(...))", "mean_ablate(dim=0)", False),
+    ("do(tl.subspace(...))", "add(tensor)", True),
+    ("do(tl.subspace(...))", "set_affine_coordinates", True),
+    ("do(model=, inputs=) (rerun)", "scramble_elements", False),
+    # Sole reachers of a library branch the rest of the sample misses.
+    ("capture intervene=", "compose", False),
+    ("attach_hooks + run", "permute_batch", False),
+    ("capture intervene=", "hook callable", True),
+    ("do(tl.units(...))", "hook callable", True),
+    ("spec.bind(model)", "hook callable", True),
+    ("do(model=, inputs=) (rerun)", "scramble_elements", True),
+    ("do(tl.units(...))", "patch_from", True),
+    ("do(tl.subspace(...))", "splice_module", True),
+    ("do(tl.subspace(...))", "scramble_elements", True),
+    ("do(model=, inputs=) (rerun)", "hook callable", True),
+    ("spec.bind(model)", "set_affine_coordinates", True),
+    ("spec.bind(model)", "permute_batch", True),
+    # Historically red: float64 sites took the float32 direction.
+    ("capture intervene=", "set_direction_mean", False),
+    ("capture intervene=", "set_direction_mean", True),
+)
+
+_SAMPLED = _sampled_cells()
+
+
+@pytest.mark.parametrize(
+    ("door", "verb", "keep"),
+    _SAMPLED,
+    ids=[f"{door}-{verb}-keep_grad_{'on' if keep else 'off'}" for door, verb, keep in _SAMPLED],
+)
+def test_gradient_cell_matches_page_and_eager_hand(door: str, verb: str, keep: bool) -> None:
+    """Sampled cell: the outcome equals the page row and the gradient equals the eager hand's."""
+
+    problem = _cell_problem(door, verb, keep)
+    assert problem is None, (door, verb, keep, problem)
+
+
+@pytest.mark.slow
+def test_every_gradient_cell_matches_page_and_eager_hand() -> None:
+    """Property: across the whole door x verb x keep_grad product, every cell keeps its page row."""
+
+    broken = {
+        f"{door}-{verb}-keep_grad_{'on' if keep else 'off'}": problem
+        for door, verb in _CELLS
+        for keep in _KEEPS
+        if (problem := _guarded_cell_problem(door, verb, keep)) is not None
+    }
+    assert not broken, broken
+
+
+def _guarded_cell_problem(door: str, verb: str, keep: bool) -> str | None:
+    """One cell's problem; an unexpected exception is that cell's problem, not the sweep's."""
+
+    try:
+        return _cell_problem(door, verb, keep)
+    except Exception as error:  # the property names the cell that raised
+        return f"raised {type(error).__name__}: {error}"

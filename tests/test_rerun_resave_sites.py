@@ -151,7 +151,6 @@ def _assert_matches_fresh(trace: Any, fresh: dict[str, Any]) -> None:
         assert torch.equal(outs[address], expected), address
 
 
-@pytest.mark.smoke
 def test_rerun_after_attach_hooks_resaves_the_requested_sites(fresh: dict[str, Any]) -> None:
     """``attach_hooks`` on a plain capture, then reruns, save the steered sites."""
 

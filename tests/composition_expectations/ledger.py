@@ -194,7 +194,7 @@ LEDGER: tuple[CompositionRow, ...] = (
         refusal_code="rerun_selector_unmatchable_live",
         source_gap="M(compo) 5.4 worked example",
         notes=(
-            "U40.6: a rerun of a live-unmatchable selector refuses typed (trace "
+            "A rerun of a live-unmatchable selector refuses typed (trace "
             "unchanged) on the same inputs and, for a tl.where predicate matching the "
             "rerun's own trace, on new inputs too; the push engine ablates it",
         ),

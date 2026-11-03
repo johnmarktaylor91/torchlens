@@ -222,6 +222,7 @@ _REDIRECTS: dict[str, str] = {
     "draw_backward": "use torchlens.Trace.draw (trace.draw(graph='backward'))",
     "draw_combined": "use torchlens.Trace.draw (trace.draw(graph='combined'))",
     "draw_model_graph": "use torchlens.Trace.draw (trace.draw())",
+    "show_bundle_graph": "use torchlens.Bundle.draw (bundle.draw(path)): the merged bundle graph",
     "FuncCallLocation": "use torchlens.types.FuncCallLocation",
     "get_model_metadata": "use torchlens.trace(model, x, save='none') -- a metadata-only capture is a trace that saves no payloads",
     "get_model_structure": "use torchlens.summary(model, x) for the module tree, or torchlens.trace(model, x).modules",

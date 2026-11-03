@@ -1002,7 +1002,7 @@ def _recurrent_linear_ops(trace: tl.Trace) -> list[Any]:
 
 
 def test_rdm_evolution_default_sweep_expands_recurrent_passes() -> None:
-    """U24.2: the default sweep yields one RDM per pass, equal to hand-built RDMs."""
+    """The default sweep yields one RDM per pass, equal to hand-built RDMs."""
 
     trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
     ops = _recurrent_linear_ops(trace)
@@ -1026,7 +1026,7 @@ def test_rdm_evolution_default_sweep_expands_recurrent_passes() -> None:
 
 
 def test_rdm_evolution_selector_matching_every_pass_expands() -> None:
-    """U24.2: a selector matching all passes gives the same per-pass RDMs."""
+    """A selector matching all passes gives the same per-pass RDMs."""
 
     trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
     ops = _recurrent_linear_ops(trace)
@@ -1040,7 +1040,7 @@ def test_rdm_evolution_selector_matching_every_pass_expands() -> None:
 
 
 def test_rdm_evolution_recurrent_expansion_leaves_mds_refusal() -> None:
-    """U24.2: expansion leaves mds_evolution's recurrent refusal unchanged."""
+    """Expansion leaves mds_evolution's recurrent refusal unchanged."""
 
     trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
 
@@ -1060,7 +1060,7 @@ def test_rdm_evolution_recurrent_expansion_leaves_mds_refusal() -> None:
     ],
 )
 def test_rdm_evolution_records_similarity_repository_id(metric: str, expected: Any) -> None:
-    """U56.3: the result names its exact RDM variant in the catalogue, or None."""
+    """The result names its exact RDM variant in the catalogue, or None."""
 
     trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
 
@@ -1071,7 +1071,7 @@ def test_rdm_evolution_records_similarity_repository_id(metric: str, expected: A
 
 
 def test_similarity_repository_table_covers_every_metric_and_method() -> None:
-    """U56.3: every rdm metric and rdm_compare method has a decided table entry."""
+    """Every rdm metric and rdm_compare method has a decided table entry."""
 
     from torchlens.repgeom import _similarity_ids as ids
     from torchlens.repgeom._geometry import DistanceMetric

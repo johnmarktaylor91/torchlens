@@ -191,7 +191,7 @@ def test_config_built_clip_visual_projection_bit_equal_through_forced_spill(forc
 
 
 def _detached(**fields: Any) -> Any:
-    """Return capture options for a detached deferred save (the pre-U27.1 escrow path).
+    """Return capture options for a detached deferred save (the earlier escrow path).
 
     Parameters
     ----------

@@ -93,7 +93,6 @@ def test_bundle_retained_bytes_lower_bound_aggregation() -> None:
     assert report["unmetered_members"] == []
 
 
-@pytest.mark.smoke
 def test_bundle_retained_bytes_names_unmetered_members() -> None:
     torch.manual_seed(1)
     x = torch.randn(2, 3, 8, 8)
@@ -105,7 +104,6 @@ def test_bundle_retained_bytes_names_unmetered_members() -> None:
     assert report["unmetered_members"] == ["legacy"]
 
 
-@pytest.mark.smoke
 def test_retention_preflight_refuses_typed_before_any_work() -> None:
     with pytest.raises(BundleExperimentError) as excinfo:
         preflight_retention_projection(

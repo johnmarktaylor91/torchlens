@@ -13,6 +13,8 @@ Three regressions from the behaviour net's ``bundle-validate`` cells:
 from __future__ import annotations
 
 import math
+import shutil
+from pathlib import Path
 
 import pytest
 import torch
@@ -26,7 +28,7 @@ from torchlens.intervention._topology.topology import (
     _preferential_topological_order,
     build_supergraph,
 )
-from torchlens.intervention.errors import BundleComparisonError
+from torchlens.intervention.errors import BundleComparisonError, MultiMatchWarning
 
 
 class _Recurrent(nn.Module):
@@ -206,6 +208,80 @@ def test_recurrent_compare_gives_one_row_per_pass() -> None:
     pair = tl.Bundle({"base": trace, "edited": trace.fork()}, baseline="base")
     ranked = dict(pair.rank_changes(k=64))
     assert {f"{layer_label}:{k}" for k in (1, 2, 3)} <= set(ranked)
+
+
+class _ReusedRelu(nn.Module):
+    """A residual block that calls one ReLU module twice, as ResNet blocks do."""
+
+    def __init__(self) -> None:
+        """Initialize modules."""
+        super().__init__()
+        self.conv = nn.Conv2d(2, 2, 3, padding=1)
+        self.bn = nn.BatchNorm2d(2)
+        self.relu = nn.ReLU()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run conv, batchnorm and ReLU, add the input back and apply the same ReLU.
+
+        Parameters
+        ----------
+        x:
+            Input tensor of shape ``(batch, 2, height, width)``.
+
+        Returns
+        -------
+        torch.Tensor
+            Block output.
+        """
+        return self.relu(self.relu(self.bn(self.conv(x))) + x)
+
+
+def test_stored_comparison_reads_the_most_changed_pass_of_a_multi_pass_layer() -> None:
+    """A multi-pass supergraph node gets its largest per-pass distance, not a refusal."""
+
+    torch.manual_seed(0)
+    trace = _trace(_Recurrent(), torch.randn(2, 4))
+    fork = trace.fork()
+    fork.do(tl.label(_first_interior_op(trace)), tl.zero_ablate())
+    pair = tl.Bundle({"base": trace, "edited": fork}, baseline="base")
+    fork_rows = dict(pair.compare("base", "edited", metric="relative_l2"))
+
+    stored = pair.stored_comparison(pair.store_comparison("relative_l2"))
+
+    tanh_label = str(next(op for op in trace.ops if op.func_name == "tanh").layer_label)
+    tanh_nodes = [name for name in stored if name.startswith("tanh_")]
+    assert len(tanh_nodes) == 1
+    per_pass = [fork_rows[f"{tanh_label}:{k}"] for k in (1, 2, 3)]
+    assert stored[tanh_nodes[0]]["base"] == 0.0
+    assert stored[tanh_nodes[0]]["edited"] == pytest.approx(max(per_pass))
+    assert max(per_pass) > 0.0
+
+
+def test_diff_drawing_of_a_reused_module_does_not_refuse(tmp_path: Path) -> None:
+    """Zero-ablating a ReLU module called twice draws a diff (ResNet bundle-diff case)."""
+
+    if shutil.which("dot") is None:
+        pytest.skip("graphviz dot not installed")
+    torch.manual_seed(0)
+    model = _ReusedRelu().eval()
+    trace = _trace(model, torch.randn(1, 2, 4, 4))
+    ablated = trace.fork("ablated")
+    # The module runs twice, so the selector fans out to both of its sites.
+    with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
+        ablated.do(
+            tl.module("relu"),
+            tl.zero_ablate(),
+            intervention=tl.options.InterventionOptions(confirm_mutation=True),
+        )
+    bundle = tl.Bundle({"clean": trace, "ablated": ablated}, baseline="clean")
+
+    dot = bundle.draw(graph="diff", path=str(tmp_path / "d"), open_viewer=False)
+
+    assert dot.startswith("// TorchLens bundle diff")
+    assert (tmp_path / "d.svg").exists()
+    stored = bundle.stored_comparison(bundle.store_comparison("relative_l2"))
+    relu_nodes = [name for name in stored if name.startswith("relu_")]
+    assert relu_nodes and all(math.isfinite(stored[n]["ablated"]) for n in relu_nodes)
 
 
 def test_contradictory_member_orders_refuse_typed() -> None:

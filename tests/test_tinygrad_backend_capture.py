@@ -23,7 +23,7 @@ tinygrad = pytest.importorskip("tinygrad")
 Tensor = pytest.importorskip("tinygrad").Tensor
 
 
-pytestmark = pytest.mark.backend_tinygrad
+pytestmark = [pytest.mark.backend_tinygrad, pytest.mark.rare]
 
 
 def _tiny_block(x: Any) -> Any:
@@ -664,7 +664,7 @@ def test_tinygrad_rejects_tinyjit_callable() -> None:
             {"intervene": tl.when(tl.func("relu"), tl.zero_ablate())},
             "can_intervene=False.*intervene",
         ),
-        ({"halt": tl.func("relu")}, "can_intervene=False.*halt"),
+        ({"stop_after": tl.func("relu")}, "can_intervene=False.*stop_after"),
         ({"save_grads": True}, "backward_capture=False.*save_grads"),
     ),
 )

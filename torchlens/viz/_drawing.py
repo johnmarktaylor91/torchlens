@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .._errors import CaptureNotActiveError
+from .._errors import ArgumentConflictError, CaptureNotActiveError
 
 __tl_layer__ = "FACADE"
 
@@ -263,6 +263,94 @@ def _render_dot_source(dot: str, fileformat: str) -> bytes:
                 "choose a supported format such as 'pdf' or 'svg'"
             ),
         ) from error
+
+
+@dataclass
+class DrawTarget:
+    """Where one ``draw`` call renders: the output path, the format and the inline mode.
+
+    Both draw doors (``Trace.draw`` and ``Bundle.draw``) resolve their target
+    with :func:`resolve_draw_target`, so the extension rule and the notebook
+    rule are one rule.
+
+    Attributes
+    ----------
+    path:
+        The path to hand the renderer: the caller's path, a scratch path for an
+        inline render, or ``None`` for a bare call outside a notebook (the
+        caller picks its default file).
+    file_format:
+        The resolved format.
+    stem:
+        ``path`` without its recognised extension (``None`` when ``path`` is).
+    inline:
+        ``True`` for a bare call inside a Jupyter kernel: the picture renders to
+        memory and no file is left behind.
+    """
+
+    path: str | None
+    file_format: str
+    stem: str | None = None
+    inline: bool = False
+    scratch: tempfile.TemporaryDirectory[str] | None = field(default=None, repr=False)
+
+    def finish(self, dot: str, outpath: str, **fields: Any) -> Drawing:
+        """Return the call's :class:`Drawing`; an inline render keeps the bytes, not the file.
+
+        ``outpath`` is the path the renderer was given; ``fields`` are the
+        remaining :class:`Drawing` fields (``num_ops``, ``policy``).
+        """
+
+        stem = self.stem if self.stem is not None else outpath
+        written = Path(f"{stem}.{self.file_format}")
+        if not self.inline:
+            path = written if written.exists() else None
+            return Drawing(dot=dot, file_format=self.file_format, path=path, **fields)
+        data = written.read_bytes() if written.exists() else None
+        if self.scratch is not None:
+            self.scratch.cleanup()
+        return Drawing(dot=dot, file_format=self.file_format, _data=data, **fields)
+
+
+def resolve_draw_target(
+    path: str | os.PathLike[str] | None,
+    file_format: str | None,
+    known_extensions: tuple[str, ...],
+    default_format: str = "pdf",
+) -> DrawTarget:
+    """Resolve a draw call's path and format (the rule both draw doors share).
+
+    The path's extension picks the format when it is one of
+    ``known_extensions``; ``file_format`` applies only to a path without one
+    (and to a bare call); naming a different format than the extension
+    refuses. With no path inside a Jupyter kernel (the detection ``tl.draw``
+    uses) the picture renders inline to a scratch directory and no file is
+    written; elsewhere a bare call leaves ``path`` ``None`` for the caller's
+    default file.
+
+    Raises
+    ------
+    ArgumentConflictError
+        ``draw_format_mismatch``: the extension and ``file_format`` disagree.
+    """
+
+    text = None if path is None else os.fspath(path)
+    stem, _, suffix = (text or "").rpartition(".")
+    extension = suffix.lower() if stem and suffix.lower() in known_extensions else None
+    if extension is not None and file_format is not None and file_format.lower() != extension:
+        raise ArgumentConflictError(
+            f"path {text!r} names the format {extension!r} but file_format={file_format!r}",
+            code="draw_format_mismatch",
+            remedy="drop file_format=, or end the path with the extension of the format you want",
+            argument="file_format",
+        )
+    inline = text is None and _in_notebook()
+    fileformat = extension or file_format or ("svg" if inline else default_format)
+    if not inline:
+        return DrawTarget(text, fileformat, stem=stem if extension is not None else text)
+    scratch = tempfile.TemporaryDirectory(prefix="tl-render-")
+    graph = str(Path(scratch.name) / "graph")
+    return DrawTarget(graph, fileformat, stem=graph, inline=True, scratch=scratch)
 
 
 def _in_notebook() -> bool:

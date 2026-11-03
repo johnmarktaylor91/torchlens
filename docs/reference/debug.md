@@ -305,7 +305,7 @@ Output:
 
 ## `dead_neurons`
 
-`tl.debug.dead_neurons(trace, *, dim=1, threshold=0.0)` reports units whose maximum
+`tl.debug.dead_neurons(trace, *, dim=1, max_activation=0.0)` reports units whose maximum
 activation is at most `threshold` or whose value has zero variance in this trace. One
 trace is only one sample; aggregate runs before making a dataset-level claim. Related:
 [`grad_health`](#grad_health).

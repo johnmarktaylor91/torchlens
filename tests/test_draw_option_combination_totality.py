@@ -23,11 +23,13 @@ This suite owns crash/refusal totality; warning hygiene is owned by the
 dedicated deprecation and advisory suites, so draws run with warnings
 visible-but-not-fatal.
 
-Tiering (the smoke family-aggregate budget rules the full sweep out of the
-5s tier): the signature tripwire and the pinned refusal rows run at smoke on
-every commit; the CORE pair family moved to ``heavy`` when the merged tree's
-per-cell draw cost outgrew the cell-scaled smoke budget (T67d), joining the
-exhaustive singles + all-pairs sweep in the ``not slow`` tiers.
+Sampling (test-shape ruling tests.4): the parametrized cells are the
+documented combinations: every pinned refusal, every option alone, the CORE
+structural pairs whose combinations have historically crashed, and the pairs
+that alone reach a library branch (``_COVERAGE_PAIRS``). One property test
+walks the whole generator (every single and every unordered pair, about 260
+seconds of draws, so ``slow``) and names every combination that neither
+draws nor refuses with its pinned code.
 """
 
 from __future__ import annotations
@@ -35,7 +37,7 @@ from __future__ import annotations
 import inspect
 import itertools
 import warnings
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -55,7 +57,7 @@ from torchlens._errors import InvalidArgumentError
 # ALIAS        deprecated or legacy alias sentinel for a canonical option;
 #              pairing two spellings of one canonical is incoherent, and the
 #              alias hop itself is asserted by the dedicated deprecation
-#              suites (test_api_renames / scripts/checks/deprecation_inventory.py).
+#              suites (scripts/checks/deprecation_inventory.py).
 # DEFAULT_ONLY declared but exercised at its default: the non-default value
 #              needs an optional runtime this suite must not depend on.
 # ---------------------------------------------------------------------------
@@ -160,6 +162,10 @@ DECLARED: dict[str, tuple[str, Any]] = {
     "size_scale": (PAIRED, "linear"),
     "stack_by": (PAIRED, True),
     "show_redundant_args": (PAIRED, True),
+    # highlight="interventions" routes through the surgery lens, which refuses
+    # typed on this un-edited sweep trace (the rule in expected_refusal); the
+    # edited-trace renders live in test_surgery_visuals_marks.py.
+    "highlight": (PAIRED, "interventions"),
 }
 
 PAIRED_OPTIONS: tuple[str, ...] = tuple(
@@ -183,10 +189,15 @@ REFUSING_COMBOS: dict[frozenset[str], str] = {
 def expected_refusal(combo: frozenset[str]) -> str | None:
     """Return the typed refusal code for a probe combination, else ``None``.
 
-    ``scale`` without ``size_by`` refuses first (the option is meaningless
-    alone), matching shipped precedence; the pinned pair rows cover the rest.
+    ``highlight`` refuses first on this un-edited trace (its lens checks the
+    intervention evidence before any draw option is applied); ``size_scale``
+    without ``size_by`` refuses next (the option is meaningless alone),
+    matching shipped precedence; the pinned pair rows cover the rest.
     """
 
+    if "highlight" in combo:
+        # The lens checks its headline evidence before drawing anything.
+        return "surgery_evidence_missing"
     if "size_scale" in combo and "size_by" not in combo:
         return "scale_requires_size_by"
     return REFUSING_COMBOS.get(combo)
@@ -279,11 +290,10 @@ def _draw(trace: Any, tmp_path: Path, kwargs: dict[str, Any]) -> None:
 _SINGLES = [(name,) for name in PAIRED_OPTIONS]
 _PAIRS = list(itertools.combinations(PAIRED_OPTIONS, 2))
 
-#: Structural axes that reshape the rendered graph — the axes whose
-#: combinations have historically crashed (profiling x vis_call_depth,
-#: rolled x show_containers). Their pairs run at SMOKE on every commit;
-#: the exhaustive sweep below covers everything at the heavy tier (the
-#: smoke family-aggregate budget rules 741 draw cells out of the 5s tier).
+#: Structural axes that reshape the rendered graph: the axes whose
+#: combinations have historically crashed (node_style x depth,
+#: rolled x show_containers). Every pair among them is a documented cell; the
+#: slow property test below walks every other pair.
 CORE_OPTIONS: tuple[str, ...] = (
     "rolled",
     "depth",
@@ -298,30 +308,83 @@ _CORE_PAIRS = list(itertools.combinations(CORE_OPTIONS, 2))
 
 #: Every pinned-refusal combination, provoked at smoke (each raises before
 #: rendering, so the family is cheap).
-_REFUSAL_COMBOS: list[tuple[str, ...]] = [("size_scale",)] + [
+_REFUSAL_COMBOS: list[tuple[str, ...]] = [("size_scale",), ("highlight",)] + [
     tuple(sorted(combo)) for combo in sorted(REFUSING_COMBOS, key=sorted)
 ]
+
+
+#: Pairs outside the CORE family whose cells alone reached a library branch
+#: in the full sweep (per-test branch coverage, test-shape lane evidence).
+_COVERAGE_PAIRS: tuple[tuple[str, str], ...] = (
+    ("layout", "code_panel"),
+    ("rolled", "fold_patterns"),
+    ("depth", "show_legend"),
+    ("collapse_fn", "fold_repeats"),
+    ("rolled", "size_by"),
+    ("collapse_fn", "collapse"),
+    ("module", "layout"),
+    ("rolled", "node_label_fields"),
+    ("graph_overrides", "layout"),
+    ("size_by", "size_scale"),
+    ("layout", "show_orphans"),
+    ("rolled", "collapse"),
+    ("depth", "fold_patterns"),
+    ("depth", "collapsed_node_spec_fn"),
+    ("node_spec_fn", "color_by"),
+    ("layout", "show_legend"),
+    ("rolled", "layout"),
+    ("rolled", "show_saved_for_backward"),
+    ("graph_overrides", "intervention_mode"),
+    ("depth", "stack_by"),
+    ("module", "skip_fn"),
+    ("module", "fold_patterns"),
+    ("rolled", "show_buffers"),
+)
+
+
+def _require_paired_options(family: str, combos: Iterable[tuple[str, ...]]) -> None:
+    """Fail collection, naming the option, when a sampled family drifts from DECLARED.
+
+    A renamed or removed draw() option otherwise surfaces as one bare
+    ``KeyError`` per parametrized cell.
+    """
+
+    stale = sorted({name for combo in combos for name in combo} - set(PAIRED_OPTIONS))
+    if stale:
+        raise ValueError(
+            f"{family} names options that are not PAIRED in DECLARED: {stale}; "
+            "use the current draw() spelling or drop the pair if the option is gone"
+        )
+
+
+_require_paired_options("CORE_OPTIONS", [CORE_OPTIONS])
+_require_paired_options("_COVERAGE_PAIRS", _COVERAGE_PAIRS)
+
+
+def _combo_problem(combo: tuple[str, ...], trace: Any, tmp_path: Path) -> str | None:
+    """How one option combination breaks its pinned verdict, else ``None``."""
+
+    kwargs = {name: DECLARED[name][1] for name in combo}
+    code = expected_refusal(frozenset(combo))
+    try:
+        _draw(trace, tmp_path, kwargs)
+    except InvalidArgumentError as error:
+        got = error.fields.get("code")
+        if got == code:
+            return None
+        return f"refused with {got!r}, expected {code or 'a successful draw'}"
+    except Exception as error:  # noqa: BLE001 -- any other exception IS the defect
+        return f"{type(error).__name__}: {error}"
+    if code is not None:
+        return f"drew, expected the typed refusal {code!r}"
+    return None
 
 
 def _exercise_combo(combo: tuple[str, ...], trace: Any, tmp_path: Path) -> None:
     """Draw one option combination; assert its pinned verdict."""
 
-    kwargs = {name: DECLARED[name][1] for name in combo}
-    code = expected_refusal(frozenset(combo))
-    if code is None:
-        _draw(trace, tmp_path, kwargs)
-        return
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        _draw(trace, tmp_path, kwargs)
-    assert excinfo.value.fields["code"] == code
-
-
-@pytest.mark.heavy
-@pytest.mark.parametrize("combo", _CORE_PAIRS, ids=["+".join(c) for c in _CORE_PAIRS])
-def test_draw_core_option_pairs(combo: tuple[str, ...], sweep_trace: Any, tmp_path: Path) -> None:
-    """High-risk structural option pairs stay legal (or refuse typed) at commit time."""
-
-    _exercise_combo(combo, sweep_trace, tmp_path)
+    problem = _combo_problem(combo, trace, tmp_path)
+    assert problem is None, ("+".join(combo), problem)
 
 
 @pytest.mark.parametrize("combo", _REFUSAL_COMBOS, ids=["+".join(c) for c in _REFUSAL_COMBOS])
@@ -332,11 +395,31 @@ def test_draw_pinned_refusals(combo: tuple[str, ...], sweep_trace: Any, tmp_path
     _exercise_combo(combo, sweep_trace, tmp_path)
 
 
-@pytest.mark.heavy
-@pytest.mark.parametrize(
-    "combo", _SINGLES + _PAIRS, ids=["+".join(combo) for combo in _SINGLES + _PAIRS]
+_CORE_PAIR_SETS = {frozenset(pair) for pair in _CORE_PAIRS}
+_SAMPLED = (
+    _SINGLES
+    + _CORE_PAIRS
+    + [pair for pair in _COVERAGE_PAIRS if frozenset(pair) not in _CORE_PAIR_SETS]
 )
+
+
+@pytest.mark.heavy
+@pytest.mark.parametrize("combo", _SAMPLED, ids=["+".join(combo) for combo in _SAMPLED])
 def test_draw_option_combination(combo: tuple[str, ...], sweep_trace: Any, tmp_path: Path) -> None:
-    """Exhaustive sweep: each declared combination succeeds or refuses typed."""
+    """Documented combination: each option alone and each structural pair draws or refuses typed."""
 
     _exercise_combo(combo, sweep_trace, tmp_path)
+
+
+@pytest.mark.slow
+def test_every_declared_option_combination_draws_or_refuses_typed(
+    sweep_trace: Any, tmp_path: Path
+) -> None:
+    """Property: every single and every unordered pair draws, or refuses with its pinned code."""
+
+    broken = {
+        "+".join(combo): problem
+        for combo in _SINGLES + _PAIRS
+        if (problem := _combo_problem(combo, sweep_trace, tmp_path)) is not None
+    }
+    assert not broken, broken

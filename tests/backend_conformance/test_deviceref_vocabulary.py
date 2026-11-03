@@ -47,7 +47,6 @@ def test_no_direct_deviceref_construction_in_backends() -> None:
     )
 
 
-@pytest.mark.smoke_cells("test_tf_device_normalizer_yields_hardware_class[/device:GPU:1-gpu-gpu:1]")
 @pytest.mark.parametrize(
     ("raw", "expected_backend", "expected_name"),
     [
@@ -72,7 +71,6 @@ def test_tf_device_normalizer_unknown_is_none(raw: object) -> None:
     assert device_ref_from_tf_device(raw) is None
 
 
-@pytest.mark.smoke_cells("test_paddle_place_normalizer_yields_hardware_class[Place(cpu)-cpu-cpu]")
 @pytest.mark.parametrize(
     ("raw", "expected_backend", "expected_name"),
     [

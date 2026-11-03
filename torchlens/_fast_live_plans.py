@@ -43,7 +43,7 @@ from . import _state
 from ._call_fingerprint import install_module_token_hooks, module_fingerprint_address
 from ._fast_live_hooks import _remove_fast_live_hooks, install_collection_hooks
 from ._fast_live_steer import apply_steer_paused, install_steer_hooks, session_is_active
-from ._runnable import RunnableErrorCode
+from ._runnable import RunnableErrorCode, RunProvider
 from ._runnable.verification import _contract_check
 from ._utils._module_call_dispatch import forward_entered_through_module_call
 from ._utils.introspection import get_vars_of_type_from_obj
@@ -197,6 +197,30 @@ def _module_exit_index(trace: Any, module_call: Any, resolved: tuple[Any, ...]) 
     return max(int(getattr(item, "raw_index", 0) or 0) for item in (*contained, *resolved))
 
 
+def _refuse_fast_aten_values(trace: Any) -> None:
+    """Refuse the fast tier for a values-profile trace.
+
+    The native forward refreshes saved ``Op.out`` values only; the ATen profile
+    and its values are recorded by the capture engine, so a fast run would hand
+    back ATen values from the source input.
+
+    Raises
+    ------
+    RunCapabilityUnavailableError
+        When the trace was captured with ``CaptureOptions(aten_ops="values")``.
+    """
+
+    if trace._options_aten_ops != "values":
+        return
+    raise RunCapabilityUnavailableError(
+        "The fast live run does not re-record ATen values "
+        "(CaptureOptions(aten_ops='values')); run(model, x) re-captures them.",
+        code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+        provider=RunProvider.LIVE,
+        detection_stage="fast_run_aten_values_unsupported",
+    )
+
+
 def build_module_plans(trace: Any) -> tuple[_FastOutputPlan, ...]:
     """Derive the module-call exit sequence whose outputs the capture saved.
 
@@ -206,9 +230,12 @@ def build_module_plans(trace: Any) -> tuple[_FastOutputPlan, ...]:
     ordered as torch fires forward hooks: by module EXIT, i.e. the raw
     index of the module's last output op, with the deeper module first
     when a nested call hands the same tensor to its parent. The root module is
-    the input/output boundary and is refreshed separately.
+    the input/output boundary and is refreshed separately. A values-profile
+    trace is refused first (:func:`_refuse_fast_aten_values`), before any plan
+    or hook exists.
     """
 
+    _refuse_fast_aten_values(trace)
     keyed: list[tuple[int, int, _FastOutputPlan]] = []
     module_calls = trace.module_calls
     for call_label in list(module_calls.keys()):

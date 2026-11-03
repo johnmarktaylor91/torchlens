@@ -132,6 +132,13 @@ DOCS: dict[str, str] = {
         -------
         Trace
             This model log, with a stale recipe if hooks were removed.
+
+        Notes
+        -----
+        Removal takes effect at once, like a torch hook handle: a rerun or
+        backward pass in progress skips the removed hooks from the next hook
+        site it reaches, and the site that is firing when this is called
+        finishes its queued hooks first.
         """
     ),
     "do": (

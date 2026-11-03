@@ -205,6 +205,7 @@ def test_transform_repr_redacts_heap_addresses() -> None:
     assert "0x" not in wrapped.replace("0x<scrubbed>", "")
 
 
+@pytest.mark.smoke
 def test_portable_state_specs_cover_every_live_attribute() -> None:
     """Each target class must map every live attribute to a scrub policy."""
 
@@ -271,6 +272,7 @@ def _sweep_public_accessors(record: Any) -> None:
             continue
 
 
+@pytest.mark.smoke
 def test_public_accessor_reads_never_poison_save(tmp_path: Path) -> None:
     """A read-only public accessor sweep must leave the trace saveable.
 
@@ -732,7 +734,7 @@ def test_r69_sparse_runnable_save_always_drops_raw_fields(tmp_path: Path, raw_po
     """r69 E: effective DROP wins before the Trace raw-value special case.
 
     Sparse runnable saves scrub ``raw_input``/``raw_output`` to ``None`` regardless
-    of the ordinary ``save_raw_input``/``save_raw_output`` policy (``True`` or
+    of the ordinary ``save_raw_input``/``save_transformed_output`` policy (``True`` or
     ``"small"``), for nested tensor/string containers included -- no raw blob or
     tensor may enter the value-free sparse core (the payload assertion stays the
     unchanged final tripwire, pinned by the genuine-stray negatives in
@@ -796,6 +798,7 @@ def test_r69_ordinary_analysis_save_retains_raw_values(tmp_path: Path) -> None:
     assert raw[1] == {"mode": "fast"}
 
 
+@pytest.mark.smoke
 def test_small_raw_input_pil_round_trips_bounded_image(tmp_path: Path) -> None:
     """PIL raw input should survive ``save_raw_input='small'`` as a bounded image."""
 
@@ -823,7 +826,6 @@ def test_small_raw_input_pil_round_trips_bounded_image(tmp_path: Path) -> None:
     assert loaded.input.size[1] <= 256
 
 
-@pytest.mark.smoke
 def test_defaultdict_op_equivalence_classes_scrub_does_not_raise() -> None:
     """N5: a defaultdict ``op_equivalence_classes`` must not crash the scrub.
 

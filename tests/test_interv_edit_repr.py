@@ -9,6 +9,9 @@ import torchlens as tl
 from torchlens.intervention.types import Edit
 
 
+@pytest.mark.smoke_cells(
+    "test_builtin_edit_repr_is_the_public_constructor_call[edit1-tl.zero_ablate()]"
+)
 @pytest.mark.parametrize(
     ("edit", "expected"),
     [
@@ -34,6 +37,7 @@ def test_non_root_builtin_prints_its_public_namespace() -> None:
     assert repr(edit).startswith("tl.intervention.scramble_elements(")
 
 
+@pytest.mark.smoke
 def test_tensor_arguments_print_by_shape_and_dtype() -> None:
     """A tensor argument prints as a readable placeholder, never its full values."""
 
@@ -48,6 +52,7 @@ def test_session_bound_edit_prints_as_tl_edit() -> None:
     assert repr(edit) == "tl.Edit('custom_edit', portability='opaque_audit')"
 
 
+@pytest.mark.smoke
 def test_no_edit_repr_prints_the_internal_class_name() -> None:
     """``Edit(`` never appears in an edit's printed form."""
 

@@ -320,7 +320,7 @@ MLX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
     runtime_message=(
         "MLX backend preview does not support: {names}. Static-label save= "
         "selectors, static-label trace(intervene=tl.when(...)), and static-label "
-        "trace(halt=...) are supported; streaming/storage and value-dependent "
+        "trace(stop_after=...) are supported; streaming/storage and value-dependent "
         "predicates need predicate-time concrete values or replay semantics that "
         "MLX lazy evaluation does not expose through a stable TorchLens surface. "
         "Use an unfiltered tl.trace(..., backend='mlx') call or the PyTorch "
@@ -780,3 +780,17 @@ def reject_unsupported_trace_options(
     if policy.output_device_message is not None and options.get("output_device") != "same":
         raise _output_device_refusal(policy)
     _reject_save_trace_options(options, policy)
+
+
+def pop_stop_directive(options: dict[str, Any]) -> Any:
+    """Pop ``halt`` and ``stop_after``; return the selector a preview backend halts on.
+
+    ``stop_after=`` is the one public stop directive and the trace door passes
+    ``halt=None``, so a preview backend that halts on a selector receives
+    ``stop_after`` in that role. ``MISSING`` reads as absent.
+    """
+
+    halt = options.pop("halt", None)
+    stop_after = options.pop("stop_after", None)
+    chosen = halt if stop_after is None or stop_after is MISSING else stop_after
+    return None if chosen is MISSING else chosen

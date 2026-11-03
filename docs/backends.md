@@ -28,8 +28,8 @@ internal capture seam; it is not the backend contract.
 decision; `stable` requires every graduation item below to be met in the backend's shipped
 scorecard. Each page has a runnable tutorial, a can and cannot table and the backend's framework
 requirement (supported version range, the version the per-change CI leg pins, and the install
-extra). `tests/test_backend_docs_lockstep.py` holds this table to the registry and each page's
-can and cannot table to the backend's shipped capability summary.
+extra). The repository check `scripts/checks/backend_docs_lockstep.py` holds this table to the
+registry and each page's can and cannot table to the backend's shipped capability summary.
 
 Shared rules every backend follows:
 
@@ -125,7 +125,7 @@ Two cross-backend honesty notes apply to every preview row above:
   hop distances plus ancestor/descendant sets) defaults to `True` on every backend — the same
   torch `CaptureOptions` default — and `=False` disables the flood on every backend, torch and all
   five previews alike.
-- **Preview replay validation scope.** Preview `validation_replay` replays each CAPTURED op from
+- **Preview replay validation scope.** Preview replay validation (the `has_validation_replay` capability) replays each CAPTURED op from
   its declared parents' saved payloads and perturbation-checks the dependency; unlike torch's
   validator it does not independently re-run the model against a ground-truth output, so an op the
   preview failed to wrap is outside the replay denominator entirely. Calls with no perturbable

@@ -167,7 +167,7 @@ def test_n1_failed_recording_refuses_save_not_attributeerror(tmp_path) -> None:
         ExplodingModel(),
         torch.ones(1, 3),
         save=tl.func("linear"),
-        on_forward_error="return_partial",
+        recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
     )
     assert recording.is_failed is True
     assert not hasattr(recording, "_runnable")
@@ -359,7 +359,7 @@ def test_failed_partial_recording_outcome_stamped() -> None:
         ExplodingModel(),
         torch.ones(1, 3),
         save=lambda ctx: ctx.kind == "op",
-        on_forward_error="return_partial",
+        recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
     )
     assert recording.status == "partial_error"
     assert recording.outcome.status is CaptureStatus.FAILED

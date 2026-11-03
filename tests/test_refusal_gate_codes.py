@@ -286,7 +286,12 @@ class _RecordingAdapter:
 
 
 def test_chunk_paths_cell_passes_chunk_size_too() -> None:
-    """The ``chunk_paths`` probe carries ``chunk_size`` so the precondition holds."""
+    """The ``chunk_paths`` probe carries ``chunk_size`` so the precondition holds.
+
+    ``chunk_size`` is a ``CaptureOptions`` field, so it travels inside ``capture=``.
+    """
+
+    from torchlens.options import CaptureOptions
 
     assert set(TRACE_OPTION_COMPANIONS["chunk_paths"]) == {"chunk_size"}
     request = CapabilityRequest(
@@ -297,7 +302,12 @@ def test_chunk_paths_cell_passes_chunk_size_too() -> None:
     )
     adapter = _RecordingAdapter()
     _refusal_cases._issue_request(adapter, None, request, (object(), object(), None))
-    assert adapter.calls == [{"chunk_paths": (0,), "chunk_size": 1}]
+    assert len(adapter.calls) == 1
+    (call,) = adapter.calls
+    assert set(call) == {"chunk_paths", "capture"}
+    assert call["chunk_paths"] == (0,)
+    assert isinstance(call["capture"], CaptureOptions)
+    assert call["capture"].chunk_size == 1
 
 
 def test_chunk_paths_and_size_pass_the_shared_precondition() -> None:

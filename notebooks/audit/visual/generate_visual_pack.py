@@ -662,7 +662,7 @@ AXES: dict[str, str] = {
     "cone:on": "show_cone=True downstream highlighter",
     "cone:off": "show_cone=False (default)",
     "input_transform_summary": "show_input_transform_summary=True input xlabel",
-    "raw_io_render": "save_raw_input/save_raw_output thumbnails on boundary nodes",
+    "raw_io_render": "save_raw_input/save_transformed_output thumbnails on boundary nodes",
     # --- draw_backward / draw_combined ---
     "draw_backward:rolled": "draw_backward default rolled grad_fn graph",
     "draw_backward:unrolled": "draw_backward rolled=False",

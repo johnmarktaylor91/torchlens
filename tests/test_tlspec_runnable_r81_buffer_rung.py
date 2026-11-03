@@ -378,7 +378,6 @@ def _fresh_module_stash() -> types.ModuleType:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_record_write_reassign_stamp_cleared() -> None:
     """RED-now-fixed: the reassignment-stamped ModuleType-stashed external is cleaned.
 
@@ -397,7 +396,6 @@ def test_record_write_reassign_stamp_cleared() -> None:
     assert _meta_clear(stash.payload)
 
 
-@pytest.mark.smoke
 def test_record_write_opwrite_stamp_cleared() -> None:
     """RED-now-fixed: the in-place (``record_op_writes``) vehicle is cleaned too.
 
@@ -448,7 +446,6 @@ def test_stale_opwrite_stamp_launder_ceils(tmp_path: Path) -> None:
     assert result.report.is_poisoned
 
 
-@pytest.mark.smoke
 def test_no_donor_control_ceils(tmp_path: Path) -> None:
     """Control B: a fresh foreign tensor in the SAME holder always ceilinged.
 
@@ -470,7 +467,6 @@ def test_no_donor_control_ceils(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_forged_stale_buffer_stamp_launder_ceils(tmp_path: Path) -> None:
     """White-box: a raw ``set_buffer_address`` stamp that DID survive never resolves.
 
@@ -490,7 +486,6 @@ def test_forged_stale_buffer_stamp_launder_ceils(tmp_path: Path) -> None:
     assert result.report.is_poisoned
 
 
-@pytest.mark.smoke
 def test_forged_stamp_address_collision_ceils(tmp_path: Path) -> None:
     """White-box: a forged stamp COLLIDING with a registered name cannot resolve.
 
@@ -551,7 +546,6 @@ def test_plain_attr_data_rebind_launder_ceils(tmp_path: Path) -> None:
     assert result.report.is_poisoned
 
 
-@pytest.mark.smoke
 def test_list_attr_data_rebind_launder_ceils(tmp_path: Path) -> None:
     """RED-now-fixed (F2/M1): the list-element spelling must ceiling too."""
 
@@ -562,7 +556,6 @@ def test_list_attr_data_rebind_launder_ceils(tmp_path: Path) -> None:
     assert result.report.is_poisoned
 
 
-@pytest.mark.smoke
 def test_underscore_attr_rebind_stays_ceiled(tmp_path: Path) -> None:
     """Control (F2/M2): the unstamped underscore-attr spelling keeps ceiling."""
 
@@ -573,6 +566,7 @@ def test_underscore_attr_rebind_stays_ceiled(tmp_path: Path) -> None:
     assert result.report.is_poisoned
 
 
+@pytest.mark.smoke
 def test_registered_buffer_rebind_stays_ceiled(tmp_path: Path) -> None:
     """Control (F2/M4): the registered-buffer spelling keeps ceiling.
 
@@ -592,7 +586,6 @@ def test_registered_buffer_rebind_stays_ceiled(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_plain_attr_state_layout_branch_stays_verified(tmp_path: Path) -> None:
     """Zero collateral: an UNREBOUND plain-attr state layout branch verifies.
 
@@ -628,7 +621,6 @@ def test_registered_buffer_layout_branch_stays_verified(tmp_path: Path) -> None:
     assert not twin.report.is_poisoned
 
 
-@pytest.mark.smoke
 def test_param_data_read_branch_stays_verified(tmp_path: Path) -> None:
     """Zero collateral: residual-(3) ``self.w.data`` READ-sourced layout verifies."""
 
@@ -644,7 +636,6 @@ def test_param_data_read_branch_stays_verified(tmp_path: Path) -> None:
     assert not twin.report.is_poisoned
 
 
-@pytest.mark.smoke
 def test_honest_conv_bn_stays_verified(tmp_path: Path) -> None:
     """Zero collateral: honest conv+BN (params AND buffers on-path) verifies."""
 
@@ -655,7 +646,6 @@ def test_honest_conv_bn_stays_verified(tmp_path: Path) -> None:
     assert not result.report.is_poisoned
 
 
-@pytest.mark.smoke
 def test_plain_attr_value_read_keeps_typed_refusal(tmp_path: Path) -> None:
     """Boundary pin: plain-attr VALUE-path reads keep the pre-existing refusal.
 

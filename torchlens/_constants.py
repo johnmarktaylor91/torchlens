@@ -10,9 +10,8 @@ each data class (Trace, Op, Layer, etc.).  They serve two purposes:
    internal state belongs in the class _FIELD_POLICY / _PORTABLE_STATE_SPEC even
    when it is intentionally not exported as a user-facing column.
 
-**Function discovery** (bottom of this module) builds ``ORIG_TORCH_FUNCS``, the
-master list of ``(namespace_str, func_name)`` pairs that ``decorate_all_once()``
-uses to permanently wrap every torch function at import time.
+**Function discovery** (bottom of this module) builds ``ORIG_TORCH_FUNCS``, the master
+list of ``(namespace_str, func_name)`` pairs ``decorate_all_once()`` wraps at import time.
 """
 
 import __future__
@@ -1035,6 +1034,7 @@ PRIMITIVE_OP_FIELD_ORDER = [
     "outcome",
     "exception_type",
     "execution_context",
+    "out",
 ]
 
 # ---------------------------------------------------------------------------

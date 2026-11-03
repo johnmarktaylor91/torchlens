@@ -16,6 +16,7 @@ from .._errors import InvalidArgumentError
 from .._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
+    DrawHighlightLiteral,
     FoldRepeatsLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
@@ -25,17 +26,17 @@ from .._literals import (
     VisRendererLiteral,
 )
 from ..intervention.types import FireRecord
-from ..viz._drawing import Drawing
+from ..viz._drawing import Drawing, resolve_draw_target
 from ._color_sources import resolve_color_source
 from ._pass_animation import pass_animation_html
 from ._render_dot import draw as _render_draw
 from ._render_entrypoints import render_backward_graph, render_combined_graph
-from ._render_utils import DEFAULT_DRAW_STEM, collision_safe_outpath, strip_known_extension
+from ._render_utils import _KNOWN_EXTS, DEFAULT_DRAW_STEM, collision_safe_outpath
 from ._trace_collapse import (
     collapse_plan as _collapse_plan,
     collapse_schedule as _collapse_schedule,
 )
-from ._trace_draw_arguments import _forward_render_arguments
+from ._trace_draw_arguments import _backward_render_arguments, _forward_render_arguments
 from .fastlog_preview import preview_fastlog as _preview_fastlog
 from .request import ShowContainersLiteral
 
@@ -108,6 +109,21 @@ def _render_backward(  # noqa: PLR0913 - the backward branch of the one draw doo
     )
 
 
+def _draw_policy(
+    graph: str, rolled: bool, theme: str, collapse: Any, module: Any, depth: Any
+) -> dict[str, Any]:
+    """Return the policy a :class:`Drawing` records: the options that shaped it."""
+
+    return {
+        "graph": graph,
+        "rolled": rolled,
+        "theme": theme,
+        "collapse": collapse,
+        "module": module,
+        "depth": depth,
+    }
+
+
 def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field is a keyword
     trace: Trace,
     path: str | None = None,
@@ -157,10 +173,17 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
     show_grad_values: bool = False,
     backward_node_spec_fn: Callable[..., Any] | None = None,
     intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
-    file_format: str = "pdf",
+    file_format: str | None = None,
     open_viewer: bool = False,
+    highlight: DrawHighlightLiteral | None = None,
 ) -> Drawing:
     """Body of ``Trace.draw``; the method docstring is the contract."""
+
+    if highlight is not None:
+        from ._highlight import draw_highlighted, explicit_draw_kwargs
+
+        # locals() is read before any parameter below is reassigned.
+        return draw_highlighted(trace, highlight, explicit_draw_kwargs(draw, locals()))
 
     if graph not in ("forward", "backward", "combined"):
         raise InvalidArgumentError(
@@ -170,37 +193,14 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
             argument="graph",
         )
     num_ops = len(trace) if hasattr(trace, "__len__") else None
-    policy: dict[str, Any] = {
-        "graph": graph,
-        "rolled": rolled,
-        "theme": theme,
-        "collapse": collapse,
-        "module": module,
-        "depth": depth,
-    }
+    policy = _draw_policy(graph, rolled, theme, collapse, module, depth)
+    target = resolve_draw_target(path, file_format, _KNOWN_EXTS)
+    path, file_format = target.path, target.file_format
     vis_mode: VisModeLiteral = "rolled" if rolled else "unrolled"
     collapse_context: Any = None
     if graph == "backward":
         outpath = "backward_modelgraph" if path is None else path
-        rendered: Any = _render_backward(
-            trace,
-            outpath=outpath,
-            vis_mode=vis_mode,
-            direction=direction,
-            graph_overrides=graph_overrides,
-            node_spec_fn=node_spec_fn,
-            collapsed_node_spec_fn=collapsed_node_spec_fn,
-            node_style=node_style,
-            edge_overrides=edge_overrides,
-            open_viewer=open_viewer,
-            file_format=file_format,
-            code_panel=code_panel,
-            bwd=bwd,
-            show_legend=show_legend,
-            theme=theme,
-            show_module_paths=show_module_paths,
-            show_grad_values=show_grad_values,
-        )
+        rendered: Any = _render_backward(trace, **_backward_render_arguments(locals()))
     elif graph == "combined":
         outpath = "combined_modelgraph" if path is None else path
         rendered = render_combined_graph(
@@ -228,11 +228,9 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
             **_forward_render_arguments(locals(), resolve_color_source),
         )
         collapse_context = request_sink.get("request")
-    written = Path(f"{strip_known_extension(str(outpath))}.{file_format}")
-    return Drawing(
-        dot=str(rendered),
-        file_format=file_format,
-        path=written if written.exists() else None,
+    return target.finish(
+        str(rendered),
+        str(outpath),
         num_ops=num_ops,
         policy=policy,
         _collapse_source=weakref.ref(trace),

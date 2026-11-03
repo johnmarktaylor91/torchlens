@@ -70,7 +70,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `cone:on` | show_cone=True downstream highlighter | p63 |
 | `cone:off` | show_cone=False (default) | p63 |
 | `input_transform_summary` | show_input_transform_summary=True input xlabel | p51 |
-| `raw_io_render` | save_raw_input/save_raw_output thumbnails on boundary nodes | p50 |
+| `raw_io_render` | save_raw_input/save_transformed_output thumbnails on boundary nodes | p50 |
 | `draw_backward:rolled` | draw_backward default rolled grad_fn graph | p55 |
 | `draw_backward:unrolled` | draw_backward rolled=False | p55 |
 | `draw_backward:bwd` | draw_backward bwd= pass selection | p56 |

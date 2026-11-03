@@ -1,4 +1,4 @@
-"""U40.1 default state contract: a capture is a pure observer; ``carry_state`` opts out.
+"""Default state contract: a capture is a pure observer; ``carry_state`` opts out.
 
 JMT's ruling (2026-10-11): "Pure observer: the trace snapshots and restores
 buffers, random state, modes and attributes; an explicit opt-in gives

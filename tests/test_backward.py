@@ -177,7 +177,7 @@ def _saved_relu(trace: tl.Trace) -> torch.Tensor:
 def test_detached_saved_activation_backward_names_backward_ready_remedy() -> None:
     """A TorchLens-detached retained activation gives targeted backward guidance.
 
-    The trace opts into detaching (U27.1: a default trace keeps selector saves
+    The trace opts into detaching (a default trace keeps selector saves
     graph-connected; ``tl.record`` and ``tl.extract`` detach by default).
     """
 
@@ -200,7 +200,7 @@ def test_detached_saved_activation_backward_names_backward_ready_remedy() -> Non
 
 
 def test_default_trace_selector_save_keeps_the_graph_for_backward() -> None:
-    """A default-trace selector save keeps the graph, so backward reaches the input (U27.1)."""
+    """A default-trace selector save keeps the graph, so backward reaches the input."""
 
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)

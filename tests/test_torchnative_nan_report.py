@@ -33,7 +33,6 @@ class DivideByZero(nn.Module):
         return self.tail(poisoned - poisoned)  # nan propagates
 
 
-@pytest.mark.smoke
 def test_posthoc_report_names_origin_free() -> None:
     """Post-hoc: origin op + source line off the existing capture."""
 
@@ -65,7 +64,6 @@ def test_clean_report_is_scoped_to_checked_values() -> None:
     log.cleanup()
 
 
-@pytest.mark.smoke
 def test_live_tripwire_form() -> None:
     """The live form runs ONE memory-light tripwire forward and discloses it."""
 

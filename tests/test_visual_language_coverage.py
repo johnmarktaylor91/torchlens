@@ -21,7 +21,6 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
 from _source_corpus import package_files
 
 from scripts.visual_language import coverage, slides
@@ -47,7 +46,6 @@ def test_generated_names_are_servable() -> None:
         assert deck.name_problem(bad), bad
 
 
-@pytest.mark.smoke
 def test_deck_covers_every_renderer_item() -> None:
     """Every draw option, vocabulary value, legend row, token, template and site is taught."""
 
