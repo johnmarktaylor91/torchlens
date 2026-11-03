@@ -517,6 +517,30 @@ def _finish_aten_call(
 _OWNER_VERDICT_RANK = {"drop": 0, "deferred": 1, "keep": 2}
 
 
+def _streams_outs_elsewhere(trace: Any) -> bool:
+    """Report whether ``trace`` sends saved activations to a sink or releases them.
+
+    ``_out_sink`` and ``_keep_outs_in_memory`` are session fields
+    (``FieldPolicy.DROP``): the forward's postprocess removes them, so a
+    backward capture on a finished trace no longer carries either. The session
+    dict is read directly; an absent flag means the outs stay in memory, the
+    same reading the backward eviction applies to the streamed fields.
+
+    Parameters
+    ----------
+    trace
+        The live capture target.
+
+    Returns
+    -------
+    bool
+        ``True`` when values must not be retained in RAM for this capture.
+    """
+
+    session = vars(trace)
+    return session.get("_out_sink") is not None or not session.get("_keep_outs_in_memory", True)
+
+
 def _retain_aten_values(
     state: Any, pending: _PendingAtenCall, result: Any
 ) -> _AtenValueCell | None:
@@ -540,7 +564,7 @@ def _retain_aten_values(
     """
 
     trace = state.trace
-    if trace._out_sink is not None or not trace._keep_outs_in_memory:
+    if _streams_outs_elsewhere(trace):
         return None
     # Logging is paused here (``_recorder_paused`` on the finish hook): the
     # reads and the clone below never reach the op log or the call fingerprint.

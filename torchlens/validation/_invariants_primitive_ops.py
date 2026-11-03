@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NoReturn
 
 from .._constants import PRIMITIVE_OP_FIELD_ORDER
 from .._data_classes.aten_op import AtenOp, OpRef, _ModePausedInteriorGap
@@ -317,7 +317,7 @@ def _check_non_torch_primitive_op_inert(trace: Trace) -> None:
         )
 
 
-def _value_failure(message: str) -> None:
+def _value_failure(message: str) -> NoReturn:
     """Raise the ATen-values invariant error.
 
     Parameters
