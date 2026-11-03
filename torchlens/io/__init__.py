@@ -315,11 +315,11 @@ def load_intervention_spec(
     Examples
     --------
     >>> import pathlib, tempfile
-    >>> trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
-    >>> _ = trace.do(tl.func("relu"), tl.zero_ablate())
+    >>> fork = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True)).fork()
+    >>> _ = fork.do(tl.func("relu"), tl.zero_ablate())
     >>> with tempfile.TemporaryDirectory() as tmp:
     ...     path = pathlib.Path(tmp) / "edit.tlspec"
-    ...     trace.save_intervention(path, level="portable")
+    ...     _ = fork.save_intervention(path, level="portable")
     ...     spec = load_intervention_spec(path)
     >>> type(spec).__name__
     'InterventionSpec'
