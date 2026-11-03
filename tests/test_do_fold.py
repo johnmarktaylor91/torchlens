@@ -301,7 +301,7 @@ def test_intervention_options_differentiable_round_trips_the_merge() -> None:
     merged = merge_intervention_options(intervention=grouped)
     assert merged == grouped
     assert merged._is_field_explicit("differentiable")
-    rebuilt = InterventionOptions.from_values(grouped.as_dict(), frozenset({"differentiable"}))
+    rebuilt = InterventionOptions._from_values(grouped.as_dict(), frozenset({"differentiable"}))
     assert rebuilt == grouped
 
     flat = merge_intervention_options(intervention=None, differentiable=True)
