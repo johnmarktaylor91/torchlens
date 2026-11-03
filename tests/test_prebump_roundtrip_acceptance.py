@@ -31,6 +31,7 @@ from pathlib import Path
 import pytest
 import torch
 import torch.nn as nn
+from _format3_envelope import read_record, write_record
 from _refuses_as_2x import assert_refuses_as_2x
 from torch.utils.checkpoint import checkpoint
 
@@ -263,7 +264,7 @@ def _persisted_eq(a: object, b: object) -> bool:
     return bool(a == b)
 
 
-def _plain_roundtrip(trace: tl.Trace, tmp_path, name: str) -> tl.Trace:
+def _plain_roundtrip(trace: tl.Trace, tmp_path, name: str, *, level: str = "portable") -> tl.Trace:
     """Save plainly, prove the current stamp and the marker's absence, load plainly.
 
     The write must stamp ``tlspec_version == TLSPEC_VERSION`` (9) and carry NO
@@ -278,17 +279,19 @@ def _plain_roundtrip(trace: tl.Trace, tmp_path, name: str) -> tl.Trace:
     )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        trace.save(str(path))
+        trace.save(str(path), level=level)
         return tl.load(str(path))
 
 
-def _second_generation(loaded: tl.Trace, tmp_path, name: str) -> tl.Trace:
+def _second_generation(
+    loaded: tl.Trace, tmp_path, name: str, *, level: str = "portable"
+) -> tl.Trace:
     """Re-save the LOADED trace plainly and load again (settle stability)."""
 
     path = tmp_path / f"{name}_gen2.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        loaded.save(str(path))
+        loaded.save(str(path), level=level)
         return tl.load(str(path))
 
 
@@ -523,7 +526,10 @@ def test_l6_selection_family_roundtrip(tmp_path) -> None:
         if record.edit is not None
     )
     assert live_recipe["resolve_digest"]
-    loaded = _plain_roundtrip(fork, tmp_path, "selection")
+    with pytest.raises(ArtifactError) as caught:
+        fork.save(tmp_path / "nonportable_selection")
+    assert caught.value.fields["code"] == "intervention_spec_not_portable"
+    loaded = _plain_roundtrip(fork, tmp_path, "selection", level="audit")
     assert loaded.intervention_audit == live_audit
     loaded_recipe = next(
         record.edit.selection_recipe
@@ -531,7 +537,7 @@ def test_l6_selection_family_roundtrip(tmp_path) -> None:
         if record.edit is not None
     )
     assert loaded_recipe == live_recipe
-    gen2 = _second_generation(loaded, tmp_path, "selection")
+    gen2 = _second_generation(loaded, tmp_path, "selection", level="audit")
     assert gen2.intervention_audit == live_audit
 
 
@@ -633,6 +639,7 @@ def _tampered_refuses(
     name: str,
     *,
     field: str,
+    level: str = "portable",
 ) -> ArtifactError:
     """Prove one planted tamper refuses teachingly and stays marker-contained.
 
@@ -656,7 +663,7 @@ def _tampered_refuses(
     path = tmp_path / f"{name}_tampered.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        trace.save(str(path))
+        trace.save(str(path), level=level)
     with pytest.raises(ArtifactError) as excinfo:
         tl.load(str(path))
     refusal = excinfo.value
@@ -747,6 +754,7 @@ def test_tamper_intervention_audit_refuses_typed(tmp_path) -> None:
         tmp_path,
         "audit",
         field="Trace.intervention_audit",
+        level="audit",
     )
     assert refusal.fields["code"] == "artifact_intervention_audit_invalid"
 
@@ -892,17 +900,14 @@ def test_tamper_structure_only_with_payload_refuses_typed(tmp_path) -> None:
 
     # Layer 2 (load-side M-C2, unchanged): write the SAME capture honestly,
     # then tamper the marker into the persisted metadata on disk.
-    import pickle as _pickle
-
     trace._options_structure_only = False
     honest_path = tmp_path / "structure_only_payload_tampered.tlspec"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         trace.save(str(honest_path))
-    metadata_path = honest_path / "metadata.pkl"
-    state = _pickle.loads(metadata_path.read_bytes())
-    state["_options_structure_only"] = True
-    metadata_path.write_bytes(_pickle.dumps(state))
+    record = read_record(honest_path, "trace")
+    record["_options_structure_only"] = True
+    write_record(honest_path, "trace", record)
     with pytest.raises(ArtifactError) as excinfo:
         tl.load(str(honest_path))
     refusal = excinfo.value
