@@ -92,7 +92,6 @@ from .format3.writer import (
     settle_live_side,
     write_trace_envelope,
 )
-from .format_contract import modellog_216_error
 from .lazy import LazyActivationRef
 from .manifest import Manifest, Provenance, TensorEntry, enforce_version_policy
 from .paths import (
@@ -1570,30 +1569,20 @@ def load(
         routed = load_by_root_manifest(bundle_path)
         if routed is not NOT_ROUTED:
             return routed
-        from ..io import detect_tlspec_format
+        from ..io import _pre3_observed, detect_tlspec_format
+        from .format_contract import below_floor_error
 
         tlspec_format = detect_tlspec_format(bundle_path)
+        if tlspec_format == "pre_3":
+            raise below_floor_error(
+                observed=_pre3_observed(bundle_path) or "2.x artifact markers",
+                path=str(bundle_path),
+                code="artifact_version_below_floor",
+            )
         if is_format3_root(bundle_path, tlspec_format):
             # 3.0 saved format: record tables plus safetensors chunks, never the pickle path.
             return load_format3(bundle_path, lazy, map_location, materialize_nested, payload_hints)
-        if tlspec_format in {"v2.16_intervention", "v2.16_intervention_with_kind"}:
-            return _load_216_intervention_spec(
-                bundle_path, tlspec_format, trust_custom_callables, allowed_custom_callable_modules
-            )
-        if tlspec_format == "v2.16_modellog_portable":
-            raise modellog_216_error(str(bundle_path), code="artifact_version_below_floor")
-        if tlspec_format == "v2.0_unified":
-            return _load_unified_tlspec(
-                bundle_path,
-                lazy=lazy,
-                map_location=map_location,
-                materialize_nested=materialize_nested,
-                payload_hints=payload_hints,
-                trust_custom_callables=trust_custom_callables,
-                allowed_custom_callable_modules=allowed_custom_callable_modules,
-                bundle_visited=_bundle_visited,
-                unknown_relations=unknown_relations,
-            )
+
     if bundle_path.is_dir() and (bundle_path / "spec.json").exists():
         from ..intervention.save import load_intervention_spec
 
