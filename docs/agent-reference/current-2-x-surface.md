@@ -634,7 +634,7 @@
   cap, and `None` disables it. Predicate-selected disk-only saves are exempt; exhaustive
   `save="all"` plus `to_disk(...)` remains budgeted
   until postprocess eviction (the former bare flat
-  `layers_to_save=` kwarg is removed). Unmeasurable auto
+  flat layer-selection keyword is removed). Unmeasurable auto
   devices warn on first charge and require an absolute budget for enforcement. The reported figure
   is an explicitly-labelled lower bound.
   Like `measure_python_peak_memory` it is a session-time knob (`FieldPolicy.DROP`, not in

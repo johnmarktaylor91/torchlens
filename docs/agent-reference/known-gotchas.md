@@ -69,7 +69,7 @@
   deltas and cross-device temporaries cannot always be known pre-allocation, so this is not a general
   OOM guarantee. Predicate disk-only saves are exempt; exhaustive
   `save="all"` plus `to_disk(...)`
-  stays budgeted until postprocess eviction (the former bare flat `layers_to_save=` kwarg is
+  stays budgeted until postprocess eviction (the former bare flat layer-selection keyword is
   removed). Unmeasurable auto devices warn on first charge.
 - Streamed disk writes are ASYNC BY DEFAULT for `trace(storage=tl.to_disk(...))` (spellings
   DOCUMENTED-UNSTABLE): one FIFO worker overlaps blob serialize+write+sha256 with the forward,
