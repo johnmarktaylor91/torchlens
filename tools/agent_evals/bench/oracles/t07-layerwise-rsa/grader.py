@@ -171,7 +171,7 @@ def grade_one(rep, label, task_dir, inputs, outputs, cache):
             z = load_npz(os.path.join(outputs, f"rdms_{net}.npz"))
             agent.update({f"{net}/{k}": v for k, v in z.items()})
         best = load_json(os.path.join(outputs, "best_layer.json"))
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 (any failure of the untrusted solution is a failed bar)
         rep.fail_all(names, f"missing output: {e}")
         return
     n = next(iter(ref.values())).shape[0]

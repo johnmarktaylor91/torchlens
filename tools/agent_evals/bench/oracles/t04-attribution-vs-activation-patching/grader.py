@@ -80,7 +80,7 @@ def oracle(inputs, cache):
     attribution = torch.stack(
         [
             torch.einsum("bthd,bthd->h", derivative, donor - original).detach()
-            for derivative, donor, original in zip(derivatives, donors, heads)
+            for derivative, donor, original in zip(derivatives, donors, heads, strict=False)
         ]
     ).numpy()
     exact = np.empty((12, 12), np.float32)

@@ -52,7 +52,7 @@ def fit(model, corpus, cfg, variant):
             grad_outputs=torch.eye(64),
             is_grads_batched=True,
         )
-        for layer, derivative in zip(sources, derivatives):
+        for layer, derivative in zip(sources, derivatives, strict=False):
             total[layer] += derivative[:, valid].double().sum(dim=1) / len(valid)
     return {layer: (value / len(corpus)).float() for layer, value in total.items()}
 

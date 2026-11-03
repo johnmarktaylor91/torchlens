@@ -87,7 +87,7 @@ def oracle(inputs, cache):
         clean_prob=np.empty(len(prompts), np.float32),
         corrupt_prob=np.empty(len(prompts), np.float32),
     )
-    for row, (p, enc) in enumerate(zip(prompts, encodings)):
+    for row, (p, enc) in enumerate(zip(prompts, encodings, strict=False)):
         ids = torch.tensor([enc["input_ids"]])
         length = ids.shape[1]
         embeddings = model.transformer.wte(ids)

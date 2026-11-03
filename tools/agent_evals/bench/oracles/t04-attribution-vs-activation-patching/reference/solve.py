@@ -39,7 +39,7 @@ def exact_changes(model, clean, donor, positive, negative, baseline, variant):
     with torch.no_grad():
         for layer, block in enumerate(model.transformer.h):
 
-            def patch(module, args):
+            def patch(module, args, layer=layer):
                 value = args[0].reshape(12, clean.shape[1], 12, 64).clone()
                 source = donor[layer].reshape(1, clean.shape[1], 12, 64)
                 if variant == "all_heads":
@@ -88,7 +88,7 @@ def run(inputs, outputs, variant=None):
     clean_metric, good = record(model, clean, positive, negative)
     gradients = torch.autograd.grad(clean_metric.sum(), good)
     attribution = []
-    for grad, donor, original in zip(gradients, bad, good):
+    for grad, donor, original in zip(gradients, bad, good, strict=False):
         product = (grad * (donor - original)).reshape(1, clean.shape[1], 12, 64)
         if variant == "last_position_only":
             product = product[:, -1:]

@@ -58,7 +58,7 @@ def restored(model, base, module, donor, batch_size):
     for start in range(0, base.shape[1], batch_size):
         positions = torch.arange(start, min(start + batch_size, base.shape[1]))
 
-        def patch(mod, args, out):
+        def patch(mod, args, out, positions=positions):
             value = tensor(out).clone()
             value[torch.arange(len(positions)), positions] = donor[0, positions]
             return replace(out, value)
@@ -92,7 +92,7 @@ def run(inputs, outputs, variant=None):
         for s in ("attn", "mlp", "resid")
     }
     clean_prob, corrupt_prob = [], []
-    for i, (p, enc) in enumerate(zip(prompts, encoded)):
+    for i, (p, enc) in enumerate(zip(prompts, encoded, strict=False)):
         ids = torch.tensor([enc["input_ids"]])
         clean = model.transformer.wte(ids)
         corrupt = clean.clone()

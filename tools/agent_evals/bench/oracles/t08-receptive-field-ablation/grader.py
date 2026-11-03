@@ -55,7 +55,7 @@ def oracle(inputs, cache_file):
             # Capture the actual activation, independently of the reference route.
             recorded = []
             handle = getattr(m, unit["layer"]).register_forward_hook(
-                lambda mod, args, value: recorded.append(value)
+                lambda mod, args, value, recorded=recorded: recorded.append(value)
             )
             try:
                 native = m(x)
@@ -101,12 +101,14 @@ def grade_one(rep, label, inputs, outputs, cache):
             and effect.dtype == np.float32
             and np.isfinite(effect).all()
         )
-        overlap = min(iou(a, b) for a, b in zip(grad, ref["gradient"])) if valid else 0.0
+        overlap = (
+            min(iou(a, b) for a, b in zip(grad, ref["gradient"], strict=False)) if valid else 0.0
+        )
         allowance = np.where(np.abs(ref["effects"]) < 1e-2, 1e-4, 0.01 * np.abs(ref["effects"]))
         error = (
             float(np.max(np.abs(effect - ref["effects"]) / allowance)) if valid else float("inf")
         )
-    except Exception as exc:  # Malformed solution files fail at this boundary.
+    except Exception as exc:  # noqa: BLE001 (any failure of the untrusted solution is a failed bar)
         rep.fail_all(names, str(exc))
         return
     rep.add(names[0], valid, int(valid), 1)

@@ -98,7 +98,7 @@ def main():
         sys.stderr.write(r.stderr[-4000:])
         try:
             rep = json.loads(r.stdout.strip().splitlines()[-1])
-        except Exception:
+        except Exception:  # noqa: BLE001 (any failure of the untrusted solution is a failed bar)
             rep = {"passed": False, "bars": [], "error": r.stdout[-2000:] + r.stderr[-2000:]}
         verdict_ok = rep["passed"] == expect_pass
         ok &= verdict_ok

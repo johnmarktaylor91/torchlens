@@ -66,7 +66,7 @@ def run(inputs, outputs, variant=None):
         baseline.append(model(target_ids, use_cache=False).logits[0, -1].numpy())
         original = block.forward
 
-        def modified(*args, **kwargs):
+        def modified(*args, donor=donor, original=original, tr=tr, **kwargs):
             return patch_output(original(*args, **kwargs), donor, tr, variant == "first_only")
 
         block.forward = modified

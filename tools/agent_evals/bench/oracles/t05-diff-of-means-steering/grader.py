@@ -48,7 +48,7 @@ def oracle(inputs, cache_file):
         for steering in (False, True):
             observed = []
 
-            def intervene(mod, args, output):
+            def intervene(mod, args, output, observed=observed):
                 h = output[0] if isinstance(output, (tuple, list)) else output
                 observed.append((h[0, -1] * unit).sum().item())
                 changed = h + cfg["coefficient"] * unit.view(1, 1, -1)
@@ -146,7 +146,7 @@ def grade_one(rep, label, inputs, outputs, cache):
         ratio = (
             st / nt if np.isfinite(nt) and np.isfinite(st) and nt > 0 and st > 0 else float("inf")
         )
-    except Exception as exc:  # Malformed solution files fail at this boundary.
+    except Exception as exc:  # noqa: BLE001 (any failure of the untrusted solution is a failed bar)
         rep.fail_all(names, str(exc))
         return
     rep.add(names[0], valid, int(valid), 1)

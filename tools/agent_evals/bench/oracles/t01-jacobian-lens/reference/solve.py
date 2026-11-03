@@ -68,7 +68,7 @@ def fit(model, tok, texts, cfg, variant=None):
             grads = torch.autograd.grad(
                 h_final, sources, grad_outputs=cot, retain_graph=k < n_pass - 1
             )
-            for li, g in zip(src, grads):
+            for li, g in zip(src, grads, strict=False):
                 rows = g[:nd][:, valid, :].double().mean(dim=1)  # [nd, d]
                 per_text[li][d0 : d0 + nd] = rows
         for li in src:

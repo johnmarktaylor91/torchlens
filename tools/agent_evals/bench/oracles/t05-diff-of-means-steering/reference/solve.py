@@ -43,7 +43,7 @@ def generate(model, tokenizer, texts, cfg, direction=None, variant=None):
         tokens, projections = [], []
         if direction is not None:
 
-            def modified(*args, **kwargs):
+            def modified(*args, projections=projections, **kwargs):
                 result = original(*args, **kwargs)
                 hidden = unpack(result)
                 changed = hidden.clone()
@@ -95,7 +95,7 @@ def run(inputs, outputs, variant=None):
             "steered_token_ids": b["token_ids"],
             "projections": b["projections"],
         }
-        for a, b in zip(native, steered)
+        for a, b in zip(native, steered, strict=False)
     ]
     if variant == "stimulus_order":
         items, logits = items[::-1], logits[::-1]

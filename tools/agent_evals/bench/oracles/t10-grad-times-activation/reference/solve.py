@@ -24,7 +24,7 @@ def run(inputs, outputs, variant=None):
     cls = 0 if variant == "class_zero" else cfg["objective_class"]
     grads = torch.autograd.grad(logits[:, cls].sum(), tuple(acts.values()))
     result = {}
-    for (key, activation), gradient in zip(acts.items(), grads):
+    for (key, activation), gradient in zip(acts.items(), grads, strict=False):
         if variant == "modules_only" and key not in ("stem", "conv2"):
             continue
         value = gradient if variant == "gradient_only" else activation * gradient

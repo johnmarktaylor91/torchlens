@@ -127,7 +127,7 @@ def topk_overlap(a, b, k):
     a2 = a.reshape(-1, a.shape[-1])
     b2 = b.reshape(-1, b.shape[-1])
     tot = 0.0
-    for x, y in zip(a2, b2):
+    for x, y in zip(a2, b2, strict=False):
         tot += len(set(x[:k].tolist()) & set(y[:k].tolist())) / k
     return tot / max(1, len(a2))
 

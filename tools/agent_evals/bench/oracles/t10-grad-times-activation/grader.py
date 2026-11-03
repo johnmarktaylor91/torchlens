@@ -73,7 +73,7 @@ def grade_one(rep, label, inputs, outputs, cache):
         ]
         errors = {key: rel_fro(got[key], value) for key, value in ref.items() if key not in missing}
         worst = max(errors.values()) if errors and not missing else float("inf")
-    except Exception as exc:  # Malformed solution files fail at this boundary.
+    except Exception as exc:  # noqa: BLE001 (any failure of the untrusted solution is a failed bar)
         rep.fail_all(names, str(exc))
         return
     rep.add(names[0], not missing, len(ref) - len(missing), len(ref), note=f"missing={missing}")

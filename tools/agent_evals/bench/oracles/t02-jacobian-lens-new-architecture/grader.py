@@ -44,7 +44,7 @@ def exact_fit(model, corpus, cfg):
             sources = model.states(ids)
         for layer in cfg["source_layers"]:
 
-            def remaining(residual):
+            def remaining(residual, layer=layer):
                 h = residual
                 for block in model.blocks[layer + 1 : cfg["target_layer"] + 1]:
                     h = block(h)

@@ -45,7 +45,7 @@ def oracle(inputs, cache_file):
         target, tr = aligned(tokenizer, item["target"], item["target_span"])
         saved = []
 
-        def capture(mod, args, kwargs):
+        def capture(mod, args, kwargs, saved=saved, sr=sr):
             saved.append(hidden_argument(args, kwargs)[:, sr[0] : sr[1]].clone())
 
         handle = next_block.register_forward_pre_hook(capture, with_kwargs=True)
@@ -64,7 +64,7 @@ def oracle(inputs, cache_file):
         )
         base.append(model(input_ids=target, use_cache=False).logits[0, -1].numpy())
 
-        def intervene(mod, args, kwargs):
+        def intervene(mod, args, kwargs, donor=donor, tr=tr):
             h = hidden_argument(args, kwargs).clone()
             h[:, tr[0] : tr[1]] = donor
             if args:
@@ -110,7 +110,7 @@ def grade_one(rep, label, inputs, outputs, cache):
             max_abs(got["baseline_logits"], ref["baseline_logits"]) if valid else float("inf")
         )
         align_ok = alignment == expected_alignment
-    except Exception as exc:  # Malformed solution files fail at this boundary.
+    except Exception as exc:  # noqa: BLE001 (any failure of the untrusted solution is a failed bar)
         rep.fail_all(names, str(exc))
         return
     rep.add(names[0], valid, int(valid), 1)

@@ -93,7 +93,7 @@ def oracle_fit(model, tok, texts, cfg):
                 grads = torch.autograd.grad(
                     outputs=h_t, inputs=h_s, grad_outputs=cot, retain_graph=k < n_pass - 1
                 )
-                for li, g in zip(src, grads):
+                for li, g in zip(src, grads, strict=False):
                     J[li][d0 : d0 + nd, :] = g[:nd, valid, :].float().mean(dim=1)
         for li in src:
             total[li] += J[li]
@@ -130,10 +130,12 @@ def self_check(model, tok, text, cfg, lens_rows, n_dims=3):
                 cot = torch.zeros_like(h_t)
                 cot[0, p, d] = 1.0
                 for acc, g in zip(
-                    summed, torch.autograd.grad(h_t, h_s, grad_outputs=cot, retain_graph=True)
+                    summed,
+                    torch.autograd.grad(h_t, h_s, grad_outputs=cot, retain_graph=True),
+                    strict=False,
                 ):
                     acc += g
-            for b, sm in zip(batched, summed):
+            for b, sm in zip(batched, summed, strict=False):
                 num = torch.linalg.norm(b[0, valid] - sm[0, valid])
                 den = torch.linalg.norm(sm[0, valid])
                 rel = float(num / den) if den > 0 else float(num)
@@ -231,7 +233,7 @@ def grade(task_dir, outputs, heldout_outputs, cache):
         J = {li: z[f"J_{li}"] for li in src}
         top = np.array(rd["top10"])
         mtop = np.array(rd["model_top10"])
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 (any failure of the untrusted solution is a failed bar)
         rep.fail_all(names, f"missing output: {e}")
         return rep
     d = J_ref[src[0]].shape[0]
@@ -260,7 +262,7 @@ def grade(task_dir, outputs, heldout_outputs, cache):
             th = np.array(load_json(os.path.join(heldout_outputs, "readout.json"))["top10"])
             ovh = topk_overlap(th, top_h, 10) if th.shape == top_h.shape else 0.0
             rep.add("readout_heldout", ovh >= 0.9, ovh, 0.9)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 (any failure of the untrusted solution is a failed bar)
             rep.fail_all(["readout_heldout"], f"missing output: {e}")
     return rep
 

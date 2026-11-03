@@ -67,7 +67,7 @@ def run(inputs, outputs, variant=None):
         with torch.no_grad():
             if variant == "unit_ablation":
 
-                def zero_unit(mod, args, out):
+                def zero_unit(mod, args, out, unit=unit):
                     result = out.clone()
                     result[:, unit["channel"], unit["row"], unit["column"]] = 0
                     return result

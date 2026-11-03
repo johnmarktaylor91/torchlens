@@ -85,7 +85,7 @@ def grade_one(rep, label, inputs, outputs, cache):
             if valid
             else float("inf")
         )
-    except Exception as exc:  # Malformed solution files fail at this boundary.
+    except Exception as exc:  # noqa: BLE001 (any failure of the untrusted solution is a failed bar)
         rep.fail_all(names, str(exc))
         return
     rep.add(names[0], valid, int(valid), 1)

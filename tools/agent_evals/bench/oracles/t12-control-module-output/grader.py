@@ -37,7 +37,7 @@ def grade_one(rep, label, inputs_dir, outputs_dir):
     ref, cfg = oracle(inputs_dir)
     try:
         acts = load_npz(os.path.join(outputs_dir, "activations.npz"))["activations"]
-    except Exception as e:  # missing or malformed
+    except Exception as e:  # noqa: BLE001 (any failure of the untrusted solution is a failed bar)
         rep.fail_all([f"{label}:shape", f"{label}:exact"], f"missing output: {e}")
         return
     rep.add(f"{label}:shape", tuple(acts.shape) == ref.shape, note=f"shape={acts.shape}")
