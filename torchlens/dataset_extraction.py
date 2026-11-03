@@ -384,8 +384,8 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
     dtype:
         Optional save dtype (DOCUMENTED-UNSTABLE; extract D11): a
         ``torch.dtype``/name or per-key mapping; ``None`` preserves. Cast
-        after pool/postprocess, before the CPU snapshot; bf16/fp8 store
-        byte-exact in safetensors shards.
+        after pool/postprocess, before the snapshot (the host copy in disk
+        mode); bf16/fp8 store byte-exact in safetensors shards.
     ragged:
         ``"refuse"`` (default) | ``"trim"`` | ``"as_captured"`` (extract
         D4). ``refuse`` fails typed BEFORE committing the first
@@ -428,7 +428,8 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
     Returns
     -------
     dict[str, torch.Tensor] | list[pathlib.Path]
-        In-memory concatenated outputs, or written shard paths.
+        In-memory concatenated outputs on the device the model produced
+        them on (never a host copy), or written shard paths.
 
     Raises
     ------
