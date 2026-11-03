@@ -161,7 +161,10 @@ def test_a_later_upstream_push_passes_through_the_replacement() -> None:
         inner = torch.relu(model.mlp[0](torch.relu(torch.zeros(2, 16))))
         expected_output = model.head(torch.zeros(2, 16))
 
-    (replacement,) = _replacement_ops(fork)
+    # The second module edit mints its own replacement; the first one is kept.
+    by_call = {tuple(r.output_of_module_calls): r for r in _replacement_ops(fork)}
+    assert sorted(by_call) == [("inp:1",), ("mlp:1",)]
+    replacement = by_call[("mlp:1",)]
     assert torch.allclose(fork.modules["mlp.1"].calls[0].outs[0], inner)
     assert torch.count_nonzero(replacement.out) == 0
     assert torch.allclose(fork[fork.output_layers[0]].out, expected_output)
@@ -175,12 +178,23 @@ def test_forked_module_edit_validates_against_the_plain_hook_output() -> None:
 
 
 @pytest.mark.parametrize("address", ["mlp", "mlp.1"])
-def test_forked_edit_of_the_innermost_owner_stays_in_place(address: str) -> None:
-    """Ablating the submodule that OWNS the last op edits that op: no replacement is needed."""
+def test_forked_edit_of_any_owner_matches_plain_hooks_and_the_capture_shape(address: str) -> None:
+    """Editing the outer module or the submodule that owns the last op: same values, same shape."""
 
     model, x = _model_and_input()
     plain = _plain_hook_outputs(model, x, address)
     _clean, fork = _forked_module_edit(model, x, address)
     forked = _module_outputs(fork)
     assert all(torch.allclose(forked[name], plain[name]) for name in plain)
-    assert len(_replacement_ops(fork)) == (1 if address == "mlp" else 0)
+
+    live = tl.trace(model, x, intervene=tl.when(tl.module(address), tl.zero_ablate()))
+    assert len(_replacement_ops(fork)) == len(_replacement_ops(live)) == 1
+
+    def _boundary(trace: tl.Trace) -> dict[str, bool]:
+        return {
+            str(m.address): m.calls[0].output_ops[0] in {r.label for r in _replacement_ops(trace)}
+            for m in trace.modules
+            if str(m.address) != "self"
+        }
+
+    assert _boundary(fork) == _boundary(live)

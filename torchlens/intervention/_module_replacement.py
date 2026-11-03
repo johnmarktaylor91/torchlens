@@ -452,6 +452,7 @@ def _splice_into_containers(
     if site_keys is not None:
         site_keys[:] = [k for k in site_keys if k not in taken]
     trace._layer_num_calls[replacement.layer_label] = 1
+    trace._num_ops += 1  # a computational layer, like the capture-time replacement
     layer = type(trace._layer_logs[site.layer_label])(replacement)  # the Layer class
     layer.ops[1] = replacement
     logs: OrderedDict[str, Any] = OrderedDict()
