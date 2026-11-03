@@ -359,3 +359,27 @@ def test_callable_edit_refuses_a_portable_trace_save(
     with pytest.raises(TorchLensError) as caught:
         live.save(tmp_path / "portable_callable", level="portable")
     assert _error_code(caught.value) == "intervention_spec_not_portable"
+
+
+def test_composite_selector_rule_saves_portably_and_reruns(
+    model: _Toy, inputs: torch.Tensor, tmp_path: Path
+) -> None:
+    """A built-in edit under an ``and`` selector saves portably; its members are nested selectors."""
+
+    spec = tl.when(tl.func("linear") & tl.in_module("b"), tl.zero_ablate())
+    saved = _save(model, inputs, spec, tmp_path / "composite")
+    recipe = json.loads((saved.root / "intervention.json").read_text(encoding="utf-8"))
+    assert recipe["executable"] is True
+    selector = recipe["capture_rules"][0]["selector"]
+    assert selector["selector_kind"] == "and"
+    assert [member["selector_kind"] for member in selector["selector_value"]] == [
+        "func",
+        "in_module",
+    ]
+    edited = [op.label for op in saved.live.ops if op.is_edited]
+    assert edited, "the composite rule fired at no op"
+    loaded = tl.load(saved.root)
+    loaded.run(model, inputs)
+    assert [op.label for op in loaded.ops if op.is_edited] == edited
+    for label, want in _saved_outs(saved.live).items():
+        assert torch.equal(_saved_outs(loaded)[label], want), f"{label} differs after the rerun"

@@ -106,6 +106,12 @@ def _selector(target: Any, encoder: _RecipeEncoder, at: str) -> dict[str, Any]:
     selector_value = getattr(target, "selector_value", None)
     if _is_target(selector_value):
         selector_value = _selector(selector_value, encoder, f"{at}.selector_value")
+    elif _is_target_sequence(selector_value):
+        # An ``and`` / ``or`` composite: each member is a nested selector object.
+        selector_value = [
+            _selector(member, encoder, f"{at}.selector_value[{i}]")
+            for i, member in enumerate(selector_value)
+        ]
     else:
         selector_value = encoder.encode(selector_value, f"{at}.selector_value")
     return {
@@ -123,6 +129,12 @@ def _is_target(value: Any) -> bool:
     """Return whether a value is a staged target spec."""
 
     return hasattr(value, "selector_kind") and hasattr(value, "selector_value")
+
+
+def _is_target_sequence(value: Any) -> bool:
+    """Return whether a value is the non-empty member tuple of a composite target spec."""
+
+    return isinstance(value, (tuple, list)) and bool(value) and all(map(_is_target, value))
 
 
 def _placeholder_edit(index: int, hook: Any, encoder: _RecipeEncoder) -> dict[str, Any]:

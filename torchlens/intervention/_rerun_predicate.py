@@ -360,12 +360,21 @@ def _make_raw_index_save_predicate(selected_indices: set[int]) -> Callable[[Any]
 _SELECTOR_KEYS = frozenset({"selector_kind", "selector_value", "strict", "slice_spec", "metadata"})
 
 
+def _is_selector_object(value: Any) -> bool:
+    """Return whether a decoded value is a nested selector object."""
+
+    return isinstance(value, Mapping) and set(value) == _SELECTOR_KEYS
+
+
 def _target(selector: Mapping[str, Any]) -> TargetSpec:
     """Rebuild a target spec from a rule ``selector`` object."""
 
     value = selector.get("selector_value")
-    if isinstance(value, Mapping) and set(value) == _SELECTOR_KEYS:
+    if _is_selector_object(value):
         value = _target(value)
+    elif isinstance(value, (list, tuple)) and value and all(map(_is_selector_object, value)):
+        # An ``and`` / ``or`` composite saves its members as nested selector objects.
+        value = tuple(_target(member) for member in value)
     slice_data = selector.get("slice_spec")
     return TargetSpec(
         selector_kind=selector["selector_kind"],
