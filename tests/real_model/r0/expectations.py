@@ -318,9 +318,12 @@ DATED_GAPS: tuple[DatedGap, ...] = (
             "a GPU leg captures and validates a real-model family under"
             " attn_implementation='flash_attention_2'"
         ),
-        notes="FA2 kernels need CUDA and the flash-attn package; every real-model"
-        " leg today is CPU, so no family runs the flash_attention_2"
-        " implementation (FamilySpec.impls stays eager/sdpa)",
+        notes="FA2 kernels need CUDA and a flash-attn build for the running torch;"
+        " every real-model leg today is CPU, so no family runs the flash_attention_2"
+        " implementation (FamilySpec.impls stays eager/sdpa). Measured 2026-11-03 on a"
+        " CUDA venue (torch 2.8.0+cu126, flash-attn 2.8.3.post2): the forward runs and"
+        " captures exactly, but forward validation fails on the kernel's unconsumed"
+        " sibling outputs, so the gap stays open (compat matrix row flash_attention_2)",
     ),
     DatedGap(
         gap_id="vjepa2-full-clip-forward-validation",
