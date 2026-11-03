@@ -65,7 +65,7 @@ the current components; `__init__` provides their thin package entry.
 | `runnable_families.py` | Fixed runnable family names, shared chunk writer, checked tensor references |
 | `container.py` | Bundle members, manifest bindings and relations |
 | `codec_policy.py` | Tensor carrier roles and backend agreement checked before codec lookup | 100 | reader |
-| `restore.py` | Declared record-state restoration while retaining saved cell values | 200 | reader |
+| `restore.py` | Declared record-state restoration, saved-cell true-up and capture-time provenance stamping through trusted caller-supplied parsers | 200 | reader |
 | `summaries.py` | Closed model-identity and backward-summary schemas | 200 | reader |
 | `codec_policy.py` | the payload codec boundary (section 9): payload columns take the artifact's codec, raw-value cells the array codec, disagreeing hints refuse before codec lookup | 100 | reader |
 | `summaries.py` | closed shapes of the optional manifest summaries (`model_fingerprint`, `backward_summary`), refused `manifest_schema_invalid` when present and malformed | 150 | reader |

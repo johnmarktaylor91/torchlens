@@ -192,7 +192,7 @@ torchlens/_io/bundle.py::_load_unified_tlspec	96
 torchlens/_io/bundle.py::_preflight_unified_trace_manifest	90
 torchlens/_io/bundle.py::_scrub_trace_for_bundle	62
 torchlens/_io/bundle.py::cleanup_tmp	120
-torchlens/_io/bundle.py::load	153
+torchlens/_io/bundle.py::load	144
 torchlens/_io/bundle.py::save	625
 torchlens/_io/bundle_container.py::_load_unified_bundle	81
 torchlens/_io/bundle_container.py::_load_unified_bundle_directory	77
