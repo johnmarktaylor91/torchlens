@@ -781,7 +781,7 @@ torchlens/backends/mlx/backend.py	2522
 torchlens/backends/mlx/backend.py::MLXBackend._attach_derived_grads	158
 torchlens/backends/mlx/backend.py::MLXBackend._build_event	134
 torchlens/backends/mlx/backend.py::MLXBackend._records_for_intermediate_mlx_grads	91
-torchlens/backends/mlx/backend.py::MLXBackend.capture_trace	234
+torchlens/backends/mlx/backend.py::MLXBackend.capture_trace	233
 torchlens/backends/mlx/backend.py::MLXBackend.emit_mlx_operation	173
 torchlens/backends/mlx/backend.py::MLXBackend.validate_trace	67
 torchlens/backends/mlx/backend.py::_find_mlx_compiled_attributes	84
@@ -794,7 +794,7 @@ torchlens/backends/paddle/backend.py::PaddleBackend._attach_derived_grads	135
 torchlens/backends/paddle/backend.py::PaddleBackend._build_event	136
 torchlens/backends/paddle/backend.py::PaddleBackend._build_op_capture	78
 torchlens/backends/paddle/backend.py::PaddleBackend._records_for_intermediate_paddle_grads	85
-torchlens/backends/paddle/backend.py::PaddleBackend.capture_trace	311
+torchlens/backends/paddle/backend.py::PaddleBackend.capture_trace	310
 torchlens/backends/paddle/backend.py::PaddleBackend.emit_paddle_operation	156
 torchlens/backends/paddle/backend.py::PaddleBackend.validate_trace	68
 torchlens/backends/paddle/backend.py::_PaddleIntermediateTapObserver.call	62
