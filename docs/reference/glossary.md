@@ -65,8 +65,9 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   public constructor. `tl.record` always returns one object.
   The Trace-parity verbs `Recording.to_agent_json()`, `Recording.save(path)`, `Recording.fork()`
   and `Recording.do(site, edit)` cook through `to_trace()` and delegate to the Trace verb, as do
-  `tl.export.xarray(recording)` and `tl.save(recording, path)`; a typed `to_trace` refusal
-  propagates unchanged. `tl.record(..., episode=)` refuses typed
+  `tl.export.xarray(recording)` and the bundle writer behind `Trace.save` when handed a Recording;
+  a typed `to_trace` refusal propagates unchanged, and a failed recording refuses as a capture
+  outcome (code `N1`) rather than cooking. `tl.record(..., episode=)` refuses typed
   (`episode_unsupported_on_record`): episode capture runs on `tl.trace(model, x, episode=...)`.
 
 **Trace.output / Recording.output**
@@ -4124,7 +4125,7 @@ The sections above describe each surface in depth.
 | `Bundle.rank_changes` | Rank sites by their distance from a baseline member; rows keyed like `Bundle.compare` (one row per pass of a multi-pass op) |
 | `Bundle.summary` | The bundle card as text: member count and names, outcome distribution, baseline, relation count, structural consistency |
 | `Bundle.to_pandas` | One stacked table: a leading `member` column, then each member's `Trace.to_pandas()` rows in `names` order with a fresh index; an empty bundle gives an empty frame with the `member` column |
-| `Bundle.to_agent_json` | The `torchlens.agent_bundle.v1` dump: `member_count`, `names`, `baseline_name`, `outcome`, `structurally_consistent` and `members` (each member's `Trace.to_agent_json(max_ops=)`) |
+| `Bundle.to_agent_json` | The agent dump (schema `"torchlens.agent_bundle.v1"`): `member_count`, `names`, `baseline_name`, `outcome`, `structurally_consistent` and `members` (each member's `Trace.to_agent_json(max_ops=)`) |
 | `BundleComparisonError.severity` | The error's severity class |
 | `CapabilityRow.is_available` | Whether the capability is available in this environment |
 | `CaptureFacts.is_structure_only` | Whether the capture kept structure only, without payloads |
