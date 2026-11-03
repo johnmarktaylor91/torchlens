@@ -7614,10 +7614,7 @@ test-docstrings	tests/test_debug_bisect_precision.py	32
 test-docstrings	tests/test_debug_bisect_precision.py	64
 test-docstrings	tests/test_debug_cost_audit_behaviors.py	100
 test-docstrings	tests/test_decoration.py	138
-test-docstrings	tests/test_decoration.py	1944
-test-docstrings	tests/test_decoration.py	3886
 test-docstrings	tests/test_decoration.py	649
-test-docstrings	tests/test_decoration.py	76
 test-docstrings	tests/test_deferred_payload_clone.py	13
 test-docstrings	tests/test_deferred_payload_clone.py	2132
 test-docstrings	tests/test_device_context_logging.py	2.1
