@@ -111,7 +111,7 @@ torchlens/_data_classes/op.py::_pool_container_cells	66
 torchlens/_data_classes/op.py::_pool_container_members	74
 torchlens/_data_classes/param.py	1082
 torchlens/_data_classes/param.py::Param.__init__	75
-torchlens/_data_classes/trace.py	3477
+torchlens/_data_classes/trace.py	3468
 torchlens/_data_classes/trace.py::Trace.__init__	364
 torchlens/_data_classes/trace.py::Trace.save	83
 torchlens/_data_substrate/artifact.py::ArtifactWriter.commit_shard	67
@@ -331,7 +331,7 @@ torchlens/_observe/_svg.py::render_timeline_svg	92
 torchlens/_observe/_timeline.py::_forward_events	71
 torchlens/_observe/_timeline.py::_persistent_events	63
 torchlens/_observe/_timeline.py::memory_timeline_v2	65
-torchlens/_options_validation.py::_validate_capture_values	72
+torchlens/_options_validation.py::_validate_capture_values	71
 torchlens/_postprocess/__init__.py::_drop_transient_capture_state	72
 torchlens/_postprocess/__init__.py::_postprocess_body	135
 torchlens/_postprocess/_buffer_addresses.py::_buffer_addresses_by_label	119
@@ -1118,12 +1118,12 @@ torchlens/intervention/_subspace_spec.py::rebuild_subspace_edit	71
 torchlens/intervention/_super/_base.py::_TensorBearing._require_immutable_param_evidence	64
 torchlens/intervention/_topology/topology.py::_find_alignment	70
 torchlens/intervention/_topology/topology.py::build_supergraph	108
-torchlens/intervention/_trace_edits.py::apply_do_mutation	85
+torchlens/intervention/_trace_edits.py::apply_do_mutation	83
 torchlens/intervention/_trace_edits.py::do_with_options	107
 torchlens/intervention/_trace_edits.py::record_do_intervention_event	78
 torchlens/intervention/_trace_edits.py::set_site	64
 torchlens/intervention/_trace_edits.py::validate_supplied_model_matches_capture	78
-torchlens/intervention/_trace_hooks.py::attach_hooks	80
+torchlens/intervention/_trace_hooks.py::attach_hooks	79
 torchlens/intervention/_trace_run.py::run	377
 torchlens/intervention/_trace_selection_edits.py::apply_cross_kind_batch_do	61
 torchlens/intervention/_trace_selection_edits.py::apply_leaf_selection_edits	70
@@ -1247,7 +1247,7 @@ torchlens/neuro/_rdms.py::_matrix_mode	95
 torchlens/neuro/_rdms.py::_source_mode	114
 torchlens/neuro/_rdms.py::_validated_matrix	77
 torchlens/neuro/_rdms.py::rdms	127
-torchlens/options.py	1715
+torchlens/options.py	1706
 torchlens/options.py::CaptureOptions.__init__	74
 torchlens/options.py::VisualizationOptions.__init__	130
 torchlens/options.py::_merge_grouped_options	74
@@ -1312,7 +1312,7 @@ torchlens/receptive_field/_viz.py::show	83
 torchlens/receptive_field/rules/interpolation.py::interpolate	63
 torchlens/receptive_field/rules/transforms.py::getitem	76
 torchlens/receptive_field/rules/transforms.py::pad	73
-torchlens/recording/_record_one_shot.py::record	146
+torchlens/recording/_record_one_shot.py::record	136
 torchlens/recording/_recorder.py	837
 torchlens/recording/_recorder.py::Recorder.__init__	157
 torchlens/recording/_recorder.py::Recorder._run_unified_capture	151
