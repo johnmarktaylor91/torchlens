@@ -23,6 +23,7 @@ fails here too, so the cell list cannot drift from the surface.
 from __future__ import annotations
 
 import functools
+import inspect
 import sys
 from pathlib import Path
 
@@ -160,3 +161,83 @@ def test_requires_marker_runs_when_module_is_present() -> None:
         "tl.present_optional", __name__, "function", _present_optional
     )
     assert docstring_examples.run_example(symbol, {}).status == "ok"
+
+
+#: Optional modules the enforcing CI environment installs (``scripts/smoke_ci_parity.py``):
+#: their ``# requires:`` examples run in the package cells above.
+GATE_ENV_EXAMPLE_MODULES: frozenset[str] = frozenset(
+    {
+        "PIL",
+        "graphviz",
+        "lovely_tensors",
+        "pandas",
+        "pyarrow",
+        "safetensors",
+        "torchshow",
+        "torchvision",
+        "transformers",
+    }
+)
+
+#: Optional modules the enforcing environment lacks. Their examples skip in the package
+#: cells, so :func:`test_optional_examples_run` runs them, one cell per module, in the
+#: legs that install the module (nightly ``bridges-real`` and ``lit-bridge``); a leg's
+#: PASSED floor counts the cells it installs, so a skip there fails the leg.
+OPTIONAL_EXAMPLE_MODULES: tuple[str, ...] = (
+    "brainio",
+    "brainscore_vision",
+    "captum",
+    "dagua",
+    "depyf",
+    "dialz",
+    "inseq",
+    "lightning",
+    "lit_nlp",
+    "mcp",
+    "pytorch_grad_cam",
+    "repeng",
+    "rsatoolbox",
+    "sae_lens",
+    "sentence_transformers",
+    "steering_vectors",
+    "tensorboard",
+    "timm",
+    "torchextractor",
+    "treescope",
+    "wandb",
+    "xarray",
+)
+
+
+def _required_by(symbol: docstring_examples.PublicSymbol) -> str | None:
+    """Return the optional module ``symbol``'s example declares, if any."""
+
+    return docstring_examples._required_module(inspect.getdoc(symbol.obj) or "")
+
+
+def test_optional_example_modules_are_listed() -> None:
+    """Every ``# requires:`` module is listed once, as gate-installed or as optional."""
+
+    declared = {module for symbol in _symbols() if (module := _required_by(symbol))}
+    listed = GATE_ENV_EXAMPLE_MODULES | set(OPTIONAL_EXAMPLE_MODULES)
+    assert not GATE_ENV_EXAMPLE_MODULES & set(OPTIONAL_EXAMPLE_MODULES)
+    assert declared == listed, (
+        f"unlisted: {sorted(declared - listed)}; listed but unused: {sorted(listed - declared)}"
+    )
+
+
+@pytest.mark.optional
+@pytest.mark.parametrize("module", OPTIONAL_EXAMPLE_MODULES)
+def test_optional_examples_run(module: str) -> None:
+    """Run every example that requires ``module``; skip only where ``module`` is absent."""
+
+    pytest.importorskip(module)
+    symbols = [symbol for symbol in _symbols() if _required_by(symbol) == module]
+    assert symbols, f"no example declares `# requires: {module}`"
+    namespace = docstring_examples.ambient_namespace()
+    failures = []
+    for symbol in symbols:
+        result = docstring_examples.run_example(symbol, namespace)
+        if result.status != "ok":
+            failures.append(f"{result.path} ({result.status}):\n{result.detail}")
+    assert not failures, f"{len(failures)} examples did not run:\n" + "\n".join(failures)

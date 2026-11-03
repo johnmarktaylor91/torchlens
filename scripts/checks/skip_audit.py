@@ -375,6 +375,7 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
 DYNAMIC_IMPORTORSKIP_SITES = frozenset(
     {
         "test_backend_registry.py",  # importorskips the registry's own dependency map
+        "test_docstring_examples.py",  # importorskips each `# requires:` module of an example
         "test_subfolder_imports.py",  # importorskips each subfolder's declared optional deps
     }
 )
