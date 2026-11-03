@@ -587,6 +587,20 @@ def _render_schema_bindings() -> str:
     return _render(_collect())
 
 
+def _render_schema_bindings_trace() -> str:
+    """Return a fresh rendering of the split-out ``trace`` storage-bindings module.
+
+    Returns
+    -------
+    str
+        Generated source text.
+    """
+
+    from tools.generate_record_schema import _collect, _render_split
+
+    return _render_split(_collect())
+
+
 def _render_op_record_manifest() -> str:
     """Return a fresh rendering of the op-record cell-source manifest.
 
@@ -816,6 +830,11 @@ GENERATED_ARTIFACTS: tuple[GeneratedArtifact, ...] = (
     GeneratedArtifact(
         "torchlens/_data_classes/_schema_bindings.py",
         _render_schema_bindings,
+        "python tools/generate_record_schema.py",
+    ),
+    GeneratedArtifact(
+        "torchlens/_data_classes/_schema_bindings_trace.py",
+        _render_schema_bindings_trace,
         "python tools/generate_record_schema.py",
     ),
     GeneratedArtifact(

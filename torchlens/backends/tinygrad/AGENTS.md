@@ -9,8 +9,8 @@ preview: `backend.py` plus registry-backed `capabilities.py` only.
 - `TinygradBackend.capture_trace()` is the standalone entry: it runs the
   callable under `_observe_tensor_ops` (Tensor-API observation building
   `TinygradUOpCapture` records from pre-realization UOp lineage) and
-  `_reject_mid_capture_execution` (typed refusal of mid-capture realization
-  that would truncate lazy UOp lineage).
+  `_reject_mid_capture_execution` (in `_execution_guard.py`; typed refusal of
+  mid-capture realization that would truncate lazy UOp lineage).
 - `GradOptions` (re-exported from `__init__.py`) drives derived gradients
   including intermediates (`TinygradIntermediateCandidate`,
   `intermediate_derived_grads=True`).

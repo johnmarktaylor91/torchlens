@@ -227,7 +227,7 @@ def test_ci_workflows_pin_torch_and_scope_lint_to_owned_paths() -> None:
     )
     assert extend_exclude is not None, "pyproject [tool.ruff] must declare extend-exclude"
     excluded = set(re.findall(r'"([^"]+)"', extend_exclude.group(1)))
-    # The two generated artifacts are excluded because their generator is the
+    # The generated artifacts are excluded because their generator is the
     # authority and tests/test_schema_lockstep.py compares them byte-for-byte, so
     # a ruff rewrite would make that gate permanently red. That half is pinned to
     # the self-declaring generated set by
@@ -237,6 +237,7 @@ def test_ci_workflows_pin_torch_and_scope_lint_to_owned_paths() -> None:
     assert excluded == {
         "tests/classics_corpus/models",
         "torchlens/_data_classes/_schema_bindings.py",
+        "torchlens/_data_classes/_schema_bindings_trace.py",
         "torchlens/_ir/op_record_manifest.py",
     }
     assert "--exclude" not in lint_text

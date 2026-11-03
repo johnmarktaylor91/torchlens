@@ -67,6 +67,7 @@ from .._finalize import (
 )
 from .._options import MLX_PREVIEW_TRACE_OPTION_POLICY, reject_unsupported_trace_options
 from . import capabilities
+from ._capture_disclosures import _disclose_compiled_attributes, _disclose_unfired_selectors
 from ._grad_oracle import (
     _eval_mlx_tree,
     _has_mlx_array_leaf,
@@ -1042,20 +1043,7 @@ class MLXBackend:
             trace._provenance_root_entry_point = (
                 f"function_call:{getattr(model, '__qualname__', trace._source_class_name)}"
             )
-        if compiled_attribute_paths:
-            # Conservative ceiling, not a refusal: the attribute may never be
-            # called, but a call would bypass wrapper capture (cold trace) or
-            # replay a cached graph (warm), so honesty cannot depend on it.
-            names = ", ".join(compiled_attribute_paths)
-            warnings.warn(
-                "MLX model holds mx.compile/traced-transform attribute(s) "
-                f"({names}); their interiors are not logged, so this capture "
-                "is marked capture_verified=False.",
-                UserWarning,
-                stacklevel=2,
-            )
-            trace._provenance_verified = False
-            trace._provenance_verification_reason = "mlx_compiled_attribute_not_logged"
+        _disclose_compiled_attributes(trace, compiled_attribute_paths)
         trace.capture_events = CaptureEvents()
         trace._mlx_saved_payloads = []
         trace._mlx_capture_depth = 0
@@ -1098,25 +1086,9 @@ class MLXBackend:
                 trace.stop_reason = signal.reason
                 trace._graph_stop_frontier = signal.reason
             _drop_forward_only_state(trace)
-            # Zero-match disclosure (preview half of the torch-side fix): a
-            # selector matching nothing produced a trace byte-identical to
-            # plain capture with no warning and no counter anywhere.
-            if intervention_plan is not None and not trace.__dict__.pop(
-                "_mlx_intervene_fired", False
-            ):
-                warnings.warn(
-                    "Capture-time intervention selector matched zero sites on the mlx "
-                    "forward; no intervention fired (check the selector's op/module name).",
-                    UserWarning,
-                    stacklevel=2,
-                )
-            if halt_selector is not None and halt_signal is None:
-                warnings.warn(
-                    "Capture-time halt selector matched zero sites on the mlx forward; "
-                    "the capture ran the full forward and completed without halting.",
-                    UserWarning,
-                    stacklevel=2,
-                )
+            _disclose_unfired_selectors(
+                trace, intervention_plan, halt_selector, halted=halt_signal is not None
+            )
             trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
 
             if halt_signal is not None:
