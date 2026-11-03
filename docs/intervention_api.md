@@ -129,11 +129,11 @@ There are no gradient-only helpers. The ordinary edits apply to whichever tensor
 | A callable `fn(grad, *, ctx)` | Receives the gradient; return a replacement or `None`. Audit-only when saved. |
 
 Edits that read recorded forward state (`tl.patch_from`, `tl.mean_ablate`, `tl.splice_module`,
-`tl.swap_with` with a site or trace donor) refuse on a gradient site with `edit_signal_mismatch`.
+`torchlens.intervention.helpers.swap_with` with a site or trace donor) refuse on a gradient site with `edit_signal_mismatch`.
 
 `trace.do(tl.grad(site), edit, model=model, inputs=x)` reruns the forward with the edit armed; the next
 `result.backward(loss)` applies it. `loss=lambda t: ...` (a callable of the returned trace) does both in
-one call. The audit row status is `"armed"` until a backward settles it. Without `model=` and `x=` (or
+one call. The audit row status is `"armed"` until a backward settles it. Without `model=` and `inputs=` (or
 `intervention=tl.options.InterventionOptions(engine="set_only")` to arm in place), `do` refuses
 `replay_gradient_edit_unsupported`.
 

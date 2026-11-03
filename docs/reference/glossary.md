@@ -1451,8 +1451,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   pre-mutated site; `Trace.run` performs a full-forward run with the log's active
   intervention spec; `tl.sweep` captures one intervened trace per swept replacement
   value. (The former `replay`/`replay_from`/`rerun` aliases are removed.) Replay re-executes
-  forward ops only, so a gradient site on `do` without `model=`/`x=`, on `engine="replay"`, or in
-  `push` refuses `replay_gradient_edit_unsupported` before any mutation ("Pass model= and x= to
+  forward ops only, so a gradient site on `do` without `model=`/`inputs=`, on `engine="replay"`, or in
+  `push` refuses `replay_gradient_edit_unsupported` before any mutation ("Pass model= and inputs= to
   rerun with the edit armed, then call result.backward(loss) (or pass loss=), or stage it with
   engine='set_only' and call trace.backward(loss) on this trace"); differentiable replay of
   gradient edits is out of scope this release. The replay engine operates on pass-qualified op labels

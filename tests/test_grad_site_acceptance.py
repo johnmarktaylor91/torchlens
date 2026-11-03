@@ -270,7 +270,7 @@ def test_a22_gradient_edit_without_a_rerun_refuses_before_mutation(engine: str |
         trace.do(tl.grad(relu), tl.scale(0), intervention=options)
     assert excinfo.value.fields["code"] == "replay_gradient_edit_unsupported"
     message = str(excinfo.value)
-    assert "model= and x=" in message
+    assert "model= and inputs=" in message
     assert "engine='set_only'" in message
     assert trace.recipe == recipe_before
     assert trace.intervention_audit == audit_before
