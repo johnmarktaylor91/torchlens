@@ -35,7 +35,12 @@ from .._data_classes._trace_intervention_records import (
 from .._errors import InvalidArgumentError
 from ..options import InterventionOptions, ReplayOptions, merge_intervention_options
 from ._edit_guards import select_do_engine, warn_if_root_mutation
-from ._trace_selection_edits import apply_selection_batch_do, apply_selection_do, is_selection_batch
+from ._trace_selection_edits import (
+    apply_selection_batch_do,
+    apply_selection_do,
+    is_selection_batch,
+    push_from_handles,
+)
 from .types import InterventionSpec, TargetSpec
 
 if TYPE_CHECKING:
@@ -432,14 +437,13 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
         return trace
     try:
         if selected_engine == "replay":
-            result = trace.push(replay=ReplayOptions(strict=strict_value))
+            result = push_from_handles(trace, attached_handles, strict=strict_value)
         else:
             assert model is not None
             result = cast("Trace", trace.run(model, x, replay=ReplayOptions(strict=strict_value)))
     except BaseException as exc:
-        # A failed do() must not leave its sticky hooks attached: the
-        # next push would silently re-fire them (contamination). Detach
-        # exactly the hooks THIS call attached, then re-raise.
+        # A failed do() must not leave its sticky hooks attached (the next push
+        # would silently re-fire them): detach exactly this call's hooks, re-raise.
         for handle_id in attached_handles:
             clear_edits(trace, handle=handle_id, confirm_mutation=True)
         record_do_intervention_event(trace, txn, status="error", error=repr(exc))
@@ -584,11 +588,10 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
         )
         return "attach_hooks", tuple(handle.handle_ids)
 
-    # A RegionTarget (F01) is the region-as-a-unit door: the replay
-    # lowering substitutes the region's derived exit values without
-    # replaying the interior. Distinct from the TraceSlice lift below,
-    # which keeps its shipped member-site family semantics. sys.modules
-    # gate keeps ordinary do() free of the regions import.
+    # A RegionTarget (F01) is the region-as-a-unit door: the replay lowering
+    # substitutes the region's derived exit values without replaying the
+    # interior. Distinct from the TraceSlice lift below, which keeps its shipped
+    # member-site family semantics. sys.modules gate keeps do() free of the regions import.
     regions_module = sys.modules.get("torchlens.intervention.regions")
     if regions_module is not None and isinstance(hooks_or_site, regions_module.RegionTarget):
         warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
@@ -599,9 +602,8 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
             (),
         )
     # A TraceSlice targets its member family: lift it to the whole-site
-    # QUERY (re-resolved on THIS trace by site name, so a slice built on
-    # the source log addresses the same sites on a fork). sys.modules
-    # gate keeps ordinary do() free of any slice import.
+    # QUERY (re-resolved on THIS trace by site name, so a slice built on the
+    # source log addresses the same sites on a fork). sys.modules gate keeps do() slice-free.
     slice_module = sys.modules.get("torchlens._trace_slice")
     if slice_module is not None and isinstance(hooks_or_site, slice_module.TraceSlice):
         hooks_or_site = hooks_or_site.__selection__()
@@ -660,13 +662,12 @@ def validate_supplied_model_matches_capture(trace: Trace, model: nn.Module) -> N
         Fail-closed on the root entry-point fact (absent fact or a non-``module_call`` root,
         F41), then if available class or weight-fingerprint evidence differs.
     """
-    # The root entry-point fact joins this gate FAIL-CLOSED: it is written
-    # unconditionally on every capture, so absence (a legacy artifact)
-    # refuses, and a non-module_call root refuses rather than re-running
-    # ``forward`` under a capture of another entry point (``owner`` for a
-    # capture of ``owner.generate`` would pass the class+weights checks and
-    # run ``__call__`` under a report that can say verified). Bound-method
-    # captures refuse rerun/append; never widened past the ruling.
+    # The root entry-point fact joins this gate FAIL-CLOSED: written on every
+    # capture, so absence (a legacy artifact) refuses; a non-module_call root
+    # refuses rather than re-running ``forward`` under another entry point's
+    # capture (``owner`` for ``owner.generate`` would pass the class+weights
+    # checks and run ``__call__`` under a report that can say verified).
+    # Bound-method captures refuse rerun/append; never widened past the ruling.
     root_fact = trace._provenance_root_entry_point
     if root_fact is None:
         raise ModelMismatchError(
@@ -779,12 +780,11 @@ def target_spec_from_site(trace: Trace, site: Any, *, strict: bool) -> TargetSpe
         target = copy.copy(site)
         target.strict = strict or target.strict
         return target
-    # An ``Op``/``Layer`` RECORD lowers to its PASS-QUALIFIED label
-    # selector(s) first (AUD-CODE 4.10, W051-REPLAY out-of-fence item 2):
-    # an ``Op`` is exactly its own pass (``site.label``, never the bare
-    # ``layer_label`` = the LAST pass of a multi-pass layer); a multi-pass
-    # ``Layer`` is the explicit all-passes composite. Selector-likes pass
-    # through unchanged.
+    # An ``Op``/``Layer`` RECORD lowers to its PASS-QUALIFIED label selector(s)
+    # first (AUD-CODE 4.10, W051-REPLAY out-of-fence item 2): an ``Op`` is
+    # exactly its own pass (``site.label``, never the bare ``layer_label`` =
+    # the LAST pass of a multi-pass layer); a multi-pass ``Layer`` is the
+    # explicit all-passes composite. Selector-likes pass through unchanged.
     site = lower_record_site_target(site)
     if hasattr(site, "to_target_spec"):
         target = site.to_target_spec()

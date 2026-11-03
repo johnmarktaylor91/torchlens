@@ -53,7 +53,7 @@ from .._runnable.execution import (
 from .._runnable.state import validate_run_seed
 from .._runnable.transaction import _LiveRunOptions, _resolve_run_save_labels
 from .._trace_state import TraceState
-from ..backends.torch._trace_backward import _refuse_stats_capture
+from ..backends.torch._trace_backward import _refuse_stats_capture, _require_live_replay
 from ..backends.torch.backward import disarm_triggers as _disarm_triggers_impl
 from ..errors import (
     PathDivergenceError,
@@ -349,9 +349,7 @@ def push(
 ) -> Trace:
     """Body of ``Trace.push``; the method carries the documented contract."""
 
-    require_capture_capability(trace, "live_replay")
-    require_structure_only_capability(trace, "live_replay")
-    _refuse_stats_capture(trace, "live_replay")
+    _require_live_replay(trace)
     replay_options = merge_replay_options(replay=replay)
 
     return _push_impl(trace, replay=replay_options)

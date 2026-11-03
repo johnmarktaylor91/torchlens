@@ -54,6 +54,30 @@ def _label_key_map(trace: Trace) -> dict[str, tuple[str, ...]]:
     return {spelling: tuple(keys) for spelling, keys in mapping.items()}
 
 
+def _final_label_key_map(trace: Trace) -> dict[str, tuple[str, ...]]:
+    """Map every FINAL label spelling to the replay keys it denotes.
+
+    Relations (``children``, ``out_versions_by_child``) are spelled in final
+    labels: the pass-qualified ``label`` of a multi-pass op, the bare
+    ``layer_label`` of a single-pass one. A historical spelling kept in
+    ``lookup_keys`` (the raw label an op carried before pass grouping
+    renumbered later steps) can equal another op's final label, so a relation
+    resolved through :func:`_label_key_map` would also name the op that once
+    carried it and pull an unrelated branch into the cone. This map holds
+    final spellings only; the bare label of a multi-pass layer still expands
+    to every pass.
+    """
+
+    mapping: dict[str, list[str]] = {}
+    for op in trace._layer_list:
+        key = _replay_site_key(op)
+        for spelling in {key, op.layer_label}:
+            keys = mapping.setdefault(spelling, [])
+            if key not in keys:
+                keys.append(key)
+    return {spelling: tuple(keys) for spelling, keys in mapping.items()}
+
+
 def _validated_cone_origins(origins: Iterable[Op]) -> list[Op]:
     """Refuse non-op cone origins typed (leverage B3), returning them listed."""
 
@@ -120,6 +144,7 @@ def cone_of_effect(trace: Trace, origins: Iterable[Op]) -> list[Op]:
     origins = _validated_cone_origins(origins)
     all_keys = trace._layer_dict_all_keys
     label_keys = _label_key_map(trace)
+    final_keys = _final_label_key_map(trace)
     call_groups = _func_call_groups(trace)
     visited: set[str] = set()
     frontier: deque[str] = deque()
@@ -138,11 +163,10 @@ def cone_of_effect(trace: Trace, origins: Iterable[Op]) -> list[Op]:
         """
 
         for child_label in _child_labels(site):
-            # A pass-ambiguous child spelling (not produced by finished-trace
-            # relations, but guarded against) expands to every pass: a
-            # conservative superset is safe for cone traversal, guessing one
-            # pass is not.
-            for child_key in label_keys.get(child_label, ()):
+            # A final-label spelling names that op only (never one that carried
+            # it raw); a pass-ambiguous spelling expands to every pass, a safe
+            # conservative superset for cone traversal.
+            for child_key in final_keys.get(child_label) or label_keys.get(child_label, ()):
                 if child_key not in visited:
                     frontier.append(child_key)
 

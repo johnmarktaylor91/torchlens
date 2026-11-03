@@ -57,6 +57,7 @@ from ._replay_sites import (
     _is_source_record,
     _keeps_captured_draw,
     _no_func_message,
+    _require_hook_origins,
     _unmet_log_precondition,
 )
 from ._replay_values import (
@@ -64,6 +65,7 @@ from ._replay_values import (
     _clone_tensors_in,
     _is_inplace_none_return,
     _looks_like_template_dict,
+    rollback_snapshot,
 )
 from .audit import _hook_name, _replay_fire_record
 from .edge_substitution import require_depth1_arg_path
@@ -190,9 +192,8 @@ def push(
     _refuse_armed_gradient_rules(trace, replay_options.hooks)
     _warn_if_direct_writes_will_be_overlaid(trace)
     hook_entries = _normalize_replay_hooks(trace, replay_options.hooks)
-    origins = _origin_sites_for_hooks(trace, hook_entries, strict=replay_options.strict)
-    if not origins:
-        raise ReplayPreconditionError("push requires at least one hook target")
+    found = _origin_sites_for_hooks(trace, hook_entries, strict=replay_options.strict)
+    origins = _require_hook_origins(found)
     with changed_param_scope(replay_options.allow_changed_params):
         if replay_options.differentiable:
             return _run_differentiable_replay(
@@ -1149,6 +1150,7 @@ def _replay_group_output(
         replay_group,
         pending_updates=state.pending_updates,
         label_keys=state.label_keys,
+        log=state.log,
     ):
         return representative.out.clone()
     return _execute_group_call(representative, args, kwargs, origins=state.origins)
@@ -1358,18 +1360,7 @@ def _commit_replay_updates(
         for label, tensor in pending_updates.items():
             site = log._layer_dict_all_keys[label]
             _record_capture_digest(site, known_digests, new_digests)
-            snapshots[label] = {
-                "out": site.out,
-                "transformed_out": site.transformed_out,
-                "shape": site.shape,
-                "transformed_out_shape": site.transformed_out_shape,
-                "dtype": site.dtype,
-                "transformed_out_dtype": site.transformed_out_dtype,
-                "memory": site.activation_memory,
-                "transformed_activation_memory": site.transformed_activation_memory,
-                "edits": list(site.edits),
-                "is_edited": site.is_edited,
-            }
+            snapshots[label] = rollback_snapshot(site)
             _apply_out_update(site, tensor)
             new_records = list(pending_records.get(label, ()))
             if new_records:

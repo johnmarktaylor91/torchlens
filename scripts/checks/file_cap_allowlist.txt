@@ -1145,11 +1145,11 @@ torchlens/intervention/_subspace_spec.py::rebuild_subspace_edit	71
 torchlens/intervention/_super/_base.py::_TensorBearing._require_immutable_param_evidence	64
 torchlens/intervention/_topology/topology.py::_find_alignment	70
 torchlens/intervention/_topology/topology.py::build_supergraph	108
-torchlens/intervention/_trace_edits.py::apply_do_mutation	111
-torchlens/intervention/_trace_edits.py::do_with_options	111
+torchlens/intervention/_trace_edits.py::apply_do_mutation	109
+torchlens/intervention/_trace_edits.py::do_with_options	110
 torchlens/intervention/_trace_edits.py::record_do_intervention_event	78
 torchlens/intervention/_trace_edits.py::set_site	89
-torchlens/intervention/_trace_edits.py::validate_supplied_model_matches_capture	79
+torchlens/intervention/_trace_edits.py::validate_supplied_model_matches_capture	78
 torchlens/intervention/_trace_hooks.py::attach_hooks	83
 torchlens/intervention/_trace_run.py::run	377
 torchlens/intervention/_trace_selection_edits.py::apply_cross_kind_batch_do	62
@@ -1193,8 +1193,8 @@ torchlens/intervention/regions.py	1052
 torchlens/intervention/regions.py::_evaluate_instance	106
 torchlens/intervention/regions.py::apply_region_do	106
 torchlens/intervention/regions.py::region	101
-torchlens/intervention/replay.py	1814
-torchlens/intervention/replay.py::_commit_replay_updates	83
+torchlens/intervention/replay.py	1805
+torchlens/intervention/replay.py::_commit_replay_updates	72
 torchlens/intervention/replay.py::_reconstruct_args_from_template	63
 torchlens/intervention/replay.py::_resolve_arg_component	125
 torchlens/intervention/replay.py::_run_differentiable_replay	62
