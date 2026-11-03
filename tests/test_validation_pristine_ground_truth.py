@@ -35,11 +35,13 @@ _PROBE_SCRIPT = textwrap.dedent(
 
     # Plant the b9-fable distortion BEFORE the first wrap: the wrapper built
     # for tanh silently multiplies its result by 1.001 using pristine
-    # pre-wrap references. This models a wrapper-layer capture bug.
-    pristine_mul = torch.mul
+    # pre-wrap references. This models a wrapper-layer capture bug. The
+    # pristine ``torch.mul`` is bound as a default argument, not a module
+    # global, because the wrap-time module sweep rebinds module globals that
+    # hold a pristine torch callable.
     real_decorator = wrappers.torch_func_decorator
 
-    def planted_decorator(func, func_name, property_accessor=None):
+    def planted_decorator(func, func_name, property_accessor=None, pristine_mul=torch.mul):
         if func_name == "tanh":
             orig = func
 

@@ -19,7 +19,7 @@ from ..._capture.projections import (
 from ..._errors import UserTransformError
 from ..._ir.predicate import RetroactiveCaptureDecision
 from ..._training_validation import TrainingModeConfigError
-from ..._utils.arg_handling import INPUT_WAS_PARAMETER_ATTR
+from ..._utils.input_leaves import INPUT_WAS_PARAMETER_ATTR
 from ..._utils.introspection import _get_code_context
 from ..._utils.rng import log_current_rng_states
 from ..._utils.tensor_utils import get_memory_amount_from_metadata

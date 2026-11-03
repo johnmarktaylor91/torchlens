@@ -13,6 +13,7 @@ from ._exemption_schema import ExemptionRow
 
 _HARDENING = "tests/validation_goldens/test_validation_exemption_hardening.py::"
 _TIGHTENING = "tests/test_validation_exemption_tightening.py::"
+_SLOTS = "tests/test_validation_structural_slots.py::"
 _TABLE_TESTS = "tests/test_validation_exemption_table.py::"
 _EX = "torchlens.validation.exemptions:"
 _CORE = "torchlens.validation.core:"
@@ -434,5 +435,19 @@ _REGISTRY_ROWS: tuple[ExemptionRow, ...] = (
         "annihilated by an all-zero weight",
         "running stats are written, not read, in training; a zero weight annihilates",
         _HARDENING + "test_instance_norm_running_stats_are_training_update_targets",
+    ),
+    _custom(
+        ("gru", "rnn_tanh", "rnn_relu"),
+        "check_packed_rnn_batch_sizes_exempt",
+        "the packed-sequence batch_sizes slot of a gru or rnn call",
+        "batch_sizes is a structural length table the kernel indexes by, never a value input",
+        _SLOTS + "test_packed_recurrence_data_slot_still_fails_when_frozen",
+    ),
+    _custom(
+        "expand",
+        "check_expand_pinned_size_exempt",
+        "an expand size pinned to the input extent at that dim (-1 or the same size)",
+        "a size equal to the input extent repeats nothing; a singleton dim size is a real input",
+        _SLOTS + "test_expand_size_at_a_singleton_dim_still_fails_when_frozen",
     ),
 )
