@@ -1,14 +1,14 @@
 {
-  "files": 1611,
+  "files": 1606,
   "inputs": [
     "serial.junit.xml",
     "durations.csv"
   ],
   "instrumented": true,
   "measured_on": "2026-11-01",
-  "note": "not-rare, not-slow, not-serial tier at ad2e0300 under -n 8 with line-coverage tracing on (an upper bound), plus the serial tier at 6a9ede91 run alone; rows of the test files shrink round 3 deleted dropped at aa9431fee",
+  "note": "not-rare, not-slow, not-serial tier at ad2e0300 under -n 8 with line-coverage tracing on (an upper bound), plus the serial tier at 6a9ede91 run alone; rows of the test files shrink round 3 deleted dropped at aa9431fee; rows of the four round-named resolver files converted to tests/test_resolver_refusal_rows.py dropped with their deletion",
   "regenerate": "python scripts/tier_durations.py regenerate --source-commit SHA --junit <pytest --junitxml output> [--workers N] [--instrumented]",
   "source_commit": "ad2e03000",
-  "tests": 24504,
+  "tests": 24275,
   "workers": 8
 }

@@ -8554,8 +8554,6 @@ test-docstrings	tests/test_r29_capval_hardening.py	85
 test-docstrings	tests/test_r29_capval_hardening.py	96
 test-docstrings	tests/test_r36_cuda_hygiene.py	13
 test-docstrings	tests/test_r36_cuda_hygiene.py	36
-test-docstrings	tests/test_r36_tensor_method_smuggling.py	256
-test-docstrings	tests/test_r39_callable_invoke_denylist.py	39
 test-docstrings	tests/test_r43_gate_inversion.py	43
 test-docstrings	tests/test_r45_property_classification.py	1_1
 test-docstrings	tests/test_r45_property_classification.py	2.7.1
@@ -9835,8 +9833,6 @@ test-names	tests/test_r23_type_reduce_rce.py	21_
 test-names	tests/test_r25_container_final.py	26_
 test-names	tests/test_r25_container_final.py	27_
 test-names	tests/test_r25_container_final.py	562_
-test-names	tests/test_r36_tensor_method_smuggling.py	36_
-test-names	tests/test_r39_callable_invoke_denylist.py	39_
 test-names	tests/test_r45_property_classification.py	45_
 test-names	tests/test_r45_torch_symbol_decode.py	49_
 test-names	tests/test_r8_operator_gate_rce.py	32_
