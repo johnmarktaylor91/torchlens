@@ -1,5 +1,9 @@
 ## Current 2.x Surface
 
+- Saved 3.0 artifacts use `tl.types.UnencodableValue` for values outside the typed
+  vocabulary. The frozen carrier preserves `type_name`, bounded `repr_text`, and `at`
+  (the original record, row and column). Inspect it with
+  `isinstance(value, tl.types.UnencodableValue)`; resaving preserves its disclosure.
 - Top-level `torchlens.__all__` has 85 names: capture, save/load, intervention,
   selectors, helper transforms, observers, validation, and the three main log classes.
 - Fast paths (doc of record [docs/guides/fast_paths.md](../guides/fast_paths.md)):
