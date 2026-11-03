@@ -15,11 +15,16 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._data_classes._trace_accessors import (
+    _invalidate_trace_module_call_accessor_cache,
+    _invalidate_trace_op_layer_accessor_caches,
+)
 from .._data_classes._trace_intervention_records import (
     _edit_identity,
     mark_intervention_spec_mutated,
 )
 from .._errors import InvalidArgumentError
+from .._selection.do_plan import build_selection_do_plan
 from ..options import ReplayOptions
 
 if TYPE_CHECKING:
@@ -27,12 +32,17 @@ if TYPE_CHECKING:
 
 __all__: list[str] = []
 
-from .._selection.do_plan import build_selection_do_plan
 from .._selection.errors import SelectionError
 from .._selection.selection import Selection, Selector, _apply_invalid, _lift
 from .._selection.selectors import label as label_selector
 from ..backends.torch._trace_backward import _require_live_replay
 from . import replay as replay_module
+from ._module_replacement import (
+    MODULE_BOUNDARY_KEY,
+    materialize_module_replacements,
+    snapshot_module_boundary_sites,
+    tag_module_boundary_items,
+)
 from ._param_fingerprint import changed_param_scope
 from ._replay_context import journal_replay_state, restore_replay_state
 from ._replay_sites import _require_hook_origins
@@ -162,7 +172,7 @@ def batch_act_plan(
 ) -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
     """Resolve one ACT batch pair to its hook plan, refusing leaf sites typed."""
 
-    resolved, plan, audit = build_selection_do_plan(trace, selection, edit)
+    resolved, plan, audit = _plan_with_module_boundaries(trace, selection, edit)
     leaf_sites = [item["op"].label for item in plan if item["is_leaf"]]
     if leaf_sites:
         raise InvalidArgumentError(
@@ -289,7 +299,7 @@ def apply_selection_do(
             )
         selection = buffer_units
         lifted = _lift(selection)
-    resolved, plan, audit = build_selection_do_plan(trace, selection, edit)
+    resolved, plan, audit = _plan_with_module_boundaries(trace, selection, edit)
     leaf_items = [item for item in plan if item["is_leaf"]]
     hook_items = [item for item in plan if not item["is_leaf"]]
     if leaf_items and hook_items:
@@ -336,6 +346,7 @@ def attach_selection_plan_hooks(
     """
 
     attached: list[str] = []
+    boundary_by_handle: dict[str, str] = {}
     try:
         for item in hook_items:
             handle = trace.attach_hooks(
@@ -345,6 +356,9 @@ def attach_selection_plan_hooks(
                 confirm_mutation=True,
             )
             attached.extend(handle.handle_ids)
+            if MODULE_BOUNDARY_KEY in item:
+                for handle_id in handle.handle_ids:
+                    boundary_by_handle[handle_id] = item[MODULE_BOUNDARY_KEY]
     except BaseException:
         for handle_id in attached:
             trace.clear_edits(handle=handle_id, confirm_mutation=True)
@@ -358,6 +372,8 @@ def attach_selection_plan_hooks(
     for hook_spec in trace._ensure_intervention_spec().hook_specs:
         if hook_spec.handle in attached_ids:
             hook_spec.metadata["selection_do_engine_owned"] = True
+            if hook_spec.handle in boundary_by_handle:
+                hook_spec.metadata[MODULE_BOUNDARY_KEY] = boundary_by_handle[hook_spec.handle]
     mark_intervention_spec_mutated(trace)
     return tuple(attached)
 
@@ -546,6 +562,7 @@ def push_from_handles(trace: Trace, handle_ids: Iterable[str], *, strict: bool) 
     _warn_if_direct_writes_will_be_overlaid(trace)
     hook_entries = _normalize_replay_hooks(trace, None)
     origin_entries = hook_entries
+    boundary: list[Any] = []
     if wanted:
         own_specs = [
             spec for spec in trace._ensure_intervention_spec().hook_specs if spec.handle in wanted
@@ -553,9 +570,24 @@ def push_from_handles(trace: Trace, handle_ids: Iterable[str], *, strict: bool) 
         origin_entries = _normalize_sticky_hook_specs(
             own_specs, allow_replay_only_site_targets=True
         )
+        boundary = snapshot_module_boundary_sites(trace, own_specs)
     origins = _require_hook_origins(_origin_sites_for_hooks(trace, origin_entries, strict=strict))
     with changed_param_scope(False):
         # Through the module so a replay counter patched on it sees this push too.
-        return replay_module._run_replay(
+        result = replay_module._run_replay(
             trace, origins, hook_entries=hook_entries, strict=strict, preserve_origins=False
         )
+    # A tl.module(...) edit is recorded like its capture-time twin: the edited
+    # value moves into a replacement op after the module's last op.
+    if materialize_module_replacements(trace, boundary):
+        _invalidate_trace_op_layer_accessor_caches(trace)
+        _invalidate_trace_module_call_accessor_cache(trace)
+    return result
+
+
+def _plan_with_module_boundaries(trace: Trace, selection: Any, edit: Any) -> tuple[Any, ...]:
+    """Build a selection do() plan whose ``tl.module`` interior items carry the address."""
+
+    resolved, plan, audit = build_selection_do_plan(trace, selection, edit)
+    tag_module_boundary_items(resolved, plan)
+    return resolved, plan, audit

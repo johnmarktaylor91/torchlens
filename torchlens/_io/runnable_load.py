@@ -3033,23 +3033,14 @@ def _store_readiness(
     report: ReadinessReport,
     attachments: Mapping[str, Callable[..., Any]] | None,
 ) -> None:
-    """Store transient descriptor/readiness state with atomic callable attachment.
+    """Store transient descriptor/readiness state with atomic callable attachment."""
 
-    Also snapshots whether the artifact's recorded values were intervened, before
-    any edit of this session can touch the trace (the legacy rerun guard reads it).
-    """
-
-    # Imported here so the guard module stays outside the package import cycle
-    # (scripts/checks/layering.py).
     from ..intervention._intervened_rerun_guard import carries_intervened_values
 
     trace._runnable.descriptor = descriptor
     trace._runnable.readiness = report
     trace._runnable.loaded_values_intervened = carries_intervened_values(trace)
-    if attachments is None:
-        trace._runnable.callables_by_call_id = None
-    else:
-        trace._runnable.callables_by_call_id = dict(attachments)
+    trace._runnable.callables_by_call_id = None if attachments is None else dict(attachments)
 
 
 def _diagnostic(
