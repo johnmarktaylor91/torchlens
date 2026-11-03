@@ -7,7 +7,7 @@ attaches a sticky callable/helper recipe that can be replayed or rerun repeatedl
 
 How to run
 ----------
-``python examples/intervention/05_set_vs_attach_hooks.py``
+``python examples/intervention/05_set_vs_hook_do.py``
 
 Runnable by default.
 """
