@@ -372,8 +372,6 @@ OP_GROUP_VIEWS: dict[str, type] = {}
 OP_STORAGE_ATTRS: Mapping[str, str] = _storage_map("Op")
 #: Former Layer member name -> attribute that now holds it.
 LAYER_STORAGE_ATTRS: Mapping[str, str] = _storage_map("Layer")
-#: Former Op member names a Layer does not store itself (read through its pass).
-_OP_ONLY_STORAGE = frozenset(OP_STORAGE_ATTRS) - frozenset(LAYER_STORAGE_ATTRS)
 #: Former Op member name -> typed-refusal remedy.
 OP_MOVED_MEMBERS: Mapping[str, str] = _removed_map("Op")
 #: Former Layer member name -> typed-refusal remedy.
@@ -491,18 +489,17 @@ def record_member(obj: Any, name: str, default: Any = _NO_DEFAULT) -> Any:
             if default is _NO_DEFAULT:
                 raise AttributeError(name)
             return default
+        # Read it on the pass record itself: a removed member's private storage
+        # attribute (``_out_ref``) never delegates from the Layer to its pass.
+        ops = getattr(obj, "ops", None)
+        if ops:
+            return record_member(ops[0], name, default)
         path = _SPELLING_PATHS["Op"][name]
     try:
         if path is None:
             # A renamed or removed member keeps its value under its storage
             # attribute; internal readers still need it.
-            try:
-                return getattr(obj, name if kind is None else record_storage_attr(obj, name))
-            except AttributeError:
-                if kind != "Layer" or name not in _OP_ONLY_STORAGE:
-                    raise
-            # A removed Op member the Layer does not hold reads from its single pass.
-            return obj._single_pass_or_error(name)
+            return getattr(obj, name if kind is None else record_storage_attr(obj, name))
         value = obj
         for part in path:
             value = getattr(value, part)

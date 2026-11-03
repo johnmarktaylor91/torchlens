@@ -12,6 +12,7 @@ from __future__ import annotations
 # record-groups: keep-flat
 import pickle
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 import torch
@@ -228,6 +229,25 @@ def test_record_member_follows_moves(trace: tl.Trace) -> None:
 
     assert record_member(_Other(), "flops_forward") == 7
     assert record_member(object(), "flops_forward", None) is None
+
+
+def test_record_member_reads_removed_op_member_through_layer_pass(tmp_path: Path) -> None:
+    """A single-pass Layer reads a removed Op-only member (``out_ref``) from its pass."""
+
+    torch.manual_seed(0)
+    source = tl.trace(
+        nn.Sequential(nn.Linear(3, 3), nn.ReLU()), torch.ones(1, 3), save=tl.func("relu")
+    )
+    path = tmp_path / "lazy.tlspec"
+    source.save(path)
+    loaded = tl.load(path, lazy=True)
+    try:
+        layer = next(lay for lay in loaded.layers if lay.ops[0]._slot("out_ref") is not None)
+        assert layer.num_passes == 1
+        assert record_member(layer, "out_ref") is layer.ops[0]._slot("out_ref")
+    finally:
+        loaded.cleanup()
+        source.cleanup()
 
 
 class _Branchy(nn.Module):
