@@ -34,7 +34,9 @@ def _apply_module_exit(trace: Any, frame: Any, output: Any) -> Any:
     """Apply one selected module call to all its output tensor leaves."""
 
     runtime = getattr(trace, "_paddle_intervention_runtime", None)
-    predicate = getattr(runtime, "intervene", None)
+    if runtime is None:
+        return output
+    predicate = runtime.intervene
     addresses = module_union_addresses(getattr(predicate, "selector", None))
     if not addresses or not any(
         module_address_matches((frame.address, frame.call_index), address) for address in addresses

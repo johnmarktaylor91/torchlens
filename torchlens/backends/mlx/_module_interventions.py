@@ -53,7 +53,7 @@ def _module_capture_op(trace: Any, frame: Any, op_name: str | None) -> str | Non
     if frame is None or plan is None:
         return op_name
     addresses = module_union_addresses(plan.selector) or ()
-    prefix = frame.address + "." if frame.address else ""
+    prefix = frame.address + "." if frame.address not in ("", "self") else ""
     if any(
         address.rsplit(":", 1)[0].startswith(prefix) and address.rsplit(":", 1)[0] != frame.address
         for address in addresses
@@ -103,7 +103,21 @@ def _emit_module_leaf(trace: Any, backend: Any, plan: Any, tensor: Any) -> Any:
                 is_edited=True,
                 fire_results=(
                     *event.fire_results,
-                    *(replace(fire, site_label=label) for fire in boundary.fire_results),
+                    *(
+                        replace(
+                            fire,
+                            site_label=label,
+                            fire_record={
+                                "backend": "mlx",
+                                "plan_id": fire.plan_id,
+                                "site_label": label,
+                                "level": "module",
+                                "selector": repr(plan.selector),
+                                "replaced": fire.replaced,
+                            },
+                        )
+                        for fire in boundary.fire_results
+                    ),
                 ),
             )
         )

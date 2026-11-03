@@ -69,7 +69,8 @@ def test_mlx_module_exit_changes_output_and_validates() -> None:
     )
     producer = next(op for op in trace._layer_list if op.type == "linear")
     assert producer.is_edited
-    assert trace._capture_events.op_event_by_label_raw[producer._label_raw].fire_results
+    assert producer.edits[0]["backend"] == "mlx"
+    assert producer.edits[0]["site_label"] == producer._label_raw
     assert np.allclose(np.asarray(trace._layer_list[-1].out), np.asarray(model.l2.bias))
     assert MLXBackend().validate_trace(trace).passed
 
@@ -120,7 +121,8 @@ def test_mlx_module_exit_nested_leaves_aliases_and_repeated_calls(
     assert MLXBackend().validate_trace(trace).passed
 
 
-def test_mlx_module_exit_inside_opaque_parent_validates() -> None:
+@pytest.mark.parametrize("root", [False, True])
+def test_mlx_module_exit_inside_opaque_parent_validates(root: bool) -> None:
     """A selected attention projection remains editable through its parent."""
 
     class Model(nn.Module):
@@ -134,8 +136,13 @@ def test_mlx_module_exit_inside_opaque_parent_validates() -> None:
             return self.attn(x, x, x)
 
     x = mx.arange(8).reshape(1, 2, 4).astype(mx.float32) / 8
+    model = Model()
+    address = "value_proj" if root else "attn.value_proj"
     trace = tl.trace(
-        Model(), x, backend="mlx", intervene=tl.when(tl.module("attn.value_proj"), tl.zero_ablate())
+        model.attn if root else model,
+        (x, x, x) if root else x,
+        backend="mlx",
+        intervene=tl.when(tl.module(address), tl.zero_ablate()),
     )
     assert np.allclose(np.asarray(trace._layer_list[-1].out), 0)
     assert MLXBackend().validate_trace(trace).passed

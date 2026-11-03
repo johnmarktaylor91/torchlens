@@ -114,9 +114,23 @@ def test_paddle_module_exit_changes_output_and_validates() -> None:
     )
     producer = _relu_op(trace)
     assert producer.is_edited
-    assert trace._capture_events.op_event_by_label_raw[producer._label_raw].fire_results
     assert list(producer.edits)
+    assert producer.edits[0].target_label == producer._label_raw
     assert np.allclose(_output_op(trace).out.numpy(), 0.5)
+    assert PaddleBackend().validate_trace(trace) is True
+
+
+def test_paddle_in_module_intervention_keeps_op_dispatch() -> None:
+    """Containment selectors still edit the existing op door once."""
+
+    trace = tl.trace(
+        paddle.nn.Sequential(paddle.nn.ReLU(), paddle.nn.Sigmoid()),
+        paddle.ones([2, 4]),
+        backend="paddle",
+        intervene=tl.when(tl.in_module("0"), tl.scale(0.5)),
+    )
+    assert np.allclose(_relu_op(trace).out.numpy(), 0.5)
+    assert np.allclose(_output_op(trace).out.numpy(), 1 / (1 + np.exp(-0.5)))
     assert PaddleBackend().validate_trace(trace) is True
 
 
