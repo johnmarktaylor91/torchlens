@@ -80,7 +80,7 @@ def _sweep_columns(rows: list[list[Any]], scan_classes: frozenset[type], get_cla
     try:
         return [
             fid
-            for fid, column in enumerate(zip(*rows))
+            for fid, column in enumerate(zip(*rows, strict=False))
             if not scan_classes.isdisjoint(map(get_class, column))
         ]
     except TypeError:
