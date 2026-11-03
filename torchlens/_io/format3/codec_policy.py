@@ -3,7 +3,9 @@
 An artifact's payload columns (``out``, ``grad`` and the other PAYLOAD storage columns)
 take one codec: the torch codec for a torch artifact, the numeric array codec for every
 other backend (its tensors materialize as arrays). The numeric array codec also carries
-raw values (the trace input and other value cells) in any artifact. A codec hint that
+raw values (the trace input and other value cells) in any artifact, and outside payload
+columns of a non-torch artifact a tensor of that artifact's own backend when its
+``logical_backend`` hint names it (derived gradients). A codec hint that
 disagrees with the cell's backend is a typed ``record_schema_invalid`` refusal raised
 before any codec is looked up.
 """
@@ -56,7 +58,8 @@ def codec_backend(
     """The backend a tensor cell belongs to, checked against the cell's role and the
     artifact's backend before any codec is looked up: a payload column takes only the
     artifact's payload codec (``payload_codec``); outside payload columns the torch codec
-    is a torch tensor and the array codec a raw array; a ``logical_backend``, ``backend``
+    is a torch tensor and the array codec a raw array, or a tensor of a non-torch
+    artifact's own backend when its ``logical_backend`` hint names it; a ``logical_backend``, ``backend``
     or ``runtime`` hint that disagrees refuses ``record_schema_invalid``. Agreeing hints
     are kept."""
 
@@ -64,8 +67,17 @@ def codec_backend(
     payload = column in payload_columns(kind)
     if payload:
         backend = manifest_backend
+    elif codec_id == _TORCH_CODEC:
+        backend = "torch"
+    elif (
+        manifest_backend != contract.DEFAULT_BACKEND
+        and (hints or {}).get("logical_backend") == manifest_backend
+    ):
+        # A non-torch trace keeps its own tensors outside payload columns too (derived
+        # gradients): the array codec hinted with the artifact's backend is that backend.
+        backend = manifest_backend
     else:
-        backend = "torch" if codec_id == _TORCH_CODEC else "numpy"
+        backend = "numpy"
     problem: str | None = None
     native = payload_codec(manifest_backend)
     if payload and codec_id != native:

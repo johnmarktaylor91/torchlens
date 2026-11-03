@@ -624,7 +624,26 @@ class DecodedArtifact(_RecordResolver):
 
         manifest = {"backend": contract.DEFAULT_BACKEND, **self.manifest}
         manifest["tensors"] = list(self.sink.entries.values())
+        # The rehydrate path reads materialization from the payload policy; format 3 keeps
+        # only the include flags there, so the backend's capability answers it.
+        manifest["payload_policy"] = {
+            **dict(manifest.get("payload_policy") or {}),
+            "materialization_supported": _backend_materializes(manifest["backend"]),
+        }
         return manifest
+
+
+def _backend_materializes(backend: str) -> bool:
+    """Whether a registered backend rebuilds its saved payloads (torch always does)."""
+
+    if backend == contract.DEFAULT_BACKEND:
+        return True
+    from ...backends.registry import registered_backend_specs
+
+    return any(
+        spec.name == backend and spec.capabilities.payload_materialization
+        for spec in registered_backend_specs()
+    )
 
 
 # ---- Doors -----------------------------------------------------------------

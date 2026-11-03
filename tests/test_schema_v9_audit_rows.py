@@ -28,6 +28,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens._io import ArtifactError
 from torchlens._io.forgery_validation import _validate_audit_row
+from torchlens.errors import OpaqueCallableError
 
 _DIGEST = hashlib.sha256(b"schema-v9-audit").hexdigest()
 _CHAIN_DIGEST = hashlib.sha256(b"schema-v9-chain").hexdigest()
@@ -72,10 +73,22 @@ def test_selection_intervened_artifact_loads_its_own_save(log, tmp_path):
         "fixture must exercise the shipped per-site source disclosure"
     )
     path = tmp_path / "selection_intervened.tlspec"
-    fork.save(path)
+    # A masked edit is opaque_audit: a portable save refuses it, the audit level records it.
+    fork.save(path, level="audit")
     loaded = tl.load(path)
     loaded_rows = [row for row in loaded.intervention_audit if row.get("kind") == "ACT"]
     assert any("source" in site for row in loaded_rows for site in row.get("sites", ()))
+
+
+def test_masked_edit_refuses_a_default_portable_save(log, tmp_path):
+    """A masked built-in edit needs the audit level: the default save names the code and remedy."""
+
+    fork = log.fork()
+    fork.do(fork[tl.units("relu_1_2", [(0, 0, 1, 1)])], tl.zero_ablate())
+    with pytest.raises(OpaqueCallableError) as caught:
+        fork.save(tmp_path / "masked_default.tlspec")
+    assert caught.value.fields["code"] == "intervention_spec_not_portable"
+    assert "level='audit'" in caught.value.fields["remedy"]
 
 
 @pytest.mark.smoke

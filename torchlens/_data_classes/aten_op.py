@@ -170,10 +170,13 @@ class AtenOp:
         from .._trace_core.record_rows import record_state_restore
 
         record_state_restore(self, mapping)
-        if isinstance(self.out, list):
+        # ``include_outs=False`` omits the out column; the loader's true-up sets
+        # it to None after this hook, so an absent cell is read as None here.
+        out = getattr(self, "out", None)
+        if isinstance(out, list):
             # A container result round-trips through JSON as a list; the
             # user-facing shape is the capture-time tuple.
-            self.out = tuple(self.out)
+            self.out = tuple(out)
 
     def __getstate__(self) -> dict[str, Any]:
         """Return primitive row state without its backing-store handle."""
