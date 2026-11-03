@@ -284,6 +284,10 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # distinct tables, keys examined); replaced whole by every scan, a
         # deterministic diagnostic counter, not capture state.
         ("torchlens/backends/torch/_protocol_redispatch.py", "_LAST_ALIAS_SCAN"),
+        # Op class properties declared plain facades over their stored cell,
+        # filled once at import by the backends that install them (the ancestor
+        # overlays); mirrors the class namespace, never mutated by a capture.
+        ("torchlens/_data_classes/op.py", "_ROW_RELEASE_PROPERTIES"),
         # First-read source digests for conditional/source attribution (deep-hunt
         # C4, fix/postproc 7a58a021). Deliberately NOT a _PROCESS_CACHES row:
         # clearing it is not correctness-neutral (the pin is the fail-closed
@@ -871,6 +875,12 @@ _PROCESS_CACHES = frozenset(
         # same object, so a dead or reused id is a miss. Specs are frozen
         # dataclasses; clearing it only costs one re-classification.
         ("torchlens/backends/torch/_ops_interventions.py", "_OP_DOOR_MEMO"),
+        # Write-once bindings of an import-cycle-deferred module object (a class,
+        # a function, a module) resolved on first use instead of per call; each
+        # value is already held by sys.modules, so the slot pins nothing extra.
+        ("torchlens/_ir/op_record_scatter.py", "_PORTABLE_BLOB_REF"),
+        ("torchlens/_ir/op_record_scatter.py", "_MATERIALIZE_RESOLVE_DTYPE"),
+        ("torchlens/intervention/_module_boundary.py", "_OPS_INTERVENTIONS"),
     }
 )
 """Process-lifetime memos holding strong references.
