@@ -419,10 +419,10 @@
         "tests/test_capopts_truth_chunk_options.py",
         "tests/test_capture_outcome_authority.py",
         "tests/test_capture_outcome_gates.py",
+        "tests/test_capture_outcome_preview_halt.py",
         "tests/test_capture_settlement.py",
         "tests/test_distributed_armed_capture_isolation.py",
-        "tests/test_fastlog_halt.py",
-        "tests/test_persist_honesty_outcome_recording.py"
+        "tests/test_fastlog_halt.py"
       ],
       "torchlens/_capture/peak_memory.py": [
         "tests/oracles/test_legacy_peak_memory_bounds.py",
@@ -489,13 +489,13 @@
       ],
       "torchlens/_capture/prepare/dispatch.py": [
         "tests/backend_parity/test_trace_option_honesty.py",
+        "tests/test_backend_registry.py",
         "tests/test_capture_pure_observer.py",
         "tests/test_flops1_backward_dispatch.py",
         "tests/test_grouping_stamp.py",
         "tests/test_options_door_codes.py",
         "tests/test_refusal_gate_codes.py",
-        "tests/test_snoop_core.py",
-        "tests/test_structure_only_entry.py"
+        "tests/test_snoop_core.py"
       ],
       "torchlens/_capture/prepare/door.py": [
         "tests/composition_expectations/test_proofnet_m1_product_verb.py",
@@ -2225,20 +2225,20 @@
         "tests/test_backend_finalize_labels.py",
         "tests/test_encoding_channels.py",
         "tests/test_grind_b4_lane_p.py",
-        "tests/test_io_pickle.py",
         "tests/test_postprocess_executor.py",
         "tests/test_r34_security_io.py",
-        "tests/test_tlspec_rehydrate_no_planted_call.py"
+        "tests/test_tlspec_rehydrate_no_planted_call.py",
+        "tests/test_tlspec_unified.py"
       ],
       "torchlens/_io/bundle.py": [
         "tests/composition_expectations/test_proofnet_m1_product_verb.py",
-        "tests/test_bundle_outcome_authority.py",
         "tests/test_io_bundle.py",
         "tests/test_io_interrupt_recovery.py",
         "tests/test_io_lazy.py",
         "tests/test_io_mediated_allocation_bypass.py",
         "tests/test_io_secio_hardening.py",
-        "tests/test_tlspec_runnable_activations.py"
+        "tests/test_tlspec_runnable_activations.py",
+        "tests/test_tlspec_unified.py"
       ],
       "torchlens/_io/bundle_container.py": [
         "tests/test_bundle_harness.py",
@@ -2274,7 +2274,7 @@
         "tests/test_schema_v9_annotations.py",
         "tests/test_schema_v9_audit_rows.py",
         "tests/test_schema_v9_entry_dark_fields.py",
-        "tests/test_weightsfree_disclosure.py",
+        "tests/test_tlspec_unified.py",
         "tests/test_weightsfree_persistence.py"
       ],
       "torchlens/_io/format3/__init__.py": [
@@ -2340,10 +2340,10 @@
         "tests/test_fastlog/test_persistence_recover.py",
         "tests/test_io_bundle.py",
         "tests/test_io_corruption.py",
+        "tests/test_io_determinism_fixes.py",
         "tests/test_io_durability_bounds.py",
         "tests/test_io_pickle.py",
         "tests/test_io_runnable_payload_integrity.py",
-        "tests/test_tlspec_envelope_ceiling.py",
         "tests/test_tlspec_parse_fuzz.py"
       ],
       "torchlens/_io/paths.py": [
@@ -2357,14 +2357,14 @@
         "tests/test_unpickle_c_path.py"
       ],
       "torchlens/_io/payload_codec.py": [
+        "tests/test_backend_registry.py",
         "tests/test_io_bundle.py",
+        "tests/test_io_determinism_fixes.py",
         "tests/test_io_pickle.py",
         "tests/test_io_rollup_hardening_r10r60.py",
         "tests/test_io_runnable_payload_integrity.py",
         "tests/test_io_scrub_policy.py",
-        "tests/test_io_secio_hardening.py",
-        "tests/test_tlspec_runnable_execution.py",
-        "tests/test_tlspec_runnable_r31_input_metadata_witness.py"
+        "tests/test_tlspec_runnable_execution.py"
       ],
       "torchlens/_io/payload_reader.py": [
         "tests/test_agent_surface_cli.py",
@@ -2383,12 +2383,12 @@
       ],
       "torchlens/_io/rehydrate.py": [
         "tests/test_grind_b4_lane_p.py",
-        "tests/test_io_bundle.py",
+        "tests/test_io_determinism_fixes.py",
         "tests/test_io_lazy.py",
         "tests/test_io_pickle.py",
         "tests/test_r34_security_io.py",
-        "tests/test_tlspec_rehydrate_no_planted_call.py",
         "tests/test_tlspec_runnable_execution.py",
+        "tests/test_tlspec_unified.py",
         "tests/test_w051_bind_fixwave.py"
       ],
       "torchlens/_io/runnable.py": [
@@ -2434,7 +2434,7 @@
       "torchlens/_io/scrub.py": [
         "tests/test_grind_b4_lane_p.py",
         "tests/test_io_bundle.py",
-        "tests/test_io_reconstructible_predicate_r10.py",
+        "tests/test_io_determinism_fixes.py",
         "tests/test_io_scrub_policy.py",
         "tests/test_prebump_roundtrip_acceptance.py",
         "tests/test_prerelease_registrar.py",
@@ -12484,8 +12484,8 @@
         "tests/test_load_refuses_saved_by_2x.py",
         "tests/test_tlspec_parse_fuzz.py",
         "tests/test_tlspec_runnable_v2_contract.py",
+        "tests/test_tlspec_unified.py",
         "tests/test_validation.py",
-        "tests/test_validation_hardening.py",
         "tests/validation_goldens/test_validation_exemption_hardening.py"
       ],
       "torchlens/validation/_autograd_grad_replay.py": [

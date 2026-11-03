@@ -143,6 +143,20 @@ def test_override_rows_rank_first(repo: Path) -> None:
     assert result.mapping["torchlens/_io/reader.py"] == ["tests/test_a.py", "tests/test_reader.py"]
 
 
+def test_marked_override_rows_keep_their_place(repo: Path) -> None:
+    """A reviewed override file that applies a ``rare`` mark still leads its list."""
+    builder = _load_builder()
+    (repo / "tests/test_a.py").write_text(
+        "import pytest\nfrom torchlens.core import a\n\n\n@pytest.mark.rare\ndef test_x():\n    pass\n",
+        encoding="utf-8",
+    )
+    rows = {"torchlens/_io/reader.py": {"tests": ["tests/test_a.py"], "why": "covers a branch"}}
+    (repo / "scripts").mkdir()
+    (repo / builder.OVERRIDES_FILE).write_text(json.dumps({"modules": rows}), encoding="utf-8")
+    result = builder.build(repo)
+    assert result.mapping["torchlens/_io/reader.py"] == ["tests/test_a.py", "tests/test_reader.py"]
+
+
 @pytest.mark.parametrize(
     ("row", "message"),
     [

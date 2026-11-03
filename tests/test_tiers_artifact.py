@@ -123,7 +123,17 @@ def test_test_tiers_json_quotes_the_artifact_and_maps_real_paths(artifact) -> No
     assert match, "test-tiers.json notes must quote the smoke count"
     assert _number(match.group(1)) == artifact["tiers"]["smoke"]["count"]
     for source, targets in config["inner"]["map"].items():
-        for path in (source, *targets):
+        # Keys are fnmatch patterns (a collapsed directory is one ``dir/*`` key); a pattern
+        # names a real place when it matches at least one path. Targets are plain files.
+        if any(ch in source for ch in "*?["):
+            assert any(REPO_ROOT.glob(source)), (
+                f"test-tiers.json inner.map key matches nothing: {source}"
+            )
+        else:
+            assert (REPO_ROOT / source).exists(), (
+                f"test-tiers.json inner.map names missing {source}"
+            )
+        for path in targets:
             assert (REPO_ROOT / path).exists(), f"test-tiers.json inner.map names missing {path}"
     for arg in config["worker_lane"]["args"]:
         if arg.startswith("tests/"):

@@ -26,9 +26,9 @@ that map statically from the source tree:
    count, at most two stem-named files without a reference (shortest name
    first), users reached through one level of torchlens-internal imports,
    conftest-inherited users, then files that only mention the module. Files
-   that apply a ``slow``/``rare``/``big_memory`` mark anywhere sort last (the
-   selector runs listed files without ``-m`` under a fixed budget). Lists cap
-   at 8;
+   that apply a ``slow``/``rare``/``big_memory`` mark anywhere sort last among
+   these ranked files (the selector runs listed files without ``-m`` under a
+   fixed budget); pinned and reviewed rows keep their place. Lists cap at 8;
 5. a module no test reaches takes its closest ancestor subpackage's list, else
    its importers' lists, else (for a package) its submodules' lists, else the
    root package's list; a directory whose modules all share one list collapses
@@ -1046,9 +1046,13 @@ def _rank_candidates(
                 if test not in seen and test in existing:
                     seen.add(test)
                     ordered.append(test)
-        cheap = [t for t in ordered if t not in index.expensive]
-        costly = [t for t in ordered if t in index.expensive]
-        ordered = cheap + costly
+        # Hand-pinned and reviewed override rows keep their place; only the static ranking
+        # sorts marked files last, so a reviewed test is never pushed past the cap.
+        reviewed = len(dict.fromkeys(t for t in (*tiers[0], *tiers[1]) if t in existing))
+        ranked_rest = ordered[reviewed:]
+        cheap = [t for t in ranked_rest if t not in index.expensive]
+        costly = [t for t in ranked_rest if t in index.expensive]
+        ordered = ordered[:reviewed] + cheap + costly
         if len(ordered) > MAX_TESTS:
             capped.append(path)
         ranked[path] = ordered[:MAX_TESTS]
