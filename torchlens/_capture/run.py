@@ -184,7 +184,7 @@ def _begin_capture(
         # identified during output extraction. The exhaustive door sets this
         # before calling in; predicate/recorder callers do not, so set it here
         # once, idempotently, for every capture path.
-        from .._visualization.code_panel import make_weak_model_ref
+        from ._run_setup import make_weak_model_ref
 
         self._source_model_ref = make_weak_model_ref(model)  # type: ignore[arg-type]
     return backend, seed

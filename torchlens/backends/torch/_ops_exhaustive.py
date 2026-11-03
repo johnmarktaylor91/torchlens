@@ -248,7 +248,7 @@ def _emit_exhaustive_operation_events(
             samples_store = self.__dict__.get("_device_memory_samples")
             if isinstance(samples_store, dict):
                 call_samples = samples_store.pop(f"call:{func_call_id}", None)
-                if call_samples is not None:
+                if call_samples is not None:  # deferred import: cycle _observe
                     from ..._observe._device_memory import flat_field_projection
 
                     samples_store[fields_dict_onetensor["_label_raw"]] = call_samples

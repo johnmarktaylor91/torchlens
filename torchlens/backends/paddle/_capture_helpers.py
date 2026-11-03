@@ -87,6 +87,6 @@ def _paddle_facet_snapshot(facet_recipes: Any) -> Any:
             code=PADDLE_REFUSAL_OPTION,
             option="facets",
         )
-    from ..._semantic import facets as facets_mod
+    from ..._semantic import facets as facets_mod  # deferred: cycle _semantic
 
     return facets_mod.snapshot(recipe_tuple)

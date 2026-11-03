@@ -1497,7 +1497,7 @@ def torch_func_decorator(
         func_exec_start = time.time()
         device_memory_before = None
         if getattr(trace, "track_device_memory", False):
-            # Observe item 15 (deferred import per the spine layer lint).
+            # Observe item 15; deferred: cycle _observe.
             from ..._observe._device_memory import read_before as _dm_read_before
 
             device_memory_before = _dm_read_before(trace)
@@ -1534,7 +1534,7 @@ def torch_func_decorator(
         except torch.cuda.OutOfMemoryError:
             # Observe item 15: the OOM raised BEFORE this op committed -- name
             # the ATTEMPTED call, never the last committed op.
-            if getattr(trace, "track_device_memory", False):
+            if getattr(trace, "track_device_memory", False):  # deferred import: cycle _observe
                 from ..._observe._device_memory import settle_op_bracket
 
                 settle_op_bracket(trace, func_name, func_call_id, device_memory_before, oom=True)
@@ -1560,7 +1560,7 @@ def torch_func_decorator(
                 _record_mode_paused_interior(trace, owner_func_call_id=func_call_id)
         func_exec_duration = time.time() - func_exec_start
         if device_memory_before is not None or getattr(trace, "track_device_memory", False):
-            from ..._observe._device_memory import settle_op_bracket
+            from ..._observe._device_memory import settle_op_bracket  # deferred: cycle _observe
 
             settle_op_bracket(trace, func_name, func_call_id, device_memory_before)
         if _echo is not None:

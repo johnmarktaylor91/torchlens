@@ -15,6 +15,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _events
+from torchlens.backends._invariants import run_metadata_invariants
 from torchlens.errors import MetadataInvariantError
 from torchlens.validation import check_metadata_invariants
 
@@ -51,10 +52,16 @@ def test_plain_capture_runs_the_registered_tripwire_once(restore_hook: None) -> 
     assert len(calls) == 1 and calls[0] is trace
 
 
-def test_empty_slot_loads_the_tripwire_instead_of_skipping(restore_hook: None) -> None:
+def test_empty_slot_raises_instead_of_skipping(restore_hook: None) -> None:
+    _events._METADATA_INVARIANTS = None
+    with pytest.raises(LookupError, match="not registered"):
+        _events.run_metadata_invariants(_plain_trace())
+
+
+def test_backend_entry_loads_the_tripwire_when_the_slot_is_empty(restore_hook: None) -> None:
     _events._METADATA_INVARIANTS = None
     trace = _plain_trace()
-    assert _events.run_metadata_invariants(trace) is True
+    assert run_metadata_invariants(trace) is True
     assert _events.registered_metadata_invariants() is check_metadata_invariants
 
 

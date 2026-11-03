@@ -191,7 +191,7 @@ def _run_refresh_forward(
 ) -> Any:
     """Run the internal refresh capture over the new inputs and return its trace."""
 
-    from ..._user_funcs import _run_model_and_save_specified_outs
+    from ..run_entry import _run_model_and_save_specified_outs
 
     model, input_args, input_kwargs, _layers, grad_layers_to_save, _seed, _run_until_plan = request
     save_grads_policy = self._options_save_grads

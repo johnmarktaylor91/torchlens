@@ -9,9 +9,9 @@ from typing import Any, Literal
 
 import numpy as np
 
-from ..._events import run_metadata_invariants
 from ..._validation_status import ValidationReplaySource, ValidationStatus
 from .._constants import CONSTANT_PARENT_PAYLOAD_REASON, CONSTANT_PRODUCER_LEAF_REASON
+from .._invariants import run_metadata_invariants
 from .._validation_shared import float_replay_tolerances, ops_by_label as _ops_by_label
 from ._raw_op_replay import _import_tensorflow, _replay_raw_op
 from .op_callback_capture import TFOpCapture

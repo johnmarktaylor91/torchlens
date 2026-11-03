@@ -96,7 +96,7 @@ class TorchProtocol(SpecBackedProtocol):
             ``trace_option_unsupported`` for an unknown trace keyword.
         """
 
-        from ..._user_funcs import trace
+        from ..._user_funcs import trace  # deferred: cycle _user_funcs
 
         unknown = sorted(set(options) - _trace_keyword_names())
         if unknown:
@@ -171,7 +171,7 @@ class TorchProtocol(SpecBackedProtocol):
 def _trace_keyword_names() -> frozenset[str]:
     """Named ``tl.trace`` parameters other than the model, its inputs and ``backend``."""
 
-    from ..._user_funcs import trace
+    from ..._user_funcs import trace  # deferred: cycle _user_funcs
 
     parameters = inspect.signature(trace).parameters.values()
     return frozenset(

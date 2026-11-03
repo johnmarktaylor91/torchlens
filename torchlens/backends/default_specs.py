@@ -772,7 +772,7 @@ def _torch_validate_entry(*args: Any, **kwargs: Any) -> bool:
         Validation result.
     """
 
-    from .._user_funcs import _validate_forward_pass_torch
+    from .._user_public_impls import _validate_forward_pass_torch
 
     return _validate_forward_pass_torch(*args, **kwargs)
 

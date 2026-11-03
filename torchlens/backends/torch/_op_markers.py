@@ -17,6 +17,8 @@ from typing import Any
 
 import torch
 
+from ..._events import active_profiler_session
+
 
 def _nvtx_host_available() -> bool:
     """Return whether this host can emit NVTX ranges (a CUDA device is visible)."""
@@ -165,12 +167,7 @@ def resolve_active_session_fn() -> Callable[[], Any]:
     global _active_session_fn
     session_fn: Callable[[], Any] | None = _active_session_fn
     if session_fn is None:
-        try:
-            from ..._observability._session import active_session
-        except ImportError:  # pragma: no cover - torn install without the substrate
-            session_fn = _no_active_session
-        else:
-            session_fn = active_session
+        session_fn = active_profiler_session
         _active_session_fn = session_fn
     return session_fn
 

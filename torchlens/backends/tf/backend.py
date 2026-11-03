@@ -13,7 +13,6 @@ from ..._capture.outcome import stamp_backend_finalized
 from ..._data_classes.param import ParamAccessor
 from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING, MissingType
-from ..._events import run_metadata_invariants
 from ..._ir.capture_events import CaptureEvents
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
@@ -34,6 +33,7 @@ from .._finalize import (
     mark_output_label,
     normalize_op_module_calls,
 )
+from .._invariants import run_metadata_invariants
 from .._options import (
     TF_EXTRA_KWARG_POLICY,
     TF_PREVIEW_TRACE_OPTION_POLICY,

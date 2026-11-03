@@ -156,6 +156,7 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # Engine hook slot: torchlens.validation installs the metadata-invariant
         # tripwire once at import; tests may wrap it (install-time fact).
         ("torchlens/_events.py", "_METADATA_INVARIANTS"),
+        ("torchlens/_events.py", "_ACTIVE_PROFILER_SESSION"),
         # Call-site grouping: the module forward wrapper code object, registered
         # idempotently when submodule forwards are decorated (one constant).
         ("torchlens/_utils/_call_site.py", "_BOUNDARY_CODES"),
@@ -1017,6 +1018,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_utils/_input_tree.py", "__all__"),
         ("torchlens/errors/validation.py", "__all__"),
         ("torchlens/_events.py", "__all__"),
+        ("torchlens/backends/_invariants.py", "__all__"),
         ("torchlens/_extract_refusals.py", "__all__"),
         ("torchlens/_extraction/__init__.py", "__all__"),
         ("torchlens/_extraction/callable_identity.py", "__all__"),

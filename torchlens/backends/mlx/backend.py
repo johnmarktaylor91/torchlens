@@ -25,7 +25,6 @@ from ..._data_classes.derived_grad import (
 )
 from ..._data_classes.param import Param, ParamAccessor
 from ..._data_classes.trace import Trace
-from ..._events import run_metadata_invariants
 from ..._ir.capture_events import CaptureEvents
 from ..._ir.events import (
     ArgTemplateRef,
@@ -65,6 +64,7 @@ from .._finalize import (
     session_callable_identity as _callable_identity,
     value_nbytes as _nbytes,
 )
+from .._invariants import run_metadata_invariants
 from .._options import MLX_PREVIEW_TRACE_OPTION_POLICY, reject_unsupported_trace_options
 from . import capabilities
 from ._grad_oracle import (

@@ -25,7 +25,6 @@ from ..._data_classes.layer import Layer
 from ..._data_classes.param import Param, ParamAccessor
 from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING, MissingType
-from ..._events import run_metadata_invariants
 from ..._ir.capture_events import CaptureEvents
 from ..._ir.container import ContainerSpec, DictKey, OutputPathComponent, TupleIndex
 from ..._ir.events import (
@@ -78,6 +77,7 @@ from ...backends._finalize import (
 from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
 from ...options import CaptureOptions, merge_capture_options
 from ...recording.types import CaptureSpec
+from .._invariants import run_metadata_invariants
 from .._options import (
     JAX_EXTRA_KWARG_POLICY,
     JAX_PREVIEW_TRACE_OPTION_POLICY,
