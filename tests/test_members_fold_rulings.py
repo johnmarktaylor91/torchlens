@@ -98,7 +98,7 @@ def test_collapse_none_drawing_refuses_a_plan_but_keeps_the_schedule(
 
     drawing = log.draw(path=str(tmp_path / "g"), file_format="dot")
     with pytest.raises(TorchLensError) as excinfo:
-        drawing.collapse_plan
+        _ = drawing.collapse_plan
     assert excinfo.value.fields["code"] == "collapse_plan_unavailable"
     assert "collapse='none'" in str(excinfo.value)
     assert drawing.collapse_schedule.steps
@@ -131,7 +131,7 @@ def test_released_trace_refuses_collapse_diagnostics(tmp_path: Any) -> None:
 
     gc.collect()
     with pytest.raises(TorchLensError) as excinfo:
-        drawing.collapse_schedule
+        _ = drawing.collapse_schedule
     assert excinfo.value.fields["code"] == "collapse_plan_unavailable"
     assert "released" in str(excinfo.value)
 
@@ -210,11 +210,11 @@ def test_hook_spellings_redirect_to_do_and_clear_edits(log: Any) -> None:
     """``attach_hooks`` and ``clear_hooks`` refuse typed and name the live doors."""
 
     with pytest.raises(FacadeTeachingError) as excinfo:
-        log.attach_hooks
+        _ = log.attach_hooks
     assert "do(" in str(excinfo.value)
     with pytest.raises(FacadeTeachingError) as excinfo:
-        log.clear_hooks
+        _ = log.clear_hooks
     assert "clear_edits" in str(excinfo.value)
     with pytest.raises(FacadeTeachingError) as excinfo:
-        log.save_new_outs
+        _ = log.save_new_outs
     assert "run(" in str(excinfo.value)

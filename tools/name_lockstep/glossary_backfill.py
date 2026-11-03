@@ -250,7 +250,11 @@ def _prune(glossary: str, gone: Callable[[str, str], bool]) -> tuple[str, int, i
             continue
         name = match.group(1)
         clauses = _CLAUSE_SPLIT.split(match.group(2).strip())
-        kept = [c for clause in clauses for c in _prune_clause(clause, lambda o: gone(name, o))]
+        kept = [
+            c
+            for clause in clauses
+            for c in _prune_clause(clause, lambda o, name=name: gone(name, o))
+        ]
         if kept == clauses:
             lines.append(line)
         elif kept:
