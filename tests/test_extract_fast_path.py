@@ -6,6 +6,7 @@ Every case compares the fast result with the full capture's result
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 import pytest
@@ -135,7 +136,10 @@ def test_ineligible_requests_run_the_full_capture(
     inputs: Any = [x] if case == "kwargs_input" else x
     ran = _spy(monkeypatch)
     if case in ("never_called", "called_twice"):  # the capture owns both refusals
-        with pytest.raises(InvalidArgumentError):
+        with contextlib.ExitStack() as stack:
+            if case == "never_called":  # the capture warns about the unmatched name first
+                stack.enter_context(pytest.warns(UserWarning, match="matched zero layers"))
+            stack.enter_context(pytest.raises(InvalidArgumentError))
             tl.extract(model, inputs, layers)
         assert ran == [1]
         return
