@@ -390,11 +390,7 @@ class EchoSession:
                 stats = self._stats_for(ctx, tensor, trace)
                 self._deliver(
                     self._event_from_ctx(
-                        ctx,
-                        kind="op",
-                        ordinal=self.ordinal,
-                        intervened=intervened,
-                        value_stats=stats,
+                        ctx, kind="op", ordinal=self.ordinal, intervened=intervened, stats=stats
                     )
                 )
             except NarrationStatsError:
