@@ -86,6 +86,13 @@ def _zero(t: torch.Tensor) -> torch.Tensor:
     return torch.zeros_like(t)
 
 
+def _double_hook(out: torch.Tensor, *, ctx: object = None) -> torch.Tensor:
+    """A plain callable hook that doubles the activation (``ctx`` is the hook context)."""
+
+    del ctx
+    return out * 2.0
+
+
 @pytest.mark.parametrize("door", ("do", "do_value", "set_only"))
 def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) -> None:
     """Each Layer door on a two-pass layer edits both passes, matching plain torch.
@@ -138,7 +145,7 @@ def test_set_only_callable_on_multi_pass_layer_is_sticky_on_both_passes(captured
     baseline = fork[fork.output_layers[0]].out.clone()
     with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
         fork.layers[shared].do(
-            _double,
+            _double_hook,
             intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
         )
     # Staged as a hook, not a value, and nothing propagates yet.
