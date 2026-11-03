@@ -7330,16 +7330,12 @@ test-docstrings	tests/test_attrib_methods_captum_ledger.py	64
 test-docstrings	tests/test_attrib_methods_guided.py	11
 test-docstrings	tests/test_attrib_methods_guided.py	12
 test-docstrings	tests/test_attrib_methods_guided.py	13
-test-docstrings	tests/test_attrib_methods_lrp.py	1_1
 test-docstrings	tests/test_attrib_methods_lrp.py	30
-test-docstrings	tests/test_attrib_methods_lrp.py	32
 test-docstrings	tests/test_attrib_methods_metrics.py	14
 test-docstrings	tests/test_attrib_methods_realmodel.py	120
 test-docstrings	tests/test_attrib_methods_realmodel.py	121
 test-docstrings	tests/test_attrib_methods_realmodel.py	13
 test-docstrings	tests/test_attrib_methods_steps.py	18
-test-docstrings	tests/test_attrib_methods_steps.py	21
-test-docstrings	tests/test_attrib_methods_steps.py	27
 test-docstrings	tests/test_attrib_methods_text.py	0.584
 test-docstrings	tests/test_attrib_methods_text.py	1.80
 test-docstrings	tests/test_attrib_methods_text.py	128
@@ -7360,10 +7356,7 @@ test-docstrings	tests/test_attrib_methods_text_real.py	32
 test-docstrings	tests/test_attrib_methods_wrapping.py	10
 test-docstrings	tests/test_attrib_methods_wrapping.py	25
 test-docstrings	tests/test_attribution_cam_choice.py	18
-test-docstrings	tests/test_attribution_eval_causal_audit.py	1.0.
 test-docstrings	tests/test_attribution_eval_causal_audit.py	32
-test-docstrings	tests/test_attribution_eval_causal_audit.py	64
-test-docstrings	tests/test_attribution_eval_causal_audit_edges.py	64
 test-docstrings	tests/test_attribution_eval_causal_audit_tables.py	64
 test-docstrings	tests/test_attribution_eval_curves.py	64
 test-docstrings	tests/test_attribution_eval_randomization.py	12
@@ -7559,11 +7552,6 @@ test-docstrings	tests/test_ci_packaging_gates.py	3.9
 test-docstrings	tests/test_ci_packaging_gates.py	78
 test-docstrings	tests/test_ci_packaging_gates.py	82,
 test-docstrings	tests/test_ci_packaging_gates.py	85
-test-docstrings	tests/test_circ1_component_graph.py	3,580.
-test-docstrings	tests/test_circ1_component_graph.py	32,491
-test-docstrings	tests/test_circ2_edge_scores.py	12.
-test-docstrings	tests/test_circ2_edge_scores.py	128
-test-docstrings	tests/test_circ2_edge_scores.py	32
 test-docstrings	tests/test_circ2_edge_scores.py	64
 test-docstrings	tests/test_circ2_faithfulness.py	12
 test-docstrings	tests/test_classics_corpus.py	256
@@ -8028,9 +8016,6 @@ test-docstrings	tests/test_internals.py	602
 test-docstrings	tests/test_internals.py	64
 test-docstrings	tests/test_internals.py	65504
 test-docstrings	tests/test_internals.py	73
-test-docstrings	tests/test_interv_gpt2_grad_edits.py	1.2
-test-docstrings	tests/test_interv_gpt2_grad_edits.py	1.4
-test-docstrings	tests/test_interv_gpt2_grad_edits.py	3.5
 test-docstrings	tests/test_interv_honesty_donor_pass.py	14
 test-docstrings	tests/test_interv_honesty_donor_pass.py	1_2
 test-docstrings	tests/test_interv_honesty_donor_pass.py	26
@@ -8042,7 +8027,6 @@ test-docstrings	tests/test_interv_substrate_site_selector.py	10.6
 test-docstrings	tests/test_interv_substrate_site_selector.py	18
 test-docstrings	tests/test_intervention_directions.py	32
 test-docstrings	tests/test_intervention_error_catalog.py	10
-test-docstrings	tests/test_intervention_error_catalog.py	14
 test-docstrings	tests/test_intervention_error_catalog.py	5.2
 test-docstrings	tests/test_intervention_force_shape_change.py	1,4
 test-docstrings	tests/test_intervention_force_shape_change.py	1,8
@@ -8054,7 +8038,6 @@ test-docstrings	tests/test_intervention_phase11.py	11
 test-docstrings	tests/test_intervention_phase13.py	3.6
 test-docstrings	tests/test_intervention_phase3.py	100
 test-docstrings	tests/test_intervention_phase3.py	64
-test-docstrings	tests/test_intervention_phase5.py	11
 test-docstrings	tests/test_intervention_phase6.py	11
 test-docstrings	tests/test_intervention_phase7.py	12
 test-docstrings	tests/test_intervention_phase7.py	140.
@@ -8150,8 +8133,6 @@ test-docstrings	tests/test_layer_grad_oracle.py	0.80
 test-docstrings	tests/test_layer_grad_oracle.py	048
 test-docstrings	tests/test_layer_grad_oracle.py	055
 test-docstrings	tests/test_layer_grad_oracle.py	100
-test-docstrings	tests/test_layer_grad_oracle.py	177
-test-docstrings	tests/test_layer_grad_oracle.py	341
 test-docstrings	tests/test_layer_log.py	10
 test-docstrings	tests/test_layer_log.py	120
 test-docstrings	tests/test_layer_log.py	15
@@ -8408,7 +8389,6 @@ test-docstrings	tests/test_onebackward_frozen.py	12
 test-docstrings	tests/test_onebackward_frozen.py	12.
 test-docstrings	tests/test_onebackward_frozen.py	13
 test-docstrings	tests/test_onebackward_frozen.py	48
-test-docstrings	tests/test_onebackward_hookband.py	438
 test-docstrings	tests/test_onebackward_realmodel.py	10
 test-docstrings	tests/test_onebackward_realmodel.py	11
 test-docstrings	tests/test_onebackward_realmodel.py	12
@@ -8676,7 +8656,6 @@ test-docstrings	tests/test_repgeom_validation_edges.py	64
 test-docstrings	tests/test_repgeom_validation_edges.py	66
 test-docstrings	tests/test_replay_corruption_battery.py	14
 test-docstrings	tests/test_replay_exact_parent_pass.py	10,
-test-docstrings	tests/test_replay_grad_fidelity.py	64
 test-docstrings	tests/test_replay_source_and_stochastic_origins.py	59
 test-docstrings	tests/test_replay_tolerance_dtype_tripwire.py	0.33
 test-docstrings	tests/test_replay_tolerance_dtype_tripwire.py	0.75
@@ -9705,7 +9684,6 @@ test-names	tests/test_checkpoint_live_ref_real_models.py	18_
 test-names	tests/test_checkpoint_live_ref_real_models.py	70
 test-names	tests/test_checks_kit_scan.py	16
 test-names	tests/test_checks_kit_scan.py	16_
-test-names	tests/test_circ1_component_graph.py	64
 test-names	tests/test_collapse_power_admission.py	18_
 test-names	tests/test_collapse_power_admission.py	201_
 test-names	tests/test_conditional_branches.py	310_
@@ -9834,8 +9812,6 @@ test-names	tests/test_large_graphs.py	100
 test-names	tests/test_large_graphs.py	20
 test-names	tests/test_large_graphs.py	250
 test-names	tests/test_large_graphs.py	50
-test-names	tests/test_layer_grad_oracle.py	50
-test-names	tests/test_layer_grad_oracle.py	50_
 test-names	tests/test_load_refuses_saved_by_2x.py	2_16_
 test-names	tests/test_lovely_containers_reprs.py	10_
 test-names	tests/test_merged_engine.py	10
@@ -9924,7 +9900,6 @@ test-names	tests/test_replay_tolerance_dtype_tripwire.py	64_
 test-names	tests/test_report_family_cost.py	100_
 test-names	tests/test_rerun_push_head_ablation_parity.py	12
 test-names	tests/test_rerun_push_head_ablation_parity.py	12_
-test-names	tests/test_rf_crossval.py	18_
 test-names	tests/test_rf_ext_integration.py	18_
 test-names	tests/test_rf_integration.py	18_
 test-names	tests/test_robustness_pr1.py	313_
