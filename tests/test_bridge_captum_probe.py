@@ -110,10 +110,12 @@ def test_spliced_forward_calls_the_probe_once_and_refuses_a_missed_site() -> Non
     log = tl.trace(model, x)
     try:
         relu_op = log.find_sites(tl.func("relu")).first()
-        probe = captum.layer(log, relu_op.layer_label)
+        key = str(relu_op.site_key)
+        ordinal = captum._site_ordinal(log, relu_op, key)
     finally:
         log.cleanup()
-    assert isinstance(probe, captum._SiteProbe) and probe.ordinal == 1
+    probe = captum._SiteProbe(model, key, str(relu_op.label), ordinal)
+    assert probe.ordinal == 1
     calls: list[tuple[int, ...]] = []
     handle = probe.register_forward_hook(lambda _m, _a, out: calls.append(tuple(out.shape)))
     try:

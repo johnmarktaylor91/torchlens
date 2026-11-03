@@ -314,7 +314,8 @@ def _pick_pass(resolved: Any, site: Any, pass_index: int | None) -> Any:
     """
 
     ops = getattr(resolved, "ops", None)
-    count = len(ops) if ops is not None and hasattr(ops, "__len__") else 0
+    passes = tuple(ops) if ops is not None and hasattr(ops, "__len__") else ()
+    count = len(passes)
     if count < 2:
         if pass_index is not None:
             raise InvalidArgumentError(
@@ -332,7 +333,7 @@ def _pick_pass(resolved: Any, site: Any, pass_index: int | None) -> Any:
             code="bridge_pass_index_invalid",
             remedy=f"pass pass_index= between 1 and {count}, or the pass-qualified label",
         )
-    return ops[pass_index - 1]
+    return passes[pass_index - 1]
 
 
 def _site_ordinal(trace: Any, resolved: Any, site_key: str) -> int:
