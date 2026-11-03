@@ -1063,6 +1063,7 @@ docs-md	docs/field-guide/linear_probes.md	1.0
 docs-md	docs/field-guide/linear_probes.md	1.0,
 docs-md	docs/field-guide/linear_probes.md	10.0
 docs-md	docs/field-guide/linear_probes.md	100,
+docs-md	docs/field-guide/linear_probes.md	1000
 docs-md	docs/field-guide/linear_probes.md	1000,
 docs-md	docs/field-guide/linear_probes.md	105,
 docs-md	docs/field-guide/linear_probes.md	112
@@ -1074,6 +1075,7 @@ docs-md	docs/field-guide/linear_probes.md	16,
 docs-md	docs/field-guide/linear_probes.md	2.0,
 docs-md	docs/field-guide/linear_probes.md	2024
 docs-md	docs/field-guide/linear_probes.md	32
+docs-md	docs/field-guide/linear_probes.md	32,
 docs-md	docs/field-guide/linear_probes.md	384,
 docs-md	docs/field-guide/linear_probes.md	4.0,
 docs-md	docs/field-guide/linear_probes.md	40
@@ -7398,11 +7400,19 @@ package-docstrings	torchlens/receptive_field/rules/interpolation.py	64
 package-docstrings	torchlens/receptive_field/rules/interpolation.py	64,
 package-docstrings	torchlens/receptive_field/rules/norms.py	11
 package-docstrings	torchlens/receptive_field/rules/transforms.py	20
+package-docstrings	torchlens/recording/_generation_options.py	20
+package-docstrings	torchlens/recording/_generation_options.py	512
 package-docstrings	torchlens/recording/_storage_resolver.py	25
 package-docstrings	torchlens/recording/exceptions.py	65
 package-docstrings	torchlens/recording/recover.py	21
 package-docstrings	torchlens/recording/recover.py	256_
 package-docstrings	torchlens/recording/recover.py	29700
+package-docstrings	torchlens/recording/reducers.py	1.0
+package-docstrings	torchlens/recording/reducers.py	1.0,
+package-docstrings	torchlens/recording/reducers.py	1.5,
+package-docstrings	torchlens/recording/reducers.py	2.0
+package-docstrings	torchlens/recording/reducers.py	2.0,
+package-docstrings	torchlens/recording/reducers.py	3.0
 package-docstrings	torchlens/recording/storage_disk.py	022
 package-docstrings	torchlens/recording/storage_disk.py	0600
 package-docstrings	torchlens/recording/storage_disk.py	0700

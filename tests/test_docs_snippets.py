@@ -584,6 +584,12 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
         "order; each later fence reads the first fence's trace and helpers)"
     ),
     "backends.md": "preview-backend snippets need tf/jax/mlx/tinygrad/paddle runtimes",
+    "bridges.md": (
+        "bridge fences share the first fence's resnet18 trace and need optional "
+        "third-party runtimes (captum, grad-cam, rsatoolbox, brain-score) plus a "
+        "network call (from_hub); claims covered by tests/test_bridge_real_captum.py, "
+        "tests/test_b2_bridge_captum.py and tests/test_b2_bridge_hub.py"
+    ),
     "backends/tf.md": (
         "tutorial fence executed by tests/backends/test_tf_docs_page.py under the "
         "tf_backend marker (needs the tensorflow runtime)"

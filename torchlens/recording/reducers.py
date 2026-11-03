@@ -37,6 +37,14 @@ class Reducer:
         Short name recorded in each reduced record's metadata.
     fn:
         The reduction; see the module docstring for its contract.
+
+    Examples
+    --------
+    >>> mean = tl.recording.reducers.Reducer("mean", lambda tensor: tensor[0].mean(dim=-1))
+    >>> mean
+    Reducer('mean')
+    >>> mean(torch.ones(1, 3, 4)).shape
+    torch.Size([3])
     """
 
     __slots__ = ("fn", "name")
@@ -84,6 +92,14 @@ def norm(ord: float = 2.0, *, dim: int = -1, position_dim: int = 1) -> Reducer:
     -------
     Reducer
         Produces ``[positions]`` per forward.
+
+    Examples
+    --------
+    >>> reducer = tl.recording.reducers.norm()
+    >>> reducer.name
+    'norm(ord=2.0)'
+    >>> reducer(torch.ones(1, 5, 4)).tolist()  # [batch, positions, features]
+    [2.0, 2.0, 2.0, 2.0, 2.0]
     """
 
     def reduce(tensor: torch.Tensor) -> torch.Tensor:
@@ -115,6 +131,17 @@ def top_k(k: int, *, dim: int = -1, position_dim: int = -2) -> Reducer:
     -------
     Reducer
         Produces ``[positions, ..., k]`` integer indices per forward.
+
+    Examples
+    --------
+    >>> reducer = tl.recording.reducers.top_k(2)
+    >>> reducer.name
+    'top_k(k=2)'
+    >>> attention = torch.tensor([[[[0.1, 0.6, 0.3]]]])  # [batch, heads, queries, keys]
+    >>> reducer(attention).tolist()
+    [[[1, 2]]]
+    >>> reducer(torch.rand(1, 2, 3, 4)).shape  # [queries, heads, k]
+    torch.Size([3, 2, 2])
     """
 
     if k < 1:
@@ -180,6 +207,15 @@ def probe(fitted: Any, *, position_dim: int = 1) -> Reducer:
     -------
     Reducer
         Produces ``[positions]`` (one output) or ``[positions, outputs]`` per forward.
+
+    Examples
+    --------
+    >>> weight, bias = torch.tensor([[1.0, 0.0, -1.0]]), torch.tensor([0.5])
+    >>> reducer = tl.recording.reducers.probe((weight, bias))
+    >>> reducer.name
+    'probe((weight, bias), outputs=1)'
+    >>> reducer(torch.tensor([[[1.0, 2.0, 3.0], [0.0, 0.0, 1.0]]])).tolist()
+    [-1.5, -0.5]
     """
 
     weight, bias, described = _linear_terms(fitted)

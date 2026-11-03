@@ -48,6 +48,12 @@ class TokenSeries:
         first; forwards the ring buffer dropped are absent from the front.
     values:
         The values, one row per position along the first axis.
+
+    Examples
+    --------
+    >>> series = tl.recording.TokenSeries("transformer.h.0", range(3, 6), torch.zeros(3, 4))
+    >>> len(series), list(series.positions), tuple(series.values.shape)
+    (3, [3, 4, 5], (3, 4))
     """
 
     name: str

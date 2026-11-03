@@ -60,6 +60,16 @@ class GenerationOptions:
     pass's unkept payloads (its model inputs, the KV cache ``generate`` feeds back
     among them) and the logits of every pass but the newest, so the recording's
     memory grows with the number of tokens, not with its square.
+
+    Examples
+    --------
+    >>> options = tl.recording.GenerationOptions(
+    ...     reducers={"transformer.h.0": tl.recording.reducers.norm()}, keep_last=8
+    ... )
+    >>> sorted(options.reducers), options.kv_sites, options.keep_last
+    (['transformer.h.0'], (), 8)
+    >>> options.max_saved_bytes == 512 * 2**20
+    True
     """
 
     reducers: Mapping[str, ReducerFn] = dataclasses.field(

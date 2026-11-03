@@ -33,7 +33,17 @@ def child_module(module: Any, child_name: str) -> Any | None:
 
 
 def child_output_spec(module: Any, child_name: str, recipe_id: str) -> FacetSpec | AbsenceReason:
-    """Return an op-anchored spec for a child module's single output."""
+    """Return an op-anchored spec for a child module's single output.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x, save="all")
+    >>> spec = tl.facets.child_output_spec(trace.modules["self"], "0", "demo_recipe")
+    >>> isinstance(spec, tl.facets.FacetSpec)
+    True
+    >>> tl.facets.child_output_spec(trace.modules["self"], "head", "demo_recipe").status
+    'structurally_absent'
+    """
 
     child = child_module(module, child_name)
     if child is None:
@@ -236,7 +246,17 @@ def _primary_output_label(module: Any, call: Any) -> str | None:
 
 
 def parameter_spec(module: Any, name: str, recipe_id: str) -> FacetSpec | AbsenceReason:
-    """Return a read-only spec for a named module parameter."""
+    """Return a read-only spec for a named module parameter.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x, save="all")
+    >>> spec = tl.facets.parameter_spec(trace.modules["0"], "weight", "demo_recipe")
+    >>> isinstance(spec, tl.facets.FacetSpec)
+    True
+    >>> tl.facets.parameter_spec(trace.modules["0"], "gamma", "demo_recipe").status
+    'structurally_absent'
+    """
 
     params = getattr(module, "params", None)
     if params is None:
@@ -266,7 +286,16 @@ def add_if_present(result: dict[str, Any], name: str, value: Any) -> None:
 
 
 def config_value(obj: Any, *names: str) -> Any | AbsenceReason:
-    """Return the first available attribute from an object."""
+    """Return the first available attribute from an object.
+
+    Examples
+    --------
+    >>> from types import SimpleNamespace
+    >>> tl.facets.config_value(SimpleNamespace(n_heads=4), "num_heads", "n_heads")
+    4
+    >>> tl.facets.config_value(SimpleNamespace(), "num_heads").status
+    'structurally_absent'
+    """
 
     for name in names:
         if hasattr(obj, name):

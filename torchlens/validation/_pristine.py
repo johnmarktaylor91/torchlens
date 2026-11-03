@@ -96,14 +96,8 @@ def pristine_torch_oracle() -> Iterator[bool]:
     # Ledger integrity (r4 census MED-1): refuse before unwrapping if any
     # recorded "orig" is itself a TorchLens wrapper (by ledger identity; see the
     # module docstring) -- restoring it would bless a forward run THROUGH a wrapper.
-    poisoned = next(
-        (
-            orig
-            for orig in _state._decorated_to_orig.values()
-            if id(orig) in _state._decorated_to_orig
-        ),
-        None,
-    )
+    ledger = _state._decorated_to_orig
+    poisoned = next((orig for orig in ledger.values() if id(orig) in ledger), None)
     if poisoned is not None:
         from .._errors import CaptureNotActiveError
 

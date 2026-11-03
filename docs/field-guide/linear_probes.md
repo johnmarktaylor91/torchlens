@@ -15,6 +15,46 @@ supplies the probe and the metrics.
 pip install torchlens transformers scikit-learn
 ```
 
+## Minimal example on the running model
+
+This page uses [the decoder on the IOI
+prompt](running_examples.md#the-decoder-on-the-ioi-prompt). A probe reads one layer's
+activation per token: here a logistic regression on block 1's output learns whether each
+token's id is even. The recipe below builds its own model and data for the full method.
+
+```python
+# recipe-test: tool=sklearn expected=True
+import torch
+import transformers
+
+import torchlens as tl
+
+PROMPT = "When Mary and John went to the store, John gave a drink to"
+words = PROMPT.replace(",", " ,").split()
+vocab = sorted(set(words))
+x = torch.tensor([[vocab.index(word) for word in words]])
+torch.manual_seed(0)
+config = transformers.GPT2Config(
+    vocab_size=len(vocab),
+    n_positions=32,
+    n_embd=64,
+    n_layer=2,
+    n_head=4,
+    use_cache=False,
+    attn_implementation="eager",
+)
+model = transformers.GPT2LMHeadModel(config).eval()
+
+trace = tl.trace(model, x)
+
+from sklearn.linear_model import LogisticRegression
+
+features = trace["transformer.h.1"].out[0].detach().numpy()
+labels = (x[0] % 2 == 0).numpy()
+probe = LogisticRegression(max_iter=1000).fit(features, labels)
+RESULT = probe.coef_.shape == (1, 64)
+```
+
 ## Real use: a trained model and a concept you label
 
 With a trained model, load it with `from_pretrained`, label each token or each

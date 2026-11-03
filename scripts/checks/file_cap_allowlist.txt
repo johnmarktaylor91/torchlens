@@ -111,7 +111,7 @@ torchlens/_data_classes/op.py::_pool_container_cells	66
 torchlens/_data_classes/op.py::_pool_container_members	74
 torchlens/_data_classes/param.py	1082
 torchlens/_data_classes/param.py::Param.__init__	75
-torchlens/_data_classes/trace.py	3477
+torchlens/_data_classes/trace.py	3476
 torchlens/_data_classes/trace.py::Trace.__init__	364
 torchlens/_data_classes/trace.py::Trace.save	83
 torchlens/_data_substrate/artifact.py::ArtifactWriter.commit_shard	67
@@ -1462,7 +1462,7 @@ torchlens/validation/_invariants_topology.py::_check_sibling_relation_derivation
 torchlens/validation/_invariants_topology.py::_check_trace_self_consistency	91
 torchlens/validation/_layer_grad_report.py::_compare_module_output_grads	212
 torchlens/validation/_operand_value_proofs.py::operand_value_proof_decision	85
-torchlens/validation/_pristine.py::pristine_torch_oracle	68
+torchlens/validation/_pristine.py::pristine_torch_oracle	62
 torchlens/validation/backward.py	821
 torchlens/validation/backward.py::_clone_inputs_with_grad	64
 torchlens/validation/backward.py::_sum_tensors	73
