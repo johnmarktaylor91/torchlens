@@ -34,7 +34,6 @@ from safetensors.torch import load_file
 
 from torchlens.backends.registry import BackendPayloadUnsupportedError
 
-from .. import __version__ as TORCHLENS_VERSION
 from .._capture._episode_ledger_anchors import reanchor_loaded_episode_evidence
 from .._data_classes._state_adapter import state_items
 from .._data_classes._trace_missing_attrs import is_live_trace
@@ -48,6 +47,7 @@ from .._runnable.state import (
 )
 from .._utils.display import user_stacklevel
 from .._utils.hashing import sha256_file
+from .._vocab._package_version import __version__ as TORCHLENS_VERSION
 from ..backends.registry import BackendSpec, get_backend_spec
 from ..errors import RunnablePreflightError, TorchLensWarning
 from . import (
