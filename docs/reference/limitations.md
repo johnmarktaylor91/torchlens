@@ -85,6 +85,7 @@ A tensor argument with no recorded graph or source provenance fails forward vali
 | A tensor subclass implements custom `__torch_function__`. | Capture may run with reduced subclass-specific metadata fidelity. | Prefer plain tensors for the captured run. |
 | Module nesting exceeds Python's recursion limit. | Traversal may raise `RecursionError`. | Flatten the hierarchy or deliberately raise `sys.setrecursionlimit`. |
 | A buffer is reassigned through `buffer.data = value`. | End-of-capture reconciliation raises `RuntimeError`. | Use `self.buffer = value` or `self.buffer.copy_(value)`. |
+| `tl.validate` runs a lazy module (`nn.LazyLinear` and friends, built in `__init__`) that has never been called. | The pre-run state snapshot fails: torch raises `ValueError` on detaching an uninitialized parameter, before capture. | Run one eager forward first (or call `initialize_parameters`); a lazy module created inside `forward`, or materialized during the pass after that warm-up, captures and validates normally. |
 
 ## Structure-only capture
 

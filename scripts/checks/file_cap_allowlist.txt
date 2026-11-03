@@ -879,7 +879,7 @@ torchlens/backends/torch/_completeness_storage.py::_make_storage_metadata_wrappe
 torchlens/backends/torch/_completeness_storage.py::_make_storage_metadata_wrapper.wrapper	75
 torchlens/backends/torch/_completeness_storage.py::capture_scalar_escape_warning	151
 torchlens/backends/torch/_held_tensor_scan.py::iter_module_held_plain_tensors	68
-torchlens/backends/torch/_ops_activations.py::_log_output_tensor_info	322
+torchlens/backends/torch/_ops_activations.py::_log_output_tensor_info	317
 torchlens/backends/torch/_ops_activations.py::_metadata_shape	65
 torchlens/backends/torch/_ops_activations.py::_save_activation_fields	194
 torchlens/backends/torch/_ops_arguments.py::_build_edge_use_records	68
@@ -895,7 +895,7 @@ torchlens/backends/torch/_ops_emission.py::_unattributed_tensor_arg_positions	21
 torchlens/backends/torch/_ops_emission.py::_unattributed_tensor_arg_positions.visit	77
 torchlens/backends/torch/_ops_emission.py::apply_live_hooks_to_outputs	78
 torchlens/backends/torch/_ops_emission.py::log_function_output_tensors	68
-torchlens/backends/torch/_ops_exhaustive.py::_emit_exhaustive_operation_events	297
+torchlens/backends/torch/_ops_exhaustive.py::_emit_exhaustive_operation_events	293
 torchlens/backends/torch/_ops_exhaustive.py::_iter_autograd_saved_candidates	62
 torchlens/backends/torch/_ops_exhaustive.py::_project_foreach_member_parent_fields	74
 torchlens/backends/torch/_ops_finalize.py::_make_layer_log_entry	126
@@ -928,7 +928,7 @@ torchlens/backends/torch/aliasing.py::detect_torch_alias_contract	61
 torchlens/backends/torch/backend.py	887
 torchlens/backends/torch/backend.py::TorchBackend.fetch_label_move_input_tensors	153
 torchlens/backends/torch/backend.py::TorchBackend.setup_inputs_and_device	88
-torchlens/backends/torch/backward.py	4258
+torchlens/backends/torch/backward.py	4246
 torchlens/backends/torch/backward.py::RecordingBackward.__enter__	65
 torchlens/backends/torch/backward.py::_capture_autograd_engine_call	95
 torchlens/backends/torch/backward.py::_close_implicit_backward_pass_if_open	74
@@ -1001,13 +1001,13 @@ torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook	137
 torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook.log_grad_to_model_history	74
 torchlens/backends/torch/tensor_tracking.py::_locate_parent_tensors_in_args	62
 torchlens/backends/torch/tensor_tracking.py::_log_tensor_grad	68
-torchlens/backends/torch/wrappers.py	2865
+torchlens/backends/torch/wrappers.py	2861
 torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	115
 torchlens/backends/torch/wrappers.py::_unwrap_torch_locked	129
 torchlens/backends/torch/wrappers.py::_wrap_torch_locked	102
 torchlens/backends/torch/wrappers.py::decorate_all_once	68
-torchlens/backends/torch/wrappers.py::torch_func_decorator	808
-torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	653
+torchlens/backends/torch/wrappers.py::torch_func_decorator	801
+torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	646
 torchlens/bridge/_sae_export.py::write_delphi	93
 torchlens/bridge/_sae_export.py::write_sae_dashboard	112
 torchlens/bridge/_sae_latents.py::logged_splice_trace	86
@@ -1504,7 +1504,7 @@ torchlens/validation/backward.py::_sum_tensors	73
 torchlens/validation/backward.py::validate_backward_pass	283
 torchlens/validation/consolidated.py::_intervention_report	69
 torchlens/validation/consolidated.py::validate	248
-torchlens/validation/core.py	3969
+torchlens/validation/core.py	3795
 torchlens/validation/core.py::_check_arglocs_correct_for_arg	127
 torchlens/validation/core.py::_check_layer_arguments_logged_correctly	80
 torchlens/validation/core.py::_check_unattributed_arg_slots	193

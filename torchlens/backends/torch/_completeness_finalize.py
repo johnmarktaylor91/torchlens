@@ -197,12 +197,12 @@ def _finalize_census(state: _WitnessState) -> None:
                 "in_replacement_hook": event.in_replacement_hook,
                 "mutates": event.mutates,
                 # A ``.data``-property accessor view (``aten.detach``/``aten.alias``) on a
-                # registered buffer -- the intrinsic, legitimately-uncaptured dispatch of the
-                # ``self.b.data.copy_(x)`` buffer-write idiom. The completeness backstop credits
-                # these apples-to-apples against the dispatch census (see
+                # registered buffer or pending lazy slot -- the legitimately-uncaptured dispatch
+                # of ``self.b.data.copy_(x)`` or ``UninitializedParameter.materialize``. The
+                # backstop credits these apples-to-apples against the dispatch census (see
                 # ``validation._completeness_backstop.completeness_backstop_counts``); a
                 # genuine untraced op is never flagged here (unowned + non-mutating +
-                # pure-view + buffer only).
+                # pure-view + buffer or pending lazy slot only).
                 "state_view_accessor": event.state_view_accessor,
             }
         )
