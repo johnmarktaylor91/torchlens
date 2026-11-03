@@ -918,6 +918,7 @@ docs-md	docs/for-ai-agents.md	25,000
 docs-md	docs/for-ai-agents.md	4,000
 docs-md	docs/for-ai-agents.md	64
 docs-md	docs/for-ai-agents.md	85
+docs-md	docs/for-ai-agents.md	91
 docs-md	docs/gallery/any_architecture.md	10
 docs-md	docs/gallery/any_architecture.md	16
 docs-md	docs/gallery/any_architecture.md	16,
@@ -1268,7 +1269,7 @@ docs-md	docs/maintainers/where.md	140
 docs-md	docs/maintainers/where.md	1400
 docs-md	docs/maintainers/where.md	1404
 docs-md	docs/maintainers/where.md	141
-docs-md	docs/maintainers/where.md	1411
+docs-md	docs/maintainers/where.md	1412
 docs-md	docs/maintainers/where.md	142
 docs-md	docs/maintainers/where.md	1429
 docs-md	docs/maintainers/where.md	143
@@ -1467,6 +1468,7 @@ docs-md	docs/maintainers/where.md	2592
 docs-md	docs/maintainers/where.md	26
 docs-md	docs/maintainers/where.md	260
 docs-md	docs/maintainers/where.md	261
+docs-md	docs/maintainers/where.md	262
 docs-md	docs/maintainers/where.md	263
 docs-md	docs/maintainers/where.md	2635
 docs-md	docs/maintainers/where.md	2638
@@ -1734,6 +1736,7 @@ docs-md	docs/maintainers/where.md	510
 docs-md	docs/maintainers/where.md	514
 docs-md	docs/maintainers/where.md	515
 docs-md	docs/maintainers/where.md	516
+docs-md	docs/maintainers/where.md	5172
 docs-md	docs/maintainers/where.md	519
 docs-md	docs/maintainers/where.md	52
 docs-md	docs/maintainers/where.md	521
@@ -1826,7 +1829,7 @@ docs-md	docs/maintainers/where.md	628
 docs-md	docs/maintainers/where.md	63
 docs-md	docs/maintainers/where.md	630
 docs-md	docs/maintainers/where.md	6316
-docs-md	docs/maintainers/where.md	631740
+docs-md	docs/maintainers/where.md	632041
 docs-md	docs/maintainers/where.md	633
 docs-md	docs/maintainers/where.md	635
 docs-md	docs/maintainers/where.md	636
@@ -2773,6 +2776,11 @@ docs-md	docs/recipes/weightwatcher.md	32
 docs-md	docs/recipes/weightwatcher.md	32,
 docs-md	docs/recipes/weightwatcher.md	64
 docs-md	docs/recipes/weightwatcher.md	64,
+docs-md	docs/reference/agent_capabilities.md	2.0
+docs-md	docs/reference/agent_capabilities.md	4.0
+docs-md	docs/reference/agent_capabilities.md	4.0,
+docs-md	docs/reference/agent_capabilities.md	64,
+docs-md	docs/reference/agent_capabilities.md	91
 docs-md	docs/reference/attribution.md	0.0012
 docs-md	docs/reference/attribution.md	0.0014
 docs-md	docs/reference/attribution.md	0.0019
@@ -5116,6 +5124,8 @@ package-docstrings	torchlens/_semantic/logit_lens.py	2.5
 package-docstrings	torchlens/_semantic/logit_lens.py	32
 package-docstrings	torchlens/_semantic/logit_lens.py	50
 package-docstrings	torchlens/_semantic/logit_lens.py	64,
+package-docstrings	torchlens/_semantic/patching.py	50257
+package-docstrings	torchlens/_semantic/patching.py	768
 package-docstrings	torchlens/_semantic/recipes/__init__.py	6.4
 package-docstrings	torchlens/_semantic/recipes/_helpers.py	11
 package-docstrings	torchlens/_semantic/recipes/attention.py	10
@@ -5434,6 +5444,8 @@ package-docstrings	torchlens/_utils/tensor_utils.py	512
 package-docstrings	torchlens/_utils/tensor_utils.py	64
 package-docstrings	torchlens/_utils/tensor_utils.py	754
 package-docstrings	torchlens/_utils/tensor_utils.py	9.8
+package-docstrings	torchlens/_validation_argument_references.py	50257
+package-docstrings	torchlens/_validation_argument_references.py	768
 package-docstrings	torchlens/_visualization/_arg_suppression.py	8.7
 package-docstrings	torchlens/_visualization/_backward_inventory.py	17
 package-docstrings	torchlens/_visualization/_backward_inventory.py	36
@@ -5705,6 +5717,7 @@ package-docstrings	torchlens/agent/_fold.py	1_1
 package-docstrings	torchlens/agent/_fold.py	24
 package-docstrings	torchlens/agent/_fold.py	3.11
 package-docstrings	torchlens/agent/_fold.py	3.4,
+package-docstrings	torchlens/agent/_init_block.py	2.0
 package-docstrings	torchlens/agent/_overview.py	12
 package-docstrings	torchlens/agent/_overview.py	2.7
 package-docstrings	torchlens/agent/_overview.py	200
@@ -8680,6 +8693,10 @@ test-docstrings	tests/test_param_log.py	10
 test-docstrings	tests/test_param_log.py	15
 test-docstrings	tests/test_param_witness_gating.py	18
 test-docstrings	tests/test_parameter_inplace_mutation.py	20
+test-docstrings	tests/test_patching_helper_memory.py	1..5
+test-docstrings	tests/test_patching_helper_memory.py	207
+test-docstrings	tests/test_patching_helper_memory.py	25
+test-docstrings	tests/test_patching_helper_memory.py	34
 test-docstrings	tests/test_peak_memory_counter_lag.py	44
 test-docstrings	tests/test_peak_memory_counter_lag.py	63
 test-docstrings	tests/test_peak_memory_counter_lag.py	64
