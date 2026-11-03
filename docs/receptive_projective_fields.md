@@ -25,7 +25,7 @@ trace = tl.trace(
     model, x, capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference")
 )
 
-op = trace["layer4.1.conv2"]
+op = trace.ops["layer4.1.conv2"]
 rf = op.receptive_field
 print(rf.size, rf.jump, rf.center0)
 
@@ -100,8 +100,8 @@ outgoing_again = op.receptive_field.at((3, 3), direction="projective")
 
 # Restrict the far endpoint. source= selects an ancestor for a receptive query;
 # target= selects a descendant for a projective query.
-early = trace["layer1.0.conv1"]
-late = trace["layer4.1.conv2"]
+early = trace.ops["layer1.0.conv1"]
+late = trace.ops["layer4.1.conv2"]
 between = late.receptive_field.at((3, 3), source=early)
 forward_between = early.projective_field.at((3, 3), target=late)
 ```

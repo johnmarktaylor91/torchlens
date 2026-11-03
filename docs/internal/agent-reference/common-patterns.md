@@ -407,3 +407,24 @@ and `show()`. `str(report)` is the table that `show()` prints and returns.
 `details`, and `suggestion`. The statuses are `pass`, `known_broken`, `scope`, and
 `not_tested`; severities are `ok`, `info`, `warning`, and `error`. Constructors are
 internal; read the returned records.
+
+### Lookup doors: the kind you name is the kind you get
+
+`trace[key]` returns the kind the key names; a typed door returns its own kind and converts
+a key that names exactly one such object; several matches refuse `ambiguous_op_lookup`
+naming the `:N` spellings (glossary: *Indexing coherence*).
+
+```python
+trace["encoder.mlp"]             # Module (called once or many times)
+trace["encoder.mlp:2"]           # ModuleCall
+trace["linear_3_7"]              # Op; trace["linear_3_7"] of a multi-pass layer refuses
+trace.ops["encoder.mlp"]         # the module's output Op (refuses when called twice)
+trace.layers["encoder.mlp"]      # its Layer
+trace.modules["linear_3_7"]      # the Module that op ran in
+trace.module_calls["linear_3_7"]  # the call that ran it
+trace.params["encoder.mlp"]      # its one Param, or a refusal listing the addresses
+module["child"]                  # a descendant Module; module.calls["linear_3_7"] its call
+```
+
+Internal code that accepts any lookup key but needs an Op calls
+`torchlens._data_classes._lookup_kinds.op_at(trace, key)`.
