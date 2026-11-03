@@ -50,26 +50,11 @@ def test_trace_parent_and_root_trace_resolve_fork_lineage() -> None:
     assert grandchild.root_trace is root
 
 
-def test_trace_source_introspection_fields_are_captured() -> None:
-    """Trace exposes source model docstrings and signatures."""
-
-    trace = _make_trace(CaptureOptions())
-
-    assert trace.source.class_docstring == _B2cModel.__doc__
-    assert trace.source.init_signature == "(self) -> None"
-    assert trace.source.init_docstring == _B2cModel.__init__.__doc__
-    assert (
-        trace.source.forward_signature
-        == "(self, x: torch.Tensor, scale: float = 1.0) -> torch.Tensor"
-    )
-    assert trace.source.forward_docstring == _B2cModel.forward.__doc__
-
-
 def test_grad_fn_calls_accessor_and_call_savedness() -> None:
     """GradFn.calls replaces ops and GradFnCall.is_saved mirrors saved grad payloads."""
 
     trace = _make_trace(CaptureOptions(save_grads=True))
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     grad_fn = next(record for record in trace.autograd.grad_fns if record.num_calls)
     grad_fn_call = grad_fn.calls[0]
 

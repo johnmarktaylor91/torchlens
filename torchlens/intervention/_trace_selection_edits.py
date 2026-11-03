@@ -4,7 +4,7 @@ The selection-batch door (D33), the cross-kind batch transaction, the
 single-selection plan, and the EDGE, PARAM and leaf-site edit paths, moved
 verbatim from the trace intervention mixin as functions taking the trace
 first. ``_trace_edits.apply_do_mutation`` dispatches here; hooks attach
-through the record's ``attach_hooks`` and ``clear_edits`` verbs.
+through the record's ``_attach_hooks`` and ``clear_edits`` verbs.
 """
 
 from __future__ import annotations
@@ -339,13 +339,14 @@ def attach_selection_plan_hooks(
     attached: list[str] = []
     try:
         for item in hook_items:
-            handle = trace.attach_hooks(
-                label_selector(item["op"].label),
-                item["edit"],
-                strict=strict,
-                confirm_mutation=True,
+            attached.extend(
+                trace._attach_hooks(
+                    label_selector(item["op"].label),
+                    item["edit"],
+                    strict=strict,
+                    confirm_mutation=True,
+                )
             )
-            attached.extend(handle.handle_ids)
     except BaseException:
         for handle_id in attached:
             trace.clear_edits(handle=handle_id, confirm_mutation=True)

@@ -38,6 +38,19 @@ class ParamHealthReport(Report):
     ``coverage`` the honest scope disclosure -- verdicts are
     ``rank_local_shard``-scoped under torch.distributed, and global
     verdicts need an explicit opt-in reduce (not shipped in v1).
+
+    Examples
+    --------
+    >>> net = nn.Linear(2, 2)
+    >>> with torch.no_grad():
+    ...     net.weight[0, 0] = float("nan")
+    >>> report = tl.debug.param_health(net)
+    >>> isinstance(report, tl.debug.ParamHealthReport)
+    True
+    >>> [f.check_name for f in report.findings if f.check_name == "param_nonfinite"]
+    ['param_nonfinite']
+    >>> report.to_dict()["schema_version"] == report.schema_version
+    True
     """
 
     findings: tuple[CheckFinding, ...]
@@ -363,6 +376,17 @@ def param_health(  # noqa: PLR0913 -- the memo-4.4 signature IS the designed pub
         names (``audit_within_unknown_name``), unknown or malformed
         ``bounds`` (``audit_bounds_unknown_name`` / ``check_bounds_invalid``),
         or out-of-range fraction knobs (``check_fraction_invalid``).
+
+    Examples
+    --------
+    >>> report = param_health(model)
+    >>> len(report.rows)
+    4
+    >>> "param_nonfinite" in report.checks_run
+    True
+    >>> sub = param_health(model, within=["0.weight"])
+    >>> [row.name for row in sub.rows]
+    ['0.weight']
     """
 
     _validate_fraction("max_fraction", max_fraction)

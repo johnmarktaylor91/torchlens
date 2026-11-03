@@ -91,6 +91,17 @@ def score_decomposition(  # noqa: PLR0913 -- one keyword per addressed coordinat
     -------
     ScoreDecomposition
         The validated term-complete record.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> try:
+    ...     tl.transformer.score_decomposition(
+    ...         trace, "no.such.layer", head=0, destination=0, source=0
+    ...     )
+    ... except tl.errors.RenderError as err:
+    ...     print(err.fields["code"])
+    tv_facet_missing
     """
 
     if layer not in getattr(trace, "modules", {}):
@@ -158,6 +169,20 @@ def render_neuron_card(
     -------
     Artifact
         The written file plus the printed term accounting.
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> q = torch.tensor([1.0, 2.0, 3.0, 4.0])
+    >>> decomp = tl.transformer.ScoreDecomposition(
+    ...     layer="blocks.0.attn", head=0, destination=1, source=0,
+    ...     query_vector=q, key_vector=torch.ones(4), products=q, scale=2.0, reference_score=5.0,
+    ... )
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     saved = tl.transformer.render_neuron_card(decomp, pathlib.Path(tmp) / "card.png")
+    ...     written = saved.paths[0].exists()
+    >>> written
+    True
     """
 
     matplotlib = require_matplotlib()

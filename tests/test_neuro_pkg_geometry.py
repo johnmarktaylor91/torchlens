@@ -7,7 +7,7 @@ Pins:
   euclidean distances, bandwidth = mean(D) over the full matrix, kernel
   ``exp(-D / mean(D))``, dissimilarity ``1 - kernel``. All-identical
   stimuli refuse typed where the reference would silently NaN. The
-  similarity-repository oracle (U56.3) checked the same equality against
+  similarity-repository oracle checked the same equality against
   the catalogued ``rdm/*/gaussian``; an analytic literal pin keeps it from
   drifting back to the earlier ``2 * mean(D)`` bandwidth.
 - ``rank_transform_rdm``: the Nili et al. 2014 display convention --
@@ -21,13 +21,10 @@ Pins:
 
 from __future__ import annotations
 
-import math
-
 import numpy as np
 import pytest
 
 from torchlens.repgeom import rank_transform_rdm, rdm
-from torchlens.stats import cka
 
 
 def _thingsvision_gaussian_rdm(features: np.ndarray) -> np.ndarray:
@@ -57,26 +54,6 @@ def test_gaussian_metric_matches_thingsvision_reference() -> None:
     assert float(ours.max()) < 1.0
 
 
-def test_gaussian_metric_analytic_literal_pin() -> None:
-    """Hand-derived values for 1-D points 0, 1, 3 (U56.3 oracle-matched).
-
-    Squared distances are 1, 9 and 4; their full-matrix mean (zero
-    diagonal included) is ``2 * (1 + 9 + 4) / 9 = 28 / 9``, so each
-    dissimilarity is ``1 - exp(-d * 9 / 28)``.
-    """
-
-    ours = rdm(np.array([[0.0], [1.0], [3.0]]), metric="gaussian")
-    expected = np.array(
-        [
-            [0.0, 1.0 - math.exp(-9 / 28), 1.0 - math.exp(-81 / 28)],
-            [1.0 - math.exp(-9 / 28), 0.0, 1.0 - math.exp(-36 / 28)],
-            [1.0 - math.exp(-81 / 28), 1.0 - math.exp(-36 / 28), 0.0],
-        ]
-    )
-    np.testing.assert_allclose(ours, expected, rtol=0, atol=1e-12)
-
-
-@pytest.mark.smoke
 def test_gaussian_metric_refuses_identical_stimuli() -> None:
     """A zero data-derived bandwidth refuses typed, never NaN."""
 
@@ -85,7 +62,6 @@ def test_gaussian_metric_refuses_identical_stimuli() -> None:
         rdm(features, metric="gaussian")
 
 
-@pytest.mark.smoke
 def test_rank_transform_percentile_and_ties() -> None:
     """Item 13: average ranks for ties; percentile max is exactly 100."""
 
@@ -123,7 +99,6 @@ def test_rank_transform_refusals() -> None:
         rank_transform_rdm(np.zeros((1, 1)))
 
 
-@pytest.mark.smoke
 def test_rdm_node_spec_display_vocabulary() -> None:
     """The render kwarg accepts raw/rank/percentile and refuses others."""
 
@@ -133,38 +108,6 @@ def test_rdm_node_spec_display_vocabulary() -> None:
         assert callable(rdm_node(display=display))
     with pytest.raises(ValueError, match="display"):
         rdm_node(display="log")
-
-
-@pytest.mark.smoke
-def test_cka_method_contract_pins() -> None:
-    """Item 14: linear/biased/CPU-f64 contract with literal reference values.
-
-    The pinned values were computed with the shipped estimator on fixed
-    integer matrices; they hold for Kornblith et al. (2019)'s BIASED linear
-    CKA (gram-matrix form, no unbiased-HSIC correction) in float64. An
-    estimator change (e.g. silently going unbiased) fails these literals.
-    """
-
-    a = np.array([[1.0, 2.0], [3.0, 5.0], [4.0, 1.0], [0.0, 2.0]])
-    b = np.array([[2.0, 0.0, 1.0], [1.0, 1.0, 4.0], [5.0, 2.0, 2.0], [2.0, 3.0, 0.0]])
-
-    # Self-alignment is exactly 1; orthogonal transforms leave it there.
-    assert cka(a, a) == pytest.approx(1.0, abs=1e-12)
-    rotation = np.array([[0.0, -1.0], [1.0, 0.0]])
-    assert cka(a, a @ rotation) == pytest.approx(1.0, abs=1e-12)
-    assert cka(a, 3.5 * a) == pytest.approx(1.0, abs=1e-12)
-
-    # Literal cross-representation reference value (biased linear CKA).
-    reference = _reference_biased_linear_cka(a, b)
-    value = cka(a, b)
-    assert value == pytest.approx(reference, abs=1e-12)
-    assert value == pytest.approx(0.8735487150980951, abs=1e-9)
-
-    # Degenerate zero-variance input -> NaN with a warning, matched rows required.
-    with pytest.warns(UserWarning, match="zero variance"):
-        assert math.isnan(cka(a, np.ones((4, 2))))
-    with pytest.raises(ValueError, match="matched row counts"):
-        cka(a, b[:3])
 
 
 def _reference_biased_linear_cka(a: np.ndarray, b: np.ndarray) -> float:

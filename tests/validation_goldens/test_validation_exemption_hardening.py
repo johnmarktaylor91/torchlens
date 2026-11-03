@@ -1069,7 +1069,6 @@ def test_index_put_overwrite_proof_rejects_negative_index_aliasing() -> None:
     assert _index_put_destination_is_fully_overwritten(dest, negative_full_layer)
 
 
-@pytest.mark.smoke
 def test_equivalence_symmetry_catches_suffixed_in_module_group_corruption() -> None:
     """Symmetric group corruption on a suffixed in-module layer must FAIL.
 
@@ -1155,7 +1154,7 @@ def test_wiped_grad_fn_registry_on_detached_trace_fails_invariants() -> None:
         capture=CaptureOptions(save_grads="all"),
         save="all",
     )
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     check_metadata_invariants(trace)
     assert trace._backward_pass_logs, "backward evidence precondition"
     assert len(trace.autograd.backward_passes) >= 1
@@ -1189,7 +1188,6 @@ def test_forward_only_trace_keeps_empty_backward_registry_valid() -> None:
     check_metadata_invariants(trace)
 
 
-@pytest.mark.smoke
 def test_forged_placeholder_still_fails_func_call_id_after_save_load(
     tmp_path: Any,
 ) -> None:

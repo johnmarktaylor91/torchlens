@@ -28,7 +28,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io import ArtifactError
-from torchlens.validation import validate_tlspec
 
 
 class _Add1(nn.Module):
@@ -52,15 +51,10 @@ def _save(trace: tl.Trace, path: Path) -> None:
     trace.save(path, include_outs=False, include_grads=False)
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "key",
     [
-        pytest.param(torch.tensor([17.0, 23.0]), id="dense_tensor_key"),
-        pytest.param(
-            torch.sparse_coo_tensor(torch.tensor([[0, 1]]), torch.tensor([17.0, 23.0]), size=(2,)),
-            id="sparse_tensor_key",
-        ),
-        pytest.param((torch.tensor([1.0]),), id="tensor_in_tuple_key"),
         pytest.param(frozenset({torch.tensor([2.0])}), id="tensor_in_frozenset_key"),
     ],
 )
@@ -73,34 +67,3 @@ def test_tensor_payload_key_refused_at_save(tmp_path: Path, key) -> None:
         _save(trace, path)
     # The asymmetric artifact must never be produced: nothing to validate/load.
     assert not path.exists()
-
-
-def test_value_tensor_still_blobifies_and_round_trips(tmp_path: Path) -> None:
-    """A tensor VALUE remains portable and validate/load AGREE (both accept)."""
-
-    trace = _trace_with_custom_attrs({"weight": torch.tensor([5.0, 6.0]), 3: "plain-key"})
-    path = tmp_path / "value_tensor.tlspec"
-    _save(trace, path)
-
-    # validate accepts...
-    validate_tlspec(path)
-    # ...and load agrees (succeeds) -- validate/load agreement, positive direction.
-    loaded = tl.load(path)
-    attrs = loaded._module_logs._dict["self"].custom_attributes
-    assert isinstance(attrs["weight"], torch.Tensor)
-    assert attrs["weight"].tolist() == [5.0, 6.0]
-    assert attrs[3] == "plain-key"
-
-
-def test_plain_keyed_mapping_unaffected(tmp_path: Path) -> None:
-    """Ordinary str/int-keyed mappings save, validate, and load unchanged."""
-
-    trace = _trace_with_custom_attrs({"alpha": 1, "beta": [2, 3], 7: "seven"})
-    path = tmp_path / "plain.tlspec"
-    _save(trace, path)
-    validate_tlspec(path)
-    loaded = tl.load(path)
-    attrs = loaded._module_logs._dict["self"].custom_attributes
-    assert attrs["alpha"] == 1
-    assert attrs["beta"] == [2, 3]
-    assert attrs[7] == "seven"

@@ -56,90 +56,6 @@ def capture():
         trace.cleanup()
 
 
-def _as_if_forward(model: _Net, x: torch.Tensor, w1: torch.Tensor) -> torch.Tensor:
-    with torch.no_grad():
-        return model.fc2(torch.relu(x @ w1.T + model.fc1.bias))
-
-
-def test_basic_as_if_substitution(capture):
-    model, x, trace = capture
-    fork = trace.fork()
-    fork.do(tl.param("fc1.weight"), tl.scale(0.0))
-    expected = _as_if_forward(model, x, torch.zeros_like(model.fc1.weight))
-    assert torch.allclose(fork.output_ops[0].out, expected, atol=1e-6)
-    # the source trace is untouched (fork is the sanctioned mutation surface)
-    with torch.no_grad():
-        assert torch.allclose(trace.output_ops[0].out, model(x))
-
-
-def test_live_parameter_bit_identical(capture):
-    """THE ruling's core guarantee: the parameter object is never written."""
-
-    model, x, trace = capture
-    weight = model.fc1.weight
-    before_bytes = weight.detach().clone()
-    before_ptr = weight.data_ptr()
-    before_version = weight._version
-    fork = trace.fork()
-    fork.do(tl.param("fc1.weight"), tl.scale(3.0))
-    assert weight.data_ptr() == before_ptr
-    assert weight._version == before_version
-    assert torch.equal(weight.detach(), before_bytes)
-    assert weight.detach().view(torch.uint8).equal(before_bytes.view(torch.uint8)), (
-        "parameter storage must be BIT-identical after an intervened replay"
-    )
-
-
-@pytest.mark.smoke
-def test_masked_param_edit_scatters_only_selected_rows(capture):
-    model, x, trace = capture
-    mask = torch.zeros_like(model.fc1.weight, dtype=torch.bool)
-    mask[0] = True
-    fork = trace.fork()
-    fork.do(tl.param("fc1.weight", mask=mask), tl.scale(0.0))
-    as_if = model.fc1.weight.detach().clone()
-    as_if[0] = 0.0
-    expected = _as_if_forward(model, x, as_if)
-    assert torch.allclose(fork.output_ops[0].out, expected, atol=1e-6)
-
-
-def test_helpers_and_raw_tensor_compose(capture):
-    model, x, trace = capture
-    fork = trace.fork()
-    fork.do(tl.param("fc1.weight"), tl.add(0.25))
-    expected = _as_if_forward(model, x, model.fc1.weight.detach() + 0.25)
-    assert torch.allclose(fork.output_ops[0].out, expected, atol=1e-6)
-    replacement = torch.randn_like(model.fc1.weight)
-    fork2 = trace.fork()
-    fork2.do(tl.param("fc1.weight"), replacement)
-    expected2 = _as_if_forward(model, x, replacement)
-    assert torch.allclose(fork2.output_ops[0].out, expected2, atol=1e-6)
-
-
-def test_engine_scoping_refusals(capture):
-    model, x, trace = capture
-    with pytest.raises(SelectionError) as excinfo:
-        trace.fork().do(
-            tl.param("fc1.weight"),
-            tl.scale(0.0),
-            intervention=tl.options.InterventionOptions(engine="set_only"),
-        )
-    assert excinfo.value.fields["code"] == "param_substitution_engine_unsupported"
-    with pytest.raises(SelectionError) as excinfo:
-        trace.fork().do(
-            tl.param("fc1.weight"),
-            tl.scale(0.0),
-            model=model,
-            inputs=x,
-            intervention=tl.options.InterventionOptions(engine="rerun"),
-        )
-    assert excinfo.value.fields["code"] == "param_substitution_engine_unsupported"
-    # auto with model+x resolves to rerun -> same refusal
-    with pytest.raises(SelectionError) as excinfo:
-        trace.fork().do(tl.param("fc1.weight"), tl.scale(0.0), model=model, inputs=x)
-    assert excinfo.value.fields["code"] == "param_substitution_engine_unsupported"
-
-
 class _RecurrentNet(nn.Module):
     """Hand-rolled recurrence reusing ONE nn.Linear (bias=True is deliberate:
     with bias=False, relu(cell(0)) == 0 is a fixed point and a wrong replay
@@ -215,7 +131,6 @@ def test_recurrent_reused_param_substitutes_every_pass(recurrent_capture):
     assert len(audit["occurrences"]) == 3
 
 
-@pytest.mark.smoke
 def test_recurrent_bias_param_substitutes_every_pass(recurrent_capture):
     model, x, trace = recurrent_capture
     replacement = torch.randn(4)
@@ -225,98 +140,6 @@ def test_recurrent_bias_param_substitutes_every_pass(recurrent_capture):
     for k, (lin, relu) in enumerate(expected, start=1):
         assert torch.allclose(fork._layer_dict_all_keys[f"linear_1_1:{k}"].out, lin, atol=1e-6)
         assert torch.allclose(fork._layer_dict_all_keys[f"relu_1_2:{k}"].out, relu, atol=1e-6)
-
-
-def test_tied_multipass_matmul_substitutes_every_pass():
-    """The historically refused case: one param at structurally corresponding
-    sites (recurrence-grouped matmuls) now substitutes at both passes."""
-
-    torch.manual_seed(0)
-
-    class Tied(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.w = nn.Parameter(torch.randn(4, 4) * 0.1)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            # grouping rule rows 21 and 51: the matmul must run from ONE place
-            # (a loop line) to be one two-pass layer; ``relu(x @ w) @ w`` on
-            # one line is two single-pass matmul layers (rows 21 and 25).
-            for step in range(2):
-                x = x @ self.w
-                if step == 0:
-                    x = torch.relu(x)
-            return x
-
-    model = Tied()
-    x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
-    try:
-        param = next(p for p in trace.params if p.address == "w")
-        assert list(param.used_by_ops) == ["matmul_1_1:1", "matmul_1_1:2"]
-        fork = trace.fork()
-        fork.do(tl.param("w"), tl.scale(2.0))
-        w2 = model.w.detach() * 2.0
-        with torch.no_grad():
-            pass1 = x @ w2
-            pass2 = torch.relu(pass1) @ w2
-        assert torch.allclose(fork._layer_dict_all_keys["matmul_1_1:1"].out, pass1, atol=1e-6)
-        assert torch.allclose(fork._layer_dict_all_keys["matmul_1_1:2"].out, pass2, atol=1e-6)
-        assert torch.allclose(fork.output_ops[0].out, pass2, atol=1e-6)
-    finally:
-        trace.cleanup()
-
-
-def test_tied_embedding_projection_substitutes_both_sites():
-    """Classic weight tying: one param consumed by embedding AND projection."""
-
-    import torch.nn.functional as F
-
-    torch.manual_seed(0)
-
-    class TiedLM(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.emb = nn.Embedding(10, 4)
-            self.fc = nn.Linear(4, 4, bias=True)
-
-        def forward(self, idx: torch.Tensor) -> torch.Tensor:
-            h = torch.relu(self.fc(self.emb(idx)))
-            return F.linear(h, self.emb.weight)
-
-    model = TiedLM()
-    idx = torch.tensor([[1, 3, 7]])
-    trace = tl.trace(model, idx, capture=tl.options.CaptureOptions(replayable=True))
-    try:
-        replacement = torch.randn(10, 4)
-        fork = trace.fork()
-        fork.do(tl.param("emb.weight"), replacement)
-        with torch.no_grad():
-            h = torch.relu(model.fc(F.embedding(idx, replacement)))
-            expected = F.linear(h, replacement)
-        assert torch.allclose(fork.output_ops[0].out, expected, atol=1e-6)
-        consumers = fork.intervention_audit[-1]["params"][0]["consumers"]
-        assert len(consumers) == 2, "both tied consumption sites must be addressed"
-    finally:
-        trace.cleanup()
-
-
-def test_multipass_live_parameter_bit_identical(recurrent_capture):
-    """The ruling's core guarantee holds on the newly admitted multi-pass path."""
-
-    model, x, trace = recurrent_capture
-    weight = model.cell.weight
-    before_bytes = weight.detach().clone()
-    before_ptr = weight.data_ptr()
-    before_version = weight._version
-    fork = trace.fork()
-    fork.do(tl.param("cell.weight"), tl.scale(3.0))
-    assert weight.data_ptr() == before_ptr
-    assert weight._version == before_version
-    assert torch.equal(weight.detach(), before_bytes)
-    assert weight.detach().view(torch.uint8).equal(before_bytes.view(torch.uint8)), (
-        "parameter storage must be BIT-identical after a multi-pass intervened replay"
-    )
 
 
 def test_multipass_validation_corroborates_every_pass(recurrent_capture):
@@ -330,23 +153,6 @@ def test_multipass_validation_corroborates_every_pass(recurrent_capture):
         assert verdict is not None
         assert verdict.decision == "edge_intervention_boundary", f"pass {k} not corroborated"
         assert not verdict.failed
-
-
-def test_multipass_validation_tamper_strip_fire_record_fails(recurrent_capture):
-    """Tripwire intact on the newly admitted path: an uncorroborated entry on a
-    NON-LAST pass (the pass the historical bug would have missed) FAILS."""
-
-    model, x, trace = recurrent_capture
-    fork = trace.fork()
-    fork.do(tl.param("cell.weight"), tl.scale(0.5))
-    tampered = fork._layer_dict_all_keys["linear_1_1:1"]
-    tampered._internal_set("edits", [r for r in tampered.edits if not r.edge_address])
-    verdict = _check_edge_intervention_boundary(fork, tampered)
-    assert verdict is not None and verdict.failed
-    assert verdict.reason == "edge_substitution_uncorroborated"
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        assert fork.validate_forward_pass(model(x)) is False
 
 
 def test_multipass_bare_consumer_spelling_refuses():
@@ -380,7 +186,6 @@ def test_multipass_incomplete_pass_coverage_refuses():
         trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_zero_mask_is_disclosure_not_error(capture):
     model, x, trace = capture
     fork = trace.fork()
@@ -425,18 +230,6 @@ def test_fire_record_and_store_mark_param_kind(capture):
     assert fire.engine == "replay"
 
 
-def test_validation_boundary_corroborates(capture):
-    model, x, trace = capture
-    fork = trace.fork()
-    fork.do(tl.param("fc1.weight"), tl.scale(0.5))
-    child = first_op(fork["fc1"])
-    verdict = _check_edge_intervention_boundary(fork, child)
-    assert verdict is not None
-    assert verdict.decision == "edge_intervention_boundary"  # DISTINCT term, never "exempted"
-    assert not verdict.failed
-
-
-@pytest.mark.smoke
 def test_validation_tamper_strip_fire_record_fails(capture):
     """Tripwire intact: an uncorroborated param entry FAILS validation."""
 

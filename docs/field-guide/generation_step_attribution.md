@@ -13,6 +13,42 @@ The example uses a two-layer GPT-2 with random weights and a word-level
 tokenizer so it runs offline. With a real checkpoint, load the model and
 tokenizer with `from_pretrained` (a download) and keep the rest.
 
+## Minimal example on the running model
+
+This page uses [the decoder on the IOI
+prompt](running_examples.md#the-decoder-on-the-ioi-prompt). Each generation step
+predicts one next token from the last position's logits; this reads that prediction from the
+trace. The recipe below builds its own model for the method.
+
+```python
+# recipe-test: tool=transformers expected=True
+import torch
+import transformers
+
+import torchlens as tl
+
+PROMPT = "When Mary and John went to the store, John gave a drink to"
+words = PROMPT.replace(",", " ,").split()
+vocab = sorted(set(words))
+x = torch.tensor([[vocab.index(word) for word in words]])
+torch.manual_seed(0)
+config = transformers.GPT2Config(
+    vocab_size=len(vocab),
+    n_positions=32,
+    n_embd=64,
+    n_layer=2,
+    n_head=4,
+    use_cache=False,
+    attn_implementation="eager",
+)
+model = transformers.GPT2LMHeadModel(config).eval()
+
+trace = tl.trace(model, x)
+
+next_id = int(trace["lm_head"].out[0, -1].argmax())
+RESULT = vocab[next_id] in vocab
+```
+
 ## 1. Generate
 
 ```python

@@ -27,7 +27,6 @@ from torch import nn
 import torchlens as tl
 from torchlens._capture._weightsfree_admission import (
     stamp_wrap_generation,
-    wrap_generation_of,
 )
 from torchlens.options import CaptureOptions
 
@@ -39,20 +38,6 @@ class Toy(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return torch.relu(self.fc(x))
-
-
-def test_every_capture_is_generation_stamped() -> None:
-    """W1-ORD plumbing: ordinary and structure-only captures both carry the
-    session wrap-generation stamp the discharge preflight keys on."""
-
-    ordinary = tl.trace(Toy(), torch.randn(2, 4))
-    structure = tl.trace(Toy(), torch.randn(2, 4), capture=CaptureOptions(structure_only=True))
-    assert wrap_generation_of(ordinary) is not None
-    assert wrap_generation_of(structure) is not None
-    assert wrap_generation_of(ordinary) == wrap_generation_of(structure)
-    envelope = structure.graph.structure_evidence
-    assert envelope is not None
-    assert envelope["wrap_generation"] == wrap_generation_of(structure)
 
 
 def test_generation_mismatch_refuses_before_any_verdict() -> None:

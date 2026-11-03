@@ -84,7 +84,6 @@ DEMOTED: dict[str, tuple[str, ...]] = {
     ),
     "torchlens.intervention": (
         "METRIC_REGISTRY",
-        "SiteSpec",
         "TopologyDiff",
         "pearson_correlation_distance",
         "ArgComponent",

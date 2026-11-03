@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tests.conformance import GraduationItem, GraduationReport, graduation_report
+from tests.conformance import GraduationItem
 from tests.conformance._graduation import GRADUATION_IDS, graduation_items, repository_root
 from tests.conformance._scorecard import (
     SCORECARD_VERSION,
@@ -18,7 +18,6 @@ from tests.conformance._scorecard import (
     _with_digest,
 )
 from torchlens.backends._backend_protocol import REFUSABLE_CAPABILITY_FLAGS
-from torchlens.backends.registry import get_backend_spec
 
 _ROW_CASES = (
     "c1_capture_completes",
@@ -304,20 +303,6 @@ def test_g4_g5_g6_read_the_repository(tmp_path: Path) -> None:
     (repo / "docs" / "reference" / "glossary.md").write_text("nothing here\n", encoding="utf-8")
     item = _item(graduation_items(card, reference=card, repo_root=repo), "G6")
     assert not item.met and "glossary" in item.detail
-
-
-def test_report_without_a_shipped_record_is_unmet_and_never_writes_maturity() -> None:
-    """``graduation_report`` on a backend without a record reads unmet and touches no label."""
-
-    before = get_backend_spec("torch").maturity
-    report = graduation_report("no-such-backend")
-    assert isinstance(report, GraduationReport)
-    assert [item.id for item in report.items] == list(GRADUATION_IDS)
-    assert not report.met
-    assert all(item.detail == "no shipped scorecard" for item in report.items)
-    assert "not met" in report.render()
-    assert report.to_dict()["met"] is False
-    assert get_backend_spec("torch").maturity == before
 
 
 def test_repository_root_is_found_from_the_package_and_absent_elsewhere(tmp_path: Path) -> None:

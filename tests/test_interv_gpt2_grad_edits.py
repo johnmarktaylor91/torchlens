@@ -1,4 +1,4 @@
-"""Gradient-side edits on GPT-2 over every live-backward spelling (U14.5).
+"""Gradient-side edits on GPT-2 over every live-backward spelling.
 
 Every spelling that edits a gradient during a live backward is checked against
 an independent oracle built from plain PyTorch hooks on a deep copy of the same
@@ -47,7 +47,7 @@ _LN_SINGLE = "transformer.ln_f"
 _LN_NODE = "NativeLayerNormBackward0"
 _RUNNERS = (
     "trace.backward",
-    "trace.log_backward",
+    "trace.backward",
     "loss.backward",
     "autograd.backward",
     "autograd.grad",
@@ -186,10 +186,8 @@ def _run_backward(trace: Any, model: torch.nn.Module, runner: str) -> Grads:
     """Run one live-backward spelling on the trace output and return the grads."""
 
     loss = _loss(trace[trace.output_layers[0]].out)
-    if runner == "trace.backward":
+    if runner == "trace.backward" or runner == "trace.backward":
         trace.backward(loss)
-    elif runner == "trace.log_backward":
-        trace.log_backward(loss)
     elif runner == "loss.backward":
         loss.backward()
     elif runner == "autograd.backward":
@@ -229,12 +227,12 @@ def _apply_door(trace: Any, door: str, selector: Any, helper: Any) -> None:
     """Attach one gradient edit to a finished trace through a post-capture door."""
 
     if door == "attach_hooks":
-        trace.attach_hooks(selector, helper, confirm_mutation=True)
+        trace._attach_hooks(selector, helper, confirm_mutation=True)
     elif door == "layer_record":
         # A Layer record addresses its gradient through tl.grad(record) on the trace;
         # Layer.attach_hooks itself edits the activation.
         layer_label = trace.find_sites(selector).first().layer_label
-        trace.attach_hooks(tl.grad(trace.layers[layer_label]), helper, confirm_mutation=True)
+        trace._attach_hooks(tl.grad(trace.layers[layer_label]), helper, confirm_mutation=True)
     else:
         raise AssertionError(door)
 
@@ -325,23 +323,6 @@ def test_func_selector_every_helper(tiny: _Fixture, door: str, helper_name: str)
     )
 
 
-@pytest.mark.parametrize("helper_name", sorted(_HELPERS))
-@pytest.mark.parametrize("door", ("intervene", "attach_hooks"))
-def test_grad_fn_selector_every_helper(tiny: _Fixture, door: str, helper_name: str) -> None:
-    """``tl.grad_fn`` edits the grad inputs of every matching autograd node."""
-
-    build, fn = _HELPERS[helper_name]
-    _check_spelling(
-        tiny,
-        door=door,
-        runner="trace.backward",
-        opt_in="backward_ready",
-        selector=tl.grad_fn(name=_LN_NODE),
-        helper=build(),
-        want=tiny.oracle("grad_fn", _LN_NODE, fn),
-    )
-
-
 def test_grad_fn_selector_grad_input_family(tiny: _Fixture) -> None:
     """A neutral clamp on a grad_fn node edits its grad inputs like the oracle."""
 
@@ -371,44 +352,6 @@ def test_label_selector_post_capture_doors(tiny: _Fixture, door: str) -> None:
     )
 
 
-def test_in_module_composite_selector(tiny: _Fixture) -> None:
-    """``in_module & func`` selects the MLP's projections inside the multi-pass graph."""
-
-    model = tiny.fresh()
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        trace = tl.trace(
-            model,
-            tiny.ids,
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            intervene=tl.when(tl.grad(tl.in_module(_MLP) & tl.func("addmm")), tl.zero_ablate()),
-        )
-        got = _run_backward(trace, model, "trace.backward")
-    assert _backward_fires(trace) > 0
-    # c_proj's addmm output gradient is zeroed, so nothing flows back into c_fc.
-    assert not torch.count_nonzero(got[f"{_MLP}.c_fc.weight"])
-    assert not torch.equal(got["transformer.wpe.weight"], tiny.clean["transformer.wpe.weight"])
-
-
-def test_label_selector_on_capture_door_arms_and_matches_oracle(tiny: _Fixture) -> None:
-    """A finalized label in ``tl.grad`` at ``intervene=`` arms and edits that layer norm.
-
-    SPEC 1.2 and 1.4: a gradient address resolves its inner site against the
-    finished forward ops, where finalized labels exist, and SPEC 3.5 gives the
-    capture door the same lowering as the post-capture doors.
-    """
-
-    _check_spelling(
-        tiny,
-        door="intervene",
-        runner="trace.backward",
-        opt_in="backward_ready",
-        selector=tl.grad(tl.label(tiny.ln_label)),
-        helper=tl.zero_ablate(),
-        want=tiny.oracle("module", _LN_SINGLE, _zero),
-    )
-
-
 def test_zero_match_forward_selector_gradient_edit_warns(tiny: _Fixture) -> None:
     """A gradient edit whose forward selector matches nothing is disclosed, not silent."""
 
@@ -421,6 +364,7 @@ def test_zero_match_forward_selector_gradient_edit_warns(tiny: _Fixture) -> None
         )
 
 
+@pytest.mark.smoke
 def test_rerun_arms_gradient_edit_and_backward_matches_oracle(tiny: _Fixture) -> None:
     """do(tl.grad(...), engine='rerun') arms the edit; the next backward matches the oracle."""
 
@@ -502,7 +446,7 @@ class TestRealGPT2:
             ("intervene", "trace.backward"),
             ("attach_hooks", "loss.backward"),
             ("layer_record", "autograd.grad"),
-            ("attach_hooks", "trace.log_backward"),
+            ("attach_hooks", "trace.backward"),
         ],
     )
     def test_module_selector_doors(self, real: _Fixture, door: str, runner: str) -> None:

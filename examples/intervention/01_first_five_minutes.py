@@ -59,8 +59,7 @@ def main() -> None:
     assert relu_site.func_name == "relu"
 
     edited = log.fork("zero_relu")
-    edited.attach_hooks(tl.func("relu"), tl.zero_ablate())
-    edited.push()
+    edited.do(tl.func("relu"), tl.zero_ablate())
 
     clean_out = log.output_ops[-1].out
     edited_out = edited.output_ops[-1].out

@@ -116,6 +116,7 @@ def test_flat_nary_or_spec_resolves(conv_trace: Any) -> None:
     assert conv_trace.find_sites(spec, max_fanout=10**6).labels() == expected
 
 
+@pytest.mark.smoke
 def test_nary_live_backward_matcher_does_not_crash() -> None:
     """FIX: three-child composites crashed ``_live_backward_context_matches``."""
 
@@ -128,7 +129,7 @@ def test_nary_live_backward_matcher_does_not_crash() -> None:
             _conv_input().requires_grad_(True),
             capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
         )
-        armed.log_backward(armed[armed.output_layers[0]].out.sum(), retain_graph=True)
+        armed.backward(armed[armed.output_layers[0]].out.sum(), retain_graph=True)
     grad_fns = {g.label: g for g in armed.autograd.grad_fns}
     # Three node-universe children: a bare forward kind joined to a node
     # selector refuses since the gradient-sites change, so the n-ary shape is
@@ -190,12 +191,14 @@ def test_flat_nary_followed_by_conjunction_capture() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_contains_raw_only_substring_matches_nothing_posthoc(conv_trace: Any) -> None:
     """FIX: ``contains("_raw")`` matched every op via ``_layer_label_raw``."""
 
     assert conv_trace.find_sites(tl.label_contains("_raw"), max_fanout=10**6).labels() == ()
 
 
+@pytest.mark.smoke
 def test_regex_raw_suffix_matches_nothing_posthoc(conv_trace: Any) -> None:
     """FIX: ``regex(r"_raw$")`` matched every op via ``_layer_label_raw``."""
 
@@ -303,6 +306,7 @@ def test_live_capability_refusal_is_site_resolution_subclass() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_followed_by_spec_rebuilds_for_capture_lifecycle() -> None:
     """FIX: capture-lifecycle deserialization refused its own window sugar."""
 
@@ -313,6 +317,7 @@ def test_followed_by_spec_rebuilds_for_capture_lifecycle() -> None:
     assert repr(rebuilt) == repr(tl.followed_by(tl.func("relu")))
 
 
+@pytest.mark.smoke
 def test_preceded_by_spec_rebuilds_for_capture_lifecycle() -> None:
     """FIX: capture-lifecycle deserialization refused the lookback selector."""
 
@@ -406,7 +411,6 @@ _KIND_PAYLOADS: dict[str, Any] = {
 }
 
 
-@pytest.mark.smoke
 def test_site_upfront_refusal_set_matches_evaluator_contract() -> None:
     """Every kind the site evaluator refuses must refuse upfront, and only those.
 
@@ -493,6 +497,7 @@ def test_bare_string_live_is_exact_raw_label() -> None:
     assert fired == ["relu_1_3_raw"]
 
 
+@pytest.mark.smoke
 def test_strict_rejects_nested_where(conv_trace: Any) -> None:
     """strict=True refuses ``tl.where`` anywhere in the tree (walk sweep)."""
 

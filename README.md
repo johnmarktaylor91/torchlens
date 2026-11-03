@@ -242,7 +242,7 @@ Capture per-op gradients with the same API:
 ```python
 x = torch.randn(1, 3, 224, 224, requires_grad=True)
 log = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True))
-log.log_backward(log[log.output_layers[0]].out.sum())
+log.backward(log[log.output_layers[0]].out.sum())
 
 grad = log['relu_1_2'].grad      # gradient tensor flowing through that op
 print(grad.shape)                 # torch.Size([1, 64, 55, 55])
@@ -252,7 +252,7 @@ Narrow gradient saving to specific ops with the same selector predicates:
 
 ```python
 log = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=tl.func('relu')))
-log.log_backward(log[log.output_layers[0]].out.sum())
+log.backward(log[log.output_layers[0]].out.sum())
 ```
 
 <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/gradients.png" width=30% height=30%>
@@ -393,11 +393,13 @@ scaled = tl.trace(model, x, save=tl.func('relu'),
 
 Available helpers: `tl.zero_ablate`, `tl.mean_ablate`,
 `torchlens.intervention.scramble_elements`, `tl.steer`, `tl.scale`, `tl.clamp`,
-`tl.add_noise`, `tl.project_onto`, `tl.project_out`, `tl.swap_with`, `tl.splice_module`.
+`tl.add_noise`, `tl.project_onto`, `tl.project_out`, `tl.splice_module`, and
+`torchlens.intervention.helpers.swap_with`.
 
 For post-hoc DAG replay and isolated experiments, capture with
-`capture=tl.options.CaptureOptions(intervention_ready=True)` and use `log.fork()` + `log.push()` /
-`log.run(model, x)`. Live hooks during rerun require capture-time selectors
+`capture=tl.options.CaptureOptions(replayable=True)` and use `log.fork()` +
+`log.do(site, edit)` (replays the saved graph) / `log.run(model, x)`. Live hooks during
+rerun require capture-time selectors
 (e.g. `tl.func(...)`, `tl.module(...)`); finalized labels resolve via
 `log.find_sites(...)`. See [docs/intervention_api.md](docs/intervention_api.md)
 for the full reference.
@@ -516,6 +518,10 @@ if torch.cuda.is_available():
 aten_log = tl.trace(model, torch.randn(1, 3, 64, 64),
                     capture=tl.options.CaptureOptions(aten_ops=True))
 print([row.operator for row in aten_log.ops[0].aten_ops])
+# ... and keep what each ATen call returned (snapshots, under the same save= policy)
+aten_vals = tl.trace(model, torch.randn(1, 3, 64, 64),
+                     capture=tl.options.CaptureOptions(aten_ops="values"))
+print([(row.operator, tuple(row.out.shape)) for row in aten_vals.ops[0].aten_ops])
 ```
 
 Dataset-level statistics stream in constant memory -- including *exact*

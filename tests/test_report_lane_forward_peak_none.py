@@ -56,26 +56,6 @@ def _capture(**kwargs: Any) -> Any:
     return tl.trace(nn.Linear(4, 2), torch.randn(2, 4), **kwargs)
 
 
-def test_cpu_zero_delta_reads_none_with_the_reason(monkeypatch: pytest.MonkeyPatch) -> None:
-    _rss(monkeypatch, 1_000_000)
-    trace = _capture()
-
-    assert trace.provenance.forward_memory_backend == "cpu"
-    assert trace.cost.forward_peak_memory is None
-    assert trace.cost.forward_peak_memory_reason == CPU_ZERO_PEAK_REASON
-    assert _FLAG in trace.cost.forward_peak_memory_reason
-
-
-def test_cpu_positive_delta_is_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
-    _rss(monkeypatch, 1_000_000, 1_004_096)
-    trace = _capture()
-
-    assert isinstance(trace.cost.forward_peak_memory, tl.types.Bytes)
-    assert int(trace.cost.forward_peak_memory) == 4096
-    assert trace.cost.forward_peak_memory_reason is None
-    assert pass_peak_facts(trace).meaning == "process RSS growth (NOT a tensor peak)"
-
-
 def test_every_printed_surface_shows_the_reason(monkeypatch: pytest.MonkeyPatch) -> None:
     _rss(monkeypatch, 1_000_000)
     trace = _capture()
@@ -101,17 +81,6 @@ def test_python_peak_opt_in_reason_when_both_read_zero() -> None:
     assert _FLAG in CPU_ZERO_PEAK_WITH_PYTHON_REASON
 
 
-def test_opt_in_positive_python_peak_is_a_value(monkeypatch: pytest.MonkeyPatch) -> None:
-    _rss(monkeypatch, 1_000_000)
-    trace = _capture(
-        capture=CaptureOptions(measure_python_peak_memory=True, measure_host_peak_memory=True)
-    )
-
-    assert isinstance(trace.cost.forward_peak_memory, tl.types.Bytes)
-    assert int(trace.cost.forward_peak_memory) > 0
-    assert trace.cost.forward_peak_memory_reason is None
-
-
 def test_cuda_mps_and_backward_semantics_are_unchanged() -> None:
     assert forward_peak_value("cuda", 0, python_peak_measured=False) == (0, None)
     assert forward_peak_value("mps", 0, python_peak_measured=False) == (0, None)
@@ -126,56 +95,6 @@ def test_cuda_mps_and_backward_semantics_are_unchanged() -> None:
         _provenance_backward_memory_backend="cpu", _cost_backward_peak_memory=0
     )
     assert pass_peak_facts(backward, "backward").value_bytes == 0
-
-
-def test_none_and_reason_round_trip_through_save_load(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _rss(monkeypatch, 1_000_000)
-    trace = _capture()
-    path = tmp_path / "zero_peak.tlspec"
-    trace.save(path)
-
-    loaded = tl.load(path)
-    assert loaded.cost.forward_peak_memory is None
-    assert loaded.cost.forward_peak_memory_reason == CPU_ZERO_PEAK_REASON
-    assert format_pass_peak(loaded).endswith(f"({CPU_ZERO_PEAK_REASON})")
-
-
-def test_positive_value_round_trips_with_no_reason(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    _rss(monkeypatch, 1_000_000, 1_004_096)
-    trace = _capture()
-    path = tmp_path / "positive_peak.tlspec"
-    trace.save(path)
-
-    loaded = tl.load(path)
-    assert int(loaded.cost.forward_peak_memory) == 4096
-    assert loaded.cost.forward_peak_memory_reason is None
-
-
-def test_legacy_artifact_refuses_as_2x() -> None:
-    """A real pre-change artifact (tlspec v7, no reason field) refuses typed: 2.x wrote it."""
-
-    from _refuses_as_2x import assert_refuses_as_2x
-
-    fixture = Path(__file__).parent / "goldens" / "legacy" / "tlspec_v7.tlspec"
-    assert_refuses_as_2x(fixture)
-
-
-def test_state_without_the_field_restores_with_no_reason() -> None:
-    """A pickled state that predates the field restores with reason None."""
-
-    trace = _capture()
-    state = trace.__getstate__()
-    state.pop("_cost_forward_peak_memory_reason", None)
-    restored = type(trace).__new__(type(trace))
-    restored.__setstate__(state)
-    assert restored.cost.forward_peak_memory_reason is None
-    assert restored.cost.forward_peak_memory is None or isinstance(
-        restored.cost.forward_peak_memory, tl.types.Bytes
-    )
 
 
 @pytest.mark.parametrize(

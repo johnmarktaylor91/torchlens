@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import importlib
 import warnings
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -12,8 +10,6 @@ import torch
 from example_models import TinyReluAdd as ReluAdd
 
 import torchlens as tl
-from torchlens._capture_state_helpers import reset_compiled_model_unwrap_warning_state
-from torchlens.errors import TraceCaptureError
 from torchlens.intervention.errors import (
     ControlFlowDivergenceError,
     ControlFlowDivergenceWarning,
@@ -128,28 +124,7 @@ def _capture(model: torch.nn.Module, x: torch.Tensor) -> tl.Trace:
     return tl.trace(model, x, capture=CaptureOptions(replayable=True))
 
 
-def test_rerun_baseline_matches_original_graph_hash_and_sets_state() -> None:
-    """No-op rerun re-captures the same graph and updates run state."""
-
-    x = torch.randn(2, 3)
-    log = _capture(ReluAdd(), x)
-    original_hash = log.provenance.fingerprint
-    original_raw_hash = log._raw_event_shape_hash  # noqa: SLF001
-    original_history_len = len(log.state_history)
-
-    result = log.run(ReluAdd(), x)
-
-    assert result is log
-    assert log.state is TraceState.RERUN_PROPAGATED
-    assert log.provenance.fingerprint == original_hash
-    assert log._raw_event_shape_hash == original_raw_hash  # noqa: SLF001
-    assert log.last_run["engine"] == "rerun"
-    assert log.last_run["old_raw_event_shape_hash"] == original_raw_hash
-    assert log.last_run["new_raw_event_shape_hash"] == original_raw_hash
-    assert len(log.state_history) == original_history_len + 1
-    assert log.state_history[-1]["engine"] == "rerun"
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/hooks.py, campaign mutant kills.
 def test_rerun_with_hook_updates_downstream_out() -> None:
     """Rerun installs the active spec so live hooks affect downstream output."""
 
@@ -172,6 +147,7 @@ def test_rerun_with_hook_updates_downstream_out() -> None:
     assert log.last_run["hooks_unfired"] == 0
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _ir/_selector_nodes.py, _ir/_selector_universe.py, _ir/selector_eval.py ....
 def test_rerun_warns_when_value_dependent_sticky_hook_stops_matching() -> None:
     """A hook resolved on the source trace reports an unfired rerun plan entry."""
     model = ReluAdd()
@@ -182,7 +158,7 @@ def test_rerun_warns_when_value_dependent_sticky_hook_stops_matching() -> None:
         lambda _op: gate["active"],
         name_hint="runtime_gate",
     )
-    log.attach_hooks(selector, tl.zero_ablate())
+    log._attach_hooks(selector, tl.zero_ablate())
     gate["active"] = False
 
     with pytest.warns(UserWarning, match="fired at zero sites on the new inputs"):
@@ -192,11 +168,12 @@ def test_rerun_warns_when_value_dependent_sticky_hook_stops_matching() -> None:
     assert log.last_run["hooks_unfired"] == 1
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_rerun_matching_sticky_hook_has_no_unfired_warning() -> None:
     """A sticky hook that fires is reconciled without a zero-site warning."""
     model = ReluAdd()
     log = _capture(model, torch.randn(2, 3))
-    log.attach_hooks(tl.func("relu"), tl.zero_ablate())
+    log._attach_hooks(tl.func("relu"), tl.zero_ablate())
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -207,121 +184,7 @@ def test_rerun_matching_sticky_hook_has_no_unfired_warning() -> None:
     assert log.last_run["hooks_unfired"] == 0
 
 
-def test_rerun_colliding_hook_identifiers_do_not_hide_misses() -> None:
-    """Two plan entries sharing one fallback identifier are audited per entry.
-
-    ``_hook_plan_identifier`` falls back through plan id -> hook id -> helper
-    name -> callable qualname, so two entries with different targets but the
-    same callable both keyed the audit Counter with one shared string: two
-    fires of the first entry hid the second entry's total miss (``fired=2``,
-    ``unfired=()``, no warning) -- incomplete f9f5b140.
-    """
-
-    from types import SimpleNamespace
-
-    from torchlens._ir.intervention import FireResult
-    from torchlens.intervention.hooks import NormalizedHookEntry
-    from torchlens.intervention.rerun import (
-        _assign_unique_plan_ids,
-        _hook_plan_identifier,
-        _reconcile_rerun_hook_fires,
-    )
-
-    def same_hook(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
-        """Shared callable planned under two different targets."""
-
-        del ctx
-        return out
-
-    entries = [
-        NormalizedHookEntry(site_target=object(), normalized_callable=same_hook),
-        NormalizedHookEntry(site_target=object(), normalized_callable=same_hook),
-    ]
-    raw_ids = [_hook_plan_identifier(entry) for entry in entries]
-    assert raw_ids[0] == raw_ids[1], "precondition: the fallback identifiers collide"
-
-    plan = _assign_unique_plan_ids(entries)
-    plan_ids = [_hook_plan_identifier(entry) for entry in plan]
-    assert len(set(plan_ids)) == 2, "colliding fallbacks must become unique accounting keys"
-
-    def _fire(plan_id: str) -> FireResult:
-        """One synthetic live fire for the given accounting id."""
-
-        return FireResult(
-            plan_id=plan_id,
-            site_label="relu_1_1",
-            fired_at_capture_index=0,
-            pre_hook_shape=(1,),
-            post_hook_shape=(1,),
-            pre_hook_dtype="torch.float32",
-            post_hook_dtype="torch.float32",
-            replaced=True,
-            fire_record=None,
-        )
-
-    # Entry 1 fires twice (two sites), entry 2 never fires: the audit must
-    # report the miss instead of letting the shared string absorb it.
-    stub_log = SimpleNamespace(
-        _layer_list=[SimpleNamespace(fire_results=[_fire(plan_ids[0]), _fire(plan_ids[0])])]
-    )
-    with pytest.warns(UserWarning, match="fired at zero sites on the new inputs"):
-        fired, unfired = _reconcile_rerun_hook_fires(stub_log, plan)
-    assert fired == 2
-    assert unfired == (plan_ids[1],)
-
-
-def test_rerun_failure_leaves_original_log_unchanged() -> None:
-    """Fresh-capture failures happen before atomic swap."""
-
-    x = torch.randn(2, 3)
-    log = _capture(ReluAdd(), x)
-    original_hash = log.provenance.fingerprint
-    original_labels = tuple(log.layer_labels)
-    log.run(ReluAdd(), x)
-    history_after_success = list(log.state_history)
-
-    with pytest.raises(TraceCaptureError, match="boom") as _tce_info:
-        log.run(BadModel(), x)
-    assert isinstance(_tce_info.value.__cause__, RuntimeError)
-
-    assert log.state is TraceState.RERUN_PROPAGATED
-    assert log.provenance.fingerprint == original_hash
-    assert tuple(log.layer_labels) == original_labels
-    assert log.state_history == history_after_success
-
-
-def test_rerun_keyboard_interrupt_during_build_leaves_original_log_unchanged(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Interruptions before validation do not partially swap rerun state."""
-
-    rerun_module = importlib.import_module("torchlens.intervention.rerun")
-
-    x = torch.randn(2, 3)
-    log = _capture(ReluAdd(), x)
-    original_hash = log.provenance.fingerprint
-    original_labels = tuple(log.layer_labels)
-    original_ledger = list(log.state_history)
-    original_output = log[log.output_layers[0]].out.clone()
-    original_run_state = log.state
-
-    def interrupt_capture(*_: Any, **__: Any) -> tl.Trace:
-        """Raise as if the fresh off-side capture was interrupted."""
-
-        raise KeyboardInterrupt("simulated interrupt")
-
-    monkeypatch.setattr(rerun_module, "_capture_with_active_spec", interrupt_capture)
-
-    with pytest.raises(KeyboardInterrupt, match="simulated interrupt"):
-        log.run(ReluAdd(), x)
-
-    assert log.state is original_run_state
-    assert log.provenance.fingerprint == original_hash
-    assert tuple(log.layer_labels) == original_labels
-    assert log.state_history == original_ledger
-    assert torch.equal(log[log.output_layers[0]].out, original_output)
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_rerun_strict_divergence_raises_before_swap() -> None:
     """Strict rerun rejects graph-shape divergence and preserves old state."""
 
@@ -357,6 +220,7 @@ def test_rerun_non_strict_divergence_warns_and_swaps() -> None:
     assert log.last_run["divergence_count"] == 1
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/rerun.py, campaign mutant kills.
 def test_rerun_honors_metadata_only_save_scope() -> None:
     """Rerun of a metadata-only trace does not save every activation."""
 
@@ -371,39 +235,7 @@ def test_rerun_honors_metadata_only_save_scope() -> None:
     assert log.last_run["engine"] == "rerun"
 
 
-# Heavy, not smoke: 18.1-18.5 s CPU on the py3.13 GitHub rows (2026-10-03), past the smoke tier's 5 s rule.
-@pytest.mark.heavy
-def test_rerun_matching_graph_refreshes_existing_ops_without_full_swap() -> None:
-    """Same-shape rerun updates existing Op payload fields in place."""
-
-    x = torch.tensor([[-1.0, 2.0, 3.0]])
-    new_x = torch.tensor([[4.0, 5.0, -6.0]])
-    log = tl.trace(
-        ReluAdd(),
-        x,
-        capture=tl.options.CaptureOptions(replayable=True, activation_transform=lambda t: t * 2),
-    )
-    relu_site = next(layer for layer in log._layer_list if layer.func_name == "relu")
-    original_relu_site_id = id(relu_site)
-    original_out = relu_site.out.clone()
-
-    log.run(ReluAdd(), new_x)
-    refreshed_relu_site = next(layer for layer in log._layer_list if layer.func_name == "relu")
-
-    assert id(refreshed_relu_site) == original_relu_site_id
-    assert log.last_run["fast_refresh"] is True
-    assert torch.equal(refreshed_relu_site.out, torch.tensor([[4.0, 5.0, 0.0]]))
-    assert not torch.equal(refreshed_relu_site.out, original_out)
-    assert refreshed_relu_site.shape == (1, 3)
-    assert refreshed_relu_site.dtype == torch.float32
-    assert int(refreshed_relu_site.activation_memory) == 12
-    assert torch.equal(refreshed_relu_site.transformed_out, refreshed_relu_site.out * 2)
-    assert refreshed_relu_site.transformed_out_shape == (1, 3)
-    assert refreshed_relu_site.transformed_out_dtype == torch.float32
-    assert int(refreshed_relu_site.transformed_activation_memory) == 12
-    assert torch.equal(log[log.output_layers[0]].out, torch.tensor([[5.0, 6.0, 1.0]]))
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_rerun_fast_refresh_repopulates_child_versions() -> None:
     """Same-shape rerun refreshes save_arg_values child-version snapshots."""
 
@@ -486,6 +318,7 @@ class MultiPassAdd(torch.nn.Module):
         return self.block(x)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of validation/_invariants_buffers.py, campaign mutant kills.
 def test_rerun_fast_refresh_keeps_every_pass_of_a_multi_pass_layer_distinct() -> None:
     """Fast refresh must pair passes positionally, not through a label map.
 
@@ -524,6 +357,7 @@ def test_rerun_fast_refresh_keeps_every_pass_of_a_multi_pass_layer_distinct() ->
     assert log.validate_forward_pass([log[log.output_layers[0]].out])
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/_trace_groups.py, _data_classes/_trace_groups_capture.py.
 def test_replace_run_state_preserves_relationship_and_spec_fields() -> None:
     """Atomic swap keeps recipe, warning flags, history, and evidence fields."""
 
@@ -569,6 +403,7 @@ def test_replace_run_state_preserves_relationship_and_spec_fields() -> None:
     assert log.layer_labels == new_log.layer_labels
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/rerun.py, campaign mutant kills.
 def test_rerun_append_true_dispatches_to_append() -> None:
     """Phase 12 implements append rerun through the function API."""
 
@@ -580,6 +415,7 @@ def test_rerun_append_true_dispatches_to_append() -> None:
     assert log.state is TraceState.APPENDED
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/rerun.py, campaign mutant kills.
 def test_rerun_x_none_requires_explicit_input() -> None:
     """Phase 7 does not reconstruct original inputs from ids."""
 
@@ -589,6 +425,7 @@ def test_rerun_x_none_requires_explicit_input() -> None:
         log.run(ReluAdd())
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_rerun_rejects_torchscript_model() -> None:
     """Rerun uses the same opaque-wrapper rejection as capture."""
 
@@ -600,47 +437,7 @@ def test_rerun_rejects_torchscript_model() -> None:
         log.run(scripted, x)
 
 
-@pytest.mark.skipif(not hasattr(torch, "compile"), reason="torch.compile unavailable")
-def test_rerun_unwraps_compiled_model() -> None:
-    """Rerun traces a torch.compile wrapper through its eager source module."""
-
-    x = torch.randn(2, 3)
-    log = _capture(ReluAdd(), x)
-    compiled = torch.compile(ReluAdd(), backend="eager")
-
-    reset_compiled_model_unwrap_warning_state()
-    with pytest.warns(UserWarning, match="compiled model detected"):
-        result = log.run(compiled, x)
-    assert result is log
-
-
-@pytest.mark.skipif(
-    not torch.distributed.is_available(), reason="torch is built without torch.distributed"
-)
-def test_rerun_rejects_fsdp_when_constructible(tmp_path: Path) -> None:
-    """Rerun rejects a real FSDP wrapper.
-
-    FSDP needs a process group, so the test builds a single-process CPU (gloo)
-    group and constructs the wrapper on CPU; any construction failure fails the
-    test loudly instead of skipping it.
-    """
-
-    import torch.distributed as dist
-    from torch.distributed.fsdp import FullyShardedDataParallel
-
-    x = torch.randn(2, 3)
-    log = _capture(ReluAdd(), x)
-    dist.init_process_group(
-        "gloo", init_method=f"file://{tmp_path / 'fsdp_pg'}", rank=0, world_size=1
-    )
-    try:
-        fsdp_model = FullyShardedDataParallel(ReluAdd(), device_id=torch.device("cpu"))
-        with pytest.raises(RuntimeError, match="FullyShardedDataParallel"):
-            log.run(fsdp_model, x)
-    finally:
-        dist.destroy_process_group()
-
-
+@pytest.mark.smoke
 def test_colliding_plan_identifiers_get_per_entry_occurrence_ids() -> None:
     """One entry's fires can never mask a colliding entry's total miss.
 

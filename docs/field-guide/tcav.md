@@ -8,6 +8,30 @@ class score. TorchLens supplies the activations, the gradients and the
 steering; TCAV itself stays a recipe. For a packaged TCAV with its statistics,
 use Captum's `captum.concept.TCAV`.
 
+## Minimal example on the running model
+
+This page uses [ResNet-18 on one
+image](running_examples.md#resnet-18-on-one-image). TCAV learns a concept
+direction from one layer's activations; `tl.extract` returns `layer3`'s for the running CNN.
+The recipe below builds its own model for the method.
+
+```python
+# recipe-test: tool=torchlens expected=True
+import torch
+import torchvision
+
+import torchlens as tl
+
+torch.manual_seed(0)
+model = torchvision.models.resnet18(weights=None).eval()
+x = torch.rand(1, 3, 224, 224)
+
+trace = tl.trace(model, x)
+
+acts = tl.extract(model, x, ["layer3"])["layer3"]
+RESULT = tuple(acts.shape) == (1, 256, 14, 14)
+```
+
 ## Setup: a model whose class depends on a known direction
 
 The toy task makes the answer known: class 1 means the input points along a
@@ -89,7 +113,7 @@ gradient during one backward pass.
 def tcav_score(direction, x, target=1):
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True))
     logits = trace[trace.output_layers[0]].out
-    trace.log_backward(logits[:, target].sum())  # rows are independent: per-example grads
+    trace.backward(logits[:, target].sum())  # rows are independent: per-example grads
     grads = trace[SITE].grad
     return (grads @ direction > 0).float().mean().item()
 

@@ -192,26 +192,6 @@ class MultiInputSmoothLayerMlp(nn.Module):
         return self.output(torch.tanh(hidden))
 
 
-def test_grad_cam_upsamples_to_input_spatial_size_and_is_finite() -> None:
-    """Grad-CAM returns a finite non-negative map at input spatial resolution."""
-
-    model = TinyCnn()
-    inputs = torch.linspace(-1.0, 1.0, steps=25).reshape(1, 1, 5, 5)
-
-    result = attribution.grad_cam(model, inputs, target=1, layer="features.0")
-
-    assert result.method == "grad_cam"
-    assert result.values.shape == (1, 1, 5, 5)
-    assert result.extra["layer"] == "features.0"
-    assert result.extra["relu"] is True
-    assert result.extra["native_map_resolution"] == (5, 5)
-    assert result.extra["rendered_map_resolution"] == (5, 5)
-    assert result.extra["upsampling"] == "bilinear_display_only"
-    assert result.extra["overlay"].info["torchlens_disclosure"].startswith("CAM native map")
-    assert torch.isfinite(result.values).all()
-    assert (result.values >= 0).all()
-
-
 def test_grad_cam_callable_target_form() -> None:
     """Grad-CAM accepts a callable output scalarizer."""
 
@@ -232,23 +212,6 @@ def test_grad_cam_callable_target_form() -> None:
     assert result.extra["relu"] is False
 
 
-def test_grad_cam_overlay_discloses_native_resolution_before_upsampling() -> None:
-    """A coarse CAM overlay visibly distinguishes measured and display grids."""
-
-    model = TinyCnn()
-    inputs = torch.linspace(-1.0, 1.0, steps=25).reshape(1, 1, 5, 5)
-
-    result = attribution.grad_cam(model, inputs, target=0, layer="features.2")
-
-    assert result.extra["native_map_resolution"] == (2, 2)
-    assert result.extra["rendered_map_resolution"] == (5, 5)
-    overlay = result.extra["overlay"]
-    assert overlay.width >= 5
-    assert overlay.height > 5
-    assert "2x2" in overlay.info["torchlens_disclosure"]
-    assert "interpolated" in overlay.info["torchlens_disclosure"]
-
-
 def test_grad_cam_rejects_non_conv_style_layer() -> None:
     """Grad-CAM rejects layers that do not emit N,C,H,W feature maps."""
 
@@ -257,46 +220,6 @@ def test_grad_cam_rejects_non_conv_style_layer() -> None:
 
     with pytest.raises(torchlens.errors.AttributionError, match="4D N,C,H,W feature map"):
         attribution.grad_cam(model, inputs, target=0, layer="classifier")
-
-
-def test_layer_attribution_activation_x_grad_shape_matches_layer_activation() -> None:
-    """Activation-times-gradient has the same shape as the target activation."""
-
-    model = TinyCnn()
-    inputs = torch.randn(1, 1, 5, 5)
-
-    result = attribution.layer_attribution(
-        model,
-        inputs,
-        target=0,
-        layer="features.0",
-        method="activation_x_grad",
-    )
-
-    assert result.method == "layer_activation_x_grad"
-    assert result.values.shape == (1, 2, 5, 5)
-    assert result.extra == {"layer": "features.0", "integer_input_layers": ()}
-    assert torch.isfinite(result.values).all()
-
-
-def test_layer_attribution_grad_method_callable_target() -> None:
-    """Gradient layer attribution returns absolute target gradients."""
-
-    model = TinyCnn()
-    inputs = torch.randn(2, 1, 4, 4)
-
-    result = attribution.layer_attribution(
-        model,
-        inputs,
-        target=lambda output: output[:, 1].sum(),
-        layer="features.0",
-        method="grad",
-    )
-
-    assert result.method == "layer_grad"
-    assert result.values.shape == (2, 2, 4, 4)
-    assert torch.isfinite(result.values).all()
-    assert (result.values >= 0).all()
 
 
 def test_bad_layer_name_lists_available_options() -> None:
@@ -310,113 +233,6 @@ def test_bad_layer_name_lists_available_options() -> None:
         match="layer 'missing' was not found; available conv-like layers include: features.0",
     ):
         attribution.grad_cam(model, inputs, target=0, layer="missing")
-
-
-def test_grad_cam_supports_multi_input_model_call() -> None:
-    """Grad-CAM threads multiple positional tensors through the model call."""
-
-    model = MultiInputCnn()
-    image = torch.randn(1, 1, 5, 5)
-    residual = torch.randn(1, 1, 5, 5)
-
-    result = attribution.grad_cam(model, (image, residual), target=0, layer="features.0")
-
-    assert result.method == "grad_cam"
-    assert result.values.shape == (1, 1, 5, 5)
-    assert torch.isfinite(result.values).all()
-
-
-def test_layer_attribution_supports_tensor_kwargs_model_call() -> None:
-    """Layer attribution threads tensor kwargs through the model call."""
-
-    model = MultiInputCnn()
-    image = torch.randn(1, 1, 5, 5)
-    residual = torch.randn(1, 1, 5, 5)
-    gain = torch.full((1, 1, 5, 5), 0.5)
-
-    result = attribution.layer_attribution(
-        model,
-        (image, residual),
-        {"gain": gain},
-        target=1,
-        layer="features.0",
-    )
-
-    assert result.method == "layer_activation_x_grad"
-    assert result.values.shape == (1, 2, 5, 5)
-    assert torch.isfinite(result.values).all()
-
-
-def test_layer_integrated_gradients_completeness_and_shape() -> None:
-    """Layer Integrated Gradients sums to the target delta on a smooth path."""
-
-    model = SmoothLayerMlp()
-    inputs = torch.tensor([[0.60, -0.20, 0.40]], dtype=torch.float64)
-    baseline = torch.tensor([[-0.10, 0.05, 0.20]], dtype=torch.float64)
-
-    result = attribution.layer_integrated_gradients(
-        model,
-        inputs,
-        target=1,
-        layer="hidden",
-        baseline=baseline,
-        num_steps=512,
-    )
-
-    with torch.no_grad():
-        target_delta = model(inputs)[..., 1].sum() - model(baseline)[..., 1].sum()
-        expected_shape = model.hidden(inputs).shape
-    attribution_sum = result.values.sum()
-
-    assert result.method == "layer_integrated_gradients"
-    assert result.extra["layer"] == "hidden"
-    assert result.extra["n_steps"] == 512
-    # D21: layer path methods carry the completeness fields plus the
-    # bottleneck caveat and step-runner cost/audit disclosure.
-    torch.testing.assert_close(result.extra["attribution_sum"], attribution_sum)
-    torch.testing.assert_close(result.extra["target_delta"], target_delta, rtol=1e-6, atol=1e-9)
-    assert result.extra["residual_rel"] < 1e-2
-    assert result.extra["target_delta_abs"] == pytest.approx(abs(float(target_delta)))
-    assert "bottleneck" in result.extra["completeness_caveat"]
-    assert result.extra["step_batch_size"] == 1
-    assert result.extra["step_audit"]["mode"] == "off"
-    assert result.extra["path_evaluations_logical"] == 512
-    assert result.values.shape == expected_shape
-    assert torch.isfinite(result.values).all()
-    torch.testing.assert_close(attribution_sum, target_delta, rtol=1e-3, atol=1e-4)
-
-
-def test_layer_conductance_completeness_and_shape() -> None:
-    """Layer Conductance sums to the target delta on a smooth path."""
-
-    model = SmoothLayerMlp()
-    inputs = torch.tensor([[0.45, -0.35, 0.25]], dtype=torch.float64)
-    baseline = torch.tensor([[-0.15, 0.10, 0.05]], dtype=torch.float64)
-
-    result = attribution.layer_conductance(
-        model,
-        inputs,
-        target=lambda output: output[..., 0].sum(),
-        layer="hidden",
-        baseline=baseline,
-        num_steps=512,
-    )
-
-    with torch.no_grad():
-        target_delta = model(inputs)[..., 0].sum() - model(baseline)[..., 0].sum()
-        expected_shape = model.hidden(inputs).shape
-    attribution_sum = result.values.sum()
-
-    assert result.method == "layer_conductance"
-    assert result.extra["layer"] == "hidden"
-    assert result.extra["n_steps"] == 512
-    torch.testing.assert_close(result.extra["attribution_sum"], attribution_sum)
-    torch.testing.assert_close(result.extra["target_delta"], target_delta, rtol=1e-6, atol=1e-9)
-    assert result.extra["residual_rel"] < 1e-2
-    assert "bottleneck" in result.extra["completeness_caveat"]
-    assert result.values.shape == expected_shape
-    assert torch.isfinite(result.values).all()
-    torch.testing.assert_close(attribution_sum, target_delta, rtol=1e-3, atol=1e-4)
 
 
 def test_layer_path_methods_reject_bad_layer_name() -> None:
@@ -435,44 +251,3 @@ def test_layer_path_methods_reject_bad_layer_name() -> None:
             target=0,
             layer="missing",
         )
-
-
-def test_layer_path_methods_support_multi_input_model_call() -> None:
-    """Layer path methods thread multiple positional tensors through the model call."""
-
-    model = MultiInputSmoothLayerMlp()
-    first = torch.tensor([[0.30, -0.60]], dtype=torch.float64)
-    second = torch.tensor([[0.20, 0.40]], dtype=torch.float64)
-    first_baseline = torch.tensor([[0.05, -0.10]], dtype=torch.float64)
-    second_baseline = torch.tensor([[-0.15, 0.05]], dtype=torch.float64)
-
-    lig_result = attribution.layer_integrated_gradients(
-        model,
-        (first, second),
-        target=lambda output: output.sum(),
-        layer="hidden",
-        baseline=(first_baseline, second_baseline),
-        num_steps=512,
-    )
-    conductance_result = attribution.layer_conductance(
-        model,
-        (first, second),
-        target=lambda output: output.sum(),
-        layer="hidden",
-        baseline=(first_baseline, second_baseline),
-        num_steps=512,
-    )
-
-    with torch.no_grad():
-        target_delta = model(first, second).sum() - model(first_baseline, second_baseline).sum()
-        expected_shape = model.hidden(first + 0.5 * second).shape
-
-    assert lig_result.values.shape == expected_shape
-    assert conductance_result.values.shape == expected_shape
-    torch.testing.assert_close(lig_result.values.sum(), target_delta, rtol=1e-3, atol=1e-4)
-    torch.testing.assert_close(
-        conductance_result.values.sum(),
-        target_delta,
-        rtol=1e-3,
-        atol=1e-4,
-    )

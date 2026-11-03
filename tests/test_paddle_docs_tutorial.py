@@ -9,7 +9,7 @@ import pytest
 
 pytest.importorskip("paddle")
 
-pytestmark = pytest.mark.backend_paddle
+pytestmark = [pytest.mark.backend_paddle, pytest.mark.rare]
 
 _DOC = Path(__file__).resolve().parents[1] / "docs" / "backends" / "paddle.md"
 

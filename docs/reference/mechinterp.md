@@ -68,8 +68,10 @@ refusal (`worst_element`).
   by module class (Conv1D `[in, out]` vs Linear `[out, in]`), fused-QKV
   slice evidence from the captured graph, GQA counts, shared-storage
   disclosure; payload-verified before serving.
-- `resolve_alias` / `alias_report`: TLens spellings (both 2.x and 3.x-bridge
-  generations, `translation.json`) resolve to native coordinates with an
+- `resolve_alias` / `alias_report`: TLens spellings (2.x, 3.x-bridge and 4.x
+  generations) and nnterp `StandardizedTransformer` accessor spellings
+  (`generation="nnterp"`: `layers_output[3]`, `attentions_output[3]`,
+  `mlps_input[3]`, `logits`, ...; `translation.json`) resolve to native coordinates with an
   honest status: `real` / `reconstructed_read_only` / `needs_capture` /
   `structurally_absent` / `ambiguous`, each with a remedy.
 - `retention_plan`: printable, priced, `save=`-composable plans; every kit

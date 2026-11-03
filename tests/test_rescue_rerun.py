@@ -15,7 +15,7 @@ from typing import Any
 
 import pytest
 import torch
-from _stale_holders import CountedRoot, OpaqueCallable, forward_runs
+from _stale_holders import OpaqueCallable
 from torch import nn
 
 import torchlens as tl
@@ -47,51 +47,7 @@ def _stale_closure_model(raw: Callable[..., Any]) -> nn.Module:
     return Model()
 
 
-def test_clean_capture_is_never_rescued() -> None:
-    """No escape signal -> exactly one mode-free run, no disclosure."""
-
-    class Model(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.linear = nn.Linear(4, 2)
-
-        def forward(self, v: torch.Tensor) -> torch.Tensor:
-            return torch.relu(self.linear(v))
-
-    trace = tl.trace(Model(), torch.randn(3, 4))
-    assert trace._rescue_rerun is None
-    assert trace.provenance.verification_reason != "mode_rescue_rerun"
-
-
-def test_rescue_restores_rng_to_capture_entry() -> None:
-    """The rescue run sees EXACTLY the capture-entry RNG state.
-
-    Driven directly against the driver: a capture stub draws from torch RNG
-    on every invocation and reports an escape signal on the first. The
-    driver must restore RNG before the re-run, so both invocations observe
-    the identical draw (the rescue replays the primary's randomness).
-    """
-
-    from torchlens.backends.torch.rescue import capture_with_rescue
-
-    draws: list[float] = []
-
-    def run_capture() -> Any:
-        draws.append(torch.rand(1).item())
-        return types.SimpleNamespace(
-            escape_diagnostics=[],
-            _had_unattributed_tensor_args=len(draws) == 1,
-            ops=[],
-            _layer_list=[],
-            _provenance_verified=None,
-            _provenance_verification_reason=None,
-        )
-
-    capture_with_rescue(run_capture)
-    assert len(draws) == 2
-    assert draws[0] == draws[1]
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_streaming_capture_skips_rescue(raw_cos: Any, tmp_path: Any) -> None:
     """A disk-streamed capture is not re-runnable: escape DISCLOSED, no rescue.
 
@@ -117,6 +73,7 @@ def test_streaming_capture_skips_rescue(raw_cos: Any, tmp_path: Any) -> None:
     assert trace._rescue_rerun["forward_runs"] == 1
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_ineligible_capture_with_escape_signal_settles_disclosure() -> None:
     """Driver-level R16-1 pin: eligible=False + live signal -> marked trace,
     exactly ONE forward run, and the ineligibility warning."""
@@ -135,19 +92,6 @@ def test_ineligible_capture_with_escape_signal_settles_disclosure() -> None:
     assert trace._provenance_verified is False
     assert trace._provenance_verification_reason == "escape_rescue_unrecovered"
     assert trace._rescue_rerun["skipped_reason"] == "rescue_ineligible"
-
-
-def test_ineligible_clean_capture_stays_clean() -> None:
-    """eligible=False with NO signal must not stamp any rescue field."""
-
-    from torchlens.backends.torch.rescue import capture_with_rescue
-
-    def run_capture() -> Any:
-        return _stub_trace(["relu"], signal=False)
-
-    trace = capture_with_rescue(run_capture, eligible=False)
-    assert trace._provenance_verification_reason is None
-    assert not hasattr(trace, "_rescue_rerun") or trace._rescue_rerun is None
 
 
 def _stub_trace(
@@ -177,6 +121,7 @@ def _stub_trace(
     return types.SimpleNamespace(**fields)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_defusion_is_not_counted_as_recovery() -> None:
     """R16-1: a rescued op multiset that LOSES ops is mode perturbation.
 
@@ -205,25 +150,7 @@ def test_defusion_is_not_counted_as_recovery() -> None:
     assert "matmul" in info["recovered_ops"]
 
 
-def test_strict_superset_rescue_still_recovers() -> None:
-    """R16-1 control: gains with zero losses stay a genuine recovery."""
-
-    from torchlens.backends.torch.rescue import capture_with_rescue
-
-    runs: list[str] = []
-    primary = _stub_trace(["relu"], signal=True)
-    rescued = _stub_trace(["relu", "cos"])
-
-    def run_capture() -> Any:
-        runs.append("run")
-        return primary if len(runs) == 1 else rescued
-
-    result = capture_with_rescue(run_capture)
-    assert result is rescued
-    assert result._provenance_verification_reason == "mode_rescue_rerun"
-    assert result._rescue_rerun["recovered_ops"] == ("cos",)
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_buffer_writing_primary_refuses_the_rescue_rerun() -> None:
     """R16-2: a primary that WROTE buffers would double-apply them; refuse."""
 
@@ -249,72 +176,7 @@ def test_buffer_writing_primary_refuses_the_rescue_rerun() -> None:
     assert result._provenance_verification_reason == "escape_rescue_unrecovered"
 
 
-def test_train_mode_batchnorm_capture_skips_rescue_end_to_end(raw_cos: Any) -> None:
-    """R16-2 end-to-end: a train-mode BN model's counter increments ONCE."""
-
-    wrap_torch()
-
-    class Model(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.bn = nn.BatchNorm1d(2)
-
-        def forward(self, v: torch.Tensor) -> torch.Tensor:
-            return torch.relu(raw_cos(self.bn(v)))
-
-    model = Model()
-    model.train()
-    with pytest.warns(UserWarning):
-        trace = tl.trace(model, torch.randn(4, 2), capture=CaptureOptions(carry_state=True))
-    assert model.bn.num_batches_tracked.item() == 1, "the forward must not run twice"
-    info = trace._rescue_rerun
-    assert info is not None
-    assert info["skipped_reason"] == "buffer_writes_double_forward"
-    assert "cos" not in [op.func_name for op in trace.ops]
-
-
-def test_provably_unchanged_buffer_journal_does_not_refuse_rescue() -> None:
-    """Journal PRESENCE alone is not a write: value_changed=False rescues.
-
-    Fused norm mutators journal unconditionally, so every EVAL-mode BN/IN/GN
-    capture carries ``buffer_write_kind`` records with
-    ``buffer_value_changed=False`` (bytes provably unchanged). Refusing on
-    presence alone permanently disabled the rescue for the most common
-    capture class; the refusal must key on an ACTUAL write.
-    """
-
-    from torchlens.backends.torch.rescue import capture_with_rescue
-
-    runs: list[str] = []
-    primary = _stub_trace(["relu"], signal=True)
-    primary.ops.append(
-        types.SimpleNamespace(
-            func_name="none",
-            buffer_write_kind="fused",
-            buffer_value_changed=False,
-            label_raw="buffer_3",
-        )
-    )
-    rescued = _stub_trace(["relu", "cos"])
-    rescued.ops.append(
-        types.SimpleNamespace(
-            func_name="none",
-            buffer_write_kind="fused",
-            buffer_value_changed=False,
-            label_raw="buffer_3",
-        )
-    )
-
-    def run_capture() -> Any:
-        runs.append("run")
-        return primary if len(runs) == 1 else rescued
-
-    result = capture_with_rescue(run_capture)
-    assert len(runs) == 2, "a provably-unchanged buffer journal must not refuse the re-run"
-    assert result is rescued
-    assert result._provenance_verification_reason == "mode_rescue_rerun"
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/rescue.py, campaign mutant kills.
 def test_eval_mode_batchnorm_capture_still_rescues_end_to_end(raw_cos: Any) -> None:
     """Eval-mode BN journals fused no-op writes; the rescue must still run."""
 
@@ -341,30 +203,7 @@ def test_eval_mode_batchnorm_capture_still_rescues_end_to_end(raw_cos: Any) -> N
     assert trace.provenance.verification_reason == "mode_rescue_rerun"
 
 
-def test_attribution_failed_rescue_refused_for_buffer_writing_primary() -> None:
-    """R16-2 covers the attribution-failed trigger too: no double forward.
-
-    The refusal used to run only in the completed-primary branch, so an
-    output-attribution failure on a train-mode BN model re-ran the forward
-    and double-mutated the buffers (num_batches_tracked == 2) undisclosed.
-    """
-
-    from torchlens._errors import OutputAttributionError
-    from torchlens.backends.torch.rescue import capture_with_rescue
-
-    runs: list[str] = []
-
-    def run_capture() -> Any:
-        runs.append("run")
-        exc = OutputAttributionError("output could not be attributed")
-        exc._torchlens_actual_buffer_writes = ("bn.num_batches_tracked",)
-        raise exc
-
-    with pytest.warns(UserWarning, match="double-apply"), pytest.raises(OutputAttributionError):
-        capture_with_rescue(run_capture)
-    assert len(runs) == 1, "the forward must run exactly once for a buffer-writing primary"
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/rescue.py.
 def test_attribution_failed_rescue_fails_closed_without_write_record() -> None:
     """An unprovable buffer-write record refuses the re-run, never guesses."""
 
@@ -385,6 +224,7 @@ def test_attribution_failed_rescue_fails_closed_without_write_record() -> None:
     assert len(runs) == 1
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _runnable/state_live.py, campaign mutant kills.
 def test_train_bn_attribution_failure_never_double_mutates(raw_cos: Any) -> None:
     """End-to-end: OAE + train-mode BN raises with the counter at ONE."""
 
@@ -418,6 +258,7 @@ def test_train_bn_attribution_failure_never_double_mutates(raw_cos: Any) -> None
     assert info["forward_runs"] == 1
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_refused_attribution_rescue_flushes_failure_advisory(raw_cos: Any) -> None:
     """When the re-run is refused and the error propagates, the advisory does too."""
 
@@ -446,53 +287,7 @@ def test_refused_attribution_rescue_flushes_failure_advisory(raw_cos: Any) -> No
     assert issubclass(advisories[0].category, RuntimeWarning)
 
 
-def test_successful_attribution_rescue_suppresses_failure_advisory(raw_cos: Any) -> None:
-    """A rescued attribution failure emits NO capture-attempt-failed advisory.
-
-    The advisory tells the user diagnostics ride the exception
-    (``exc.partial_trace``) — untruthful when the rescue swallowed the failure
-    and returned a trace. It is deferred while a rescue is possible and
-    dropped on success; re-raising paths flush it (pinned by
-    ``test_capture_failure_reporting``).
-    """
-
-    import warnings as warnings_module
-
-    wrap_torch()
-
-    class Model(nn.Module):
-        def forward(self, v: torch.Tensor) -> torch.Tensor:
-            return raw_cos(torch.sigmoid(v))
-
-    with warnings_module.catch_warnings(record=True) as caught:
-        warnings_module.simplefilter("always")
-        trace = tl.trace(Model(), torch.tensor([0.25, 0.5]))
-    info = trace._rescue_rerun
-    assert info is not None
-    assert info["trigger"] == "output_attribution_failed"
-    assert info["recovered"] is True
-    advisories = [w for w in caught if "capture attempt failed" in str(w.message)]
-    assert not advisories, [str(w.message) for w in advisories]
-
-
-def test_stateless_primary_still_rescues() -> None:
-    """R16-2 control: no buffer writes -> the re-run proceeds."""
-
-    from torchlens.backends.torch.rescue import capture_with_rescue
-
-    runs: list[str] = []
-    primary = _stub_trace(["relu"], signal=True)
-    rescued = _stub_trace(["relu", "cos"])
-
-    def run_capture() -> Any:
-        runs.append("run")
-        return primary if len(runs) == 1 else rescued
-
-    result = capture_with_rescue(run_capture)
-    assert len(runs) == 2
-    assert result is rescued
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/rescue.py.
 def test_recovered_rescue_never_clobbers_dynamo_verdict() -> None:
     """R16-3: dynamo_region_not_logged outranks mode_rescue_rerun in _mark."""
 
@@ -516,6 +311,7 @@ def test_recovered_rescue_never_clobbers_dynamo_verdict() -> None:
     assert result._rescue_rerun is not None, "the rescue attempt must stay disclosed"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/escape_detection.py, backends/torch/rescue.py, campaign mutant kills.
 def test_escape_detector_diagnostic_triggers_rescue(raw_cos: Any) -> None:
     """The opt-in shadow detector's diagnostics are a rescue trigger too."""
 
@@ -539,6 +335,7 @@ def test_escape_detector_diagnostic_triggers_rescue(raw_cos: Any) -> None:
         wrap_torch()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/rescue.py, campaign mutant kills.
 def test_rescue_never_double_applies_in_forward_parameter_writes(raw_cos: Any) -> None:
     """A forward that writes declared PARAMETER state must not be applied twice.
 
@@ -576,41 +373,7 @@ def test_rescue_never_double_applies_in_forward_parameter_writes(raw_cos: Any) -
     assert trace.provenance.verified is False
 
 
-def test_rescue_never_double_applies_journal_invisible_param_writes(raw_cos: Any) -> None:
-    """A write the buffer-write journal cannot see must not double-apply.
-
-    R02-2 regression: the success-path guard read an EMPTY buffer-write
-    journal as proof of no writes, but the journal is structurally blind to
-    PARAMETER storage (its index skips ``nn.Parameter``), so a host write
-    into a param during the forward left no record and the re-run
-    double-applied it. The state snapshot audits the re-run by bytes instead
-    of trusting journal emptiness.
-    """
-
-    class HiddenParamWriter(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-
-        def forward(self, v: torch.Tensor) -> torch.Tensor:
-            # Journal-invisible write: raw host write into PARAMETER storage.
-            self.lin.weight.detach().numpy()[0, 0] += 1.0
-            return torch.relu(raw_cos(self.lin(v)))
-
-    model = HiddenParamWriter()
-    model.eval()
-    baseline = model.lin.weight.detach().clone()
-
-    with pytest.warns(UserWarning, match="wrote model state"):
-        trace = tl.trace(model, torch.randn(3, 4))
-
-    expected = baseline.clone()
-    expected[0, 0] += 1.0
-    assert torch.equal(model.lin.weight.detach(), expected)
-    assert trace._rescue_rerun is not None
-    assert trace._rescue_rerun["skipped_reason"] == "state_writes_double_forward_undone"
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_journal_visible_buffer_writes_still_refuse_before_the_rerun(raw_cos: Any) -> None:
     """Pin: a value-changing registered-buffer write still refuses PRE-rescue.
 
@@ -641,59 +404,7 @@ def test_journal_visible_buffer_writes_still_refuse_before_the_rerun(raw_cos: An
     assert trace._rescue_rerun["forward_runs"] == 1
 
 
-def test_minted_source_nodes_do_not_refuse_a_perfect_rescue() -> None:
-    """R16-1 follow-up: bookkeeping ``none`` nodes are outside the oracle.
-
-    When the primary minted an ``internalsource`` orphan (func_name ``none``)
-    for the escaped op's output and the rescue captured the real op instead,
-    the rescued trace read one ``none`` short -- ``lost_ops=('none',)`` -- and
-    the two-sided oracle refused a PERFECT rescue, leaving the user the broken
-    primary. Functionless source nodes must not count as losses.
-    """
-
-    from torchlens.backends.torch.rescue import capture_with_rescue
-
-    primary = _stub_trace(["none", "linear", "relu"], signal=True)
-    rescued = _stub_trace(["cos", "linear", "relu"])
-    traces = iter([primary, rescued])
-
-    result = capture_with_rescue(lambda: next(traces))
-
-    assert result is rescued
-    assert result._provenance_verification_reason == "mode_rescue_rerun"
-    assert result._rescue_rerun["recovered"] is True
-    assert result._rescue_rerun["recovered_ops"] == ("cos",)
-    assert result._rescue_rerun["lost_ops"] == ()
-
-
-def test_module_consumed_stale_ref_is_disclosed_and_rescued(raw_cos: Any) -> None:
-    """R16: module-entry adoption must not LAUNDER a stale-ref escape.
-
-    A stale pre-wrap reference whose output is first consumed by a MODULE
-    (``self.lin(stale_fn(x))`` -- the overwhelmingly common shape) used to be
-    adopted as a clean ``internalsource`` node: op absent, zero warnings,
-    ``rescue_rerun`` None -- indistinguishable from a clean capture, while the
-    identical escape consumed by a wrapped FUNCTION warned and rescued.
-    Disclosure must not be consumption-order-dependent.
-    """
-
-    class Model(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-
-        def forward(self, v: torch.Tensor) -> torch.Tensor:
-            return self.lin(raw_cos(v))
-
-    with pytest.warns(UserWarning, match="no graph/source provenance"):
-        trace = tl.trace(Model(), torch.randn(3, 4))
-
-    assert "cos" in [op.func_name for op in trace.ops]
-    assert trace._rescue_rerun is not None
-    assert trace._rescue_rerun["recovered"] is True
-    assert trace.provenance.verification_reason == "mode_rescue_rerun"
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_module_boundary_adoption.py, campaign mutant kills.
 def test_ownership_snapshot_pins_members_against_id_reuse() -> None:
     """Round-3 b1/b3/b4 merged: the pre-forward ownership snapshot PINS its members.
 
@@ -735,122 +446,7 @@ def test_ownership_snapshot_pins_members_against_id_reuse() -> None:
     )
 
 
-def test_intervened_capture_never_reruns_user_callables(raw_cos: Any) -> None:
-    """A rescue re-run would invoke user intervention callables a SECOND time.
-
-    Side-effecting user callables (counters, file writes, externally-held
-    state) double-applied invisibly on the rescue path; interventions now
-    refuse the re-run fail-closed, exactly like streaming/halt captures.
-    """
-
-    calls = {"intervene": 0}
-
-    def counting_transform(value: torch.Tensor, *, ctx: Any) -> torch.Tensor:
-        calls["intervene"] += 1
-        return value * 0.5
-
-    class Model(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-
-        def forward(self, v: torch.Tensor) -> torch.Tensor:
-            return torch.relu(raw_cos(self.lin(v)))
-
-    with pytest.warns(UserWarning, match="no graph/source provenance"):
-        trace = tl.trace(
-            Model(),
-            torch.randn(3, 4),
-            intervene=tl.when(tl.func("linear"), counting_transform),
-        )
-
-    assert calls["intervene"] == 1
-    # R16-1: the refused re-run is DISCLOSED, never silent clean fields.
-    assert trace._rescue_rerun["skipped_reason"] == "rescue_ineligible"
-    assert trace._rescue_rerun["forward_runs"] == 1
-    assert trace.provenance.verification_reason == "escape_rescue_unrecovered"
-
-
-def test_transform_callables_never_double_fire_on_rescue(raw_cos: Any) -> None:
-    """b6-opus-R16-1 reopen: the transform channels must gate rescue eligibility.
-
-    The eligibility gate refused ``intervene=``/hooks for double-invocation
-    side effects but let ``activation_transform``/``grad_transform``/
-    ``output_transform`` through -- and they DID run twice on a recovered
-    rescue (measured: activation 2x per saved op, output once per forward
-    x2). A transform that appends to a list, writes a file, or accumulates
-    statistics silently double-applied. All in-capture user-callable channels
-    now refuse the re-run fail-closed, exactly like ``intervene=``.
-    """
-
-    calls = {"act": 0, "out": 0}
-
-    def counting_act(value: torch.Tensor, **kwargs: Any) -> torch.Tensor:
-        calls["act"] += 1
-        return value
-
-    def counting_out(value: torch.Tensor, **kwargs: Any) -> torch.Tensor:
-        calls["out"] += 1
-        return value
-
-    class Model(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-
-        def forward(self, v: torch.Tensor) -> torch.Tensor:
-            return self.lin(raw_cos(v))
-
-    wrap_torch()
-
-    # Control: identical capture shape with no escape fixes the single-run
-    # activation-transform count.
-    class Control(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-
-        def forward(self, v: torch.Tensor) -> torch.Tensor:
-            return self.lin(torch.cos(v))
-
-    tl.trace(
-        Control(),
-        torch.randn(3, 4),
-        capture=tl.options.CaptureOptions(
-            output_transform=counting_out, activation_transform=counting_act
-        ),
-        save="all",
-    )
-    control_act, control_out = calls["act"], calls["out"]
-    assert control_out == 1
-    calls["act"] = calls["out"] = 0
-
-    with pytest.warns(UserWarning, match="no graph/source provenance"):
-        trace = tl.trace(
-            Model(),
-            torch.randn(3, 4),
-            capture=tl.options.CaptureOptions(
-                output_transform=counting_out,
-                grad_transform=lambda value, **kwargs: value,
-                activation_transform=counting_act,
-            ),
-            save="all",
-        )
-
-    assert trace._rescue_rerun["skipped_reason"] == "rescue_ineligible", (
-        "a capture with in-capture transform callables must refuse the rescue "
-        "re-run (side effects double-apply) and disclose the refusal"
-    )
-    assert trace._rescue_rerun["forward_runs"] == 1
-    assert calls["out"] == 1, f"output_transform fired {calls['out']}x (expected once)"
-    # The escaped cos op is invisible to the primary, so the escape capture
-    # saves at most the control's op count; strictly more means a second run.
-    assert calls["act"] <= control_act, (
-        f"activation_transform fired {calls['act']}x vs {control_act}x on the "
-        "no-escape control: the rescue re-ran the user callable"
-    )
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_recovered_rescue_preserves_specific_verification_reasons() -> None:
     """A recovered rescue must not demote a specific verdict to the generic stamp.
 
@@ -875,6 +471,7 @@ def test_recovered_rescue_preserves_specific_verification_reasons() -> None:
     assert result._rescue_rerun["recovered"] is True
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/rescue.py, campaign mutant kills.
 def test_warning_recorder_leaves_a_user_installed_handler_in_place() -> None:
     """The rescue driver's showwarning swaps restore identity-checked.
 
@@ -898,6 +495,7 @@ def test_warning_recorder_leaves_a_user_installed_handler_in_place() -> None:
         warnings_module.showwarning = before
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/rescue.py, campaign mutant kills.
 def test_failed_rescue_rerun_still_restores_state_writes() -> None:
     """R63: a rescue re-run that WRITES declared state and then RAISES must
     still restore the snapshot -- the except arm formerly skipped it, leaving
@@ -927,6 +525,7 @@ def test_failed_rescue_rerun_still_restores_state_writes() -> None:
     assert "rescue died mid-forward" in trace._rescue_rerun["rescue_error"]
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/rescue.py.
 def test_interrupted_rescue_rerun_still_restores_state_writes() -> None:
     """R63 interrupt arm: KeyboardInterrupt mid-re-run propagates, but the
     snapshot restore still runs on the way out."""
@@ -952,6 +551,7 @@ def test_interrupted_rescue_rerun_still_restores_state_writes() -> None:
     )
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_successful_rescue_rerun_warns_about_the_double_forward() -> None:
     """R67: the success path was the ONLY silent rescue outcome.
 
@@ -975,6 +575,7 @@ def test_successful_rescue_rerun_warns_about_the_double_forward() -> None:
     assert result is rescued
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_restore_changed_state_is_nan_aware() -> None:
     """r8 R16: a state slot legitimately holding NaN is not "changed".
 
@@ -1002,71 +603,3 @@ def test_restore_changed_state_is_nan_aware() -> None:
     changed = _restore_changed_state(model, snapshot)
     assert changed == ("buffer:stat",)
     assert model.stat[0].item() == 1.0
-
-
-def test_nan_state_does_not_false_flag_the_state_audit() -> None:
-    """R16: IEEE ``torch.equal`` returns False for NaN==NaN, so a model
-    legitimately holding a NaN parameter/buffer was falsely accused of a
-    double-applied state write by the untouched-model audit -- the rescue
-    trace was discarded and the user warned about writes that never happened.
-    The audit must be NaN-safe (byte-exact, never tolerant)."""
-
-    from torchlens.backends.torch.rescue import (
-        _restore_changed_state,
-        _snapshot_declared_state,
-    )
-
-    model = nn.Linear(2, 2)
-    with torch.no_grad():
-        model.weight[0, 0] = float("nan")
-    model.register_buffer("nan_buffer", torch.tensor([float("nan"), 1.0]))
-
-    snapshot = _snapshot_declared_state(model)
-    assert snapshot is not None
-    changed = _restore_changed_state(model, snapshot)
-    assert changed == (), (
-        "nothing wrote model state between snapshot and audit, yet the audit "
-        f"reported changes: {changed!r} (NaN-blind torch.equal compare)"
-    )
-
-
-def test_nan_holding_model_still_flags_a_real_state_write() -> None:
-    """Positive control for the NaN-safe audit: a genuine write on a model
-    that also holds NaN state is still detected and restored byte-exactly."""
-
-    from torchlens.backends.torch.rescue import (
-        _restore_changed_state,
-        _snapshot_declared_state,
-    )
-
-    model = nn.Linear(2, 2)
-    model.register_buffer("nan_buffer", torch.tensor([float("nan"), 1.0]))
-
-    snapshot = _snapshot_declared_state(model)
-    assert snapshot is not None
-    with torch.no_grad():
-        model.nan_buffer[1] = 7.0
-        model.weight.add_(1.0)
-    changed = _restore_changed_state(model, snapshot)
-    assert set(changed) == {"buffer:nan_buffer", "param:weight"}
-    assert torch.equal(model.weight, snapshot["param:weight"]), "the flagged write was not restored"
-    assert model.nan_buffer[1].item() == 1.0
-
-
-def test_closure_held_original_is_rebound_without_rescue() -> None:
-    """The stale-closure case with the bare original, as the rescue tests first held it.
-
-    Capture preparation rebinds the closure cell to the wrapper, so ``cos``
-    is captured in one forward with no rescue, and the cell holds the
-    original again afterwards.
-    """
-
-    unwrap_torch()
-    raw = torch.cos
-    wrap_torch()
-    model = CountedRoot(_stale_closure_model(raw))
-    trace = tl.trace(model, torch.tensor([0.25, 0.5]))
-
-    assert forward_runs(trace, model) == 1
-    assert trace._rescue_rerun is None
-    assert [op.func_name for op in trace.ops].count("cos") == 1

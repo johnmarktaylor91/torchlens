@@ -13,6 +13,14 @@ class TraceState(Enum):
     ``PRISTINE`` is only the machine's start value: an assignment can set it
     and a func-targeted ``intervene=`` capture keeps it. Whether anything ever
     intervened on a trace is the derived ``Trace.is_pristine`` reading.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> trace.state is TraceState.PRISTINE
+    True
+    >>> TraceState("spec_stale").name
+    'SPEC_STALE'
     """
 
     PRISTINE = "pristine"

@@ -45,6 +45,8 @@ MOVED: tuple[str, ...] = (
     "skip_audit",
     "schema_lockstep",
     "golden_governance_lint",
+    "global_state_inventory",
+    "backend_docs_lockstep",
 )
 
 

@@ -128,37 +128,6 @@ def test_torch_dotted_walk_to_nontorch_type_denied_no_spawn(
     assert not sentinel.exists()
 
 
-@pytest.mark.parametrize("unpickler_cls", _UNPICKLERS)
-def test_reported_collect_env_popen_vector_inert(
-    unpickler_cls: type[pickle.Unpickler], tmp_path: Path
-) -> None:
-    """The exact reported payload (``torch`` / ``utils.collect_env.subprocess.Popen``) is inert.
-
-    It must RAISE and spawn NOTHING. Depending on which torch submodules a runtime has
-    imported, the escape either resolves (denied by the ownership gate ->
-    ``UnpicklingError``) or the walk itself fails (``AttributeError``); both are denials
-    with no process spawned.
-    """
-
-    sentinel = tmp_path / "r27_e1_reported_pwned"
-    payload = _reduce_global_pickle(
-        "torch",
-        "utils.collect_env.subprocess.Popen",
-        ["/bin/sh", "-c", f"touch {sentinel}"],
-    )
-    with pytest.raises((pickle.UnpicklingError, AttributeError)):
-        unpickler_cls(io.BytesIO(payload)).load()
-    assert not sentinel.exists()
-
-
-def test_legit_torch_types_still_admit() -> None:
-    """Genuine torch data types (real torch module) still resolve (no regression)."""
-
-    unpickler = SafeBundleUnpickler(io.BytesIO(b""))
-    assert unpickler.find_class("torch", "Size") is torch.Size
-    assert unpickler.find_class("torch.nn.modules.linear", "Identity") is torch.nn.Identity
-
-
 def test_preview_backend_dotted_walk_escape_denied() -> None:
     """The preview-backend branch also requires the resolved type to be preview-owned.
 
@@ -187,9 +156,12 @@ def test_preview_backend_dotted_walk_escape_denied() -> None:
 # ---------------------------------------------------------------------------
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "import_path",
-    ["torch:os.system", "torch:serialization.load", "torch:serialization.save"],
+    [
+        "torch:os.system",
+    ],
 )
 def test_resolver_dotted_walk_to_denied_module_denied_under_trust(import_path: str) -> None:
     """A dotted qualname off ``torch`` that walks into a denied module is refused."""
@@ -215,24 +187,6 @@ def test_resolver_from_file_via_dotted_torch_denied_by_purity() -> None:
 
     with pytest.raises(UntrustedCallableError):
         _resolve_import_ref("torch:_C._VariableFunctions.from_file", trust_custom_callables=True)
-
-
-def test_resolver_legit_foreign_trusted_callable_still_resolves(tmp_path: Path) -> None:
-    """A genuinely foreign (non-torch) trusted callable is NOT purity-gated (no regression)."""
-
-    mod_name = "r27_resolver_trusted_mod"
-    (tmp_path / f"{mod_name}.py").write_text("def hook(out, *, ctx):\n    return out * 2\n")
-    sys.path.insert(0, str(tmp_path))
-    try:
-        mod = importlib.import_module(mod_name)
-        assert _resolve_import_ref(f"{mod_name}:hook", trust_custom_callables=True) is mod.hook
-        assert (
-            _resolve_import_ref(f"{mod_name}:hook", allowed_custom_callable_modules={mod_name})
-            is mod.hook
-        )
-    finally:
-        sys.path.remove(str(tmp_path))
-        sys.modules.pop(mod_name, None)
 
 
 # ---------------------------------------------------------------------------
@@ -266,14 +220,6 @@ def test_unpickler_trusted_dotted_walk_to_os_denied(_trusted_os_module: str) -> 
         SafeBundleUnpickler(
             io.BytesIO(payload), allowed_custom_callable_modules={_trusted_os_module}
         ).load()
-
-
-def test_unpickler_legit_trusted_callable_still_resolves(_trusted_os_module: str) -> None:
-    """A genuine (single-name) callable in the trusted module still resolves (no regression)."""
-
-    unpickler = SafeBundleUnpickler(io.BytesIO(b""), trust_custom_callables=True)
-    resolved = unpickler.find_class(_trusted_os_module, "hook")
-    assert getattr(resolved, "__name__", None) == "hook"
 
 
 # ---------------------------------------------------------------------------

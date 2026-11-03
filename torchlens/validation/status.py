@@ -56,6 +56,14 @@ class ValidationStatus:
         a provable exemption.
     decisions:
         Optional per-op validation decisions, used by golden regression tests.
+
+    Examples
+    --------
+    >>> status = tl.trace(model, x).validation_replay_status
+    >>> isinstance(status, ValidationStatus)
+    True
+    >>> status.source
+    'live'
     """
 
     state: ValidationReplayState

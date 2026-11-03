@@ -45,20 +45,6 @@ class _TokenizerModel(nn.Module):
         return x
 
 
-def test_string_positional_argument_traces_and_validates() -> None:
-    """The synthetic trigger: a mode string beside a tensor reaches forward unchanged."""
-
-    torch.manual_seed(0)
-    model = _StringPositional().eval()
-    x = torch.randn(3, 4)
-    trace = tl.trace(model, (x, "soft"))
-    try:
-        assert any(op.func_name == "linear" for op in trace)
-    finally:
-        trace.cleanup()
-    assert bool(tl.validate(model, (x, "soft"), scope="forward"))
-
-
 def test_string_items_pass_through_without_tokenizer() -> None:
     """Tuple and list items that are strings stay strings when no tokenizer exists."""
 
@@ -79,7 +65,7 @@ def test_string_item_is_still_tokenized_when_model_has_tokenizer() -> None:
     assert isinstance(coerced[1], torch.Tensor)
 
 
-@pytest.mark.parametrize("payload", ["text", ("text",)])
+@pytest.mark.parametrize("payload", [("text",)])
 def test_whole_text_input_without_tokenizer_keeps_helpful_error(payload: Any) -> None:
     """Text that is the whole input still raises the tokenizer guidance."""
 

@@ -68,6 +68,13 @@ def check_card(
     -----
     TorchLensWarning
         ``preprocessing_card_mismatch`` when any compared field disagrees.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> card = tl.preprocessing.check_card(trace, authority={"mean": [0.5] * 3, "std": [0.5] * 3})
+    >>> card.verdict
+    'unknown'
     """
 
     from ._authorities import resolve
