@@ -1022,8 +1022,8 @@ class Layer(_SelectionOperand):
         if self.num_passes > 1:
             raise InvalidArgumentError(
                 f"Layer '{self.layer_label}' has {self.num_passes} ops. "
-                f"Access '{field_name}' on a specific pass: "
-                f"log['{self.layer_label}'].ops[0].{field_name}",
+                f"Access '{field_name}' on one pass: trace['{self.layer_label}:1'].{field_name} "
+                f"or trace.layers['{self.layer_label}'].ops[0].{field_name}",
                 code="layer_pass_ambiguous",
                 remedy=f"access {field_name!r} on one pass via .ops[k]",
                 layer_label=self.layer_label,

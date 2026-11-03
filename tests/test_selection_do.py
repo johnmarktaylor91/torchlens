@@ -101,7 +101,7 @@ def test_whole_site_short_circuit(log):
     """A whole-site mask skips the scatter: exactly today's behavior."""
 
     fork_selection = log.fork()
-    fork_selection.do(log["relu_1_2"].__selection__(), tl.zero_ablate())
+    fork_selection.do(log.layers["relu_1_2"].__selection__(), tl.zero_ablate())
     fork_shipped = log.fork()
     fork_shipped.do("relu_1_2", tl.zero_ablate())
     assert torch.equal(fork_selection["relu_1_2"].out, fork_shipped["relu_1_2"].out)

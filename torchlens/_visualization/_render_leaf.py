@@ -2021,7 +2021,7 @@ def _conditional_branch_edge_kind(child_node: Union["Op", "Layer"], trace: "Trac
     bool_kind: dict[str, str] = {}
     for event in trace._graph_conditional_records or ():
         for bool_label in getattr(event, "bool_layers", ()) or ():
-            bool_layer = trace[bool_label]
+            bool_layer = trace.layers[bool_label]
             bool_ops = tuple(getattr(bool_layer, "ops", {}).values())
             context_kinds = (
                 {getattr(op, "conditional_context_kind", None) for op in bool_ops}

@@ -236,7 +236,7 @@ def _apply_door(trace: Any, door: str, selector: Any, helper: Any) -> None:
         # A Layer record addresses its gradient through tl.grad(record) on the trace;
         # do(trace[label], edit) itself edits the activation.
         layer_label = trace.find_sites(selector).first().layer_label
-        trace.do(tl.grad(trace[layer_label]), helper, intervention=_STAGE)
+        trace.do(tl.grad(trace.layers[layer_label]), helper, intervention=_STAGE)
     else:
         raise AssertionError(door)
 

@@ -224,7 +224,7 @@ def all_site_keys(log):
     """Collect every op-level structural site key in a capture."""
     keys = set()
     for label in log.layer_labels:
-        for op in log[label].ops:
+        for op in log.layers[label].ops:
             if isinstance(op.site_key, str):
                 keys.add(op.site_key)
     return keys

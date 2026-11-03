@@ -986,7 +986,7 @@ def _facet_owner_address(log: Any, selector: FacetSelector, home_label: str, fac
     """Return the innermost module address owning ``facet`` at ``home_label``, if any."""
 
     try:
-        home = log[home_label]
+        home = log._layer_logs[home_label] if home_label in log._layer_logs else log[home_label]
         modules = getattr(log, "modules", None)
         for call_label in reversed(list(getattr(home, "modules", ()) or ())):
             address = str(call_label).rsplit(":", 1)[0]

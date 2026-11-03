@@ -141,7 +141,7 @@ def _descendants(trace: Any, label: str) -> set[str]:
     frontier = [label]
     while frontier:
         current = frontier.pop()
-        for child in trace[current].children or ():
+        for child in trace.layers[_no_pass(current)].children or ():
             child_label = child if isinstance(child, str) else getattr(child, "label", str(child))
             child_label = _no_pass(child_label)
             if child_label not in seen:

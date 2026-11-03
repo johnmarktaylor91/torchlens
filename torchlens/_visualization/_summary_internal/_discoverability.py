@@ -644,7 +644,7 @@ def _combined_shape_str(trace: Trace, labels: Sequence[str]) -> str:
     shapes = []
     for label in labels:
         try:
-            shapes.append(_shape_str(getattr(trace[label], "shape", None)))
+            shapes.append(_shape_str(getattr(trace.layers[label], "shape", None)))
         except KeyError:
             continue
     if not shapes:

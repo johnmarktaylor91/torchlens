@@ -320,8 +320,8 @@ def test_loop_detection_groups_recurrent_ops_with_parameter_input() -> None:
 
     trace = tl.trace(_LoopStimulusModel(), _parameter_stimulus())
 
-    add_layer = trace["add_1_1"]
-    relu_layer = trace["relu_1_2"]
+    add_layer = trace.layers["add_1_1"]
+    relu_layer = trace.layers["relu_1_2"]
     assert add_layer.num_passes == 3
     assert relu_layer.num_passes == 3
     assert all(op.input_was_parameter is False for op in trace._layer_list if not op.is_input)

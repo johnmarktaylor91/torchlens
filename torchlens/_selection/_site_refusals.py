@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
+from .._pass_tokens import PASS_TOKEN_ALL, split_pass_token
 from .errors import AmbiguousSiteError, SiteResolutionError
 
 if TYPE_CHECKING:
@@ -93,8 +94,9 @@ def multipass_bare_label_message(layer_label: str, pass_indices: Sequence[int]) 
         f"{layer_label!r} ran {len(pass_indices)} passes, and each pass is a "
         "distinct op with its own activation. Bare layer labels address only "
         "single-pass layers. Remedy: address one pass with a pass-qualified "
-        f"label ({spellings}), or select every pass explicitly with the Layer "
-        f"selection (log[{layer_label!r}].__selection__())."
+        f"label ({spellings}), the final pass with '{layer_label}:last', or every "
+        f"pass as a Selection with '{layer_label}:all'; the aggregate Layer is "
+        f"trace.layers[{layer_label!r}]."
     )
 
 
@@ -115,6 +117,10 @@ def _refuse_bare_multipass_label(selector: BaseSelector, matched: Sequence[Site]
 
     selector_kind = getattr(selector, "selector_kind", None)
     if len(matched) <= 1 or selector_kind not in ("label", "contains"):
+        return
+    token = split_pass_token(str(getattr(selector, "selector_value", "")))
+    if selector_kind == "label" and token is not None and token[1] == PASS_TOKEN_ALL:
+        # ``label:all`` is the set spelling: naming every pass is its meaning.
         return
     layer_labels = {getattr(site, "layer_label", None) for site in matched}
     if len(layer_labels) != 1:

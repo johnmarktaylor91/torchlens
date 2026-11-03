@@ -60,7 +60,7 @@ def test_failed_do_detaches_its_hook_and_later_edits_run_clean() -> None:
 def test_failed_selection_do_detaches_its_hooks() -> None:
     log = _log()
     fork = log.fork()
-    selection = fork["relu_1_2"].__selection__()
+    selection = fork.layers["relu_1_2"].__selection__()
     with pytest.raises(RuntimeError, match="boom"):
         fork.do(selection, _bad_hook)
     assert _hook_count(fork) == 0
