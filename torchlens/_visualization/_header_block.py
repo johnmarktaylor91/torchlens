@@ -8,8 +8,8 @@ separate legend node before, placed wherever the layout had room).
 
 The key draws each mark with its real shape and fill: ovals for single
 function calls (input and output are function calls too), boxes for leaf
-modules, cylinders for buffers; grey fill means weights on any shape, light
-for trainable and dark for frozen. Graphviz HTML labels can only draw
+modules, cylinders for buffers; the weight fills mark weights on any shape,
+light for trainable and dark for frozen. Graphviz HTML labels can only draw
 rectangles, so the swatches are small drawn PNG images in a shared,
 content-addressed folder under the system temp directory, referenced by
 absolute path so the DOT source renders from any working directory. Rows

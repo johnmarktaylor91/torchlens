@@ -278,7 +278,7 @@ def reading_notes(node_attrs: Iterable[Mapping[str, Any]], module: Any) -> tuple
         )
     notes.append("(shape), size: the op's output tensor and its memory")
     if any("params:" in text for text in texts):
-        notes.append("params: the weights the op used (grey fill)")
+        notes.append("params: the weights the op used (filled as the key shows)")
     if any(_ARGUMENT.search(text) for text in texts):
         notes.append("name=value: an argument the op was called with")
     return tuple(notes)

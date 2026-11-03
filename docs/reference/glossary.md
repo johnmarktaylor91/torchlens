@@ -2888,7 +2888,7 @@ deprecation shim owed*
 **theme / show_legend (Bundle.draw kwargs)** — *unstable — no deprecation shim owed*
 : `bundle.draw(path, theme="dark", show_legend=True)` draws the bundle picture like
   `Trace.draw`: the skin's page, ink and Helvetica face, `draw`'s node shapes and fills (oval for
-  one function call, box for a leaf module, cylinder for a buffer; grey fill for weights), and with
+  one function call, box for a leaf module, cylinder for a buffer; the weight fills for weights), and with
   `show_legend=True` the key under the header. Member lists appear only on nodes and arrows that
   not every member runs.
 

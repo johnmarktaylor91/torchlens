@@ -231,7 +231,7 @@ def test_focus_key_is_on_by_default_and_off_on_request(trace: tl.Trace, tmp_path
     assert "@name: the module at that address" in dot
     assert re.search(r"\w+_\d+_\d+: the \d+(st|nd|rd|th) \w+ call, op \d+ of the whole", dot)
     assert "(shape), size: the op's output tensor and its memory" in dot
-    assert "params: the weights the op used (grey fill)" in dot
+    assert "params: the weights the op used (filled as the key shows)" in dot
     assert "module run as one op" in dot  # the dropout and GELU are drawn as boxes
     bare = _dot(trace, tmp_path, "bare", module=_FOCUS, show_legend=False)
     assert KEY_TABLE_ID not in bare and "@name: the module" not in bare
