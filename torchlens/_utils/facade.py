@@ -44,7 +44,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .._errors import FacadeTeachingError, MissingDependencyError
-from ._private_submodules import refuse_private_submodule
+from .._private_submodules import refuse_private_submodule
 
 __all__ = [
     "DependencyGate",

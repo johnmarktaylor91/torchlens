@@ -416,7 +416,7 @@ def __getattr__(name: str) -> Any:
 
     # Resolved at call time like the lazy exception paths: torchlens._errors imports this
     # package while it initializes, so a module-level import of the refusal helper is a cycle.
-    importlib.import_module("torchlens._utils._private_submodules").refuse_private_submodule(
+    importlib.import_module("torchlens._private_submodules").refuse_private_submodule(
         __name__, name
     )
 

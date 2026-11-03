@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from torchlens._utils._private_submodules import (
+from torchlens._private_submodules import (
     refuse_private_submodule as _refuse_private_submodule,
 )
 

@@ -13,7 +13,7 @@ typed ``facade_redirect`` error from the parent's ``__getattr__``.
 
 from __future__ import annotations
 
-from .._errors import FacadeTeachingError
+from ._errors import FacadeTeachingError
 
 #: Parent namespace -> submodule names it no longer exposes.
 PRIVATE_SUBMODULES: dict[str, frozenset[str]] = {

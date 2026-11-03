@@ -7,7 +7,7 @@ import sys as _sys
 from types import ModuleType as _ModuleType
 from typing import Any
 
-from torchlens._utils._private_submodules import (
+from torchlens._private_submodules import (
     refuse_private_submodule as _refuse_private_submodule,
 )
 

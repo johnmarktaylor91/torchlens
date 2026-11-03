@@ -16,7 +16,7 @@ import pytest
 
 import torchlens
 from torchlens._errors import FacadeTeachingError
-from torchlens._utils._private_submodules import PRIVATE_SUBMODULES
+from torchlens._private_submodules import PRIVATE_SUBMODULES
 
 #: Module paths the walk taught as public import paths (surface.6, option a).
 TAUGHT = frozenset(

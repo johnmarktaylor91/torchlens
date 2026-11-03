@@ -8,7 +8,7 @@ a public import path. The ruling keeps the taught paths public (``torchlens.back
 ``torchlens.intervention.stochastic``, and the per-framework backend namespaces ``torchlens.backends.jax``,
 ``mlx``, ``paddle``, ``tf`` and ``tinygrad`` that the backend guides teach) and gives every other one a leading underscore. The parent's
 ``__getattr__`` refuses the old attribute spelling with the typed ``facade_redirect`` error
-(``torchlens/_utils/_private_submodules.py``); this pass does not touch that table.
+(``torchlens/_private_submodules.py``); this pass does not touch that table.
 
 The pass is re-runnable: a module already moved is skipped, every target spelling starts with an
 underscore the patterns do not match, and a second run changes nothing (``--check`` exits 1 if a
@@ -125,7 +125,7 @@ EXCLUDES = (
     "MIGRATIONS.md",
     "docs/migration",
     "docs/reference/deprecations.md",
-    "torchlens/_utils/_private_submodules.py",
+    "torchlens/_private_submodules.py",
     "torchlens/_io/_pre3_module_paths.py",
     # Demonstrates the old tl.viz.batch_summary spelling refusing typed.
     "notebooks/audit/11_visualization_in_workflow.ipynb",
