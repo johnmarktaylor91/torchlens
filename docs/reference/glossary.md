@@ -1370,8 +1370,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   it writes (a `TorchLensWarning` coded `facet_selector_fanout`, with `fields["site_count"]`;
   36 on a 12-layer GPT-2: q, k and v in each layer); `.in_module(address)` scopes it to one
   module, and so does composition: `tl.module(address) & tl.head(i)` (either order) is that
-  same scoped facet selector, accepted wherever a selector is (`trace[sel]`, `tl.when`, `do`,
-  `attach_hooks`); a facet already scoped to another module refuses
+  same scoped facet selector, accepted wherever a selector is (`trace[sel]`, `tl.when`, `do`);
+  a facet already scoped to another module refuses
   `selector_module_facet_scope_conflict`;
   `tl.func_transform` selects `torch.func` and `torch.autograd` transform boundary ops
   (including `autogradgrad`, an in-forward `torch.autograd.grad` call, with
