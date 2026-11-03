@@ -12,3 +12,5 @@ downloads.
 | [`trainable_intervention_recipe.ipynb`](trainable_intervention_recipe.ipynb) | Advanced | Gradient-based learning of a trainable activation intervention parameter. |
 | [`generation_step_iterator_recipe.ipynb`](generation_step_iterator_recipe.ipynb) | Intermediate | Per-step hook planning for generation loops that mirror `model.generate()`. |
 | [`train_tuned_lens_recipe.ipynb`](train_tuned_lens_recipe.ipynb) | Intermediate | Train a tuned lens from a disk-mode `tl.extract_dataset` artifact and apply it through `logit_lens(lens=...)`, which checks the recorded model identity. |
+| [`probe_accuracy_by_layer_recipe.ipynb`](probe_accuracy_by_layer_recipe.ipynb) | Beginner | Linear probe on every layer of one trace, accuracy plotted against depth with an untrained-network control (Alain and Bengio 2016; Belinkov 2022). |
+| [`cka_rsa_two_models_recipe.ipynb`](cka_rsa_two_models_recipe.ipynb) | Intermediate | Layer-by-layer linear CKA and RSA heatmaps between two CNNs of different width and seed, one `tl.neuro.compare` call per column (Kornblith et al. 2019; Kriegeskorte et al. 2008). |
