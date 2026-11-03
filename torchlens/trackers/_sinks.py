@@ -106,14 +106,15 @@ class JSONLSink:
 
     Examples
     --------
-    >>> import json, pathlib, tempfile
+    >>> import pathlib, tempfile
+    >>> from torchlens._io._json import loads_bounded
     >>> from torchlens.trackers import ScalarPoint
     >>> with tempfile.TemporaryDirectory() as tmp:
     ...     path = pathlib.Path(tmp) / "run.jsonl"
     ...     sink = JSONLSink(path)
     ...     sink.emit_scalar(ScalarPoint("gradients/norm/0.weight", 3, 0.5))
     ...     sink.close()
-    ...     rows = [json.loads(line) for line in path.read_text().splitlines()]
+    ...     rows = [loads_bounded(line) for line in path.read_text().splitlines()]
     >>> [row.get("kind", "header") for row in rows]
     ['header', 'scalar', 'closed']
     """
