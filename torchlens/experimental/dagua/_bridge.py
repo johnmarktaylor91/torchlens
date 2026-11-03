@@ -761,16 +761,11 @@ def trace_to_dagua_graph(
     direction: str = "bottomup",
     include_grad_edges: bool | None = None,
 ) -> Any:
-    """Translate a TorchLens Trace into a DaguaGraph.
-
-    ``rolled=True`` draws each repeated module once (layer aggregates);
-    ``False`` draws every pass. ``depth`` caps how deep module boxes nest.
-    """
+    """Trace to DaguaGraph; ``rolled`` draws repeats once, ``depth`` caps module nesting."""
     import dagua
 
-    vis_mode = "rolled" if rolled else "unrolled"
     g = dagua.DaguaGraph(direction=_to_dagua_direction(direction))
-    entries = _entries_for_mode(trace, vis_mode)
+    entries = _entries_for_mode(trace, vis_mode := "rolled" if rolled else "unrolled")
     if not show_buffers:
         entries = [e for e in entries if not getattr(e, "is_buffer", False)]
     entries_by_label = {getattr(e, "layer_label"): e for e in entries}
