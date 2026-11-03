@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1453 modules, 648070 lines, 0 modules without a docstring.
+83 packages, 1453 modules, 648074 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -87,7 +87,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 20 | 6142 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3902 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 34 | 14277 |
-| `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 11 | 2252 |
+| `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 11 | 2256 |
 | `torchlens.stats` | Streaming statistics for out aggregation (real subpackage; item 18). | 18 | 7185 |
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 5269 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 14 | 5056 |
@@ -1936,7 +1936,7 @@ Reports that describe a completed trace: summary, cost, profile, FLOPs and healt
 
 ### `torchlens.report._notebook`
 
-Extras-gated notebook namespace with no public objects yet. (11 modules, 2252 lines)
+Extras-gated notebook namespace with no public objects yet. (11 modules, 2256 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1948,7 +1948,7 @@ Extras-gated notebook namespace with no public objects yet. (11 modules, 2252 li
 | `_motifs` | Six-state status motifs and the diverging-around-zero value map (B3). | 264 |
 | `_truncation` | Balanced truncation budgets, ported from treescope (B3). | 290 |
 | `_value_cards` | Notebook record cards reuse exactly the bounded text card rows. | 39 |
-| `cards` | Notebook cards for traces, records and failed captures. | 273 |
+| `cards` | Notebook cards for traces, records and failed captures. | 277 |
 | `cardtree` | CardTree: presentation-only HTML card IR + native safe renderer (B1). | 418 |
 | `frontier` | The diagnostic frontier: first-dirty sites plus one hop (B6). | 151 |
 

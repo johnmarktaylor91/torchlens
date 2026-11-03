@@ -11,6 +11,7 @@ from html import escape
 from typing import Any
 
 from ..._data_classes._trace_missing_attrs import is_live_trace
+from ._axis_labels import sdpa_attention_hint
 from ._card_suppression import card_render_suppressed
 from ._value_cards import layer_value_card, op_value_card
 from .cardtree import (
@@ -141,11 +142,14 @@ def trace_card(trace: Any, *, root: str | None = None) -> Card:
         )
         + "</table>"
     )
+    hint = sdpa_attention_hint(trace)
+    notice = (CardText(hint, role="notice"),) if hint else ()
     return Card(
         title=repr(trace),
         kind="trace",
         children=(
             CardHtml(html),
+            *notice,
             CardText("more      .summary()  .modules  .layers  .ops  .params"),
         ),
     )
