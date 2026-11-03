@@ -32,7 +32,7 @@ x = torch.rand(1, 3, 224, 224)
 trace = tl.trace(model, x)
 
 attribution = tl.attribution.saliency(model, x, target=0)
-RESULT = tuple(attribution.shape) == tuple(x.shape)
+RESULT = tuple(attribution.values.shape) == tuple(x.shape)
 ```
 
 ## Wrap an attribution function as `explain_func`
