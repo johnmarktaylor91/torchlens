@@ -8588,7 +8588,6 @@ test-docstrings	tests/test_recipe_dissection.py	64
 test-docstrings	tests/test_recipe_dissection.py	64.
 test-docstrings	tests/test_recipe_dissection.py	7697
 test-docstrings	tests/test_record_schema_bindings.py	11
-test-docstrings	tests/test_reentrant_trace.py	55
 test-docstrings	tests/test_rehydration_floor.py	10,
 test-docstrings	tests/test_rehydration_floor.py	2.16
 test-docstrings	tests/test_rehydration_floor.py	2.16_
