@@ -2,7 +2,7 @@
 
 Three ops record something other than their literal ``(args, kwargs)``:
 
-* a **storage-rebinding setter** (r28 reconcile) is recorded as the canonical
+* a **storage-rebinding setter** is recorded as the canonical
   single-argument ``detach(rhs)`` call: the receiver's OLD value has zero dataflow
   into the result (the rebind replaces every value), so only the right-hand side is
   logged, and the live receiver still gets the op's label through the same-object
