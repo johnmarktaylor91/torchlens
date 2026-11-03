@@ -494,7 +494,7 @@ def export_collapse_plan(trace: Any, mode: str = "auto") -> dict[str, Any]:
 
     from .._postprocess._site_join import site_profile
 
-    plan = trace.collapse_plan(mode=mode)
+    plan = trace._collapse_plan(mode=mode)
     profile = site_profile(trace)
     per_call = [
         {

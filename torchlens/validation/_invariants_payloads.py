@@ -511,7 +511,7 @@ def _check_payload_metadata_invariants(ml: Trace) -> None:
             payload_name="transformed_grad",
         )
         for record in getattr(op, "_grad_records", ()) or ():
-            record_label = f"{label}.grad_record[{getattr(record, 'backward_pass_index', '?')}]"
+            record_label = f"{label}.grad_record[{getattr(record, 'backward_pass_number', '?')}]"
             _check_live_payload_metadata(
                 name,
                 record_label,

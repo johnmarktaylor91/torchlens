@@ -99,7 +99,7 @@ tests; `tests/AGENTS.md` has the full area table.
 | Replay | `Trace.run`, `torchlens._runnable` | `_runnable/`, `captured_run.py` | `test_runnable_*.py`, `test_run_*.py` |
 | Validation | `tl.validate`, `torchlens.validation.validate_forward_pass` | `validation/` | `test_validation*.py`, `test_backward*.py`, `validation_goldens/` |
 | Backward capture | `CaptureOptions(backward_ready=True)`, `trace.draw_backward` | `backends/torch/backward.py`, `validation/backward.py` | `test_backward*.py` |
-| Intervention | `tl.run`, `tl.when`, `Trace.fork`, `fork.do`, `tl.sweep` | `intervention/`, `_trace_state.py` | `test_intervention*.py`, `test_sites.py` |
+| Intervention | `tl.run`, `tl.when`, `Trace.fork`, `fork.do`, `tl.sweep` | `intervention/`, `_trace_state.py` | `test_intervention*.py` |
 | Bundles and experiments | `tl.Bundle`, `torchlens.experiment` | `bundle/`, `intervention/` (Bundle), `experiment/` | `test_bundle_*.py` |
 | Selection algebra | `tl.Selection`, `tl.units`, `tl.params`, `tl.top_k` | `_selection.py`, `_selection_values.py`, `_selection_graph.py`, `_selection_subspace.py`, `_selection_compare.py` | `test_selection*.py` |
 | Attribution | `tl.attribution` | `attribution/`, `attribution/graph/`, `attribution/onebackward/` | `test_attribution*.py` |

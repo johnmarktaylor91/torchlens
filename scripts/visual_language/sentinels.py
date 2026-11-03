@@ -173,7 +173,7 @@ SENTINELS: tuple[Sentinel, ...] = (
                 "draw_backward()",
                 call="draw_backward",
                 capture=_GRAD,
-                prep="log_backward",
+                prep="backward",
             ),
             _panel(
                 "b",
@@ -181,7 +181,7 @@ SENTINELS: tuple[Sentinel, ...] = (
                 "draw_combined()",
                 call="draw_combined",
                 capture=_GRAD,
-                prep="log_backward",
+                prep="backward",
             ),
             _panel(
                 "c",

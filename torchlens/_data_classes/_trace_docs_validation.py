@@ -273,22 +273,6 @@ DOCS: dict[str, str] = {
             claim (the recorder pass); a bare nested entry without it refuses.
         """
     ),
-    "log_backward": (
-        """Run backward from ``loss`` while capturing first-class backward metadata.
-        
-        Parameters
-        ----------
-        loss:
-            Tensor whose ``grad_fn_handle`` roots the backward graph.
-        **backward_kwargs:
-            Keyword arguments forwarded to ``torch.Tensor.backward``.
-        
-        Returns
-        -------
-        Trace
-            This model log, for chaining.
-        """
-    ),
     "backward": (
         """Run backward from ``loss`` and populate this Trace with backward metadata.
         
@@ -312,16 +296,6 @@ DOCS: dict[str, str] = {
         -------
         Any
             Backward recording context manager.
-        """
-    ),
-    "disarm_triggers": (
-        """Detach this Trace from global autograd backward interception.
-        
-        Returns
-        -------
-        None
-            Future plain ``loss.backward()`` or ``torch.autograd.*`` calls will
-            not record into this Trace.
         """
     ),
     "_remove_log_entry": (

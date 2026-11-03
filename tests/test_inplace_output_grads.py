@@ -51,7 +51,7 @@ def _module_site_grad(
     """Trace ``model``, run a managed backward and return the module output's grad."""
 
     trace = tl.trace(model, x, capture=CaptureOptions(save_grads=save_grads))
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     sites = list(trace.find_sites(tl.module(address)))
     assert len(sites) == 1
     return sites[0].grad
@@ -204,7 +204,7 @@ def test_each_in_place_write_to_one_tensor_records_its_own_gradient(func_name: s
     reference = _per_version_reference(copy.deepcopy(model), x)
     assert not torch.allclose(reference["add_"], reference["relu_"])
     trace = tl.trace(model, x, capture=CaptureOptions(save_grads=tl.func(func_name)))
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     sites = [op for op in trace if getattr(op, "func_name", None) == func_name]
     assert len(sites) == 1
     assert sites[0].grad is not None
@@ -271,7 +271,7 @@ def test_unselected_in_place_ops_record_no_gradient() -> None:
     torch.manual_seed(0)
     model = _WrittenThreeTimes().eval()
     trace = tl.trace(model, torch.randn(2, 6), capture=CaptureOptions(save_grads=tl.func("mul_")))
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     with_grad = [op.func_name for op in trace if getattr(op, "grad", None) is not None]
     assert with_grad == ["mul_"]
 
@@ -290,7 +290,7 @@ def _refreshed_trace(model: nn.Module, x: torch.Tensor, save_grads: object) -> t
         model, torch.randn_like(x), capture=CaptureOptions(save_grads=save_grads, seed=0)
     )
     trace.save_new_outs(model, x, seed=1)
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     return trace
 
 

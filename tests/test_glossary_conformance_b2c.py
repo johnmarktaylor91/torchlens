@@ -68,7 +68,7 @@ def test_grad_fn_calls_accessor_and_call_savedness() -> None:
     """GradFn.calls replaces ops and GradFnCall.is_saved mirrors saved grad payloads."""
 
     trace = _make_trace(CaptureOptions(layers_to_save="all", save_grads=True))
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     grad_fn = next(record for record in trace.autograd.grad_fns if record.num_calls)
     grad_fn_call = grad_fn.calls[0]
 

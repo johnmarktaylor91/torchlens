@@ -28,7 +28,7 @@ def _observed(case: str) -> tuple[Any, Any]:
     trace = tl.trace(model, inputs, capture=tl.options.CaptureOptions(backward_ready=True))
     before = cost_tree(trace, fold_repeats=False)
     out = trace[trace.output_layers[0]].out
-    trace.log_backward(out.sum())
+    trace.backward(out.sum())
     return trace, before
 
 
@@ -131,7 +131,7 @@ def test_unattributed_backward_work_is_a_row_not_spread() -> None:
     trace = tl.trace(model, inputs, capture=tl.options.CaptureOptions(backward_ready=True))
     try:
         out = trace[trace.output_layers[0]].out
-        trace.log_backward(out.sum())
+        trace.backward(out.sum())
         status = backward_status(trace)
         assert status.unattributed_flops == 0
         tree = cost_tree(trace)
@@ -148,7 +148,7 @@ def test_siblings_whose_backward_differs_never_fold() -> None:
     trace = tl.trace(model, inputs, capture=tl.options.CaptureOptions(backward_ready=True))
     try:
         out = trace[trace.output_layers[0]].out
-        trace.log_backward(out.sum())
+        trace.backward(out.sum())
         tree = cost_tree(trace)
         for row in tree.rows:
             if row.folded > 1:

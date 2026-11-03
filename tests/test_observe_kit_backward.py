@@ -54,7 +54,7 @@ def _backward_trace(model: nn.Module, x: torch.Tensor) -> tl.Trace:
         save_mode="reference",
     )
     output = captured.output_ops[0].out
-    captured.log_backward(output)
+    captured.backward(output)
     return captured
 
 
@@ -180,8 +180,8 @@ def test_multi_backward_requires_bwd_selector() -> None:
     )
     try:
         output = captured.output_ops[0].out
-        captured.log_backward(output, retain_graph=True)
-        captured.log_backward(output)
+        captured.backward(output, retain_graph=True)
+        captured.backward(output)
         with pytest.raises(InvalidArgumentError) as excinfo:
             bisect_nan_backward(captured)
         assert excinfo.value.fields["code"] == "bwd_selector_required"

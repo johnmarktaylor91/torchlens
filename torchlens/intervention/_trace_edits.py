@@ -1,6 +1,6 @@
 """Trace edit functions reached from the records through ``_data_classes._doors.intervention``.
 
-The ``do``, ``set``, ``remove``, ``clear_edits`` and ``save_intervention`` bodies of ``Trace``
+The ``do``, ``remove``, ``clear_edits`` and ``save_intervention`` bodies of ``Trace``
 live here as functions taking the trace first; the record keeps one thin method per verb.
 Selection-kind ``do`` bodies: ``_trace_selection_edits``; sticky hook attachment:
 ``_trace_hooks``; spec state and history records: ``_data_classes._trace_intervention_records``.
@@ -144,32 +144,12 @@ def set_site(  # noqa: PLR0913 - trace stands in for self on the moved method
     site: Any,
     value: Any,
     *,
-    direction: str = "forward",
     strict: bool = False,
     confirm_mutation: bool = False,
 ) -> Trace:
-    """Set a site out recipe without propagating it. (the ``Trace.set`` body)."""
+    """Stage a site out recipe without propagating it (the ``engine="set_only"`` body of ``Trace.do``)."""
 
     warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
-    if direction not in {"forward", "backward", "both"}:
-        raise InvalidArgumentError(
-            "set(..., direction=...) must be 'forward', 'backward', or 'both'; "
-            f"received {direction!r}",
-            code="intervention_direction_invalid",
-            remedy="pass direction='forward', 'backward', or 'both'",
-            argument="direction",
-        )
-    if direction in {"backward", "both"}:
-        # Gradients are addressed as sites now; ``set`` (removed by wave D)
-        # keeps only its activation path rather than a second gradient door.
-        raise InvalidArgumentError(
-            f"set(..., direction={direction!r}) no longer edits gradients: a gradient "
-            "is addressed as a site, tl.grad(site)",
-            code="intervention_direction_invalid",
-            remedy="trace.do(tl.grad(site), edit, model=model, inputs=x, loss=fn), or "
-            "trace.attach_hooks(tl.grad(site), edit) then trace.backward(loss)",
-            argument="direction",
-        )
     if is_facet_target(site):
 
         def _facet_replacement_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:

@@ -238,19 +238,6 @@ def test_push_refuses_a_recipe_holding_a_gradient_rule() -> None:
     assert "Replay re-executes forward ops only" in str(excinfo.value)
 
 
-@pytest.mark.parametrize("direction", ["backward", "both", "sideways"])
-def test_set_refuses_a_gradient_or_unknown_direction(direction: str) -> None:
-    """``Trace.set`` keeps only its activation path; gradients are sites (tl.grad)."""
-
-    trace = _trace(_BranchNet()).fork()
-    label = _relu_label(trace)
-    recipe_before = trace.recipe
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        trace.set(label, torch.zeros_like(trace[label].out), direction=direction)
-    assert excinfo.value.fields["code"] == "intervention_direction_invalid"
-    assert trace.recipe == recipe_before
-
-
 # ---------------------------------------------------------------------------
 # Settle rows (A20, A27) driven directly
 # ---------------------------------------------------------------------------
@@ -297,7 +284,7 @@ def test_settle_writes_one_fired_row_per_pass_and_keeps_earlier_rows() -> None:
     assert row["fire_count"] == 1
     assert row["parent_event_id"] == "lineage:1"
     assert row["arming_event_id"] == "lineage:1"
-    assert row["backward_pass_index"] == 1
+    assert row["backward_pass_number"] == 1
     assert trace.intervention_audit[-1]["kind"] == "EVENT"
     assert trace.intervention_audit[-1]["status"] == "fired"
     assert trace.annotations["armed_gradient_edits"] == 0
@@ -306,7 +293,7 @@ def test_settle_writes_one_fired_row_per_pass_and_keeps_earlier_rows() -> None:
     spec.records.append(_Fire(edit, pass_index=2, label=label))
     settle_armed_gradient_edits(trace, pass_index=2)
     rows = _events(trace, door="backward")
-    assert [r["backward_pass_index"] for r in rows] == [1, 2]
+    assert [r["backward_pass_number"] for r in rows] == [1, 2]
     assert rows[0] == snapshot
 
 
@@ -422,11 +409,11 @@ def test_backward_settles_the_armed_row_per_pass() -> None:  # A20
     assert first["parent_event_id"] == arming["event_id"]
     assert first["status"] == "fired"
     assert first["fire_count"] >= 1
-    assert first["backward_pass_index"] == 1
+    assert first["backward_pass_number"] == 1
     snapshot = dict(first)
     result.backward(loss)
     rows = _events(result, door="backward")
-    assert [row["backward_pass_index"] for row in rows] == [1, 2]
+    assert [row["backward_pass_number"] for row in rows] == [1, 2]
     assert rows[0] == snapshot
 
 

@@ -57,7 +57,7 @@ def _captured_backward_trace() -> tl.Trace:
         model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all")
     )
     loss = trace[trace.output_layers[0]].out.sum()
-    trace.log_backward(loss)
+    trace.backward(loss)
     check_metadata_invariants(trace)
     return trace
 

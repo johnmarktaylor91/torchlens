@@ -52,7 +52,7 @@ def _observed(
     if with_sketch:
         histogram = Histogram()
         histogram.update(tensor)
-        sketch = histogram.result()
+        sketch = histogram.compute()
     return ObservationRecord(
         global_step=step,
         site_id=site,
@@ -145,7 +145,7 @@ class TestDerivedQuantiles:
         data = torch.randn(20000)
         histogram = Histogram()
         histogram.update(data)
-        sketch = histogram.result()
+        sketch = histogram.compute()
         for q in (0.05, 0.25, 0.5, 0.75, 0.95):
             estimate = derived_quantile(sketch, q)
             truth = float(torch.quantile(data, q))
@@ -161,7 +161,7 @@ class TestDerivedQuantiles:
         torch.manual_seed(2)
         histogram = Histogram()
         histogram.update(torch.randn(5000))
-        sketch = histogram.result()
+        sketch = histogram.compute()
         values = [derived_quantile(sketch, q).value for q in (0.1, 0.3, 0.5, 0.7, 0.9)]
         assert values == sorted(values)
 
@@ -169,12 +169,12 @@ class TestDerivedQuantiles:
     def test_zero_heavy_population_median_is_zero(self) -> None:
         histogram = Histogram()
         histogram.update(torch.zeros(100))
-        assert derived_quantile(histogram.result(), 0.5).value == 0.0
+        assert derived_quantile(histogram.compute(), 0.5).value == 0.0
 
     def test_overflow_clamp_is_disclosed(self) -> None:
         histogram = Histogram()
         histogram.update(torch.full((50,), 2.0**40))  # beyond hi_exp=16 window
-        estimate = derived_quantile(histogram.result(), 0.5)
+        estimate = derived_quantile(histogram.compute(), 0.5)
         assert estimate.clamped_to_window
         assert estimate.value == 2.0**16
 
@@ -182,14 +182,14 @@ class TestDerivedQuantiles:
         histogram = Histogram()
         histogram.update(torch.randn(10))
         with pytest.raises(WatchRenderError) as excinfo:
-            derived_quantile(histogram.result(), 1.5)
+            derived_quantile(histogram.compute(), 1.5)
         assert excinfo.value.fields["code"] == "watch_quantile_invalid"
 
     def test_empty_population_refuses(self) -> None:
         histogram = Histogram()
         histogram.update(torch.full((5,), float("nan")))
         with pytest.raises(WatchRenderError) as excinfo:
-            derived_quantile(histogram.result(), 0.5)
+            derived_quantile(histogram.compute(), 0.5)
         assert excinfo.value.fields["code"] == "watch_population_empty"
 
 

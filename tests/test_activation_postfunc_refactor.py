@@ -99,7 +99,7 @@ def test_grad_transform_keeps_raw_grad_and_transformed_metadata() -> None:
         capture=CaptureOptions(save_grads="all"),
         save=SaveOptions(grad_transform=lambda t: t.mean()),
     )
-    trace.log_backward(_output_loss(trace))
+    trace.backward(_output_loss(trace))
     layer = next(trace[label] for label in trace.saved_grad_ops.keys())
 
     assert layer.grad is not None
@@ -124,7 +124,7 @@ def test_save_raw_grads_false_keeps_raw_metadata_only() -> None:
             save_raw_grads=False,
         ),
     )
-    trace.log_backward(_output_loss(trace))
+    trace.backward(_output_loss(trace))
     layer = next(trace[label] for label in trace.saved_grad_ops.keys())
 
     assert layer.grad is None

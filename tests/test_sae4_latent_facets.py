@@ -154,7 +154,11 @@ _DOORS = {
     "trace_do": lambda trace, site, hook: trace.do(site, hook, intervention=_IN_PLACE),
     "fork_do": lambda trace, site, hook: trace.fork("door").do(site, hook),
     "tl_do": lambda trace, site, hook: trace.do(site, hook, intervention=_IN_PLACE),
-    "set": lambda trace, site, hook: trace.fork("door").set(site, hook).push(),
+    "set": lambda trace, site, hook: (
+        trace.fork("door")
+        .do(site, hook, intervention=tl.options.InterventionOptions(engine="set_only"))
+        .push()
+    ),
 }
 
 
@@ -366,7 +370,15 @@ def test_a_latent_set_is_one_simultaneous_write(setup) -> None:
 
 def test_set_writes_a_latent_value(setup) -> None:
     model, x, _sae = setup
-    edited = _trace(model, x).fork("pin").set(tl.facet("res").latent(1), torch.full((2,), 4.0))
+    edited = (
+        _trace(model, x)
+        .fork("pin")
+        .do(
+            tl.facet("res").latent(1),
+            torch.full((2,), 4.0),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
+        )
+    )
     expected = [[h[j] + (4.0 - _latents(h)[1]) * W_DEC[1][j] for j in range(4)] for h in X]
     edited.push()
     torch.testing.assert_close(_site_out(edited), torch.tensor(expected), **TOL)

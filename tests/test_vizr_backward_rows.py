@@ -53,7 +53,7 @@ def _backward_trace() -> tl.Trace:
         torch.randn(2, 3, requires_grad=True),
         capture=tl.options.CaptureOptions(save_grads="all"),
     )
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     return trace
 
 

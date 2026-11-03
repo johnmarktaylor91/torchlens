@@ -220,7 +220,7 @@ class TestCrossSiteRollupRefused:
                 phase="forward",
                 presence="observed",
                 spine=spine.compute(),
-                sketch=sketch.result(),
+                sketch=sketch.compute(),
             )
 
         with pytest.raises(HistorySchemaError) as excinfo:

@@ -22,7 +22,7 @@ from torchlens._observability._kineto import extract_events
 
 
 def _backward_session(model: nn.Module, x: torch.Tensor, **backward_kwargs):
-    """One armed capture + log_backward inside one owned session."""
+    """One armed capture + backward inside one owned session."""
 
     with obs.session() as sess:
         log = tl.trace(
@@ -32,7 +32,7 @@ def _backward_session(model: nn.Module, x: torch.Tensor, **backward_kwargs):
             save_mode="reference",
         )
         loss = log.output_ops[0].out.sum()
-        log.log_backward(loss, **backward_kwargs)
+        log.backward(loss, **backward_kwargs)
     extraction = extract_events(sess.closed_profiler)
     return log, extraction
 
@@ -78,8 +78,8 @@ def test_second_pass_markers_carry_pass_index() -> None:
             save_mode="reference",
         )
         loss = log.output_ops[0].out.sum()
-        log.log_backward(loss, retain_graph=True)
-        log.log_backward(loss)
+        log.backward(loss, retain_graph=True)
+        log.backward(loss)
     extraction = extract_events(sess.closed_profiler)
     markers = [e for e in extraction.events if e.name.startswith("torchlens::gradfn::")]
     pass_indexes = {int(e.name.rsplit("::", 1)[-1].split(":")[1]) for e in markers}
@@ -122,7 +122,7 @@ def test_raising_node_leaks_are_drained_and_disclosed() -> None:
         )
         loss = log.output_ops[0].out.sum()
         with pytest.raises(RuntimeError, match="injected backward failure"):
-            log.log_backward(loss)
+            log.backward(loss)
     extraction = extract_events(sess.closed_profiler)
     # No marker survives the pass boundary: the profiler's marker stack was
     # fully unwound before the session closed (otherwise export would show
@@ -144,7 +144,7 @@ def test_no_marker_work_without_a_session() -> None:
         save_mode="reference",
     )
     loss = log.output_ops[0].out.sum()
-    log.log_backward(loss)
+    log.backward(loss)
     assert log.__dict__.get("_tl_gradfn_marker_leaks", 0) == 0
     assert log.__dict__.get("_tl_gradfn_marker_gaps", 0) == 0
     log.cleanup()

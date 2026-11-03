@@ -1233,7 +1233,7 @@ def _collapse_artifact_snapshot(trace: tl.Trace, tmp_path: Path, stem: str) -> t
     analysis = analyze_collapse(trace)
     auto_result = select_collapse_plan(trace, context, mode="auto")
     max_result = select_collapse_plan(trace, context, mode="max")
-    schedule = trace.collapse_schedule(context)
+    schedule = trace._collapse_schedule(context)
     auto_dot = _draw_source(trace, tmp_path, f"{stem}_auto", "auto").encode()
     max_dot = _draw_source(trace, tmp_path, f"{stem}_max", "max").encode()
     return (
@@ -1271,7 +1271,7 @@ def _all_mode_collapse_snapshot(trace: tl.Trace, tmp_path: Path, stem: str) -> t
     _clear_collapse_caches(trace)
     plans = (
         collapse_plan_for_trace(trace, None, None, RenderContext()),
-        *(trace.collapse_plan(mode=mode) for mode in modes[1:]),
+        *(trace._collapse_plan(mode=mode) for mode in modes[1:]),
     )
     dots = tuple(_draw_source(trace, tmp_path, f"{stem}_{mode}", mode).encode() for mode in modes)
     return plans, dots
@@ -1552,9 +1552,9 @@ def test_float_collapse_plan_counts_match_train_batchnorm_svg(tmp_path: Path) ->
         ]
         assert len(hidden_updates) == 2
 
-        schedule = trace.collapse_schedule()
+        schedule = trace._collapse_schedule()
         for index, threshold in enumerate((0.0, 0.25, 0.6, 1.0)):
-            plan = trace.collapse_plan(threshold)
+            plan = trace._collapse_plan(threshold)
             out = tmp_path / f"batchnorm_float_{index}"
             trace.draw(
                 collapse=threshold,
@@ -2772,8 +2772,8 @@ def test_equivalent_max_plans_render_same_collapsed_box_layer_labels(
     torch.set_num_threads(4)
     trace = _trace(tvm.mobilenet_v2(weights=None), torch.randn(1, 3, 224, 224))
     try:
-        max_plan = trace.collapse_plan(mode="max")
-        level_plan = trace.collapse_plan(mode=1.0)
+        max_plan = trace._collapse_plan(mode="max")
+        level_plan = trace._collapse_plan(mode=1.0)
         max_labels = _draw_svg_layer_labels(trace, tmp_path, "mobilenet_v2_max", "max")
         level_labels = _draw_svg_layer_labels(trace, tmp_path, "mobilenet_v2_level_1", 1.0)
 

@@ -1156,7 +1156,7 @@ def test_wiped_grad_fn_registry_on_detached_trace_fails_invariants() -> None:
         torch.randn(2, 4),
         capture=CaptureOptions(layers_to_save="all", save_grads="all"),
     )
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     check_metadata_invariants(trace)
     assert trace._backward_pass_logs, "backward evidence precondition"
     assert len(trace.autograd.backward_passes) >= 1

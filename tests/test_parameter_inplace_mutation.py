@@ -630,7 +630,7 @@ def test_frozen_parameter_mutation_op_records_its_gradient(spelling: str) -> Non
     eager_out.sum().backward()
 
     trace = tl.trace(copy.deepcopy(model), x, capture=CaptureOptions(save_grads="all"))
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     mutation = _ops_by_type(trace, _GRAD_OPERAND_OP[spelling])[0]
     assert mutation.grad is not None
     assert torch.allclose(mutation.grad, eager_temp.grad)
@@ -719,7 +719,7 @@ def test_no_grad_parameter_mutation_validates_backward(op: str) -> None:
 
 
 def _backward_through_own_output(trace: Any) -> None:
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
 
 
 def test_mutation_gradient_hook_records_only_its_own_traces_backward() -> None:

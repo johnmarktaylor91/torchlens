@@ -88,7 +88,7 @@
   (`recording_backward_not_requested`). A `tl.trace` or `tl.record` entered under
   `torch.no_grad()` or `torch.inference_mode()` with no backward option implies
   `inference_only=True` (`Trace.options.inference_only`, `outcome.inference_only`), and a later
-  `log_backward()` refuses naming that cause. The implied flag is cleared when the forward
+  `backward()` refuses naming that cause. The implied flag is cleared when the forward
   re-enables grad (`torch.enable_grad()` inside it) and an output carries autograd history;
   an explicit `inference_only=True` is never cleared.
   A backward run through such a capture records the ATen calls it dispatched on
@@ -149,7 +149,7 @@
   A swallowed halt/nonfinite signal (broad `except:` in user code) raises
   `tl.errors.StopSignalSwallowedError` at the capture boundary and settles
   FAILED, never COMPLETE. Refresh re-arms `raise_on_nan`. Halted analysis
-  `Trace.save` works (the transient-leak refusal is fixed); halted `log_backward`
+  `Trace.save` works (the transient-leak refusal is fixed); halted `backward`
   and loaded-sparse `run()` remain allowed.
 - QUERYABLE NONFINITE RECORD (spellings DOCUMENTED-UNSTABLE): `trace.nonfinite_ops`
   returns the pass-qualified labels of ops whose output held NaN/Inf and
@@ -518,8 +518,8 @@
   `None` preserves defaults (`"none"` has no run folding; `"auto"`/`"max"` use band-pressure
   folding), `True` folds eligible repeated runs even with `collapse="none"`, and `False` disables
   run folding. `collapse="max"` may emit segment boxes; `(xN)`, ellipsis, and segment labels must
-  `Trace.collapse_plan(mode=...)` returns the diagnostic
-  plan, and `Trace.collapse_schedule()` returns the float schedule metadata. Smart-collapse
+  `Drawing.collapse_plan(mode=...)` returns the diagnostic
+  plan, and `Drawing.collapse_schedule()` returns the float schedule metadata. Smart-collapse
   admission (F11, memo D5) gates on U -- the rendered universe of the full plan -- tiered by
   a measured (U, W) work estimator, with `COLLAPSE_OPTIMIZER_MAX_OPS` (2000,
   `torchlens._visualization.collapse_optimizer`) as the defensive constant: over-budget
@@ -1358,7 +1358,7 @@
   nodes; spliced outputs are identical with it off. `bridge.sae.register(name, sae, site=)`
   / `unregister(name)` (DOCUMENTED-UNSTABLE) make an SAE's latents the facet family `name`:
   `tl.facet(name).latent(k)` (or a list) is edited at the doors `tl.head` serves
-  (`Trace.set`, `attach_hooks`, `Trace.do`, `fork().do`) as
+  (`attach_hooks`, `Trace.do`, `fork().do`) as
   `site + decode(z') - decode(z)` (the reconstruction error stays), and
   `trace[site].facets["name[k]"]` reads the encoder activation; a string site must be one
   op of a single-pass layer (`sae_latent_site_ambiguous`), a selector site fans out. A bare

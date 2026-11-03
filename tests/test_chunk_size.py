@@ -407,13 +407,13 @@ def test_omitted_chunk_size_does_not_block_non_torch_backend() -> None:
     assert trace.provenance.backend == "chunk_fake"
 
 
-def test_log_backward_rejects_chunked_forward() -> None:
+def test_backward_rejects_chunked_forward() -> None:
     """Chunked traces should not accept deferred backward capture."""
 
     trace = tl.trace(DeterministicToy().eval(), _toy_inputs(), chunk_size=4)
 
     with pytest.raises(Exception, match="chunk_size"):
-        trace.log_backward(torch.tensor(1.0, requires_grad=True))
+        trace.backward(torch.tensor(1.0, requires_grad=True))
 
 
 def test_rerun_chunk_size_matches_manual_append_loop() -> None:

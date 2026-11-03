@@ -336,7 +336,7 @@ DOCS: dict[str, str] = {
             This log, allowing chained calls before ``draw``.
         """
     ),
-    "animate_ops": (
+    "animate": (
         """Return a minimal HTML animation for repeated ops at ``site``.
         
         Parameters

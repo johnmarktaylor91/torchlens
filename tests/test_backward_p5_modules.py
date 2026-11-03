@@ -53,7 +53,7 @@ def _trace_with_backward(layers_to_save: str | list[str] = "all") -> tl.Trace:
         capture=tl.options.CaptureOptions(layers_to_save=layers_to_save, save_grads="all"),
     )
     loss = trace[trace.output_layers[0]].out.square().mean()
-    trace.log_backward(loss, retain_graph=True)
+    trace.backward(loss, retain_graph=True)
     return trace
 
 

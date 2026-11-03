@@ -95,7 +95,7 @@ def test_aggregate_grad_basic_norms() -> None:
             capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=True),
         )
         loss = _mse_loss(trace[trace.output_layers[-1]].out, targets)
-        trace.log_backward(loss)
+        trace.backward(loss)
         grad = next(layer.grad for layer in trace._layer_list if layer.type == "relu")
         expected_norms.append(float(torch.linalg.vector_norm(grad.reshape(-1)).item()))
         trace.cleanup()
@@ -114,7 +114,7 @@ def test_aggregate_grad_warns_on_ambiguous_saved_selector_and_uses_first_match()
         capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=tl.func("linear")),
     )
     loss = _mse_loss(trace[trace.output_layers[-1]].out, batch[1])
-    trace.log_backward(loss)
+    trace.backward(loss)
     matches = [
         layer
         for layer in trace._layer_list

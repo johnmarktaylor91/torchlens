@@ -137,7 +137,7 @@ class _Attend(nn.Module):
 
 def _executed(model: nn.Module, x: torch.Tensor) -> Any:
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     status = backward_status(trace)
     trace.cleanup()
     return status

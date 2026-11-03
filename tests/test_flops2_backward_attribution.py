@@ -192,7 +192,7 @@ def _checkpointed_trace(mode: str) -> Any:
     with checkpoint.set_checkpoint_early_stop(False):
         trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
         out = trace[trace.output_layers[0]].out
-        trace.log_backward(out.sum())
+        trace.backward(out.sum())
     return trace
 
 
@@ -308,7 +308,7 @@ def test_a_backward_that_raises_reads_not_run_never_a_number() -> None:
     try:
         out = trace[trace.output_layers[0]].out
         with pytest.raises(RuntimeError, match="refused on purpose"):
-            trace.log_backward(out.sum())
+            trace.backward(out.sum())
         (record,) = trace.autograd.backward_passes
         assert record.status != "ok"
         assert record.aten_ops  # the second Linear's backward ran before the raise
@@ -339,7 +339,7 @@ def test_without_the_node_resolver_the_count_reads_unknown_never_a_guess(
         model, _leaf((5, 4), False, 4), capture=tl.options.CaptureOptions(backward_ready=True)
     )
     try:
-        trace.log_backward(trace[trace.output_layers[0]].out.sum())
+        trace.backward(trace[trace.output_layers[0]].out.sum())
         (record,) = trace.autograd.backward_passes
         assert record.status == "ok" and record.aten_ops
         assert all(op.grad_fn_call_ref is None for op in record.aten_ops)
@@ -426,7 +426,7 @@ def test_an_unused_output_gets_no_gradient_and_backward_runs(case: str) -> None:
         model, x, capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True)
     )
     try:
-        trace.log_backward(trace[trace.output_layers[0]].out)
+        trace.backward(trace[trace.output_layers[0]].out)
         for name, param in model.named_parameters():
             torch.testing.assert_close(param.grad, expected[name])
         outputs = [op for op in trace._layer_list if op.func_name == func_name]

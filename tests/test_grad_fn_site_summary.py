@@ -40,7 +40,7 @@ def _backward_trace(model: nn.Module | None = None) -> tl.Trace:
         save_mode="reference",
         capture=tl.options.CaptureOptions(backward_ready=True),
     )
-    trace.log_backward(trace.output_ops[0].out.sum())
+    trace.backward(trace.output_ops[0].out.sum())
     return trace
 
 

@@ -10,7 +10,7 @@ with zero capture-time preparation.
 
 The id rejoin is a FALLBACK, not a co-primary source: a suppressed read never
 consumes the handles, so the rejoin exists for the one real case of a user
-``log_backward`` before the read (which nulls per-op handles while the
+``backward`` before the read (which nulls per-op handles while the
 trace's strong-ref list keeps the objects alive).
 
 Alias identity is ``(id(node), slot)`` (D11): distinct slots of one split
@@ -164,7 +164,7 @@ _INDEX_CACHE: weakref.WeakKeyDictionary[Any, ReadEdgeIndex] = weakref.WeakKeyDic
 def _validity_token(trace: Any) -> tuple[Any, ...]:
     """Return the cheap invalidation token for a trace's edge index.
 
-    A user ``log_backward`` advances ``num_backward_passes`` (and nulls
+    A user ``backward`` advances ``num_backward_passes`` (and nulls
     per-op handles -> the rejoin path), cleanup flips ``_tl_cleaned_up``, and
     both must invalidate a cached index. Suppressed reads change neither.
     """
@@ -338,7 +338,7 @@ def read_edge_index(trace: Any) -> ReadEdgeIndex:
     """Return the (cached) addressable-site index for a live trace.
 
     The cache invalidates on the cheap validity token (backward-pass count,
-    pinned-ref count, cleanup flag), so a user ``log_backward`` between reads
+    pinned-ref count, cleanup flag), so a user ``backward`` between reads
     transparently rebuilds through the id-rejoin fallback while suppressed
     reads reuse the cached index.
 

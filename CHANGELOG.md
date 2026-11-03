@@ -5,6 +5,39 @@
 
 ### Behavior changes
 
+- **intervention**: `Trace.set`, `Layer.set` and `Op.set` are removed (decision walk api.1, 2 Nov 2026).
+  Stage a one-shot replacement with `trace.do(site, value, intervention=tl.options.InterventionOptions(engine="set_only"))`
+  (on a layer, `layer.do(value, intervention=...)`). The set-only route is unchanged; `do()` gains no new keyword.
+  The old `Trace.set` and `Layer.set` refuse with the typed `facade_redirect` error naming the replacement. The
+  `intervention_direction_invalid` refusals that only `set(..., direction=)` raised are gone with it; the code still
+  covers `Rule(direction=)`.
+- **intervention**: `torchlens.intervention.sites` (the `sites()` builder with `SiteCollection` and
+  `SiteSpec`) is removed (round-2 walk names.7). Pass selectors to
+  `torchlens.experiment.sweep_sites(...)` directly. The old names refuse with the typed
+  `facade_redirect` error.
+- **draw**: the collapse diagnostics moved off Trace onto the draw result (round-2 walk names.1):
+  `Trace.collapse_plan(mode)` is now `Drawing.collapse_plan(mode)` and `Trace.collapse_schedule()`
+  is now `Drawing.collapse_schedule()`. Render with `tl.render(..., return_trace=True)` and ask the
+  drawing; a drawing that kept no trace refuses typed. `Trace.collapse_order` is unchanged. The old
+  Trace spellings refuse with the typed `facade_redirect` error.
+- **backward**: `Trace.log_backward(loss)` is gone; `trace.backward(loss)` is the one spelling (round-2
+  walk names.5). It was already an alias of `log_backward`, so the behaviour and keywords
+  (`save_grads=`, `retain_graph=`, and the other `torch.Tensor.backward` keywords) are unchanged.
+  The old spelling refuses with the typed `facade_redirect` error naming `trace.backward(loss)`.
+- **backward**: `Trace.disarm_triggers()` is now `trace.autograd.disarm()` (round-2 walk names.4):
+  detaching a Trace from global autograd interception belongs with the other autograd members. The
+  old spelling refuses with the typed `facade_redirect` error naming `trace.autograd.disarm()`.
+- **draw**: `Trace.animate_ops(site)` is now `Trace.animate(site)` (velocity walk names.1: the
+  animation is its own method and `VisualizationOptions.animate` is gone). The old spelling
+  refuses with the typed `facade_redirect` error naming `trace.animate(site)`.
+- **backward**: one word for the pass counter (velocity walk names.6, rename). The hook-context
+  key `backward_pass_index` is now `backward_pass_number`, and so is the saved
+  `GradFnCall.backward_pass_index` field (and the matching field of the per-op gradient
+  records), spelled like `FireRecord.backward_pass_number`; the v11 writer contract and the
+  persisted-field table carry the new spelling. `color_by="pass_index"` is now
+  `color_by="pass_number"`. Other fields named `pass_index` are unchanged.
+- **stats**: `tl.stats.Histogram.result()` is now `compute()` (round-2 walk names.2), so every
+  accumulator in `tl.stats` finalizes with the one verb `compute()`. `result()` is gone.
 - **intervention**: `tl.intervention.Rule` has no `direction` field. The site decides the pass
   (`Rule.signal`, derived): `Rule(site, edit)` edits the activation, `Rule(tl.grad(site), edit)`
   the gradient, `Rule(tl.grad(site) | site, edit)` both. `Rule(..., direction=...)` and the old
