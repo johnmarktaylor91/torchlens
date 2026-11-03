@@ -436,8 +436,10 @@ class _TensorBearing:
                     remedy="compare against a member with a stored tensor at this node",
                     member=str(other),
                 )
+            self._require_equal_shapes(names, tensors, metric)
             ref_idx = names.index(other)
             return self._diff_row(tensors, ref_idx, metric_fn)
+        self._require_equal_shapes(names, tensors, metric)
         return self._diff_matrix(tensors, metric_fn)
 
     def aggregate(
@@ -671,6 +673,55 @@ class _TensorBearing:
 
         shape = tuple(getattr(member, "shape", ()) or ())
         return () if len(shape) <= 1 else shape[1:]
+
+    def _require_equal_shapes(
+        self,
+        names: list[str],
+        tensors: list[torch.Tensor],
+        metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+    ) -> None:
+        """Refuse a site whose member tensors differ in shape (typed, site-named).
+
+        Runs on different inputs (prompts of different token counts) reach
+        this site with different shapes; an element-wise distance has no
+        meaning there, so the comparison refuses with the same code as
+        ``Bundle.compare`` instead of failing inside a metric or comparing
+        flattened tensors. All-scalar-like sites still compare.
+
+        Parameters
+        ----------
+        names:
+            Member names, aligned with ``tensors``.
+        tensors:
+            Member tensors at this site.
+        metric:
+            Metric name or callable, named in the refusal.
+
+        Raises
+        ------
+        InvalidArgumentError
+            ``code="metric_shape_mismatch"`` when the shapes differ.
+        """
+
+        if all(is_scalar_like(tensor) for tensor in tensors):
+            return
+        shapes = {name: tuple(tensor.shape) for name, tensor in zip(names, tensors, strict=True)}
+        if len(set(shapes.values())) > 1:
+            metric_name = (
+                metric if isinstance(metric, str) else getattr(metric, "__name__", "metric")
+            )
+            raise InvalidArgumentError(
+                f"Bundle comparison at site {self._label!r} under {metric_name} received "
+                f"different shapes per member: {shapes}",
+                code="metric_shape_mismatch",
+                remedy=(
+                    "compare members whose aligned sites hold the same shape (for runs "
+                    "on different inputs, inputs of the same shape, such as prompts "
+                    "with the same token count)"
+                ),
+                site=str(self._label),
+                member_shapes=shapes,
+            )
 
     @staticmethod
     def _diff_matrix(

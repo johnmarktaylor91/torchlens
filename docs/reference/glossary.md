@@ -933,7 +933,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `b.stored_comparison_names()` lists the stored names. Session-level state on the built
   supergraph, never persisted. Every (baseline, member) pair goes through the comparison gate
   first, the same predicates as `bundle.at(site).compare()`: no ordering path between them, a
-  shared graph, and proven-equal input values; otherwise the read refuses with the gate's
+  shared graph, and sites that line up (proven-equal input values, or for runs on different inputs
+  or checkpoints, equal graph-shape hashes); otherwise the read refuses with the gate's
   `bundle_gate_*` code.
 
 **Bundle.draw**

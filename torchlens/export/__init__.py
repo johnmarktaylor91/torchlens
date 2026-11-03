@@ -905,16 +905,23 @@ def _chrome_trace_diff_deltas(bundle: Any) -> tuple[dict[str, dict[str, float]],
     The timeline (one process per member, one event per supergraph node) never needs
     the deltas. They are the per-node relative L2 distances from the baseline
     (``Bundle.compare`` with ``metric="relative_l2"``) and run the Bundle comparison
-    gate; when it refuses (members on different inputs, foreign models, ordering-joined
-    members) only the delta part is refused: every event's ``delta`` is ``None`` and the
-    status records the gate's stable code and message. The gate is never bypassed.
+    gate; when it refuses (members whose graphs do not line up, foreign models,
+    ordering-joined members) or a site's shapes differ (members on inputs of
+    different shapes, ``metric_shape_mismatch``), only the delta part is refused: every
+    event's ``delta`` is ``None`` and the status records the stable code and message.
+    The gate is never bypassed.
     """
 
+    from .._errors import InvalidArgumentError
     from ..intervention.errors import BundleComparisonError
 
     try:
         return bundle._norm_delta(), {"status": "computed", "operation": "norm_delta"}
-    except BundleComparisonError as exc:
+    except (BundleComparisonError, InvalidArgumentError) as exc:
+        if not isinstance(exc, BundleComparisonError) and (
+            exc.fields.get("code") != "metric_shape_mismatch"
+        ):
+            raise
         return {}, {
             "status": "refused",
             "operation": "norm_delta",

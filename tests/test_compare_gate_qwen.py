@@ -19,6 +19,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens._errors import InvalidArgumentError
 from torchlens.intervention.errors import BundleComparisonError
 from torchlens.types import Relationship
 
@@ -59,7 +60,8 @@ def test_two_real_turns_topology_refusal_and_rank_audit(
     """Two real conversation turns refuse comparison for the right reasons.
 
     One model load carries every leg: (1) the live pair derives the identity
-    relationship yet refuses on input VALUES (Path 1 on a real model);
+    relationship, lines up, and refuses typed on the turns' different shapes
+    (never on the identity rank);
     (2) with the ``successor_of`` row the refusal keys on TOPOLOGY, taking
     precedence over input evidence; (3) both survive the Bundle artifact
     round trip; (4) the loaded pair's relationship rank only ever goes DOWN
@@ -99,11 +101,15 @@ def test_two_real_turns_topology_refusal_and_rank_audit(
     # input equality.
     assert bundle.comparability("turn1", "turn2") is Relationship.SAME_OBJECT
 
-    # WITHOUT the ordering row, the refusal is the input predicate's own
-    # (right reason: the turns captured different input values).
-    with pytest.raises(BundleComparisonError) as excinfo:
+    # WITHOUT the ordering row, the two turns are legitimate cross-input
+    # operands whose graphs line up (equal graph-shape hashes), and the
+    # refusal is the per-site shape guard's (right reason: the turns have
+    # different token counts), naming the site.
+    assert turn1._provenance_fingerprint == turn2._provenance_fingerprint
+    with pytest.raises(InvalidArgumentError) as excinfo:
         bundle.at(tl.module("model.norm")).compare()
-    assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
+    assert excinfo.value.fields["code"] == "metric_shape_mismatch"
+    assert excinfo.value.fields["site"]
 
     # WITH the ordering row, topology takes precedence over input evidence.
     bundle.relate({"kind": "successor_of", "from": "turn2", "to": "turn1", "params": {}})
