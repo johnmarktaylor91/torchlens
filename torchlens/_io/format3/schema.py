@@ -200,12 +200,7 @@ _CORE_FAMILIES: dict[str, dict[str, Any]] = {
         "key": {**_STR, "pattern": r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$"},
         "values": {
             "kind": "object",
-            "keys": {
-                "schema_id": _TEXT,
-                "version": _POSITIVE,
-                "owner": _TEXT,
-                "payload": _ANY,
-            },
+            "keys": {"schema_id": _TEXT, "version": _POSITIVE, "owner": _TEXT, "payload": _ANY},
         },
     },
     "source_snapshots": {
@@ -217,11 +212,7 @@ _CORE_FAMILIES: dict[str, dict[str, Any]] = {
         "unique_by": ("path", "digest"),
         "items": {
             "kind": "object",
-            "keys": {
-                "path": _TEXT,
-                "digest": _DIGEST,
-                "text": {**_STR, "nullable": True},
-            },
+            "keys": {"path": _TEXT, "digest": _DIGEST, "text": {**_STR, "nullable": True}},
         },
     },
 }
@@ -248,11 +239,7 @@ _COLLECTIVE_FAMILIES: dict[str, dict[str, Any]] = {
         "kind": "object",
         "discriminator": "schema",
         "cases": {
-            "collective_boundary_v1": {
-                "kind": "object",
-                "open": True,
-                "keys": _COLLECTIVE_KEYS,
-            },
+            "collective_boundary_v1": {"kind": "object", "open": True, "keys": _COLLECTIVE_KEYS},
             "functional_collective_boundary_v0": {
                 "kind": "object",
                 "open": True,
@@ -261,9 +248,7 @@ _COLLECTIVE_FAMILIES: dict[str, dict[str, Any]] = {
                     "events": {
                         "kind": "object",
                         "open": True,
-                        "keys": {
-                            "event_model": {"vocab": ("funcol_issue_is_launch",)},
-                        },
+                        "keys": {"event_model": {"vocab": ("funcol_issue_is_launch",)}},
                     },
                     "disclosures": {"kind": "list"},
                 },
@@ -381,11 +366,7 @@ _COLLECTIVE_FAMILIES: dict[str, dict[str, Any]] = {
             "rows": {"kind": "tuple", "items": _FLOPS_ROW},
             "uncounted_ops": {
                 "kind": "tuple",
-                "items": {
-                    "kind": "tuple",
-                    "length": 2,
-                    "positions": {0: _LABEL, 1: _POSITIVE},
-                },
+                "items": {"kind": "tuple", "length": 2, "positions": {0: _LABEL, 1: _POSITIVE}},
             },
             "unattributed": {
                 "kind": "tuple",
@@ -420,11 +401,7 @@ _AUDIT_COMMON = {"edit": _STR, "kind": _STR, "resolve_digest": _DIGEST, "selecti
 _REPR_TUPLE = {**_STR, "max_length": 4096, "literal_tuple": True}
 _OCCURRENCE = {
     "kind": "object",
-    "keys": {
-        "consumer": _STR,
-        "edge_address": _REPR_TUPLE,
-        "value_digest": _DIGEST,
-    },
+    "keys": {"consumer": _STR, "edge_address": _REPR_TUPLE, "value_digest": _DIGEST},
 }
 _EVENT_KEYS = {
     "kind": {"vocab": ("EVENT",)},
@@ -460,11 +437,7 @@ _AUDIT_FAMILIES: dict[str, dict[str, Any]] = {
                         "patch_source": {
                             "kind": "object",
                             "keys": dict.fromkeys(
-                                (
-                                    "source_model_class",
-                                    "source_object_id",
-                                    "source_trace_label",
-                                ),
+                                ("source_model_class", "source_object_id", "source_trace_label"),
                                 _STR,
                             ),
                         },
@@ -473,18 +446,11 @@ _AUDIT_FAMILIES: dict[str, dict[str, Any]] = {
                 },
                 "EDGE": {
                     "kind": "object",
-                    "keys": {
-                        **_AUDIT_COMMON,
-                        "edges": _ANY,
-                    },
+                    "keys": {**_AUDIT_COMMON, "edges": _ANY},
                 },
                 "PARAM": {
                     "kind": "object",
-                    "keys": {
-                        **_AUDIT_COMMON,
-                        "disclosure": _STR,
-                        "params": _ANY,
-                    },
+                    "keys": {**_AUDIT_COMMON, "disclosure": _STR, "params": _ANY},
                 },
                 "EVENT": {
                     "kind": "object",
@@ -505,10 +471,7 @@ _AUDIT_FAMILIES: dict[str, dict[str, Any]] = {
         "any_of": (
             {
                 "kind": "object",
-                "keys": {
-                    "edge_address": _REPR_TUPLE,
-                    "resolve_digest": _DIGEST,
-                },
+                "keys": {"edge_address": _REPR_TUPLE, "resolve_digest": _DIGEST},
             },
             {
                 "kind": "object",
@@ -533,41 +496,21 @@ _AUDIT_FAMILIES: dict[str, dict[str, Any]] = {
     },
     # Call-site scalars: a swapped cell type refuses instead of loading as the wrong kind.
     "call_location_file": {"record": "func_call_location", "column": "file", **_STR},
-    "call_location_line": {
-        "record": "func_call_location",
-        "column": "line_number",
-        **_INT,
-        "nullable": True,
-    },
-    "call_location_func_name": {
-        "record": "func_call_location",
-        "column": "func_name",
-        **_STR,
-        "nullable": True,
-    },
-    "call_location_func_qualname": {
-        "record": "func_call_location",
-        "column": "func_qualname",
-        **_STR,
-        "nullable": True,
-    },
-    "call_location_firstlineno": {
-        "record": "func_call_location",
-        "column": "code_firstlineno",
-        **_INT,
-        "nullable": True,
-    },
-    "call_location_col_offset": {
-        "record": "func_call_location",
-        "column": "col_offset",
-        **_INT,
-        "nullable": True,
-    },
-    "call_location_source_loading": {
-        "record": "func_call_location",
-        "column": "source_loading_enabled",
-        **_BOOL,
-        "nullable": True,
+    **{
+        f"call_location_{column}": {
+            "record": "func_call_location",
+            "column": column,
+            **leaf,
+            "nullable": True,
+        }
+        for column, leaf in (
+            ("line_number", _INT),
+            ("func_name", _STR),
+            ("func_qualname", _STR),
+            ("code_firstlineno", _INT),
+            ("col_offset", _INT),
+            ("source_loading_enabled", _BOOL),
+        )
     },
     "selection_recipes": {
         "requires": ("trace", "intervention_audit", "present"),
@@ -579,10 +522,7 @@ _AUDIT_FAMILIES: dict[str, dict[str, Any]] = {
         "open": True,
         "when_attribute_present": "selection_recipe",
         "code": "artifact_intervention_audit_invalid",
-        "keys": {
-            "name": _STR,
-            "selection_recipe": {"family": "selection_recipe"},
-        },
+        "keys": {"name": _STR, "selection_recipe": {"family": "selection_recipe"}},
     },
 }
 
