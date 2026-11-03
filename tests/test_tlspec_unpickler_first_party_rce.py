@@ -87,6 +87,19 @@ def _has_unpickling_error(exc: BaseException | None) -> bool:
     return False
 
 
+def _assert_refused_before_unpickling(raised: BaseException | None) -> None:
+    """The planted pickle never reaches an unpickler: format 3 refuses the directory first.
+
+    A ``metadata.pkl`` at the artifact root marks a 2.x save, which the 3.0 reader refuses
+    ``artifact_version_below_floor`` without opening it (the direct-unpickler tests below
+    still pin the unpickler's own denial).
+    """
+
+    assert isinstance(raised, ArtifactError), "load-time gadget was not refused typed"
+    assert raised.code == "artifact_version_below_floor", raised
+    assert not _has_unpickling_error(raised), "the planted pickle was opened"
+
+
 # --------------------------------------------------------------------------- #
 # The confirmed load-time RCE: crafted metadata.pkl -> private import gadget.
 # --------------------------------------------------------------------------- #
@@ -121,7 +134,7 @@ def test_module_is_installed_reduce_gadget_denied_through_tl_load(tmp_path: Path
             raised = exc
 
         assert raised is not None, "load-time import gadget was not blocked"
-        assert _has_unpickling_error(raised), "denial must surface an UnpicklingError"
+        _assert_refused_before_unpickling(raised)
         assert not sentinel.exists(), "attacker sentinel written -> gadget executed (RCE)"
         assert attacker_name not in sys.modules, "attacker module imported -> gadget executed"
     finally:
@@ -309,7 +322,7 @@ def test_fs_mutation_gadget_denied_through_tl_load(tmp_path: Path) -> None:
         raised = exc
 
     assert raised is not None, "fs-mutation gadget was not blocked"
-    assert _has_unpickling_error(raised), "denial must surface an UnpicklingError"
+    _assert_refused_before_unpickling(raised)
     assert victim.exists(), "attacker-named directory was deleted -> gadget executed"
     assert (victim / "important.txt").exists(), "victim contents destroyed -> rmtree ran"
 
