@@ -16,7 +16,7 @@ from .themes import resolve_theme, theme_edge_attrs, theme_graph_attrs, theme_no
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
     from ..bundle import Bundle
-    from ..bundle._site_deltas import SiteDeltas
+    from ..bundle._deltas import SiteDeltas
 
 
 DiffLayout = Literal["paired"]
@@ -88,7 +88,7 @@ def bundle_diff(
 
     left_name, right_name = _resolve_side_names(bundle, left=left, right=right)
     baseline_ref = baseline if baseline is not None else left_name
-    from ..bundle._site_deltas import site_deltas
+    from ..bundle._deltas import site_deltas
 
     baseline_name = bundle._baseline_or_raise(baseline_ref)
     sides = sorted({left_name, right_name} - {baseline_name})
@@ -664,11 +664,17 @@ def _node_id(side: str, layer: Any) -> str:
 
 
 def _site_label(layer: Any) -> str:
-    """Return a drawn op's label: ``"<layer>:<k>"`` for pass ``k`` of a multi-pass layer."""
+    """Return a drawn op's label: ``"<layer>:<k>"`` for pass ``k`` of a multi-pass layer.
 
-    from ..bundle._aligned_sites import site_row_key
+    The row key of ``Bundle.compare`` (``bundle._aligned_sites.site_row_key``),
+    spelled here so the renderer adds no import of ``bundle``.
+    """
 
-    return site_row_key(layer) if hasattr(layer, "layer_label") else "node"
+    if not hasattr(layer, "layer_label"):
+        return "node"
+    if int(getattr(layer, "num_passes", 1) or 1) > 1:
+        return f"{layer.layer_label}:{layer.pass_number}"
+    return str(layer.layer_label)
 
 
 def _node_label(layer: Any, delta: float) -> str:

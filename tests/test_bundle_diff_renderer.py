@@ -16,7 +16,7 @@ import torch
 
 import torchlens as tl
 from torchlens._visualization.bundle_diff import _add_svg_accessibility, _build_dot, _select_pairs
-from torchlens.bundle._site_deltas import SiteDeltas
+from torchlens.bundle._deltas import SiteDeltas
 from torchlens.errors import MultiMatchWarning
 
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots"

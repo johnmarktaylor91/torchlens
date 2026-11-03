@@ -28,7 +28,7 @@ verb; each logic body is a function `f(self: Bundle, ...)` in a sibling module:
 | `_lookup.py` | `at`, the cached supergraph, structural consistency |
 | `_aligned_sites.py` | aligned-site tables and the selector-site resolution behind `at` |
 | `_operations.py` | `do`, `fork`, `run`, `map`, `show`, the chronology ledger rows, the effect-table read |
-| `_site_deltas.py` | per-pass member distances behind `draw(graph="diff")`: one value per op, a multi-pass layer's passes apart (`site_deltas`, `SiteDeltas`); a layer-level read joins passes in `_deltas._tensor_field` |
 | `_comparisons.py` | `compare`, `rank_changes`, the comparability matrix, per-site diffs, relationship evidence; stored comparisons |
+| `_deltas.py` | metric and lookup primitives (`_distance_value`, `_tensor_field`, which joins a multi-pass layer's passes in pass order) and the per-pass sites behind `draw(graph="diff")` (`site_deltas`, `SiteDeltas`) |
 | `_relation_carriage.py` | relation table construction, removal cascades, `relate`, episode status, upstream/downstream |
 | `_save.py` | `save` (the package's one deferred `_io` import) |

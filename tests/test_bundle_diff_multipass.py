@@ -19,8 +19,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.bundle._aligned_sites import site_row_key
-from torchlens.bundle._deltas import _tensor_field
-from torchlens.bundle._site_deltas import site_deltas
+from torchlens.bundle._deltas import _tensor_field, site_deltas
 from torchlens.errors import MultiMatchWarning
 from torchlens.intervention._metrics import relative_l2
 
