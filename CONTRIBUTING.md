@@ -59,7 +59,7 @@ pytest tests/ -m "not rare and not slow" -x --tb=short        # before merging a
 
 Byte goldens enforce only in the pinned environment (python 3.10, torch 2.13.0), so the
 parity script is the commit gate, not a plain smoke run in your own environment. Smoke is
-about 1,400 coverage-chosen tests under a fixed size ceiling; a new smoke test needs a
+about 1,470 coverage-chosen tests under a fixed size ceiling; a new smoke test needs a
 matching demotion. Run `-n N` with `N` equal to the cores you have, never `-n auto`.
 
 ## The lockstep rule

@@ -55,7 +55,7 @@ from torchlens._errors import InvalidArgumentError
 # ALIAS        deprecated or legacy alias sentinel for a canonical option;
 #              pairing two spellings of one canonical is incoherent, and the
 #              alias hop itself is asserted by the dedicated deprecation
-#              suites (test_api_renames / scripts/checks/deprecation_inventory.py).
+#              suites (scripts/checks/deprecation_inventory.py).
 # DEFAULT_ONLY declared but exercised at its default: the non-default value
 #              needs an optional runtime this suite must not depend on.
 # ---------------------------------------------------------------------------
