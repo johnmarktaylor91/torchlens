@@ -288,7 +288,9 @@
   `diverged`, never a settlement input); declared unsnapshotable state refuses at declaration
   time (`episode_state_unsnapshotable`). Bundles gain the optional S6 member-relation table
   (`relations=`, `Bundle.relate`, `Bundle.episode_status` — a derived fold,
-  never Bundle-level settlement; mutators cascade explicitly or refuse typed). Doc of record:
+  never Bundle-level settlement; `Bundle.relation_grades` — per-row `RelationGrade` derived
+  from the evidence, `broken` on exactly two premises, seam-local divergences never escalate;
+  mutators cascade explicitly or refuse typed). Doc of record:
   `docs/reference/episode_capture.md`.
 - HARNESS BUNDLES (phases 1 and 2; every spelling DOCUMENTED-UNSTABLE; doc of record
   `docs/reference/harness_bundles.md`): no new datatype, the Bundle plus its relation table is
@@ -734,7 +736,9 @@
   the C07-adjudicated field-intent census is maintained privately. The C07X
   AMENDMENT rides the SAME v9 window (TLSPEC_VERSION stays 9; JF-9 ratified): bundle
   relation grammar v2 (required/optional split; `successor_of` admits the optional
-  evidence envelope `{schema, items[], facts_digest}` + `carry_mode`/`state_source`;
+  evidence envelope `{schema, items[], facts_digest}` + `carry_mode` (closed:
+  `none`/`verbatim`/`summarized`; `none` grades `disclosed`) / `state_source` / `seams`; items carry
+  the seven-kind origin `class` (required under the reserved schemas) and an optional declared `seam`;
   graded claims over the closed verified/consistent/disclosed/unchecked/divergent
   vocabulary with the contracted unchecked-reason menu incl. `no_param_snapshot` --
   user-authored MEASUREMENT grades (verified/consistent/divergent) are clamped to

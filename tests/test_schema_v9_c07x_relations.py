@@ -84,7 +84,7 @@ def _successor_row(**params: object) -> MemberRelationRow:
 def _evidence(**overrides: object) -> dict[str, object]:
     envelope: dict[str, object] = {
         "schema": "version_boundary_v1",
-        "items": [{"grade": "consistent", "basis": "step_count"}],
+        "items": [{"grade": "consistent", "basis": "step_count", "class": "member_state"}],
         "facts_digest": "sha256:00",
     }
     envelope.update(overrides)
@@ -108,11 +108,11 @@ def test_successor_of_bare_row_still_valid() -> None:
 @pytest.mark.smoke
 def test_successor_of_admits_optional_evidence_carry_mode_state_source() -> None:
     row = _successor_row(
-        evidence=_evidence(), carry_mode="declared", state_source="optimizer_checkpoint"
+        evidence=_evidence(), carry_mode="summarized", state_source="optimizer_checkpoint"
     )
     payload = row.to_payload()
     rebuilt = MemberRelationRow.from_payload(payload)
-    assert rebuilt.params["carry_mode"] == "declared"
+    assert rebuilt.params["carry_mode"] == "summarized"
     assert rebuilt.params["state_source"] == "optimizer_checkpoint"
     assert rebuilt.params["evidence"]["schema"] == "version_boundary_v1"
 
@@ -190,7 +190,14 @@ def test_unchecked_grade_requires_contracted_reason() -> None:
 def test_no_param_snapshot_is_admitted() -> None:
     row = _successor_row(
         evidence=_evidence(
-            items=[{"grade": "unchecked", "basis": None, "reason": "no_param_snapshot"}]
+            items=[
+                {
+                    "grade": "unchecked",
+                    "basis": None,
+                    "reason": "no_param_snapshot",
+                    "class": "member_params",
+                }
+            ]
         )
     )
     assert row.params["evidence"]["items"][0]["reason"] == "no_param_snapshot"
@@ -211,7 +218,12 @@ def test_evidence_envelope_exact_keys() -> None:
 def test_evidence_over_budget_refuses_typed() -> None:
     oversized = _evidence(
         items=[
-            {"grade": "disclosed", "basis": "bulk", "blob": "x" * RELATION_EVIDENCE_BUDGET_BYTES}
+            {
+                "grade": "disclosed",
+                "basis": "bulk",
+                "class": "harness_record",
+                "blob": "x" * RELATION_EVIDENCE_BUDGET_BYTES,
+            }
         ]
     )
     with pytest.raises(BundleRelationError) as excinfo:
@@ -224,7 +236,12 @@ def test_evidence_over_budget_code_survives_bundle_door(two_member_bundle: Bundl
 
     oversized = _evidence(
         items=[
-            {"grade": "disclosed", "basis": "bulk", "blob": "x" * RELATION_EVIDENCE_BUDGET_BYTES}
+            {
+                "grade": "disclosed",
+                "basis": "bulk",
+                "class": "harness_record",
+                "blob": "x" * RELATION_EVIDENCE_BUDGET_BYTES,
+            }
         ]
     )
     with pytest.raises(BundleRelationError) as excinfo:

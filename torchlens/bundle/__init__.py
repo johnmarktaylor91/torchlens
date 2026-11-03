@@ -18,12 +18,7 @@ from ..intervention._super.super_logs import (
     SuperModuleCallAccessor,
     SuperParamAccessor,
 )
-from ..intervention._super.super_op import (
-    SuperAtenOp,
-    SuperLayerAccessor,
-    SuperOp,
-    SuperOpAccessor,
-)
+from ..intervention._super.super_op import SuperAtenOp, SuperLayerAccessor, SuperOp, SuperOpAccessor
 from ..intervention._topology.topology import Supergraph
 from ..intervention.types import Relationship
 from . import (
@@ -77,6 +72,10 @@ from ._relation_carriage import (
     _bundle_downstream,
     _bundle_relate,
     _bundle_upstream,
+)
+from ._relation_grades import (
+    RelationGrade as RelationGrade,  # re-export: torchlens.bundle.RelationGrade
+    _bundle_relation_grades,
 )
 from ._relations import MemberRelationRow, MemberRelationTable, OpaqueRelationRow
 from ._token_divergence import (
@@ -501,6 +500,7 @@ class Bundle:
     # completion, no longer __getattr__-only dynamic lookups).
     relate = _bundle_relate
     episode_status = _bundle_derive_episode_status
+    relation_grades = _bundle_relation_grades  # derived FK-2/FK-5 grades, never stored
     # The provenance join (F03 item 4): pure derived views, never stored.
     why = _bundle_why
     provenance = _bundle_provenance

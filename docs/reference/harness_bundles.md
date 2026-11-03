@@ -258,6 +258,44 @@ Artifacts carrying `fed_by` or `selected_by` rows need a reader of tlspec 10 or 
 readers refuse the kinds, and an artifact stamped with an earlier version that carries either kind
 refuses `bundle_relation_schema_invalid` (no writer of that version could have produced it).
 
+## Grading a `successor_of` chain
+
+A `successor_of` row may carry evidence about the boundary it crosses: an envelope
+`{schema, items, facts_digest}` whose items are graded claims. Each item names its ground-truth
+origin under `class`, one of seven kinds: `member_input`, `member_output`, `member_state`,
+`member_params` (measured on the members) and `declared_carry`, `declared_transform`,
+`harness_record` (declared by the harness, so exogenous to the members). The row itself declares
+`carry_mode` (`none`, `verbatim` or `summarized`) and, when the chain is expected to change at a
+known boundary, `seams`, which an item may cite under `seam`.
+
+`b.relation_grades()` reads the rows back as one `RelationGrade` each. Nothing is stored: the
+grade is derived from the items every time.
+
+```python
+b.relate(
+    "successor_of", "turn_2", "turn_1",
+    carry_mode="verbatim",
+    seams=["chat_template_v3"],
+    evidence={
+        "schema": "turn_boundary_v1",
+        "facts_digest": "sha256:...",
+        "items": [
+            {"grade": "disclosed", "basis": "prompt_prefix", "class": "declared_carry"},
+            {"grade": "disclosed", "basis": "system_prompt", "class": "member_input",
+             "seam": "chat_template_v3"},
+        ],
+    },
+)
+grade = b.relation_grades()[-1]
+grade.grade              # "disclosed": declared, nothing checked
+grade.exogenous_items    # 1: the declared carry
+```
+
+A `carry_mode="none"` row with no evidence grades `disclosed`: a declared fresh start is a claim
+on record, not a blank. A row grades `broken` on exactly two premises: more than half of the
+checked member-origin items diverge, or a `verbatim` carry has a divergent `declared_carry` item.
+A divergence at a declared seam grades the row `divergent` on record but never escalates it.
+
 ## Four harnesses
 
 Each recipe generates natively, then captures one teacher-forced forward over prompt plus output:
