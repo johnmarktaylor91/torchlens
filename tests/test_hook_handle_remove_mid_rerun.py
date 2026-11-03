@@ -43,13 +43,13 @@ def _attach(trace: Any, selector: Any, hook: Any) -> tuple[str, ...]:
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", MultiMatchWarning)
-        return trace._attach_hooks(selector, hook, confirm_mutation=True)
+        return trace._attach_hooks(selector, hook)
 
 
 def _remove(trace: Any, handle_ids: tuple[str, ...]) -> None:
     """Remove the staged hook by its handle ids, as ``do``'s caller would."""
 
-    trace.clear_edits(handle=handle_ids, confirm_mutation=True)
+    trace.clear_edits(handle=handle_ids)
 
 
 def test_forward_hook_removed_before_its_site_never_fires_on_that_run() -> None:

@@ -1577,6 +1577,7 @@ class Layer(_SelectionOperand):
     def do(
         self,
         input_transform: Any,
+        /,
         *,
         model: Any = None,
         inputs: Any = None,
@@ -1588,10 +1589,8 @@ class Layer(_SelectionOperand):
         ----------
         input_transform:
             Transform or hook to apply to this layer's output.
-        model:
-            Model required when ``intervention.engine="rerun"``.
-        inputs:
-            Input required when ``intervention.engine="rerun"``.
+        model, inputs:
+            Required when ``intervention.engine="rerun"``.
         intervention:
             Grouped intervention options (``InterventionOptions``).
 

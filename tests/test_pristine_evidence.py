@@ -27,6 +27,8 @@ from torchlens._trace_state import TraceState
 from torchlens.intervention.errors import BaselineUndeterminedError
 from torchlens.options import CaptureOptions
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 _DIM = 8
 _HERE = Path(__file__).parent
 _V9_ARTIFACT = _HERE / "goldens" / "legacy" / "tlspec_v9.tlspec"
@@ -109,7 +111,7 @@ def test_fork_inherits_the_reading_and_never_touches_its_parent() -> None:
     fork.do(
         tl.module("block"),
         _double,
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     assert fork.is_pristine is False
     assert plain.is_pristine is True

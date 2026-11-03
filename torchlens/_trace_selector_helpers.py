@@ -560,8 +560,9 @@ def _trace_module_addresses(trace: Any) -> list[str]:
 def canonical_module_site_key(trace: Any, name: object) -> str | None:
     """Map a module or stage name that is not a lookup key to the address it names.
 
-    A module name resolves to that module's output at every selector door
-    (DOCUMENTED-UNSTABLE rule). Exact module addresses are already lookup keys;
+    A module name resolves to that module's output at every selector door, and
+    to the Module itself at ``trace[...]`` (DOCUMENTED-UNSTABLE rule). Exact
+    module addresses are already lookup keys;
     this adds the two spellings wrappers teach their users: a name relative to
     a wrapped inner model (timm ``FeatureGetterNet`` reports ``"blocks.9"`` for
     the module at ``"model.blocks.9"``) and a dotted name whose module was

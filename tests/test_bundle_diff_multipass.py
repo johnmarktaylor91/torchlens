@@ -55,7 +55,7 @@ def _zero_relu_bundle() -> tl.Bundle:
         ablated.do(
             tl.module("relu"),
             tl.zero_ablate(),
-            intervention=tl.options.InterventionOptions(confirm_mutation=True),
+            intervention=tl.options.InterventionOptions(),
         )
     return tl.Bundle({"clean": clean, "ablated": ablated}, baseline="clean")
 
@@ -132,7 +132,7 @@ def test_store_comparison_joins_passes_in_pass_order() -> None:
     patched = clean.fork("patched").do(
         tl.module("fc2"),
         tl.scale(0.5),
-        intervention=tl.options.InterventionOptions(engine="replay", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="replay"),
     )
     bundle = tl.Bundle({"clean": clean, "patched": patched}, baseline="clean")
     relu = _relu_label(clean)

@@ -44,11 +44,10 @@ def attach_hooks(  # noqa: PLR0913 - trace stands in for self on the moved metho
     hook: Any = None,
     *extra_hooks: Any,
     strict: bool = False,
-    confirm_mutation: bool = False,
 ) -> tuple[str, ...]:
     """Stage sticky hooks on the recipe (the ``Trace._attach_hooks`` body); return handle ids."""
 
-    warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
+    warn_if_root_mutation(trace)
     if isinstance(hooks_or_site, PublicInterventionSpec):
         # C03 spec door: the ONE immutable spec is accepted unchanged.
         # Its rules already carry site and action, so extra call
@@ -120,10 +119,10 @@ def attach_hooks(  # noqa: PLR0913 - trace stands in for self on the moved metho
     return tuple(handle_ids)
 
 
-def clear_hooks(trace: Trace, *, confirm_mutation: bool = False) -> Trace:
+def clear_hooks(trace: Trace) -> Trace:
     """Clear every sticky hook from the recipe (the ``Trace._clear_hooks`` body)."""
 
-    warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
+    warn_if_root_mutation(trace)
     spec = ensure_intervention_spec(trace)
     handles_before = sticky_handle_ids(spec)
     spec.clear()

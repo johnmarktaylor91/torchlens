@@ -179,7 +179,7 @@ def test_rerun_with_sticky_site_hook_refuses_at_preflight() -> None:
     model = _TinyModel()
     log = _ready(model)
     fork = log.fork()
-    fork._attach_hooks(site(func="relu"), tl.scale(0.0), confirm_mutation=True)
+    fork._attach_hooks(site(func="relu"), tl.scale(0.0))
     with pytest.raises(SelectorCapabilityError):
         fork.run(model, torch.randn(2, 4))
 

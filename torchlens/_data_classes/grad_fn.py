@@ -21,6 +21,7 @@ from .._io import (
 )
 from .._quantities import Duration
 from ._accessor_base import Accessor
+from ._lookup_kinds import converted, grad_fn_for_key, refuse_several
 from ._runtime_handles import runtime_handle_from_owner
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 from .grad_fn_call import GradFnCall
@@ -791,8 +792,8 @@ _install_grad_fn_facade()
 class GradFnAccessor(Accessor[GradFn]):
     """Dict-like accessor for ``GradFn`` objects.
 
-    Supports integer order, exact label, pass-qualified label, and first
-    substring match against labels.
+    Supports integer order, exact label, pass-qualified label, a unique
+    substring of a label, and the label of an op that owns a grad_fn.
     """
 
     def __init__(self, grad_fn_logs: dict[int, GradFn], grad_fn_order: list[int]) -> None:
@@ -811,10 +812,6 @@ class GradFnAccessor(Accessor[GradFn]):
         grad_fn_list = [grad_fn_logs[grad_fn_object_id] for grad_fn_object_id in grad_fn_order]
         super().__init__(grad_fn_dict, item_list=grad_fn_list)
 
-    def __getitem__(self, key: int | str) -> GradFn | GradFnCall:  # type: ignore[override]
-        """Return a GradFn by grad-fn-specific lookup rules."""
-        return super().__getitem__(key)
-
     def _resolve_pass_qualified(self, key: str) -> GradFn | None:
         """Resolve ``label:pass`` notation to the parent GradFn."""
         base, _, pass_str = key.rpartition(":")
@@ -827,11 +824,13 @@ class GradFnAccessor(Accessor[GradFn]):
         return None
 
     def _resolve_substring(self, key: str) -> GradFn | None:
-        """Resolve the first grad_fn_handle whose label contains ``key``."""
+        """Resolve the one grad_fn whose label contains ``key``, else the grad_fn of op ``key``."""
         matches = [grad_fn_handle for grad_fn_handle in self._list if key in grad_fn_handle.label]
-        if matches:
+        if len(matches) == 1:
             return matches[0]
-        return None
+        if len(matches) > 1:
+            refuse_several("GradFn", key, [handle.label for handle in matches], "grad_fns")
+        return converted(self, key, grad_fn_for_key)
 
     def _suggest(self, key: str) -> list[str]:
         """Return valid grad_fn_handle labels for error context."""

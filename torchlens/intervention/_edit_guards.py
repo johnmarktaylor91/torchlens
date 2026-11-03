@@ -55,32 +55,64 @@ def refuse_chunked_batch_coupling(trace: Trace, entries: list[Any]) -> None:
                 remedy="re-capture without chunk_size for whole-batch "
                 "edits, or apply a per-row edit (resample_rows_from) whose "
                 "value never couples rows",
-                argument="hooks_or_site",
+                argument="site",
             )
 
 
-def warn_if_root_mutation(trace: Trace, *, confirm_mutation: bool) -> None:
+def warn_if_root_mutation(trace: Trace) -> None:
     """Emit the once-per-root mutate-in-place warning, attributed past the thin method.
+
+    The guard reads only the trace: a fork (``trace._parent_run`` set) is an
+    isolated copy and never warns; a root trace warns once, unless the
+    session-level ``torchlens.io.suppress_mutate_warnings()`` context is active.
+    There is no per-call opt-out keyword.
 
     Parameters
     ----------
     trace:
-        The root trace about to be mutated in place.
-    confirm_mutation:
-        Whether the caller explicitly accepted in-place mutation.
+        The trace about to be mutated in place.
     """
 
-    if confirm_mutation or trace._parent_run is not None or trace._warned_mutate_in_place:
+    if trace._parent_run is not None or trace._warned_mutate_in_place:
         return
     if suppress_mutate_warnings.is_suppressed:
         return
     warnings.warn(
         "TraceMutationWarning: Trace mutators modify root logs in place. "
-        "Use log.fork(...) for isolated edits or pass confirm_mutation=True.",
+        "Use trace.fork(...) for isolated edits, or wrap intentional in-place "
+        "edits in torchlens.io.suppress_mutate_warnings().",
         TraceMutationWarning,
         stacklevel=4,
     )
     trace._warned_mutate_in_place = True
+
+
+def internal_mutation() -> Any:
+    """Context for a library-internal mutation step whose public door already ran the guard.
+
+    Returns
+    -------
+    Any
+        The ``suppress_mutate_warnings`` context manager, entered for the step.
+    """
+
+    return suppress_mutate_warnings()
+
+
+def detach_handles(trace: Trace, handle_ids: list[str] | tuple[str, ...]) -> None:
+    """Remove exactly the sticky hooks one transaction attached (an internal cleanup step).
+
+    Parameters
+    ----------
+    trace:
+        The trace whose sticky hooks are detached.
+    handle_ids:
+        The handle ids the transaction attached.
+    """
+
+    with internal_mutation():
+        for handle_id in handle_ids:
+            trace.clear_edits(handle=handle_id)
 
 
 def select_do_engine(trace: Trace, engine: str, *, model: nn.Module | None, x: Any) -> str:

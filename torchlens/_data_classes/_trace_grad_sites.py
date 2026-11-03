@@ -61,10 +61,10 @@ def _plan() -> ModuleType:
     return importlib.import_module("torchlens.intervention._grad_site_plan")
 
 
-def signal_plan(hooks_or_site: Any, value_or_hook: Any) -> _SignalPlan | None:
+def signal_plan(site: Any, value_or_hook: Any) -> _SignalPlan | None:
     """Split a ``do()`` input into its activation and backward halves (``None``: no gradient site)."""
 
-    return _plan().signal_plan(hooks_or_site, value_or_hook)
+    return _plan().signal_plan(site, value_or_hook)
 
 
 def refuse_invalid_do_loss(loss: Any, plan: _SignalPlan | None) -> None:
@@ -211,7 +211,7 @@ def select_signal_plan_engine(
             message,
             code="replay_gradient_edit_unsupported",
             remedy=remedy,
-            argument="hooks_or_site",
+            argument="site",
         )
     return trace._select_do_engine(engine, model=model, x=x)
 

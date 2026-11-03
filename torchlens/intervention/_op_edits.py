@@ -77,6 +77,7 @@ def grad_for(op: Op, *, bwd: int) -> torch.Tensor:
 def do(
     op: Op,
     input_transform: Any,
+    /,
     *,
     model: Any = None,
     inputs: Any = None,

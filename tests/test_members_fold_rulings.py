@@ -156,7 +156,7 @@ def test_recipe_with_set_only_stages_one_sticky_hook_without_running(log: Any) -
     before = log[_relu_label(log)].out.clone()
     log.do(
         tl.when(tl.func("relu"), _double_hook),
-        intervention=InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=InterventionOptions(engine="set_only"),
     )
     assert len(log._intervention_spec.hook_specs) == 1
     assert log._spec_revision == revision + 1
@@ -171,7 +171,7 @@ def test_do_with_a_hook_and_set_only_stages_it_sticky(log: Any) -> None:
     log.do(
         tl.func("relu"),
         tl.scale(2.0),
-        intervention=InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=InterventionOptions(engine="set_only"),
     )
     assert len(log._intervention_spec.hook_specs) == 1
     assert not log._intervention_spec.target_value_specs
@@ -184,7 +184,7 @@ def test_do_with_a_hook_propagates_at_once(log: Any) -> None:
     """``do(site, hook)`` attaches the sticky hook and replays in the same call."""
 
     before = log[_relu_label(log)].out.clone()
-    log.do(tl.func("relu"), _double_hook, intervention=InterventionOptions(confirm_mutation=True))
+    log.do(tl.func("relu"), _double_hook, intervention=InterventionOptions())
     assert len(log._intervention_spec.hook_specs) == 1
     torch.testing.assert_close(log[_relu_label(log)].out, before * 2)
 
@@ -192,17 +192,17 @@ def test_do_with_a_hook_propagates_at_once(log: Any) -> None:
 def test_clear_edits_accepts_the_handle_tuple_do_staged(log: Any) -> None:
     """``clear_edits(handle=)`` takes one id or the tuple of ids one staging call made."""
 
-    first = log._attach_hooks(tl.func("relu"), _identity_hook, confirm_mutation=True)
-    second = log._attach_hooks(tl.func("__add__"), _identity_hook, confirm_mutation=True)
+    first = log._attach_hooks(tl.func("relu"), _identity_hook)
+    second = log._attach_hooks(tl.func("__add__"), _identity_hook)
     assert isinstance(first, tuple) and len(first) == 1
     assert len(log._intervention_spec.hook_specs) == 2
 
-    log.clear_edits(handle=first, confirm_mutation=True)
+    log.clear_edits(handle=first)
     remaining = log._intervention_spec.hook_specs
     assert len(remaining) == 1
     assert remaining[0].handle in second
 
-    log.clear_edits(handle=list(second), confirm_mutation=True)
+    log.clear_edits(handle=list(second))
     assert log._intervention_spec.hook_specs == []
 
 

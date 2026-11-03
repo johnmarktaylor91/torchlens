@@ -34,6 +34,9 @@ _URL_RE = re.compile(r"\w+://\S*")
 _QUALIFIER_RE = re.compile(r"[\w.]+$")
 _JSON_LINE_TAIL_RE = re.compile(r'(?:\\n)?"\s*,?\s*$')
 _CONTINUATION_ENDS = ("(", ",", "\\")
+#: Bare names and commas before a leaf: the leaf is one target of an unpacking
+#: assignment (``model, x = ...``), never a keyword argument (that needs an open ``(``).
+_UNPACK_TARGETS = re.compile(r"^(?:\*?[A-Za-z_]\w*\s*,\s*)+$")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -223,7 +226,8 @@ def is_assignment(lines: list[str], number: int, start: int) -> bool:
 
     A keyword argument is preceded, ignoring whitespace and line breaks, by ``(`` or
     ``,``. A leaf that opens its logical line (the previous non-blank line does not
-    end in ``(``, ``,`` or a backslash) is the target of an assignment instead.
+    end in ``(``, ``,`` or a backslash), opens a ``;``-separated statement, or follows
+    only bare names and commas (``model, x = ...``) is an assignment target instead.
 
     Parameters
     ----------
@@ -240,7 +244,8 @@ def is_assignment(lines: list[str], number: int, start: int) -> bool:
         True for an assignment, false for anything that may be a call argument.
     """
 
-    if _code(lines[number - 1][:start]).strip():
+    before = _code(lines[number - 1][:start]).rsplit(";", 1)[-1].strip()
+    if before and not _UNPACK_TARGETS.match(before):
         return False
     for previous in reversed(lines[: number - 1]):
         code = _code(previous).rstrip()

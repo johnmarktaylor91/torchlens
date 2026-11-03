@@ -231,7 +231,7 @@ def run_benchmarks() -> str:
     rerun_log.do(
         tl.func("relu"),
         _zero_hook,
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     rerun_label, rerun_s = _time_repeated(
         "run(model, x)",

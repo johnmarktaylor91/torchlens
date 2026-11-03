@@ -6,12 +6,15 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
 from torchlens.options import CaptureOptions
 from torchlens.validation.status import ValidationStatus
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
 GOLDEN_PATH = Path(__file__).with_name("validation_decisions.json")
 
@@ -493,7 +496,7 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
     edited.do(
         tl.func("relu"),
         torch.zeros_like(relu_pass.out),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     edited.run(intervention, x_intervention)
 

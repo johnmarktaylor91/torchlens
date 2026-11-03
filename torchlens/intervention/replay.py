@@ -209,7 +209,7 @@ def _refuse_armed_gradient_rules(trace: Trace, hooks: Any = None) -> None:
             message,
             code="replay_gradient_edit_unsupported",
             remedy=remedy,
-            argument="hooks_or_site",
+            argument="site",
         )
 
 

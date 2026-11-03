@@ -239,6 +239,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # field need their policy, init, default-fill and rerun-refresh rows here,
     # beside their forward twins; the file sat at 3998.
     # 3750 -> 3600: the record-s2 fold plus the c2-rulings Trace port measure 3566 (slack rule).
+    # 3600 -> 3500: the do(site) and confirm_mutation sweep left it at 3497 (slack rule).
     "torchlens/_data_classes/trace.py": 3500,
     # 3550 -> 3800: fix/private-probe-routing moved the last 9 stray private
     # torch touches (funcol module/ACT/wait-redispatch, checkpoint hook class,

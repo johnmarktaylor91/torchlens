@@ -54,6 +54,7 @@ from ._call_tree import (
     _resolve_call_ops,
     _sum_call_ops_field,
 )
+from ._lookup_kinds import converted, module_call_owning_op, module_for_key, module_item
 from ._module_accessor_filters import ModuleAccessorFilters
 from ._module_facade_fields import _MODULE_CALL_STORED_FIELDS, _MODULE_STORED_FIELDS
 from ._runtime_handles import runtime_handle_from_trace
@@ -239,7 +240,7 @@ class ModuleCallAccessor(Accessor["ModuleCall"]):
                 f"Module '{key}' has {len(parent_matches)} calls. Use a 0-based integer "
                 f"position or a call-qualified label like '{key}:1'."
             )
-        return None
+        return module_call_owning_op(self._dict.values(), key)  # an op label names its call
 
 
 @dataclass
@@ -2379,9 +2380,12 @@ class Module:
         return len(self.layer_labels)
 
     def __getitem__(self, ix: int | str) -> Any:
-        """Return the Op at position ix within this module's layer list.
+        """Return the record ``ix`` names inside this module.
 
-        Supports int indexing and string label lookup (#120).
+        An int gives the Layer at that position of this module's layer list. A
+        string gives the kind the key names: a layer label of this module gives
+        what ``trace[label]`` gives, a descendant module address its Module and
+        a descendant call label its ModuleCall (#120).
         """
         if self._source_trace is None:
             raise RecordBindingError(
@@ -2390,21 +2394,7 @@ class Module:
                 remedy="keep the owning Trace alive and index layers through it",
             )
         if isinstance(ix, str):
-            # String label lookup within this module's layers
-            if ix in self.layer_labels:
-                return self._source_trace[ix]
-            # Try substring match within module layers
-            matches = [lbl for lbl in self.layer_labels if ix in lbl]
-            if len(matches) == 1:
-                return self._source_trace[matches[0]]
-            elif len(matches) > 1:
-                raise AmbiguousOpLookupError(
-                    f"Ambiguous lookup: '{ix}' matches {len(matches)} layers in module "
-                    f"'{self.address}': {', '.join(matches[:5])}",
-                    key=str(ix),
-                    address=self.address,
-                )
-            raise KeyError(f"'{ix}' not found in module '{self.address}' layers")
+            return module_item(self, ix)
         return self._source_trace.layers[self.layer_labels[ix]]
 
     def __iter__(self) -> Iterator[Any]:
@@ -2491,7 +2481,7 @@ class ModuleAccessor(ModuleAccessorFilters, Accessor["Module"]):
     * **module address** (str) -- e.g. ``"features.0"``, ``"self"``.
     * **alias** (str) -- for shared modules (same nn.Module registered at
       multiple addresses), any alias resolves to the same Module.
-    * **pass label** (str) -- e.g. ``"features.0:2"`` returns a ModuleCall.
+    * **pass label** (str) -- e.g. ``"features.0:2"`` returns that call's Module.
     * **ordinal index** (int) -- position in address order.
 
     Available as ``trace.modules``.
@@ -2540,7 +2530,14 @@ class ModuleAccessor(ModuleAccessorFilters, Accessor["Module"]):
             return self._alias_dict[key]
         if isinstance(key, str) and key in self._pass_dict:
             key = self._pass_dict[key].address
-        return super().__getitem__(key)
+        try:
+            return super().__getitem__(key)
+        except KeyError:
+            # An op label, parameter or buffer address names the Module it belongs to.
+            resolved = converted(self, str(key), module_for_key)
+            if resolved is None:
+                raise
+            return resolved
 
     def __contains__(self, key: object) -> bool:
         """Return True if key is a known module address, alias, or pass label."""

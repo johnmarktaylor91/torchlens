@@ -78,7 +78,7 @@ def test_spec_door_refuses_extra_arguments() -> None:
         log.fork().do(
             spec,
             tl.scale(0.5),
-            intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
         )
     assert excinfo.value.fields["code"] == "spec_door_extra_arguments"
 

@@ -48,7 +48,7 @@ def main() -> None:
     log = tl.trace(model, x)
     log.do(
         tl.when(tl.func("relu"), tl.zero_ablate()),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
 
     with tempfile.TemporaryDirectory() as tmpdir:

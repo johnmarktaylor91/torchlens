@@ -249,34 +249,24 @@ def record(
     # record() shares trace()'s decorated hot path, so it must enforce the SAME up-front guard
     # instead of crashing deep in capture with an opaque torch error.
     check_model_and_input_variants(model, inputs, input_kwargs)
+    # The Recorder takes its own knobs as one ``recording=`` bundle; the
+    # door's ``postprocess`` stays here (an enrichment the constructor refuses).
+    recorder_kwargs: dict[str, Any] = {
+        "save": save,
+        "intervene": intervene,
+        "stop_after": stop_after,
+        "storage": storage,
+        "narrate": narrate,
+        "capture": capture,
+        "recording": RecordingOptions(**knobs),
+    }
     if generate_kwargs is not None:
         output, generation = record_generation(
-            model,
-            inputs,
-            input_kwargs,
-            generate_kwargs,
-            {
-                **knobs,
-                "save": save,
-                "intervene": intervene,
-                "stop_after": stop_after,
-                "storage": storage,
-                "narrate": narrate,
-                "capture": capture,
-            },
+            model, inputs, input_kwargs, generate_kwargs, recorder_kwargs
         )
         object.__setattr__(generation.recording, "_output", output_returned(output))
         return enrich_generation(generation, postprocess)
-    with Recorder(
-        model,
-        **knobs,
-        save=save,
-        intervene=intervene,
-        stop_after=stop_after,
-        storage=storage,
-        narrate=narrate,
-        capture=capture,
-    ) as recorder:
+    with Recorder(model, **recorder_kwargs) as recorder:
         recorder(inputs, input_kwargs)
     result = recorder.recording
     if postprocess != "none":

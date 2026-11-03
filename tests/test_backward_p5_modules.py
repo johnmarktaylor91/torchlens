@@ -11,6 +11,8 @@ from torch import nn
 import torchlens as tl
 from torchlens.validation.invariants import MetadataInvariantError, check_metadata_invariants
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 
 class _ModuleContainmentModel(nn.Module):
     """Small model with paired, intervening, and parameter backward nodes."""
@@ -147,7 +149,7 @@ def test_multi_pass_module_grad_fns_keep_layer_label_and_hooks_see_their_own_pas
     try:
         linear = next(layer for layer in trace._layer_logs.values() if layer.layer_type == "linear")
         assert linear.num_passes == 2
-        trace._attach_hooks(tl.grad_fn(name="AddmmBackward0"), _probe, confirm_mutation=True)
+        trace._attach_hooks(tl.grad_fn(name="AddmmBackward0"), _probe)
         trace[trace.output_layers[0]].out.sum().backward()
 
         addmm = {

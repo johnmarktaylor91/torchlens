@@ -26,6 +26,8 @@ from torchlens.intervention.helpers import _helper_spec
 from torchlens.intervention.hooks import normalize_hook_plan
 from torchlens.intervention.types import FireRecord, InterventionSpec, TargetSpec
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 
 class _EncoderModel(nn.Module):
     """Small model with module-scoped ReLU and intervening backward nodes."""
@@ -315,7 +317,6 @@ def test_composite_grad_output_selector_matches_real_live_backward_hook() -> Non
             factory=factory,
             metadata={"mount_shape": "tuple"},
         ),
-        confirm_mutation=True,
     )
 
     trace.backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
@@ -362,7 +363,6 @@ def test_live_backward_pass_selector_targets_second_retain_graph_pass() -> None:
             factory=factory,
             metadata={"mount_shape": "tuple"},
         ),
-        confirm_mutation=True,
     )
 
     trace.backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)

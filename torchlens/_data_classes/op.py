@@ -2530,6 +2530,7 @@ class Op(OpAtenMixin, _SelectionOperand):
     def do(
         self,
         input_transform: Any,
+        /,
         *,
         model: Any = None,
         inputs: Any = None,
@@ -2551,10 +2552,8 @@ class Op(OpAtenMixin, _SelectionOperand):
 
         Parameters
         ----------
-        map_location:
-            Target device for the materialized tensor.
-        payload_hints:
-            Optional backend payload hints used during materialization.
+        map_location, payload_hints:
+            Target device for the materialized tensor; optional backend payload hints.
 
         Returns
         -------

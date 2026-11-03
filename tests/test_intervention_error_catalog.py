@@ -17,6 +17,8 @@ import torchlens as tl
 from torchlens.intervention import check_spec_compat, errors as terrors
 from torchlens.io import TraceState, list_traces, load_intervention_spec
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 SeverityClass = type[BaseException]
 WarningClass = type[Warning]
 
@@ -307,9 +309,9 @@ def test_axis_a_public_verbs_success_paths() -> None:
     log.do(
         tl.func("relu"),
         torch.zeros(1, 3),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
-    log._attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
+    log._attach_hooks(tl.func("relu"), _zero_hook)
     replay_result = log.push()
     assert replay_result is log
     assert log.state is TraceState.REPLAY_PROPAGATED
@@ -318,7 +320,7 @@ def test_axis_a_public_verbs_success_paths() -> None:
     do_log.do(
         tl.func("relu"),
         torch.ones(1, 3),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     assert do_log.state is TraceState.SPEC_STALE
 
@@ -347,15 +349,13 @@ def test_axis_a_public_verbs_success_paths() -> None:
             lambda log: log.do(
                 tl.func("missing"),
                 torch.zeros(1, 3),
-                intervention=tl.options.InterventionOptions(
-                    engine="set_only", confirm_mutation=True
-                ),
+                intervention=tl.options.InterventionOptions(engine="set_only"),
             ),
             terrors.SiteResolutionError,
         ),
         (
             "attach_hooks",
-            lambda log: log._attach_hooks(tl.func("missing"), _zero_hook, confirm_mutation=True),
+            lambda log: log._attach_hooks(tl.func("missing"), _zero_hook),
             terrors.SiteResolutionError,
         ),
         (
@@ -364,7 +364,7 @@ def test_axis_a_public_verbs_success_paths() -> None:
                 tl.func("relu"),
                 _zero_hook,
                 inputs=torch.zeros(1, 3),
-                intervention=tl.options.InterventionOptions(confirm_mutation=True),
+                intervention=tl.options.InterventionOptions(),
             ),
             terrors.EngineDispatchError,
         ),
@@ -404,8 +404,8 @@ def test_axis_b_replay_and_rerun_match_for_graph_stable_hook() -> None:
     replay_log = _capture(_ReluAdd(), x)
     rerun_log = _capture(_ReluAdd(), x)
 
-    replay_log._attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
-    rerun_log._attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
+    replay_log._attach_hooks(tl.func("relu"), _zero_hook)
+    rerun_log._attach_hooks(tl.func("relu"), _zero_hook)
     replay_log.push()
     rerun_log.run(_ReluAdd(), x)
 
@@ -503,7 +503,7 @@ def test_graph_shape_mismatch_error_raised_for_executable_spec(
 
     x = torch.randn(1, 3)
     log = _capture(_ReluAdd(), x)
-    log._attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+    log._attach_hooks(tl.func("relu"), tl.zero_ablate())
     path = tmp_path / "graph_shape_mismatch.tlspec"
     log.save_intervention(path, level="portable")
     spec = load_intervention_spec(path)

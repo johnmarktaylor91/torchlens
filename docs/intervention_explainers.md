@@ -253,7 +253,7 @@ for hook_spec in spec.hook_specs:
     fresh.do(
         hook_spec.site_target,
         hook_spec.helper,
-        intervention=tl.options.InterventionOptions(confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(),
     )
 reloaded = fresh
 helper = spec.hook_specs[0].helper
@@ -348,7 +348,7 @@ for hook_spec in spec.hook_specs:
     fresh.do(
         hook_spec.site_target,
         hook_spec.helper,
-        intervention=tl.options.InterventionOptions(confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(),
     )
 
 RESULT = [

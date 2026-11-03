@@ -180,7 +180,6 @@ _REPLAY_FIELDS: Final[tuple[str, ...]] = (
 )
 _INTERVENTION_FIELDS: Final[tuple[str, ...]] = (
     "engine",
-    "confirm_mutation",
     "strict",
     "allow_changed_params",
 )
@@ -270,7 +269,6 @@ _REPLAY_FLAT_TO_GROUP: Final[dict[str, str]] = {
 }
 _INTERVENTION_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "engine": "engine",
-    "confirm_mutation": "confirm_mutation",
     "strict": "strict",
     "allow_changed_params": "allow_changed_params",
 }
@@ -1315,8 +1313,6 @@ class InterventionOptions:
     ----------
     engine:
         Propagation engine: ``"auto"``, ``"replay"``, ``"rerun"``, or ``"set_only"``.
-    confirm_mutation:
-        Whether root-mutation warnings are suppressed for intentional mutation.
     strict:
         Whether selector and propagation checks raise instead of warning.
     allow_changed_params:
@@ -1334,7 +1330,6 @@ class InterventionOptions:
     """
 
     engine: str = "auto"
-    confirm_mutation: bool = False
     strict: bool = False
     allow_changed_params: bool = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
@@ -1342,7 +1337,6 @@ class InterventionOptions:
     def __init__(
         self,
         engine: str | MissingType = MISSING,
-        confirm_mutation: bool | MissingType = MISSING,
         strict: bool | MissingType = MISSING,
         allow_changed_params: bool | MissingType = MISSING,
     ) -> None:
@@ -1351,9 +1345,6 @@ class InterventionOptions:
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
             "engine": _resolve_option_value("engine", engine, "auto", specified_fields),
-            "confirm_mutation": _resolve_option_value(
-                "confirm_mutation", confirm_mutation, False, specified_fields
-            ),
             "strict": _resolve_option_value("strict", strict, False, specified_fields),
             "allow_changed_params": _resolve_option_value(
                 "allow_changed_params", allow_changed_params, False, specified_fields

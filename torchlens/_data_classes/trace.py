@@ -1262,14 +1262,14 @@ class Trace(TraceOutputMixin, TraceLike):
     def __getitem__(self, ix: Any) -> Any:
         """Return one record, or the Selection a selector names.
 
-        After the pass an int, slice or string addresses records; a selector is
-        the one resolution door: a set-naming selector (``tl.func``, ``tl.where``,
-        ``tl.in_module``, ``tl.label_contains``, compositions) returns a
-        ``tl.Selection`` of every match, never capped; a one-thing spelling (exact
-        label, target spec, facet) must match exactly one and returns it. During
-        the pass the raw barcode lookup applies. Never a ``Layer`` (that door is
-        ``trace.layers[...]``): a layer label gives its Op or refuses a bare
-        multi-pass label; ``label:N`` (1-based), ``label:last``, ``label:all``.
+        After the pass an int, slice or string addresses records; a set-naming
+        selector (``tl.func``, ``tl.where``, ``tl.in_module``, compositions)
+        returns a ``tl.Selection`` of every match; a one-thing spelling must match
+        exactly one. A key gives the kind it names: a layer label its Op (a bare
+        multi-pass label refuses; ``label:N``, ``:last``, ``:all``), never a
+        ``Layer`` (that door is ``trace.layers[...]``); a module address its
+        Module, ``address:N`` its ModuleCall, a parameter, buffer or grad_fn key
+        its record. Typed doors convert: ``trace.ops[address]`` is the output Op.
 
         Args:
             ix: index, slice, label, address, substring or selector.
@@ -2732,7 +2732,6 @@ class Trace(TraceOutputMixin, TraceLike):
         hook: Any = None,
         *extra_hooks: Any,
         strict: bool = False,
-        confirm_mutation: bool = False,
     ) -> tuple[str, ...]:
         """Stage sticky hooks on the recipe (the ``do`` attach path); returns the handle ids."""
 
@@ -2742,7 +2741,6 @@ class Trace(TraceOutputMixin, TraceLike):
             hook,
             *extra_hooks,
             strict=strict,
-            confirm_mutation=confirm_mutation,
         )
 
     def _refuse_chunked_batch_coupling(self, entries: list[Any]) -> None:
@@ -2771,20 +2769,15 @@ class Trace(TraceOutputMixin, TraceLike):
         handle: Any = None,
         *,
         strict: bool = False,
-        confirm_mutation: bool = False,
     ) -> "Trace":
         """Detach sticky hooks by site or handle."""
 
-        return _doors.intervention()._trace_edits.clear_edits(
-            self, site, handle, strict=strict, confirm_mutation=confirm_mutation
-        )
+        return _doors.intervention()._trace_edits.clear_edits(self, site, handle, strict=strict)
 
-    def _clear_hooks(self, *, confirm_mutation: bool = False) -> "Trace":
+    def _clear_hooks(self) -> "Trace":
         """Clear every sticky hook from the recipe (internal; ``clear_edits`` is the public door)."""
 
-        return _doors.intervention()._trace_hooks.clear_hooks(
-            self, confirm_mutation=confirm_mutation
-        )
+        return _doors.intervention()._trace_hooks.clear_hooks(self)
 
     @property
     def _graph_edges(self) -> tuple[Any, ...]:
@@ -2803,8 +2796,9 @@ class Trace(TraceOutputMixin, TraceLike):
 
     def do(
         self,
-        hooks_or_site: Any,
+        site: Any,
         value_or_hook: Any = None,
+        /,
         *,
         model: nn.Module | None = None,
         inputs: Any = None,
@@ -2815,7 +2809,7 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _doors.intervention()._trace_edits.do(
             self,
-            hooks_or_site,
+            site,
             value_or_hook,
             model=model,
             inputs=inputs,
@@ -2825,7 +2819,7 @@ class Trace(TraceOutputMixin, TraceLike):
 
     def _do_with_options(
         self,
-        hooks_or_site: Any,
+        site: Any,
         value_or_hook: Any,
         *,
         model: nn.Module | None,
@@ -2836,7 +2830,7 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _doors.intervention()._trace_edits.do_with_options(
             self,
-            hooks_or_site,
+            site,
             value_or_hook,
             model=model,
             x=x,
@@ -2886,12 +2880,10 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _trace_intervention_records.record_operation(self, op, **payload)
 
-    def _warn_if_root_mutation(self, *, confirm_mutation: bool) -> None:
+    def _warn_if_root_mutation(self) -> None:
         """Forward to ``_doors.intervention()._edit_guards.warn_if_root_mutation``."""
 
-        return _doors.intervention()._edit_guards.warn_if_root_mutation(
-            self, confirm_mutation=confirm_mutation
-        )
+        return _doors.intervention()._edit_guards.warn_if_root_mutation(self)
 
     def _select_do_engine(self, engine: str, *, model: nn.Module | None, x: Any) -> str:
         """Forward to ``_doors.intervention()._edit_guards.select_do_engine``."""
@@ -2900,22 +2892,20 @@ class Trace(TraceOutputMixin, TraceLike):
 
     def _apply_do_mutation(
         self,
-        hooks_or_site: Any,
+        site: Any,
         value_or_hook: Any,
         *,
         engine: str,
         strict: bool,
-        confirm_mutation: bool,
     ) -> tuple[str, tuple[str, ...]]:
         """Forward to ``_doors.intervention()._trace_edits.apply_do_mutation``."""
 
         return _doors.intervention()._trace_edits.apply_do_mutation(
             self,
-            hooks_or_site,
+            site,
             value_or_hook,
             engine=engine,
             strict=strict,
-            confirm_mutation=confirm_mutation,
         )
 
     @staticmethod
@@ -3109,6 +3099,7 @@ class Trace(TraceOutputMixin, TraceLike):
         self,
         model: Any = None,
         x: Any = None,
+        /,
         *,
         inputs: Any | MissingType = MISSING,
         seed: int | None = None,

@@ -201,7 +201,9 @@ def _reference_module_call_match(accessor: TraceModuleCallAccessor, key: str) ->
             f"Module '{key}' has {len(parent_matches)} calls. Use a 0-based integer "
             f"position or a call-qualified label like '{key}:1'."
         )
-    return None
+    # The typed door converts a key that names exactly one call (here, a call label
+    # handed straight to the resolver) to that call; the scan mirrors it.
+    return accessor._dict.get(key)
 
 
 def _reference_grad_fn_call_match(accessor: TraceGradFnCallAccessor, key: str) -> Any:

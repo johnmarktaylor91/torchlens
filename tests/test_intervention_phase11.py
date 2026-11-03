@@ -11,6 +11,8 @@ from example_models import TinyReluAdd as _ReluAdd
 import torchlens as tl
 from torchlens.experimental import dagua
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 
 def _interventions() -> tl.Trace:
     """Build an intervention-ready log with a relu replacement recipe.
@@ -26,7 +28,7 @@ def _interventions() -> tl.Trace:
     log.do(
         tl.func("relu"),
         torch.zeros(2, 3),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     return log
 

@@ -21,6 +21,8 @@ from torch import nn
 import torchlens as tl
 from torchlens.intervention.errors import SpecMutationError
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 _CODE = "helper_tensor_changed_since_capture"
 
 
@@ -71,7 +73,7 @@ def _staged_trace(model: nn.Module, x: torch.Tensor, direction: torch.Tensor, do
     if door == "intervene_module":
         return tl.trace(model, x, intervene=tl.when(tl.module("fc1"), _steer(direction)))
     trace = tl.trace(model, x)
-    trace._attach_hooks(tl.module("fc1"), _steer(direction), confirm_mutation=True)
+    trace._attach_hooks(tl.module("fc1"), _steer(direction))
     return trace
 
 
@@ -122,11 +124,11 @@ def test_learning_loop_that_restages_each_step_keeps_working(setup) -> None:
 
     model, x, direction = setup
     trace = tl.trace(model, x)
-    handle = trace._attach_hooks(tl.module("fc1"), _steer(direction), confirm_mutation=True)
+    handle = trace._attach_hooks(tl.module("fc1"), _steer(direction))
     for _ in range(3):
         direction.add_(0.25)
-        trace.clear_edits(handle=handle, confirm_mutation=True)
-        handle = trace._attach_hooks(tl.module("fc1"), _steer(direction), confirm_mutation=True)
+        trace.clear_edits(handle=handle)
+        handle = trace._attach_hooks(tl.module("fc1"), _steer(direction))
         trace.run(model, x)
         torch.testing.assert_close(trace.output_ops[0].out, _truth(model, x, direction))
 

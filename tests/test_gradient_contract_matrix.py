@@ -63,6 +63,8 @@ from torchlens.intervention import (
 from torchlens.intervention.helpers import swap_with
 from torchlens.intervention.types import InterventionDecision
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 _PAGE = Path(__file__).resolve().parent.parent / "docs" / "gradient_contract.md"
 _SITE = "linear_1_1"
 _SHAPE = (2, 3, 4)
@@ -264,14 +266,14 @@ def _door_replay(model: nn.Module, edit: Any) -> torch.Tensor:
 
 def _door_rerun(model: nn.Module, edit: Any) -> torch.Tensor:
     trace = tl.trace(model, _X)
-    confirm = tl.options.InterventionOptions(confirm_mutation=True)
+    confirm = tl.options.InterventionOptions()
     trace.do(tl.module("lin1"), edit, model=model, inputs=_X, intervention=confirm)
     return _out(trace)
 
 
 def _door_attach_run(model: nn.Module, edit: Any) -> torch.Tensor:
     trace = tl.trace(model, _X)
-    trace._attach_hooks(tl.module("lin1"), edit, confirm_mutation=True)
+    trace._attach_hooks(tl.module("lin1"), edit)
     trace.run(model, _X)
     return _out(trace)
 

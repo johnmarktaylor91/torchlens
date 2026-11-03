@@ -16,6 +16,8 @@ from torchlens.errors import TraceCaptureError
 from torchlens.io import load_intervention_spec
 from torchlens.validation import validate_forward_pass
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 _HAS_TORCH_FUNC = hasattr(torch, "func")
 
 
@@ -673,7 +675,7 @@ def test_loaded_func_transform_hook_spec_executes_after_round_trip(tmp_path: Pat
             x,
             capture=tl.options.CaptureOptions(replayable=True),
         )
-    log._attach_hooks(tl.func_transform("vmap"), tl.zero_ablate(), confirm_mutation=True)
+    log._attach_hooks(tl.func_transform("vmap"), tl.zero_ablate())
     path = tmp_path / "func_transform_hook.tlspec"
 
     log.save_intervention(path, level="portable")

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
 
 class M(nn.Module):
@@ -109,7 +112,7 @@ def test_last_run_records_returns_tuple_snapshot() -> None:
     """Fire records from the most recent propagated run are returned as a tuple."""
 
     log = _capture()
-    log._attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+    log._attach_hooks(tl.func("relu"), tl.zero_ablate())
     log.push()
 
     records = log.last_run_records()

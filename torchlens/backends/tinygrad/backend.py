@@ -263,7 +263,7 @@ class TinygradBackend:
         input_args: object,
         input_kwargs: dict[Any, Any] | None = None,
         *,
-        layers_to_save: str | list[Any] | None | MissingType = MISSING,
+        save: str | list[Any] | None | MissingType = MISSING,
         keep_orphans: bool | MissingType = MISSING,
         output_device: str | MissingType = MISSING,
         activation_transform: object | None = None,
@@ -305,8 +305,8 @@ class TinygradBackend:
             Positional arguments for ``model``.
         input_kwargs
             Keyword arguments. Unsupported in this preview.
-        layers_to_save
-            Must be ``"all"``; tinygrad preview is full-save only for live traces.
+        save
+            Must be ``"all"`` (``tl.trace(save=)`` spelling); the preview is full-save only.
         keep_orphans
             Whether orphan ops are retained.
         output_device
@@ -380,7 +380,7 @@ class TinygradBackend:
         # N5: ``trace()`` passes none of these as flat kwargs; see ``backends/jax/backend.py``.
         capture_options = merge_capture_options(
             capture=capture,
-            _layers_to_save=layers_to_save,
+            _layers_to_save=save,
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,

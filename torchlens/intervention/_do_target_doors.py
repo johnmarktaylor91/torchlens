@@ -20,12 +20,11 @@ __all__: list[str] = []
 
 def apply_region_target_do(  # noqa: PLR0913 - apply_do_mutation's own arguments
     trace: Trace,
-    hooks_or_site: Any,
+    site: Any,
     value_or_hook: Any,
     *,
     engine: str,
     strict: bool,
-    confirm_mutation: bool,
 ) -> tuple[str, tuple[str, ...]] | None:
     """Apply ``do`` to a ``RegionTarget``; return ``None`` for any other site."""
     # A RegionTarget (F01) is the region-as-a-unit door: the replay lowering
@@ -33,23 +32,23 @@ def apply_region_target_do(  # noqa: PLR0913 - apply_do_mutation's own arguments
     # interior. Distinct from the TraceSlice lift below, which keeps its shipped
     # member-site family semantics. sys.modules gate keeps do() free of the regions import.
     regions_module = sys.modules.get("torchlens.intervention.regions")
-    if regions_module is not None and isinstance(hooks_or_site, regions_module.RegionTarget):
-        warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
+    if regions_module is not None and isinstance(site, regions_module.RegionTarget):
+        warn_if_root_mutation(trace)
         return (
             regions_module.apply_region_do(
-                trace, hooks_or_site, value_or_hook, engine=engine, strict=strict
+                trace, site, value_or_hook, engine=engine, strict=strict
             ),
             (),
         )
     return None
 
 
-def lift_trace_slice(hooks_or_site: Any) -> Any:
+def lift_trace_slice(site: Any) -> Any:
     """Return a ``TraceSlice``'s whole-site selection; any other site unchanged."""
     # A TraceSlice targets its member family: lift it to the whole-site
     # QUERY (re-resolved on THIS trace by site name, so a slice built on the
     # source log addresses the same sites on a fork). sys.modules gate keeps do() slice-free.
     slice_module = sys.modules.get("torchlens._trace_slice")
-    if slice_module is not None and isinstance(hooks_or_site, slice_module.TraceSlice):
-        hooks_or_site = hooks_or_site.__selection__()
-    return hooks_or_site
+    if slice_module is not None and isinstance(site, slice_module.TraceSlice):
+        site = site.__selection__()
+    return site

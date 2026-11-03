@@ -35,6 +35,8 @@ from torchlens.intervention.errors import (
     MultiMatchWarning,
 )
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 transformers = pytest.importorskip("transformers")
 
 GradFn = Callable[[torch.Tensor], torch.Tensor]
@@ -227,12 +229,12 @@ def _apply_door(trace: Any, door: str, selector: Any, helper: Any) -> None:
     """Attach one gradient edit to a finished trace through a post-capture door."""
 
     if door == "attach_hooks":
-        trace._attach_hooks(selector, helper, confirm_mutation=True)
+        trace._attach_hooks(selector, helper)
     elif door == "layer_record":
         # A Layer record addresses its gradient through tl.grad(record) on the trace;
         # a hook staged on the Layer record itself edits the activation.
         layer_label = trace.find_sites(selector).first().layer_label
-        trace._attach_hooks(tl.grad(trace.layers[layer_label]), helper, confirm_mutation=True)
+        trace._attach_hooks(tl.grad(trace.layers[layer_label]), helper)
     else:
         raise AssertionError(door)
 
@@ -379,7 +381,7 @@ def test_rerun_arms_gradient_edit_and_backward_matches_oracle(tiny: _Fixture) ->
             tl.zero_ablate(),
             model=model,
             inputs=tiny.ids,
-            intervention=tl.options.InterventionOptions(engine="rerun", confirm_mutation=True),
+            intervention=tl.options.InterventionOptions(engine="rerun"),
         )
     assert len(result.armed_edits) == 1
     assert _backward_fires(result) == 0

@@ -10,6 +10,7 @@ from .._errors import AmbiguousOpLookupError
 from .._pass_tokens import PASS_TOKEN_ALL, split_pass_token
 from ._accessor_base import Accessor, attach_source_honesty, first_source_trace
 from ._layer_accessors import _LAYER_COUNTABLE_FIELDS
+from ._lookup_kinds import converted, module_call_for_key, output_op
 from ._nonfinite import nonfinite_op_labels
 from .op import Op
 
@@ -552,7 +553,9 @@ class TraceOpAccessor(Accessor[Op]):
             if key == op.raw_label:
                 return op
         parent_matches = [op for op in self._list if key in {op.layer_label, op.short_layer_label}]
-        return self._resolve_parent_matches(parent_matches)
+        resolved = self._resolve_parent_matches(parent_matches)
+        # A module, module-call or buffer key names its output Op here.
+        return resolved if resolved is not None else converted(self, key, output_op)
 
     @staticmethod
     def _resolve_parent_matches(parent_matches: Sequence[Op]) -> Op | None:
@@ -572,7 +575,7 @@ class TraceOpAccessor(Accessor[Op]):
         return None
 
     def _resolve_substring(self, key: str) -> Op | None:
-        """Resolve exact long/short Op labels or unique bare parent labels."""
+        """Resolve exact long/short Op labels, unique bare parent labels, or a record key's output Op."""
 
         indexes = self._ensure_alias_indexes()
         if indexes is None:
@@ -583,7 +586,8 @@ class TraceOpAccessor(Accessor[Op]):
             direct = indexes.raw.get(key)
         if direct is not None:
             return direct
-        return self._resolve_parent_matches(indexes.layer.get(key, ()))
+        resolved = self._resolve_parent_matches(indexes.layer.get(key, ()))
+        return resolved if resolved is not None else converted(self, key, output_op)
 
     def _resolved_op(self, key: str) -> Op:
         """Return ``self[key]``, memoized per lookup key.
@@ -625,7 +629,7 @@ class TraceModuleCallAccessor(Accessor[Any]):
                 f"Module '{key}' has {len(parent_matches)} calls. Use a 0-based integer "
                 f"position or a call-qualified label like '{key}:1'."
             )
-        return None
+        return converted(self, key, module_call_for_key)  # an op label names its call
 
 
 class TraceGradFnCallAccessor(Accessor[Any]):

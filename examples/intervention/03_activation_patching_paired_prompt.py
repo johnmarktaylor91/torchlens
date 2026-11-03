@@ -52,7 +52,7 @@ def main() -> None:
     patched.do(
         tl.func("relu"),
         clean_relu,
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     patched.push()
 

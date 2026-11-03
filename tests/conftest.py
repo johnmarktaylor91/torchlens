@@ -42,6 +42,24 @@ pytest_plugins = [
 
 # Output directories are assigned under pytest's private basetemp in
 # ``pytest_configure`` before test modules import these constants.
+
+
+@pytest.fixture
+def root_edits_in_place():
+    """Opt one test into editing root traces in place.
+
+    ``InterventionOptions.confirm_mutation`` and the ``confirm_mutation=`` keyword
+    are gone (D.12): the root-mutation guard reads only the trace, so a test that
+    deliberately edits a root trace enters the session-level suppression context
+    for its own duration. Tests that assert the warning never request this fixture.
+    """
+
+    from torchlens.io import suppress_mutate_warnings
+
+    with suppress_mutate_warnings():
+        yield
+
+
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 TEST_OUTPUTS_DIR = ""
 REPORTS_DIR = ""

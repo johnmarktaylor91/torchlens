@@ -51,7 +51,7 @@ def main() -> None:
     set_log.do(
         tl.func("relu"),
         torch.zeros(relu_shape),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     ).push()
 
     hook_log = log.fork("hook")

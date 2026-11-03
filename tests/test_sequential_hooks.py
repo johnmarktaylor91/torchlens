@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import pytest
 import torch
 
 import torchlens as tl
+
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
 
 
 class ReluModel(torch.nn.Module):
@@ -75,7 +78,7 @@ def test_sequential_hooks_run_in_order_during_rerun() -> None:
     model = ReluModel()
     x = torch.tensor([[-1.0, 2.0]])
     log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
-    log._attach_hooks(tl.func("relu"), add_one, times_two, confirm_mutation=True)
+    log._attach_hooks(tl.func("relu"), add_one, times_two)
 
     rerun_log = log.run(model, x)
 
@@ -111,12 +114,12 @@ def test_hook_handle_remove_and_context_manager_cleanup() -> None:
         del ctx
         return out
 
-    handle = log._attach_hooks(tl.func("relu"), identity, confirm_mutation=True)
+    handle = log._attach_hooks(tl.func("relu"), identity)
     assert len(log._intervention_spec.hook_specs) == 1
-    log.clear_edits(handle=handle, confirm_mutation=True)
+    log.clear_edits(handle=handle)
     assert log._intervention_spec.hook_specs == []
 
-    handle = log._attach_hooks(tl.func("relu"), identity, confirm_mutation=True)
+    handle = log._attach_hooks(tl.func("relu"), identity)
     assert len(log._intervention_spec.hook_specs) == 1
-    log.clear_edits(handle=handle[0], confirm_mutation=True)
+    log.clear_edits(handle=handle[0])
     assert log._intervention_spec.hook_specs == []

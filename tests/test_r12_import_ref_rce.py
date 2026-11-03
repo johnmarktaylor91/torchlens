@@ -37,6 +37,8 @@ from torchlens.intervention._spec_values import LazyImportRef, _resolve_import_r
 from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.intervention.save import load_intervention_spec
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 
 def _write_evil_module(tmp_path: Path, sentinel: Path) -> str:
     """Write a module whose IMPORT writes ``sentinel`` (the RCE payload)."""
@@ -60,7 +62,7 @@ def _save_import_ref_spec(tmp_path: Path, mod_name: str) -> Path:
 
     mod = importlib.import_module(mod_name)
     log = tl.trace(_ReluModel(), torch.ones(1, 3))
-    log._attach_hooks(tl.func("relu"), mod.hook, confirm_mutation=True)
+    log._attach_hooks(tl.func("relu"), mod.hook)
     spec_path = tmp_path / "evil.tlspec"
     log.save_intervention(str(spec_path), level="executable_with_callables")
     return spec_path
@@ -223,7 +225,7 @@ def test_trusted_import_ref_round_trips_through_tl_load(tmp_path: Path) -> None:
     try:
         mod = importlib.import_module(mod_name)
         log = tl.trace(_ReluModel(), torch.ones(1, 3))
-        log._attach_hooks(tl.func("relu"), mod.hook, confirm_mutation=True)
+        log._attach_hooks(tl.func("relu"), mod.hook)
         spec_path = tmp_path / "trusted.tlspec"
         log.save_intervention(str(spec_path), level="executable_with_callables")
 

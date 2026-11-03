@@ -39,6 +39,8 @@ from torchlens.intervention.types import (
 )
 from torchlens.io import load_intervention_spec
 
+pytestmark = pytest.mark.usefixtures("root_edits_in_place")  # D.12: no per-call mutation keyword
+
 _INTERVENTION_RESOLVER = importlib.import_module("torchlens.intervention._resolver_registry")
 
 
@@ -180,7 +182,6 @@ def test_where_hook_save_manifest_tolerates_nonportable_predicate(tmp_path: Path
         tl.where(lambda ctx: ctx.func_name == "relu", name_hint="relu predicate"),
         tl.zero_ablate(),
         strict=False,
-        confirm_mutation=True,
     )
     audit_path = tmp_path / "where_audit.tlspec"
 
@@ -229,7 +230,7 @@ def test_loaded_output_at_and_regex_hook_specs_execute_on_fresh_trace(
     x = torch.ones(1, 4)
     output_log = _log(_ChunkModel(), x)
     with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
-        output_log._attach_hooks(output_at(1), tl.zero_ablate(), confirm_mutation=True)
+        output_log._attach_hooks(output_at(1), tl.zero_ablate())
     output_path = tmp_path / "loaded_output_at.tlspec"
     output_log.save_intervention(output_path, level="portable")
     output_spec = load_intervention_spec(output_path)
@@ -241,7 +242,7 @@ def test_loaded_output_at_and_regex_hook_specs_execute_on_fresh_trace(
     assert torch.count_nonzero(output_tensor) == 0
 
     regex_log = _log(_ReluModel(), torch.ones(1, 3))
-    regex_log._attach_hooks(tl.label_matches("relu"), tl.scale(0.0), confirm_mutation=True)
+    regex_log._attach_hooks(tl.label_matches("relu"), tl.scale(0.0))
     regex_path = tmp_path / "loaded_regex.tlspec"
     regex_log.save_intervention(regex_path, level="portable")
     regex_spec = load_intervention_spec(regex_path)
@@ -312,7 +313,7 @@ def test_loaded_import_ref_has_no_load_side_effect_until_execution(tmp_path: Pat
         import side_effect_mod
 
         log = _log(_ReluModel(), torch.ones(1, 3))
-        log._attach_hooks(tl.func("relu"), side_effect_mod.hook, confirm_mutation=True)
+        log._attach_hooks(tl.func("relu"), side_effect_mod.hook)
         path = tmp_path / "lazy_import.tlspec"
         log.save_intervention(path, level="executable_with_callables")
         sentinel.unlink()
@@ -371,7 +372,7 @@ def test_loaded_helper_import_ref_preserves_identity_and_executes_lazily(
             factory=side_effect_helper_mod.make_hook,
         )
         log = _log(_ReluModel(), torch.ones(1, 3))
-        log._attach_hooks(tl.func("relu"), helper, confirm_mutation=True)
+        log._attach_hooks(tl.func("relu"), helper)
         path = tmp_path / "lazy_helper_import.tlspec"
         log.save_intervention(path, level="executable_with_callables")
         sentinel.unlink()
@@ -415,7 +416,7 @@ def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log._attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0), confirm_mutation=True)
+    log._attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0))
     log.backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_records.tlspec"
 
@@ -437,7 +438,7 @@ def test_loaded_backward_grad_fn_spec_executes_after_round_trip(tmp_path: Path) 
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log._attach_hooks(tl.grad_fn(name="relu"), tl.scale(2.0), confirm_mutation=True)
+    log._attach_hooks(tl.grad_fn(name="relu"), tl.scale(2.0))
     log.backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_execute.tlspec"
 
@@ -468,7 +469,7 @@ def test_backward_hook_spec_saves_before_first_backward_and_executes(
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log._attach_hooks(tl.grad_fn(name="relu"), tl.scale(2.0), confirm_mutation=True)
+    log._attach_hooks(tl.grad_fn(name="relu"), tl.scale(2.0))
     path = tmp_path / "backward_before_pass.tlspec"
 
     log.save_intervention(path, level="portable")
@@ -569,7 +570,7 @@ def test_portable_rejects_opaque_hook(tmp_path: Path) -> None:
         del ctx
         return out
 
-    log._attach_hooks({tl.func("relu"): opaque_hook}, confirm_mutation=True)
+    log._attach_hooks({tl.func("relu"): opaque_hook})
     with pytest.raises(OpaqueCallableError):
         log.save_intervention(tmp_path / "opaque.tlspec", level="portable")
 
@@ -686,7 +687,7 @@ def test_target_manifest_mismatch_returns_fail(tmp_path: Path) -> None:
     log.do(
         tl.func("relu"),
         tl.zero_ablate(),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     path = tmp_path / "target.tlspec"
     log.save_intervention(path, level="audit")
@@ -704,7 +705,7 @@ def test_save_intervention_allows_more_than_eight_matching_sites(tmp_path: Path)
     x = torch.randn(2, 3)
     log = _log(_DeepReluStack(), x)
     with pytest.warns(MultiMatchWarning, match="fan out"):
-        log._attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+        log._attach_hooks(tl.func("relu"), tl.zero_ablate())
     path = tmp_path / "deep_relu.tlspec"
 
     log.save_intervention(path, level="portable")
@@ -722,7 +723,7 @@ def test_check_spec_compat_allows_saved_selectors_with_more_than_eight_sites(
     x = torch.randn(2, 3)
     log = _log(_DeepReluStack(), x)
     with pytest.warns(MultiMatchWarning, match="fan out"):
-        log._attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+        log._attach_hooks(tl.func("relu"), tl.zero_ablate())
     path = tmp_path / "deep_relu_compat.tlspec"
 
     log.save_intervention(path, level="portable")
@@ -740,7 +741,7 @@ def test_atomic_save_cleans_up_after_tensor_write_failure(tmp_path: Path) -> Non
     log.do(
         tl.func("relu"),
         torch.zeros(2, 3),
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
     )
     target = tmp_path / "crash.tlspec"
 
