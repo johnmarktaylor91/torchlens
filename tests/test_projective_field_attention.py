@@ -41,8 +41,9 @@ class _ScaledMlp(nn.Module):
 class _CausalAttention(nn.Module):
     """One head of causal self-attention between two linear layers."""
 
-    def __init__(self, width: int = 8) -> None:
+    def __init__(self, width: int = 8, *, fused: bool = False) -> None:
         super().__init__()
+        self.fused = fused
         self.pre = nn.Linear(4, width)
         self.q = nn.Linear(width, width)
         self.k = nn.Linear(width, width)
@@ -52,6 +53,10 @@ class _CausalAttention(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         h = self.pre(x)
+        if self.fused:
+            heads = [part(h).unsqueeze(1) for part in (self.q, self.k, self.v)]
+            mixed = nn.functional.scaled_dot_product_attention(*heads, is_causal=True)
+            return self.proj(mixed.squeeze(1))
         scores = (self.q(h) @ self.k(h).transpose(-1, -2)) * self.scale
         length = scores.shape[-1]
         future = torch.ones(length, length, dtype=torch.bool).triu(1)
@@ -98,12 +103,17 @@ def test_reference_mode_dunder_payload_stays_grad_connected() -> None:
         trace.cleanup()
 
 
-def test_gradient_method_through_attention_respects_causality() -> None:
-    """A unit at position 3 reaches the attention output at positions 3 and 4 only."""
+@pytest.mark.parametrize("fused", [False, True], ids=["explicit", "fused_kernel"])
+def test_gradient_method_through_attention_respects_causality(fused: bool) -> None:
+    """A unit at position 3 reaches the attention output at positions 3 and 4 only.
+
+    The fused kernel has no second derivative, so the projective probe answers
+    with one backward pass per target element instead of a double VJP.
+    """
 
     torch.manual_seed(1)
     trace = tl.trace(
-        _CausalAttention().eval(),
+        _CausalAttention(fused=fused).eval(),
         torch.randn(1, _SEQ, 4),
         capture=tl.options.CaptureOptions(**_ARMED),
     )
@@ -117,18 +127,30 @@ def test_gradient_method_through_attention_respects_causality() -> None:
         trace.cleanup()
 
 
-@pytest.fixture(scope="module")
-def gpt2():
+def _gpt2(attention: str = "sdpa"):
     """A two-block GPT-2 with random weights, cache on, and a five-token input."""
 
     transformers = pytest.importorskip("transformers")
     config = transformers.GPT2Config(
-        n_layer=2, n_head=4, n_embd=32, vocab_size=64, n_positions=16, use_cache=True
+        n_layer=2,
+        n_head=4,
+        n_embd=32,
+        vocab_size=64,
+        n_positions=16,
+        use_cache=True,
+        attn_implementation=attention,
     )
     torch.manual_seed(0)
     model = transformers.GPT2LMHeadModel(config).eval()
     ids = torch.randint(0, 64, (1, _SEQ), generator=torch.Generator().manual_seed(0))
     return model, ids
+
+
+@pytest.fixture(scope="module")
+def gpt2():
+    """The default-attention GPT-2 shared by the plain-capture tests."""
+
+    return _gpt2()
 
 
 @pytest.mark.heavy
@@ -187,10 +209,11 @@ def test_gpt2_gradient_on_plain_capture_says_how_to_recapture(gpt2) -> None:
 
 
 @pytest.mark.heavy
-def test_gpt2_gradient_method_through_attention_respects_causality(gpt2) -> None:
+@pytest.mark.parametrize("attention", ["sdpa", "eager"])
+def test_gpt2_gradient_method_through_attention_respects_causality(attention: str) -> None:
     """On a backward-ready reference capture the gradient method answers through attention."""
 
-    model, ids = gpt2
+    model, ids = _gpt2(attention)
     trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(**_ARMED))
     try:
         seed = _only_output(trace, "transformer.h.0.mlp.act")
@@ -200,5 +223,28 @@ def test_gpt2_gradient_method_through_attention_respects_causality(gpt2) -> None
             units, within="transformer.h.1.attn.c_proj", method="gradient"
         )
         assert _positions_reached(_row(reached, target).mask) == list(range(_SEED_POSITION, _SEQ))
+    finally:
+        trace.cleanup()
+
+
+def test_fused_attention_sweep_over_probe_budget_keeps_the_refusal() -> None:
+    """A target site larger than probe_budget refuses rather than sweeping every element."""
+
+    torch.manual_seed(1)
+    trace = tl.trace(
+        _CausalAttention(fused=True).eval(),
+        torch.randn(1, _SEQ, 4),
+        capture=tl.options.CaptureOptions(**_ARMED),
+    )
+    try:
+        seed = _only_output(trace, "pre")
+        target_numel = _only_output(trace, "proj").out.numel()
+        with pytest.raises(ReceptiveFieldUnavailableError, match="probe_budget"):
+            seed.projective_field.of(
+                [(0, _SEED_POSITION, 0)],
+                within="proj",
+                method="gradient",
+                probe_budget=target_numel - 1,
+            )
     finally:
         trace.cleanup()

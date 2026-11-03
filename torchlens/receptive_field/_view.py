@@ -487,6 +487,9 @@ class ReceptiveFieldView:
             ``"geometric"`` (the field engine's index geometry, the default) or
             ``"gradient"`` (one autograd probe per unit and site; needs a trace
             captured with ``backward_ready=True`` and ``save_mode="reference"``).
+            Through a fused kernel with no second derivative (fused attention)
+            a projective probe instead runs one backward pass per element of
+            the site, and only for a site of at most ``probe_budget`` elements.
         probe_budget:
             Most autograd probes (units times sites) ``"gradient"`` may run.
 
