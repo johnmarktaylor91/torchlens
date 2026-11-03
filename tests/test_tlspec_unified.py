@@ -1044,7 +1044,7 @@ def test_schema_v2_codec_preflight_wraps_registry_errors(
             lambda manifest: manifest.__setitem__("backward_summary", {"has_backward_pass": True}),
             "backward_summary",
         ),
-        (lambda manifest: manifest.__setitem__("torch_version", "2.0.0"), "torch_version=null"),
+        (lambda manifest: manifest.__setitem__("torch_version", None), "torch_version"),
     ],
 )
 def test_schema_v2_non_torch_corruptions_fail_closed(
@@ -1052,16 +1052,19 @@ def test_schema_v2_non_torch_corruptions_fail_closed(
     mutation: Callable[[dict[str, Any]], Any],
     match: str,
 ) -> None:
-    """Schema v2 backend-conditional fields reject malformed non-torch manifests."""
+    """Current array artifacts retain closed backend/runtime and summary validation."""
 
     path = tmp_path / "bad_v2.tlspec"
     _captured_log().save(path)
-    manifest = _mlx_schema_v2_manifest(path)
+    manifest = _mlx_materialized_schema_v2_manifest(path)
+    _write_manifest(path, manifest)
+    validate_tlspec(path)
     mutation(manifest)
     _write_manifest(path, manifest)
 
-    with pytest.raises(ValueError, match=match):
+    with pytest.raises(ArtifactError, match=match) as caught:
         validate_tlspec(path)
+    assert caught.value.fields["code"] == "manifest_schema_invalid"
 
 
 def test_schema_v1_rejects_schema_v2_body_uses(tmp_path: Path) -> None:

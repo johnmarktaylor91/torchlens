@@ -375,10 +375,16 @@ def test_torch_bundle_rejects_non_torch_body_index_codec(
     assert foreign_backend not in looked_up
 
 
-def test_torch_bundle_allows_numeric_ndarray_in_raw_input(tmp_path: Path) -> None:
+@pytest.mark.parametrize("dtype", [np.float64, np.complex128])
+@pytest.mark.parametrize("lazy", [False, True])
+def test_torch_bundle_allows_numeric_ndarray_in_raw_input(
+    tmp_path: Path, dtype: Any, lazy: bool
+) -> None:
     """The role restriction keeps the independent raw-value array carrier working."""
 
-    raw = {"array": np.arange(12, dtype=np.float64), "x": torch.randn(2, 4)}
+    raw = {"array": np.arange(12).astype(dtype), "x": torch.randn(2, 4)}
+    if dtype is np.complex128:
+        raw["array"] += 2j
     trace = tl.trace(
         _TorchTraceModel(),
         raw,
@@ -386,7 +392,8 @@ def test_torch_bundle_allows_numeric_ndarray_in_raw_input(tmp_path: Path) -> Non
     )
     path = tmp_path / "raw_array.tlspec"
     trace.save(path)
-    loaded = tl.load(path)
+    loaded = tl.load(path, lazy=lazy)
     assert isinstance(loaded.input["array"], np.ndarray)
+    assert loaded.input["array"].dtype == raw["array"].dtype
     np.testing.assert_array_equal(loaded.input["array"], raw["array"])
     assert torch.equal(loaded.input["x"], raw["x"])
