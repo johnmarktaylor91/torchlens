@@ -285,7 +285,7 @@ def _snapshot_layer_log(layer_log: Any | None) -> dict[str, Any]:
         if isinstance(layer_log, Mapping):
             value = layer_log.get(field_name)
         else:
-            value = getattr(layer_log, field_name, None)
+            value = record_member(layer_log, field_name, None)
         snapshot[field_name] = value
     return snapshot
 
