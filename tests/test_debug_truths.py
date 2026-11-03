@@ -432,7 +432,7 @@ class _Composite(nn.Module):
 
 def _grad_frame(model: nn.Module, x: torch.Tensor) -> Any:
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True))
-    trace.log_backward(trace[trace.output_layers[0]].out.square().mean())
+    trace.backward(trace[trace.output_layers[0]].out.square().mean())
     frame = tl.debug.grad_health(trace).to_pandas()
     return frame[frame["verdict"] != "unavailable"]
 
