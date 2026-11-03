@@ -9,6 +9,26 @@ from dataclasses import dataclass
 from typing import Any
 
 
+def class_names_tuple(class_name: str | tuple[str, ...] | None) -> tuple[str, ...]:
+    """Normalize a ``class_name=`` registration filter to a tuple of patterns."""
+
+    if class_name is None:
+        return ()
+    if isinstance(class_name, str):
+        return (class_name,)
+    return tuple(class_name)
+
+
+def matches_class_name(patterns: tuple[str, ...], class_name: str | None) -> bool:
+    """Return whether ``class_name`` passes a registration filter (empty matches all)."""
+
+    if not patterns:
+        return True
+    if class_name is None:
+        return False
+    return any(fnmatch.fnmatchcase(class_name, pattern) for pattern in patterns)
+
+
 @dataclass(frozen=True)
 class Detector:
     """Registered detector metadata.
@@ -39,9 +59,8 @@ class Registry:
     not match"; return a non-None result to claim the dispatch.
 
     The registry is direction-agnostic: the ``kind`` field is purely for diagnostics.
-    Used for input dispatch (``tl._autoroute.input``) in this sprint; structured to
-    also serve output dispatch (``tl._autoroute.output``) in a future sprint without
-    modification.
+    One instance serves input dispatch and one serves output decoding; the
+    public registration doors are ``tl.inputs`` and ``tl.outputs``.
     """
 
     def __init__(self, kind: str) -> None:
@@ -97,7 +116,7 @@ class Registry:
             if any(detector.name == name for detector in self._detectors):
                 raise ValueError(
                     f"detector {name!r} is already registered on {self.kind} registry; "
-                    f"call tl._autoroute.{self.kind}.unregister({name!r}) first to replace"
+                    f"call tl.{self.kind}s.unregister({name!r}) first to replace"
                 )
             self._counter += 1
             self._detectors.append(

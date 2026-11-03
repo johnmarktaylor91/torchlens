@@ -134,6 +134,8 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_selection": "L4",
     "_trace_slice": "L4",
     "facets": "L4",
+    "inputs": "L4",
+    "outputs": "L4",
     "_autoroute": "L4",
     "transforms": "L4",
     # -- L5 READS ------------------------------------------------------------

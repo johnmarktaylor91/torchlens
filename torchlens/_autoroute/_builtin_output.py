@@ -312,6 +312,27 @@ def _resolve_requested_style(meta: dict[str, Any]) -> ResolvedPostprocessing | N
     return None
 
 
+def output_decoders_cache_key() -> tuple[tuple[str, int, int], ...]:
+    """Return the registered output detectors as a capture-cache fragment.
+
+    Registered detectors label the capture-time decode, so a cached trace made
+    before a register or unregister must not serve the next capture.
+
+    Returns
+    -------
+    tuple[tuple[str, int, int], ...]
+        ``(name, priority, registration_order)`` per registered detector, in
+        dispatch order; re-registering a name changes its order and the key.
+    """
+
+    from . import output as autoroute_output
+
+    return tuple(
+        (detector.name, detector.priority, detector.registration_order)
+        for detector in autoroute_output.list()
+    )
+
+
 def semantic_output_cache_key(model: Any) -> dict[str, Any]:
     """Return a serializable semantic-output cache fingerprint.
 
@@ -404,6 +425,7 @@ def _build_output_meta(
         if tokenizer is not None
         else getattr(trace, "_output_tokenizer", None),
         "model_metadata": getattr(trace, "_semantic_output_metadata", None),
+        "model_class_name": getattr(trace, "_source_class_name", None),
     }
 
 
@@ -451,8 +473,8 @@ def refuse_unknown_decode_style(style: Any) -> NoReturn:
         f"detector resolved it. Built-in styles: {', '.join(BUILTIN_OUTPUT_STYLES)}.",
         code="decode_style_unknown",
         remedy=(
-            "pass a built-in style, or register a custom detector that resolves it "
-            "with tl._autoroute.output.register(...)"
+            "pass a built-in style, or register a custom output decoder that resolves it "
+            "with tl.outputs.register(...)"
         ),
         argument=STYLE_KW,
     )
