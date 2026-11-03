@@ -158,7 +158,7 @@ def public_symbols(inventory: dict[str, Any] | None = None) -> list[PublicSymbol
     Examples
     --------
     >>> symbols = public_symbols()
-    >>> any(s.path == "tl.log_forward_pass" for s in symbols)
+    >>> any(s.path == "tl.trace" for s in symbols)
     True
     """
 
@@ -244,7 +244,8 @@ def ambient_namespace() -> dict[str, Any]:
     -------
     dict[str, Any]
         ``tl``, ``torch``, ``nn``, a small eval-mode ``model`` and a matching input ``x``;
-        the same application-supplied names the docs pages assume.
+        the same application-supplied names the docs pages assume. :func:`run_example`
+        adds the documented object under its own name.
 
     Examples
     --------
@@ -298,6 +299,8 @@ def run_example(symbol: PublicSymbol, namespace: dict[str, Any] | None = None) -
         except ImportError:
             return ExampleResult(symbol.path, "skipped", required)
     globs = dict(namespace if namespace is not None else ambient_namespace())
+    # The documented object is in scope under its own name, as a reader expects.
+    globs.setdefault(symbol.path.rsplit(".", 1)[-1], symbol.obj)
     test = doctest.DocTest(examples, globs, symbol.path, None, None, None)
     report = io.StringIO()
     runner = doctest.DocTestRunner(optionflags=OPTION_FLAGS, verbose=False)
@@ -379,6 +382,36 @@ def render_census(symbols: list[PublicSymbol], members: list[dict[str, Any]]) ->
     )
     lines.append("")
     return "\n".join(lines)
+
+
+def census_packages(path: Path = CENSUS_PATH) -> list[str]:
+    """Read the package names from the committed census table.
+
+    Parameters
+    ----------
+    path
+        The census Markdown file.
+
+    Returns
+    -------
+    list[str]
+        Package names in table order, the totals row excluded; empty when the file is
+        missing.
+
+    Examples
+    --------
+    >>> "intervention" in census_packages()
+    True
+    """
+
+    if not path.exists():
+        return []
+    names = []
+    for line in path.read_text().splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) == 3 and cells[1].isdigit() and not cells[0].startswith("**"):
+            names.append(cells[0])
+    return names
 
 
 def iter_status(symbols: list[PublicSymbol]) -> Iterator[str]:

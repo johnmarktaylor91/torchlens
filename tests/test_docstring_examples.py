@@ -15,7 +15,9 @@ example that needs an optional dependency starts with ``>>> # requires: <module>
 is skipped, not failed, when that module is absent.
 
 Each example captures a small model, so the family is ``heavy`` (worker and backstop
-tiers, never smoke); one cell per package keeps every cell inside the heavy budget.
+tiers, never smoke); one cell per package (the packages the committed census lists, read
+without importing torchlens) keeps every cell inside the heavy budget. A stale census
+fails here too, so the cell list cannot drift from the surface.
 """
 
 from __future__ import annotations
@@ -37,26 +39,6 @@ pytestmark = pytest.mark.heavy
 #: EMPTY is the intended steady state. Adding a row needs a reason and an owner; a row
 #: whose symbol gains an example must leave in the same change (the staleness test).
 PENDING: dict[str, str] = {}
-
-
-def _package_names() -> list[str]:
-    """List the packages a public symbol can be filed under, without importing torchlens.
-
-    Returns
-    -------
-    list[str]
-        ``torchlens`` (root-module definitions) plus every subpackage and top-level module
-        name below ``torchlens/``, sorted.
-    """
-
-    root = REPO_ROOT / "torchlens"
-    names = {"torchlens"}
-    for entry in root.iterdir():
-        if entry.is_dir() and (entry / "__init__.py").exists():
-            names.add(entry.name)
-        elif entry.suffix == ".py" and entry.name != "__init__.py":
-            names.add(entry.stem)
-    return sorted(names)
 
 
 @functools.lru_cache(maxsize=1)
@@ -94,13 +76,25 @@ def test_pending_ledger_has_no_stale_entries() -> None:
     assert not stale, "stale PENDING rows:\n  " + "\n  ".join(stale)
 
 
-@pytest.mark.parametrize("package", _package_names())
+def test_census_is_current() -> None:
+    """The committed census matches a fresh render, so its package list stays true."""
+
+    rendered = docstring_examples.render_census(
+        list(_symbols()), docstring_examples.public_members()
+    )
+    committed = docstring_examples.CENSUS_PATH.read_text()
+    assert committed == rendered, (
+        "docs/maintainers/docstring_examples_census.md is stale: run "
+        "`python tools/docstring_examples.py census` and commit the result"
+    )
+
+
+@pytest.mark.parametrize("package", docstring_examples.census_packages())
 def test_every_example_runs(package: str) -> None:
     """Execute every example filed under ``package`` and report each failure."""
 
     symbols = [symbol for symbol in _symbols() if symbol.package == package]
-    if not symbols:
-        pytest.skip(f"no public function or class is defined under {package}")
+    assert symbols, f"the census lists {package} but no public symbol is filed there"
     namespace = docstring_examples.ambient_namespace()
     failures = []
     for symbol in symbols:
