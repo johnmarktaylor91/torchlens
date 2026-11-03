@@ -698,10 +698,11 @@ def _check_call_site_contract_post_hoc(
     ``call_site_contract_unchecked`` instead of passing silently.
     """
 
-    from .invariants import MetadataInvariantError
+    from .invariants import MetadataInvariantError  # deferred: cycle validation
 
     classes = call_site_classes_for(trace)
     if classes is None:
+        # deferred: cycle validation
         from .diagnostics import ValidationDiagnostic, record_validation_diagnostic
 
         record_validation_diagnostic(

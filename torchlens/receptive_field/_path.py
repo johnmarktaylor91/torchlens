@@ -238,7 +238,7 @@ def forward_index_image(
         whether every oracle answer and both supplied sets were exact.
     """
 
-    from ._query import _IndexSet
+    from ._query import _IndexSet  # deferred: cycle receptive_field
 
     source_values = frozenset(source_set.values())
     reached: list[int] = []

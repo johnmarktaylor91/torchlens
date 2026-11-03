@@ -47,7 +47,7 @@ _PERTURB_WIDENING_FRACTION = 0.1
 def _perturbed_parent_is_only_running_var(layer: Any, layers_to_perturb: list[str]) -> bool:
     """Return whether the single perturbed parent feeds ``args[4]`` and nothing else."""
 
-    from .exemptions import (
+    from .exemptions import (  # deferred: cycle validation
         _perturbed_parent_arg_positions,
         _perturbed_parents_only_occupy_template_slot,
     )

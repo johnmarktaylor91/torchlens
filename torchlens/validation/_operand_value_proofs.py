@@ -407,7 +407,7 @@ def operand_value_proof_decision(
         Exempt decision for a proved case, otherwise non-exempt.
     """
 
-    from .exemptions import PosthocPerturbDecision
+    from .exemptions import PosthocPerturbDecision  # deferred: cycle validation
 
     proofs = (
         (

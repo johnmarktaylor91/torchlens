@@ -231,7 +231,7 @@ def _walk_pool(input_tree: Any, pool_tree: Any) -> list[Tensor]:
         If containers do not mirror.
     """
 
-    from torchlens.attribution._core import _is_attributed_tensor
+    from torchlens.attribution._core import _is_attributed_tensor  # deferred: cycle attribution
 
     if _is_attributed_tensor(input_tree):
         return [pool_tree]

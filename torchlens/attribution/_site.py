@@ -264,7 +264,7 @@ def _require_input_dependence(
 ) -> None:
     """Refuse a site whose output is not computed from any attributed leaf."""
 
-    from torchlens.attribution._layer import _autograd_leaf_variable_ids
+    from torchlens.attribution._layer import _autograd_leaf_variable_ids  # deferred: cycle
 
     leaves = [leaf for leaf in replacements if leaf.requires_grad]
     if not leaves:
@@ -396,7 +396,7 @@ def _input_dependent_site(
     Used only to spell the remedy of an input-independent site refusal.
     """
 
-    from torchlens.attribution._layer import _autograd_leaf_variable_ids
+    from torchlens.attribution._layer import _autograd_leaf_variable_ids  # deferred: cycle
 
     outputs: list[tuple[str, Tensor]] = []
     handles: list[RemovableHandle] = []

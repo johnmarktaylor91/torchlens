@@ -225,7 +225,7 @@ class AttributionGraph:
             logits nothing influences.
         """
 
-        from ._neuronpedia import graph_to_neuronpedia
+        from ._neuronpedia import graph_to_neuronpedia  # deferred: cycle attribution
 
         return graph_to_neuronpedia(
             self,

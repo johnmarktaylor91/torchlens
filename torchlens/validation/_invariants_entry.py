@@ -68,8 +68,8 @@ def _check_receptive_field_metadata_invariants(trace: Trace) -> None:
         If receptive-field metadata violates a geometric contract.
     """
 
-    from ..receptive_field._errors import ReceptiveFieldError
-    from ..receptive_field._validation import check_geometric_metadata_invariants
+    from ..receptive_field._errors import ReceptiveFieldError  # deferred: cycle receptive_field
+    from ..receptive_field._validation import check_geometric_metadata_invariants  # deferred: cycle
 
     try:
         check_geometric_metadata_invariants(trace)

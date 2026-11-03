@@ -728,7 +728,7 @@ def read(  # noqa: PLR0913 -- the M(reads) public door: eight keyword-only spec-
         warnings=tuple(warning_codes) + frozen_plan.disclosures,
         rescorable=True,
     )
-    from ._accessor import _validity_token
+    from ._accessor import _validity_token  # deferred: cycle attribution
 
     return ReadTable(rows, provenance, trace=trace, trace_token=_validity_token(trace))
 

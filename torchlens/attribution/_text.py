@@ -854,7 +854,7 @@ def text(
 
     import warnings
 
-    from torchlens.attribution._core import (
+    from torchlens.attribution._core import (  # deferred: cycle attribution
         _completeness_extra,
         integrated_gradients,
     )

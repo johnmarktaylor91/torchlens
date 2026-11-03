@@ -122,7 +122,7 @@ def _grad_cam_aggregate_overlay(
         A PIL image overlay, or ``None`` when no spatial input exists.
     """
 
-    from torchlens.attribution._layer import _cam_overlay
+    from torchlens.attribution._layer import _cam_overlay  # deferred: cycle attribution
 
     if not isinstance(aggregated, Tensor) or aggregated.ndim != 4:
         return None

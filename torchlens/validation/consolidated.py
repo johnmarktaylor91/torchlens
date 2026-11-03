@@ -394,7 +394,7 @@ def _validate_receptive_field_scope(
     """
 
     from .._user_public_impls import trace
-    from ..receptive_field._validation import validate_receptive_field_trace
+    from ..receptive_field._validation import validate_receptive_field_trace  # deferred: cycle
     from .invariants import check_metadata_invariants
 
     ready_args = _gradient_ready_value(input_args)

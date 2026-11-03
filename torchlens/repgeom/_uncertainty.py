@@ -347,7 +347,7 @@ def compare_rdms_interval(  # noqa: PLR0913 -- the spec'd row-1 door: two RDMs, 
         method, or invalid bootstrap settings.
     """
 
-    from ._geometry import compare_rdms
+    from ._geometry import compare_rdms  # deferred: cycle repgeom
 
     settings = BootstrapSettings(num_resamples=num_resamples, seed=seed, confidence=confidence)
     square_a = _square_rdm(rdm_a, "rdm_a")
@@ -476,7 +476,7 @@ def cka_interval(
 
         return _gram_cka(gram_a[np.ix_(index, index)], gram_b[np.ix_(index, index)])
 
-    from ._similarity_ids import LINEAR_CKA_ID
+    from ._similarity_ids import LINEAR_CKA_ID  # deferred: cycle repgeom
 
     return bootstrap_interval(
         statistic,

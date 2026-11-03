@@ -394,6 +394,7 @@ def _check_op_label_resolution(ml: Trace) -> None:
         # has no second lookup that could disagree with ``ml[label]``. A real
         # ``Trace`` always defines ``ops``, so this never applies to one. The
         # check is reported as not run, never passed silently.
+        # deferred: cycle validation
         from .diagnostics import ValidationDiagnostic, record_validation_diagnostic
 
         record_validation_diagnostic(

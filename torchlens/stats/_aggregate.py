@@ -599,12 +599,12 @@ def _run_aggregate(
         Finalized metric results keyed by canonical name.
     """
 
-    from ._aggregate_loop import _aggregate_loop
+    from ._aggregate_loop import _aggregate_loop  # deferred: cycle stats
 
     keyed, sites, loss_fn = plan
     if not cache:
         return _aggregate_loop(model, dataloader, keyed, sites=sites, loss_fn=loss_fn)
-    from ._aggregate_cache import run_cached
+    from ._aggregate_cache import run_cached  # deferred: cycle stats
 
     target = "grad" if any(_is_gradient_key(site) for site in sites.values()) else "out"
     return run_cached(

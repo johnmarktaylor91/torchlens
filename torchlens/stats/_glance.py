@@ -64,8 +64,8 @@ def glance(
             "surfaces (repr(log[label]) / log.summary(view='stats')) which add provenance "
             f"and honesty envelopes. Got {type(tensor).__name__}."
         )
-    from ._stats_render import render_core_line
-    from ._tensor_stats import tensor_stats
+    from ._stats_render import render_core_line  # deferred: cycle stats
+    from ._tensor_stats import tensor_stats  # deferred: cycle stats
 
     identity = f"glance:{tuple(tensor.shape)}:{tensor.dtype}"
     stats = tensor_stats(tensor, identity=identity)

@@ -268,7 +268,7 @@ def sdpa_value_proof_decision(
         Exempt decision for a proved case, otherwise non-exempt.
     """
 
-    from .exemptions import PosthocPerturbDecision
+    from .exemptions import PosthocPerturbDecision  # deferred: cycle validation
 
     if sdpa_zero_value_output(layer, layers_to_perturb, args):
         return PosthocPerturbDecision(

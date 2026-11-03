@@ -115,7 +115,7 @@ def replay_copy_for_slot(
         A fresh copy that requires grad exactly when the captured argument did.
     """
 
-    from .core import _op_for_validation_label
+    from .core import _op_for_validation_label  # deferred: cycle validation
 
     parent_label = (getattr(layer, "parent_arg_positions", {}) or {}).get(arg_type, {}).get(key)
     parent_layer = None
@@ -166,7 +166,7 @@ def _captured_slot_grad_flags(
         when no tensor snapshot sits at this position.
     """
 
-    from .core import _read_replay_arg_value
+    from .core import _read_replay_arg_value  # deferred: cycle validation
 
     try:
         snapshot = _read_replay_arg_value(

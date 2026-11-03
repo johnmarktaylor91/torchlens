@@ -810,7 +810,7 @@ class MergedTrace:
         """Save the merged artifact as a ``merged-directory`` bundle."""
 
         self._require_members("save()")
-        from ._artifact import save_merged
+        from ._artifact import save_merged  # deferred: cycle _merged
 
         save_merged(self, path, overwrite=overwrite)
         self._source_path = str(path)

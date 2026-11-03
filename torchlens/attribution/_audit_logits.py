@@ -33,7 +33,7 @@ from torchlens.attribution._result import AttributionError
 def _is_contribution_table(claim: Any) -> bool:
     """Return whether ``claim`` is a ``torchlens.mechinterp`` direct-logit table."""
 
-    from torchlens.mechinterp._records import ContributionScores
+    from torchlens.mechinterp._records import ContributionScores  # deferred: cycle mechinterp
 
     return isinstance(claim, ContributionScores)
 
@@ -68,7 +68,7 @@ def _dla_refusal(claim: Any, why: str, *, code: str) -> AttributionError:
 def _logits_label(trace: Any, claim: Any) -> str:
     """Return the op label of the unembedding head's output on the audit trace."""
 
-    from torchlens.mechinterp._anchors import resolve_lm_head
+    from torchlens.mechinterp._anchors import resolve_lm_head  # deferred: cycle mechinterp
 
     try:
         head = resolve_lm_head(trace).head
@@ -91,8 +91,8 @@ def _logits_label(trace: Any, claim: Any) -> str:
 def _logit_rows(trace: Any, claim: Any, logits: Tensor) -> tuple[int, ...]:
     """Return the logits rows of the claim's residual positions (or refuse)."""
 
-    from torchlens.mechinterp._anchors import resolve_lm_head
-    from torchlens.mechinterp._dla import _map_positions
+    from torchlens.mechinterp._anchors import resolve_lm_head  # deferred: cycle mechinterp
+    from torchlens.mechinterp._dla import _map_positions  # deferred: cycle mechinterp
 
     view = resolve_lm_head(trace).facets()
     try:

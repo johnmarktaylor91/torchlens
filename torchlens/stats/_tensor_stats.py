@@ -105,7 +105,7 @@ class TensorStats:
         exists to serve. Never raises (the line renderer is pure).
         """
 
-        from ._stats_render import render_core_line
+        from ._stats_render import render_core_line  # deferred: cycle stats
 
         return fail_open(
             lambda: f"TensorStats({render_core_line(self)})",

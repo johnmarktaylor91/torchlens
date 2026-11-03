@@ -64,7 +64,7 @@ EDGES_REMEDY = (
 def _is_edge_table(claim: Any) -> bool:
     """Return whether ``claim`` is a one-backward ``ReadTable`` holding ``EDGE`` rows."""
 
-    from torchlens.attribution.onebackward._table import ReadTable
+    from torchlens.attribution.onebackward._table import ReadTable  # deferred: cycle attribution
 
     return isinstance(claim, ReadTable) and any(row.kind == "EDGE" for row in claim.rows())
 
@@ -104,7 +104,7 @@ class _EdgesPlan(_SitesPlan):
     def _patched(self, keys: tuple[tuple[int, ...], ...]) -> Any:
         """Return a fork of the trace with the edges of ``keys`` patched."""
 
-        from torchlens.mechinterp import patch_edges
+        from torchlens.mechinterp import patch_edges  # deferred: cycle mechinterp
 
         with torch.no_grad():
             return patch_edges(self.trace, self._edges(keys), corrupted_graph=self.corrupt)
@@ -165,6 +165,7 @@ class _EdgesPlan(_SitesPlan):
     ) -> tuple[tuple[Any, Tensor], ...]:
         """Return one ``(selection, value)`` pair per receiver of ``keys``, as ``fork`` wrote it."""
 
+        # deferred: cycle mechinterp
         from torchlens.mechinterp._edge_patch import _stage_key, receiver_selection
 
         receivers = {edge.receiver.name: edge.receiver for edge in self._edges(keys)}
@@ -178,7 +179,7 @@ class _EdgesPlan(_SitesPlan):
 def _written(fork: Any, receiver: Any) -> Tensor:
     """Return the value a ``patch_edges`` fork wrote for ``receiver``."""
 
-    from torchlens.mechinterp._edge_patch import _head_spec, _input_edge_record
+    from torchlens.mechinterp._edge_patch import _head_spec, _input_edge_record  # deferred: cycle
 
     if receiver.kind in ("q", "k", "v"):
         return fork.ops[str(_head_spec(fork, receiver).home_label)].out.detach().clone()
@@ -209,6 +210,7 @@ def _edge_trace(request: _AuditRequest, inputs: Any) -> Any:
 def _mixed_remedy(claim: Any, rows: tuple[Any, ...]) -> str:
     """Return the audit of a mixed table's site reads (seeded), else of its edges rescored."""
 
+    # deferred: cycle attribution
     from torchlens.attribution._audit_reads import _read_remedy, _recorded_target, _seed_spelling
 
     act = next(row for row in rows if row.kind != "EDGE")
@@ -272,8 +274,8 @@ def _check_request(request: _AuditRequest, rows: tuple[Any, ...]) -> str:
 def _graphs(request: _AuditRequest) -> tuple[Any, Any, Any]:
     """Return the audit's trace, its component graph and the corrupted run's graph."""
 
-    from torchlens.mechinterp import component_graph
-    from torchlens.mechinterp._errors import MechInterpError
+    from torchlens.mechinterp import component_graph  # deferred: cycle mechinterp
+    from torchlens.mechinterp._errors import MechInterpError  # deferred: cycle mechinterp
 
     trace = _edge_trace(request, request.inputs)
     try:
@@ -305,7 +307,7 @@ def _metric_scorer(
 ) -> tuple[str, Callable[[Any], float]]:
     """Return the logits op label and ``run -> metric reduced over examples``."""
 
-    from torchlens.mechinterp._anchors import resolve_lm_head
+    from torchlens.mechinterp._anchors import resolve_lm_head  # deferred: cycle mechinterp
 
     head = resolve_lm_head(trace).head
     label = str(trace.ops[str(list(head.output_ops)[-1])].label)
@@ -341,7 +343,7 @@ def _write_site(trace: Any, receiver: Any) -> str:
     """Return the op label a patch into ``receiver`` writes."""
 
     if receiver.kind in ("q", "k", "v"):
-        from torchlens.mechinterp._edge_patch import _head_spec
+        from torchlens.mechinterp._edge_patch import _head_spec  # deferred: cycle mechinterp
 
         return str(_head_spec(trace, receiver).home_label)
     return str(receiver.input_label)

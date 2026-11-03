@@ -65,7 +65,7 @@ def _graph_site_values(graph: Any, graph_value: str) -> dict[str, list[float]]:
 
     by_site: dict[str, list[float]] = {}
     if graph_value == "influence":
-        from torchlens.attribution.graph._neuronpedia import node_influence
+        from torchlens.attribution.graph._neuronpedia import node_influence  # deferred: cycle
 
         influence = node_influence(graph).tolist()
         for index, node in enumerate(graph.nodes):
@@ -111,7 +111,7 @@ def _graph_entries(trace: Any, graph: Any, graph_value: str, reduce: str) -> dic
 def _check_graph_value(source: Any, graph_value: Any) -> str | None:
     """The graph value to paint for ``source`` (``None`` for non-graph sources)."""
 
-    from torchlens.attribution.graph._result import AttributionGraph
+    from torchlens.attribution.graph._result import AttributionGraph  # deferred: cycle attribution
 
     if not isinstance(source, AttributionGraph):
         if graph_value is not None:

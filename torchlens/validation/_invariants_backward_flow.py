@@ -545,7 +545,7 @@ def _is_func_call_id_exempt(layer: Op) -> bool:
     # A closure-constant source (SPEC 2 rule 1) is a functionless source like
     # a buffer: no torch call, so no ``func_call_id``. The predicate is the
     # narrow shared one (parentless, internal source, no callable, no call id).
-    from ._constant_source import is_closure_constant_source
+    from ._constant_source import is_closure_constant_source  # deferred: cycle validation
 
     return is_closure_constant_source(layer)
 
