@@ -532,6 +532,15 @@ def test_every_gradient_cell_matches_page_and_eager_hand() -> None:
         f"{door}-{verb}-keep_grad_{'on' if keep else 'off'}": problem
         for door, verb in _CELLS
         for keep in _KEEPS
-        if (problem := _cell_problem(door, verb, keep)) is not None
+        if (problem := _guarded_cell_problem(door, verb, keep)) is not None
     }
     assert not broken, broken
+
+
+def _guarded_cell_problem(door: str, verb: str, keep: bool) -> str | None:
+    """One cell's problem; an unexpected exception is that cell's problem, not the sweep's."""
+
+    try:
+        return _cell_problem(door, verb, keep)
+    except Exception as error:  # the property names the cell that raised
+        return f"raised {type(error).__name__}: {error}"

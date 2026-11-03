@@ -19,14 +19,15 @@ import pytest
 import torchlens as tl
 from torchlens._capture.prepare.dispatch import _filter_trace_kwargs_for_backend
 from torchlens.backends import BackendSpec
+from torchlens.backends._backend_protocol import REFUSABLE_CAPABILITY_FLAGS
 from torchlens.backends._options import (
     JAX_PREVIEW_TRACE_OPTION_POLICY,
     MLX_PREVIEW_TRACE_OPTION_POLICY,
     PADDLE_PREVIEW_TRACE_OPTION_POLICY,
     TF_PREVIEW_TRACE_OPTION_POLICY,
     TINYGRAD_PREVIEW_TRACE_OPTION_POLICY,
+    TRACE_OPTION_CAPABILITY_GATES,
     PreviewTraceOptionPolicy,
-    _option_refusal_code,
     reject_unsupported_trace_options,
 )
 from torchlens.backends.registry import PUBLIC_OPTION_SPINE_TRACE_OPTIONS
@@ -128,6 +129,17 @@ def _preview_rejects(policy: PreviewTraceOptionPolicy, option_name: str) -> bool
 _REFUSAL_NAMES: dict[str, str] = {"lookback_payload_policy": "lookback"}
 
 
+def _expected_refusal_code(option_name: str) -> str:
+    """The contracted code, read from the two data tables rather than the library helper.
+
+    An option a capability flag gates refuses with that flag's code; any other
+    option refuses with ``trace_option_unsupported``.
+    """
+
+    gate = TRACE_OPTION_CAPABILITY_GATES.get(option_name)
+    return "trace_option_unsupported" if gate is None else REFUSABLE_CAPABILITY_FLAGS[gate]
+
+
 def _typed_refusal_problem(
     error: BackendUnsupportedError, option_name: str, backend: str
 ) -> str | None:
@@ -136,8 +148,9 @@ def _typed_refusal_problem(
     fields = error.fields
     option_name = _REFUSAL_NAMES.get(option_name, option_name)
     named = fields.get("option") == option_name or option_name in (fields.get("options") or ())
-    if fields.get("code") != _option_refusal_code(option_name) or not named:
-        return f"refused with {fields!r}, expected code {_option_refusal_code(option_name)!r}"
+    expected = _expected_refusal_code(option_name)
+    if fields.get("code") != expected or not named:
+        return f"refused with {fields!r}, expected code {expected!r}"
     if fields.get("backend", backend) != backend:
         return f"refusal names backend {fields.get('backend')!r}"
     return None
@@ -177,6 +190,15 @@ def _preview_violation(
     if _preview_rejects(policy, option_name):
         return "option the policy names was admitted"
     return None
+
+
+def _guarded(check: Any, *cell: Any) -> str | None:
+    """Run one cell's check; an unexpected exception is that cell's problem, not the sweep's."""
+
+    try:
+        return check(*cell)
+    except Exception as error:  # the property names the cell that raised
+        return f"raised {type(error).__name__}: {error}"
 
 
 def _covering_cells(
@@ -224,7 +246,7 @@ def test_every_backend_spine_option_cell_is_declared_or_rejected_typed() -> None
         f"{spec.name}-{option_name}": problem
         for spec in _SPECS
         for option_name in PUBLIC_OPTION_SPINE_TRACE_OPTIONS
-        if (problem := _spine_violation(spec, option_name)) is not None
+        if (problem := _guarded(_spine_violation, spec, option_name)) is not None
     }
     assert not broken, broken
 
@@ -236,7 +258,7 @@ def test_every_preview_policy_option_cell_is_refused_exactly_when_named() -> Non
         f"{policy.backend_name}-{option_name}": problem
         for policy in _PREVIEW_POLICIES
         for option_name, value in _PREVIEW_UNSUPPORTED_VALUES
-        if (problem := _preview_violation(policy, option_name, value)) is not None
+        if (problem := _guarded(_preview_violation, policy, option_name, value)) is not None
     }
     assert not broken, broken
 
