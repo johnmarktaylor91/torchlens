@@ -118,6 +118,11 @@ def _validate_chunked_forward_capture(
         _refuse_chunk_option_conflict(
             "chunk_size cannot be combined with stop_after=.", "drop stop_after="
         )
+    _refuse_chunked_streaming(streaming)
+
+
+def _refuse_chunked_streaming(streaming: StorageOptions) -> None:
+    """Refuse chunked capture into streaming storage (chunked capture is in-memory only in v1)."""
     if streaming.path is not None or streaming.on_save is not None:
         _refuse_chunk_option_conflict(
             "chunk_size is in-memory only in v1 and cannot be combined with streaming storage.",

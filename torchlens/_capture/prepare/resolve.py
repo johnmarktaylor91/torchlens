@@ -17,14 +17,16 @@ from torchlens.intervention._zero_fire import settle_capture_zero_fire
 from torchlens.intervention.audit import rule_signal as _rule_signal
 from torchlens.intervention.hooks import split_site_branches as _split_site_branches
 
-from ..._trace_selector_helpers import (
-    _combine_save_predicates,
-    _is_selective_label_save,
+from ..._trace_selection_shape import (
     _layers_to_save_has_negative_index,
     _layers_to_save_live_subset,
     _layers_to_save_mentions_identity,
     _layers_to_save_mentions_output,
     _layers_to_save_needs_final_resolution,
+)
+from ..._trace_selector_helpers import (
+    _combine_save_predicates,
+    _is_selective_label_save,
     _make_layers_to_save_predicate,
 )
 from ...intervention.hooks import gradient_inners, normalize_hook_plan, split_site_branches

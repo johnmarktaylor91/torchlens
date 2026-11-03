@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import importlib
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Final, Literal, TypeVar, cast
 
@@ -772,171 +772,13 @@ class CaptureOptions:
     ) -> None:
         """Initialize a frozen capture option bundle."""
 
+        supplied = locals().copy()  # every parameter is named after its field
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
-            "input_transform": _resolve_option_value(
-                "input_transform", input_transform, None, specified_fields
-            ),
-            "save_raw_input": _resolve_option_value(
-                "save_raw_input", save_raw_input, "small", specified_fields
-            ),
-            "batch_render": _resolve_option_value(
-                "batch_render", batch_render, "auto", specified_fields
-            ),
-            "output_transform": _resolve_option_value(
-                "output_transform", output_transform, None, specified_fields
-            ),
-            "save_transformed_output": _resolve_option_value(
-                "save_transformed_output", save_transformed_output, "small", specified_fields
-            ),
-            "layer_visualizers": _resolve_option_value(
-                "layer_visualizers", layer_visualizers, None, specified_fields
-            ),
-            "save_visualizations": _resolve_option_value(
-                "save_visualizations", save_visualizations, False, specified_fields
-            ),
-            "keep_orphans": _resolve_option_value(
-                "keep_orphans", keep_orphans, False, specified_fields
-            ),
-            "output_device": _resolve_option_value(
-                "output_device", output_device, "same", specified_fields
-            ),
-            "save_args": _resolve_option_value("save_args", save_args, False, specified_fields),
-            "save_grads": _resolve_option_value("save_grads", save_grads, None, specified_fields),
-            "capture_tensor_grad_hooks": _resolve_option_value(
-                "capture_tensor_grad_hooks",
-                capture_tensor_grad_hooks,
-                True,
-                specified_fields,
-            ),
-            "save_source_context": _resolve_option_value(
-                "save_source_context", save_source_context, False, specified_fields
-            ),
-            "save_rng": _resolve_option_value("save_rng", save_rng, False, specified_fields),
-            "seed": _resolve_option_value("seed", seed, None, specified_fields),
-            "source_context_lines": _resolve_option_value(
-                "source_context_lines", source_context_lines, 7, specified_fields
-            ),
-            "optimizer": _resolve_option_value("optimizer", optimizer, None, specified_fields),
-            "compute_input_output_distances": _resolve_option_value(
-                "compute_input_output_distances",
-                compute_input_output_distances,
-                True,
-                specified_fields,
-            ),
-            "detach_saved_activations": _resolve_option_value(
-                "detach_saved_activations", detach_saved_activations, False, specified_fields
-            ),
-            "recurrence_detection": _resolve_option_value(
-                "recurrence_detection", recurrence_detection, True, specified_fields
-            ),
-            "replayable": _resolve_option_value("replayable", replayable, False, specified_fields),
-            "capture_container_structure": _resolve_option_value(
-                "capture_container_structure",
-                capture_container_structure,
-                False,
-                specified_fields,
-            ),
-            "hooks": _resolve_option_value("hooks", hooks, None, specified_fields),
-            "unwrap_when_done": _resolve_option_value(
-                "unwrap_when_done", unwrap_when_done, False, specified_fields
-            ),
-            "verbose": _resolve_option_value("verbose", verbose, False, specified_fields),
-            "backward_ready": _resolve_option_value(
-                "backward_ready", backward_ready, False, specified_fields
-            ),
-            "inference_only": _resolve_option_value(
-                "inference_only", inference_only, False, specified_fields
-            ),
-            "carry_state": _resolve_option_value(
-                "carry_state", carry_state, False, specified_fields
-            ),
-            "name": _resolve_option_value("name", name, None, specified_fields),
-            "cache": _resolve_option_value("cache", cache, False, specified_fields),
-            "cache_dir": _resolve_option_value("cache_dir", cache_dir, None, specified_fields),
-            "module_filter": _resolve_option_value(
-                "module_filter", module_filter, None, specified_fields
-            ),
-            "jax_control_flow": _resolve_option_value(
-                "jax_control_flow", jax_control_flow, "unroll", specified_fields
-            ),
-            "jax_max_control_flow_unroll": _resolve_option_value(
-                "jax_max_control_flow_unroll",
-                jax_max_control_flow_unroll,
-                64,
-                specified_fields,
-            ),
-            "module_identity_mode": _resolve_option_value(
-                "module_identity_mode", module_identity_mode, None, specified_fields
-            ),
-            "payload_policy": _resolve_option_value(
-                "payload_policy", payload_policy, None, specified_fields
-            ),
-            "emit_nvtx": _resolve_option_value("emit_nvtx", emit_nvtx, False, specified_fields),
-            "measure_python_peak_memory": _resolve_option_value(
-                "measure_python_peak_memory",
-                measure_python_peak_memory,
-                False,
-                specified_fields,
-            ),
-            "save_budget": _resolve_option_value(
-                "save_budget",
-                save_budget,
-                "auto",
-                specified_fields,
-            ),
-            "distributed_witness": _resolve_option_value(
-                "distributed_witness",
-                distributed_witness,
-                "none",
-                specified_fields,
-            ),
-            "on_nonfinite": _resolve_option_value(
-                "on_nonfinite", on_nonfinite, "ignore", specified_fields
-            ),
-            "track_device_memory": _resolve_option_value(
-                "track_device_memory", track_device_memory, False, specified_fields
-            ),
-            "structure_only": _resolve_option_value(
-                "structure_only", structure_only, False, specified_fields
-            ),
-            "log_injections": _resolve_option_value(
-                "log_injections", log_injections, False, specified_fields
-            ),
-            "measure_host_peak_memory": _resolve_option_value(
-                "measure_host_peak_memory", measure_host_peak_memory, False, specified_fields
-            ),
-            "activation_transform": _resolve_option_value(
-                "activation_transform", activation_transform, None, specified_fields
-            ),
-            "grad_transform": _resolve_option_value(
-                "grad_transform", grad_transform, None, specified_fields
-            ),
-            "save_raw_activations": _resolve_option_value(
-                "save_raw_activations", save_raw_activations, True, specified_fields
-            ),
-            "save_raw_grads": _resolve_option_value(
-                "save_raw_grads", save_raw_grads, True, specified_fields
-            ),
-            "save_mode": _resolve_option_value("save_mode", save_mode, "copy", specified_fields),
-            "reconstruction_ready": _resolve_option_value(
-                "reconstruction_ready", reconstruction_ready, False, specified_fields
-            ),
-            "lookback": _resolve_option_value("lookback", lookback, 0, specified_fields),
-            "lookback_payload_policy": _resolve_option_value(
-                "lookback_payload_policy",
-                lookback_payload_policy,
-                "metadata_only",
-                specified_fields,
-            ),
-            "grouping": _resolve_option_value("grouping", grouping, "structural", specified_fields),
-            "jax_static_argnums": _resolve_option_value(
-                "jax_static_argnums", jax_static_argnums, None, specified_fields
-            ),
-            "grad_options": _resolve_option_value(
-                "grad_options", grad_options, None, specified_fields
-            ),
-            "chunk_size": _resolve_option_value("chunk_size", chunk_size, None, specified_fields),
+            field_name: _resolve_option_value(
+                field_name, supplied[field_name], _CAPTURE_DEFAULTS[field_name], specified_fields
+            )
+            for field_name in _CAPTURE_FIELDS
         }
         _validate_capture_values(values)
         _set_frozen_fields(self, _CAPTURE_FIELDS, values)
@@ -986,6 +828,14 @@ class CaptureOptions:
         object.__setattr__(instance, "_layers_to_save_explicit", _layers_to_save_explicit)
         object.__setattr__(instance, "_specified_fields", specified_fields)
         return instance
+
+
+# The public default of each capture field is its dataclass declaration above.
+_CAPTURE_DEFAULTS: Final[Mapping[str, Any]] = {
+    option_field.name: option_field.default
+    for option_field in fields(CaptureOptions)
+    if option_field.name in _CAPTURE_FIELDS
+}
 
 
 @dataclass(frozen=True, init=False)

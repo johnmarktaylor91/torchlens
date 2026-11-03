@@ -23,7 +23,6 @@ from .._capture.projections import (
     _empty_recording,
     active_recording_state,
 )
-from .._capture.stages import InternalCaptureConfig
 from .._capture.stop import StopDirective, stop_directive_for_trace
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.trace import Trace
@@ -40,6 +39,7 @@ from ..intervention.predicates import InterventionPredicate
 from ..options import StorageOptions
 from ..types import _ActivationPostfunc, _GradientPostfunc
 from ._halt import StopSignal
+from ._recorder_config import _configure_predicate_capture
 from ._recorder_streaming import _rank_prefixed_streaming_options
 from ._validation import validate_recording_options
 from .exceptions import RecorderStateError
@@ -500,14 +500,7 @@ class Recorder:
             inference_only=inference_only,
             inference_only_implied=inference_only,
         )
-        trace._capture_config = InternalCaptureConfig(
-            capture_mode="predicate",
-            layers_to_save=[],
-            grad_layers_to_save=[],
-            random_seed=self.options.seed,
-            postprocess=False,
-            stop=trace._stop_directive,
-        )
+        _configure_predicate_capture(trace, self.options)
         self._reset_state_for_pass(sample_id=sample_id)
         if self._echo_session is not None:
             self._echo_session.reset_pass(self._next_pass_index)

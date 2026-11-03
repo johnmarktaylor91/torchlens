@@ -24,6 +24,7 @@ from .._literals import (
 )
 from . import _doors
 from ._nonfinite import nonfinite_coverage, nonfinite_op_labels
+from ._trace_viz_arguments import _forward_draw, _forward_summary
 from .module import Module
 
 GraphLiteral = Literal["forward", "backward", "combined"]
@@ -266,57 +267,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             path when a file was written, and the resolved policy.
         """
 
-        return _doors.visualization()._trace_draw.draw(
-            self,
-            path,
-            graph=graph,
-            rolled=rolled,
-            depth=depth,
-            module=module,
-            collapse=collapse,
-            fold_repeats=fold_repeats,
-            fold_patterns=fold_patterns,
-            theme=theme,
-            layout=layout,
-            renderer=renderer,
-            direction=direction,
-            node_style=node_style,
-            show_buffers=show_buffers,
-            show_legend=show_legend,
-            color_by=color_by,
-            size_by=size_by,
-            size_scale=size_scale,
-            stack_by=stack_by,
-            node_overlay=node_overlay,
-            node_label_fields=node_label_fields,
-            graph_overrides=graph_overrides,
-            edge_overrides=edge_overrides,
-            grad_edge_overrides=grad_edge_overrides,
-            module_overrides=module_overrides,
-            node_spec_fn=node_spec_fn,
-            collapsed_node_spec_fn=collapsed_node_spec_fn,
-            collapse_fn=collapse_fn,
-            skip_fn=skip_fn,
-            intervention_mode=intervention_mode,
-            show_cone=show_cone,
-            code_panel=code_panel,
-            font_size=font_size,
-            dpi=dpi,
-            order_siblings=order_siblings,
-            show_containers=show_containers,
-            container_max_inline=container_max_inline,
-            show_input_transform_summary=show_input_transform_summary,
-            show_orphans=show_orphans,
-            show_redundant_args=show_redundant_args,
-            show_saved_for_backward=show_saved_for_backward,
-            bwd=bwd,
-            show_module_paths=show_module_paths,
-            show_grad_values=show_grad_values,
-            backward_node_spec_fn=backward_node_spec_fn,
-            intervening_cluster=intervening_cluster,
-            file_format=file_format,
-            open_viewer=open_viewer,
-        )
+        return _forward_draw(_doors.visualization()._trace_draw.draw, locals())
 
     def animate(
         self: "Trace",
@@ -577,27 +528,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
             render/print/to_pandas/to_markdown/to_html result API.
         """
 
-        return _doors.report()._trace_summary.summary(
-            self,
-            level=level,
-            view=view,
-            depth=depth,
-            columns=columns,
-            where=where,
-            buffers=buffers,
-            fold_repeats=fold_repeats,
-            max_rows=max_rows,
-            flop_convention=flop_convention,
-            units=units,
-            style=style,
-            max_scan_elements=max_scan_elements,
-            input_shape=input_shape,
-            execution_mode=execution_mode,
-            grad_mode=grad_mode,
-            _execution_note=_execution_note,
-            _input_synthesis=_input_synthesis,
-            **unsupported,
-        )
+        return _forward_summary(_doors.report()._trace_summary.summary, locals())
 
     def to_dagua_graph(
         self: "Trace",

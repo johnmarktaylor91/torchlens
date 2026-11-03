@@ -18,7 +18,7 @@ from ._errors import PayloadUnavailableError
 __tl_layer__ = "L1"
 __tl_vocabulary__ = True
 
-__all__ = ["OutputSlot", "OutputStatus", "forward_failed", "read_output", "returned", "stopped"]
+__all__ = ("OutputSlot", "OutputStatus", "forward_failed", "read_output", "returned", "stopped")
 
 OutputStatus = Literal["returned", "forward_failed", "stopped"]
 

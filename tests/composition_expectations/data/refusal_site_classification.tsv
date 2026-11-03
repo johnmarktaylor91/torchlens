@@ -995,11 +995,11 @@ torchlens.attribution._text:_resolve_target:AttributionError::3	CONTRACTED	text_
 torchlens.attribution._text:text._run:AttributionError::1	CONTRACTED	text_input_invalid	F06 attribution-kit typed teaching refusal (attrib memo D1-D32); coded with structured Remedy
 torchlens.attribution._text:text:AttributionError::1	CONTRACTED	text_input_invalid	F06 attribution-kit typed teaching refusal (attrib memo D1-D32); coded with structured Remedy
 torchlens.attribution._text:text:AttributionError::2	CONTRACTED	text_input_invalid	F06 attribution-kit typed teaching refusal (attrib memo D1-D32); coded with structured Remedy
-torchlens.attribution._viz:_classify_entries:AttributionError::1	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
-torchlens.attribution._viz:_entry_items:AttributionError::1	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
-torchlens.attribution._viz:_entry_items:AttributionError::2	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
-torchlens.attribution._viz:_entry_items:AttributionError::3	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
-torchlens.attribution._viz:_reduce_value:AttributionError::1	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
+torchlens.attribution._result:_classify_entries:AttributionError::1	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
+torchlens.attribution._result:_entry_items:AttributionError::1	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
+torchlens.attribution._result:_entry_items:AttributionError::2	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
+torchlens.attribution._result:_entry_items:AttributionError::3	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
+torchlens.attribution._result:_reduce_value:AttributionError::1	KNOWN-GAP		pre-F06 attribution surface, uncoded; stable teaching message; part of the S-17 burn-down pool
 torchlens.attribution._noise_tunnel:_validate_noise_bank_coverage:AttributionError::1	CONTRACTED	noise_bank_invalid	F06 up-front tunnel bank-coverage refusal (a defective bank is tunnel configuration, not a child failure)
 torchlens.attribution._noise_tunnel:noise_tunnel._call_sample:AttributionError::1	INTERNAL	noise_tunnel_route_unbound	F06 internal invariant tripwire; fires only on TorchLens contract breaches, coded for diagnostics (T51 union fix)
 torchlens.attribution._text:text:AttributionError::3	INTERNAL	text_auto_ladder_empty	F06 internal invariant tripwire; fires only on TorchLens contract breaches, coded for diagnostics (T51 union fix)

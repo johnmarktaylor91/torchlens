@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-__all__ = ["EncodingChannelRequest"]
+__all__ = ("EncodingChannelRequest",)
 
 
 @dataclass(frozen=True)

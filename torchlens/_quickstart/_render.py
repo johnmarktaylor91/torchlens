@@ -103,33 +103,40 @@ def draw(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input lad
     theme:
         Skin preset (``Trace.draw(theme=)``).
     collapse:
-        Collapse mode; the facade default is ``"auto"`` (``Trace.draw`` keeps
-        ``"none"``).
+        Collapse mode; the facade default is ``"auto"`` (``Trace.draw`` keeps ``"none"``).
     module:
         Focus the picture on one module.
     depth:
         Maximum module nesting depth shown.
     path:
-        Output target. An explicit path always writes and reports. With no
-        path: notebooks display inline and write NOTHING; plain scripts
-        follow fork F1 branch A (collision-safe ``<ModelClass>-graph.pdf``
-        + one printed line) while ``BARE_RENDER_WRITES_FILE_IN_SCRIPTS`` is
-        True.
+        Explicit paths write and report. With no path, notebooks display inline without a file;
+        scripts write collision-safe ``<ModelClass>-graph.pdf`` plus one printed line when
+        ``BARE_RENDER_WRITES_FILE_IN_SCRIPTS`` is True (fork F1 branch A).
     file_format:
-        Output format (``"pdf"``, ``"svg"``, ...). Defaults to ``"svg"``
-        for inline notebook display and ``"pdf"`` otherwise.
+        Output format (``"pdf"``, ``"svg"``, ...): ``"svg"`` inline, ``"pdf"`` otherwise.
     open_viewer:
-        Explicit opt-in to open the written file with the system viewer.
-        Never the default (memo D14).
+        Explicit opt-in to open the written file with the system viewer. Never the default (memo D14).
     **draw_kwargs:
-        Passed through to ``Trace.draw`` unchanged (the dials above are
-        ``Trace.draw``'s own spellings, so a keyword is passed once).
+        Passed unchanged to ``Trace.draw``; the dials above use its spellings and pass once.
 
     Returns
     -------
     Drawing
         The detached picture (memo D13). Never ``None``.
     """
+
+    return _capture_and_render(**locals())
+
+
+def _capture_and_render(
+    model: nn.Module,
+    input_args: Any,
+    input_kwargs: dict[str, Any] | None,
+    input_shape: Any,
+    draw_kwargs: dict[str, Any],
+    **dials: Any,
+) -> Drawing:
+    """Capture the model's concrete forward and render it with the facade's dials."""
 
     resolved = resolve_inputs(model, input_args, input_kwargs, input_shape, verb="draw")
     trace, receipt = capture_concrete(
@@ -143,18 +150,7 @@ def draw(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input lad
         attach_provenance(trace, resolved.provenance)
         _gate_value_channels(trace, draw_kwargs)
         return _render_finished_trace(
-            trace,
-            model,
-            resolved.provenance,
-            receipt,
-            theme=theme,
-            collapse=collapse,
-            module=module,
-            depth=depth,
-            path=path,
-            file_format=file_format,
-            open_viewer=open_viewer,
-            draw_kwargs=draw_kwargs,
+            trace, model, resolved.provenance, receipt, draw_kwargs=draw_kwargs, **dials
         )
     finally:
         del trace
