@@ -19,6 +19,7 @@ from ..._data_classes.derived_grad import (
 from ..._data_classes.param import Param, ParamAccessor
 from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING, MissingType
+from ..._events import run_metadata_invariants
 from ..._ir.capture_events import CaptureEvents
 from ..._ir.events import (
     ArgTemplateRef,
@@ -949,10 +950,8 @@ class PaddleBackend:
                 (validation_decision(label, OUTCOME_FAILED, reason, detail),)
             )
         if validate_metadata:
-            from ...validation.invariants import check_metadata_invariants
-
             try:
-                invariants_ok = check_metadata_invariants(trace)
+                invariants_ok = run_metadata_invariants(trace)
             except Exception as exc:  # noqa: BLE001 - the invariant error names the problem
                 invariants_ok = False
                 detail = f"{type(exc).__name__}: {exc}"

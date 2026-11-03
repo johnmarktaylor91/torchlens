@@ -58,6 +58,7 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_user_funcs_guards": "FACADE",
     # -- L0 BASIS ---------------------------------------------------------
     "_errors": "L0",
+    "_events": "L0",
     "errors": "L0",
     "_vocab": "L0",
     "_literals": "L0",

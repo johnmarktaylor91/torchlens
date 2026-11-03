@@ -20,6 +20,7 @@ from ..._data_classes.derived_grad import (
 from ..._data_classes.param import Param, ParamAccessor
 from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING, MissingType
+from ..._events import run_metadata_invariants
 from ..._ir.capture_events import CaptureEvents
 from ..._ir.events import (
     ArgTemplateRef,
@@ -596,9 +597,7 @@ class TinygradBackend:
             return status
         try:
             if kwargs.get("validate_metadata", True):
-                from ...validation.invariants import check_metadata_invariants
-
-                check_metadata_invariants(trace)
+                run_metadata_invariants(trace)
             verdict = self._validate_uops(trace)
             status_result = self._validation_status_from_counts(trace, verdict=verdict)
         except BackendUnsupportedError:

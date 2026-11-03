@@ -25,6 +25,7 @@ from ..._data_classes.layer import Layer
 from ..._data_classes.param import Param, ParamAccessor
 from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING, MissingType
+from ..._events import run_metadata_invariants
 from ..._ir.capture_events import CaptureEvents
 from ..._ir.container import ContainerSpec, DictKey, OutputPathComponent, TupleIndex
 from ..._ir.events import (
@@ -846,9 +847,7 @@ class JAXBackend:
         log = _JaxValidationLog()
         try:
             if validate_metadata:
-                from ...validation.invariants import check_metadata_invariants
-
-                check_metadata_invariants(trace)
+                run_metadata_invariants(trace)
             passed = self._validate_jax_equations(trace, log)
             _record_jax_constant_leaves(trace, log)
             if passed and not self._validate_jax_regions(trace):

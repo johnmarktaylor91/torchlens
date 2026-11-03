@@ -25,6 +25,7 @@ from ..._data_classes.derived_grad import (
 )
 from ..._data_classes.param import Param, ParamAccessor
 from ..._data_classes.trace import Trace
+from ..._events import run_metadata_invariants
 from ..._ir.capture_events import CaptureEvents
 from ..._ir.events import (
     ArgTemplateRef,
@@ -1495,12 +1496,11 @@ class MLXBackend:
         decisions: tuple[dict[str, Any], ...] = ()
         try:
             from ..._validation_status import count_importer_region_annotations
-            from ...validation.invariants import check_metadata_invariants
             from .validation import MLX_VALIDATION_REASONS, validate_mlx_captures_detailed
 
             exempted: dict[str, int] = {}
             unverified_reasons: dict[str, int] = {}
-            if kwargs.get("validate_metadata", True) and not check_metadata_invariants(trace):
+            if kwargs.get("validate_metadata", True) and not run_metadata_invariants(trace):
                 failed_count = 1
                 decisions = (_mlx_metadata_failed_decision(MLX_VALIDATION_REASONS),)
             else:

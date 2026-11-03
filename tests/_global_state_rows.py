@@ -153,6 +153,9 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # Backend protocol shells resolve their spec through one lookup hook that
         # the registry installs once at import (install-time fact, never rebound).
         ("torchlens/backends/_backend_protocol.py", "_spec_lookup"),
+        # Engine hook slot: torchlens.validation installs the metadata-invariant
+        # tripwire once at import; tests may wrap it (install-time fact).
+        ("torchlens/_events.py", "_METADATA_INVARIANTS"),
         # Call-site grouping: the module forward wrapper code object, registered
         # idempotently when submodule forwards are decorated (one constant).
         ("torchlens/_utils/_call_site.py", "_BOUNDARY_CODES"),
@@ -1010,6 +1013,10 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_deploy_env.py", "__all__"),
         ("torchlens/_distributed/__init__.py", "__all__"),
         ("torchlens/_episode_spec.py", "__all__"),
+        ("torchlens/_utils/_sig_format.py", "__all__"),
+        ("torchlens/_utils/_input_tree.py", "__all__"),
+        ("torchlens/errors/validation.py", "__all__"),
+        ("torchlens/_events.py", "__all__"),
         ("torchlens/_extract_refusals.py", "__all__"),
         ("torchlens/_extraction/__init__.py", "__all__"),
         ("torchlens/_extraction/callable_identity.py", "__all__"),

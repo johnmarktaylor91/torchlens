@@ -765,7 +765,7 @@ torchlens/backends/default_specs.py	1291
 torchlens/backends/default_specs.py::_simple_leaves	72
 torchlens/backends/default_specs.py::_tf_can_handle	79
 torchlens/backends/default_specs.py::register_default_backend_specs	191
-torchlens/backends/jax/backend.py	4371
+torchlens/backends/jax/backend.py	4370
 torchlens/backends/jax/backend.py::JAXBackend._append_event	173
 torchlens/backends/jax/backend.py::JAXBackend._attach_derived_grads	170
 torchlens/backends/jax/backend.py::JAXBackend._attach_pytree_op_params	66
@@ -803,13 +803,13 @@ torchlens/backends/mlx/backend.py::MLXBackend._build_event	134
 torchlens/backends/mlx/backend.py::MLXBackend._records_for_intermediate_mlx_grads	91
 torchlens/backends/mlx/backend.py::MLXBackend.capture_trace	260
 torchlens/backends/mlx/backend.py::MLXBackend.emit_mlx_operation	173
-torchlens/backends/mlx/backend.py::MLXBackend.validate_trace	67
+torchlens/backends/mlx/backend.py::MLXBackend.validate_trace	66
 torchlens/backends/mlx/backend.py::_find_mlx_compiled_attributes	84
 torchlens/backends/mlx/interventions.py::_resolve_helper_applier	63
 torchlens/backends/mlx/model_prep.py::discover_mlx_module_tree	68
 torchlens/backends/mlx/wrappers.py::_MLXWrapperRegistry._wrap_installed	83
 torchlens/backends/mlx/wrappers.py::_MLXWrapperRegistry.wrap_attr	70
-torchlens/backends/paddle/backend.py	2766
+torchlens/backends/paddle/backend.py	2765
 torchlens/backends/paddle/backend.py::PaddleBackend._attach_derived_grads	135
 torchlens/backends/paddle/backend.py::PaddleBackend._build_event	136
 torchlens/backends/paddle/backend.py::PaddleBackend._build_op_capture	78
@@ -821,7 +821,7 @@ torchlens/backends/paddle/backend.py::_PaddleIntermediateTapObserver.call	62
 torchlens/backends/paddle/model_prep.py::discover_paddle_module_tree	82
 torchlens/backends/paddle/validation.py::_rebuild_inputs	77
 torchlens/backends/paddle/wrappers.py::_PaddleWrapperRegistry.wrap_attr	71
-torchlens/backends/tf/backend.py	1396
+torchlens/backends/tf/backend.py	1395
 torchlens/backends/tf/backend.py::TFBackend._new_trace	133
 torchlens/backends/tf/backend.py::TFBackend.capture_trace	380
 torchlens/backends/tf/backend.py::_reject_unsupported_options	80
@@ -847,10 +847,10 @@ torchlens/backends/tf/op_callback_capture.py::TFEagerCaptureSession._emit_source
 torchlens/backends/tf/op_callback_capture.py::TFEagerCaptureSession._event_for_output	159
 torchlens/backends/tf/op_callback_capture.py::TFEagerCaptureSession._parents_for_inputs	86
 torchlens/backends/tf/op_callback_capture.py::TFEagerCaptureSession._record_context	75
-torchlens/backends/tf/validation.py	1101
+torchlens/backends/tf/validation.py	1100
 torchlens/backends/tf/validation.py::_validate_self_consistency	86
 torchlens/backends/tf/validation.py::validate_tf_trace_detailed	80
-torchlens/backends/tinygrad/backend.py	3201
+torchlens/backends/tinygrad/backend.py	3200
 torchlens/backends/tinygrad/backend.py::TinygradBackend._append_event	176
 torchlens/backends/tinygrad/backend.py::TinygradBackend._attach_derived_grads	90
 torchlens/backends/tinygrad/backend.py::TinygradBackend._derive_intermediate_grads_no_realize	74

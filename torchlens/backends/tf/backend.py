@@ -13,6 +13,7 @@ from ..._capture.outcome import stamp_backend_finalized
 from ..._data_classes.param import ParamAccessor
 from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING, MissingType
+from ..._events import run_metadata_invariants
 from ..._ir.capture_events import CaptureEvents
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
@@ -508,9 +509,7 @@ class TFBackend:
             return status
         try:
             if kwargs.get("validate_metadata", True):
-                from ...validation.invariants import check_metadata_invariants
-
-                check_metadata_invariants(trace)
+                run_metadata_invariants(trace)
             status_result = validate_tf_trace(
                 trace,
                 validate_metadata=bool(kwargs.get("validate_metadata", True)),

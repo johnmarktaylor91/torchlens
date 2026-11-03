@@ -188,7 +188,7 @@ _LEGACY_EXCEPTION_PATHS = {
     ),
     "NoParentError": ("torchlens.intervention.errors", "NoParentError"),
     "DeadParentError": ("torchlens.intervention.errors", "DeadParentError"),
-    "MetadataInvariantError": ("torchlens.validation.invariants", "MetadataInvariantError"),
+    "MetadataInvariantError": ("torchlens.errors.validation", "MetadataInvariantError"),
 }
 
 _LAZY_EXCEPTION_PATHS = {
