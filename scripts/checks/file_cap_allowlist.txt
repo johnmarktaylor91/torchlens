@@ -905,7 +905,7 @@ torchlens/backends/torch/_transform_wrappers.py::transform_builder_decorator.wra
 torchlens/backends/torch/_transform_wrappers.py::transform_builder_decorator.wrapped_builder.wrapped_transform	62
 torchlens/backends/torch/aliasing.py::detect_torch_alias_contract	61
 torchlens/backends/torch/backend.py::TorchBackend.setup_inputs_and_device	88
-torchlens/backends/torch/backward.py	4190
+torchlens/backends/torch/backward.py	4187
 torchlens/backends/torch/backward.py::RecordingBackward.__enter__	65
 torchlens/backends/torch/backward.py::_capture_autograd_engine_call	95
 torchlens/backends/torch/backward.py::_close_implicit_backward_pass_if_open	74
@@ -978,10 +978,10 @@ torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook	137
 torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook.log_grad_to_model_history	74
 torchlens/backends/torch/tensor_tracking.py::_locate_parent_tensors_in_args	62
 torchlens/backends/torch/tensor_tracking.py::_log_tensor_grad	68
-torchlens/backends/torch/wrappers.py	2861
-torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	115
-torchlens/backends/torch/wrappers.py::_unwrap_torch_locked	129
-torchlens/backends/torch/wrappers.py::_wrap_torch_locked	102
+torchlens/backends/torch/wrappers.py	2847
+torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	81
+torchlens/backends/torch/wrappers.py::_unwrap_torch_locked	119
+torchlens/backends/torch/wrappers.py::_wrap_torch_locked	84
 torchlens/backends/torch/wrappers.py::decorate_all_once	68
 torchlens/backends/torch/wrappers.py::torch_func_decorator	798
 torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	644
