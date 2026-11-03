@@ -142,7 +142,7 @@ def test_truncated_safetensors_blob_raises_with_blob_path(tmp_path: Path) -> Non
     with pytest.raises(ArtifactError) as caught:
         load(bundle_path, lazy=True)
     assert caught.value.fields["code"] == "bundle_load_failed"
-    assert str(blob_path) in str(caught.value)
+    assert caught.value.file_path == str(blob_path)
 
 
 def test_missing_blob_file_raises_with_blob_id(tmp_path: Path) -> None:
@@ -154,7 +154,7 @@ def test_missing_blob_file_raises_with_blob_id(tmp_path: Path) -> None:
     with pytest.raises(ArtifactError) as caught:
         load(bundle_path)
     assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
-    assert str(blob_path) in str(caught.value)
+    assert caught.value.file_path == str(blob_path)
 
 
 def test_corrupt_metadata_pickle_raises_with_metadata_path(tmp_path: Path, monkeypatch) -> None:
@@ -169,7 +169,7 @@ def test_corrupt_metadata_pickle_raises_with_metadata_path(tmp_path: Path, monke
     with pytest.raises(ArtifactError) as caught:
         load(bundle_path)
     assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
-    assert str(record_path) in str(caught.value)
+    assert caught.value.file_path == str(record_path)
     assert calls == []
 
 
@@ -423,7 +423,7 @@ def test_checksum_mismatch_raises_with_blob_id_and_path(tmp_path: Path) -> None:
     with pytest.raises(ArtifactError) as caught:
         load(bundle_path)
     assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
-    assert str(blob_path) in str(caught.value)
+    assert caught.value.file_path == str(blob_path)
 
 
 # --- secA_1 (r51): corrupt-metadata unpickle exception-family normalization ---------
@@ -502,7 +502,7 @@ def test_secA_corpus_e2e_metadata_raises_torchlens_io_error(
     with pytest.raises(ArtifactError) as caught:
         load(bundle_path)
     assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
-    assert str(record_path) in str(caught.value)
+    assert caught.value.file_path == str(record_path)
     assert calls == []
 
 
