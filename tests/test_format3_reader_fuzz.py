@@ -134,6 +134,9 @@ def test_each_dropped_manifest_key_refuses(saved, tmp_path, built_counter):
 SWAPS = [None, True, 0, -1, 2**53 + 1, 1.5, "", "x", [], {}, {"$tl": "pickle"}]
 #: Manifest version stamps; a non-empty string that is not PEP 440 refuses by field and code.
 VERSION_STAMPS = ("torchlens_version", "python_version", "torch_version")
+#: Free-text writer identity (non-empty by grammar): another non-empty string is a value the
+#: format cannot tell from an honest one, so the load may accept it and resave equal.
+FREE_TEXT_STAMPS = ("platform", "created_at")
 
 
 @pytest.mark.parametrize("value", SWAPS, ids=lambda v: json.dumps(v))
@@ -156,7 +159,10 @@ def test_swapped_manifest_field_types_refuse(saved, tmp_path, built_counter, val
             assert f"{key} must be a PEP 440 version string" in str(info.value), key
             assert not any(cls.__name__ == "Trace" for cls in built_counter), "a Trace was built"
             continue
-        assert _expect_refusal_or_roundtrip(copy, root, built_counter) == "refused", key
+        verdict = _expect_refusal_or_roundtrip(copy, root, built_counter)
+        if key in FREE_TEXT_STAMPS and isinstance(value, str) and value:
+            continue
+        assert verdict == "refused", key
 
 
 @pytest.mark.parametrize("value", SWAPS, ids=lambda v: json.dumps(v))
