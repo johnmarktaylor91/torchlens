@@ -155,8 +155,10 @@ def test_real_gpt2_tiny_patch_from_on_default_captures_equals_replayable_replay(
     france = torch.tensor([[3, 7, 1, 9, 4, 3]])
     italy = torch.tensor([[3, 7, 1, 9, 8, 3]])
     _assert_patch_from_matches_replayable_replay(model, france, italy, tl.module("transformer.h.5"))
+    # GPT-2's default activation is gelu_new, written out as explicit tanh math rather
+    # than a gelu call, so the inner site is addressed by its module.
     _assert_do_matches_replayable_replay(
-        model, italy, tl.func("gelu") & tl.in_module("transformer.h.5"), tl.zero_ablate()
+        model, italy, tl.module("transformer.h.5.mlp"), tl.zero_ablate()
     )
 
 
@@ -234,7 +236,8 @@ def test_runnable_save_on_default_capture_still_names_replayable(tmp_path) -> No
     """``level="runnable"`` is the one door that still needs ``replayable=True``, and says so."""
 
     torch.manual_seed(0)
-    trace = tl.trace(_Mlp().eval(), torch.randn(2, 6))
+    model = _Mlp().eval()  # held alive: a dead source model refuses at a later stage
+    trace = tl.trace(model, torch.randn(2, 6))
     with pytest.raises(tl.errors.RunnablePreflightError) as info:
         trace.save(str(tmp_path / "runnable.tlspec"), level="runnable")
     message = str(info.value)
