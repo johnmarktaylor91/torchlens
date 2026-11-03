@@ -401,7 +401,7 @@ Delete outright once the reader stream's `load_trace` reads the golden set:
 | `torchlens/_io/_portability_preflight.py` | gone | dry-run unpickle before publish |
 | `torchlens/_io/state_keys.py` | 307 | shadow filter for pickled setstate key sets |
 | `torchlens/_io/_inline_tensor.py` | 275 | pickle reduce of small tensors |
-| `torchlens/_io/_pre3_module_paths.py` | 183 | pre-3 module-path probe in pickle globals (the 2.x refusal stays, section 14, by a cheaper test) |
+| `torchlens/_io/_pre3_module_paths.py` | gone | pre-3 module-path probe in pickle globals (the 2.x refusal stays, section 14, by a cheaper test) |
 | `torchlens/_io/_canonical_pickle.py` | 103 | deterministic pickler |
 | `torchlens/_io/_artifact_anchors.py` | 91 | manifest-vs-metadata anchors (manifest `files` digests replace them) |
 | `torchlens/_io/_rehydrate_lazy_names.py` | 53 | lazy name table for rehydrate |

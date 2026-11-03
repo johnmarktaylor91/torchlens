@@ -637,10 +637,10 @@ def refuse_v1_manifest(manifest: Mapping[str, Any], *, container: Path) -> None:
 
     if manifest.get("schema") != MANIFEST_SCHEMA_V1:
         return
-    from .._io._pre3_module_paths import pre_3_artifact_error
+    from .._io.format_contract import below_floor_error
 
-    raise pre_3_artifact_error(
-        f"extraction manifest schema={MANIFEST_SCHEMA_V1}",
+    raise below_floor_error(
+        observed=f"extraction manifest schema={MANIFEST_SCHEMA_V1}",
         path=str(container),
         code="artifact_version_below_floor",
     )

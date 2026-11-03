@@ -24,9 +24,8 @@ from ..._data_classes._schema_bindings import STORAGE_BINDINGS
 from ..._data_classes.field_policy import StorageKind
 from .._artifact_anchors import check_manifest_metadata_anchors
 from .._json import loads_bounded, read_bytes_bounded
-from .._pre3_module_paths import pre_3_artifact_error
 from ..field_registry import RECORD_CONTRACT_CLASSES
-from ..format_contract import TLSPEC_VERSION, above_ceiling_error
+from ..format_contract import TLSPEC_VERSION, above_ceiling_error, below_floor_error
 from ..format_errors import ArtifactError, ArtifactTooOldError, UnknownPersistedFieldError
 from ..paths import reject_symlink_path
 from ..state_contract import _unknown_field_remedy
@@ -83,7 +82,7 @@ def symlink_guard(path: Path, context: str) -> None:
 
 
 def pre3_error(root: Path, observed: str, *, code: str) -> ArtifactTooOldError:
-    return pre_3_artifact_error(observed, path=str(root), code=code)
+    return below_floor_error(observed=observed, path=str(root), code=code)
 
 
 def legacy_stamp(manifest_path: Path) -> int | None:

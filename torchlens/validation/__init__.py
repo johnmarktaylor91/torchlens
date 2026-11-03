@@ -89,7 +89,7 @@ def validate_tlspec(
         _codec._validate_format_version(spec.get("format_version"), path=tlspec_path)
         return
     if tlspec_format == "v2.16_modellog_portable":
-        from .._io._pre3_module_paths import modellog_216_error
+        from .._io.format_contract import modellog_216_error
 
         raise modellog_216_error(str(tlspec_path), code="artifact_version_below_floor")
     if tlspec_format == "v3":
