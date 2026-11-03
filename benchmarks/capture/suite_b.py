@@ -65,8 +65,8 @@ ROWS = {
         Row("draw", "a rendered graph file of the whole trace", needs_graphviz=True),
         Row(
             "bundle_compare",
-            "a two-member bundle (clean and ablated traces) and its shared and divergent "
-            "operation labels",
+            "a two-member bundle (clean and ablated traces) and the supergraph that aligns "
+            "their operations",
         ),
     )
 }
@@ -144,14 +144,14 @@ def build_row(
     if name == "record":
         return (lambda: _no_grad_record(tl, model, x, site)), facts
     if name == "validate":
-        return (lambda: tl.validate(model, x, scope="forward", random_seed=0)), facts
+        return (lambda: tl.validate(model, x, scope="forward", seed=0)), facts
     if name == "save_load":
         calls = itertools.count()
 
         def save_load() -> Any:
             # A fresh path per call: saving refuses to overwrite an existing bundle.
             path = workdir / f"trace-{next(calls)}.tlspec"
-            tl.save(probe, path, level="portable")
+            probe.save(path, level="portable")
             return tl.load(path)
 
         return save_load, facts
@@ -159,9 +159,7 @@ def build_row(
         return _backward(tl, subject), facts
     if name == "draw":
         out = str(workdir / "graph")
-        return (
-            lambda: probe.draw(vis_outpath=out, vis_save_only=True, vis_fileformat="svg")
-        ), facts
+        return (lambda: probe.draw(path=out, file_format="svg", open_viewer=False)), facts
     if name == "bundle_compare":
         return _bundle(tl, subject), facts
     raise ValueError(name)
@@ -174,7 +172,8 @@ def _no_grad(model: Any, x: Any) -> Any:
 
 def _no_grad_record(tl: Any, model: Any, x: Any, site: str) -> Any:
     with torch.no_grad():
-        return tl.record(model, x, save=tl.module(site), return_output=True)
+        recording = tl.record(model, x, save=tl.module(site))
+        return recording.output, recording
 
 
 def _backward(tl: Any, subject: Subject) -> Callable[[], Any]:
@@ -203,7 +202,7 @@ def _bundle(tl: Any, subject: Subject) -> Callable[[], Any]:
         ablated = tl.trace(
             model, x, intervene=tl.when(tl.module(site), tl.zero_ablate()), capture=_options()
         )
-        bundle = tl.bundle({"clean": clean, "ablated": ablated}, baseline="clean")
-        return bundle.shared_op_labels, bundle.divergent_op_labels
+        bundle = tl.Bundle({"clean": clean, "ablated": ablated}, baseline="clean")
+        return bundle.supergraph
 
     return run

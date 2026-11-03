@@ -391,9 +391,8 @@ class TLRecordArm(_TorchLensBase):
 
     def _record(self, x: Any, sites: list[str], **kw: Any) -> Any:
         with torch.no_grad():
-            return self.tl.record(
-                self.s.model, x, save=_sel(self.tl, sites), return_output=True, **kw
-            )
+            recording = self.tl.record(self.s.model, x, save=_sel(self.tl, sites), **kw)
+        return recording.output, recording
 
     def _edited(self, edit: Any) -> torch.Tensor:
         tl, s = self.tl, self.s

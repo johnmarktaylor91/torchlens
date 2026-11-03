@@ -221,14 +221,14 @@ def _validate(entry: Any, model: Any, inputs: Any) -> dict[str, Any]:
 
     import torchlens as tl
     from tests.classics_corpus._loader import VALIDATION_SEED
-    from torchlens.utils.arg_handling import normalize_input_args
+    from torchlens._utils.arg_handling import normalize_input_args
     from torchlens.validation import last_validation_failure
 
     with torch.no_grad():
         model(*normalize_input_args(copy.deepcopy(inputs), model))
     start = time.perf_counter()
     verdict = tl.validate(
-        model, inputs, scope="forward", random_seed=VALIDATION_SEED, validate_metadata=True
+        model, inputs, scope="forward", seed=VALIDATION_SEED, validate_metadata=True
     )
     result: dict[str, Any] = {"passed": bool(verdict), "seconds": time.perf_counter() - start}
     if not verdict:
