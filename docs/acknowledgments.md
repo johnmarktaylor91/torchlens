@@ -8,6 +8,9 @@ TorchLens feature, ordered roughly by how much we took. Point-of-use
 "inspired by" notes live in the borrowed features' own docs; this page
 collects them. "Inspired by" appears only where provenance supports it;
 everything else is related prior art, and nothing here implies endorsement.
+This page is about where TorchLens's ideas came from; the tools TorchLens
+hands its output to, with the exact calls, are on the
+[connectors page](bridges.md).
 
 ## License hygiene
 

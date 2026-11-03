@@ -416,6 +416,8 @@ Publishes a saved trace, bundle or intervention spec to a Hub repository.
   plain objects with no bundle path, because a raw pickle would embed home
   paths and the user name. `dry_run=True` serialises locally and reports the
   planned upload without contacting the Hub.
+  The save step warns when the bundle embeds custom module attributes or
+  pre-forward buffer values; review them before publishing.
 - Loading is the reverse by hand: download the file with
   `huggingface_hub.hf_hub_download`, extract the tarball, and open the
   bundle directory with `tl.load(path)`. There is no download helper in
