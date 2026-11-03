@@ -207,6 +207,7 @@ exclude_docs: |
   /reference/capture_state_contract.md
   /reference/checks_kit.md
   /reference/collapse.md
+  /reference/compat_matrix.md
   /reference/composition_matrix.md
   /reference/debug.md
   /reference/deployment_envelope.md

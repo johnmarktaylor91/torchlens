@@ -16,12 +16,13 @@ version table, the limitations catalog) lives in
 | Row | Test | torch | transformers | python | Host | Result |
 |---|---|---|---|---|---|---|
 | Router-logit outputs (`output_router_logits=True`) | `test_router_logit_outputs_capture_exactly_and_validate[mixtral, qwen2_moe, olmoe]` | 2.14.1+cpu | 5.19.0 | 3.11.15 | Linux x86_64 CPU worker | pass (3 of 3) |
-| DTensor tensor parallelism, two-process CPU `gloo` mesh | `test_dtensor_tensor_parallel_on_a_two_process_cpu_mesh_refuses_typed` | 2.14.1+cpu | 5.19.0 | 3.11.15 | Linux x86_64 CPU worker | pass: typed refusal on both ranks, both sharding paths |
+| DTensor tensor parallelism, two-process CPU `gloo` mesh | `test_dtensor_tensor_parallel_on_a_two_process_cpu_mesh_refuses_typed` | 2.14.1+cpu | 5.19.0 | 3.11.15 | Linux x86_64 CPU worker | pass: typed refusal on both ranks (torch-native sharding) |
 | `flash_attention_4` | `test_flash_attention_4_capture_and_validate` | 2.14.1+cu126 | 5.19.0 | 3.11.2 | Linux x86_64, one NVIDIA L40 (compute capability 8.9), flash-attn-4 4.0.0b37 | pass: exact output, each attention call one `autogradfunction` boundary op (exit `flash_attn.cute`), forward validation passes, witnessed trace verified |
 | Router-logit outputs | as above | 2.14.1+cu126 | 5.19.0 | 3.11.2 | Linux x86_64 GPU host (CPU tensors) | pass (3 of 3) |
 | DTensor tensor parallelism, two-process CPU `gloo` mesh | as above | 2.14.1+cu126 | 5.19.0 | 3.11.2 | Linux x86_64 GPU host, CUDA hidden from the ranks | pass |
 | Router-logit outputs | as above | 2.14.1 | 5.19.0 | 3.11.14 | macOS arm64 (Apple silicon) | pass (3 of 3) |
-| DTensor tensor parallelism, two-process CPU `gloo` mesh | as above | 2.14.1 | 5.19.0 | 3.11.14 | macOS arm64 (Apple silicon) | pass: typed refusal on both ranks, torch-native path only (transformers refuses `tp_plan` on MPS machines) |
+| DTensor tensor parallelism, two-process CPU `gloo` mesh | as above | 2.14.1 | 5.19.0 | 3.11.14 | macOS arm64 (Apple silicon) | pass: typed refusal on both ranks (torch-native sharding) |
+| DTensor tensor parallelism loaded by transformers (`tp_plan="auto"`) | none | not run | not run | not run | none | not yet verified: no test in the suite loads a `tp_plan` model |
 
 ### Router-logit outputs
 
@@ -35,23 +36,20 @@ validation (`tl.validate(..., scope="forward")`) passes.
 
 ### DTensor tensor parallelism
 
-Two processes form a CPU `gloo` device mesh. Two models are sharded over it: a
-two-linear MLP through `torch.distributed.tensor.parallel.parallelize_module`
-(column-wise then row-wise), and a small Llama loaded by transformers with
-`distributed_config=transformers.DistributedConfig(tp_plan="auto")`. Both
-sharded forwards run (the parameters are `DTensor`s). On every rank, capture
+Two processes form a CPU `gloo` device mesh. A two-linear MLP is sharded over it
+through `torch.distributed.tensor.parallel.parallelize_module` (column-wise then
+row-wise), and the sharded forward runs (the parameters are `DTensor`s). On every rank, capture
 refuses at entry with the typed `tl.errors.DistributedCaptureUnsupportedError`,
 whose findings name the `dtensor` and `tensor_parallel` kinds. This refusal is
 the supported behaviour today: capturing below the `DTensor` dispatch layer would
-record rank-local shims instead of the real ops. The planned capture design is
-[tensor_parallel_design.md](../internal/reference/tensor_parallel_design.md); until it is built,
-capture a rank-local dense copy of the module.
+record rank-local shims instead of the real ops. A capture design for sharded
+modules is planned but not built; until it is, capture a rank-local dense copy of
+the module.
 
-Transformers applies a `tp_plan` only when the rank layout is in the process
-environment (`RANK`, `WORLD_SIZE`, `LOCAL_RANK`); without it the checkpoint
-loads unsharded and there is no tensor parallelism to test. On macOS, transformers
-refuses a `tp_plan` on any machine with an MPS device, so only the torch-native
-path runs there, and `gloo` needs the loopback interface for a local mesh
+A model loaded by transformers with
+`distributed_config=transformers.DistributedConfig(tp_plan="auto")` is not yet
+verified: no test in the suite loads one, so this page makes no claim about it.
+On macOS, `gloo` needs the loopback interface for a local mesh
 (`GLOO_SOCKET_IFNAME=lo0`; the test sets it when unset), else the shard scatter
 waits out its timeout.
 

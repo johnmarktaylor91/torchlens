@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 
 from .._capture.projections import LiveOpView
 from .._errors import AmbiguousOpLookupError, InvalidArgumentError
+from .._pass_tokens import PASS_TOKEN_ALL, split_pass_token
 from .._selection.errors import AmbiguousSiteError
 from .._selection.selectors import BaseSelector
 from .._selection.target import FrozenTargetSpec, TargetSpec
@@ -118,7 +119,10 @@ def _names_one_thing(selector: Any) -> bool:
 
     if isinstance(selector, TargetSpec | FrozenTargetSpec | FacetSelector):
         return True
-    return getattr(selector, "selector_kind", None) == "label"
+    if getattr(selector, "selector_kind", None) != "label":
+        return False
+    token = split_pass_token(str(getattr(selector, "selector_value", "")))
+    return token is None or token[1] != PASS_TOKEN_ALL
 
 
 def _getitem_selector(self: "Trace", ix: Any) -> Any:
@@ -172,21 +176,21 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
     Lookup cascade:
     1. slice -> list slice of layer_list
     2. int -> Op by 0-based ordinal position
-    3. string -> ops, module_calls, layers, modules, params, buffers, grad_fns
-    4. alternate Op lookup keys
-    5. case-insensitive exact match against alternate Op lookup keys
-    6. substring match against alternate Op lookup keys
-    7. fallback: KeyError with contextual help message
+    3. ``label:last`` / ``label:all`` -> last-pass Op / Selection of every pass
+    4. layer label -> its Op (one pass) or the multi-pass teaching refusal
+    5. accessors, alternate Op lookup keys, case-insensitive, then substring
+    6. fallback: KeyError with contextual help message (never a ``Layer``)
 
     Args:
         ix: int (ordinal), slice, or str (label/address/substring).
 
     Returns:
-        Op, Layer, Module, or ModuleCall.
+        Op, Selection, Module, ModuleCall, Param, Buffer or GradFn.
 
     Raises:
         KeyError: No match found.
-        ValueError: Ambiguous substring match or invalid index.
+        AmbiguousSiteError / AmbiguousOpLookupError: Bare multi-pass label / substring.
+        ValueError: Invalid index.
     """
     from .._selection.selection import Selector
 
@@ -210,8 +214,8 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         from .._trace_selector_helpers import canonical_module_site_key
 
         ix = canonical_module_site_key(self, ix) or ix
-        if ix in self._layer_logs:
-            return self._layer_logs[ix]
+        if (record := _layer_label_lookup(self, ix)) is not None:
+            return record
 
         ambiguous_lookup_keys = getattr(self, "_ambiguous_lookup_keys", {})
         if ix in ambiguous_lookup_keys:
@@ -223,7 +227,6 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         for accessor in (
             self.ops,
             self.module_calls,
-            self.layers,
             self.modules,
             self.params,
             self.buffers,
@@ -238,7 +241,6 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         for accessor in (
             self.ops,
             self.module_calls,
-            self.layers,
             self.modules,
             self.params,
             self.buffers,
@@ -289,6 +291,29 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
     # Step 7: nothing matched — give a helpful error
     _give_user_feedback_about_lookup_key(self, ix, "get_one_item")
     raise KeyError(ix)
+
+
+def _layer_label_lookup(self: "Trace", ix: str) -> Any:
+    """Resolve a layer label, bare or pass-tokened, to its record; ``None`` when ``ix`` names no layer.
+
+    A bare label of a single-pass layer returns that Op. ``label:last`` returns
+    the final pass and ``label:all`` the Selection of every pass. A bare label of
+    a multi-pass layer goes through the label selector, whose refusal
+    (``multipass_bare_label_ambiguous`` on ``AmbiguousSiteError``, the same one
+    ``tl.label`` raises) teaches ``label:N``, ``label:last``, ``label:all`` and
+    ``trace.layers[label]``; ``trace[...]`` never returns a Layer.
+    """
+
+    from .._selection.selectors import LabelSelector
+
+    token = split_pass_token(ix)
+    base = ix if token is None else token[0]
+    ops = self.ops.resolve_all(base)
+    if not ops:
+        return None
+    if token is None and len(ops) == 1:
+        return ops[0]
+    return _getitem_selector(self, LabelSelector(ix))
 
 
 #: Elision rungs for the bounded execution log (F10; lovely matrix row):

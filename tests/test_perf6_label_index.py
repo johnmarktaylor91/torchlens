@@ -61,13 +61,21 @@ def _spellings(log: tl.Trace) -> list[str]:
     return [*spellings, "no_such_label_1_1"]
 
 
+def _identity(resolved: Any) -> tuple[Any, ...]:
+    """A comparable identity: the Op's id, or a Selection's entry keys (``label:all``)."""
+
+    if type(resolved).__name__ == "Selection":
+        return ("Selection", tuple(entry.key for entry in resolved))
+    return (id(resolved),)
+
+
 def _outcome(log: tl.Trace, spelling: str) -> tuple[Any, ...]:
     """Resolved site identities, or the refusal, plus the warning texts."""
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         try:
-            result: Any = (id(log[tl.label(spelling)]),)
+            result: Any = _identity(log[tl.label(spelling)])
         except Exception as exc:  # noqa: BLE001 - the refusal itself is compared
             result = (type(exc).__name__, str(exc))
     return result, tuple(str(w.message) for w in caught)
@@ -142,7 +150,12 @@ def test_the_index_skips_positional_keys_and_steps_aside_for_unknown_ones() -> N
 
     site = _Site()
     index = selector_eval._label_site_index([site])
-    assert index == {"a_1_1": (site,), "a_1_1:1": (site,)}
+    assert index == {
+        "a_1_1": (site,),
+        "a_1_1:1": (site,),
+        "a_1_1:last": (site,),
+        "a_1_1:all": (site,),
+    }
     odd = _Site()
     odd.lookup_keys = ("a_1_1", _Key())
     assert selector_eval._label_site_index([odd]) is None

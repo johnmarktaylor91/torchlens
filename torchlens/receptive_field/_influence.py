@@ -50,11 +50,7 @@ from typing import Any
 
 import torch
 
-from .._selection.graph import (
-    _InfluenceTerm,
-    _resolve_region,
-    _TraceGraph,
-)
+from .._selection.graph import _ExecutedDag, _InfluenceTerm, _resolve_region
 from .._selection.mask import _Mask, _mask_empty, _mask_from_dense, _mask_from_slices, _mask_union
 from .._selection.selection import (
     Selection,
@@ -118,7 +114,7 @@ def _influence_entry(
 def _resolve_influence_term(node: _InfluenceTerm, trace: Any) -> Selection:
     """Resolve one influence query against a trace (geometric or gradient)."""
 
-    graph = _TraceGraph.from_trace(trace)
+    graph = _ExecutedDag.from_trace(trace)
     seed = _resolve_region(node.seed, trace)
     targets = _target_ops(graph, trace, node)
     seeds = tuple((_site_op(graph, entry), entry) for entry in seed if entry._mask.form != "empty")
@@ -138,7 +134,7 @@ def _resolve_influence_term(node: _InfluenceTerm, trace: Any) -> Selection:
     return _geometric_influence(trace, seeds, targets, node)
 
 
-def _site_op(graph: _TraceGraph, entry: Site) -> Any:
+def _site_op(graph: _ExecutedDag, entry: Site) -> Any:
     """Map one resolved ACT entry to its executed op (internal invariant)."""
 
     label = graph.by_site.get(entry.key)
@@ -150,7 +146,7 @@ def _site_op(graph: _TraceGraph, entry: Site) -> Any:
     return graph.ops[label]
 
 
-def _target_ops(graph: _TraceGraph, trace: Any, node: _InfluenceTerm) -> tuple[Any, ...]:
+def _target_ops(graph: _ExecutedDag, trace: Any, node: _InfluenceTerm) -> tuple[Any, ...]:
     """Resolve the target family: ``within`` regions or the view default endpoints."""
 
     if node.within is None:
