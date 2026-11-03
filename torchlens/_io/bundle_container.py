@@ -26,9 +26,11 @@ from .bundle_metadata import (
     _load_lineage_sections,
     _partition_bundle_sections,
 )
+from .format3 import contract as format3_contract
 from .format3.container import verify_member_reference
 
 _CEILING_CODE = _bundle_module._OPCODE_CEILING_CODE
+_MANIFEST_SCHEMA_CODE = format3_contract.REFUSAL_CODES["manifest_invalid"]
 
 if TYPE_CHECKING:
     from ..bundle import Bundle
@@ -332,7 +334,10 @@ def assemble_bundle(
 
     baseline_name = metadata.get("baseline_name")
     if baseline_name is not None and not isinstance(baseline_name, str):
-        raise ArtifactError("Unified bundle baseline_name must be a string or null.")
+        raise ArtifactError(
+            "Unified bundle baseline_name must be a string or null.",
+            code=_MANIFEST_SCHEMA_CODE,
+        )
     preserved_sections = _partition_bundle_sections(metadata)
     member_relations = _load_gated_member_relations(
         metadata, unknown_relations=unknown_relations, tlspec_version=tlspec_version

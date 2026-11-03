@@ -23,6 +23,7 @@ from ..format_contract import BlobRef
 from ..prerelease import PRERELEASE_STATE_KEY, validate_prerelease_state
 from ..state_contract import governed_artifact_load
 from . import contract
+from ._tables import read_record_table, record_class, refuse_cell_types, refuse_table_columns
 from .codec_policy import codec_backend
 from .container import iter_members, read_member_index
 from .decode import (
@@ -36,10 +37,8 @@ from .decode import (
     _element_size,
     build_component,
     cell_error,
-    settle_mapping,
-    settle_tuple,
 )
-from .restore import restore_record
+from .restore import restore_record, settle_mapping, settle_tuple
 from .validate import (
     BELOW_FLOOR,
     TLSPEC_KEY,
@@ -53,9 +52,6 @@ from .validate import (
     manifest_schema_errors,
     pre3_error,
     read_json_file,
-    read_record_table,
-    record_class,
-    refuse_unknown_columns,
     symlink_guard,
     validate_records,
     verify_listed_files,
@@ -428,7 +424,7 @@ class DecodedArtifact:
             if kind == "trace" and raw_rows:
                 self._check_prerelease_marker(raw_rows[0])
             if raw_rows:
-                refuse_unknown_columns(kind, raw_rows[0], declared_version=self.version)
+                refuse_table_columns(kind, raw_rows[0], self.manifest)
             self.tables[kind] = [
                 {
                     name: self.decoder.decode(cell, at=f"{kind}[{index}].{name}")
@@ -436,6 +432,7 @@ class DecodedArtifact:
                 }
                 for index, row in enumerate(raw_rows)
             ]
+            refuse_cell_types(kind, self.tables[kind])
             cls = record_class(kind)
             self.objects[kind] = [state_new(cls) for _ in raw_rows]
             self._index_identities(kind)
@@ -501,8 +498,8 @@ class DecodedArtifact:
         if isinstance(value, (set, frozenset)):
             return type(value)(self._settle(item, at) for item in value)
         if isinstance(value, dict):
-            items = {key: self._settle(item, f"{at}.{key}") for key, item in value.items()}
-            return settle_mapping(value, items)
+            mapping = {key: self._settle(item, f"{at}.{key}") for key, item in value.items()}
+            return settle_mapping(value, mapping)
         return value
 
     def _lookup(self, reference: RowRef, at: str) -> Any:

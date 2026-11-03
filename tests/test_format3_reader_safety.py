@@ -537,10 +537,13 @@ def test_recursion_during_rehydration_refuses_typed(saved, monkeypatch):
 
 
 def test_contract_backends_are_the_payload_codec_registry() -> None:
-    """The closed ``backend`` vocabulary names exactly the registered payload codecs."""
+    """The closed ``backend`` vocabulary names exactly the registered backend payload codecs.
+
+    The registry's ``numpy`` entry is the raw-input value codec, not a backend.
+    """
 
     from torchlens._io import payload_codec
     from torchlens._io.format3 import contract
 
-    assert set(contract.BACKENDS) == set(payload_codec._CODECS)
+    assert set(contract.BACKENDS) == set(payload_codec._CODECS) - {"numpy"}
     assert contract.DEFAULT_BACKEND in contract.BACKENDS

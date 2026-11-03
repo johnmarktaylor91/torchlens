@@ -17,22 +17,18 @@ import json
 import os
 import re
 from collections.abc import Mapping, Sequence
-from importlib import import_module
+from functools import cache
 from pathlib import Path
 from typing import Any, Final
 
-from ..._data_classes._schema_bindings import STORAGE_BINDINGS
-from ..._data_classes.field_policy import StorageKind
 from .._artifact_anchors import check_manifest_metadata_anchors
 from .._extra_files import _warn_extra_files
 from .._json import loads_bounded, read_bytes_bounded
 from .._runtime_identity import check_runtime_identity
-from ..field_registry import RECORD_CONTRACT_CLASSES
 from ..format_contract import TLSPEC_VERSION, above_ceiling_error, below_floor_error
-from ..format_errors import ArtifactError, ArtifactTooOldError, UnknownPersistedFieldError
+from ..format_errors import ArtifactError, ArtifactTooOldError
 from ..paths import reject_symlink_path
-from ..prerelease import prerelease_fields_active, registered_prerelease_fields
-from ..state_contract import _unknown_field_remedy
+from ..writer_contract import writer_contract_digest
 from . import contract
 from .summaries import summary_schema_errors
 
@@ -44,8 +40,6 @@ __all__ = [
     "pre3_error",
     "manifest_schema_errors",
     "read_json_file",
-    "read_record_table",
-    "refuse_unknown_columns",
     "symlink_guard",
     "validate_records",
     "verify_file_bytes",
@@ -61,9 +55,6 @@ TLSPEC_KEY: Final = "tlspec_version"
 _RECORD_PATH = re.compile(r"^records/([a-z_]+)\.json$")
 _SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
 #: Record kinds whose storage bindings live under another key.
-_SCHEMA_KEY_BY_RECORD: Final[dict[str, str]] = {"aten_op": "primitive_op"}
-#: Columns the trace table may carry beyond its bindings (the state contract's transport keys).
-_TRACE_TRANSPORT_COLUMNS: Final = frozenset({"_io_module_accessor_state"})
 
 
 def artifact_error(message: str, *, code: str, remedy: str, **fields: Any) -> ArtifactError:
@@ -244,28 +235,30 @@ def _records_table_errors(records: Any, files: Any, kind: Any) -> list[str]:
     for record, entry in records.items():
         if record not in known:
             errors.append(f"records names unknown record kind {record!r}")
-            continue
-        if not isinstance(entry, dict):
-            errors.append(f"records[{record!r}] must be an object")
-            continue
-        path = entry.get("path")
-        match = _RECORD_PATH.match(path) if isinstance(path, str) else None
-        if match is None or match.group(1) != record:
-            errors.append(f"records[{record!r}].path must be records/{record}.json")
-            continue
-        if not is_int(entry.get("rows")) or entry["rows"] < 0:
-            errors.append(f"records[{record!r}].rows must be a non-negative integer")
-        listed = files.get(path) if isinstance(files, dict) else None
-        if not isinstance(listed, dict):
-            errors.append(f"records[{record!r}].path {path} is absent from files")
-        elif listed.get("sha256") != entry.get("sha256") or listed.get("bytes") != entry.get(
-            "bytes"
-        ):
-            errors.append(
-                f"records[{record!r}] digest or byte count disagrees with files[{path!r}]"
-            )
+        else:
+            errors.extend(_record_entry_errors(record, entry, files))
     if kind == "trace" and "trace" not in records:
         errors.append("records must name the trace record")
+    return errors
+
+
+def _record_entry_errors(record: str, entry: Any, files: Any) -> list[str]:
+    """One ``records`` entry: an object whose path, rows and digest agree with ``files``."""
+
+    if not isinstance(entry, dict):
+        return [f"records[{record!r}] must be an object"]
+    path = entry.get("path")
+    match = _RECORD_PATH.match(path) if isinstance(path, str) else None
+    if match is None or match.group(1) != record:
+        return [f"records[{record!r}].path must be records/{record}.json"]
+    errors: list[str] = []
+    if not is_int(entry.get("rows")) or entry["rows"] < 0:
+        errors.append(f"records[{record!r}].rows must be a non-negative integer")
+    listed = files.get(path) if isinstance(files, dict) else None
+    if not isinstance(listed, dict):
+        errors.append(f"records[{record!r}].path {path} is absent from files")
+    elif listed.get("sha256") != entry.get("sha256") or listed.get("bytes") != entry.get("bytes"):
+        errors.append(f"records[{record!r}] digest or byte count disagrees with files[{path!r}]")
     return errors
 
 
@@ -279,19 +272,50 @@ def manifest_schema_errors(manifest: Mapping[str, Any]) -> list[str]:
     ]
     if errors:
         return errors
+    errors.extend(_identity_errors(manifest))
+    errors.extend(_backend_errors(manifest))
+    errors.extend(_policy_errors(manifest))
+    errors.extend(_files_table_errors(manifest["files"]))
+    errors.extend(_records_table_errors(manifest["records"], manifest["files"], manifest["kind"]))
+    errors.extend(_disclosure_errors(manifest.get("disclosures")))
+    errors.extend(summary_schema_errors(manifest))
+    return errors
+
+
+def _identity_errors(manifest: Mapping[str, Any]) -> list[str]:
+    """The format name, the two version stamps, the writer-contract digest, the writer
+    identity strings and the artifact kind."""
+
+    errors: list[str] = []
     if manifest["format"] != contract.FORMAT_NAME:
         errors.append(f"format is {manifest['format']!r}, expected {contract.FORMAT_NAME!r}")
     for key in ("format_version", TLSPEC_KEY):
         if not is_int(manifest[key]) or manifest[key] < 0:
             errors.append(f"{key} must be a non-negative integer")
-    if not isinstance(manifest["contract_digest"], str) or not manifest["contract_digest"]:
+    digest = manifest["contract_digest"]
+    if not isinstance(digest, str) or not digest:
         errors.append("contract_digest must be a non-empty string")
+    elif manifest[TLSPEC_KEY] == TLSPEC_VERSION and digest != _current_contract_digest():
+        errors.append("contract_digest does not name this runtime's writer contract")
     for key, pattern in contract.IDENTITY_FIELD_PATTERNS.items():
         if not isinstance(manifest[key], str) or re.fullmatch(pattern, manifest[key]) is None:
             errors.append(f"{key} must be a string matching the identity grammar {pattern!r}")
     if manifest["kind"] not in contract.ARTIFACT_KINDS:
         errors.append(f"kind {manifest['kind']!r} is not one of {contract.ARTIFACT_KINDS}")
-    errors.extend(_backend_errors(manifest))
+    return errors
+
+
+@cache
+def _current_contract_digest() -> str:
+    """The writer-contract digest of this runtime, the only one a current-version file names."""
+
+    return writer_contract_digest()
+
+
+def _policy_errors(manifest: Mapping[str, Any]) -> list[str]:
+    """``payload_policy`` is an object of boolean flags; ``codecs`` a repeat-free list of ids."""
+
+    errors: list[str] = []
     policy = manifest["payload_policy"]
     if not isinstance(policy, dict) or not all(
         isinstance(key, str) and isinstance(value, bool) for key, value in policy.items()
@@ -306,10 +330,13 @@ def manifest_schema_errors(manifest: Mapping[str, Any]) -> list[str]:
         errors.append(
             f"codecs must be a list without repeats drawn from {contract.PAYLOAD_CODEC_IDS}"
         )
-    errors.extend(_files_table_errors(manifest["files"]))
-    errors.extend(_records_table_errors(manifest["records"], manifest["files"], manifest["kind"]))
-    disclosures = manifest.get("disclosures")
-    if disclosures is not None and not (
+    return errors
+
+
+def _disclosure_errors(disclosures: Any) -> list[str]:
+    """Optional ``disclosures`` is ``{count: positive int, first: [<=16 strings]}``."""
+
+    if disclosures is None or (
         isinstance(disclosures, dict)
         and set(disclosures) == {"count", "first"}
         and is_int(disclosures["count"])
@@ -318,9 +345,8 @@ def manifest_schema_errors(manifest: Mapping[str, Any]) -> list[str]:
         and len(disclosures["first"]) <= 16
         and all(isinstance(item, str) for item in disclosures["first"])
     ):
-        errors.append("disclosures must be {count: positive int, first: [<=16 strings]}")
-    errors.extend(summary_schema_errors(manifest))
-    return errors
+        return []
+    return ["disclosures must be {count: positive int, first: [<=16 strings]}"]
 
 
 def _backend_errors(manifest: Mapping[str, Any]) -> list[str]:
@@ -414,100 +440,6 @@ def verify_file_bytes(root: Path, relpath: str, entry: Mapping[str, Any]) -> Pat
     if digest.hexdigest() != entry["sha256"]:
         raise integrity_error(target, "SHA-256 differs from the manifest's", code=_CORRUPT)
     return target
-
-
-def record_class(kind: str) -> type:
-    """Return the record class a record kind names in the field registry."""
-
-    module_name, class_name = RECORD_CONTRACT_CLASSES[kind]
-    return getattr(import_module(module_name), class_name)
-
-
-def read_record_table(root: Path, manifest: Mapping[str, Any], kind: str) -> list[dict[str, Any]]:
-    """Read ``records/<kind>.json`` after its digest check; return one raw dict per row."""
-
-    entry = manifest["records"][kind]
-    target = root / entry["path"]
-    data, raw = read_json_file(target, code=_CORRUPT, what="record file")
-    listed = manifest["files"][entry["path"]]
-    if len(raw) != listed["bytes"] or hashlib.sha256(raw).hexdigest() != listed["sha256"]:
-        raise integrity_error(target, "bytes differ from the manifest's digest", code=_CORRUPT)
-    if not isinstance(data, dict) or data.get("record") != kind:
-        raise integrity_error(target, f"not a {kind!r} record object", code=_CORRUPT)
-    if data.get(TLSPEC_KEY) != manifest[TLSPEC_KEY]:
-        raise integrity_error(target, "tlspec_version differs from the manifest's", code=_CORRUPT)
-    if kind == "trace":
-        fields = data.get("fields")
-        if set(data) != {"record", TLSPEC_KEY, "fields"} or not isinstance(fields, dict):
-            raise integrity_error(
-                target,
-                "trace record must be {record, tlspec_version, fields}",
-                code=_CORRUPT,
-            )
-        if entry["rows"] != 1:
-            raise integrity_error(target, "the trace record counts one row", code=_CORRUPT)
-        return [dict(fields)]
-    rows, columns = data.get("rows"), data.get("columns")
-    if set(data) != {"record", TLSPEC_KEY, "rows", "columns"} or not isinstance(columns, dict):
-        raise integrity_error(
-            target,
-            "record table must be {record, tlspec_version, rows, columns}",
-            code=_CORRUPT,
-        )
-    if rows != entry["rows"]:
-        raise integrity_error(
-            target,
-            f"rows {rows!r} differs from the manifest's {entry['rows']}",
-            code=_CORRUPT,
-        )
-    for name, column in columns.items():
-        if not isinstance(column, list) or len(column) != rows:
-            raise integrity_error(
-                target,
-                f"column {name!r} is not an array of {rows} cells",
-                code=_CORRUPT,
-            )
-    return [{name: column[index] for name, column in columns.items()} for index in range(rows)]
-
-
-def _unknown_columns(kind: str, names: Mapping[str, Any]) -> list[str]:
-    """Return the table columns the field bindings do not declare."""
-
-    bindings = STORAGE_BINDINGS[_SCHEMA_KEY_BY_RECORD.get(kind, kind)]
-    allowed_extra = _TRACE_TRANSPORT_COLUMNS if kind == "trace" else frozenset()
-    if prerelease_fields_active():
-        # A switch-on write persists the registered sprint-gated fields; the marker the
-        # reader already validated proves the artifact is one of ours.
-        owner = record_class(kind).__name__
-        allowed_extra = allowed_extra | frozenset(registered_prerelease_fields().get(owner, ()))
-    unknown = []
-    for name in names:
-        if name in allowed_extra:
-            continue
-        binding = bindings.get(name)
-        if binding is None or binding.kind is StorageKind.RUNTIME:
-            unknown.append(name)
-    return unknown
-
-
-def refuse_unknown_columns(kind: str, names: Mapping[str, Any], *, declared_version: int) -> None:
-    """Refuse a column the record's bindings do not persist (``unknown_persisted_field``)."""
-
-    unknown = _unknown_columns(kind, names)
-    if not unknown:
-        return
-    cls = record_class(kind)
-    raise UnknownPersistedFieldError(
-        f"{cls.__name__} record table carries {len(unknown)} column(s) unknown to this "
-        f"reader's persisted-state contract: {', '.join(sorted(unknown)[:12])}. Unknown "
-        "columns refuse in both writer directions.",
-        code=_CODES["record_key_unknown"],
-        record_type=cls.__name__,
-        unknown_fields=sorted(unknown),
-        declared_tlspec_version=declared_version,
-        runtime_tlspec_version=TLSPEC_VERSION,
-        remedy=_unknown_field_remedy(declared_version),
-    )
 
 
 #: Trace containers whose length must equal a record table's row count.
@@ -737,6 +669,77 @@ def validate_records(
     if "trace" in tables:
         _check_trace_containers(tables, objects, root)
         _check_orphans_disjoint(tables, root)
+    _check_module_derived_cells(tables, objects, root)
+
+
+def _address_name(address: Any) -> Any:
+    """The ``name`` a module or module call derives from its address (the record property)."""
+
+    if not isinstance(address, str):
+        return address
+    return "" if address == "self" else address.rsplit(".", 1)[-1]
+
+
+#: module_call cells the writer copies from the called module's row.
+_CALL_CELLS_FROM_MODULE = (
+    "has_frozen_params",
+    "has_trainable_params",
+    "num_param_tensors_trainable",
+    "num_param_tensors_frozen",
+)
+
+
+def _check_module_derived_cells(
+    tables: Mapping[str, list[dict[str, Any]]],
+    objects: Mapping[str, Sequence[Any]],
+    root: Path,
+) -> None:
+    """The cells a module or module-call row derives from its others must agree with them.
+
+    ``name`` is the address's last segment and ``has_multiple_addresses`` counts
+    ``all_addresses`` (both record properties); a module call's ``module`` names the module
+    row with its address, and its parameter counts and flags copy that row's. A forged cell
+    here would be re-derived on the next save, so the artifact refuses ``record_schema_invalid``.
+    """
+
+    code = contract.REFUSAL_CODES["record_schema_invalid"]
+    for kind in ("module", "module_call"):
+        for index, row in enumerate(tables.get(kind, ())):
+            name = row.get("name")
+            if name is not None and name != _address_name(row.get("address")):
+                raise _invariant_error(
+                    root, f"{kind}[{index}].name does not derive from its address", code=code
+                )
+            addresses = row.get("all_addresses")
+            multiple = row.get("has_multiple_addresses")
+            if multiple is not None and isinstance(addresses, list):
+                if multiple != (len(addresses) > 1):
+                    raise _invariant_error(
+                        root, f"{kind}[{index}].has_multiple_addresses disagrees", code=code
+                    )
+    module_rows = {id(obj): i for i, obj in enumerate(objects.get("module", ()))}
+    for index, row in enumerate(tables.get("module_call", ())):
+        if row.get("module") is None:
+            continue
+        position = module_rows.get(id(row["module"]))
+        module = tables["module"][position] if position is not None else None
+        if module is None or module.get("address") != row.get("address"):
+            raise _invariant_error(
+                root, f"module_call[{index}].module is not the module at its address", code=code
+            )
+        for column in _CALL_CELLS_FROM_MODULE:
+            own, theirs = row.get(column), module.get(column)
+            if own is not None and theirs is not None and own != theirs:
+                raise _invariant_error(
+                    root, f"module_call[{index}].{column} differs from its module's", code=code
+                )
+        params = module.get("params")
+        count = row.get("num_param_tensors")
+        if count is not None and isinstance(params, list):
+            if count != len(params):
+                raise _invariant_error(
+                    root, f"module_call[{index}].num_param_tensors is not its module's", code=code
+                )
 
 
 class _AnchorView:
