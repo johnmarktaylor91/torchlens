@@ -32,10 +32,11 @@ def first_nonfinite(trace: Trace, link_format: Literal["terminal", "html", "text
     # answer below names how many ops could not be examined.
     layer = first_nonfinite_layer(trace, kind="saved")
     if layer is not None:
-        stack = getattr(layer, "code_context", None) or []
+        from .._data_classes.func_call_location import display_frame
+
+        frame = display_frame(getattr(layer, "code_context", None))
         location = "source unavailable"
-        if stack:
-            frame = stack[0]
+        if frame is not None:
             file_path = str(getattr(frame, "file", "unknown"))
             line_number = getattr(frame, "line_number", "unknown")
             if link_format == "terminal":

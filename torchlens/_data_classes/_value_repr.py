@@ -199,13 +199,46 @@ def op_repr_line(op: Any) -> str:
     )
 
 
+def _source_location(op: Any) -> tuple[str | None, str | None]:
+    """Where the op's line is and what it says: ``(location, code line)``.
+
+    Names the innermost frame outside torch's own code (``display_frame``) as
+    ``file:line in function``; the code line is that line's source text, read
+    lazily from the file when the capture kept no snapshot, or the reason it
+    cannot be shown (the file changed since capture, or is gone).
+    """
+
+    from .func_call_location import display_frame, short_source_path
+
+    frame = display_frame(getattr(op, "code_context", None))
+    if frame is None:
+        return None, None
+    location = (
+        f"{short_source_path(str(frame.file))}:{frame.line_number}"
+        f" in {frame.func_qualname or frame.func_name}"
+    )
+    view, status = frame._source_text_state()
+    text = view[3] if view is not None else ""
+    return location, f"code   {text or f'({status})'}"
+
+
 def _where_line(op: Any) -> str | None:
-    """The card's module-location line, when the op sits in a module."""
+    """The card's location line: the module the op sits in and its source line."""
 
     module = getattr(op, "module", None)
-    if not module:
+    location, _code = _source_location(op)
+    parts = [f"module {module}"] if module else []
+    if location:
+        parts.append(location)
+    if not parts:
         return None
-    return f"where  module {module}"
+    return "where  " + ", ".join(parts)
+
+
+def _code_line(op: Any) -> str | None:
+    """The card's source-text line for the op's line (see ``_source_location``)."""
+
+    return _source_location(op)[1]
 
 
 def _graph_line(op: Any) -> str | None:
@@ -273,6 +306,7 @@ def op_card(op: Any) -> str:
         line
         for line in (
             _where_line(op),
+            _code_line(op),
             _graph_line(op),
             _func_line(op),
             _params_line(op),
@@ -338,6 +372,7 @@ def layer_card(layer: Any) -> str:
             line
             for line in (
                 _where_line(first),
+                _code_line(first),
                 _graph_line(first),
                 _func_line(first),
                 _params_line(first),

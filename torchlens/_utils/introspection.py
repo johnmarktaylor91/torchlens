@@ -9,7 +9,7 @@ import sys
 import warnings
 from collections.abc import Callable, Iterator
 from types import CodeType, FrameType
-from typing import Any, TypeAlias
+from typing import Any, TypeAlias, cast
 
 import numpy as np
 import torch
@@ -913,6 +913,30 @@ def _call_site_chain(
     return chain
 
 
+def _cached_source_fingerprint(
+    filename: str, num_context_lines: int, context_cache: _CodeContextCache | None
+) -> tuple[Any, ...] | None:
+    """Return a file's source fingerprint, taken at most once per capture.
+
+    One ``os.stat`` per distinct file per capture: it lets an unsnapshotted
+    frame read its text lazily and refuse it when the file later changed
+    (:func:`torchlens._data_classes.func_call_location.source_fingerprint`).
+    """
+
+    from .._data_classes.func_call_location import source_fingerprint
+
+    if context_cache is None:
+        return source_fingerprint(filename, num_context_lines)
+    key = ("__torchlens_source_fingerprint__", filename, num_context_lines)
+    cached = context_cache.get(key)
+    if cached is None:
+        # Stored boxed in a 1-tuple: the cache holds tuples, and the
+        # fingerprint itself may be ``None``.
+        cached = (source_fingerprint(filename, num_context_lines),)
+        context_cache[key] = cached
+    return cast(tuple[Any, ...] | None, cached[0])
+
+
 def _get_code_context(
     num_context_lines: int = 7,
     source_loading_enabled: bool = True,
@@ -931,11 +955,13 @@ def _get_code_context(
     by ``FuncCallLocation`` on first access via ``linecache``.
 
     The walk is a single innermost-to-outermost pass that keeps only
-    surviving (non-internal, non-``_call_impl``) frames. The historical
-    outermost-first scan is recovered from the survivor list: the outermost
-    ``forward``-named survivor starts the context, every deeper survivor
-    follows, and the first survivor above that ``forward`` (the user's
-    ``trace`` call site) is appended last.
+    surviving (non-internal, non-``_call_impl``) frames. The context is then
+    read from the survivor list outermost first, like a traceback: the first
+    survivor above the outermost ``forward``-named survivor (the call site:
+    the user's ``trace`` line, or the nearest wrapper above the root
+    ``forward``, such as a decorator) comes first, then the outermost
+    ``forward`` and every deeper survivor, so the innermost frame -- the line
+    that ran the op -- is always the LAST entry.
 
     When a ``context_cache`` is supplied, the walk also maintains a
     per-capture *anchor* -- the identity of the call-site frame -- under
@@ -967,7 +993,8 @@ def _get_code_context(
             Python frame lies inside it. Grouping (step 7) keys layers on it.
 
     Returns:
-        List[FuncCallLocation] ordered shallow-to-deep.
+        List[FuncCallLocation] ordered outermost to innermost; the last entry
+        is the frame that ran the op.
     """
     global _FUNC_CALL_LOCATION
 
@@ -1033,15 +1060,17 @@ def _get_code_context(
             )
         )
 
-    # Reconstruct the historical selection from the survivor list. With no
-    # ``forward`` frame, tracking never starts and the context is empty; the
-    # call site is only ever appended when a ``forward`` frame exists.
+    # Select the context from the survivor list, outermost first like a
+    # traceback: the call site (when one survives), then the outermost
+    # ``forward`` frame down to the innermost frame, which ran the op and is
+    # always LAST. With no ``forward`` frame, tracking never starts and the
+    # context is empty; the call site is only ever included when a ``forward``
+    # frame exists.
     selected: list[tuple[FrameType, CodeType, int, int]] = []
     if last_forward_pos >= 0:
-        selected = survivors[last_forward_pos::-1]
+        call_site: tuple[FrameType, CodeType, int, int] | None
         if last_forward_pos + 1 < len(survivors):
             call_site = survivors[last_forward_pos + 1]
-            selected.append(call_site)
         elif anchor_frame is not None:
             call_site = (
                 anchor_frame,
@@ -1049,9 +1078,9 @@ def _get_code_context(
                 anchor_frame.f_lineno,
                 anchor_frame.f_lasti,
             )
-            selected.append(call_site)
         else:
             call_site = None
+        selected = ([call_site] if call_site is not None else []) + survivors[last_forward_pos::-1]
         if context_cache is not None and anchor is None and call_site is not None:
             # Establish the anchor: ``call_site`` is the first survivor above
             # the OUTERMOST ``forward`` frame, so no ``forward``-named survivor
@@ -1097,6 +1126,10 @@ def _get_code_context(
             col_offset=None if disable_col_offset else _get_col_offset(frame_ref),
             source_loading_enabled=source_loading_enabled,
         )
+        if not source_loading_enabled:
+            loc._linecache_entry = _cached_source_fingerprint(
+                code.co_filename, num_context_lines, context_cache
+            )
         result.append(loc)
 
     if context_cache is not None and cache_key is not None:

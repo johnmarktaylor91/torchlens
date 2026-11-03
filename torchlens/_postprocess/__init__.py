@@ -291,6 +291,12 @@ def _postprocess_body(
             for _fcl in _fcl_group or ():
                 if isinstance(_fcl, _FCL):
                     _fcl_seen.setdefault(id(_fcl), _fcl)
+        if getattr(self, "_options_save_source_context", False):
+            # save_source_context=True snapshots the source text now, at
+            # capture, so later edits to the files never change what the
+            # Trace shows (captures without it read the files lazily).
+            for _fcl in _fcl_seen.values():
+                _fcl._ensure_source_loaded()  # type: ignore[attr-defined]
         if _fcl_seen:
             from .._trace_core.record_rows import adopt_records
 
