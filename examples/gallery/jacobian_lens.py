@@ -158,7 +158,9 @@ def fit_autograd(model: Any, blocks: Any, prompts: list[torch.Tensor]) -> dict[i
         states: dict[int, torch.Tensor] = {}
         handles = [
             block.register_forward_hook(
-                lambda m, args, output, index=index: states.__setitem__(index, unwrap(output))
+                lambda m, args, output, index=index, states=states: states.__setitem__(
+                    index, unwrap(output)
+                )
             )
             for index, block in enumerate(blocks)
         ]

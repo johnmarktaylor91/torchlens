@@ -230,7 +230,14 @@ def score_rows(
         )
         batch = torch.arange(len(clean))
 
-        def metric(logits: torch.Tensor) -> torch.Tensor:
+        def metric(
+            logits: torch.Tensor,
+            *,
+            batch: torch.Tensor = batch,
+            last: torch.Tensor = last,
+            answer: torch.Tensor = answer,
+            subject: torch.Tensor = subject,
+        ) -> torch.Tensor:
             """Return MIB's negative IO-minus-subject logit difference."""
             return -(logits[batch, last, answer] - logits[batch, last, subject])
 
