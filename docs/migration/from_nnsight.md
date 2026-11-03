@@ -12,7 +12,7 @@ states as a tensor, so the older `.output[0]` tuple idiom is gone from both side
 | `model.transformer.h[0].output[:, :, :2] = 2.5` inside the trace | Capture with `capture=tl.options.CaptureOptions(replayable=True)`, then `trace.fork().set(tl.module("transformer.h.0"), edit, confirm_mutation=True).push()` | `edit` is a tensor or a function of the original output; `.push()` replays the recorded graph downstream. |
 | Save every op, including ones no module owns (`.source`) | Nothing to ask for: `tl.trace` records every executed op (`trace.layers`) | |
 | `model.trace(...)` on the wrapped model | `tl.trace(model._model, ids)` on the model NNsight wraps | See below. |
-| Remote execution (NDIF), vLLM and tensor-parallel back ends | No equivalent | TorchLens captures a local eager forward. |
+| Remote execution (NDIF), vLLM and tensor-parallel back ends | No equivalent | TorchLens captures a local eager forward; to check a serving engine's hooks against it on a small model, see [Cross-engine checks](cross_engine.md). |
 
 ## Running TorchLens on the model NNsight wraps
 

@@ -21,6 +21,7 @@ MIGRATION_FILES = (
     "from_torchextractor.md",
     "from_fx.md",
     "coming_from_torchsnooper.md",
+    "cross_engine.md",
 )
 
 OPTIONAL_IMPORTS = {

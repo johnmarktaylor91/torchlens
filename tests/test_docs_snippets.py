@@ -514,6 +514,10 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "method_x_model_compatibility.md": "compatibility matrix stubs, not runnable programs",
     "migration/from_captum.md": "needs captum installed (weekly bridge leg env only)",
     "migration/from_fx.md": "pending execution coverage",
+    "migration/cross_engine.md": (
+        "executed by tests/test_migrations.py (the TorchLens side always; the nnsight "
+        "comparison where nnsight is installed)"
+    ),
     "migration/from_nnsight.md": (
         "executed by tests/test_migrations.py (the TorchLens side always; the nnsight "
         "side where nnsight is installed)"
