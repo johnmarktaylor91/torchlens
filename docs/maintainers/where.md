@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1400 modules, 629733 lines, 0 modules without a docstring.
+83 packages, 1400 modules, 629761 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 45 | 25071 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1520 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4601 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 86 | 37375 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 86 | 37403 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10551 |
@@ -285,7 +285,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (86 modules, 37375 lines)
+Core data structures for representing a logged forward pass. (86 modules, 37403 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -350,7 +350,7 @@ Core data structures for representing a logged forward pass. (86 modules, 37375 
 | `_trace_rerun_state` | Trace rerun-state family: the saved inputs and options a rerun replays. | 618 |
 | `_trace_source_introspection` | Source-model introspection fallbacks for ''Trace'''s ''_source_*'' fields. | 67 |
 | `_trace_stack` | Order-aligned activation stacking for completed traces. | 140 |
-| `_trace_state_io` | Trace pickle state helpers moved off ''Trace.__getstate__'' and ''__setstate__''. | 662 |
+| `_trace_state_io` | Trace pickle state helpers moved off ''Trace.__getstate__'' and ''__setstate__''. | 690 |
 | `_trace_stats_grad_fn_site` | Pure helpers behind the Trace grad-fn site and fire-timing rollups. | 176 |
 | `_trace_views` | Trace group-view and field-derived accessor functions. | 687 |
 | `_trace_viz_arguments` | Private argument forwarding for the Trace visualization surface. | 34 |
