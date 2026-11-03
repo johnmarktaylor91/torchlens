@@ -1,7 +1,7 @@
 {
   "_rule": "Every number here only shrinks. Lower one in the change that earns it; a raise needs a one-line reason in the commit message.",
   "layering": {
-    "in_function_internal_imports": 2436,
+    "in_function_internal_imports": 2419,
     "largest_scc": 477
   },
   "id_lint": {
@@ -10,7 +10,7 @@
     "work_item": 2,
     "review_round": 2331,
     "finding": 811,
-    "sprint_feature": 1867,
+    "sprint_feature": 1865,
     "memo_item": 2818
   }
 }

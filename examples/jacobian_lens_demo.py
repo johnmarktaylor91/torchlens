@@ -3,12 +3,12 @@
 The Jacobian lens transports a block's residual state into the final layer's
 basis with ``J_l = E[d h_final / d h_l]`` before the model's own final norm and
 unembedding; the logit lens is the special case ``J_l = I``. The recipe is the
-one in ``docs/recipes/jacobian_lens.md``: a hook callable bound with
-``tl.when(...).bind(model)`` keeps each block's live output, batched
-``torch.autograd.grad`` gives the Jacobian rows, and ``logit_lens(lens=...)``
-reads the fitted lens out beside the plain logit lens. ``--check`` compares the
-fit against ``torch.func.jacrev`` of the whole model with the block output
-replaced, which never touches TorchLens.
+one in ``docs/field-guide/jacobian_lens.md``: a trace with ``save_mode="view"``
+keeps each block's live output, batched ``torch.autograd.grad`` gives the
+Jacobian rows, and the model's own final norm and unembedding read the fitted
+lens out beside the plain logit lens. ``--check`` compares the fit against
+``torch.func.jacrev`` of the whole model with the block output replaced, which
+never touches TorchLens.
 
 The eight-sentence corpus (about a hundred source positions) is a demonstration fit:
 the late blocks read out sensibly, the early blocks' top tokens are noise. The
@@ -23,14 +23,11 @@ Run (downloads the checkpoint on first use)::
 from __future__ import annotations
 
 import argparse
-import functools
-import operator
 import time
 
 import torch
 
 import torchlens as tl
-from torchlens._semantic import logit_lens
 
 CORPUS = (
     "The quick brown fox jumps over the lazy dog while the farmer watches from the porch.",
@@ -51,19 +48,9 @@ def block_output(out):
 
 
 def residual_states(model, blocks, ids):
-    """Run one forward and return each block's live (graph-attached) output, in block order."""
-    states = {}
-
-    def keep(address):
-        def hook(activation, *, ctx):
-            states[address] = activation
-            return activation
-
-        return hook
-
-    spec = functools.reduce(operator.and_, [tl.when(tl.module(a), keep(a)) for a in blocks])
-    spec.bind(model)(ids)
-    return [states[address] for address in blocks]
+    """Run one traced forward and return each block's live (graph-attached) output, in block order."""
+    trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(save_mode="view"))
+    return [trace[address].out for address in blocks]
 
 
 def fit_jacobian_lens(model, blocks, prompts, *, skip_first, chunk):
@@ -83,7 +70,7 @@ def fit_jacobian_lens(model, blocks, prompts, *, skip_first, chunk):
                 is_grads_batched=True,
                 retain_graph=True,
             )
-            for address, grad in zip(blocks[:-1], grads):
+            for address, grad in zip(blocks[:-1], grads, strict=True):
                 rows[address].append(grad[:, 0, valid].sum(1) / len(valid))
         for address in blocks[:-1]:
             total[address] += torch.cat(rows[address])
@@ -121,18 +108,22 @@ def model_jacobian(model, index, ids, *, skip_first, chunk_size):
 def readout(model, tokenizer, blocks, lenses, ids, *, top):
     """Print the Jacobian lens and the logit lens top tokens at the last position per block."""
     final_norm, unembed = model.transformer.ln_f, model.lm_head
-    lens = {address: (lambda h, J=J: unembed(final_norm(h @ J.T))) for address, J in lenses.items()}
-    trace = tl.trace(model, ids, save="all")
-    jacobian = logit_lens(trace, lens=lens, layers=list(lens), verify=False)
-    plain = logit_lens(trace, layers=list(lens), verify=False)
-    print(f"prompt: {tokenizer.decode(ids[0])!r}")
-    print(f"{'block':<16} {'jacobian lens':<40} logit lens")
-    for j_entry, p_entry in zip(jacobian.entries, plain.entries):
-        j_tokens = [tokenizer.decode(t) for t in j_entry.logits[0, -1].topk(top).indices]
-        p_tokens = [tokenizer.decode(t) for t in p_entry.logits[0, -1].topk(top).indices]
-        print(f"{j_entry.address:<16} {str(j_tokens):<40} {p_tokens}")
-    model_tokens = [tokenizer.decode(t) for t in plain.final_logits[0, -1].topk(top).indices]
-    print(f"{'model':<16} {model_tokens}")
+
+    def top_tokens(logits):
+        return [tokenizer.decode(t) for t in logits.topk(top).indices]
+
+    with torch.no_grad():
+        states = residual_states(model, blocks, ids)
+        print(f"prompt: {tokenizer.decode(ids[0])!r}")
+        print(f"{'block':<16} {'jacobian lens':<40} logit lens")
+        for address, state in zip(blocks, states, strict=True):
+            if address not in lenses:
+                continue
+            last = state[0, -1]
+            jacobian = top_tokens(unembed(final_norm(last @ lenses[address].T)))
+            plain = top_tokens(unembed(final_norm(last)))
+            print(f"{address:<16} {str(jacobian):<40} {plain}")
+        print(f"{'model':<16} {top_tokens(unembed(final_norm(states[-1][0, -1])))}")
 
 
 def main() -> int:

@@ -10,7 +10,7 @@ sites; `tl.record(model, x, save=...)` is the lighter path for tight loops where
 selected records and can materialize a `Trace` later.
 
 Backend note: these timings and sparse-recording examples are torch-oriented. `tl.record()` /
-fastlog is torch-only in the backend-v1 registry. Non-torch preview backends may have different
+sparse recording (`tl.record()`) is torch-only in the backend-v1 registry. Non-torch preview backends may have different
 capture costs; JAX, tinygrad, Paddle, and TensorFlow `.tlspec` saves materialize array payloads but
 loaded traces cannot replay-validate stripped runtime captures. Paddle preview capture has its own
 dygraph/eager replay and static-inventory audit costs; TensorFlow preview capture runs live eager
@@ -77,7 +77,7 @@ assert gelu_site.out.shape == (2, 4)
 `tl.record(save=...)` is the only torch sparse-capture spelling; the old
 `keep_op=`/`keep_module=` alias kwargs are removed.
 
-When a fastlog forward raises, the default remains `on_forward_error="raise"`. Opt into
+When a `tl.record()` forward raises, the default remains `on_forward_error="raise"`. Opt into
 `on_forward_error="attach_partial"` to attach `exc.partial_recording` and re-raise, or
 `on_forward_error="return_partial"` to return a failed partial `Recording` (its `output` refuses
 with `output_forward_failed`). Failed partials set `status="partial_error"`, `failed=True`,
@@ -342,7 +342,7 @@ assert torch.count_nonzero(patched.find_sites(tl.func("relu")).first().out) == 0
 ```
 
 Use `intervene=` when the edited value must affect downstream execution. For post-hoc experiments
-on an existing trace, prefer `trace.fork()`, `set(...)` or `attach_hooks(...)`, and `push()`
+on an existing trace, prefer `trace.fork()` with `set(...)` and `push()`, or `do(...)`, which stages the edit and replays it in one call
 (which engine fits which question: [intervention explainers](intervention_explainers.md#which-engine-when)).
 
 ## Long sequences and long contexts
@@ -471,10 +471,10 @@ activation and gradient substrate.
 Measured on the canonical bench host (Intel i9-9900X) at SHA `712a4e5` on
 `2026-06-16`, from a full non-smoke run (`baseline_status: "canonical"`). The complete 196-row
 table (CPU + CUDA, every model and row) lives in
-[`docs/_perf_numbers.md`](_perf_numbers.md) and the raw baseline in
+`docs/_perf_numbers.md` and the raw baseline in
 `benchmarks/perf_baselines/linux-cpu.json`.
 
-**Headline: with fastlog capture and an early halt at ~25% depth, capture runs _faster than the
+**Headline: with sparse recording and an early halt at ~25% depth, capture runs _faster than the
 raw forward pass itself_ — `fastlog_halt_25` is 0.84x raw forward on ResNet-18 (CPU) and 0.83x on
 GPT-2 (HookedTransformer, CPU).** You only pay for the layers you actually reach.
 

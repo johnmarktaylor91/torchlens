@@ -5,7 +5,7 @@ glossary entry, the agent-reference examples, and the audit notebooks and exampl
 use it. This module turns that rule into findings:
 
 - a new or renamed name needs a glossary entry (its head spelling);
-- a new root name or namespace export also needs a mention in ``docs/agent-reference/``;
+- a new root name or namespace export also needs a mention in ``docs/internal/agent-reference/``;
 - a renamed or removed name leaves no old spelling in the glossary, the agent
   reference, ``notebooks/audit/`` or ``examples/``.
 
@@ -29,11 +29,12 @@ from typing import Any
 from name_lockstep import attribution, spelling
 from name_lockstep.codecontext import CodeContext
 from name_lockstep.diff import SurfaceDiff
+from name_lockstep.records import is_record, record_classes
 
 DEFAULT_GLOSSARY = ("docs/reference/glossary.md",)
 #: Lockstep places, as (label, directory, suffixes).
 PLACES = (
-    ("agent-reference", "docs/agent-reference", (".md",)),
+    ("agent-reference", "docs/internal/agent-reference", (".md",)),
     ("notebooks/audit", "notebooks/audit", (".ipynb", ".py", ".md")),
     ("examples", "examples", (".py", ".md", ".ipynb")),
 )
@@ -362,21 +363,55 @@ def is_private(row: dict[str, Any]) -> bool:
     return row["kind"] == "param" and str(row["name"]).startswith("_")
 
 
-def _needs(row: dict[str, Any]) -> list[str]:
+def record_only(row: dict[str, Any], records: frozenset[str]) -> bool:
+    """Return whether a keyword row's every use is a record constructor.
+
+    Records are built by TorchLens (``records.py``), so a keyword that only their
+    constructors take is not public: it needs no glossary entry and no legibility check.
+
+    Parameters
+    ----------
+    row
+        Inventory row.
+    records
+        Record spellings from the head glossary (``records.record_classes``).
+
+    Returns
+    -------
+    bool
+        True for a ``param`` row with at least one use, all of them record classes.
+    """
+
+    uses = list(row.get("uses") or [])
+    return row["kind"] == "param" and bool(uses) and all(is_record(u, records) for u in uses)
+
+
+def glossary_records(corpus: Corpus) -> frozenset[str]:
+    """Return the record spellings every glossary file of the corpus lists."""
+
+    found: set[str] = set()
+    for _, text in corpus.files.get("glossary", []):
+        found.update(record_classes(text))
+    return frozenset(found)
+
+
+def _needs(row: dict[str, Any], records: frozenset[str] = frozenset()) -> list[str]:
     """Return the places a new or renamed name must appear in.
 
     Parameters
     ----------
     row
         Head row.
+    records
+        Record spellings from the head glossary.
 
     Returns
     -------
     list[str]
-        Place labels; none for an underscore keyword.
+        Place labels; none for an underscore keyword or a record-constructor-only keyword.
     """
 
-    if is_private(row):
+    if is_private(row) or record_only(row, records):
         return []
     places = ["glossary"]
     if row["kind"] in _AGENT_REFERENCE_KINDS:
@@ -411,11 +446,12 @@ def check_lockstep(
         if row["kind"] == "member":
             live_owners.setdefault(row["name"], set()).update(_owners(row))
     claims = attribution.Claims.from_rows(head_rows.values())
+    records = glossary_records(corpus)
     findings: list[Finding] = []
     for row in surface_diff.new:
-        findings += _missing(corpus, row, "new")
+        findings += _missing(corpus, row, "new", records)
     for move in surface_diff.moved:
-        findings += _missing(corpus, head_rows[move.new_id], "moved")
+        findings += _missing(corpus, head_rows[move.new_id], "moved", records)
         for owner in move.retired_owners:
             row = {
                 **head_rows[move.new_id],
@@ -425,7 +461,7 @@ def check_lockstep(
             findings += _residue(corpus, row, move.new_id, "moved", leaves, claims)
     for rename in surface_diff.renamed:
         new_row = head_rows[rename.new_id]
-        findings += _missing(corpus, new_row, "renamed")
+        findings += _missing(corpus, new_row, "renamed", records)
         old_row = {**new_row, "id": rename.old_id, "name": rename.old_name}
         old_row["path"] = _old_path(new_row, rename.new_name, rename.old_name)
         gone = _retired_spelling(old_row, live_owners)
@@ -515,7 +551,9 @@ def _old_path(new_row: dict[str, Any], new_name: str, old_name: str) -> str:
     return path[: len(path) - len(new_name) - len(suffix)] + old_name + suffix
 
 
-def _missing(corpus: Corpus, row: dict[str, Any], change: str) -> list[Finding]:
+def _missing(
+    corpus: Corpus, row: dict[str, Any], change: str, records: frozenset[str] = frozenset()
+) -> list[Finding]:
     """Return the places that lack the row's current spelling.
 
     Parameters
@@ -526,6 +564,8 @@ def _missing(corpus: Corpus, row: dict[str, Any], change: str) -> list[Finding]:
         Head row.
     change
         ``new`` or ``renamed``.
+    records
+        Record spellings from the head glossary.
 
     Returns
     -------
@@ -535,7 +575,7 @@ def _missing(corpus: Corpus, row: dict[str, Any], change: str) -> list[Finding]:
 
     return [
         Finding(row["id"], change, place, "missing", place, str(row["path"]))
-        for place in _needs(row)
+        for place in _needs(row, records)
         if not _present(corpus, place, row)
     ]
 

@@ -900,14 +900,14 @@ class Bundle:
 
         return _operations.bundle_fork(self, name)
 
-    def run(self, model: nn.Module, x: Any = None, **kwargs: Any) -> Bundle:
+    def run(self, model: nn.Module, inputs: Any = None, **kwargs: Any) -> Bundle:
         """Run all member logs with a supplied model and input.
 
         Parameters
         ----------
         model:
             Model forwarded to each member.
-        x:
+        inputs:
             Forward input.
 
         Returns
@@ -916,7 +916,7 @@ class Bundle:
             This bundle.
         """
 
-        return _operations.bundle_run(self, model, x, **kwargs)
+        return _operations.bundle_run(self, model, inputs, **kwargs)
 
     def map(self, fn: Callable[..., Any]) -> dict[str, Any]:
         """Apply a function independently to each member; released members read ``"unmeasured"``.
@@ -924,10 +924,15 @@ class Bundle:
         Parameters
         ----------
         fn:
-            Callable receiving one member log. A callable that accepts a
-            second positional parameter additionally receives the member's
-            NAME (``bundle.map(lambda log, name: ...)``); single-parameter
-            callables keep the historical contract unchanged.
+            Callable receiving one member log. A callable whose second
+            positional parameter is required (or that takes ``*args``)
+            additionally receives the member's NAME there
+            (``bundle.map(lambda log, name: ...)``); a callable declaring a
+            parameter called ``name`` receives it by keyword
+            (``lambda log, k=3, name=None: ...``). A defaulted second
+            parameter with another name keeps its default
+            (``lambda log, k=3: ...`` is called as ``fn(log)``), and
+            single-parameter callables keep the historical contract.
 
         Returns
         -------
@@ -939,17 +944,6 @@ class Bundle:
         """
 
         return _operations.bundle_map(self, fn)
-
-    @staticmethod
-    def _accepts_member_name(fn: Callable[..., Any]) -> bool:
-        """Whether ``fn`` can take (member, name) rather than (member,) only.
-
-        Signature inspection failures (builtins, C callables) fall back to
-        the historical single-argument call, never a guessed two-argument
-        call that would raise mid-iteration.
-        """
-
-        return _operations.accepts_member_name(fn)
 
     def show(self, kind: str | None = None, **kwargs: Any) -> Drawing | dict[str, Drawing | str]:
         """Show the bundle: by default the merged graph of where its members differ.

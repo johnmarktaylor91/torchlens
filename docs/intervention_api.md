@@ -7,8 +7,8 @@ To apply one intervention to many forwards or a `generate()` loop, use `spec.bin
 (capture-free, about the cost of a plain hook) or `tl.record(..., intervene=spec)` (the
 model output is `recording.output`) when you need activations too, or rerun a steered trace with
 `trace.run(model, x)` (the guarded fast engine when the spec targets modules; see the glossary
-entry "Guarded fast rerun"). Recipe: "Steering many forwards / generation" in
-[agent-reference/common-patterns.md](agent-reference/common-patterns.md).
+entry "Guarded fast rerun"). Which one to pick for a loop or for generation:
+[Performance: choosing a fast path](guides/fast_paths.md).
 
 ## Selectors
 
@@ -89,14 +89,14 @@ portable selector after discovery.
 ## Forward Helpers
 
 Forward helpers return `Edit` objects that can be passed to `set`,
-`attach_hooks`, `do`, live capture `hooks=...`, replay, or rerun.
+`do`, live capture `hooks=...`, replay, or rerun.
 
 | Helper | Signature | Portability |
 | --- | --- | --- |
 | `tl.zero_ablate` | `zero_ablate(*, allow_shape_change=False)` | Portable built-in; append-compatible unless shape changes are forced. |
 | `tl.mean_ablate` | `mean_ablate(source=None, *, dim, allow_shape_change=False)` | The one mean door; `dim` is required (`None` for every axis, else the axes). Portable for self and tensor sources; a population source is audit-only; the self mean couples the batch and blocks append. |
-| `scramble_elements` | `torchlens.intervention.scramble_elements(source=None, *, from_=None, seed=None, allow_shape_change=False)` (the honest rename of the removed `resample_ablate` spelling; elementwise iid scramble, NOT coherent resampling ablation -- see MIGRATIONS.md) | Built-in, stochastic; seeded runs are reproducible, append-incompatible. |
-| `tl.steer` | `steer(direction, strength=1.0, *, coef=None, dim=None, allow_shape_change=False)` | Portable when `direction` is serializable tensor data. |
+| `scramble_elements` | `torchlens.intervention.scramble_elements(source=None, *, seed=None, allow_shape_change=False)` (the honest rename of the removed `resample_ablate` spelling; elementwise iid scramble, NOT coherent resampling ablation -- see MIGRATIONS.md) | Built-in, stochastic; seeded runs are reproducible, append-incompatible. |
+| `tl.steer` | `steer(direction, strength=1.0, *, dim=None, allow_shape_change=False)` | Portable when `direction` is serializable tensor data. |
 | `tl.scale` | `scale(factor, *, allow_shape_change=False)` | Portable built-in and append-compatible. |
 | `tl.clamp` | `clamp(*, low=None, high=None, allow_shape_change=False)` | Portable built-in and append-compatible. |
 | `tl.add_noise` | `add_noise(std, *, seed=None, allow_shape_change=False)` | Built-in stochastic helper; seeded runs avoid global RNG consumption. |
@@ -223,8 +223,8 @@ A full `tl.trace(...)` whose forward raises raises `tl.errors.TraceCaptureError`
 | Method | Use |
 | --- | --- |
 | `log.set(site, value)` | Record a one-shot tensor or callable replacement and mark the recipe stale. |
-| `log.attach_hooks(site, hook)` | Add sticky helper/callable hooks to the recipe. |
-| `log.do(...)` | Apply an intervention and dispatch to `push`, `run`, or `set_only`. |
+| `log.do(site, hook)` | Add a sticky helper/callable hook to the recipe and dispatch to `push`, `run` (with `model=`/`inputs=`), or `set_only` (stage without running; pass a `tl.when(site, hook)` recipe to stage a sticky hook). |
+| `log.clear_edits(site)` | Remove the sticky hooks staged at `site` (or by handle id with `log.clear_edits(handle=...)`). Removal takes effect at once, like a torch hook handle: a rerun or backward pass in progress skips the removed hooks from the next hook site it reaches, and the site firing at that moment finishes its queued hooks first. |
 | `log.fork(name=None)` | Create an isolated branch for experiments. |
 | `log.push(replay=ReplayOptions(...))` | Propagate over the saved DAG without calling `model.forward` (the former `replay()` alias is removed). |
 | `log.run(model, x, replay=ReplayOptions(append=False))` | Re-execute the model under the active spec (the former `rerun()` alias is removed). |

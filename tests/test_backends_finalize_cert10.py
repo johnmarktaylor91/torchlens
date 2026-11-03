@@ -62,7 +62,7 @@ import mlx.nn as nn  # noqa: E402
 tinygrad = pytest.importorskip("tinygrad")
 from tinygrad import Tensor as TinygradTensor  # noqa: E402
 
-pytestmark = pytest.mark.rare
+pytestmark = [pytest.mark.rare, pytest.mark.backend_mlx, pytest.mark.backend_tinygrad]
 
 
 class _MlxMlp(nn.Module):
@@ -86,12 +86,14 @@ def test_mlx_finalize_flips_per_op_tracing_finished_and_types_param_memory() -> 
 
     Uses ``save=`` matching nothing so ``op.out is None`` and ``str()``/``repr()``
     skip the (separately torch-only, out-of-scope) tensor-content display path
-    -- isolating exactly the two behaviors this fix owns.
+    -- isolating exactly the two behaviors this fix owns. The capture warns that
+    the predicate matched nothing; that is the intended zero-match notice.
     """
 
     model = _MlxMlp()
     x = mx.random.normal((2, 4))
-    log = tl.trace(model, x, save=tl.func("__never_matches__"))
+    with pytest.warns(UserWarning, match="predicate matched zero operations"):
+        log = tl.trace(model, x, save=tl.func("__never_matches__"))
 
     assert log._num_ops > 0
     sampled = 0
@@ -144,7 +146,8 @@ def test_tinygrad_finalize_flips_per_op_tracing_finished() -> None:
         return (x * 2).relu()
 
     x = TinygradTensor.randn(2, 4)
-    log = tl.trace(_fn, x, backend="tinygrad", save=tl.func("__never_matches__"))
+    with pytest.warns(UserWarning, match="predicate matched zero operations"):
+        log = tl.trace(_fn, x, backend="tinygrad", save=tl.func("__never_matches__"))
 
     assert log._num_ops > 0
     for op_label in log.op_labels:
@@ -171,13 +174,14 @@ def test_finalize_single_pass_trace_sets_per_op_tracing_finished_backend_agnosti
 
     model = _MlxMlp()
     x = mx.random.normal((2, 4))
-    seed_trace = tl.trace(model, x, save=tl.func("__never_matches__"))
+    with pytest.warns(UserWarning, match="predicate matched zero operations"):
+        seed_trace = tl.trace(model, x, save=tl.func("__never_matches__"))
     assert seed_trace._num_ops >= 1
 
     trace = Trace(model_class_name="MinimalModel")
     raw_ops = OrderedDict()
-    for label in seed_trace.layer_labels:
-        op_log = seed_trace._layer_dict_main_keys[label]
+    # Main-dict keys are pass labels (``relu_1_3:1``); ``layer_labels`` drop the pass.
+    for label, op_log in seed_trace._layer_dict_main_keys.items():
         op_log._tracing_finished = False
         # Simulate the pre-fix backend hook state: a plain int, not Bytes.
         op_log.param_memory = int(op_log.param_memory)

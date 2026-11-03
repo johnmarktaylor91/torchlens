@@ -255,10 +255,10 @@ def test_tf_shape_changing_replacement_refuses_typed() -> None:
 
 
 def test_tf_halt_keeps_typed_refusal() -> None:
-    """halt= refuses typed inside the capture path."""
+    """stop_after= refuses typed inside the capture path."""
 
     x = tf.constant([1.0, -1.0, 2.0])
-    with pytest.raises(BackendUnsupportedError, match="halt"):
+    with pytest.raises(BackendUnsupportedError, match="stop_after"):
         tl.trace(_relu_plus_ten, x, backend="tf", stop_after=tl.func("relu"))
 
 

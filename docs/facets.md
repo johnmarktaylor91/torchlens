@@ -207,8 +207,7 @@ log = tl.trace(
     capture=tl.options.CaptureOptions(save_args=True), save="all",
 )
 edited = log.fork("ablated")
-edited.attach_hooks(tl.head(3, "q"), tl.zero_ablate())
-edited.run(model, x)
+edited.do(tl.head(3, "q"), tl.zero_ablate(), model=model, inputs=x)
 ```
 
 Static patching uses the same scatter-back path:
@@ -224,7 +223,7 @@ edited.run(model, x)
 facets `q`, `k`, and `v` wherever they are present:
 
 ```python
-edited.attach_hooks(tl.head(3), tl.zero_ablate())
+edited.do(tl.head(3), tl.zero_ablate(), model=model, inputs=x)
 ```
 
 Scatter-back preserves the home tensor dtype, device, shape, and memory format.
@@ -255,7 +254,7 @@ is backed by a real op.
 
 Patching helpers live at `tl.facets.patching`. They run a clean trace and a
 corrupted trace, then reuse the facet intervention path (`fork`,
-`attach_hooks`, `rerun`, and `tl.facet`/`tl.head` selectors) to patch clean
+`do` with `model=`/`inputs=` (a rerun), and `tl.facet`/`tl.head` selectors) to patch clean
 facet activations into the corrupted run.
 
 The metric callable receives the patched `Trace` and must return a scalar
@@ -411,7 +410,7 @@ weak evidence and often look like noise even when the layer carries the informat
 across depth, compare it with a probe or a tuned lens passed as `lens=`, and do not read one early
 layer's top token as what that layer "thinks". A Jacobian lens (the corpus-average Jacobian
 of the final residual with respect to a block's, passed as `lens=`) is fitted from public
-primitives in [the Jacobian lens recipe](recipes/jacobian_lens.md).
+primitives in [the Jacobian lens recipe](field-guide/jacobian_lens.md).
 
 `torchlens._semantic.logit_lens_predictions` is the streaming reduction of the
 same sweep: it projects ONE layer at a time, keeps only per-position top-k
@@ -558,8 +557,8 @@ wrong facet label is a confidently mislabelled part of someone's model.
 ## Recipe Plugins
 
 On FIRST USE of the facet-recipe subsystem (not at `import torchlens` --
-the loader is module-level in `torchlens/_semantic/recipes/__init__.py`, and
-`torchlens._semantic` is lazy), TorchLens loads installed setuptools entry
+the loader is module-level in the facet-recipes package initializer, and
+the facet subsystem is lazy), TorchLens loads installed setuptools entry
 points in the `torchlens.recipes` group. A broken entry point therefore warns
 when facets are first touched, not at import. Entry points are never scanned
 from local directories.
@@ -567,7 +566,7 @@ from local directories.
 ## Built-In Inventory
 
 TorchLens records built-in facet capabilities as data in
-`torchlens._semantic.recipes.BUILTIN_FACET_CAPABILITY_INVENTORY`. Current classes
+`BUILTIN_FACET_CAPABILITY_INVENTORY` in the private facet-recipes package (no public spelling yet). Current classes
 are:
 
 ```text

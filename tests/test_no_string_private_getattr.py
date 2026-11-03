@@ -220,7 +220,11 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # `peek_buffer_write_tracker`, now reused by six call sites that were
     # each a separate string reach-in before this reconcile, net -7 there
     # alone), discharging all nine new sites plus six pre-existing ones.
-    "backends/torch": 116,
+    # 116 -> 111: merged backend changes discharged five more sites; lowered
+    # to the found count.
+    # 111 -> 109 (C-077 merge): the stack's backend changes meet C-076's and
+    # discharge two more sites; lowered to the found count.
+    "backends/torch": 109,
     "bridge": 1,
     "bundle": 1,
     # 20 -> 22 (2026-08-16 l2 episode, f2228f46 S7 suite): the episode
@@ -333,7 +337,9 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # 30 -> 29 (2026-08-17 privprobes reconcile): the l2/l3 row above landed
     # with ONE `_tracing_finished` read in _invariants_primitive_ops.py, not
     # two -- correcting the overcount (profile x3 + tracing_finished x1).
-    "validation": 29,
+    # 29 -> 28: _invariants_payloads.py reads the loaded-bundle flag from the
+    # trace's instance dict instead of a string getattr.
+    "validation": 28,
     # 20 -> 23 (2026-08-14 fixwave-2 reconcile): intended R19/R40 rendering
     # additions (node-overlay names/scores, source-code blob, `_visualizer_dir`
     # consolidation into _render_dot.py) against removed `_raw_layer_dict` /

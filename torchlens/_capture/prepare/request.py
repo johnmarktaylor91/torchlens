@@ -89,7 +89,6 @@ class _DoorArgs:
     name: str | None | MissingType = MISSING
     cache: bool | MissingType = MISSING
     cache_dir: str | Path | None | MissingType = MISSING
-    module_filter: Callable[[Any], bool] | None | MissingType = MISSING
     stop_after: Any | None | MissingType = MISSING
     structure_only: bool | MissingType = MISSING
     jax_control_flow: Literal["reject", "unroll", "region"] | MissingType = MISSING
@@ -140,7 +139,7 @@ class _DoorState:
     layers_to_save: Any = None
     requested_layers_to_save: Any = None
     save_raw_input_policy: Any = None
-    save_raw_output_policy: Any = None
+    save_transformed_output_policy: Any = None
     save_mode_value: Any = "copy"
     halt: Any = None
     stop_after_site: Any = None
@@ -212,7 +211,6 @@ def _run_plan_capture_rows(state: _DoorState) -> dict[str, Any]:
             state.inference_only_value and not opts._is_field_explicit("inference_only")
         ),
         "name": state.log_name,
-        "module_filter": opts.module_filter,
     }
 
 
@@ -240,7 +238,7 @@ def _run_plan_policy_rows(state: _DoorState) -> dict[str, Any]:
         "save_raw_input": state.save_raw_input_policy,
         "batch_render": opts.batch_render,
         "output_transform": opts.output_transform,
-        "save_transformed_output": state.save_raw_output_policy,
+        "save_transformed_output": state.save_transformed_output_policy,
         "layer_visualizers": opts.layer_visualizers,
         "save_visualizations": opts.save_visualizations,
         "recipes": state.facet_recipes,

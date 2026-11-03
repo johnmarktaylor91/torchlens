@@ -18,7 +18,7 @@ __all__ = [
 #: Remedy every extract-side lookup refusal carries.
 LOOKUP_REMEDY = (
     "pass a layer label, module address or pass-qualified label the capture records; "
-    "trace.find_layers(substring) lists the candidates"
+    "trace[tl.label_contains(substring)].labels lists the candidates"
 )
 
 

@@ -10,7 +10,7 @@ import pytest
 from torchlens.backends.paddle import wrappers as paddle_wrappers
 from torchlens.backends.paddle.wrappers import PaddleInventory, _PaddleWrapperRegistry
 
-pytestmark = pytest.mark.rare
+pytestmark = [pytest.mark.rare, pytest.mark.backend_paddle]
 
 paddle = pytest.importorskip("paddle")
 
@@ -96,7 +96,11 @@ EXPECTED_WRAPPED = (
     "sum",
     "tanh",
     "tensor.__add__",
+    "tensor.__ge__",
     "tensor.__getitem__",
+    "tensor.__gt__",
+    "tensor.__le__",
+    "tensor.__lt__",
     "tensor.__matmul__",
     "tensor.__mul__",
     "tensor.__neg__",

@@ -128,10 +128,10 @@ def test_zero_fire_capture_reads_not_pristine(tmp_path: Path) -> None:
 
 def test_staged_hook_stays_not_pristine_after_clear_and_save(tmp_path: Path) -> None:
     trace = _ready(_model())
-    trace.attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+    trace._attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
     assert trace.is_pristine is False
     assert "staged_spec" in pristine_touch_evidence(trace)
-    trace.clear_hooks(confirm_mutation=True)
+    trace._clear_hooks(confirm_mutation=True)
     assert trace.is_pristine is False
     # The staged spec is session-time; the staging row persists.
     loaded = _saved(trace, tmp_path)
@@ -151,7 +151,7 @@ def test_value_replacement_survives_a_state_reassignment(tmp_path: Path) -> None
 
 def test_clear_hooks_on_an_untouched_trace_stays_pristine(tmp_path: Path) -> None:
     trace = _ready(_model())
-    trace.clear_hooks(confirm_mutation=True)
+    trace._clear_hooks(confirm_mutation=True)
     assert trace.state is TraceState.SPEC_STALE
     assert trace.is_pristine is True
     assert _saved(trace, tmp_path).is_pristine is True
@@ -324,3 +324,29 @@ def test_reading_the_flag_never_changes_the_plain_run_verdict() -> None:
     assert [getattr(read, name) for name in card] == [getattr(unread, name) for name in card]
     assert read.path_faithfulness is PathFaithfulness.VERIFIED
     assert tl.validate(model, _x(), scope="forward") is True
+
+
+def test_runnable_model_doc_states_the_hooked_run_disclosure() -> None:
+    """The short runnable model and the exhaustive contract tell one story.
+
+    ``run(inputs=)`` pushes inputs through the model; a hooked or intervened
+    run settles ``unverifiable`` under ``hooked_run_unverified`` and the trace
+    reads ``is_pristine == False``: disclosed, never silent. The user-facing
+    model page must say so in the contract's own vocabulary.
+    """
+
+    docs = Path(__file__).resolve().parents[1] / "docs" / "reference"
+    model = (docs / "runnable_model.md").read_text(encoding="utf-8")
+    contract = (docs / "runnable_tlspec_contract.md").read_text(encoding="utf-8")
+    section = model.split("## Clean run, hooked run, and disclosure", 1)[1].split("\n## ", 1)[0]
+    for anchor in (
+        "`Trace.is_pristine == False`",
+        "`hooked_run_unverified`",
+        "`pristine=false`",
+        "`run_staged_spec_unapplied`",
+        "`user_intervention_unsupported`",
+        "never silent",
+    ):
+        assert anchor in section, anchor
+    for anchor in ("hooked_run_unverified", "pristine=false", "run_staged_spec_unapplied"):
+        assert anchor in contract, anchor

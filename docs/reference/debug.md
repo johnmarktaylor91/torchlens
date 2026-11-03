@@ -158,7 +158,7 @@ True nan
 
 ## `bisect_precision`
 
-`tl.debug.bisect_precision(model, input_args)` (DOCUMENTED-UNSTABLE spelling) runs the
+`tl.debug.bisect_precision(model, inputs)` (DOCUMENTED-UNSTABLE spelling) runs the
 same seeded forward twice -- once at native precision, once with floating state and
 inputs cast to `reference_dtype` (fp64 by default) -- and returns a
 `BisectPrecisionReport` naming the first op whose native output separates from the
@@ -399,7 +399,7 @@ Output:
 results to CHECKED values, discloses AMP limits, and prints the
 `torch.autograd.set_detect_anomaly` recipe verbatim for the cases it does
 not cover (backward-born NaNs, custom-autograd exceptions). The live form
-`tl.debug.nonfinite_origin(model, x)` runs one memory-light tripwire forward. It
+`tl.debug.nonfinite_origin(model, inputs)` runs one memory-light tripwire forward. It
 NEVER auto-runs anomaly mode — a second execution can mutate state and
 follow another stochastic path.
 
@@ -421,7 +421,7 @@ TorchLens unknown cells, and a native ZERO can be a registry-coverage fact
 `tl.debug.hot_path(trace, by="flops")` aggregates forward FLOPs, activation memory, or
 duration by source line. `by` is one of `"flops"`, `"memory"`, `"duration"`, or
 `"device_time"` (joined Kineto device nanoseconds; refuses typed
-`device_time_unavailable` without a joined `torchlens._observability`
+`device_time_unavailable` without a joined observability
 session); use
 [`recompute_candidates`](#recompute_candidates) when the question is activation-memory
 tradeoffs instead.
@@ -472,7 +472,7 @@ Output:
 `tl.debug.guess_input_shape(model, *, batch_size=1, input_dtype=None, channels=None,
 spatial_rank="auto", seq_len=None, square=True, min_size=1, max_size=512,
 preferred_sizes=(224, 256, 384, 299, 128, 96, 64, 32, 28), max_probes=64, device=None,
-seed=0, return_trace=False, on_failure="return", input_specs=None)` probes a module and
+seed=0, on_failure="return", input_specs=None)` probes a module and
 returns an `GuessInputShapeReport` with a verified synthetic shape or a diagnostic failure.
 
 ```python
@@ -537,7 +537,7 @@ Output:
 
 ## `find_nan`
 
-`tl.debug.find_nan(model, x, **trace_kwargs)` runs a memory-light live capture and stops at
+`tl.debug.find_nan(model, inputs, **trace_kwargs)` runs a memory-light live capture and stops at
 the first non-finite operation output. `trace.find_nan()` instead scans the payloads saved in an
 existing trace; on a selective-save trace, its result explicitly identifies the uncertainty zone
 created by unsaved operations.
@@ -585,7 +585,7 @@ no rerun. `result.first_bad_thing` projects into the shared `FirstBadThing` voca
 
 ## `check_determinism`
 
-`tl.debug.check_determinism(model, input_args, *, runs=2, seed=0, rtol=None, atol=None,
+`tl.debug.check_determinism(model, inputs, *, runs=2, seed=0, rtol=None, atol=None,
 seed_sensitivity=False)` (DOCUMENTED-UNSTABLE spelling) answers ONE controlled question:
 do N isolated same-seed runs agree? Every run executes on a fresh released deep copy
 with cloned inputs under preserved, identically-seeded RNG. The verdict is three-state
@@ -607,7 +607,7 @@ whose rows follow execution order -- never alphabetical.
 ## `isolated_capture` / `preserved_rng_state` / `clone_input_tree`
 
 The shared isolated-rerun harness (DOCUMENTED-UNSTABLE spellings) behind
-`bisect_precision` and `check_determinism`: `isolated_capture(model, input_args, *,
+`bisect_precision` and `check_determinism`: `isolated_capture(model, inputs, *,
 seed, prepare=None, **trace_kwargs)` runs one seeded capture of a fresh deep copy
 that is RELEASED from inherited TorchLens preparation first (the deepcopy-after-trace
 `KeyError` repair), with cloned inputs, under `preserved_rng_state()` (Python, NumPy,

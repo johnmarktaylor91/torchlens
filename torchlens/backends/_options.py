@@ -247,11 +247,11 @@ JAX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
         "JAX backend preview does not support runtime-mutation or stop-early "
         "options: {names}. Static-label save= selectors are supported as "
         "post-finalization payload filters, but trace(intervene=...) and "
-        "trace(halt=...) need predicate-time concrete values and mutation/partial "
+        "trace(stop_after=...) need predicate-time concrete values and mutation/partial "
         "replay semantics that jaxpr tracing does not expose through TorchLens' "
         "current public labels. Use an unfiltered tl.trace(..., backend='jax') "
         "call, static-label save= selectors, or the PyTorch backend for "
-        "intervention, halt, streaming, and value-dependent predicates."
+        "intervention, stop_after, storage, and value-dependent predicates."
     ),
     fallback_message=(
         "JAX backend preview does not support: {names}. "
@@ -267,11 +267,11 @@ TINYGRAD_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
         "tinygrad backend preview does not support runtime-mutation or stop-early "
         "options: {names}. Static-label save= selectors are supported as "
         "post-finalization payload filters, but trace(intervene=...) and "
-        "trace(halt=...) need predicate-time concrete values and a way to replace or "
+        "trace(stop_after=...) need predicate-time concrete values and a way to replace or "
         "truncate lazy UOp descendants before realize(), which tinygrad does not expose "
         "through a stable TorchLens surface. Use an unfiltered tl.trace(..., "
         "backend='tinygrad') call, static-label save= selectors, or the PyTorch backend "
-        "for intervention, halt, streaming, and value-dependent predicates."
+        "for intervention, stop_after, storage, and value-dependent predicates."
     ),
     fallback_message="",
     always_runtime=True,
@@ -283,10 +283,10 @@ PADDLE_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
     runtime_option_names=frozenset(),
     runtime_message=(
         "paddle backend preview does not support these options: {names}. "
-        "Live trace(intervene=...), trace(halt=...), facets=, and static-label "
-        "save= selectors are supported on the eager Paddle preview; streaming, "
+        "Live trace(intervene=...), trace(stop_after=...), facets=, and static-label "
+        "save= selectors are supported on the eager Paddle preview; "
         "storage=, and the remaining torch-only runtime options are not. Use "
-        "the PyTorch backend for streaming and stop-early capture shaping."
+        "the PyTorch backend for storage= and stop-early capture shaping."
     ),
     fallback_message="",
     always_runtime=True,
@@ -320,7 +320,7 @@ MLX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
     runtime_message=(
         "MLX backend preview does not support: {names}. Static-label save= "
         "selectors, static-label trace(intervene=tl.when(...)), and static-label "
-        "trace(halt=...) are supported; streaming/storage and value-dependent "
+        "trace(stop_after=...) are supported; storage= and value-dependent "
         "predicates need predicate-time concrete values or replay semantics that "
         "MLX lazy evaluation does not expose through a stable TorchLens surface. "
         "Use an unfiltered tl.trace(..., backend='mlx') call or the PyTorch "
@@ -416,10 +416,6 @@ JAX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "JAX backend preview does not support backward_ready; full-save forward capture "
             "only. Use tl.backends.jax.GradOptions for derived gradients."
         ),
-        "module_filter": (
-            "JAX backend preview does not support module_filter; full-save forward capture "
-            "only. Use full-save JAX trace capture or the PyTorch backend."
-        ),
         "transform": (
             "JAX backend preview does not support transform; full-save forward capture only. "
             "Use full-save JAX trace capture or the PyTorch backend."
@@ -458,7 +454,6 @@ TINYGRAD_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "save_source_context",
             "save_rng",
             "backward_ready",
-            "module_filter",
             "transform",
             "layer_visualizers",
             "save_visualizations",
@@ -489,7 +484,6 @@ PADDLE_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "save_source_context",
             "save_rng",
             "backward_ready",
-            "module_filter",
             "transform",
             "layer_visualizers",
             "save_visualizations",
@@ -521,7 +515,6 @@ MLX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "save_source_context",
             "save_rng",
             "backward_ready",
-            "module_filter",
             "transform",
             "layer_visualizers",
             "save_visualizations",
@@ -551,7 +544,6 @@ TF_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "save_source_context",
             "save_rng",
             "backward_ready",
-            "module_filter",
             "transform",
             "layer_visualizers",
             "save_visualizations",
@@ -604,7 +596,7 @@ def resolve_optional_capture_field(capture: Any, field_name: str, flat_value: An
 
     Some preview backend ``capture_trace`` parameters predate ``CaptureOptions``
     and still spell a handful of optional fields (e.g. ``save_grads``,
-    ``module_filter``, ``transform``) with a concrete ``None`` default instead
+    ``transform``) with a concrete ``None`` default instead
     of the ``MissingType`` sentinel, so ``is_missing()`` cannot tell "the
     caller left this unset" apart from an explicit ``capture=`` value the way
     it can for every ``MISSING``-defaulted field. ``flat_value is not None``
@@ -780,3 +772,17 @@ def reject_unsupported_trace_options(
     if policy.output_device_message is not None and options.get("output_device") != "same":
         raise _output_device_refusal(policy)
     _reject_save_trace_options(options, policy)
+
+
+def pop_stop_directive(options: dict[str, Any]) -> Any:
+    """Pop ``halt`` and ``stop_after``; return the selector a preview backend halts on.
+
+    ``stop_after=`` is the one public stop directive and the trace door passes
+    ``halt=None``, so a preview backend that halts on a selector receives
+    ``stop_after`` in that role. ``MISSING`` reads as absent.
+    """
+
+    halt = options.pop("halt", None)
+    stop_after = options.pop("stop_after", None)
+    chosen = halt if stop_after is None or stop_after is MISSING else stop_after
+    return None if chosen is MISSING else chosen

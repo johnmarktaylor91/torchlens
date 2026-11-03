@@ -119,9 +119,22 @@ def _diagnostics_svg(trace: Any, output: Path) -> None:
         Destination SVG path.
     """
 
-    schedule = trace.collapse_schedule()
-    rows = ["collapse_plan(mode='auto')", repr(trace.collapse_plan(mode="auto")), ""]
-    rows.extend(["collapse_plan(mode='max')", repr(trace.collapse_plan(mode="max")), ""])
+    # The plan and schedule are members of the Drawing a forward draw returns;
+    # the throwaway DOT files keep the gallery directory free of extra artifacts.
+    with tempfile.TemporaryDirectory(prefix="tl-collapse-diagnostics-") as scratch:
+        drawings = {
+            mode: trace.draw(
+                path=str(Path(scratch) / f"plan_{mode}"),
+                collapse=mode,
+                file_format="dot",
+                open_viewer=False,
+                show_containers=False,
+            )
+            for mode in ("auto", "max")
+        }
+        schedule = drawings["auto"].collapse_schedule
+        rows = ["draw(collapse='auto').collapse_plan", repr(drawings["auto"].collapse_plan), ""]
+        rows.extend(["draw(collapse='max').collapse_plan", repr(drawings["max"].collapse_plan), ""])
     rows.append("t      target  visible  collapsed module addresses")
     for step in schedule.steps:
         rows.append(

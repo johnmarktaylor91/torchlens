@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import re
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal
@@ -11,7 +10,7 @@ import graphviz
 import torch
 
 from .._errors import InvalidArgumentError
-from ._render_utils import html_escape, render_dot_to_file, strip_known_extension
+from ._render_utils import _add_svg_accessibility, render_dot_to_file, strip_known_extension
 from .themes import resolve_theme, theme_edge_attrs, theme_graph_attrs, theme_node_attrs
 
 if TYPE_CHECKING:
@@ -278,6 +277,14 @@ def _build_dot(
         {
             "rankdir": "TB",
             "compound": "true",
+            # One global ranking across clusters. Without it, dot pulls every
+            # node named in a ``rank=same`` pair subgraph (_add_pair_alignment)
+            # OUT of its side cluster ("already in a rankset, deleted from
+            # cluster"), drops both side clusters as empty, and lays the pairs
+            # out as loose node pairs: the column frames and member titles
+            # vanish and the white baseline column reads as an unlabeled
+            # duplicate of the marked one.
+            "newrank": "true",
             "splines": "ortho",
             "nodesep": "0.32",
             "ranksep": "0.34",
@@ -301,16 +308,8 @@ def _build_dot(
 
     paired_left_ids = {id(left_layer) for left_layer, _right_layer in pairs}
     paired_right_ids = {id(right_layer) for _left_layer, right_layer in pairs}
-    left_unmatched = (
-        [layer for layer in bundle[left_name]._layer_list if id(layer) not in paired_left_ids]
-        if include_unmatched
-        else []
-    )
-    right_unmatched = (
-        [layer for layer in bundle[right_name]._layer_list if id(layer) not in paired_right_ids]
-        if include_unmatched
-        else []
-    )
+    left_unmatched = _unmatched_layers(bundle[left_name], paired_left_ids, include_unmatched)
+    right_unmatched = _unmatched_layers(bundle[right_name], paired_right_ids, include_unmatched)
     left_layers = [left_layer for left_layer, _right_layer in pairs] + left_unmatched
     right_layers = [right_layer for _left_layer, right_layer in pairs] + right_unmatched
     values = _pair_delta_values(
@@ -348,6 +347,14 @@ def _build_dot(
     _add_pair_alignment(dot, pairs)
     _add_legend(dot)
     return dot
+
+
+def _unmatched_layers(member: Any, paired_ids: set[int], include_unmatched: bool) -> list[Any]:
+    """Return ``member``'s layers with no aligned counterpart, or ``[]`` when not drawn."""
+
+    if not include_unmatched:
+        return []
+    return [layer for layer in member._layer_list if id(layer) not in paired_ids]
 
 
 def _metric_display_name(metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor]) -> str:
@@ -841,38 +848,6 @@ def _interpolate(start: str, end: str, fraction: float) -> str:
     from ._encoding import interpolate_hex
 
     return interpolate_hex(start, end, fraction)
-
-
-def _add_svg_accessibility(path: str, aria_label: str) -> None:
-    """Add figure-level accessibility attributes to a rendered SVG.
-
-    Parameters
-    ----------
-    path:
-        Rendered SVG path.
-    aria_label:
-        Root SVG accessibility label.
-
-    Returns
-    -------
-    None
-        The SVG is updated in place when it exists.
-    """
-
-    if not os.path.exists(path):
-        return
-    with open(path, encoding="utf-8") as handle:
-        svg = handle.read()
-    if "aria-label=" not in svg:
-        escaped_label = html_escape(aria_label).replace('"', "&quot;")
-        svg = re.sub(
-            r"<svg\b",
-            f'<svg role="img" aria-label="{escaped_label}"',
-            svg,
-            count=1,
-        )
-    with open(path, "w", encoding="utf-8") as handle:
-        handle.write(svg)
 
 
 __all__ = ["bundle_diff"]

@@ -65,7 +65,6 @@ def _copied_capture_fields(opts: CaptureOptions) -> dict[str, Any]:
         "capture_container_structure": opts.capture_container_structure,
         "verbose": opts.verbose,
         "cache_dir": opts.cache_dir,
-        "module_filter": opts.module_filter,
         "module_identity_mode": opts.module_identity_mode,
         "payload_policy": opts.payload_policy,
         "emit_nvtx": opts.emit_nvtx,
@@ -91,7 +90,7 @@ def _routed_capture_fields(state: _DoorState, opts: CaptureOptions, save: Any) -
     return {
         "input_transform": None,
         "save_raw_input": state.save_raw_input_policy,
-        "save_transformed_output": state.save_raw_output_policy,
+        "save_transformed_output": state.save_transformed_output_policy,
         "save_grads": state.save_grads_policy,
         "hooks": MISSING,
         "unwrap_when_done": False,

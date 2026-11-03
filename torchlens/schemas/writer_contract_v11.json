@@ -922,7 +922,6 @@
     "_mlx_saved_payloads": "drop",
     "_module_call_accessor": "drop",
     "_module_capture_ws": "drop",
-    "_module_filter": "drop",
     "_module_logs": "drop",
     "_nonfinite_capture": "drop",
     "_nonfinite_frontier_out": "drop",
@@ -3376,7 +3375,6 @@
      "_mlx_saved_payloads": "drop",
      "_module_call_accessor": "drop",
      "_module_capture_ws": "drop",
-     "_module_filter": "drop",
      "_module_logs": "drop",
      "_nonfinite_capture": "drop",
      "_nonfinite_frontier_out": "drop",
@@ -4014,5 +4012,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "06eb06c37471250c6888d84a0f56eaf55332dde81cfafcc92659eb249ede2f0f"
+ "writer_contract_digest": "774604708ad892a3bd7949ad92e4ae4cbc356a85b645ff27dda7f5288e82648f"
 }

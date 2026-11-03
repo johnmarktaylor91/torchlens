@@ -190,7 +190,7 @@ def _lockstep_repo(root: Path, glossary: str, example: str) -> check.Corpus:
         root,
         {
             "docs/reference/glossary.md": glossary,
-            "docs/agent-reference/surface.md": "Use `tl.trace(model, x)` and `tl.io.dump`.\n",
+            "docs/internal/agent-reference/surface.md": "Use `tl.trace(model, x)` and `tl.io.dump`.\n",
             "notebooks/audit/a.py": "trace = tl.trace(model, x)\n",
             "examples/demo.py": example,
             "tests/test_demo.py": "def test_x():\n    trace.ops\n    tl.io.dump(trace, 'p')\n",
@@ -231,6 +231,28 @@ def test_check_passes_a_complete_change(tmp_path: Path) -> None:
     base["member:m:Trace._layer_list"] = BASE["member:m:Trace._layer_list"]
     surface_diff = diff_inventories(base, head, {"member:m:Trace._layer_list": "ops"})
     assert check.check_lockstep(surface_diff, corpus, head) == []
+
+
+def test_check_owes_no_glossary_entry_for_a_record_constructor_keyword(tmp_path: Path) -> None:
+    """A new keyword that only record constructors take needs no glossary entry."""
+
+    glossary = (
+        "### Records built by TorchLens\n| Record | Meaning |\n| --- | --- |\n"
+        "| `tl.report.Facts` | built by TorchLens |\n| `tl.errors.*` | errors |\n\n"
+        "### Keywords\n`tl.trace`\n"
+    )
+    corpus = _lockstep_repo(tmp_path, glossary=glossary, example="")
+    head = {
+        "root:tl.trace": HEAD["root:tl.trace"],
+        "param:peak": _row("param:peak", "param", "peak", "peak=", "f-p", uses=["tl.report.Facts"]),
+        "param:code": _row(
+            "param:code", "param", "code", "code=", "f-c", uses=["tl.errors.ReadError"]
+        ),
+        "param:k": _row("param:k", "param", "k", "k=", "f-k", uses=["tl.report.Facts", "tl.rank"]),
+    }
+    base = {"root:tl.trace": BASE["root:tl.trace"]}
+    findings = check.check_lockstep(diff_inventories(base, head), corpus, head)
+    assert {f.row_id for f in findings if f.problem == "missing"} == {"param:k"}
 
 
 def test_contextual_residue_skips_a_leaf_another_row_keeps(tmp_path: Path) -> None:
@@ -300,7 +322,11 @@ def test_gate_items_carry_snippet_and_reference(tmp_path: Path) -> None:
     assert dump["reference_source"] == "glossary:docs/reference/glossary.md:1"
     assert "tl.io.dump" in dump["snippet"]
     paths = {s["path"] for s in dump["snippets"]}
-    assert paths == {"examples/demo.py", "tests/test_demo.py", "docs/agent-reference/surface.md"}
+    assert paths == {
+        "examples/demo.py",
+        "tests/test_demo.py",
+        "docs/internal/agent-reference/surface.md",
+    }
 
 
 DOCUMENTED_CORE = '''
@@ -713,7 +739,7 @@ def test_real_package_inventory_has_the_core_names() -> None:
     """The walk over the real package reaches the core nouns and their members."""
 
     rows = {row["id"]: row for row in build_inventory()["rows"]}
-    assert {"root:tl.trace", "root:tl.Trace", "param:layers_to_save"} <= set(rows)
+    assert {"root:tl.trace", "root:tl.Trace", "param:save"} <= set(rows)
     trace_members = [
         r for r in rows.values() if r["kind"] == "member" and "Trace" in r["owner_names"]
     ]

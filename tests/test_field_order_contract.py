@@ -111,9 +111,8 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
                 # (FieldPolicy.KEEP) with load validation.
                 "last_run",
                 "layer_visualizers",
-                "_module_filter",
                 "_parent_run",
-                # R2-37: the live pinned-graph disclosure; a loaded trace pins
+                # The live pinned-graph disclosure; a loaded trace pins
                 # nothing, so it never persists.
                 "_cost_pinned_autograd_memory",
                 "_replay_frontier",

@@ -627,7 +627,7 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
         x,
         capture=CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0), confirm_mutation=True)
+    log._attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0), confirm_mutation=True)
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "trace_backward_intervention.tlspec"
 
@@ -905,6 +905,7 @@ def test_schema_v2_mlx_materialized_manifest_validates(tmp_path: Path) -> None:
 
 
 @pytest.mark.rare
+@pytest.mark.backend_mlx
 def test_schema_v2_mlx_materialized_loads_payloads(tmp_path: Path) -> None:
     """MLX schema v2 materialized traces load body entries as MLX arrays."""
 
@@ -960,6 +961,7 @@ def test_schema_v2_mlx_old_audit_only_fixture_loads_metadata_only(tmp_path: Path
 
 
 @pytest.mark.rare
+@pytest.mark.backend_mlx
 @pytest.mark.optional
 def test_mlx_public_save_writes_materialized_manifest_body(tmp_path: Path) -> None:
     """Public MLX portable saves write codec-backed safetensors body entries."""

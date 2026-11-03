@@ -35,6 +35,7 @@ from ._literals import (
 from ._mutate_warnings import _MutateWarningSuppression
 from ._option_receipt import (
     NarrationOptions,
+    _build_option,
     _explicit_fields,
     _field_is_explicit,
     _resolve_option_value,
@@ -99,7 +100,6 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "name",
     "cache",
     "cache_dir",
-    "module_filter",
     "jax_control_flow",
     "jax_max_control_flow_unroll",
     "module_identity_mode",
@@ -225,7 +225,6 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "name": "name",
     "cache": "cache",
     "cache_dir": "cache_dir",
-    "module_filter": "module_filter",
     "jax_control_flow": "jax_control_flow",
     "jax_max_control_flow_unroll": "jax_max_control_flow_unroll",
     "module_identity_mode": "module_identity_mode",
@@ -361,17 +360,6 @@ def _merge_grouped_options(
     return _build_option(option_factory, values, specified_fields)
 
 
-def _build_option(
-    option_factory: Any, values: Mapping[str, Any], specified_fields: frozenset[str]
-) -> Any:
-    """Build an option object from resolved values through its (possibly private) builder."""
-
-    builder = getattr(option_factory, "_from_values", None)
-    if builder is None:
-        builder = option_factory.from_values
-    return builder(values, specified_fields)
-
-
 @dataclass(frozen=True, init=False)
 class CaptureOptions:
     """Grouped capture options for ``trace``.
@@ -390,7 +378,7 @@ class CaptureOptions:
             ``"shape_only"``.
         output_transform:
             Optional callable applied once to the model output after ``model.forward``.
-        save_raw_output:
+        save_transformed_output:
             Raw model-output save policy for portable bundles. ``"small"`` stores a
             bounded representation, ``True`` stores the full object, and ``False``
             drops it when saving.
@@ -447,7 +435,11 @@ class CaptureOptions:
         recurrence_detection:
             Whether repeated graph patterns are detected during postprocess.
         replayable:
-            Whether replay-template metadata is captured for intervention APIs.
+            Whether the runnable apparatus is captured: the state, RNG and escape
+            records a ``level="runnable"`` save and a sparse run need, plus edge
+            provenance. Saved-graph replay (``do()`` without ``model=``) does not need
+            it: every capture records the per-op argument templates replay uses.
+            Measured capture premium on CPU: 5-8x wall time.
         capture_container_structure:
             Whether to persist input and output container structure without
             enabling intervention replay metadata.
@@ -495,18 +487,6 @@ class CaptureOptions:
             ``torchlens.clear_cache()`` empties the cache.
         cache_dir:
             Optional directory for content-hash cache entries.
-        module_filter:
-            Optional THIRD save gate composed (AND) with ``save=``: an op's
-            payload is retained only when the save selection picks it AND this
-            predicate returns truthy. The
-            predicate receives an op-record namespace (the legacy-shaped
-            ``SimpleNamespace`` of captured op fields such as ``func_name``,
-            ``layer_label``, and ``modules``), NEVER an
-            ``nn.Module`` instance — a filter written against modules (e.g.
-            ``lambda m: isinstance(m, nn.Linear)``) matches nothing and saves
-            ZERO payloads. Returning ``False`` keeps metadata but skips payload
-            saving; a capture whose every selected payload was suppressed by
-            this gate emits a ``module_filter_zero_saved`` warning.
         jax_control_flow:
             Declared JAX control-flow policy. Backends other than torch reject
             explicit use until their implementation phase supports it.
@@ -694,7 +674,6 @@ class CaptureOptions:
     name: str | None = None
     cache: bool = False
     cache_dir: str | Path | None = None
-    module_filter: Callable[[Any], bool] | None = None
     jax_control_flow: Literal["reject", "unroll", "region"] = "unroll"
     jax_max_control_flow_unroll: int = 64
     module_identity_mode: str | None = None
@@ -757,7 +736,6 @@ class CaptureOptions:
         name: str | None | MissingType = MISSING,
         cache: bool | MissingType = MISSING,
         cache_dir: str | Path | None | MissingType = MISSING,
-        module_filter: Callable[[Any], bool] | None | MissingType = MISSING,
         jax_control_flow: Literal["reject", "unroll", "region"] | MissingType = MISSING,
         jax_max_control_flow_unroll: int | MissingType = MISSING,
         module_identity_mode: str | None | MissingType = MISSING,
@@ -1389,18 +1367,18 @@ class InterventionOptions:
 
         return {field_name: getattr(self, field_name) for field_name in _INTERVENTION_FIELDS}
 
-    def is_field_explicit(self, field_name: str) -> bool:
-        """Return whether a field was explicitly supplied by the caller."""
+    def _is_field_explicit(self, field_name: str) -> bool:
+        """Return whether a field was explicitly supplied by the caller (private)."""
 
         return _field_is_explicit(self, field_name)
 
     @classmethod
-    def from_values(
+    def _from_values(
         cls,
         values: Mapping[str, Any],
         specified_fields: frozenset[str],
     ) -> InterventionOptions:
-        """Build an instance from already-resolved field values."""
+        """Build an instance from already-resolved field values (private; the flat-kwarg merge path)."""
 
         instance = object.__new__(cls)
         _set_frozen_fields(instance, _INTERVENTION_FIELDS, values)

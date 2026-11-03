@@ -822,13 +822,6 @@ class MLXBackend:
 
         return value
 
-    def copy_replacement_metadata(self, session: object, src: object, dst: object) -> None:
-        """Copy MLX side-table labels between replacement arrays."""
-
-        label = self.tensor_store.get_label(src)
-        if label is not None:
-            self.tensor_store.set_label(dst, label)
-
     def emit_function_outputs(
         self,
         session: object,
@@ -926,7 +919,6 @@ class MLXBackend:
         verbose: bool = False,
         backward_ready: bool = False,
         name: str | None = None,
-        module_filter: object | None = None,
         transform: object | None = None,
         raw_input: object | None = None,
         save_raw_input: str | bool = "small",
@@ -952,7 +944,6 @@ class MLXBackend:
                 "save_source_context": save_source_context,
                 "save_rng": save_rng,
                 "backward_ready": backward_ready,
-                "module_filter": module_filter,
                 "transform": transform,
                 "output_device": output_device,
                 "layer_visualizers": layer_visualizers,
@@ -974,7 +965,7 @@ class MLXBackend:
             if not spec.capabilities.can_intervene:
                 raise BackendUnsupportedError(
                     "MLX backend capability table declares can_intervene=False; "
-                    "refusing trace(intervene=/halt=) instead of silently "
+                    "refusing trace(intervene=/stop_after=) instead of silently "
                     "ignoring the requested behavior.",
                     code="interventions_unsupported",
                 )
@@ -985,7 +976,7 @@ class MLXBackend:
             intervention_plan, halt_selector = resolve(intervene, halt, self.mx)
             if grad_options is not None:
                 raise BackendUnsupportedError(
-                    "MLX backend cannot combine grad_options with intervene=/halt=: the "
+                    "MLX backend cannot combine grad_options with intervene=/stop_after=: the "
                     "derived-gradient replay re-runs the model without the intervention "
                     "surface, so its output-divergence oracle would always refuse. Capture "
                     "the intervened trace and the derived gradients in separate calls.",
@@ -1020,7 +1011,6 @@ class MLXBackend:
             recurrence_detection=recurrence_detection,
             verbose=verbose,
             backward_ready=backward_ready,
-            module_filter=cast("Callable[[Any], bool] | None", module_filter),
             emit_nvtx=False,
             input_transform=cast("Callable[[Any], Any] | None", transform),
             input=raw_input,

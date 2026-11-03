@@ -792,12 +792,17 @@ def test_multi_target_projective_raises_target_error() -> None:
 
     trace = tl.trace(TwoOut(), torch.randn(1, 3))
     source = sole_input(trace)
-    for accessor in ("status", "axes", "size", "jump", "center0", "axis_roles"):
+    for accessor in ("axes", "size", "jump", "center0", "axis_roles"):
         with pytest.raises(AmbiguousTargetError, match="target") as exc_info:
             getattr(source.projective_field, accessor)
         assert not isinstance(exc_info.value, AmbiguousInputError)
         message = str(exc_info.value)
         assert "target=" in message and "input_op=" not in message
+    # A status classifies each target on its own: it answers per target instead.
+    statuses = source.projective_field.status
+    assert isinstance(statuses, Mapping)
+    assert tuple(statuses) == tuple(source.projective_field.per_input)
+    assert all(isinstance(status, ReceptiveFieldStatus) for status in statuses.values())
 
     class TwoIn(nn.Module):
         def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
@@ -806,7 +811,8 @@ def test_multi_target_projective_raises_target_error() -> None:
     trace_in = tl.trace(TwoIn(), (torch.randn(1, 3), torch.randn(1, 3)))
     add = op_named(trace_in, "add")
     with pytest.raises(AmbiguousInputError, match="input_op="):
-        _ = add.receptive_field.status
+        _ = add.receptive_field.size
+    assert set(add.receptive_field.status) == set(add.receptive_field.per_input)
 
 
 # ---------------------------------------------------------------------------

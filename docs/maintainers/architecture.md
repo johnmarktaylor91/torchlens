@@ -123,7 +123,7 @@ tests; `tests/AGENTS.md` has the full area table.
 | Agent surface | `trace.to_agent_json`, `tl.report.explain`, `tl.bridge.mcp` | `agent/`, `report/`, `bridge/` | `test_agent*.py`, `agent_surface_goldens/` |
 | External tool bridges | `tl.bridge.<tool>`, `tl.callbacks` | `bridge/`, `bridge/lit/`, `callbacks/` | `test_bridges_*.py` |
 | Environment and model report | `tl.report.doctor()` | `report/_doctor.py`, `report/_environment.py`, `compat/_report.py` | `test_doctor*.py`, `test_compat*.py` |
-| Episode capture | `tl.options.EpisodeSpec` | `_episode_spec.py`, `capture/`, `bundle/` | `test_episode*.py` |
+| Episode capture | `tl.options.EpisodeOptions` | `_episode_spec.py`, `capture/`, `bundle/` | `test_episode*.py` |
 | Kernel telemetry | `torchlens._kernel_telemetry` | `_kernel_telemetry.py` | `test_kernel_telemetry*.py` |
 
 ## Known tangles
@@ -139,7 +139,7 @@ before you move it. The four split hubs (`backends/torch/ops.py`,
 `backends/torch/completeness_witness.py`, `validation/invariants.py`, `_runnable/execution.py`)
 import their split modules at the bottom of the file, after their own definitions; a test
 patches a private name on the module that defines it and on every module that binds it
-(`docs/agent-reference/known-gotchas.md`).
+(`docs/internal/agent-reference/known-gotchas.md`).
 
 **The god objects.** `Trace` is `_data_classes/trace.py` (about 3,700 lines of thin methods and
 the dataclass) over the `_data_classes/_trace_*.py` function modules and the destination
@@ -175,7 +175,7 @@ the generated index gives each one's first docstring line.
 
 - A module's one-line purpose and size: [where.md](where.md).
 - Step order and contracts in postprocess: `torchlens/_postprocess/_contracts.py`.
-- The invariants a change must keep: `docs/agent-reference/critical-invariants.md`.
+- The invariants a change must keep: `docs/internal/agent-reference/critical-invariants.md`.
 - The saved-file contract: `torchlens/schemas/writer_contract_v11.json` and
   `docs/reference/runnable_tlspec_contract.md`.
 - Every persisted key of the saved format, with its type, save level, policy and public

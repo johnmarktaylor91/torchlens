@@ -18,7 +18,7 @@ the record or on the stable refusal codes below — never on exception text.
 
 `phase` is FAILED-only, not FAILED-required: a `FAILED` outcome normally
 carries a `phase`, but two writers legitimately emit `FAILED` with
-`phase=None` — the fastlog recorder fallback stamp (when the runtime trace's
+`phase=None` — the sparse-recording recorder fallback stamp (when the runtime trace's
 settled record is unavailable or non-failed) and the legacy `partial_error`
 derivation. When present, `phase` is one of (`FORWARD` — the model forward raised;
 `FINALIZE` — the forward completed but finalize/output-extraction/cleanup
@@ -122,7 +122,7 @@ Enforced through the ONE chokepoint
 | validation entry (N2) | allow | allow (halted output block skipped, as always) | refuse N2 | **allow** — the tripwire stays armed | refuse N2 |
 | `Trace.save` analysis (N1) | allow | allow | refuse N1 | allow (no upgrade) | refuse N1 |
 | `trace.save(path, level="runnable")` (N4) | allow | refuse N4 (runnable vocabulary: `stopped_capture_unsupported`) | refuse N1 | allow-scoped (existing preflights gate) | refuse N1 |
-| live replay: refresh / `save_new_outs` / push / replay / rerun / live `run()` / `fast=True` (N5/N3) | allow | refuse N5 | refuse N3 | allow | refuse N3 |
+| live replay: refresh / `run()` / push / replay / rerun / live `run()` / `fast=True` (N5/N3) | allow | refuse N5 | refuse N3 | allow | refuse N3 |
 | loaded-sparse `run()` | allow | **allow** — executes exactly the recorded prefix DAG | refuse N3 | allow | refuse N3 |
 | `log_backward` / `backward` / `capture_backward` (N3) | allow | allow — the autograd graph IS the captured prefix | refuse N3 | allow | refuse N3 |
 | draw / `report.explain` / inspection / fork / load | allow | allow | via `PartialTrace` / pickle inspection, as today | allow | allow (analysis-only, coreless staging) |

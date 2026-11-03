@@ -281,6 +281,16 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # third-party handler tables at unwrap; drained by the next wrap's shim
         # install, so it is install bookkeeping, not capture state.
         ("torchlens/backends/torch/_protocol_redispatch.py", "_ALIAS_JOURNAL"),
+        # One-slot record of what the last unwrap's alias scan read (modules,
+        # distinct tables, keys examined); replaced whole by every scan, a
+        # deterministic diagnostic counter, not capture state.
+        ("torchlens/backends/torch/_protocol_redispatch.py", "_LAST_ALIAS_SCAN"),
+        # Op class properties declared plain facades over their stored cell,
+        # filled once at import by the backends that install them (the ancestor
+        # overlays), and the Op facade op.py binds once at import; both mirror
+        # the class namespace and are never mutated by a capture.
+        ("torchlens/_data_classes/_op_row_release.py", "_ROW_RELEASE_PROPERTIES"),
+        ("torchlens/_data_classes/_op_row_release.py", "_OP_FACADE"),
         # First-read source digests for conditional/source attribution (deep-hunt
         # C4, fix/postproc 7a58a021). Deliberately NOT a _PROCESS_CACHES row:
         # clearing it is not correctness-neutral (the pin is the fail-closed
@@ -868,6 +878,12 @@ _PROCESS_CACHES = frozenset(
         # same object, so a dead or reused id is a miss. Specs are frozen
         # dataclasses; clearing it only costs one re-classification.
         ("torchlens/backends/torch/_ops_interventions.py", "_OP_DOOR_MEMO"),
+        # Write-once bindings of an import-cycle-deferred module object (a class,
+        # a function, a module) resolved on first use instead of per call; each
+        # value is already held by sys.modules, so the slot pins nothing extra.
+        ("torchlens/_ir/op_record_scatter.py", "_PORTABLE_BLOB_REF"),
+        ("torchlens/_ir/op_record_scatter.py", "_MATERIALIZE_RESOLVE_DTYPE"),
+        ("torchlens/intervention/_module_boundary.py", "_OPS_INTERVENTIONS"),
     }
 )
 """Process-lifetime memos holding strong references.
@@ -1116,6 +1132,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_autoroute/input/__init__.py", "__all__"),
         ("torchlens/_autoroute/output/__init__.py", "__all__"),
         ("torchlens/backends/__init__.py", "__all__"),
+        ("torchlens/backends/_facet_recipes.py", "__all__"),
         ("torchlens/backends/_protocol.py", "__all__"),
         ("torchlens/backends/jax/__init__.py", "__all__"),
         ("torchlens/backends/jax/capabilities.py", "__all__"),
@@ -1165,6 +1182,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/bundle/_relation_evidence.py", "__all__"),
         ("torchlens/bundle/_relation_grades.py", "__all__"),
         ("torchlens/neuro/_brainpipe.py", "__all__"),
+        ("torchlens/intervention/_do_target_doors.py", "__all__"),
         ("torchlens/bridge/__init__.py", "__all__"),
         ("torchlens/bridge/_utils.py", "__all__"),
         ("torchlens/bridge/brain_score.py", "__all__"),
@@ -1191,6 +1209,8 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/bundle/_bytes.py", "__all__"),
         ("torchlens/bundle/_lineage.py", "__all__"),
         ("torchlens/bundle/_provenance.py", "__all__"),
+        ("torchlens/bundle/_relation_evidence.py", "__all__"),
+        ("torchlens/bundle/_relation_grades.py", "__all__"),
         ("torchlens/bundle/_relations.py", "__all__"),
         ("torchlens/bundle/_vary.py", "__all__"),
         ("torchlens/callbacks/__init__.py", "__all__"),
@@ -1289,7 +1309,6 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/intervention/compose.py", "__all__"),
         ("torchlens/intervention/edge_substitution.py", "__all__"),
         ("torchlens/intervention/errors.py", "__all__"),
-        ("torchlens/intervention/handles.py", "__all__"),
         ("torchlens/intervention/helpers.py", "__all__"),
         ("torchlens/intervention/hooks.py", "__all__"),
         ("torchlens/intervention/injection.py", "__all__"),
@@ -1351,6 +1370,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_merged/_errors.py", "__all__"),
         ("torchlens/_merged/_evidence.py", "__all__"),
         ("torchlens/_merged/_presenter.py", "__all__"),
+        ("torchlens/neuro/_conflicts.py", "__all__"),
         ("torchlens/neuro/_datasets.py", "__all__"),
         ("torchlens/neuro/_rdms.py", "__all__"),
         ("torchlens/report/_notebook/__init__.py", "__all__"),

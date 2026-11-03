@@ -544,8 +544,8 @@ def find_sites(trace: Trace, selector: Any, *, strict: bool = False, max_fanout:
     return find_sites(trace, selector, strict=strict, max_fanout=max_fanout)
 
 
-def find_layers(trace: Trace, selector: str, *, limit: int = 10) -> list[str]:
-    """Return layer labels matching a fuzzy query.
+def suggest_layer_labels(trace: Trace, selector: str, *, limit: int = 10) -> list[str]:
+    """Return layer labels matching a fuzzy query (the did-you-mean candidates of a refusal).
 
     Parameters
     ----------

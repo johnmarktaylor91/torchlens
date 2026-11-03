@@ -267,7 +267,7 @@ def test_save_new_outs_rebuilds_child_versions_and_validates_alias_mutation() ->
         save="all",
     )
 
-    log.save_new_outs(model, new_x, layers_to_save="all")
+    log._save_new_outs(model, new_x, save="all")
 
     add_site = log["add_1_1"]
     assert log._replay_arg_version_data_complete

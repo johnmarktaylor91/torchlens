@@ -1,4 +1,4 @@
-"""Vision logit lens and user-lens identity checks (batch-2 VISION: U55.2, U43.2).
+"""Vision logit lens and user-lens identity checks (vision lane).
 
 Models are built from their vendored published configs, shrunk, weights from
 a fixed seed, zero network:

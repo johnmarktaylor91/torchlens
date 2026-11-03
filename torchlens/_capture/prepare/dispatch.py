@@ -38,6 +38,7 @@ from ...backends._facet_recipes import attach_facet_recipes, pop_facet_recipes
 from ...backends._options import (
     MLX_EXTRA_KWARG_POLICY,
     TRACE_OPTION_CAPABILITY_GATES,
+    pop_stop_directive,
     reject_extra_trace_kwargs,
 )
 from ...backends._trace_options import _CONTROL_FLOW
@@ -97,7 +98,6 @@ def _trace_mlx_model(
     visualization: VisualizationOptions | None,
     backward_ready: bool | MissingType,
     name: str | None | MissingType,
-    module_filter: Callable[[Any], bool] | None | MissingType,
     module_identity_mode: str | None | MissingType,
     grad_options: Any | None | MissingType,
     verbose: bool | MissingType,
@@ -154,7 +154,6 @@ def _trace_mlx_model(
         name=name,
         cache=MISSING,
         cache_dir=MISSING,
-        module_filter=module_filter,
         module_identity_mode=module_identity_mode,
     )
     save_options = (
@@ -218,7 +217,6 @@ def _trace_mlx_model(
         verbose=capture_options.verbose,
         backward_ready=capture_options.backward_ready,
         name=capture_options.name,
-        module_filter=capture_options.module_filter,
         transform=None,
         raw_input=raw_input,
         save_raw_input=capture_options.save_raw_input,
@@ -274,7 +272,6 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
             "storage": kwargs["storage"],
             "inference_only": kwargs.get("inference_only", MISSING),
             "cache": kwargs.get("cache", MISSING),
-            "stop_after": kwargs.get("stop_after", MISSING),
             "on_nonfinite": (
                 kwargs["capture"].on_nonfinite if kwargs.get("capture") is not None else "ignore"
             ),
@@ -324,7 +321,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
         save_raw_input=kwargs.get("save_raw_input", MISSING),
         batch_render=kwargs.get("batch_render", MISSING),
         output_transform=kwargs.get("output_transform", MISSING),
-        save_transformed_output=kwargs.get("save_raw_output", MISSING),
+        save_transformed_output=kwargs.get("save_transformed_output", MISSING),
         layer_visualizers=MISSING,
         save_visualizations=MISSING,
         keep_orphans=kwargs.get("keep_orphans", MISSING),
@@ -350,12 +347,11 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
         visualization=None,
         backward_ready=kwargs.get("backward_ready", MISSING),
         name=kwargs.get("name", MISSING),
-        module_filter=kwargs.get("module_filter", MISSING),
         module_identity_mode=kwargs.get("module_identity_mode", MISSING),
         grad_options=kwargs["grad_options"],
         verbose=kwargs.get("verbose", MISSING),
         intervene=kwargs["intervene"],
-        halt=kwargs["halt"],
+        halt=pop_stop_directive(dict(kwargs)),
     )
     attach_facet_recipes(trace, facet_recipes, backend_name="MLX")
     return trace

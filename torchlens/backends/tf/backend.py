@@ -41,7 +41,7 @@ from .._options import (
     TF_EXTRA_KWARG_POLICY,
     TF_PREVIEW_TRACE_OPTION_POLICY,
     default_if_missing,
-    is_missing,
+    pop_stop_directive,
     reject_extra_trace_kwargs,
     reject_unsupported_trace_options,
     resolve_optional_capture_field,
@@ -110,13 +110,12 @@ class TFBackend:
         verbose: bool | MissingType = MISSING,
         backward_ready: bool | MissingType = MISSING,
         name: str | None = None,
-        module_filter: object | None = None,
         transform: object | None = None,
         raw_input: object | None = None,
         save_raw_input: str | bool | MissingType = MISSING,
         batch_render: str | MissingType = MISSING,
         output_transform: object | None = None,
-        save_raw_output: str | bool | MissingType = MISSING,
+        save_transformed_output: str | bool | MissingType = MISSING,
         layer_visualizers: dict[Any, Any] | None = None,
         save_visualizations: bool | MissingType = MISSING,
         module_identity_mode: str | None = None,
@@ -161,7 +160,7 @@ class TFBackend:
             backward_ready=backward_ready,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
-            save_transformed_output=save_raw_output,
+            save_transformed_output=save_transformed_output,
             save_visualizations=save_visualizations,
         )
         layers_to_save = capture_options._layers_to_save
@@ -177,12 +176,11 @@ class TFBackend:
         backward_ready = capture_options.backward_ready
         save_raw_input = capture_options.save_raw_input
         batch_render = capture_options.batch_render
-        save_raw_output = capture_options.save_transformed_output
+        save_transformed_output = capture_options.save_transformed_output
         save_visualizations = capture_options.save_visualizations
         save_grads = resolve_optional_capture_field(capture, "save_grads", save_grads)
         random_seed = resolve_optional_capture_field(capture, "seed", random_seed)
         name = resolve_optional_capture_field(capture, "name", name)
-        module_filter = resolve_optional_capture_field(capture, "module_filter", module_filter)
         transform = resolve_optional_capture_field(capture, "transform", transform)
         output_transform = resolve_optional_capture_field(
             capture, "output_transform", output_transform
@@ -196,7 +194,7 @@ class TFBackend:
         # layers_to_save/keep_orphans/output_device/detach_saved_activations/
         # save_arg_values/save_code_context/save_rng_states/
         # recurrence_detection/compute_input_output_distances/verbose/
-        # backward_ready/save_raw_input/batch_render/save_raw_output/
+        # backward_ready/save_raw_input/batch_render/save_transformed_output/
         # save_visualizations are CaptureOptions-native fields: the
         # ``capture_options.<field>`` reads above already resolved each one to
         # its concrete (non-MISSING) default via ``merge_capture_options``,
@@ -210,7 +208,6 @@ class TFBackend:
         random_seed = default_if_missing(random_seed, None)
         num_context_lines = default_if_missing(num_context_lines, 7)
         name = default_if_missing(name, None)
-        module_filter = default_if_missing(module_filter, None)
         transform = default_if_missing(transform, None)
         raw_input = default_if_missing(raw_input, None)
         output_transform = default_if_missing(output_transform, None)
@@ -244,7 +241,6 @@ class TFBackend:
             save_source_context=save_code_context,
             save_rng=save_rng_states,
             backward_ready=backward_ready,
-            module_filter=module_filter,
             transform=transform,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
@@ -283,13 +279,12 @@ class TFBackend:
                 verbose=verbose,
                 backward_ready=backward_ready,
                 name=name,
-                module_filter=module_filter,
                 transform=transform,
                 raw_input=raw_input,
                 save_raw_input=save_raw_input,
                 batch_render=batch_render,
                 output_transform=output_transform,
-                save_transformed_output=save_raw_output,
+                save_transformed_output=save_transformed_output,
                 layer_visualizers=layer_visualizers,
                 save_visualizations=save_visualizations,
                 tf=tf,
@@ -354,13 +349,12 @@ class TFBackend:
             verbose=verbose,
             backward_ready=backward_ready,
             name=name,
-            module_filter=module_filter,
             transform=transform,
             raw_input=raw_input,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=output_transform,
-            save_transformed_output=save_raw_output,
+            save_transformed_output=save_transformed_output,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
             tf=tf,
@@ -538,7 +532,6 @@ class TFBackend:
         verbose: bool,
         backward_ready: bool,
         name: str | None,
-        module_filter: object | None,
         compute_input_output_distances: bool = True,
         transform: object | None,
         raw_input: object | None,
@@ -584,8 +577,6 @@ class TFBackend:
             Backward-ready flag.
         name
             Optional trace label.
-        module_filter
-            Module filter option.
         transform
             Input transform option.
         raw_input
@@ -628,7 +619,6 @@ class TFBackend:
             recurrence_detection=recurrence_detection,
             verbose=verbose,
             backward_ready=backward_ready,
-            module_filter=cast(Any, module_filter),
             emit_nvtx=False,
             input_transform=cast(Any, transform),
             input=raw_input,
@@ -946,14 +936,14 @@ class TFBackend:
 
 
 def _reject_unimplemented_intervention_options(kwargs: dict[str, Any]) -> Any:
-    """Refuse ``halt=`` and pop the facet recipes the tf preview attaches.
+    """Refuse ``stop_after=`` and pop the facet recipes the tf preview attaches.
 
-    The ``interventions`` capability flag admits ``intervene=`` and ``halt=``
-    through the shared option gate, so the unimplemented ``halt=`` keeps its
-    typed refusal here in the capture path instead of in the declarative
-    policy tables (where a True flag would classify it as a self-contradictory
-    registration). ``facets=`` is backend-neutral (the ``facet_recipes``
-    record): its value is popped here and snapshotted onto the finished trace.
+    The ``can_intervene`` flag admits ``intervene=`` and ``stop_after=`` through the
+    shared option gate, so the unimplemented ``stop_after=`` refuses typed here in the
+    capture path instead of in the policy tables (where a True flag would classify it
+    as a self-contradictory registration). ``facets=`` is backend-neutral (the
+    ``facet_recipes`` record): its value is popped here and snapshotted onto the
+    finished trace.
 
     Parameters
     ----------
@@ -966,12 +956,12 @@ def _reject_unimplemented_intervention_options(kwargs: dict[str, Any]) -> Any:
         The facet recipes to attach, or ``None`` when none were requested.
     """
 
-    halt_value = kwargs.pop("halt", None)
-    if halt_value is not None and not is_missing(halt_value):
+    halt_value = pop_stop_directive(kwargs)
+    if halt_value is not None:
         raise BackendUnsupportedError(
-            "tf backend interventions support intervene= only; trace(halt=...) needs "
+            "tf backend interventions support intervene= only; trace(stop_after=...) needs "
             "partial-forward finalization semantics the tf preview does not "
-            "implement. Use the PyTorch backend for predicate-time halt."
+            "implement. Use the PyTorch backend for stop_after."
         )
     return pop_facet_recipes(kwargs)
 
@@ -1040,7 +1030,6 @@ def _reject_unsupported_options(
     save_source_context: bool,
     save_rng: bool,
     backward_ready: bool,
-    module_filter: object | None,
     transform: object | None,
     layer_visualizers: dict[Any, Any] | None,
     save_visualizations: bool,
@@ -1070,8 +1059,6 @@ def _reject_unsupported_options(
         RNG-state option.
     backward_ready
         Backward-ready option.
-    module_filter
-        Module filter option.
     transform
         Input transform option.
     layer_visualizers
@@ -1098,7 +1085,6 @@ def _reject_unsupported_options(
             "save_source_context": save_source_context,
             "save_rng": save_rng,
             "backward_ready": backward_ready,
-            "module_filter": module_filter,
             "transform": transform,
             "output_device": output_device,
             "layer_visualizers": layer_visualizers,

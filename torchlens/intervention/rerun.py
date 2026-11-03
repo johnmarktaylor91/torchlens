@@ -6,7 +6,7 @@ import time
 import warnings
 import weakref
 from collections import Counter
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from functools import partial
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -25,8 +25,14 @@ from .._utils.hashing import compute_graph_shape_hash
 from ..backends.torch.backward import _register_forward_grad_fn
 from ..options import ReplayOptions, merge_replay_options
 from ._helper_fingerprint import refuse_changed_staged_helpers
+from ._live_hook_plan import (
+    _assign_unique_plan_ids as _assign_unique_plan_ids,
+    _drop_handles_removed_mid_run,
+    _hook_plan_identifier as _hook_plan_identifier,
+)
 from ._rerun_ledger import _build_ledger_record
 from ._rerun_predicate import (
+    _make_raw_index_save_predicate,
     plan_rerun_spec,
     settle_predicate_rerun,
     translate_staged_final_labels,
@@ -143,8 +149,7 @@ def run(
             intervene_predicate=spec_plan.intervene_predicate,
         )
     _refuse_shifted_raw_index_resave(trace, new_log)
-    settle_predicate_rerun(spec_plan, spec, new_log)
-    new_log.facet_functions = getattr(trace, "facet_functions", None)
+    hook_plan = _settle_rerun_capture(trace, new_log, (spec_plan, spec), hook_plan)
     hook_fire_count, unfired_hook_ids = _reconcile_rerun_hook_fires(
         new_log, hook_plan, source_log=trace
     )
@@ -201,6 +206,26 @@ def run(
     trace._has_direct_writes = False
     trace._out_recipe_revision = getattr(trace, "_spec_revision", 0)
     return trace
+
+
+def _settle_rerun_capture(
+    source: Trace,
+    new_log: Trace,
+    plan_and_spec: tuple[Any, Any],
+    hook_plan: list[NormalizedHookEntry],
+) -> list[NormalizedHookEntry]:
+    """Settle a finished candidate capture and return the plan its fire audit counts.
+
+    Predicate bookkeeping and the facet functions carry over from the source;
+    a sticky hook removed through its handle while the run was in progress
+    leaves the returned plan, so the fire audit and the ledger count the
+    recipe as it stands after the run.
+    """
+
+    spec_plan, spec = plan_and_spec
+    settle_predicate_rerun(spec_plan, spec, new_log)
+    new_log.facet_functions = getattr(source, "facet_functions", None)
+    return _drop_handles_removed_mid_run(hook_plan, spec)
 
 
 #: Rerun captures whose autograd graph a backward-ready rerun result adopted,
@@ -445,8 +470,7 @@ def _append_rerun(
             output_transform=getattr(log, "_output_transform", None),
             intervene_predicate=spec_plan.intervene_predicate,
         )
-    settle_predicate_rerun(spec_plan, spec, new_log)
-    new_log.facet_functions = getattr(log, "facet_functions", None)
+    hook_plan = _settle_rerun_capture(log, new_log, (spec_plan, spec), hook_plan)
     hook_fire_count, unfired_hook_ids = _reconcile_rerun_hook_fires(new_log, hook_plan)
 
     _validate_append_candidate(log, new_log, hook_plan=hook_plan)
@@ -1363,85 +1387,6 @@ def _refuse_shifted_raw_index_resave(old_log: Trace, new_log: Trace) -> None:
         remedy=remedy,
         first_differing_position=first,
     )
-
-
-def _make_raw_index_save_predicate(selected_indices: set[int]) -> Callable[[Any], bool]:
-    """Build a predicate that mirrors a static raw-index save subset.
-
-    Parameters
-    ----------
-    selected_indices:
-        Raw operation indices selected by the original capture.
-
-    Returns
-    -------
-    Callable[[Any], bool]
-        Predicate returning ``True`` for matching capture contexts.
-    """
-
-    def keep_selected_raw_index(ctx: Any) -> bool:
-        """Return whether a predicate context matches the selected raw indices."""
-
-        raw_index = getattr(ctx, "raw_index", None)
-        if raw_index is None:
-            raw_index = getattr(ctx, "event_index", None)
-        return raw_index in selected_indices
-
-    return keep_selected_raw_index
-
-
-def _assign_unique_plan_ids(hook_plan: list[NormalizedHookEntry]) -> list[NormalizedHookEntry]:
-    """Give every planned entry a unique, stable accounting identifier.
-
-    The fallback identifier ladder (plan id -> hook id -> helper name ->
-    callable qualname) can COLLIDE across entries with different targets, and
-    the fire audit compares ``Counter`` values keyed by that string: two
-    fires of one entry hid the other entry's total miss (``fired=2``,
-    ``unfired=()``), so a partially-applied plan claimed every entry fired
-    (incomplete f9f5b140). Colliding identifiers get a stable occurrence
-    suffix stamped into ``metadata["plan_id"]``, which live execution writes
-    into each ``FireResult``, so the audit is per-entry; unique identifiers
-    are preserved verbatim.
-    """
-
-    import dataclasses as _dataclasses
-
-    counts = Counter(_hook_plan_identifier(entry) for entry in hook_plan)
-    seen: Counter[str] = Counter()
-    unique_plan: list[NormalizedHookEntry] = []
-    for entry in hook_plan:
-        base = _hook_plan_identifier(entry)
-        if counts[base] > 1:
-            metadata = dict(entry.metadata)
-            metadata["plan_id"] = f"{base}#occ{seen[base]}"
-            metadata["plan_id_base"] = base
-            entry = _dataclasses.replace(entry, metadata=metadata)
-        seen[base] += 1
-        unique_plan.append(entry)
-    return unique_plan
-
-
-def _hook_plan_identifier(entry: NormalizedHookEntry) -> str:
-    """Return the identifier written into a live ``FireResult``.
-
-    Parameters
-    ----------
-    entry:
-        Planned normalized hook entry.
-
-    Returns
-    -------
-    str
-        Plan id using the same fallback order as live execution.
-    """
-
-    if "plan_id" in entry.metadata:
-        return str(entry.metadata["plan_id"])
-    if "hook_id" in entry.metadata:
-        return str(entry.metadata["hook_id"])
-    if entry.helper_spec is not None:
-        return str(entry.helper_spec.name)
-    return str(getattr(entry.normalized_callable, "__qualname__", "user_hook"))
 
 
 def _reconcile_rerun_hook_fires(

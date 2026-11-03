@@ -125,7 +125,7 @@ Two cross-backend honesty notes apply to every preview row above:
   hop distances plus ancestor/descendant sets) defaults to `True` on every backend — the same
   torch `CaptureOptions` default — and `=False` disables the flood on every backend, torch and all
   five previews alike.
-- **Preview replay validation scope.** Preview `validation_replay` replays each CAPTURED op from
+- **Preview replay validation scope.** Preview replay validation (the `has_validation_replay` capability) replays each CAPTURED op from
   its declared parents' saved payloads and perturbation-checks the dependency; unlike torch's
   validator it does not independently re-run the model against a ground-truth output, so an op the
   preview failed to wrap is outside the replay denominator entirely. Calls with no perturbable
@@ -285,7 +285,7 @@ value-dependent callable conditions, shape-changing replacements, graph-only ent
 combining `intervene=` with `grad_options=` refuse typed. `stop_after=` keeps its typed refusal inside
 the capture path; `facets=` attaches per-trace facet recipes on both the eager and the static path.
 
-TensorFlow true backward capture, `stop_after=`, fastlog/`tl.record()`, streaming, and value-dependent
+TensorFlow true backward capture, `stop_after=`, sparse recording (`tl.record()`), streaming, and value-dependent
 predicates remain deferred. These surfaces raise typed backend errors instead of silently
 producing partial traces.
 
@@ -332,7 +332,7 @@ perturbation oracle, and only records with `status == "exact"` reach
 These derived gradients are not true backward capture, and `op.grads` /
 `trace.saved_grad_ops` stay true-backward-only.
 
-MLX supports static-label live interventions and halt. `trace(intervene=tl.when(static_selector,
+MLX supports static-label live interventions and `stop_after=`. `trace(intervene=tl.when(static_selector,
 action))` substitutes matched output arrays at the wrapper boundary — the replacement genuinely
 flows into downstream ops — and `trace(stop_after=static_selector)` finalizes an honest partial trace at
 the matched frontier (`trace.is_stopped`, `trace.stop_reason`; parameter accounting is restricted to
@@ -504,7 +504,7 @@ replayable ops and region seam checks pass. Pass `jax_control_flow="reject"` to 
 earlier nested-primitive rejection behavior, or `jax_control_flow="region"` to force supported
 scan/while/custom-VJP-forward boundaries to regions. Workarounds are to pass raw functions and explicit params/input leaves to
 `tl.trace(..., backend="jax")`, or use the PyTorch backend for value-dependent predicate capture,
-intervention, sparse fastlog, and true backward graphs.
+intervention, sparse recording, and true backward graphs.
 
 JAX `.tlspec` support uses `payload_policy="array_payloads"`: default portable saves persist
 forward and derived array payloads and load them back as `jax.Array` values.
@@ -597,7 +597,7 @@ selectors such as `tl.func(...)`, `tl.label(...)`, `tl.label_contains(...)`, and
 applied after full graph finalization: unsaved ops keep metadata but drop public activation
 payloads. Workarounds are to return a pure lazy tinygrad expression from a raw callable and use
 `tl.trace(..., backend="tinygrad")`, or use the PyTorch backend for value-dependent predicate
-capture, intervention, sparse fastlog, and true backward graphs.
+capture, intervention, sparse recording, and true backward graphs.
 
 tinygrad `.tlspec` support uses `payload_policy="array_payloads"`: default portable saves persist
 forward and derived array payloads and load them back as tinygrad `Tensor` values.

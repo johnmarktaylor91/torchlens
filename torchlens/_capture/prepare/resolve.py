@@ -15,6 +15,7 @@ from torchlens._data_classes.trace import Trace
 from torchlens._errors import ArgumentTypeError, InvalidArgumentError
 from torchlens._selection.selectors import BaseSelector
 from torchlens.intervention._zero_fire import (
+    _unfired_forward_rules,
     non_tensor_reason_fields,
     recorded_non_tensor_details,
     settle_capture_zero_fire,
@@ -247,35 +248,6 @@ def _fired_capture_records(trace: Trace) -> tuple[list[str], int, list[Any]]:
             fire_count += len(records)
             fired_records.extend(records)
     return fired_labels, fire_count, fired_records
-
-
-def _unfired_forward_rules(spec: Recipe, fired_rule_ids: Collection[str]) -> tuple[Rule, ...]:
-    """Return the spec's rules that address the forward pass and fired nowhere.
-
-    Settlement is per rule IDENTITY (the rule ids the capture doors noted as
-    they fired), never per action repr: same-named closures render alike, and
-    a callable never renders like its fire record. A backward-only rule
-    (``tl.grad(...)`` or a node site) fires after the capture returns, so the
-    capture-time settlement never judges it.
-
-    Parameters
-    ----------
-    spec:
-        The capture's public ``intervene=`` spec.
-    fired_rule_ids:
-        Rule ids noted as fired during the capture.
-
-    Returns
-    -------
-    tuple[Rule, ...]
-        Unfired forward rules, in spec order.
-    """
-
-    return tuple(
-        rule
-        for rule in spec.rules
-        if rule.signal != "backward" and rule.rule_id not in fired_rule_ids
-    )
 
 
 def _record_capture_intervention_event(

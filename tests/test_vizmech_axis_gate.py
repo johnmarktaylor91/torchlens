@@ -111,7 +111,7 @@ def _context(combo: dict[str, object]) -> str:
     )
 
 
-@pytest.mark.smoke_cells("test_axis_combo_renders_clean[torchlens-topdown-d1000-png-rank]")
+@pytest.mark.smoke_cells("test_axis_combo_renders_clean[colorblind-bottomup-d1-png-rank]")
 @pytest.mark.parametrize(
     "combo",
     _COVER,

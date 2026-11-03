@@ -175,6 +175,87 @@ def test_tf_keras_gelu_erfc_is_classified_and_replayed() -> None:
     assert set(status.unverified_reason_counts) <= VALIDATION_REASONS
 
 
+def test_tf_where_selectv2_is_classified_and_replayed() -> None:
+    """``tf.where`` runs ``SelectV2`` (attention masks); validation replays it.
+
+    Every parent perturbation is tried, the boolean condition included, so a
+    replay that ignored any input would fail the tripwire.
+    """
+
+    def fn(v: Any) -> Any:
+        return tf.where(v > 0.0, v * 2.0, v - 1.0)
+
+    trace = tl.trace(fn, _x(), backend="tf")
+    assert any(op.func_name == "SelectV2" for op in trace._layer_list)
+    status = _protocol().validate(trace, None)
+    assert status.state == "passed", status.message
+    select = [r for r in status.decisions if r["func_name"] == "SelectV2"]
+    assert select and select[0]["decision"] == "validated", select
+
+
+def test_tf_broadcast_to_is_classified_and_replayed() -> None:
+    """``tf.broadcast_to`` runs ``BroadcastTo`` (BERT's mask expansion); validation replays it."""
+
+    def fn(v: Any) -> Any:
+        return tf.broadcast_to(tf.reduce_sum(v, axis=0), [2, 4]) * v
+
+    trace = tl.trace(fn, _x(), backend="tf")
+    assert any(op.func_name == "BroadcastTo" for op in trace._layer_list)
+    status = _protocol().validate(trace, None)
+    assert status.state == "passed", status.message
+    broadcast = [r for r in status.decisions if r["func_name"] == "BroadcastTo"]
+    assert broadcast and broadcast[0]["decision"] == "validated", broadcast
+
+
+def test_tf_expand_dims_replays_with_its_axis_input() -> None:
+    """``tf.expand_dims`` runs ``ExpandDims``, whose raw op takes ``axis``; replay validates it."""
+
+    def fn(v: Any) -> Any:
+        return tf.expand_dims(v, 1) * 2.0
+
+    trace = tl.trace(fn, _x(), backend="tf")
+    status = _protocol().validate(trace, None)
+    assert status.state == "passed", status.message
+    expand = [r for r in status.decisions if r["func_name"] == "ExpandDims"]
+    assert expand and expand[0]["decision"] == "validated", expand
+
+
+def test_tf_integer_threshold_compare_is_perturbation_sensitive() -> None:
+    """``ids < 0`` on non-negative token ids changes under a sign-flipping perturbation.
+
+    BERT builds its padding mask this way; ``ids + 1`` and zeros never cross the
+    threshold, so the tripwire needs a candidate that does.
+    """
+
+    ids = tf.constant([[101, 1996, 4248, 102]], dtype=tf.int32)
+
+    def fn(token_ids: Any) -> Any:
+        return tf.cast(token_ids < 0, tf.float32)
+
+    trace = tl.trace(fn, ids, backend="tf")
+    status = _protocol().validate(trace, None)
+    assert status.state == "passed", status.message
+    less = [r for r in status.decisions if r["func_name"] == "Less"]
+    assert less and less[0]["decision"] == "validated", less
+
+
+def test_tf_gather_and_slice_are_replayed() -> None:
+    """An embedding lookup (``GatherV2``) and ``tf.slice`` (``Slice``) replay and validate."""
+
+    table = tf.constant(np.arange(20, dtype=np.float32).reshape(5, 4) / 10.0)
+    ids = tf.constant([[3, 0, 4]], dtype=tf.int32)
+
+    def fn(token_ids: Any) -> Any:
+        return tf.slice(tf.gather(table, token_ids), [0, 1, 0], [1, 2, 3])
+
+    trace = tl.trace(fn, ids, backend="tf")
+    status = _protocol().validate(trace, None)
+    assert status.state == "passed", status.message
+    decided = {r["func_name"]: r["decision"] for r in status.decisions}
+    assert decided.get("GatherV2") == "validated", status.decisions
+    assert decided.get("Slice") == "validated", status.decisions
+
+
 def test_tf_tampered_payload_fails_naming_the_op_and_reason() -> None:
     """A11: a tampered payload yields ``failed`` naming the op in message and decisions."""
 

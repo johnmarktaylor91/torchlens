@@ -46,7 +46,10 @@ def main() -> None:
     model = TinyMLP().eval()
     x = torch.randn(2, 8)
     log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
-    log.attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+    log.do(
+        tl.when(tl.func("relu"), tl.zero_ablate()),
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
 
     with tempfile.TemporaryDirectory() as tmpdir:
         path = Path(tmpdir) / "zero_relu.tlspec"

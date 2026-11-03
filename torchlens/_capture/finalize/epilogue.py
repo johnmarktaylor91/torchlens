@@ -6,7 +6,7 @@ The bodies moved verbatim from the torch door (``torchlens._user_funcs``, then
 (``stop_after_site``, ``stop_after_selector_shaped``, ``stop_after_ambient``,
 ``save_grads_policy``, ``uses_selective_layers_to_save``,
 ``episode_resolved``, ``meta_admission``), the user's knobs from
-``CaptureRequest.options`` (``module_filter``, ``input_transform``,
+``CaptureRequest.options`` (``input_transform``,
 ``save_args``, ``layer_visualizers``, ``unwrap_when_done``) and the cache
 ``key``, ``path``, ``secret`` and ``store`` callable from ``CaptureRequest.cache``.
 """
@@ -23,7 +23,6 @@ from ..._data_classes._preprocessing_provenance import stamp_user_transform_prov
 from ..._data_classes.trace import (
     Trace,
 )
-from ..._errors import InvalidArgumentError
 from ..._utils.display import _vprint, ensure_trace_visualizer_dir
 from ...errors import TorchLensWarning
 from .._episode_ledger import (
@@ -35,6 +34,7 @@ from .._episode_ledger import (
     _fidelity_basis,
     write_episode_ledger,
 )
+from .._stop_after_policy import settle_unfired_stop_after
 
 if TYPE_CHECKING:
     from .._episode_ledger import ResolvedEpisode
@@ -136,7 +136,7 @@ def _safe_visualizer_filename(label: str) -> str:
 def finish_trace(result: ForwardResult, request: CaptureRequest) -> Trace:
     """Run the door epilogue on a finished capture and return its trace.
 
-    Order (pinned): stop_after never fired; on_nonfinite="warn"; module_filter zero fire;
+    Order (pinned): stop_after never fired; on_nonfinite="warn";
     input_transform provenance; selective save; summary print; layer
     visualizers; ``unwrap_when_done``; cache store; episode ledger;
     weightsfree settlement. ``request.admission`` carries the door facts,
@@ -161,7 +161,6 @@ def finish_trace(result: ForwardResult, request: CaptureRequest) -> Trace:
     _check_stop_after_fired(trace, facts)
     if getattr(options, "on_nonfinite", "ignore") == "warn":
         _warn_once_nonfinite_detected(trace)
-    _warn_module_filter_zero_saved(trace, getattr(options, "module_filter", None))
     input_transform = getattr(options, "input_transform", None)
     if input_transform is not None:
         stamp_user_transform_provenance(trace, input_transform)
@@ -210,47 +209,13 @@ def _settle_epilogue_tail(trace: Trace, request: CaptureRequest) -> None:
 
 
 def _check_stop_after_fired(trace: Trace, facts: dict[str, Any]) -> None:
-    """Refuse or warn when ``stop_after`` never fired, by the site's provenance.
-
-    Never-fired policy split by provenance: a selector-shaped site that never
-    fired is a typo-shaped wrong result (the full forward ran; the caller asked
-    for a frontier) and refuses typed; an exploratory callable or ambient
-    context-manager site legitimately may never fire and warns with a durable
-    ledger entry.
-    """
-    # brainpipe D-16.
-    stop_after_site = facts.get("stop_after_site")
-    if stop_after_site is None or bool(getattr(trace, "is_stopped", False)):
-        return
-    site_repr = repr(stop_after_site)
-    if facts.get("stop_after_selector_shaped") and not facts.get("stop_after_ambient"):
-        raise InvalidArgumentError(
-            f"stop_after={site_repr} never fired: the capture ran the full "
-            "forward and completed without halting, so the result is not the "
-            "requested frontier",
-            code="stop_after_never_fired",
-            remedy=(
-                "check the site against the model's module addresses "
-                "(model.named_modules()) or use tl.func(...)/tl.module(...); "
-                "an exploratory predicate that may legitimately never fire "
-                "belongs in a callable"
-            ),
-            argument="stop_after",
-        )
-    stop_annotations = getattr(trace, "annotations", None)
-    if isinstance(stop_annotations, dict):
-        stop_annotations.setdefault("unmatched_capture_selectors", []).append(
-            {"slot": "stop_after", "selector": site_repr}
-        )
-    warnings.warn(
-        TorchLensWarning(
-            f"stop_after={site_repr} never fired; the capture ran the full "
-            "forward and the outputs are the model's real outputs, not a "
-            "frontier. Remedy: check the stop_after site against the executed "
-            "model, or drop stop_after",
-            code="stop_after_never_fired_callable",
-        ),
-        stacklevel=4,
+    """Run the shared never-fired ``stop_after`` policy with the door's facts."""
+    settle_unfired_stop_after(
+        trace,
+        facts.get("stop_after_site"),
+        selector_shaped=bool(facts.get("stop_after_selector_shaped")),
+        ambient=bool(facts.get("stop_after_ambient")),
+        stacklevel=5,
     )
 
 
@@ -272,30 +237,6 @@ def _warn_once_nonfinite_detected(trace: Trace) -> None:
         ),
         stacklevel=4,
     )
-
-
-def _warn_module_filter_zero_saved(trace: Trace, module_filter: Any) -> None:
-    """Warn when ``module_filter`` suppressed every selected payload."""
-    module_filter_suppressed = int(trace.__dict__.pop("_tl_module_filter_suppressed", 0))
-    if (
-        module_filter is not None
-        and module_filter_suppressed > 0
-        and int(trace._num_saved_ops or 0) == 0
-    ):
-        warnings.warn(
-            TorchLensWarning(
-                f"module_filter suppressed every selected payload "
-                f"({module_filter_suppressed} ops): the returned trace has full "
-                "metadata but ZERO saved activations. module_filter is a third "
-                "save gate composed with save=/layers_to_save, and its argument "
-                "is an op-record namespace (fields such as func_name, "
-                "layer_label, modules), NEVER an nn.Module. "
-                "Remedy: write the filter against op-record fields (e.g. lambda "
-                "op: op.func_name == 'linear'), or drop module_filter",
-                code="module_filter_zero_saved",
-            ),
-            stacklevel=4,
-        )
 
 
 def _restrict_layer_nums_to_saved(trace: Trace, save_args: bool) -> None:

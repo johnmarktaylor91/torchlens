@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._utils.facade import refuse_removed_member
+
 if TYPE_CHECKING:
     from .trace import Trace
 
@@ -51,6 +53,30 @@ _REMOVED_TRACE_MEMBERS: dict[str, str] = {
     "replay": "use trace.push(...) -- Trace.replay was renamed",
     "replay_from": "use trace.push_from(...) -- Trace.replay_from was renamed",
     "rerun": "use trace.run(model, x) -- Trace.rerun was renamed",
+    "attach_hooks": (
+        "use trace.do(site, edit, model=model, inputs=x) -- attach_hooks folded into do; "
+        "stage without running with intervention=InterventionOptions(engine='set_only')"
+    ),
+    "clear_hooks": (
+        "use trace.clear_edits(site) or trace.clear_edits(handle=...) -- clear_hooks was "
+        "removed; a fresh fork() starts without staged edits"
+    ),
+    "collapse_plan": (
+        "use trace.draw(collapse='auto', ...).collapse_plan -- the collapse plan is a member "
+        "of the Drawing a forward draw returns"
+    ),
+    "collapse_schedule": (
+        "use trace.draw(...).collapse_schedule -- the collapse schedule is a member of the "
+        "Drawing a forward draw returns"
+    ),
+    "collapse_order": (
+        "use trace.draw(collapse='auto', ...).collapse_plan -- the plan carries the ranking; "
+        "trace.module_collapse_order still lists every module's collapse score"
+    ),
+    "save_new_outs": (
+        "use trace.run(inputs=x) -- save_new_outs left the public surface; run(inputs=) is the "
+        "graph-checked refresh (a changed graph raises), while run(model, x) re-captures"
+    ),
     "validate_saved_outs": (
         "use trace.validate_forward_pass(...) -- validate_saved_outs was its removed alias"
     ),
@@ -95,8 +121,6 @@ def _raise_missing_trace_attribute(trace: Trace, name: str) -> Any:
             remedy="re-capture with tl.trace(...); cleanup() permanently empties a Trace",
             attribute=name,
         )
-    from .._utils.facade import refuse_removed_member
-
     refuse_removed_member(type(trace).__name__, name, _REMOVED_TRACE_MEMBERS)
     hint = _MISSING_ATTR_HINTS.get(name)
     if hint is not None:

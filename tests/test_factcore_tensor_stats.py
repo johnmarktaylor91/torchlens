@@ -161,7 +161,7 @@ def test_end_bin_invariant_with_failing_control() -> None:
     torch.manual_seed(4)
     core = torch.randn(5_000)
     tensor = torch.cat([core, torch.tensor([-100.0, 100.0, float("nan")])])
-    stats = tensor_stats(tensor, identity="end-bin-fixture")
+    stats = tensor_stats(tensor, _identity="end-bin-fixture")
     assert stats.histogram_evidence.policy == "sampled"  # contaminated path
     assert stats.histogram_counts is not None
     assert stats.histogram_counts[0] >= 1

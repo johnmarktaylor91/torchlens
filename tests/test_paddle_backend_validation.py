@@ -95,6 +95,38 @@ def test_paddle_validation_healthy_two_layer_mlp_passes() -> None:
     assert PaddleBackend().validate_entry(_functional_mlp, _inputs()) is True
 
 
+def test_paddle_validation_integer_threshold_compare_is_perturbation_sensitive() -> None:
+    """``ids < 0`` on non-negative token ids changes under a sign-flipping perturbation.
+
+    ``ids + 1`` and zeros never cross the threshold, so the tripwire needs a
+    candidate that does; a replay that ignored the ids would still fail.
+    """
+
+    ids = paddle.to_tensor([[101, 1996, 4248, 102]], dtype="int64")
+
+    def fn(token_ids: Any) -> Any:
+        return paddle.cast(paddle.less_than(token_ids, paddle.zeros_like(token_ids)), "float32")
+
+    trace = tl.trace(fn, ids, backend="paddle")
+    assert PaddleBackend().validate_trace(trace) is True, trace.validation_replay_status
+    assert trace.validation_replay_status.state == "passed"
+
+
+def test_paddle_tensor_ordering_comparisons_are_captured() -> None:
+    """``t < 0`` and ``t >= 2`` are recorded ops, so the consuming casts have traced parents."""
+
+    x = paddle.to_tensor([[-1.0, 0.5, 2.0, 3.0]], dtype="float32")
+
+    def fn(value: Any) -> Any:
+        return paddle.cast(value < 0, "float32") + paddle.cast(value >= 2.0, "float32")
+
+    trace = tl.trace(fn, x, backend="paddle")
+    names = [str(op.func_name) for op in trace._layer_list]
+    assert {"tensor.__lt__", "tensor.__ge__"} <= set(names), names
+    assert PaddleBackend().validate_trace(trace) is True, trace.validation_replay_status
+    assert trace.validation_replay_status.state == "passed"
+
+
 def test_paddle_validation_fails_unwrapped_intermediate_gap(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -82,6 +82,7 @@ from .payload_codec import (
     get_payload_codec,
     numpy_to_transport_tensor,
 )
+from .prerelease import effective_policy
 from .rehydrate import rehydrate_trace
 from .save_policy import _refuse_incoherent_structure_only_write, _resolve_include_flags
 from .scrub import BlobSpec, scrub_for_save
@@ -530,7 +531,7 @@ def save(
                     "Runnable save refuses a HALTED capture: the recorded graph "
                     "is an honest prefix of the forward, not the complete taken "
                     "path the sparse runnable contract requires. Re-capture "
-                    "without halt= to produce a runnable artifact.",
+                    "without stop_after= to produce a runnable artifact.",
                     code=RunnableErrorCode.HALTED_CAPTURE_NOT_RUNNABLE.value,
                 ) from outcome_exc
             raise
@@ -3795,8 +3796,6 @@ def _contains_nested_blob_refs(
     if obj_id in seen:
         return False
     seen.add(obj_id)
-
-    from .prerelease import effective_policy
 
     for field_name, field_value in state_items(value):
         policy = spec.get(field_name)

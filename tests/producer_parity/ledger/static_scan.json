@@ -3706,6 +3706,14 @@
  {
   "ambiguous": true,
   "field": "modules",
+  "file": "torchlens/_semantic/_input_patching.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
   "file": "torchlens/_semantic/coverage.py",
   "has_default": false,
   "sites": 1,
@@ -3748,7 +3756,7 @@
   "field": "modules",
   "file": "torchlens/_semantic/patching.py",
   "has_default": false,
-  "sites": 14,
+  "sites": 15,
   "via_getattr": false
  },
  {
@@ -7032,6 +7040,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/bridge/_hf_refusals.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "source_trace",
   "file": "torchlens/bridge/_sae_latents.py",
@@ -7172,7 +7188,7 @@
   "field": "kind",
   "file": "torchlens/bundle/_operations.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -7372,7 +7388,15 @@
   "field": "modules",
   "file": "torchlens/debug/_infer_input_shape.py",
   "has_default": false,
-  "sites": 5,
+  "sites": 4,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/debug/_infer_training_states.py",
+  "has_default": false,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -7452,16 +7476,8 @@
   "field": "modules",
   "file": "torchlens/experimental/dagua/_bridge.py",
   "has_default": false,
-  "sites": 2,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/experimental/dagua/_bridge.py",
-  "has_default": true,
   "sites": 1,
-  "via_getattr": true
+  "via_getattr": false
  },
  {
   "ambiguous": false,
@@ -7477,6 +7493,22 @@
   "file": "torchlens/experimental/dagua/_bridge.py",
   "has_default": true,
   "sites": 3,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/experimental/dagua/_clusters.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/experimental/dagua/_clusters.py",
+  "has_default": true,
+  "sites": 1,
   "via_getattr": true
  },
  {
@@ -7641,6 +7673,14 @@
  },
  {
   "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/intervention/_do_target_doors.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/intervention/_facet_save.py",
   "has_default": true,
@@ -7651,6 +7691,14 @@
   "ambiguous": false,
   "field": "module_stack",
   "file": "torchlens/intervention/_facet_save.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/intervention/_facet_writes.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -7736,6 +7784,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "raw_index",
+  "file": "torchlens/intervention/_rerun_predicate.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/intervention/_super/super_logs.py",
@@ -7774,14 +7830,6 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/intervention/_trace_edits.py",
-  "has_default": false,
-  "sites": 2,
-  "via_getattr": false
  },
  {
   "ambiguous": true,
@@ -7908,7 +7956,7 @@
   "field": "modules",
   "file": "torchlens/intervention/hooks.py",
   "has_default": true,
-  "sites": 3,
+  "sites": 2,
   "via_getattr": true
  },
  {
@@ -8054,14 +8102,6 @@
   "has_default": false,
   "sites": 4,
   "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "raw_index",
-  "file": "torchlens/intervention/rerun.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
  },
  {
   "ambiguous": false,
@@ -8596,7 +8636,7 @@
   "field": "source_trace",
   "file": "torchlens/receptive_field/_gradient_forward.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 4,
   "via_getattr": false
  },
  {
@@ -10220,7 +10260,7 @@
   "field": "policy",
   "file": "torchlens/viz/_drawing.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {

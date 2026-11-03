@@ -989,7 +989,7 @@ SLIDES: tuple[Slide, ...] = (
                 "a",
                 "Nonfinite",
                 call="lens",
-                capture={"module_filter": "@unsaved_abs"},
+                capture={"save": "@unsaved_abs"},
                 kwargs={"lens": "debug", "node_label_fields": ["label"]},
             ),
         ),

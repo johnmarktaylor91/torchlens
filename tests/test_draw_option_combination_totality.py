@@ -37,7 +37,7 @@ from __future__ import annotations
 import inspect
 import itertools
 import warnings
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -190,7 +190,7 @@ def expected_refusal(combo: frozenset[str]) -> str | None:
     """Return the typed refusal code for a probe combination, else ``None``.
 
     ``highlight`` refuses first on this un-edited trace (its lens checks the
-    intervention evidence before any draw option is applied); ``scale``
+    intervention evidence before any draw option is applied); ``size_scale``
     without ``size_by`` refuses next (the option is meaningless alone),
     matching shipped precedence; the pinned pair rows cover the rest.
     """
@@ -291,7 +291,7 @@ _SINGLES = [(name,) for name in PAIRED_OPTIONS]
 _PAIRS = list(itertools.combinations(PAIRED_OPTIONS, 2))
 
 #: Structural axes that reshape the rendered graph: the axes whose
-#: combinations have historically crashed (profiling x vis_call_depth,
+#: combinations have historically crashed (node_style x depth,
 #: rolled x show_containers). Every pair among them is a documented cell; the
 #: slow property test below walks every other pair.
 CORE_OPTIONS: tuple[str, ...] = (
@@ -342,6 +342,25 @@ _COVERAGE_PAIRS: tuple[tuple[str, str], ...] = (
 )
 
 
+def _require_paired_options(family: str, combos: Iterable[tuple[str, ...]]) -> None:
+    """Fail collection, naming the option, when a sampled family drifts from DECLARED.
+
+    A renamed or removed draw() option otherwise surfaces as one bare
+    ``KeyError`` per parametrized cell.
+    """
+
+    stale = sorted({name for combo in combos for name in combo} - set(PAIRED_OPTIONS))
+    if stale:
+        raise ValueError(
+            f"{family} names options that are not PAIRED in DECLARED: {stale}; "
+            "use the current draw() spelling or drop the pair if the option is gone"
+        )
+
+
+_require_paired_options("CORE_OPTIONS", [CORE_OPTIONS])
+_require_paired_options("_COVERAGE_PAIRS", _COVERAGE_PAIRS)
+
+
 def _combo_problem(combo: tuple[str, ...], trace: Any, tmp_path: Path) -> str | None:
     """How one option combination breaks its pinned verdict, else ``None``."""
 
@@ -376,7 +395,12 @@ def test_draw_pinned_refusals(combo: tuple[str, ...], sweep_trace: Any, tmp_path
     _exercise_combo(combo, sweep_trace, tmp_path)
 
 
-_SAMPLED = _SINGLES + _CORE_PAIRS + [pair for pair in _COVERAGE_PAIRS if pair not in _CORE_PAIRS]
+_CORE_PAIR_SETS = {frozenset(pair) for pair in _CORE_PAIRS}
+_SAMPLED = (
+    _SINGLES
+    + _CORE_PAIRS
+    + [pair for pair in _COVERAGE_PAIRS if frozenset(pair) not in _CORE_PAIR_SETS]
+)
 
 
 @pytest.mark.heavy

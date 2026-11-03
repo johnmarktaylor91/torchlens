@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any
 from .._io import _json
 from .._user_funcs import (
     validate_backward_pass,
-    validate_batch_of_models_and_inputs,
     validate_forward_pass,
 )
 from .diagnostics import (
@@ -1335,7 +1334,6 @@ __all__ = [
     "last_validation_failure",
     "last_validation_peak_memory",
     "validate_backward_pass",
-    "validate_batch_of_models_and_inputs",
     "validate_forward_pass",
     "check_metadata_invariants",
     "validate_tlspec",

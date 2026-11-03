@@ -50,7 +50,7 @@ _LATENTS_WARN_BYTES = 256 * 1024**2
 #: Warning codes already emitted this session (each code fires once).
 _WARNED_CODES: set[str] = set()
 
-_DOCS = "docs/recipes/pretrained_saes.md"
+_DOCS = "docs/field-guide/pretrained_saes.md"
 
 
 def _keep_leading_positions(
@@ -516,7 +516,7 @@ def _replayed(clean: Any, site: str, name: str, module: nn.Module) -> Any:
     from torchlens.intervention.helpers import splice_module
 
     fork = clean.fork(name)
-    fork.attach_hooks(label_selector(site), splice_module(module, input_route="out"))
+    fork._attach_hooks(label_selector(site), splice_module(module, input_route="out"))
     fork.push()
     return fork
 
