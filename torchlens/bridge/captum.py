@@ -456,7 +456,7 @@ def _spliced_forward(probe: _SiteProbe) -> Any:
     model = probe.model()
     seen = {"count": 0}
 
-    def splice(out: Any, *, hook: Any) -> Any:
+    def splice(out: Any, *, ctx: Any) -> Any:
         """Route the ``probe.ordinal``-th firing of the site through the probe.
 
         The downstream forward gets a clone of what the probe returned: an
