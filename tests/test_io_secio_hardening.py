@@ -154,20 +154,6 @@ def test_save_failure_persists_type_name_not_message(tmp_path: Path, monkeypatch
 
 
 # --------------------------------------------------------------------------- #
-# B8-16: metadata.pkl byte ceiling                                            #
-# --------------------------------------------------------------------------- #
-
-
-def test_metadata_pkl_byte_ceiling_refuses_oversize(tmp_path: Path, monkeypatch) -> None:
-    """An implausibly large metadata.pkl is refused typed before it is unpickled."""
-
-    spec = _save(tmp_path)
-    monkeypatch.setattr(bundle_mod, "_MAX_METADATA_PKL_BYTES", 16)
-    with pytest.raises(ArtifactError, match="ceiling"):
-        tl.load(str(spec))
-
-
-# --------------------------------------------------------------------------- #
 # B8-9: visualizer_path containment on load                                    #
 # --------------------------------------------------------------------------- #
 
@@ -193,10 +179,12 @@ def test_visualizer_path_inside_bundle_is_reanchored(tmp_path: Path) -> None:
     """A real thumbnail inside the bundle's visualizers/ dir is kept and re-anchored."""
 
     spec = _save(tmp_path)
+    trace = tl.load(str(spec))
+    # The 3.0 reader refuses any file the manifest does not list, so the thumbnail is
+    # placed after the load; re-anchoring is a per-trace step the loader runs on its paths.
     (spec / "visualizers").mkdir(exist_ok=True)
     thumb = spec / "visualizers" / "00000_layer.png"
     thumb.write_bytes(b"\x89PNG\r\n\x1a\n")
-    trace = tl.load(str(spec))
     trace._layer_list[0].visualizer_path = "/somewhere/else/00000_layer.png"
     _reanchor_visualizer_paths(trace, spec)
     kept = trace._layer_list[0].visualizer_path

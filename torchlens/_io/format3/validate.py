@@ -496,7 +496,9 @@ def _check_trace_containers(tables: Mapping[str, list[dict[str, Any]]], root: Pa
             raise _invariant_error(
                 root, f"trace.{field} is not a container", field=field, code=_CODE
             )
-        if len(container) != _rows_of(tables, kind):
+        if kind == "op":
+            _check_op_coverage(tables, trace, field, root)
+        elif len(container) != _rows_of(tables, kind):
             raise _invariant_error(
                 root,
                 f"trace.{field} holds {len(container)} entries but the {kind} table has "
@@ -504,6 +506,36 @@ def _check_trace_containers(tables: Mapping[str, list[dict[str, Any]]], root: Pa
                 field=field,
                 code=_CODE,
             )
+
+
+def _check_op_coverage(
+    tables: Mapping[str, list[dict[str, Any]]], trace: Mapping[str, Any], field: str, root: Path
+) -> None:
+    """The op table is exactly the retained refs plus the orphan refs (keep_orphans saves).
+
+    Every op row must be reached by ``_layer_list`` or ``_orphan_logs`` and every ref must be
+    a row; a row neither references (a forged extra) or a dangling ref refuses. The
+    ``_layer_dict_main_keys`` values are the retained ops themselves.
+    """
+
+    container = trace[field]
+    refs = list(container.values()) if isinstance(container, dict) else list(container)
+    orphans = trace.get("_orphan_logs")
+    covered = {id(op) for op in refs}
+    if field == "_layer_list" and isinstance(orphans, (list, tuple)):
+        covered |= {id(op) for op in orphans}
+    rows = {id(row) for row in tables.get("op", ())}
+    if field == "_layer_dict_main_keys":
+        retained = trace.get("_layer_list")
+        rows = {id(op) for op in retained} if isinstance(retained, list) else rows
+    if covered != rows:
+        raise _invariant_error(
+            root,
+            f"trace.{field} covers {len(covered)} op rows but {len(rows)} are expected: "
+            f"{len(rows - covered)} unreferenced, {len(covered - rows)} dangling",
+            field=field,
+            code=_CODE,
+        )
 
 
 def _check_orphans_disjoint(tables: Mapping[str, list[dict[str, Any]]], root: Path) -> None:

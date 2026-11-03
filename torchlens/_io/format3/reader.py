@@ -24,6 +24,7 @@ from ..._data_classes.field_policy import StorageKind
 from ..format_contract import BlobRef
 from ..state_contract import governed_artifact_load
 from . import contract
+from .container import verify_member_reference
 from .decode import (
     CELL_CODE,
     DEVICE_TEXT,
@@ -773,18 +774,16 @@ def _iter_members(
             raise integrity_error(
                 root / relpath, "member files must belong to a declared member", code=_CORRUPT
             )
-    for path, name in declared.items():
-        member_root = root / path
+    for member in metadata["members"]:
+        member_root = root / member["path"]
         symlink_guard(member_root, "bundle member")
-        yield name, member_root
+        verify_member_reference(member_root, member, required=True)
+        yield member["name"], member_root
 
 
 def load_intervention_recipe(path: str | Path) -> Any:
-    """Load the intervention recipe (``intervention.json``) of a trace or intervention artifact.
-
-    Built-in edits come back through the helper registry; a callable placeholder loads as an
-    audit-only edit every rerun door refuses (``run_intervention_spec_not_persisted``).
-    """
+    """Load the recipe (``intervention.json``) of a trace or intervention artifact: built-in edits
+    through the helper registry; a callable placeholder is an audit-only edit (rerun refuses)."""
 
     root = Path(path)
     manifest = validate_artifact(root)
