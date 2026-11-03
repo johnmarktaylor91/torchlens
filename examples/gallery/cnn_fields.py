@@ -141,13 +141,15 @@ def measure(
         "oracles",
         "analytic_box",
         gallery.Check(
-            "exact clipped box and exact status",
+            "exact match of the clipped box (relation reported, not graded)",
             {
                 "expected": [lo, hi],
                 "measured": [[a.clipped_start, a.clipped_stop] for a in box.axes[-2:]],
+                # A strided hull is labelled upper_bound by contract: it may hold
+                # positions that influence nothing (docs/reference/selection_completeness.md).
                 "status": box.status.value,
             },
-            box.exact and torch.equal(spatial, expected),
+            torch.equal(spatial, expected),
         ),
     )
     empirical = gradient_mask(model, x, layer, unit)
@@ -234,18 +236,16 @@ def measure(
     trace.save(artifact, level="portable", overwrite=True)
 
     def replay(loaded: Any) -> dict[str, Any]:
-        """Apply the saved-input edit without propagation, then rerun the model."""
-        fork = loaded.fork()
-        fork.do(
-            tl.units(source.label, outside),
-            tl.zero_ablate(),
-            intervention=tl.options.InterventionOptions(engine="set_only"),
-        )
-        # Input-leaf edits use set_only; rerun consumes the edited saved input.
-        fork.run(model, fork.input_ops[0].out)
-        delta = abs(float(fork[layer].out[unit]) - baseline)
+        """Zero the outside field of the reloaded input and rerun the model plainly."""
+        saved_input = loaded.input_ops[0].out
+        saved_baseline = float(loaded[layer].out[unit])
+        rerun = tl.trace(model, saved_input.masked_fill(outside, 0), save=tl.module(layer))
+        delta = abs(float(rerun.modules[layer].out[unit]) - saved_baseline)
         return {
-            "matched": delta == OUTSIDE_DELTA and delta == outside_delta,
+            "matched": torch.equal(saved_input, x)
+            and saved_baseline == baseline
+            and delta == OUTSIDE_DELTA
+            and delta == outside_delta,
             "outside_unit_delta": delta,
             "in_memory_delta": outside_delta,
         }

@@ -185,7 +185,14 @@ def measure(
     }
     reference = {key: reference_rdm(value) for key, value in plain.items()}
     correlations = {key: pearson(measured[key], reference[key]) for key in keys}
-    errors = {key: float(np.max(np.abs(measured[key] - reference[key]))) for key in keys}
+    # Spec oracle: tl.neuro.rdms against rsatoolbox's own pipeline on the same TorchLens values.
+    errors = {
+        key: float(np.max(np.abs(measured[key] - reference_rdm(record.out.detach()))))
+        for key, record in zip(keys, records, strict=True)
+    }
+    # Reported beside it: the same RDMs against plain hooks. Capture holds the fused
+    # attention fast path off, so on ViT these differ at float32 rounding.
+    plain_errors = {key: float(np.max(np.abs(measured[key] - reference[key]))) for key in keys}
     permutation = np.random.default_rng(SHUFFLE_SEED).permutation(len(ids))
     shuffled_ids = [ids[i] for i in permutation]
     shuffled = {key: pearson(measured[key], reference_rdm(plain[key][permutation])) for key in keys}
@@ -215,7 +222,7 @@ def measure(
             all(value >= CORRELATION_MIN for value in correlations.values()),
         ),
         "rsatoolbox_pipeline": gallery.Check(
-            f"each max absolute error <= {RDM_ATOL}",
+            f"rsatoolbox on the same TorchLens values; each max absolute error <= {RDM_ATOL}",
             errors,
             all(value <= RDM_ATOL for value in errors.values()),
         ),
@@ -274,6 +281,7 @@ def measure(
         "synthetic_target": stages[-1],
         "residual_adds": len(adds),
         "stimulus_order_mismatch": ids != shuffled_ids,
+        "plain_hooks_rdm_max_abs_error": plain_errors,
     }
     entry.verbs = ("capture", "select", "read", "compare", "save")
     entry.architectures = ("ResNet-18" if arch == "resnet18" else "ViT-B/16",)
