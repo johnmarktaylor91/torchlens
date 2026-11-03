@@ -204,7 +204,7 @@ def test_gradient_flow_audit_empty_torch_only_and_defaults() -> None:
     non_torch = tl.debug.grad_health(RaisingGradTrace()).to_pandas()  # type: ignore[arg-type]
     params = signature(tl.debug.grad_health).parameters
 
-    assert "re-trace backward_ready=True" in no_backward.attrs["message"]
+    assert "CaptureOptions(save_grads=True)" in no_backward.attrs["message"]
     assert non_torch.attrs["message"] == "torch-only"
     assert params["vanishing_threshold"].default == 1e-7
     assert params["exploding_threshold"].default == 1e4

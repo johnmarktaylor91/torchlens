@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from torchlens._data_classes.op import Op
     from torchlens._data_classes.trace import Trace
 
-from .._debug_report import Report, table_report, trace_subject
+from .._debug_report import Report, at_source, table_report, trace_subject
 from ._common import (
     _compute_ops,
     _op_from_label,
@@ -64,13 +64,17 @@ class LineageReport(Report):
         """One-line findings for the card, most severe first."""
 
         findings = [self.message] if self.message else []
-        findings.extend(f"{node[0]} (depth {node[1]})" for node in self.nodes)
+        findings.extend(f"{node[0]} (depth {node[1]}){at_source(node[2])}" for node in self.nodes)
         return findings
 
     def _report_rows(self) -> list[dict[str, Any]] | None:
-        """The natural table rows behind ``to_pandas()``."""
+        """The natural table rows behind ``to_pandas()``.
 
-        names = ("label", "depth", "func_name", "shape", "module")
+        Columns follow the node tuple: ``label``, ``depth``, ``source_line``,
+        ``shape``, ``dtype``.
+        """
+
+        names = ("label", "depth", "source_line", "shape", "dtype")
         return [dict(zip(names, node, strict=False)) for node in self.nodes]
 
 
@@ -157,7 +161,9 @@ def lineage(
     )
 
 
-def _activation_row(label: str, status: str, reason: str) -> dict[str, Any]:
+def _activation_row(
+    label: str, status: str, reason: str, source_line: str | None = None
+) -> dict[str, Any]:
     """Build a minimal activation-unavailable comparison row.
 
     Parameters
@@ -168,6 +174,8 @@ def _activation_row(label: str, status: str, reason: str) -> dict[str, Any]:
         Presence status.
     reason:
         Unavailable reason.
+    source_line:
+        ``"file:line"`` of the user code that ran the op, when known.
 
     Returns
     -------
@@ -184,7 +192,62 @@ def _activation_row(label: str, status: str, reason: str) -> dict[str, Any]:
         "mean_abs": None,
         "allclose": None,
         "reason": reason,
+        "source_line": source_line,
     }
+
+
+def _align_for_compare(
+    out_a: torch.Tensor, out_b: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor, str] | None:
+    """Bring two activations onto one device and dtype so they can be compared.
+
+    A CPU run against a GPU run, or a float32 run against a float64 run, is
+    exactly the comparison a user wants to see; the values are moved to the
+    CPU and compared in the wider dtype (``torch.promote_types``). Only a
+    shape mismatch truly cannot be compared.
+
+    Returns
+    -------
+    tuple[torch.Tensor, torch.Tensor, str] | None
+        The aligned pair and a note saying what was aligned (``""`` when
+        nothing was), or ``None`` when the shapes differ.
+    """
+
+    if out_a.shape != out_b.shape:
+        return None
+    notes = []
+    a, b = out_a.detach(), out_b.detach()
+    if a.device != b.device:
+        notes.append(f"devices differ ({a.device} vs {b.device}): compared on cpu")
+        a, b = a.cpu(), b.cpu()
+    if a.dtype != b.dtype:
+        common = torch.promote_types(a.dtype, b.dtype)
+        notes.append(
+            f"dtypes differ ({str(a.dtype).removeprefix('torch.')} vs "
+            f"{str(b.dtype).removeprefix('torch.')}): compared in "
+            f"{str(common).removeprefix('torch.')}"
+        )
+        a, b = a.to(common), b.to(common)
+    return a, b, "; ".join(notes)
+
+
+def _compare_coverage(rows: list[dict[str, Any]]) -> str:
+    """Return the compare card's coverage line: compared vs skipped, and why."""
+
+    compared = sum(1 for row in rows if row["allclose"] is not None)
+    aligned = sum(1 for row in rows if row["allclose"] is not None and row["reason"])
+    skipped: dict[str, int] = {}
+    for row in rows:
+        if row["allclose"] is None:
+            reason = str(row["reason"] or row["status"])
+            skipped[reason] = skipped.get(reason, 0) + 1
+    text = f"{compared} of {len(rows)} ops compared"
+    if aligned:
+        text += f" ({aligned} after moving to one device or dtype)"
+    if skipped:
+        detail = ", ".join(f"{reason}: {count}" for reason, count in skipped.items())
+        text += f"; {sum(skipped.values())} not compared ({detail})"
+    return text
 
 
 def _compare_rows(
@@ -249,11 +312,11 @@ def _compare_rows(
         op_b = ops_b.get(label)
         if op_a is None:
             summary["only_b"] += 1
-            rows.append(_activation_row(label, "only-b", "only-b"))
+            rows.append(_activation_row(label, "only-b", "only-b", _source_line(op_b)))
             continue
         if op_b is None:
             summary["only_a"] += 1
-            rows.append(_activation_row(label, "only-a", "only-a"))
+            rows.append(_activation_row(label, "only-a", "only-a", _source_line(op_a)))
             continue
 
         out_a, reason_a = _safe_out(op_a)
@@ -271,6 +334,7 @@ def _compare_rows(
             "mean_abs": None,
             "allclose": None,
             "reason": "",
+            "source_line": _source_line(op_a) or _source_line(op_b),
         }
         if not shape_match:
             summary["shape_mismatch"] += 1
@@ -284,21 +348,18 @@ def _compare_rows(
             row["reason"] = "non-tensor/container"
             rows.append(row)
             continue
-        if out_a.device != out_b.device:
+        aligned = _align_for_compare(out_a, out_b)
+        if aligned is None:
             summary["activation_unavailable"] += 1
-            row["reason"] = "device-mismatch"
+            row["reason"] = "shape-mismatch"
             rows.append(row)
             continue
-        if out_a.shape != out_b.shape or out_a.dtype != out_b.dtype:
-            summary["activation_unavailable"] += 1
-            row["reason"] = "shape-or-dtype-mismatch"
-            rows.append(row)
-            continue
+        cmp_a, cmp_b, row["reason"] = aligned
 
-        delta = torch.abs(out_a.detach() - out_b.detach())
+        delta = torch.abs(cmp_a - cmp_b)
         max_abs = float(delta.max().item()) if delta.numel() else 0.0
         mean_abs = float(delta.mean().item()) if delta.numel() else 0.0
-        allclose = bool(torch.allclose(out_a, out_b, rtol=rtol, atol=atol))
+        allclose = bool(torch.allclose(cmp_a, cmp_b, rtol=rtol, atol=atol))
         if allclose:
             summary["matched"] += 1
         else:
@@ -345,8 +406,13 @@ def compare(
     Report
         Tabular ``tl.debug`` report; ``.to_pandas()`` returns the
         DataFrame described here.
-        One row per pass-qualified op with summary counts in ``df.attrs``.
-        The optional view over :func:`_compare_rows` (the pandas-free core).
+        One row per pass-qualified op with summary counts in ``df.attrs``;
+        ``source_line`` is the ``"file:line"`` of the user code that ran the
+        op. Activations on different devices are compared on the CPU, and
+        different floating dtypes in the wider dtype (the row's ``reason``
+        says so); the card's coverage line counts the ops that could not be
+        compared and why. The optional view over :func:`_compare_rows` (the
+        pandas-free core).
     """
 
     rows, attrs = _compare_rows(trace_a, trace_b, rtol=rtol, atol=atol)
@@ -362,6 +428,7 @@ def compare(
             "mean_abs",
             "allclose",
             "reason",
+            "source_line",
         ],
     )
     frame.attrs.update(attrs)
@@ -369,7 +436,8 @@ def compare(
         "compare",
         frame,
         subject=f"{trace_subject(trace_a)} vs {trace_subject(trace_b)}",
-        finding_columns=("op", "status", "max_abs", "reason"),
+        finding_columns=("op", "status", "max_abs", "reason", "source_line"),
+        coverage=_compare_coverage(rows),
     )
 
 
@@ -384,10 +452,14 @@ def first_divergence(
 
     A divergence row is one whose compared payloads crossed tolerance
     (``allclose=False``), mismatched shape, or exists in only one trace.
-    Rows whose payloads could not be compared (unsaved, non-tensor,
-    device-mismatch) are NOT divergences; they are disclosed under
-    ``attrs["activation_unavailable"]`` by :func:`_compare_rows`, and a
-    divergence inside such a region cannot be excluded.
+    Payloads on different devices (a CPU run against a GPU run) are compared
+    on the CPU, and different floating dtypes in the wider dtype, so those
+    runs diverge where their values really separate. Rows whose payloads
+    could not be compared at all (unsaved, non-tensor, non-floating) are NOT
+    divergences; ``print(tl.debug.compare(trace_a, trace_b))`` counts them
+    on its coverage line, and a divergence inside such a region cannot be
+    excluded. The row's ``source_line`` is the ``"file:line"`` of the user
+    code that ran the op.
 
     Parameters
     ----------
@@ -443,6 +515,7 @@ def dead_neurons_rows(
     skipped = 0
     for op in _compute_ops(trace):
         label = _op_label(op)
+        source_line = _source_line(op)
         out, reason = _safe_out(op)
         reason = reason or _tensor_unavailable_reason(out)
         if reason is not None:
@@ -455,6 +528,7 @@ def dead_neurons_rows(
                     "dead_frac": None,
                     "sample_dead_idx": [],
                     "reason": reason,
+                    "source_line": source_line,
                 }
             )
             continue
@@ -472,6 +546,7 @@ def dead_neurons_rows(
                     "dead_frac": None,
                     "sample_dead_idx": [],
                     "reason": "invalid-dim",
+                    "source_line": source_line,
                 }
             )
             continue
@@ -494,6 +569,7 @@ def dead_neurons_rows(
                 "dead_frac": 0.0 if total_units == 0 else dead_count / total_units,
                 "sample_dead_idx": dead_indices[:10],
                 "reason": "",
+                "source_line": source_line,
             }
         )
 
@@ -531,7 +607,8 @@ def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> Repor
         Tabular ``tl.debug`` report; ``.to_pandas()`` returns the
         DataFrame described here.
         Columns are ``op``, ``total_units``, ``dead_count``, ``dead_frac``,
-        ``sample_dead_idx``, and ``reason``. The optional view over
+        ``sample_dead_idx``, ``reason``, and ``source_line`` (``"file:line"``
+        of the user code that ran the op). The optional view over
         :func:`dead_neurons_rows` (the pandas-free core).
     """
 
@@ -539,12 +616,20 @@ def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> Repor
     pd = _require_pandas()
     frame = pd.DataFrame(
         rows,
-        columns=["op", "total_units", "dead_count", "dead_frac", "sample_dead_idx", "reason"],
+        columns=[
+            "op",
+            "total_units",
+            "dead_count",
+            "dead_frac",
+            "sample_dead_idx",
+            "reason",
+            "source_line",
+        ],
     )
     frame.attrs.update(attrs)
     return table_report(
         "dead_neurons",
         frame,
         subject=trace_subject(trace),
-        finding_columns=("op", "dead_count", "total_units", "dead_frac"),
+        finding_columns=("op", "dead_count", "total_units", "dead_frac", "source_line"),
     )
