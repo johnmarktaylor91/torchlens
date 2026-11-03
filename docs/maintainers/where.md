@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1367 modules, 631963 lines, 0 modules without a docstring.
+84 packages, 1367 modules, 631955 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 67 | 31903 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 67 | 31901 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1237 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -34,12 +34,12 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 3 | 549 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14711 |
 | `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 16 | 9503 |
-| `torchlens._semantic` | Semantic facet views for TorchLens records. | 10 | 6702 |
+| `torchlens._semantic` | Semantic facet views for TorchLens records. | 10 | 6701 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2937 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2118 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 12 | 4092 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 35 | 15823 |
-| `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6323 |
+| `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6318 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 66 | 42800 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1146 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 753 |
@@ -100,7 +100,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (67 modules, 31903 lines)
+TorchLens - extract outs and metadata from PyTorch models. (67 modules, 31901 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -152,7 +152,7 @@ TorchLens - extract outs and metadata from PyTorch models. (67 modules, 31903 li
 | `_state` | Global state for torchlens toggle-gated decoration. | 1394 |
 | `_storage_bindings` | Record and restore the storage binding of a parameter or buffer. | 162 |
 | `_surface` | SURFACE-table machinery: the root surface as machine-readable rows ( item 7). | 121 |
-| `_trace_selector_helpers` | Internal predicate and selector helpers for public trace capture. | 836 |
+| `_trace_selector_helpers` | Internal predicate and selector helpers for public trace capture. | 834 |
 | `_trace_slice` | ''TraceSlice'': the sub-DAG view presenter (L6 graph slice, P2). | 401 |
 | `_trace_state` | Trace-state vocabulary and the capture-state predicates shared across layers. | 49 |
 | `_training_validation` | Shared validation helpers for training-compatible capture modes. | 203 |
@@ -695,16 +695,16 @@ Selection: naming sites and resolving them on a trace. (16 modules, 9503 lines)
 
 ### `torchlens._semantic`
 
-Semantic facet views for TorchLens records. (10 modules, 6702 lines)
+Semantic facet views for TorchLens records. (10 modules, 6701 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Semantic facet views for TorchLens records. | 22 |
+| `__init__` | Semantic facet views for TorchLens records. | 28 |
 | `_families` | Facet families: facets a registered codec (an SAE's latents) serves on its home op. | 100 |
 | `_hops` | Hop rule: grammar proposes, payload identity verifies (mikit /, wave 0a). | 430 |
 | `_norm_reconstruction` | Shared, validated norm linearization record (mikit , build item 3). | 350 |
 | `coverage` | Facet-coverage reporting for the recipe-maintenance pipeline. | 218 |
-| `facets` | Derived semantic facet views for TorchLens records. | 2005 |
+| `facets` | Derived semantic facet views for TorchLens records. | 1998 |
 | `logit_lens` | Logit-lens appliance over semantic facets. | 1397 |
 | `patching` | Prebuilt activation and attribution patching helpers for facets. | 1324 |
 | `reconstruction` | Read-only reconstruction helpers for semantic facets. | 661 |
@@ -806,7 +806,7 @@ Shared helpers used by two or more TorchLens packages. (35 modules, 15823 lines)
 
 ### `torchlens._utils.rng`
 
-RNG state for reproducible capture and replay, and the host-nondeterminism monitor. (17 modules, 6323 lines)
+RNG state for reproducible capture and replay, and the host-nondeterminism monitor. (17 modules, 6318 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -820,7 +820,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 | `generator_sweep` | Model-held torch generator sweep: digests every generator a model can reach. | 394 |
 | `inventory_types` | Receiver, holder and leaf type tables for the monitor's RNG instance inventory. | 564 |
 | `inventory_walk` | Holder, leaf and namespace walk rules of the monitor's RNG instance inventory. | 516 |
-| `monitor` | The host-nondeterminism monitor: the capture-window context manager. | 1576 |
+| `monitor` | The host-nondeterminism monitor: the capture-window context manager. | 1571 |
 | `monitor_state` | Process-wide slots of the host-nondeterminism monitor: the active window and patch stacks. | 132 |
 | `numpy_frames` | Candidate children of a NumPy frame for the frame-local RNG snapshot. | 199 |
 | `registry` | The frozen host-nondeterminism channel registry and the torch RNG surface tables. | 750 |
