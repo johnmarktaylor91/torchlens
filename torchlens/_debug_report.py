@@ -238,7 +238,7 @@ class Report:
             The rendered card.
         """
 
-        from .report._report_protocol import ReportLead, render_report_card
+        from .report._report_protocol import ReportLead, render_report_card  # deferred: cycle
 
         lead = ReportLead(
             report_type=self.report_type,

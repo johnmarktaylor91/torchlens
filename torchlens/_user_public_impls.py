@@ -869,7 +869,7 @@ def _downgrade_retrace_mismatch_to_unverified(trace: Trace) -> None:
         Validation trace whose pristine re-trace diverged structurally.
     """
 
-    from .validation.status import ValidationStatus
+    from .validation.status import ValidationStatus  # deferred: cycle validation
 
     current_status = trace.validation_replay_status
     unverified_reason_counts = dict(current_status.unverified_reason_counts)
@@ -941,7 +941,7 @@ def _refuse_validation_precondition(
     """
 
     warnings.warn(message, RuntimeWarning, stacklevel=3)
-    from .validation.diagnostics import (
+    from .validation.diagnostics import (  # deferred: cycle validation
         CHECK_PRECONDITION,
         ValidationFailure,
         record_validation_failure,
@@ -1039,7 +1039,7 @@ def _validate_forward_pass_torch(
         True if all validation checks pass, False otherwise.
     """
     warn_parallel()
-    from .validation.diagnostics import reset_validation_failure
+    from .validation.diagnostics import reset_validation_failure  # deferred: cycle validation
 
     # Clear any stale precondition-refusal failure from a prior call on this
     # process (CHECK_PRECONDITION sites below have no Trace to reset against,
@@ -1189,7 +1189,7 @@ def _validate_forward_pass_torch(
                 {"code": COPY_FAILED_CODE} if plain_attr_snapshot.copy_failure else None,
             )
         from .backends.torch._ops_containers import _walk_output_tensors_with_paths
-        from .validation._pristine import pristine_ground_truth_oracle
+        from .validation._pristine import pristine_ground_truth_oracle  # deferred: cycle validation
 
         # R75-1: the phase-0 ground truth must observe through PRISTINE
         # torch. In a wrapped process this forward used to run through the
@@ -1232,7 +1232,7 @@ def _validate_forward_pass_torch(
         # a missing output. Cross-check the adapter's enumeration against the
         # validation-owned independent traversal; a disagreement is a capture
         # (or adapter) bug and must FAIL validation, never pass silently.
-        from .validation._output_walk import independent_output_tensor_ids
+        from .validation._output_walk import independent_output_tensor_ids  # deferred: cycle
 
         adapter_leaf_ids = {id(entry[0]) for entry in ground_truth_output_all}
         independent_leaf_ids = set(independent_output_tensor_ids(ground_truth_output))
@@ -1406,7 +1406,7 @@ def _validate_forward_pass_torch(
         # DIRECT repeat call reports this-run evidence only (B8-43); the
         # retrace diagnostics recorded above belong to THIS flow, so they are
         # snapshotted and re-prepended after the replay run.
-        from .validation.diagnostics import (
+        from .validation.diagnostics import (  # deferred: cycle validation
             MAX_VALIDATION_DIAGNOSTICS,
             TRACE_DIAGNOSTICS_ATTR,
             get_validation_diagnostics,
@@ -1422,7 +1422,7 @@ def _validate_forward_pass_torch(
         if retrace_outcome == "mismatch":
             _downgrade_retrace_mismatch_to_unverified(trace)
             outs_are_valid = False
-            from .validation.diagnostics import (
+            from .validation.diagnostics import (  # deferred: cycle validation
                 CHECK_RETRACE_MISMATCH,
                 ValidationFailure,
                 record_validation_failure,
@@ -1540,7 +1540,7 @@ def validate_backward_pass(
     bool
         True if backward capture matches stock autograd.
     """
-    from .validation.backward import validate_backward_pass as _impl
+    from .validation.backward import validate_backward_pass as _impl  # deferred: cycle validation
 
     return _impl(
         model,
