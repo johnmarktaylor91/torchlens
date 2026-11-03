@@ -303,8 +303,10 @@ def _refuse_ungeometric(descriptor: ReceptiveField, seed_op: Any, target: Any) -
         raise _unresolvable(
             "influence_geometry_unavailable",
             f"influence geometry between {seed_op.label!r} and {target.label!r} is "
-            f"unavailable (field status {descriptor.status.value!r}): {error} "
-            "Use method='gradient' on a backward-ready trace for an empirical answer.",
+            f"unavailable (field status {descriptor.status.value!r}): the field engine has no "
+            "per-unit index geometry along this path (data-dependent mixing such as "
+            "attention has none). For an empirical answer pass method='gradient' on a "
+            f"trace captured with capture={_GRADIENT_CAPTURE}.",
             code="influence_geometry_unavailable",
             seed_site=seed_op.label,
             target_site=target.label,
@@ -471,6 +473,9 @@ def _refuse_over_probe_budget(seed_units: int, target_sites: int, probe_budget: 
             probes=total,
             probe_budget=probe_budget,
         )
+
+
+_GRADIENT_CAPTURE = 'tl.options.CaptureOptions(backward_ready=True, save_mode="reference")'
 
 
 def _gradient_influence(

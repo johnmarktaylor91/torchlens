@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from fractions import Fraction
 from importlib import import_module
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from .._selection.graph import _DEFAULT_PROBE_BUDGET, _influence
@@ -259,9 +260,34 @@ class ReceptiveFieldView:
             ) from exc
 
     @property
-    def status(self) -> ReceptiveFieldStatus:
-        """Return status for the only reachable input."""
+    def status(self) -> ReceptiveFieldStatus | Mapping[str, ReceptiveFieldStatus]:
+        """Return the field status, one per endpoint when several are reachable.
 
+        A status classifies each reachable endpoint on its own, so a view with
+        several reachable targets (projective) or inputs (receptive) answers
+        for every one instead of refusing: a read-only mapping from the
+        endpoint's IO role (the ``per_input`` keys) to its status. A projective
+        view of a GPT-2 activation, for example, reaches ``output.logits`` and
+        the cached keys and values of every later block. The geometry
+        accessors (``size``, ``jump``, ``center0``, ``axes``, ``axis_roles``)
+        still need one endpoint selected with ``view[role]``.
+
+        Returns
+        -------
+        ReceptiveFieldStatus or Mapping[str, ReceptiveFieldStatus]
+            The status for the only reachable endpoint, or the per-endpoint
+            mapping in reachability order when there are several.
+
+        Raises
+        ------
+        ReceptiveFieldError
+            If no endpoint is reachable.
+        """
+
+        if len(self.per_input) > 1:
+            return MappingProxyType(
+                {role: descriptor.status for role, descriptor in self.per_input.items()}
+            )
         return self._descriptor().status
 
     @property

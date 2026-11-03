@@ -4302,6 +4302,7 @@ The sections above describe each surface in depth.
 | `ReceptiveFieldView.axis_roles` | Axis layout of the viewed op's input grid |
 | `ReceptiveFieldView.of` | Many-unit influence region as a trace-bound `tl.Selection`, one region per `within=` site |
 | `ReceptiveFieldView.probe_grad` | Empirical gradient probe of one unit's receptive field |
+| `ReceptiveFieldView.status` | Field status of the only reachable endpoint, or a read-only mapping from each endpoint's IO role to its status when several are reachable (a projective view of a GPT-2 activation reaches the logits and every later block's cached keys and values) |
 | `Recipe.address_class` | Most restrictive address class over all rules (worst wins) |
 | `Recipe.decision` | The sole rule's normalized decision (`None` on multi-clause specs) |
 | `Recipe.door_pairs` | Lower the spec to `(site, action)` pairs for the hook doors |
