@@ -38,8 +38,10 @@ from torchlens.validation import last_validation_failure
 
 BASE_ORACLES: tuple[str, ...] = ("trace", "validate", "save", "load", "equality", "forward_match")
 _SCALARS = (int, float, bool, str, bytes, type(None))
-#: The one portable-save refusal the save oracle answers with an audit save (format.5).
+#: The one portable-save refusal the save oracle answers with a callable-level save (format.5).
 _PORTABLE_REFUSAL = "intervention_spec_not_portable"
+#: The level ``_save`` uses after that refusal: outs and argument snapshots stay real.
+_CALLABLE_LEVEL = "executable_with_callables"
 
 
 @dataclass(frozen=True)
@@ -97,7 +99,7 @@ class Cell:
     loaded: Any = None
     plain_output: list[Any] = field(default_factory=list)
     outcomes: dict[str, Outcome] = field(default_factory=dict)
-    #: The format.5 portable refusal ``_save`` asserted before saving at audit.
+    #: The format.5 portable refusal ``_save`` asserted before its callable-level save.
     portable_refusal: str = ""
 
     def changes(self, oracle: str) -> bool:
@@ -485,14 +487,15 @@ def _validate(cell: Cell) -> None:
 
 
 def _save(cell: Cell) -> None:
-    """Save the cell's trace portably, or at audit when format.5 refuses portable.
+    """Save the cell's trace portably, or with callables when format.5 refuses portable.
 
     ``docs/maintainers/saved_format_3.md`` section 5: a portable save of a recipe
-    holding a user callable refuses with ``intervention_spec_not_portable`` and the
-    remedy is ``level="audit"``. Only that code, on a trace whose audit recipe really
-    holds a callable placeholder, takes the audit path; the refusal is asserted
-    (nothing left on disk) and load and equality then run on the audit artifact.
-    Any other refusal, or this code on a callable-free trace, fails the cell.
+    holding a user callable refuses with ``intervention_spec_not_portable``. Only
+    that code, on a trace whose saved recipe really holds a callable placeholder,
+    takes the ``executable_with_callables`` path (it keeps outs and argument
+    snapshots and writes the callable as a non-executable placeholder); the refusal
+    is asserted (nothing left on disk) and load and equality then compare real
+    payloads. Any other refusal, or this code on a callable-free trace, fails the cell.
     """
 
     path = cell.tmp / "cell.tlspec"
@@ -505,7 +508,7 @@ def _save(cell: Cell) -> None:
             raise
         refusal = f"{type(exc).__name__}({_PORTABLE_REFUSAL}): {str(exc)[:200]}"
     cell.expect(not path.exists(), f"refused portable save left {path.name} on disk")
-    trace.save(path, level="audit")
+    trace.save(path, level=_CALLABLE_LEVEL)
     cell.expect(
         _recipe_holds_callable(path),
         f"portable save refused {_PORTABLE_REFUSAL} but the recipe holds no user callable",
@@ -659,7 +662,8 @@ def _finish(cell: Cell) -> CellResult:
     if cell.portable_refusal and outcomes.get("save") == Outcome("pass"):
         outcomes["save"] = Outcome(
             "pass",
-            f"portable refused as format.5 requires, audit save used: {cell.portable_refusal}",
+            f"portable refused as format.5 requires, {_CALLABLE_LEVEL} save used: "
+            f"{cell.portable_refusal}",
             code=_PORTABLE_REFUSAL,
         )
     gate = outcomes.get("trace")

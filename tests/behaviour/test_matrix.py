@@ -187,7 +187,8 @@ def test_cell(cell_result: CellResult) -> None:
     declare (``trace``), default forward validation with metadata invariants
     passes (``validate``), a portable save succeeds, or refuses with
     ``intervention_spec_not_portable`` on a recipe holding a user callable and
-    the audit save stands in (format.5) (``save``), the artifact loads (``load``), the loaded trace equals the live one through the public
+    the ``executable_with_callables`` save stands in (format.5) (``save``), the
+    artifact loads (``load``), the loaded trace equals the live one through the public
     surface (``equality``), and the output equals a plain forward or the replay
     a feature declares (``forward_match``). Then each active feature's own
     promise on the live and loaded traces (``feature:<name>``).
@@ -245,7 +246,7 @@ def test_cell_verdict_names_every_unsatisfied_oracle() -> None:
 
 
 def test_callable_free_intervene_cell_still_saves_portably(tmp_path: Path) -> None:
-    """A built-in edit recipe saves portably: the format.5 audit path stays unused."""
+    """A built-in edit recipe saves portably: the format.5 callable-level path stays unused."""
 
     result = run_cell(case_by_name("toy:simple_ff"), (feature("intervene"),), tmp_path / "cell")
     assert result.outcomes["save"] == Outcome("pass")
@@ -291,14 +292,14 @@ class _SaveCell:
 
 
 def test_portable_refusal_without_a_user_callable_fails_the_save_oracle(tmp_path: Path) -> None:
-    """The format.5 code on a callable-free recipe is a finding, never an audit fallback."""
+    """The format.5 code on a callable-free recipe is a finding, never a callable-level fallback."""
 
     with pytest.raises(OracleFailure, match="holds no user callable"):
         _save(_SaveCell(tmp_path, _PORTABLE_REFUSAL))
 
 
 def test_any_other_portable_refusal_still_refuses_the_save_oracle(tmp_path: Path) -> None:
-    """Only ``intervention_spec_not_portable`` takes the audit path; other codes propagate."""
+    """Only ``intervention_spec_not_portable`` takes the callable-level path; other codes propagate."""
 
     cell = _SaveCell(tmp_path, "some_other_refusal")
     with pytest.raises(OpaqueCallableError):
