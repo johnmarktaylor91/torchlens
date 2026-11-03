@@ -525,7 +525,7 @@ def logged_splice_trace(
                 remedy="splice without log_latents=True, or at a site a module returns as a "
                 f"tensor; see {_DOCS}",
             )
-        from .sae import _encode_decode
+        from .sae import _encode_decode  # deferred: cycle bridge
 
         latents, _edited, replacement = _encode_decode(
             reconstruction._sae, output, reconstruction._latents_edit, reconstruction._start

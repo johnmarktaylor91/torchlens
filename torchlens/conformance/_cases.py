@@ -149,6 +149,7 @@ def _unavailable_rows(
     reason = probe() if callable(probe) else None
     if reason is None:
         return None
+    # deferred: cycle conformance
     from ._protocol_cases import c1_row_case_ids, c1_tail_case_ids, c2_row_case_ids
 
     row_ids = c1_row_case_ids if tier == "C1" else c2_row_case_ids
@@ -212,7 +213,7 @@ def run_c0_cases(adapter: Any) -> list[CaseResult]:
 def _run_capture(adapter: Any, model: RosterModel) -> tuple[Any, Any, Any]:
     """Build the roster model and capture once (validation-ready); return (net, trace, reference)."""
 
-    from ._validation_cells import capture_for_validation
+    from ._validation_cells import capture_for_validation  # deferred: cycle conformance
 
     net, example = model.builder()
     trace = capture_for_validation(adapter, net, example)
@@ -284,8 +285,8 @@ def run_c1_cases(adapter: Any, roster: tuple[RosterModel, ...]) -> list[CaseResu
 
     import warnings
 
-    from ._protocol_cases import run_c1_protocol_row_cases
-    from ._refusal_cases import run_c1_refusal_cases
+    from ._protocol_cases import run_c1_protocol_row_cases  # deferred: cycle conformance
+    from ._refusal_cases import run_c1_refusal_cases  # deferred: cycle conformance
 
     skipped = _unavailable_rows(adapter, roster, "C1", C1_MODEL_CASES)
     if skipped is not None:
@@ -437,6 +438,7 @@ def run_c2_cases(
 
     import warnings
 
+    # deferred: cycle conformance
     from ._protocol_cases import C2Reload, load_for_replay, run_c2_protocol_row_cases
 
     skipped = _unavailable_rows(adapter, roster, "C2", C2_MODEL_CASES)

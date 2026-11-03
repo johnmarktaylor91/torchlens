@@ -119,7 +119,7 @@ class TorchReferenceAdapter:
     def default_roster(self) -> tuple[RosterModel, ...]:
         """Torch's own roster (``_rosters/torch.py``): the reference rows."""
 
-        from ._rosters.torch import roster
+        from ._rosters.torch import roster  # deferred: cycle conformance
 
         return roster()
 
@@ -257,8 +257,8 @@ class FakeProviderAdapter:
         plain ``RuntimeError`` instead (the refusal cell must read failed).
         """
 
-        from ._protocol_cases import false_capability_flags
-        from ._refusal_cases import request_option_for_flag
+        from ._protocol_cases import false_capability_flags  # deferred: cycle conformance
+        from ._refusal_cases import request_option_for_flag  # deferred: cycle conformance
 
         for flag in false_capability_flags(self._delegate.protocol()):
             option = request_option_for_flag(flag)
@@ -347,7 +347,7 @@ class FakeProviderAdapter:
 def _drop_first_constant_payload(trace: Any) -> None:
     """Strip the saved payload of the first constant-like op (a recorded node without data)."""
 
-    from ._protocol_cases import constant_like_ops
+    from ._protocol_cases import constant_like_ops  # deferred: cycle conformance
 
     for op in constant_like_ops(trace):
         if getattr(op, "out", None) is not None:
@@ -415,7 +415,7 @@ def resolve_adapter(backend: str, *, plant: str | None = None) -> Any:
         providers enter through the c0 provider-API pack once activated).
     """
 
-    from ._preview_adapters import PREVIEW_ADAPTER_FACTORIES
+    from ._preview_adapters import PREVIEW_ADAPTER_FACTORIES  # deferred: cycle conformance
 
     factory = _ADAPTER_FACTORIES.get(backend) or PREVIEW_ADAPTER_FACTORIES.get(backend)
     if factory is not None:

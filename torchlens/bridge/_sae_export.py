@@ -269,7 +269,7 @@ def _dashboard_topk(dense: torch.Tensor, k: int) -> Any:
 def _warn_large_dashboard(latents: int, k: int, sequence: int) -> None:
     """Warn once per session when the dashboard JSON would pass ``_DASHBOARD_WARN_BYTES``."""
 
-    from .sae import _warn_once
+    from .sae import _warn_once  # deferred: cycle bridge
 
     code = "sae_export_dashboard_large"
     estimate = latents * k * sequence * 24

@@ -372,7 +372,7 @@ def dataset(
     """
 
     _require_lit_nlp()
-    from ._adapters import build_dataset
+    from ._adapters import build_dataset  # deferred: cycle bridge
 
     vocab = tuple(str(label) for label in labels) if labels is not None else None
     return build_dataset(examples, vocab, description)
@@ -393,6 +393,6 @@ def layout() -> Any:
     """
 
     _require_lit_nlp()
-    from ._adapters import build_layout
+    from ._adapters import build_layout  # deferred: cycle bridge
 
     return build_layout()

@@ -597,7 +597,7 @@ def _preview_scorecard(
     """:func:`preview_scorecard` with an explicit repository root for the
     file-based graduation items (the CLI's ``--repo-root``)."""
 
-    from . import _roster_for, run_conformance
+    from . import _roster_for, run_conformance  # deferred: cycle conformance
 
     adapter = resolve_adapter(backend)
     roster = _roster_for(adapter, None)

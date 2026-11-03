@@ -81,7 +81,7 @@ def capture_for_validation(adapter: Any, net: Any, example: Any) -> Any:
 
     import warnings
 
-    from ._protocol_cases import adapter_protocol
+    from ._protocol_cases import adapter_protocol  # deferred: cycle conformance
 
     options = validation_capture_options(adapter_protocol(adapter))
     trace_with = getattr(adapter, "trace_with", None)

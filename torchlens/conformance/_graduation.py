@@ -346,7 +346,7 @@ def graduation_report(backend: str) -> GraduationReport:
 def _graduation_report(backend: str, *, repo_root: Path | None = None) -> GraduationReport:
     """:func:`graduation_report` with an explicit repository root (the CLI's ``--repo-root``)."""
 
-    from ._scorecard import reference_scorecard_for, shipped_scorecard
+    from ._scorecard import reference_scorecard_for, shipped_scorecard  # deferred: cycle
 
     card = shipped_scorecard(backend)
     if card is None:
