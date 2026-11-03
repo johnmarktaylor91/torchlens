@@ -1124,8 +1124,8 @@ def _restore_jax_scalar_semantics(jax_module: Any, value: Any, entry: Any) -> An
         return value
     if metadata.get("weak_type") is True and getattr(value, "weak_type", False) is not True:
         try:
-            # Public lax.convert_element_type takes no weak_type; jax.lax re-exports this one.
-            value = jax_module.lax._convert_element_type(value, value.dtype, weak_type=True)
+            convert = jax_module._src.lax.lax._convert_element_type  # sole weak_type setter
+            value = convert(value, value.dtype, weak_type=True)
         except (AttributeError, TypeError, ValueError, RuntimeError) as exc:
             raise BackendRuntimeCompatibilityError(
                 "Portable JAX payload could not restore weak_type=True."
