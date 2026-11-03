@@ -12,13 +12,12 @@ from __future__ import annotations
 import copy
 import functools
 import inspect
-import pickle
 import re
 import warnings
 import weakref
 from collections import OrderedDict, defaultdict
 from collections.abc import Callable, Iterable, Iterator, Mapping, MutableMapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
@@ -29,7 +28,7 @@ from .._data_classes._state_adapter import state_items, state_new, state_restore
 from .._data_classes.trace import Trace, _scrubbed_transform_repr
 from ..errors._base import TorchLensWarning
 from . import TLSPEC_VERSION, ArtifactError, BlobRef, FieldPolicy, prerelease as _prerelease
-from ._small_raw import _small_raw_value
+from ._small_raw import _is_safely_picklable, _small_raw_value, _stringify_value
 from ._source_privacy import (
     _apply_advisory_source_policy,
     _apply_conditional_source_policy,
@@ -861,6 +860,7 @@ class _ScrubWalk:
     blob_counter: list[int]
     stringify_unknown: bool = False
     payload_owner: tuple[Any, str] | None = None
+    raw_payloads: bool = False
 
     @property
     def noun(self) -> str:
@@ -876,7 +876,7 @@ class _ScrubWalk:
         policies on a plain metadata walk sharing this walk's memo and blobs.
         """
 
-        if self.payload_owner is None and not self.stringify_unknown:
+        if self.payload_owner is None and not self.stringify_unknown and not self.raw_payloads:
             return self
         return _ScrubWalk(self.options, self.memo, self.blob_specs, self.blob_counter)
 
@@ -1088,6 +1088,15 @@ def _scrub_object_node(value: Any, walk: _ScrubWalk, depth: int) -> Any:
     """
 
     owner = walk.payload_owner
+    if owner is not None and walk.raw_payloads:
+        backend = "numpy" if isinstance(value, np.ndarray) else walk.options.backend_name
+        codec = get_payload_codec(backend)
+        if not codec.can_encode(value):
+            return value
+        options = replace(walk.options, backend_name=backend, payload_codec=codec)
+        return _blobify_tensor_field(
+            owner[0], owner[1], value, walk.blob_specs, walk.blob_counter, options
+        )
     if owner is not None and walk.options.payload_codec.can_encode(value):
         return _blobify_tensor_field(
             owner[0], owner[1], value, walk.blob_specs, walk.blob_counter, walk.options
@@ -1685,26 +1694,18 @@ def _scrub_raw_value_for_save(
     policy = getattr(owner, _RAW_SAVE_POLICY_ATTR.get(field_name, policy_name), "small")
     if policy is False:
         return None
-    if policy is True:
-        # Scrub with ``stringify_unknown=True`` (not the default
-        # passthrough) so live, un-picklable objects nested inside a raw
-        # input/output (generators, locks, open file handles, sockets, ...)
-        # fall through to ``_stringify_value``'s bounded placeholder instead
-        # of reaching ``pickle.dump`` unmodified. This mirrors the
-        # ``saved_args``/``forward_args``/``custom_attributes`` policy,
-        # which already uses a stringify fallback (via
-        # ``_blobify_recursive_value``) for exactly this class of object.
-        return _scrub_value(
-            value,
-            walk.options,
-            walk.memo,
-            walk.blob_specs,
-            walk.blob_counter,
-            stringify_unknown=True,
-        )
-    if policy != "small":
+    if policy not in (True, "small"):
         raise ArtifactError(f"{policy_name} must be 'small', True, or False.")
-    return _small_raw_value(value, field_name=field_name)
+    selected = value if policy is True else _small_raw_value(value, field_name=field_name)
+    raw_walk = _ScrubWalk(
+        walk.options,
+        walk.memo,
+        walk.blob_specs,
+        walk.blob_counter,
+        payload_owner=(owner, field_name),
+        raw_payloads=True,
+    )
+    return _scrub_node(selected, raw_walk, 0)
 
 
 def _blobify_tensor_field(
@@ -1810,77 +1811,6 @@ def _blobify_recursive_value(
 
     walk = _ScrubWalk(options, memo, blob_specs, blob_counter, payload_owner=(owner, field_name))
     return _scrub_node(value, walk, depth)
-
-
-def _stringify_value(value: Any) -> str:
-    """Convert a non-portable object into a stable placeholder string."""
-
-    return f"<scrubbed:{type(value).__name__}>"
-
-
-_KNOWN_SAFELY_PICKLABLE_TYPES = (torch.Tensor,)
-
-
-def _is_safely_picklable(value: Any) -> bool:
-    """Return whether ``value`` can be pickled without raising.
-
-    Used by :func:`_scrub_value`'s ``stringify_unknown`` path to decide
-    whether an unspecced leaf value (one with no
-    ``_PORTABLE_STATE_SPEC``) reached via ``save_raw_input``/
-    ``save_raw_output``'s ``True`` policy should be kept as-is (full
-    retention, per those options' docs) or degraded to a bounded
-    :func:`_stringify_value` placeholder. Probing picklability once, here,
-    at scrub time -- rather than letting the real ``pickle.dump()`` over
-    the full scrubbed state discover the problem later -- is what keeps
-    live-resource objects (generators, locks, open file handles, sockets,
-    ...) from ever reaching that later call, where a failure mid-write can
-    otherwise cost an already-saved bundle (see ``bundle.py``'s ``save()``
-    atomic-write/backup-restore contract).
-
-    ``torch.Tensor`` and ``numpy.ndarray`` values whose dtype holds no
-    object references (numeric, bool, string, and structured dtypes with
-    no object-typed field) are exempted from the probe: they always
-    support the standard pickle protocol via their own ``__reduce_ex__``
-    and hold no live OS resources that could make pickling fail, so
-    probing them would only pay a full extra ``pickle.dumps()`` pass --
-    doubling CPU and transiently doubling peak memory -- for a result
-    that is always ``True``. Any ``numpy.ndarray`` whose dtype reports
-    ``hasobject`` (a plain ``object``-dtype array, or a structured/
-    compound/nested dtype with an object-typed field), however, is NOT
-    exempted: it may hold arbitrary live Python objects (generators,
-    locks, or other unpicklable values) in any of its fields, just like a
-    plain ``list`` or ``dict`` can, so exempting it would reintroduce
-    exactly the hard ``save()`` failure this probe exists to prevent.
-    ``dtype.hasobject`` is used rather than a top-level
-    ``dtype != np.dtype("object")`` identity check because the latter is
-    only true for a bare object dtype -- a structured dtype whose fields
-    include ``object`` is never itself equal to ``np.dtype("object")`` and
-    would wrongly slip through an identity comparison even though it
-    genuinely embeds live object references. Skipping the probe only for
-    provably-safe types keeps the live-resource detection intact for
-    every value it actually protects.
-
-    Parameters
-    ----------
-    value:
-        Candidate value to probe.
-
-    Returns
-    -------
-    bool
-        ``True`` if ``pickle.dumps(value)`` succeeds, ``False`` otherwise.
-    """
-
-    if isinstance(value, _KNOWN_SAFELY_PICKLABLE_TYPES):
-        return True
-    if isinstance(value, np.ndarray) and not value.dtype.hasobject:
-        return True
-
-    try:
-        pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
-    except Exception:
-        return False
-    return True
 
 
 def _next_blob_id(blob_counter: list[int]) -> str:

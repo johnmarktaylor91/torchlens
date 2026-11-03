@@ -8,9 +8,11 @@ nothing from the package.
 from __future__ import annotations
 
 import logging
+import pickle
 from io import BytesIO
 from typing import Any
 
+import numpy as np
 import torch
 
 _RAW_INPUT_TEXT_LIMIT = 10_000
@@ -50,8 +52,16 @@ def _small_raw_value(value: Any, *, field_name: str) -> Any:
     is_output = field_name == "transformed_output"
     if isinstance(value, str):
         return value[: _RAW_OUTPUT_TEXT_LIMIT if is_output else _RAW_INPUT_TEXT_LIMIT]
-    if isinstance(value, torch.Tensor):
-        tensor_bytes = value.nelement() * value.element_size()
+    if isinstance(value, (torch.Tensor, np.ndarray)):
+        if isinstance(value, np.ndarray) and (
+            value.dtype.kind not in "biufc" or value.dtype.hasobject
+        ):
+            return None
+        tensor_bytes = (
+            value.nbytes
+            if isinstance(value, np.ndarray)
+            else value.nelement() * value.element_size()
+        )
         tensor_limit = (
             _RAW_OUTPUT_TENSOR_BYTES_LIMIT if is_output else _RAW_INPUT_TENSOR_BYTES_LIMIT
         )
@@ -181,3 +191,74 @@ def _encode_small_raw_image(image: Any, *, fmt: str) -> bytes | None:
     if len(data) > _RAW_INPUT_IMAGE_BYTES_LIMIT:
         return None
     return data
+
+
+def _stringify_value(value: Any) -> str:
+    """Convert a non-portable object into a stable placeholder string."""
+
+    return f"<scrubbed:{type(value).__name__}>"
+
+
+_KNOWN_SAFELY_PICKLABLE_TYPES = (torch.Tensor,)
+
+
+def _is_safely_picklable(value: Any) -> bool:
+    """Return whether ``value`` can be pickled without raising.
+
+    Used by :func:`_scrub_value`'s ``stringify_unknown`` path to decide
+    whether an unspecced leaf value (one with no
+    ``_PORTABLE_STATE_SPEC``) reached via ``save_raw_input``/
+    ``save_raw_output``'s ``True`` policy should be kept as-is (full
+    retention, per those options' docs) or degraded to a bounded
+    :func:`_stringify_value` placeholder. Probing picklability once, here,
+    at scrub time -- rather than letting the real ``pickle.dump()`` over
+    the full scrubbed state discover the problem later -- is what keeps
+    live-resource objects (generators, locks, open file handles, sockets,
+    ...) from ever reaching that later call, where a failure mid-write can
+    otherwise cost an already-saved bundle (see ``bundle.py``'s ``save()``
+    atomic-write/backup-restore contract).
+
+    ``torch.Tensor`` and ``numpy.ndarray`` values whose dtype holds no
+    object references (numeric, bool, string, and structured dtypes with
+    no object-typed field) are exempted from the probe: they always
+    support the standard pickle protocol via their own ``__reduce_ex__``
+    and hold no live OS resources that could make pickling fail, so
+    probing them would only pay a full extra ``pickle.dumps()`` pass --
+    doubling CPU and transiently doubling peak memory -- for a result
+    that is always ``True``. Any ``numpy.ndarray`` whose dtype reports
+    ``hasobject`` (a plain ``object``-dtype array, or a structured/
+    compound/nested dtype with an object-typed field), however, is NOT
+    exempted: it may hold arbitrary live Python objects (generators,
+    locks, or other unpicklable values) in any of its fields, just like a
+    plain ``list`` or ``dict`` can, so exempting it would reintroduce
+    exactly the hard ``save()`` failure this probe exists to prevent.
+    ``dtype.hasobject`` is used rather than a top-level
+    ``dtype != np.dtype("object")`` identity check because the latter is
+    only true for a bare object dtype -- a structured dtype whose fields
+    include ``object`` is never itself equal to ``np.dtype("object")`` and
+    would wrongly slip through an identity comparison even though it
+    genuinely embeds live object references. Skipping the probe only for
+    provably-safe types keeps the live-resource detection intact for
+    every value it actually protects.
+
+    Parameters
+    ----------
+    value:
+        Candidate value to probe.
+
+    Returns
+    -------
+    bool
+        ``True`` if ``pickle.dumps(value)`` succeeds, ``False`` otherwise.
+    """
+
+    if isinstance(value, _KNOWN_SAFELY_PICKLABLE_TYPES):
+        return True
+    if isinstance(value, np.ndarray) and not value.dtype.hasobject:
+        return True
+
+    try:
+        pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
+    except Exception:
+        return False
+    return True
