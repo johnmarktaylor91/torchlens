@@ -1570,13 +1570,19 @@ def load(
         if routed is not NOT_ROUTED:
             return routed
         from ..io import _pre3_observed, detect_tlspec_format
-        from .format_contract import below_floor_error
+        from .format_contract import _MODELLOG_216_NOTE, below_floor_error
 
         tlspec_format = detect_tlspec_format(bundle_path)
         if tlspec_format == "pre_3":
+            observed = _pre3_observed(bundle_path) or "2.x artifact markers"
             raise below_floor_error(
-                observed=_pre3_observed(bundle_path) or "2.x artifact markers",
+                observed=observed,
                 path=str(bundle_path),
+                remedy_note=(
+                    _MODELLOG_216_NOTE
+                    if observed.startswith("io_format_version=2, n_activation_blobs=")
+                    else ""
+                ),
                 code="artifact_version_below_floor",
             )
         if is_format3_root(bundle_path, tlspec_format):
