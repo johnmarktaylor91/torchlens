@@ -38,16 +38,20 @@ Every recorded number only shrinks.
 
 ## Running in CI
 
-A CI leg installs import-linter and runs:
+The `dev` extra declares import-linter, so the repository-checks job in
+`.github/workflows/pr.yml` and the venv `scripts/smoke_ci_parity.py` builds
+both run the `import-contracts` check. The job runs:
 
 ```bash
-pip install import-linter
+pip install -e ".[dev]"
 TORCHLENS_CHECKS_STRICT=1 python scripts/checks/run_all.py
 ```
 
-Without import-linter the `import-contracts` check reports `SKIP`;
-`TORCHLENS_CHECKS_STRICT=1` turns a skip into a failure. The checks need only
-the standard library and the source tree; nothing imports torch.
+`TORCHLENS_CHECKS_STRICT=1` turns a skip into a failure, so a CI environment
+that lost import-linter fails instead of passing silently. `import-contracts`
+reports `SKIP` only in a bare environment without the `dev` extra. Apart from
+import-linter the checks need only the standard library and the source tree;
+nothing imports torch.
 
 ## Adding a check
 

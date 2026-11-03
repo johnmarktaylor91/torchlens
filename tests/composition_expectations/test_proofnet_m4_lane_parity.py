@@ -86,13 +86,11 @@ def test_zero_match_selection_lane_refuses_typed(parity_trace: Any) -> None:
     assert _code(excinfo.value) == "selection_unresolvable"
 
 
-def test_zero_match_do_lane_is_the_ledgered_codeless_cell(parity_trace: Any) -> None:
-    """The do() string lane refuses SiteResolutionError with code=None.
+def test_zero_match_do_lane_refuses_typed(parity_trace: Any) -> None:
+    """The do() string lane refuses SiteResolutionError with site_selector_no_match.
 
-    LEDGERED ASYMMETRY (compo memo named first-wave cell): typed and
-    teaching in prose, code=None -- the fields-clobber class. When the
-    intervention-errors fix lands a code here, this cell must be promoted
-    deliberately.
+    Promoted from the ledgered code=None asymmetry cell (compo memo named
+    first-wave cell) once the site-resolution refusals gained stable codes.
     """
 
     fork = parity_trace.fork()
@@ -101,10 +99,7 @@ def test_zero_match_do_lane_is_the_ledgered_codeless_cell(parity_trace: Any) -> 
             fork.do(MISSING_SITE, __import__("torchlens").zero_ablate())
         exc = excinfo.value
         assert type(exc).__name__ == "SiteResolutionError"
-        assert _code(exc) is None, (
-            "the do() zero-match refusal now carries a code -- promote this"
-            " ledgered asymmetry cell to a typed-parity assertion"
-        )
+        assert _code(exc) == "site_selector_no_match"
     finally:
         fork.cleanup()
 

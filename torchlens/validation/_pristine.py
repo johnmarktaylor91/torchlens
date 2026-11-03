@@ -142,7 +142,7 @@ def pristine_ground_truth_oracle(model: nn.Module) -> Iterator[bool]:
     MHA fast path is held off here exactly as the capture scope holds it
     (``hold_fused_attention_fastpath_off``), since capture's forced
     ``requires_grad`` alone would otherwise steer the two forwards onto different
-    kernels (wave-3 stress F4). Yields and raises as :func:`pristine_torch_oracle`.
+    kernels (wave-3 stress case 4). Yields and raises as :func:`pristine_torch_oracle`.
     """
 
     with pristine_torch_oracle() as pristine, hold_fused_attention_fastpath_off(model):

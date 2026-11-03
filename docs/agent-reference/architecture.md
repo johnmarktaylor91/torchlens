@@ -248,13 +248,6 @@ Key entry points:
   `torchlens._ir.events.BackwardPassEnd.close_path` sidecar-only disclosure. Grouped floor:
   `trace.grad_fn_site_summary` per-site backward rollups (read-only L1
   consumption).
-- Predicate runtime extension point (DOCUMENTED-UNSTABLE, S4 seam):
-  `torchlens._ir.predicate_registry` — `PredicateProtocol` (one positional
-  concrete `RecordContext`), `coerce_predicate(value, slot="save"|"halt"|"until")`
-  (raw callables incl. `BaseSelector` returned BY IDENTITY; registered names
-  via a slot-aware enforcing wrapper), `register_predicate(name)` (no
-  user-object mutation, no loader-consulted attribute). Registry INERT until
-  consumers adopt names. Contract: `docs/reference/predicate_runtime.md`.
 - Sparse capture: `tl.record(model, x, save=...)` is torch-only in backend v1; it returns
   `Recording`, and `Recording.to_trace()` materializes full graph structure with explicit
   errors for unsaved payload reads. Forward exceptions default to
@@ -293,7 +286,9 @@ Key entry points:
   `docs/reference/attribution.md`; glossary carries the unstable index.
 - Kernel telemetry (optional CUDA/CUPTI adapter, DOCUMENTED-UNSTABLE):
   importing `torchlens._kernel_telemetry` installs `gpu_kernels` views over
-  the ATen execution profile; rows persist as of tlspec v8 (`FieldPolicy.KEEP`)
+  the ATen execution profile (recorded by `CaptureOptions(aten_ops=True)`, served by
+  `Trace.aten_ops` / `Op.aten_ops`, read in `_completeness_finalize._resolve_witness_requests`
+  from the trace's `_options_aten_ops` session knob); rows persist as of tlspec v8 (`FieldPolicy.KEEP`)
   and counts are lower bounds wherever `mode_paused_interior` is non-empty.
   Doc of record: `docs/reference/kernel_telemetry.md`.
 - Lazy decoration: `torchlens/backends/torch/model_prep.py:_ensure_model_prepared()` calls

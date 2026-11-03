@@ -708,7 +708,8 @@ def test_torchvision_model_trace_still_covers_torchvision_ops() -> None:
     torchvision_models = pytest.importorskip("torchvision.models")
 
     import torchlens as tl
-    from torchlens._constants import TORCHVISION_FUNCS, get_orig_torch_funcs
+    from torchlens._constants import get_orig_torch_funcs
+    from torchlens._torchvision_ops import TORCHVISION_FUNCS
 
     wrapped_targets = set(get_orig_torch_funcs())
     assert set(TORCHVISION_FUNCS).issubset(wrapped_targets)

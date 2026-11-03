@@ -553,7 +553,7 @@ def _operation(
     if operation == "aux_compat_report":
         import torchlens as tl
 
-        return lambda: tl.compat.report(model, x)
+        return lambda: tl.report.doctor(model, x)
     if operation == "aux_save":
         import torchlens as tl
 

@@ -17,6 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.intervention._replay_cone import _final_label_key_map, _label_key_map
 from torchlens.intervention.errors import ReplayPreconditionError
 
 
@@ -97,6 +98,23 @@ def test_op_lookup_prefers_the_final_label_over_a_colliding_raw_label() -> None:
     trace = _capture()
     key = _colliding_label(trace)
     assert trace.ops[key].layer_label == key
+
+
+def test_cone_children_resolve_a_colliding_label_to_the_final_op() -> None:
+    """A child spelled by a final label never names the op that carried it raw.
+
+    The replay cone walks ``children``, which labeling spells in final labels.
+    The layer-wide lookup map keeps every historical spelling too, so the
+    colliding label there names both ops; the cone's final-label map names one.
+    """
+
+    trace = _capture()
+    key = _colliding_label(trace)
+    final_op = trace.ops[key]
+    raw_owner = next(op for op in trace._layer_list if str(op.raw_label) == key)
+    assert str(raw_owner.label) != str(final_op.label)
+    assert str(raw_owner.label) in _label_key_map(trace)[key]
+    assert _final_label_key_map(trace)[key] == (str(final_op.label),)
 
 
 def test_trace_without_pass_exact_maps_still_refuses() -> None:

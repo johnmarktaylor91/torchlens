@@ -140,7 +140,7 @@ def test_doctor_module_imports_the_row_builder_lazily() -> None:
     module_source = inspect.getsource(doctor_module)
     report_source = inspect.getsource(doctor_module.doctor)
     assert "backends._scorecard_rows import" in report_source
-    header = module_source.split("\nStatus = Literal", 1)[0]
+    header = module_source.split("\ndef doctor(", 1)[0]
     assert "_scorecard_rows" not in header
 
 

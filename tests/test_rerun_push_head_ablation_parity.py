@@ -240,12 +240,14 @@ def test_input_dependent_predicate_miss_on_new_inputs_keeps_the_warning() -> Non
     assert result.last_run["hooks_unfired"] > 0
 
 
-def test_label_and_head_spellings_and_plain_capture_are_unchanged() -> None:
+def test_final_label_and_head_spellings_fire_and_plain_capture_is_unchanged() -> None:
     model, x, baseline, label = _mlp_case()
-    # A bare finalized label still refuses before the forward, with its own code.
-    with pytest.raises(LiveModeLabelError) as excinfo:
-        _rerun(baseline, label, model, x)
-    assert excinfo.value.fields["code"] == "rerun_staged_label_unmatchable"
+    # A bare finalized label is translated to its raw capture label and ablates on
+    # the rerun, like the push engine does on the saved trace.
+    by_label = _rerun(baseline, label, model, x)
+    assert by_label.last_run["hooks_unfired"] == 0
+    assert torch.count_nonzero(by_label[label].out) == 0
+    assert torch.count_nonzero(baseline[label].out) > 0
     # A live-matchable selector still ablates on the rerun, with no warning.
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")

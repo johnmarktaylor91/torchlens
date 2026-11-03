@@ -31,7 +31,7 @@ def tiny() -> tuple[nn.Module, torch.Tensor]:
     return nn.Sequential(nn.Linear(4, 3), nn.ReLU()).eval(), torch.randn(2, 4)
 
 
-def test_to_disk_target_that_exists_refuses_bundle_save_failed(
+def test_to_disk_target_that_exists_refuses_bundle_path_exists(
     tiny: tuple[nn.Module, torch.Tensor], tmp_path: Path
 ) -> None:
     model, x = tiny
@@ -40,11 +40,11 @@ def test_to_disk_target_that_exists_refuses_bundle_save_failed(
     assert target.is_dir()
     with pytest.raises(TorchLensError) as info:
         tl.trace(model, x, storage=tl.to_disk(str(target)))
-    assert _code(info.value) == "bundle_save_failed"
+    assert _code(info.value) == "bundle_path_exists"
     assert info.value.fields.get("remedy")
 
 
-def test_bundle_missing_blob_refuses_bundle_load_failed(
+def test_bundle_missing_blob_refuses_bundle_blob_missing(
     tiny: tuple[nn.Module, torch.Tensor], tmp_path: Path
 ) -> None:
     model, x = tiny
@@ -55,7 +55,7 @@ def test_bundle_missing_blob_refuses_bundle_load_failed(
     blobs[0].unlink()
     with pytest.raises(TorchLensError) as info:
         tl.load(target)
-    assert _code(info.value) == "bundle_load_failed"
+    assert _code(info.value) == "bundle_blob_missing"
     assert "missing blob" in str(info.value)
 
 
@@ -70,10 +70,10 @@ def test_chunk_size_with_streaming_storage_refuses_with_a_code(
             storage=tl.to_disk(str(tmp_path / "s.tlspec")),
             capture=tl.options.CaptureOptions(chunk_size=1),
         )
-    assert _code(info.value) == "trace_option_unsupported"
+    assert _code(info.value) == "chunked_capture_option_conflict"
 
 
-def test_trace_save_to_existing_path_refuses_bundle_save_failed(
+def test_trace_save_to_existing_path_refuses_bundle_path_exists(
     tiny: tuple[nn.Module, torch.Tensor], tmp_path: Path
 ) -> None:
     """``Trace.save`` on an existing path refuses with the streaming writer's code and shape."""
@@ -84,14 +84,14 @@ def test_trace_save_to_existing_path_refuses_bundle_save_failed(
     trace.save(target)
     with pytest.raises(TorchLensError) as info:
         trace.save(target)
-    assert _code(info.value) == "bundle_save_failed"
+    assert _code(info.value) == "bundle_path_exists"
     assert str(info.value).startswith(f"Bundle path already exists: {target}")
     assert "overwrite=True" in info.value.fields.get("remedy", "")
     assert info.value.__cause__ is None
     assert tl.load(target) is not None  # the refusal left the first bundle in place
 
 
-def test_bundle_save_to_existing_path_refuses_bundle_save_failed(
+def test_bundle_save_to_existing_path_refuses_bundle_path_exists(
     tiny: tuple[nn.Module, torch.Tensor], tmp_path: Path
 ) -> None:
     """``Bundle.save`` on an existing path refuses typed instead of raising ``FileExistsError``."""
@@ -102,7 +102,7 @@ def test_bundle_save_to_existing_path_refuses_bundle_save_failed(
     bundle.save(target)
     with pytest.raises(TorchLensError) as info:
         bundle.save(target)
-    assert _code(info.value) == "bundle_save_failed"
+    assert _code(info.value) == "bundle_path_exists"
     assert str(info.value).startswith(f"Bundle path already exists: {target}")
     assert "overwrite=True" in info.value.fields.get("remedy", "")
 

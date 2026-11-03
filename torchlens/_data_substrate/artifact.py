@@ -46,12 +46,11 @@ __all__ = [
     "MANIFEST_SCHEMA_V2",
     "SIGNATURE_SEMANTIC_FIELDS",
     "STIMULUS_IDS_FILENAME",
-    "UNRECORDED_V1",
     "ExtractionArtifactError",
     "ArtifactWriter",
     "compare_model_identity",
     "compare_signatures",
-    "refuse_v1_manifest",
+    "refuse_2x_manifest",
     "read_trusted_rows",
     "repair_ledger_tail",
     "shard_filename",
@@ -125,10 +124,6 @@ SIGNATURE_SEMANTIC_FIELDS: tuple[str, ...] = (
     "callable_identity",
     "selector_plan",
 )
-
-#: Sentinel a 2.x migration wrote for a v1 field it could not prove (kept so a v2 manifest
-#: carrying it still compares; this release writes no new ones).
-UNRECORDED_V1 = "unrecorded_v1"
 
 
 class ExtractionArtifactError(_ActionableErrorMixin, ConfigurationError, RuntimeError):
@@ -250,18 +245,13 @@ def compare_signatures(existing: Mapping[str, Any], current: Mapping[str, Any]) 
         Names of every mismatched or missing semantic field, in KNOWN-FIELDS
         order (empty = compatible). ``model_identity`` is compared by its own
         level rules via :func:`compare_model_identity` and reported under its
-        field name; fields a 2.x v1 migration marked
-        :data:`UNRECORDED_V1` are skipped (disclosed, not comparable).
+        field name.
     """
 
     mismatched: list[str] = []
     for field_name in SIGNATURE_SEMANTIC_FIELDS:
         recorded = existing.get(field_name, "__MISSING__")
         requested = current.get(field_name, "__MISSING__")
-        if recorded == UNRECORDED_V1 or (
-            isinstance(recorded, Mapping) and recorded.get("level") == UNRECORDED_V1
-        ):
-            continue
         if field_name == "model_identity":
             if compare_model_identity(recorded, requested):
                 mismatched.append(field_name)
@@ -618,8 +608,14 @@ class ArtifactWriter:
         self.write_manifest()
 
 
-def refuse_v1_manifest(manifest: Mapping[str, Any], *, container: Path) -> None:
-    """Refuse a v1 extraction artifact: torchlens 2.34 and earlier wrote that layout.
+def refuse_2x_manifest(
+    manifest: Mapping[str, Any], *, container: Path, running_version: str
+) -> None:
+    """Refuse an extraction artifact torchlens 2.x wrote, at every reader that loads it.
+
+    Two marks say torchlens 2.x wrote it: the v1 schema (torchlens 2.34 and earlier) and a
+    v2 manifest whose ``torchlens_version`` names an earlier major release than the running
+    one, which is how ``tl.load`` decides at the root manifest.
 
     Parameters
     ----------
@@ -627,20 +623,26 @@ def refuse_v1_manifest(manifest: Mapping[str, Any], *, container: Path) -> None:
         The parsed ``manifest.json`` mapping.
     container:
         Artifact directory, for the refusal's structured fields.
+    running_version:
+        The running release's ``torchlens.__version__``, passed in so this substrate
+        module never imports the package that imports it.
 
     Raises
     ------
     ArtifactTooOldError
-        When ``manifest`` carries the v1 schema. This release reads no file saved by
-        torchlens 2.x and migrates nothing in place; the one 2.x error names the remedy.
+        When either mark is present. This release reads no file saved by torchlens 2.x
+        and migrates nothing in place; the one 2.x error names the remedy.
     """
 
-    if manifest.get("schema") != MANIFEST_SCHEMA_V1:
-        return
     from .._io._pre3_module_paths import pre_3_artifact_error
+    from .._io.format_contract import raise_if_saved_by_older_major
 
-    raise pre_3_artifact_error(
-        f"extraction manifest schema={MANIFEST_SCHEMA_V1}",
-        path=str(container),
-        code="artifact_version_below_floor",
+    if manifest.get("schema") == MANIFEST_SCHEMA_V1:
+        raise pre_3_artifact_error(
+            f"extraction manifest schema={MANIFEST_SCHEMA_V1}",
+            path=str(container),
+            code="artifact_version_below_floor",
+        )
+    raise_if_saved_by_older_major(
+        manifest.get("torchlens_version"), str(container), running_version=running_version
     )

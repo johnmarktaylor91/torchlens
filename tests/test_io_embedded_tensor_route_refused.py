@@ -176,7 +176,7 @@ def test_load_from_bytes_refused_inside_a_valid_bundle(
     assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
     assert isinstance(caught.value.__cause__, pickle.UnpicklingError)
     assert "torch.storage._load_from_bytes" in str(caught.value.__cause__)
-    assert "re-saved" in str(caught.value.__cause__)
+    assert "capture the model again" in str(caught.value.__cause__)
     assert torch_load_tripwire == []
 
 
