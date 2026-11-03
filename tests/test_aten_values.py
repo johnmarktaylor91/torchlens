@@ -107,7 +107,6 @@ def _block_trace(**capture: Any) -> tuple[_BlockModel, torch.Tensor, tl.Trace]:
     return model, x, tl.trace(model, x.clone(), capture=options)
 
 
-@pytest.mark.smoke
 def test_values_equal_a_plain_torch_recomputation() -> None:
     """addmm, conv, layer_norm, tanh-GELU, an in-place op and a view match plain torch."""
 
@@ -140,7 +139,6 @@ def test_values_equal_a_plain_torch_recomputation() -> None:
     assert check_metadata_invariants(trace)
 
 
-@pytest.mark.smoke
 def test_values_are_snapshots_and_every_op_reproduces_its_out() -> None:
     """A kept value is a copy at return time; each saved Op's out equals one of its values."""
 
@@ -160,7 +158,6 @@ def test_values_are_snapshots_and_every_op_reproduces_its_out() -> None:
     assert trace.aten_gaps == ()
 
 
-@pytest.mark.smoke
 def test_multi_output_aten_op_keeps_one_value_per_output_fact() -> None:
     """A tuple-returning ATen op stores a tuple, one tensor per output fact, in order."""
 
@@ -179,7 +176,6 @@ def test_multi_output_aten_op_keeps_one_value_per_output_fact() -> None:
     assert check_metadata_invariants(trace)
 
 
-@pytest.mark.smoke
 def test_save_selection_restricts_which_calls_keep_values() -> None:
     """Rows beneath unsaved torch calls drop their values; the saved call keeps them."""
 
@@ -202,7 +198,6 @@ def test_save_selection_restricts_which_calls_keep_values() -> None:
     assert check_metadata_invariants(trace)
 
 
-@pytest.mark.smoke
 def test_save_selection_frees_dropped_values_during_the_forward(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -302,7 +297,6 @@ def test_values_count_against_the_save_budget() -> None:
         capture("values", budget)
 
 
-@pytest.mark.smoke
 def test_rows_only_switch_never_copies_and_keeps_rows_value_free(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -324,7 +318,6 @@ def test_rows_only_switch_never_copies_and_keeps_rows_value_free(
     assert off.has_aten_ops is False
 
 
-@pytest.mark.smoke
 def test_switch_rejects_unknown_spellings() -> None:
     """Only ``False``, ``True`` and ``"values"`` are accepted."""
 
@@ -375,7 +368,6 @@ def test_backward_rows_keep_values_when_the_profile_records_them() -> None:
     assert check_metadata_invariants(trace)
 
 
-@pytest.mark.smoke
 def test_values_leave_the_op_graph_unchanged() -> None:
     """Recording values never changes what the torch-level capture logs (in-place ops too)."""
 
@@ -400,7 +392,6 @@ def test_values_leave_the_op_graph_unchanged() -> None:
     assert inplace.parent_op_refs[0].op_label.startswith("add_")
 
 
-@pytest.mark.smoke
 def test_refresh_re_records_values() -> None:
     """``run()`` refreshes re-record the profile, so values follow the new input."""
 
@@ -445,7 +436,6 @@ def test_rows_capture_admits_the_fast_tier() -> None:
     assert len(fast.trace.ops) == len(trace.ops)
 
 
-@pytest.mark.smoke
 def test_invariant_rejects_a_value_that_disagrees_with_its_facts_or_owner() -> None:
     """``aten_values_consistent`` is a tripwire: a wrong value fails validation."""
 

@@ -367,7 +367,7 @@ def _check_row_values(row: Any, ops: list[Any]) -> None:
     leaves = _value_leaves(row.out)
     if leaves is None:
         _value_failure(f"{row.label}.out is neither a tensor nor a tuple of tensors")
-    facts = tuple(row.output_tensor_facts)
+    facts = tuple(row.output_tensor_facts or ())
     if len(leaves) != len(facts):
         _value_failure(f"{row.label} kept {len(leaves)} values for {len(facts)} output facts")
     for leaf, fact in zip(leaves, facts, strict=True):
