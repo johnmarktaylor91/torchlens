@@ -16,10 +16,6 @@ these runtime sites:
 3. ``nn.utils._expanded_weights`` -- ``conv_picker`` namespace reads and the
    ``ExpandedWeight.__torch_function__`` mixed table/namespace bases broke
    per-sample-grads loudly.
-4. Tensor METHOD dispatch -- torch's C parser presents ``torch.Tensor.<name>``
-   read at call time (the wrapper), so ``UninitializedTensorMixin``'s
-   ``_allowed_methods`` allowlist refused ``model.to()`` on an uninitialized
-   lazy module.
 
 These tests pin the identity shims that keep each site behaving exactly as
 unwrapped eager torch. Flag gates use ``getattr`` so the module also imports
@@ -222,74 +218,6 @@ class TestExpandedWeightsDispatch:
         orig_flatten = _resolve(torch._cudnn_rnn_flatten_weight)
         result = ExpandedWeight.__torch_function__(orig_flatten, (), (), None)
         assert result is None
-
-
-@pytest.mark.skipif(
-    not _flag("HAS_LAZY_MODULE_PROTOCOL_ALLOWLIST"),
-    reason="torch build lacks the lazy-module materialization allowlist",
-)
-class TestLazyModuleProtocolAllowlist:
-    """``model.to()`` on an uninitialized lazy module behaves as in plain torch.
-
-    ``nn.Module._apply`` calls ``t.is_floating_point()``, ``t.is_complex()`` and
-    ``t.to(...)`` on every parameter; ``UninitializedTensorMixin`` allows exactly
-    those through its import-time ``_allowed_methods``. Torch's C parser hands
-    the handler ``torch.Tensor.is_floating_point`` read at call time -- the
-    torchlens wrapper once wrappers are installed -- so the allowlist missed and
-    a user who had captured once could no longer move a lazy module.
-    """
-
-    @pytest.mark.smoke
-    def test_uninitialized_lazy_module_moves_like_plain_torch(self):
-        _ensure_wrapped()
-        module = nn.LazyLinear(4)
-        module.to("cpu")
-        module.to(torch.float64)
-        assert isinstance(module.weight, nn.parameter.UninitializedParameter)
-        assert module.weight.dtype == torch.float64
-        out = module(torch.randn(2, 3, dtype=torch.float64))
-        assert out.shape == (2, 4)
-        assert not isinstance(module.weight, nn.parameter.UninitializedParameter)
-        assert module.weight.shape == (4, 3)
-        assert module.weight.dtype == torch.float64
-
-    @pytest.mark.smoke
-    def test_methods_outside_the_allowlist_still_refuse(self):
-        # Normalizing the presented identity must not widen torch's allowlist:
-        # a wrapped method outside it raises exactly as unwrapped eager torch.
-        _ensure_wrapped()
-        weight = nn.LazyLinear(4).weight
-        with pytest.raises(ValueError, match="uninitialized parameter"):
-            weight.add(1)
-        with pytest.raises(ValueError, match="uninitialized parameter"):
-            torch.add(weight, 1)
-        assert weight.is_floating_point()
-
-    def test_handler_receives_the_ledger_original(self):
-        from torch.nn.parameter import UninitializedTensorMixin
-
-        _ensure_wrapped()
-        handler = vars(UninitializedTensorMixin)["__torch_function__"]
-        assert getattr(handler.__func__, "_torchlens_identity_shim", False)
-        wrapper = torch.Tensor.is_floating_point
-        assert _resolve(wrapper) is not wrapper, "is_floating_point is a wrapped method"
-        assert _resolve(wrapper) in UninitializedTensorMixin._allowed_methods
-
-    def test_shim_removed_on_unwrap(self):
-        from torch.nn.parameter import UninitializedTensorMixin
-
-        from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
-
-        _ensure_wrapped()
-        try:
-            unwrap_torch()
-            handler = vars(UninitializedTensorMixin)["__torch_function__"]
-            assert not getattr(handler.__func__, "_torchlens_identity_shim", False)
-            nn.LazyLinear(4).to("cpu")
-        finally:
-            wrap_torch()
-        handler = vars(UninitializedTensorMixin)["__torch_function__"]
-        assert getattr(handler.__func__, "_torchlens_identity_shim", False)
 
 
 class TestDisclosedResiduals:
@@ -713,6 +641,69 @@ class TestShimLifecycle:
             "HAS_TRANSFORMER_ACTIVATION_FASTPATH_FLAG",
             "HAS_ATTENTION_CAUSAL_BIAS",
             "HAS_EXPANDED_WEIGHTS_CONV_PICKER",
-            "HAS_LAZY_MODULE_PROTOCOL_ALLOWLIST",
+            "HAS_LAZY_MODULE_ALLOWED_METHODS",
         ):
             assert name in snapshot
+
+
+class TestLazyModuleAllowlist:
+    """Site 9: the lazy-module ``_allowed_methods`` list resolves wrappers (stress F2).
+
+    For a TENSOR METHOD torch's C-level protocol hands ``__torch_function__`` the
+    CURRENT ``torch.Tensor.<name>`` class attribute, the torchlens wrapper during
+    the wrap epoch, so the import-time allowlist membership missed and a plain
+    ``model.to("cpu")`` on an un-run ``nn.LazyLinear`` raised torch's
+    "uninitialized parameter" ``ValueError`` outside any capture.
+    """
+
+    @pytest.mark.smoke
+    def test_plain_to_on_a_lazy_model_works_after_a_capture_installed_wrappers(self):
+        _ensure_wrapped()
+        assert torch.Tensor.is_floating_point is not torch._C.TensorBase.is_floating_point
+        model = nn.Sequential(nn.Linear(4, 4), nn.LazyLinear(2))
+        model.to("cpu")
+        model.float()
+        param = nn.parameter.UninitializedParameter()
+        assert param.is_floating_point()
+        assert not param.is_complex()
+        assert tuple(param.size()) == (0,)
+        out = model(torch.randn(3, 4))
+        assert tuple(out.shape) == (3, 2)
+        assert not nn.parameter.is_lazy(model[1].weight)
+
+    @pytest.mark.smoke
+    def test_disallowed_methods_still_raise_torchs_own_error(self):
+        _ensure_wrapped()
+        param = nn.parameter.UninitializedParameter()
+        with pytest.raises(ValueError, match="uninitialized parameter"):
+            param.add(1)
+
+    def test_view_is_installed_with_wrappers_and_restored_on_unwrap(self):
+        from torchlens.backends.torch.identity_shims import _LedgerResolvingMembers
+        from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
+
+        if not _flag("HAS_LAZY_MODULE_ALLOWED_METHODS"):
+            pytest.skip("torch build without UninitializedTensorMixin._allowed_methods")
+        mixin = nn.parameter.UninitializedTensorMixin
+        _ensure_wrapped()
+        installed = vars(mixin)["_allowed_methods"]
+        assert isinstance(installed, _LedgerResolvingMembers)
+        assert torch.Tensor.is_floating_point in installed
+        try:
+            unwrap_torch()
+            restored = vars(mixin)["_allowed_methods"]
+            assert type(restored) is list
+            assert torch.Tensor.is_floating_point in restored
+        finally:
+            wrap_torch()
+        assert isinstance(vars(mixin)["_allowed_methods"], _LedgerResolvingMembers)
+
+    def test_lazy_model_captures_and_a_later_to_still_works(self):
+        model = nn.Sequential(nn.Linear(4, 4), nn.LazyLinear(2))
+        model.to("cpu")
+        trace = tl.trace(model, [torch.randn(3, 4)])
+        assert len(trace.ops) > 0
+        assert not nn.parameter.is_lazy(model[1].weight)
+        other = nn.Sequential(nn.LazyLinear(2))
+        other.to("cpu")
+        other.half().float()

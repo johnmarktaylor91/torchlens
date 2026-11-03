@@ -357,27 +357,27 @@ def _is_buffer_state_view_dispatch(
     mutates: bool,
     args: tuple[Any, ...],
 ) -> bool:
-    """Return whether an aten dispatch is a ``.data``-accessor view on module state.
+    """Return whether an aten dispatch is a ``.data``-accessor view on a registered buffer.
 
     This flags the intrinsic, legitimately-uncaptured ``aten.detach`` a registered buffer's
-    ``.data`` property emits during a buffer WRITE (``self.b.data.copy_(x)``), and the same
-    accessor view on a PENDING lazy slot: ``UninitializedParameter.materialize`` reads
-    ``self.data`` (device, dtype) through the wrapper's uninitialized pass-through, which
-    logs nothing because the slot has no storage to log (the materialized parameter
-    registers at the module-entry gate). The predicate is intentionally strict on every
-    axis so it can never mask a genuine untraced dispatch:
+    ``.data`` property emits during a buffer WRITE (``self.b.data.copy_(x)``). The predicate is
+    intentionally strict on every axis so it can never mask a genuine untraced dispatch:
 
     * ``owner is None`` -- the dispatch has NO python-wrapper owner (a wrapped ``.detach()``
       call would be an accounted owner, not a gap; only the property-accessor path is unowned).
-    * ``not mutates`` -- the operator writes to no argument (schema flag); no in-place drop.
-    * ``aten.detach`` / ``aten.alias`` only -- pure aliasing views; a dropped value-producing
-      op (``aten.add``/``aten.mul``/...) stays unaccounted.
+    * ``not mutates`` -- the operator writes to no argument (ground-truth schema flag). A
+      value-affecting in-place drop can never be credited here.
+    * ``aten.detach`` / ``aten.alias`` only -- pure aliasing views. A dropped value-producing
+      op (``aten.add``/``aten.mul``/...) on the buffer is NOT in this set and stays unaccounted.
     * ``args[0]`` is a REGISTERED BUFFER whose stamp is SESSION-VALIDATED (r81:
       current-session object + live storage identity -- a stale or input-rebound
-      stamp is never credited as a benign state view), or an UNINITIALIZED lazy
-      parameter/buffer (``torch.nn.parameter.is_lazy``): a slot with no storage, whose
-      view can carry no model value. Once materialized it is an ordinary parameter and
-      no longer qualifies.
+      stamp is never credited as a benign state view).
+    * or ``args[0]`` is a PENDING LAZY slot (``UninitializedParameter`` /
+      ``UninitializedBuffer``): torch's in-place materialization reads the slot's
+      ``.data`` for its device and dtype before assigning storage, and the wrapper
+      passes those calls through unlogged (they are constructor plumbing, not model
+      dataflow). A pending slot holds no value, so the view can carry nothing that a
+      dropped op could have produced (wave-3 stress F3).
 
     Parameters
     ----------
@@ -395,16 +395,16 @@ def _is_buffer_state_view_dispatch(
     Returns
     -------
     bool
-        ``True`` only for a ``.data``-accessor view on a registered buffer or pending lazy slot.
+        ``True`` only for a ``.data``-accessor view dispatch on a registered buffer.
     """
 
-    if (
-        owner is not None
-        or mutates
-        or _operator_base_name(func) not in _BUFFER_STATE_VIEW_OPERATORS
-    ):
+    if owner is not None or mutates:
         return False
-    source = args[0] if args else None
+    if _operator_base_name(func) not in _BUFFER_STATE_VIEW_OPERATORS:
+        return False
+    if not args:
+        return False
+    source = args[0]
     if not isinstance(source, torch.Tensor):
         return False
     if _is_uninitialized_lazy_tensor(source):

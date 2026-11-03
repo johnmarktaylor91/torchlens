@@ -7,31 +7,52 @@ input and later reads bind to that op. This module holds the receiver policy the
 wrapper consults: which Parameters count as receivers, how a mutation result is
 turned into a loggable tensor, how a frozen receiver runs, and how a receiver
 passed by keyword is normalized.
+
+The second half ("Late registration" below) handles Parameters the captured forward
+itself created: lazy modules built inside ``forward`` whose slots torch materializes
+during the pass.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager, nullcontext, suppress
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import torch
+from torch import nn
+from torch.utils.weak import WeakIdKeyDictionary
 
 from ... import _state
 from ..._capture.projections import active_recording_state_or_none
+from ..._capture_honesty import (
+    ADVISORIES_ANNOTATIONS_KEY,
+    ADVISORY_PARAMETER_CREATED_IN_FORWARD,
+    append_capture_advisory,
+)
+from ..._capture_state_helpers import _is_uninitialized_param
 from ..._data_classes._trace_missing_attrs import is_live_trace
+from ..._data_classes.param import Param, ParamAccessor
+from ..._quantities import Bytes
 from ..._utils._torch_compat import HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
+from ..._utils.hashing import make_random_barcode
 from ..._utils.tensor_leaves import iter_tensors
-from ..._utils.tensor_utils import safe_copy
+from ..._utils.tensor_utils import get_memory_amount, safe_copy
 from ._completeness_origins import internal_scalar_read
 from ._tl import (
     NO_USER_GRAD_FN,
     get_param_meta,
     get_tensor_label,
     mutated_parameter_label,
+    set_param_meta,
     set_tensor_label,
     storage_alias_index_key,
 )
+from .buffer_writes import peek_buffer_write_tracker
+from .frozen_parameter_gradients import _forces_frozen_parameter_gradients
+
+if TYPE_CHECKING:
+    from ..._data_classes.trace import Trace
 
 
 def is_unregistered_parameter(trace: Any, value: Any) -> bool:
@@ -70,7 +91,10 @@ def is_prepared_parameter_receiver(trace: Any, value: Any) -> bool:
     lazy module's ``UninitializedParameter`` has no value when the pass starts:
     its in-forward materialization (``materialize`` then ``reset_parameters``'s
     ``uniform_`` family) creates the Parameter's first value rather than mutating
-    a prepared one, so those writes keep the plain-capture treatment (no ops).
+    a prepared one, so those writes keep the plain-capture treatment (logged
+    against a snapshot output and orphan-pruned, never a prepared-state mutation
+    whose label the Parameter carries forward). A parameter registered late for a
+    lazy module built inside forward carries the same flag.
 
     Parameters
     ----------
@@ -155,13 +179,14 @@ def adopt_minted_parameter_label(trace: Any, param: Any, sources: tuple[Any, ...
     """Give a forward-created Parameter the label of the tensor it was minted from.
 
     ``nn.Parameter(data)`` (``Tensor._make_subclass``) returns a new Parameter
-    object on ``data``'s storage carrying none of ``data``'s TorchLens metadata,
-    and a lazy module's ``materialize`` rebinds its pending slot's ``.data`` to a
-    fresh allocation the same way. Inside the captured pass that tensor is a
-    logged factory output (``torch.empty`` in ``nn.Linear.__init__``), so the
-    Parameter adopts its label: the Parameter's first read or in-place
-    initializer binds to the op that produced the storage instead of consuming
-    unattributed data. A prepared Parameter never qualifies.
+    object on ``data``'s storage carrying none of ``data``'s TorchLens metadata.
+    Inside the captured pass that tensor is a logged factory output
+    (``torch.empty`` in ``nn.Linear.__init__``), so the Parameter adopts its
+    label: the Parameter's first read or in-place initializer binds to the op
+    that produced the storage instead of consuming unattributed data. A prepared
+    Parameter never qualifies, and neither does a pending lazy slot: its
+    materialization is constructor plumbing and the materialized Parameter
+    registers late (``late_register_forward_created_parameter``).
 
     Parameters
     ----------
@@ -174,7 +199,11 @@ def adopt_minted_parameter_label(trace: Any, param: Any, sources: tuple[Any, ...
         the origin.
     """
 
-    if not is_unregistered_parameter(trace, param) or mutated_parameter_label(param) is not None:
+    if (
+        _is_uninitialized_param(param)
+        or not is_unregistered_parameter(trace, param)
+        or mutated_parameter_label(param) is not None
+    ):
         return
     for source in sources:
         if isinstance(source, torch.Tensor) and not isinstance(source, torch.nn.Parameter):
@@ -261,11 +290,13 @@ def frozen_parameter_receiver_context(
 ) -> AbstractContextManager[Any]:
     """Run an in-place op on a frozen prepared Parameter as eager does.
 
-    Capture forces ``requires_grad=True`` on floating prepared Parameters so their
-    reads are gradient-capable. A Parameter frozen by the user
-    (``requires_grad=False``) may legally be mutated in place with grad mode on
-    (EMA weights, fixed tables); under the forced flag autograd would refuse the
-    same call. Operands are scanned positionally, by keyword and inside nested
+    A capture inside ``frozen_parameter_gradients()`` (an analysis that
+    backpropagates through its own capture) sets ``requires_grad=True`` on frozen
+    floating prepared Parameters so their reads are gradient-capable; a plain
+    capture never does, and then this context is a null context. A Parameter
+    frozen by the user (``requires_grad=False``) may legally be mutated in place
+    with grad mode on (EMA weights, fixed tables); under the forced flag autograd
+    would refuse the same call. Operands are scanned positionally, by keyword and inside nested
     containers:
 
     - no operand requires grad: the eager call records no autograd history, so
@@ -379,6 +410,17 @@ def _plain_parameter_snapshot(value: torch.nn.Parameter) -> torch.Tensor:
     return tensor
 
 
+# A lazy module's in-forward initialization of its Parameter (``reset_parameters``
+# after torch materialized the pending slot; see ``is_prepared_parameter_receiver``)
+# IS converted like the initialization of a module created inside ``forward``: the
+# op is logged against a snapshot output that no later read consumes (the Parameter
+# does not take the op's label, so consumers read it as prepared state), the
+# postprocess orphan-prunes it, and the dispatch census still owns its ``uniform_``
+# dispatch. Returning the Parameter instead left that mutating dispatch with no
+# captured op (``owner_not_captured``), which failed forward validation's
+# completeness backstop for every lazy module. Both capture modes classify alike
+# through ``_prepared_parameter_lazy_flag``; predicate capture (``tl.record``) keeps
+# the final-graph view and records no op for it.
 def parameter_mutation_output_for_logging(
     trace: Any,
     value: Any,
@@ -399,13 +441,11 @@ def parameter_mutation_output_for_logging(
     A prepared model Parameter mutated in place (``with torch.no_grad():
     self.temp.clamp_(lo, hi)``) is converted too: the op is logged with the
     Parameter as its parameter input, and the live Parameter then carries the op's
-    label so every later read in the pass consumes the op's output. Two prepared
-    cases are NOT converted and keep the plain-capture treatment: a
+    label so every later read in the pass consumes the op's output. One prepared
+    case is NOT converted and keeps the plain-capture treatment: a
     storage-rebinding ``param.data = rhs`` setter (still visible to the
-    completeness tripwire) and the in-forward initialization of a lazy module's
-    Parameter (see ``is_prepared_parameter_receiver``). Both capture modes
-    classify alike: predicate capture reads its per-pass identity registry
-    (``_prepared_parameter_lazy_flag``).
+    completeness tripwire). A lazy module's in-forward initialization is converted
+    too (comment above).
 
     Parameters
     ----------
@@ -430,6 +470,238 @@ def parameter_mutation_output_for_logging(
     if not was_inplace or not isinstance(source, torch.nn.Parameter):
         return value
     lazy_at_prep = _prepared_parameter_lazy_flag(trace, source)
-    if lazy_at_prep is not None and (is_storage_rebind or lazy_at_prep):
+    if lazy_at_prep is not None and is_storage_rebind:
+        return value
+    if lazy_at_prep and getattr(trace, "capture_mode", None) == "predicate":
+        # Predicate capture keeps the final-graph view: the trace's copy of this
+        # op is orphan-pruned below, so ``tl.record`` records nothing here.
         return value
     return _plain_parameter_snapshot(value)
+
+
+# ---------------------------------------------------------------------------
+# Late registration of parameters the captured forward itself created (lazy modules).
+# ---------------------------------------------------------------------------
+# Model preparation stamps every parameter of the module tree before the forward runs
+# (``model_prep._create_session_param_logs``). A lazy module built INSIDE forward
+# (``self.lazy = nn.LazyLinear(4)`` followed by ``self.lazy(x)``) is not in that tree yet:
+# torch materializes its pending ``UninitializedParameter`` slots in place from the lazy
+# pre-hook, fills them in ``reset_parameters``, and the module body then consumes them
+# through ``F.linear`` with no session provenance. This is the parameter twin of
+# ``buffer_writes.resolve_or_late_index_buffer_address``: reached only when a wrapped call
+# consumes a Parameter the wrapper watched torch materialize from a pending slot during this
+# forward, it registers the parameter through the same session registry preparation uses
+# (``set_param_meta``, ``trace._param_logs``, the session inventory) and discloses the creation
+# as a ``parameter_created_in_forward`` capture advisory.
+#
+# The carve-out is narrow on purpose (r77 F1: a fresh in-forward ``nn.Parameter`` or a foreign
+# model's parameter must never launder provenance). A parameter registers here only when ALL
+# of these hold at consumption time:
+#
+# * the wrapper saw torch's materialization plumbing run on the object while it was still a
+#   pending lazy slot (the ``.data`` reads and setter of ``UninitializedTensorMixin.materialize``,
+#   recorded by object identity in ``WrapperRuntimeWorkspace.materialized_lazy_slots``);
+# * the object is now a materialized ``nn.Parameter`` outside the session registry;
+# * it is a live slot of the captured model's own module tree (``model.named_parameters``,
+#   walked only on this rare path).
+#
+# A Parameter attached to the tree inside forward from a captured value
+# (``self.p = nn.Parameter(y.detach())``) never was a pending slot, so it keeps the break
+# marker and the honest ``source_provenance`` failure, exactly as before.
+
+
+def materialized_lazy_slots(trace: Trace) -> Any:
+    """Return the forward's watched pending-slot set, or ``None`` when none was seen.
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace.
+
+    Returns
+    -------
+    Any
+        The ``WeakIdKeyDictionary`` of pending slots torch materialized through the
+        wrapper during this forward, or ``None`` (the hot-path fast exit).
+    """
+
+    return trace._wrapper_runtime_ws.materialized_lazy_slots
+
+
+def note_lazy_slot_materializing(trace: Trace, slot: torch.Tensor) -> None:
+    """Record that torch's materialization plumbing ran on a pending lazy slot.
+
+    Called by the wrapper for every passed-through call whose receiver is an
+    ``UninitializedParameter`` or ``UninitializedBuffer``. Identity-keyed: torch's
+    ``materialize`` swaps the object's ``__class__`` in place, so the same key later
+    names the materialized Parameter.
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace.
+    slot:
+        The pending receiver of the passed-through call.
+    """
+
+    workspace = trace._wrapper_runtime_ws
+    slots = workspace.materialized_lazy_slots
+    if slots is None:
+        slots = WeakIdKeyDictionary()
+        workspace.materialized_lazy_slots = slots
+    slots[slot] = True
+
+
+def _live_tree_addresses(model: nn.Module, param: torch.Tensor) -> list[str]:
+    """Return the dotted addresses at which ``param`` is a live slot of ``model``."""
+
+    return [
+        name
+        for name, candidate in model.named_parameters(remove_duplicate=False)
+        if candidate is param
+    ]
+
+
+def _force_requires_grad_like_prep(trace: Trace, param: nn.Parameter) -> None:
+    """Set ``requires_grad`` on exactly the terms preparation uses for a prepped Parameter.
+
+    A plain capture never changes the flag; only a capture inside
+    ``frozen_parameter_gradients()`` sets it on a frozen floating leaf.
+    """
+
+    if _forces_frozen_parameter_gradients(trace, param):
+        param.requires_grad = True
+
+
+def _has_optimizer_like_prep(trace: Trace) -> bool | None:
+    """Mirror the prep inventory's optimizer column: ``None`` without an optimizer, else False.
+
+    A parameter created inside forward cannot belong to an optimizer built before it.
+    """
+
+    for existing in trace._param_logs:
+        return None if existing.has_optimizer is None else False
+    return None
+
+
+def _record_creation_advisory(trace: Trace, entry: str) -> None:
+    """Add ``entry`` to the forward's ``parameter_created_in_forward`` advisory row.
+
+    The lazy module's parameters register at different wrapped calls (the weight at its
+    ``kaiming_uniform_``, the bias at its ``uniform_``), so the first registration writes
+    the row and later ones extend it, keeping one row per kind and forward.
+    """
+
+    annotations = getattr(trace, "annotations", None)
+    rows = annotations.get(ADVISORIES_ANNOTATIONS_KEY) if isinstance(annotations, dict) else None
+    if isinstance(rows, list):
+        for row in rows:
+            if isinstance(row, dict) and row.get("kind") == ADVISORY_PARAMETER_CREATED_IN_FORWARD:
+                row["count"] = int(row.get("count", 0)) + 1
+                row["message"] = f"{row.get('message', '')}; {entry}"
+                return
+    append_capture_advisory(trace, ADVISORY_PARAMETER_CREATED_IN_FORWARD, [entry])
+
+
+def _late_param_log(
+    trace: Trace, param: nn.Parameter, addresses: list[str], requires_grad_before: bool
+) -> Param:
+    """Stamp ``param`` and build its record for a late in-forward registration.
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace.
+    param:
+        The materialized Parameter, already forced to prep-like ``requires_grad``.
+    addresses:
+        Every live-tree address of ``param``; the first is canonical.
+    requires_grad_before:
+        The Parameter's ``requires_grad`` before capture forced it on.
+    """
+
+    address = addresses[0]
+    module_address, _, name = address.rpartition(".")
+    barcode = make_random_barcode()
+    set_param_meta(
+        param, barcode=barcode, address=address, requires_grad_before=requires_grad_before
+    )
+    param_log = Param(
+        module_address=module_address or "self",
+        name=name,
+        shape=tuple(param.shape),
+        dtype=param.dtype,
+        num_params=param.numel(),
+        param_memory=Bytes(get_memory_amount(param)),
+        trainable=requires_grad_before,
+        address=address,
+        barcode=barcode,
+        has_optimizer=_has_optimizer_like_prep(trace),
+    )
+    param_log._param_ref = param
+    # Pending when the slot entered the session (creation time here, prep time for a
+    # prep-registered lazy slot): the materialization writes that follow create the
+    # parameter's first value instead of mutating a prepared one, so they keep the
+    # plain-capture treatment, and step 15 reads the live geometry.
+    param_log._lazy_at_prep = True  # type: ignore[attr-defined]
+    for alias in addresses[1:]:
+        param_log.all_addresses.append(alias)
+        alias_module = alias.rpartition(".")[0] or "self"
+        if alias_module not in param_log.all_module_addresses:
+            param_log.all_module_addresses.append(alias_module)
+    return param_log
+
+
+def late_register_forward_created_parameter(trace: Trace, param: torch.Tensor) -> str | None:
+    """Register a Parameter torch materialized from a pending slot during this forward.
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace.
+    param:
+        A ``nn.Parameter`` argument of a wrapped call that the wrapper watched torch
+        materialize from a pending lazy slot earlier in this forward.
+
+    Returns
+    -------
+    str | None
+        The registered parameter address, or ``None`` when the object is not a live slot
+        of the captured model's own tree (or is already registered); nothing is stamped
+        in that case and the consuming op keeps its unattributed-argument marker.
+    """
+
+    slots = materialized_lazy_slots(trace)
+    if slots is None or param not in slots:
+        return None
+    if _is_uninitialized_param(param):
+        return None
+    # The slot is consumed once: a later look-up is the registered parameter itself.
+    slots.pop(param, None)
+    if not isinstance(param, nn.Parameter) or not is_unregistered_parameter(trace, param):
+        return None
+    tracker = peek_buffer_write_tracker(trace)
+    model = tracker.model_ref() if tracker is not None else None
+    if model is None:
+        return None
+    addresses = _live_tree_addresses(model, param)
+    if not addresses:
+        return None
+
+    requires_grad_before = param.requires_grad
+    _force_requires_grad_like_prep(trace, param)
+    param_log = _late_param_log(trace, param, addresses, requires_grad_before)
+    address = param_log.address
+
+    existing: dict[str, Param] = dict(trace._param_logs._dict)
+    displaced = existing.get(address)
+    existing[address] = param_log
+    trace._param_logs = ParamAccessor(existing)
+    trace._param_log_by_pid[id(param)] = address
+    trace._session_param_inventory.append(param)
+
+    detail = "lazy slot created and materialized inside forward"
+    if displaced is not None:
+        detail += "; it replaces the pending slot registered at preparation"
+    _record_creation_advisory(trace, f"{address} ({detail})")
+    return address

@@ -1,93 +1,136 @@
-"""A lazy module materializing inside the captured forward balances the dispatch census.
+"""Lazy-module materialization inside a captured forward and the dispatch census (stress F3).
 
-``UninitializedParameter.materialize`` reads ``self.data`` (device, dtype) on the pending
-slot before allocating storage. The wrapper passes a call on an uninitialized receiver
-through unlogged (nothing to log: no shape, no storage), so each read is an unowned
-``aten.detach`` dispatch. The completeness witness classifies it as a state-accessor
-view, the same class as a registered buffer's ``.data`` getter, on strict axes: unowned,
-non-mutating, a pure aliasing view, and a receiver that is still a lazy slot. These tests
-pin the balanced census end to end and the predicate's narrowness: an initialized
-parameter, a mutating operator or an owned dispatch never qualify.
+Torch materializes a pending ``UninitializedParameter`` in place from its lazy pre-hook:
+``materialize`` reads the slot's ``.data`` for the device and the dtype before it assigns
+storage, and ``reset_parameters`` then fills the new tensor. The wrapper passes calls whose
+receiver is a pending slot through unlogged (they are constructor plumbing, not model
+dataflow) and, under the dispatch census, runs them as the audited expected-opaque owner
+``lazy_module:materialize``: the ``aten.detach`` each ``.data`` read emits is accounted to
+that boundary, so the validation backstop's arithmetic (dispatched = captured + orphan-pruned
++ accounted) holds with no tolerance, count or exemption change. The pending-slot state-view
+flag stays as the witness's own account of such a read should one ever reach the dispatcher
+outside the wrapper; it credits pending slots only.
 """
 
 from __future__ import annotations
 
-import warnings
+from collections.abc import Iterator
+from typing import Any
 
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.backends.torch._completeness_dispatch_names import _is_buffer_state_view_dispatch
-from torchlens.backends.torch.escape_detection import ExpectedOriginalToken
+from torchlens import _state
+from torchlens.backends.torch._completeness_audited import LAZY_MODULE_MATERIALIZE_WRAPPER
+from torchlens.backends.torch.completeness_witness import AUDITED_COMPLETENESS_BOUNDARIES
+from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
+
+WIDTH = 8
+BATCH = 3
 
 
-class _LazyAtInit(nn.Module):
-    """``nn.LazyLinear`` built at init; its first call (under capture) materializes it."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.pre = nn.Linear(4, 4)
-        self.lazy = nn.LazyLinear(3)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.lazy(torch.relu(self.pre(x)))
-
-
-class _LazyInForward(nn.Module):
-    """``nn.LazyLinear`` built and materialized inside forward."""
+class LazyBuiltInForward(nn.Module):
+    """``nn.LazyLinear`` created and materialized inside forward, never seen before capture."""
 
     def __init__(self) -> None:
         super().__init__()
-        self.pre = nn.Linear(4, 4)
+        self.pre = nn.Linear(WIDTH, WIDTH)
         self.lazy: nn.Module | None = None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        self.lazy = nn.LazyLinear(3)
+        self.lazy = nn.LazyLinear(4)
         return self.lazy(torch.relu(self.pre(x)))
 
 
-def _validate(model: nn.Module, x: torch.Tensor) -> bool:
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        return bool(tl.validate(model, x, scope="forward"))
+class LazyAtPrep(nn.Module):
+    """``nn.LazyLinear`` registered before capture and materialized by the captured forward."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.pre = nn.Linear(WIDTH, WIDTH)
+        self.lazy = nn.LazyLinear(4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.lazy(torch.relu(self.pre(x)))
 
 
-def test_lazy_module_first_called_inside_capture_keeps_its_parameter_a_source() -> None:
-    # ``tl.validate`` needs a state snapshot, which a never-run lazy module refuses
-    # (torch cannot detach an uninitialized parameter), so the capture itself is
-    # pinned: a prepared lazy Parameter's in-forward materialization is prepared
-    # state, not ops, and the module's read binds to the Parameter.
-    torch.manual_seed(0)
-    trace = tl.trace(_LazyAtInit(), torch.randn(2, 4))
-    assert [op.func_name for op in trace.ops] == ["linear", "relu", "linear"]
-    assert not trace.ops[-1].unattributed_tensor_args
+@pytest.fixture
+def _armed_witness() -> Iterator[None]:
+    """Arm the dispatch census for one test and restore the process-level modes after."""
+
+    saved_escape = _state._escape_detector_mode
+    saved_witness = _state._completeness_witness_mode
+    unwrap_torch()
+    wrap_torch(completeness_witness=True)
+    yield
+    unwrap_torch()
+    wrap_torch(escape_detector=saved_escape, completeness_witness=saved_witness)
+
+
+def _materialization_owners(trace: tl.Trace) -> list[dict[str, Any]]:
+    return [
+        entry
+        for entry in trace.health.completeness_decompositions
+        if entry["owner_wrapper"] == LAZY_MODULE_MATERIALIZE_WRAPPER
+    ]
+
+
+def _assert_materialization_is_audited(trace: tl.Trace) -> None:
+    owners = _materialization_owners(trace)
+    assert owners, "the lazy pre-hook materialization ran outside the audited owner"
+    assert all(entry["scope"] == "expected_opaque" for entry in owners)
+    operators = [op for entry in owners for op in entry["aten_ops"]]
+    # weight and bias, device and dtype read each: four value-free views of pending slots
+    assert len(operators) == 4
+    assert all(op.startswith(("aten.detach", "aten.alias")) for op in operators)
+    assert trace.completeness_diagnostics == []
+    assert trace.provenance.verified is True
+
+
+def test_the_audited_row_is_the_wrapper_wide_materialization_boundary() -> None:
+    rows = [
+        row
+        for row in AUDITED_COMPLETENESS_BOUNDARIES
+        if row.wrapper_name == LAZY_MODULE_MATERIALIZE_WRAPPER
+    ]
+    assert len(rows) == 1 and rows[0].operator is None and rows[0].reason
 
 
 @pytest.mark.smoke
-def test_lazy_module_built_inside_forward_validates() -> None:
+def test_materialization_of_a_module_built_in_forward_is_audited(_armed_witness: None) -> None:
     torch.manual_seed(0)
-    assert _validate(_LazyInForward(), torch.randn(2, 4)) is True
+    trace = tl.trace(LazyBuiltInForward().eval(), [torch.randn(BATCH, WIDTH)])
+    _assert_materialization_is_audited(trace)
 
 
-def test_pending_lazy_slot_accessor_view_is_the_only_credited_case() -> None:
-    detach = torch.ops.aten.detach.default
-    pending = nn.parameter.UninitializedParameter()
-    plain = nn.Parameter(torch.zeros(2))
-    assert _is_buffer_state_view_dispatch(None, detach, None, False, (pending,)) is True
-    # Materialized: an ordinary parameter, no longer a pending slot.
-    pending.materialize((2,))
-    assert _is_buffer_state_view_dispatch(None, detach, None, False, (pending,)) is False
-    assert _is_buffer_state_view_dispatch(None, detach, None, False, (plain,)) is False
-    # A mutating operator, an owned dispatch or a value-producing op never qualify.
-    fresh = nn.parameter.UninitializedParameter()
-    assert _is_buffer_state_view_dispatch(None, detach, None, True, (fresh,)) is False
-    token = ExpectedOriginalToken(
-        raw_id=0, original=detach, wrapper_name="x", wrapper_frame_id=0, owner_thread_id=0
+def test_materialization_of_a_lazy_module_registered_at_prep_is_audited(
+    _armed_witness: None,
+) -> None:
+    torch.manual_seed(0)
+    trace = tl.trace(LazyAtPrep().eval(), [torch.randn(BATCH, WIDTH)])
+    _assert_materialization_is_audited(trace)
+
+
+def test_a_detach_on_a_materialized_parameter_is_not_credited() -> None:
+    """The state-view flag covers PENDING slots only: a real tensor's unowned view stays a gap."""
+
+    from torchlens.backends.torch._completeness_dispatch_names import (
+        _is_buffer_state_view_dispatch,
     )
-    assert _is_buffer_state_view_dispatch(None, detach, token, False, (fresh,)) is False
+
+    param = nn.Parameter(torch.randn(2))
+    pending = nn.parameter.UninitializedParameter()
     assert (
-        _is_buffer_state_view_dispatch(None, torch.ops.aten.add.Tensor, None, False, (fresh,))
+        _is_buffer_state_view_dispatch(None, torch.ops.aten.detach.default, None, False, (param,))
+        is False
+    )
+    assert (
+        _is_buffer_state_view_dispatch(None, torch.ops.aten.detach.default, None, False, (pending,))
+        is True
+    )
+    assert (
+        _is_buffer_state_view_dispatch(None, torch.ops.aten.detach.default, None, True, (pending,))
         is False
     )

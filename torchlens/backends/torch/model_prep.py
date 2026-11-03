@@ -96,6 +96,7 @@ from .escape_detection import (
     expected_original_call,
     mark_expected_original_accounted,
 )
+from .frozen_parameter_gradients import _forces_frozen_parameter_gradients
 from .prehook_provenance import bind_invocation
 from .sources import log_closure_constant_if_known, log_source_tensor
 from .tensor_tracking import _append_module_suffix_to_equivalence_class
@@ -504,8 +505,8 @@ def _prepare_model_session(
        ``trace._module_capture_ws.module_metadata``.
     3. Sets session-scoped Trace dictionaries for module pass counters and
        tensor entry/exit tracking.
-    4. Creates ``Param`` objects and forces ``requires_grad=True`` on all
-       parameters (needed so ``grad_fn_handle`` chain is available for metadata).
+    4. Creates ``Param`` objects and stamps each parameter's barcode, address
+       and user ``requires_grad`` flag (the flag itself is never changed).
     5. Tags buffer tensors with ``_tl.address``.
 
     All session-scoped state is cleaned up by ``_cleanup_model_session``.
@@ -626,13 +627,19 @@ def _prepare_model_session(
 
 
 def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any = None) -> None:
-    """Create ``Param`` objects and prepare parameter grad tracking.
+    """Create ``Param`` objects and stamp each parameter's session metadata.
 
-    Outside ``backward_ready``, ``requires_grad`` is forced True so that ``grad_fn_handle``
-    metadata is available on all intermediate tensors during the forward pass.
-    In ``backward_ready``, user-authored ``requires_grad`` values are preserved. The
-    original value is always saved to ``_tl.requires_grad_before_capture`` and restored during
-    ``_cleanup_model_session``.
+    Capture never changes a parameter's ``requires_grad``: a frozen parameter
+    stays frozen, so the captured forward runs the same autograd program as an
+    eager forward (torch picks kernels from it, e.g. the attention paths).
+    Parameter provenance does not need ``grad_fn``: a parameter read is resolved
+    by identity at the op boundary from the stamped barcode. The user's flag is
+    still recorded on ``_tl.requires_grad_before_capture`` (``Param.is_trainable``,
+    and ``_cleanup_model_session`` restores it if the forward itself changed it).
+    The one exception is a capture inside ``frozen_parameter_gradients()``: an
+    analysis that backpropagates through its own capture (edge attribution
+    patching) needs a gradient path through frozen weights, so there floating
+    leaf parameters are set to require grad for the session and restored after.
     """
     if not hasattr(trace, "_param_log_by_pid"):
         raise AttributeError("Trace._param_log_by_pid must be initialized before param logging.")
@@ -681,17 +688,8 @@ def _create_session_param_logs(trace: "Trace", model: nn.Module, optimizer: Any 
             # captured forward materializes them in place (postprocess step 15).
             param_is_lazy = _is_uninitialized_param(param)
 
-            # Save original requires_grad before forcing True. Integer/bool-dtype
-            # Parameters (e.g. a fixed nn.Parameter(torch.arange(...), requires_grad=False)
-            # lookup buffer) are legal PyTorch and never gradient-capable; forcing
-            # requires_grad on them raises, so only force floating/complex dtypes.
             requires_grad_before = param.requires_grad
-            if (
-                not param_is_lazy
-                and param.is_leaf  # a non-leaf already requires grad; its flag is read-only
-                and not trace._options_backward_ready
-                and (torch.is_floating_point(param) or torch.is_complex(param))
-            ):
+            if not param_is_lazy and _forces_frozen_parameter_gradients(trace, param):
                 param.requires_grad = True
 
             barcode = make_random_barcode()

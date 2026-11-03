@@ -3643,3 +3643,67 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: c4e6f60b89a14f417fa9f345c2aade2667132347 (dirty)
 recorded: 2026-11-01T23:49:21.414123+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: names-rulings: merge batch L b30f2aaaf (released_candidates moves to bundle/_operations.py)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 76718acd874d55d0408d0e2ae42bb8240e9b3c20 (dirty)
+recorded: 2026-11-02T08:57:50.408980+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: names-rulings: merge batch L b30f2aaaf (released_candidates moves to bundle/_operations.py)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 76718acd874d55d0408d0e2ae42bb8240e9b3c20 (dirty)
+recorded: 2026-11-02T08:57:57.259416+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: frozen-grad stack on the train: param_mutation gains late registration, new frozen_parameter_gradients and _fused_attention_hold modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 93007be8a0c99826f47e0b7c9d9c810b19c54ed0 (clean)
+recorded: 2026-11-02T09:11:32.532337+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: frozen-grad stack on the train: param_mutation gains late registration, new frozen_parameter_gradients and _fused_attention_hold modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 93007be8a0c99826f47e0b7c9d9c810b19c54ed0 (clean)
+recorded: 2026-11-02T09:11:36.052884+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: frozen-grad stack on the train: param_mutation gains late registration, new frozen_parameter_gradients and _fused_attention_hold modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c5378f30b2f4daf196e3214e94795ee67a04ff31 (clean)
+recorded: 2026-11-02T09:21:25.274060+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: frozen-grad stack on the train: param_mutation gains late registration, new frozen_parameter_gradients and _fused_attention_hold modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c5378f30b2f4daf196e3214e94795ee67a04ff31 (clean)
+recorded: 2026-11-02T09:21:28.637009+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: frozen-grad stack under the file-cap rows: get_arg_names, the identity shim views, the robustness offenses and the direct forward routes moved into sibling modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1f7059f727a051dccea09555f395fe939fac357e (clean)
+recorded: 2026-11-02T10:09:58.285204+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: frozen-grad stack under the file-cap rows: get_arg_names, the identity shim views, the robustness offenses and the direct forward routes moved into sibling modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1f7059f727a051dccea09555f395fe939fac357e (clean)
+recorded: 2026-11-02T10:10:01.634327+00:00

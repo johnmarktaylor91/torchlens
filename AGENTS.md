@@ -27,7 +27,7 @@ extras gate appliance and bridge namespaces; see `pyproject.toml` for the curren
 
 ## Torch Version Compatibility
 
-TorchLens supports torch 2.1 -> 2.12+ for eager torch capture. The declared floor stays
+TorchLens supports torch 2.1 -> 2.15 for eager torch capture (the newest gating CI row; newer releases run in the non-gating nightly canary). The declared floor stays
 `torch>=2.1`; torch 2.0 may work best-effort through guarded fallbacks, but it is not a
 declared support floor.
 
@@ -133,7 +133,7 @@ Byte goldens enforce only in the pinned environment (python 3.10, torch 2.13.0) 
 outside it and outside CI, so only the script's answer equals CI's (`tests/AGENTS.md`, "The smoke tier").
 
 Tiers by cost (every tier's count: `tests/tiers/collection.json`): `smoke` selects
-~1.5k tests (1,482/37,032 collect-only, measured 2026-11-01),
+~1.5k tests (1,474/39,361 collect-only, measured 2026-11-02),
 a coverage-chosen subset of the former ~9.9k-test tier (see `tests/AGENTS.md`, "The smoke
 tier"). The instrumented smoke wall measurement (measured 2026-10-02, one 4-core Linux worker,
 serial, 4 torch threads) took 186s (~3 min), collection included; `-n 4` with one thread
@@ -156,9 +156,13 @@ FILE --workers N`; `python scripts/tier_durations.py shards --count N --index I`
 duration-balanced shard of test files for a parallel gate. `pytest-xdist` ships in the
 `dev` extra: run `OMP_NUM_THREADS=1 pytest tests/ -m smoke -n N` with N equal to the cores you
 declared (never `-n auto`). Measured 2026-10-02 on a 32-core Linux worker: smoke took 5.5 min at
-`-n 8` against 28 min serial. Every worker collects the files it is given first (the whole
-tree takes about 100-140 s; `scripts/smoke_ci_parity.py` passes only the smoke-bearing
-files), so the gain shrinks below 4 workers.
+`-n 8` against 28 min serial. Every worker collects first, so the gain shrinks below 4 workers.
+Smoke runs collect only the smoke file list: under `-m smoke` the tiers plugin skips every test
+module off it before import, and `python scripts/tier_durations.py files --tier smoke` recomputes
+the list from the tree on every call, so nothing needs regenerating. Measured 2026-11-02 on a
+4-core Linux worker: smoke collection took about 40-45 s, serial or `-n 4`, against about 60-65 s
+for the whole tree; passing the listed files as arguments took 130-140 s, because pytest re-walks
+the directory for every file argument.
 
 Use `pytest.importorskip()` for optional migration dependencies. Keep tests
 deterministic and run documentation examples when they are meant to be executable.
