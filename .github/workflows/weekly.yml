@@ -1,8 +1,9 @@
 name: Weekly
 
-# The expensive tiers, weekly: slow and rare, the mutation margins and the
-# rotating per-arm mutation campaign, the optimized-verdict identity check,
-# the hook-pin staleness and netron drift canaries. The 100k+ node large-graph
+# The expensive tiers, weekly: slow and rare, the full stress matrix, the
+# mutation margins and the rotating per-arm mutation campaign, the
+# optimized-verdict identity check, the hook-pin staleness and netron drift
+# canaries. The 100k+ node large-graph
 # suite runs from the monthly cron (and on manual dispatch with large_graphs).
 on:
   schedule:
@@ -620,12 +621,108 @@ jobs:
           retention-days: 30
 
 
+  stress-full:
+    if: github.event.schedule != '37 6 3 * *' && !inputs.large_graphs
+    name: Stress matrix, full (shard ${{ matrix.shard }} of 4)
+    # Every generated stress cell (TORCHLENS_STRESS_FULL=1), six oracles
+    # each; nightly.yml's stress-subset runs the pre-merge subset. Same pinned
+    # environment as that leg and nightly.yml's tier (torch 2.13.0+cpu,
+    # py 3.10), the one the matrix is kept green on. Shard K takes the cells at
+    # positions K, K+4, ... of the sorted cell-id list, with all six oracle
+    # tests of each cell, so `--dist loadgroup` still runs each cell once;
+    # shard 1 also runs the two structural tests.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.10"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          # No uv.lock: key the uv cache on the dependency declarations.
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+          # Rank layout renders with neato -n; fail here if this Graphviz lacks it.
+          echo 'graph { a -- b }' | neato -Tsvg > /dev/null
+
+      - name: Install torch and TorchLens
+        run: |
+          cat > "${{ runner.temp }}/torch-2.13-constraints.txt" <<'EOF2'
+          torch==2.13.0+cpu
+          torchvision==0.28.0+cpu
+          EOF2
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          uv pip install --system -c "${{ runner.temp }}/torch-2.13-constraints.txt" \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular,viz]" \
+            "torch==2.13.0+cpu" \
+            "torchvision==0.28.0+cpu" \
+            "transformers==5.18.0"
+          uv pip check
+          python -c "import torch, torchvision; assert torch.__version__ == '2.13.0+cpu', torch.__version__; print(torch.__version__, torchvision.__version__)"
+
+      - name: Select this shard's cells
+        env:
+          TORCHLENS_STRESS_FULL: "1"
+          SHARD: ${{ matrix.shard }}
+        run: |
+          sel="${{ runner.temp }}/stress-select"
+          mkdir -p "$sel"
+          pytest tests/stress --collect-only -q -p no:randomly > "$sel/collect.txt"
+          grep -o '^tests/stress/test_stress.py::test_[a-z_]*\[[^]]*\]' "$sel/collect.txt" \
+            | sed 's/.*\[\(.*\)\]$/\1/' | sort -u > "$sel/cells.txt"
+          awk -v k="$(( SHARD - 1 ))" '(NR - 1) % 4 == k' "$sel/cells.txt" > "$sel/mine.txt"
+          grep -F -f <(sed 's/.*/[&]/' "$sel/mine.txt") "$sel/collect.txt" \
+            | grep -o '^tests/stress/test_stress.py::[^ ]*' > "$sel/ids.txt"
+          if [ "$SHARD" = 1 ]; then
+            grep -E '^tests/stress/test_stress.py::test_[a-z_]+$' "$sel/collect.txt" >> "$sel/ids.txt"
+          fi
+          echo "cells: $(wc -l < "$sel/cells.txt") total, $(wc -l < "$sel/mine.txt") in shard $SHARD; tests: $(wc -l < "$sel/ids.txt")"
+          test -s "$sel/mine.txt"
+
+      - name: Run the shard
+        env:
+          TORCHLENS_STRESS_FULL: "1"
+          OMP_NUM_THREADS: "1"
+          SHARD: ${{ matrix.shard }}
+        run: |
+          pytest "@${{ runner.temp }}/stress-select/ids.txt" -n 4 --dist loadgroup -p no:randomly \
+            --tb=short -rfE --junitxml="${{ runner.temp }}/junit/stress-full-${SHARD}.xml"
+
+      - name: Declare the executed-test floor
+        # About half of the tests a shard executes (FULL_MEASURED).
+        run: echo "stress-full-${{ matrix.shard }}.xml 1300" >> "${{ runner.temp }}/junit/legs.floor"
+
+      - name: Upload junit and executed-test floors
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: junit-${{ github.job }}-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/junit/
+          if-no-files-found: error
+          retention-days: 30
+
   attest:
     name: Executed-test floors (every leg)
     # One check for the whole workflow: every test job above declares its
     # legs' floors in a legs.floor file beside its junit; this job checks all
     # of them, so a leg whose suite silently skipped or hollowed out is red.
-    needs: [extended-tests, large-graphs]
+    needs: [extended-tests, stress-full, large-graphs]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
