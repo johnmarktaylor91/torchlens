@@ -1012,7 +1012,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   distance on the `on` field: `members=(left, right)` names them (default the baseline and the
   next member); its defaults are `theme="paper"`, `"svg"` and a `bundle_diff` file, and it runs
   the comparison gate on the rendered pair only. Any other keyword (a `Trace.draw` keyword the
-  bundle renderer does not support yet, such as `depth=` or `vis_mode=`) refuses with
+  bundle renderer does not support yet, such as `depth=`) refuses with
   `ArgumentTypeError` (`bundle_draw_keyword_unsupported`) naming the supported list; each is added
   when the renderer supports it (JMT decision, Sun 1 Nov 2026, 3:00 PM PT). Replaces the removed
   `show_bundle_graph` and its `signal=` keyword (now `graph=`; no alias).
