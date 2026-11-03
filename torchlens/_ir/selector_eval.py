@@ -452,7 +452,7 @@ def _capability_error(kind: str, lifecycle: str) -> SelectorCapabilityError:
             "tl.facet(...) / tl.head(...) selectors resolve through intervention mutators "
             "(Trace.do, also as a union: do(module_a & tl.head(i) | module_b & tl.head(j), "
             "edit)) and, on a finished trace, as a bare selector via trace[selector]; not via "
-            f"{where}{' (find_sites, other composites)' if lifecycle == 'site' else ''}.",
+            f"{where}{' (find_sites, other composite selectors)' if lifecycle == 'site' else ''}.",
             code="facet_selector_unsupported",
             selector_kind=kind,
             lifecycle=lifecycle,

@@ -171,3 +171,16 @@ def test_find_sites_over_a_facet_union_still_refuses_and_names_the_do_spelling(
         corrupt.find_sites(HEAD_A | HEAD_B)
     assert caught.value.fields["code"] == "facet_selector_unsupported"
     assert "do(module_a & tl.head(i) | module_b & tl.head(j), edit)" in str(caught.value)
+
+
+def test_union_with_a_facet_inside_another_composite_refuses_before_any_write(
+    case: Case,
+) -> None:
+    """``facet & tl.func(...)`` is not a facet site, so the union refuses as a whole."""
+
+    _model, _x, _clean, corrupt = case
+    fork = corrupt.fork()
+    with pytest.raises(SelectorCapabilityError) as caught:
+        fork.do((HEAD_A & tl.func("linear")) | HEAD_B, tl.zero_ablate())
+    assert caught.value.fields["code"] == "facet_selector_unsupported"
+    assert _facet_writes(fork) == []

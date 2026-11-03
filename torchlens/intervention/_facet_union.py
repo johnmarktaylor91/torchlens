@@ -11,7 +11,14 @@ the single selector would, and any non-facet branches stay one ordinary entry.
 ``(module_a & facet) | (module_b & facet)`` before the split.
 
 A composite that mixes a facet into anything else (``facet & tl.func(...)``, a
-facet under ``~``) is not split and keeps the facet capability refusal.
+facet under ``~``) is not split and keeps the facet capability refusal: it stays
+in the non-facet remainder, whose site validation refuses it before any hook
+attaches.
+
+Selectors are recognised by their ``selector_kind`` (``"facet"``, ``"and"``,
+``"or"``, ``"module"``) rather than by class, so this module imports nothing from
+the selector or hook modules: ``_trace_hooks`` and ``_trace_edits`` import it,
+and an import back would join their import cycle (``scripts/checks/layering.py``).
 """
 
 from __future__ import annotations
@@ -20,15 +27,27 @@ import functools
 import operator
 from collections.abc import Sequence
 from dataclasses import replace
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from .._ir.selector_eval import selector_contains_kind
 from .._selection._module_facet_fold import _fold_module_facet
-from .._selection.selector_base import CompositeSelector
-from .._selection.selectors import FacetSelector
-from .hooks import NormalizedHookEntry
 
-__all__: list[str] = []
+if TYPE_CHECKING:
+    from .hooks import NormalizedHookEntry
+
+
+def _kind(selector: Any) -> Any:
+    """Return a selector's ``selector_kind`` (``None`` for a non-selector)."""
+
+    return getattr(selector, "selector_kind", None)
+
+
+def _composite_children(selector: Any, operator_name: str) -> tuple[Any, ...] | None:
+    """Return the children of an ``operator_name`` composite, else ``None``."""
+
+    children = getattr(selector, "selectors", None)
+    if _kind(selector) != operator_name or not isinstance(children, tuple):
+        return None
+    return children
 
 
 def _union_branches(selector: Any) -> list[Any] | None:
@@ -38,14 +57,16 @@ def _union_branches(selector: Any) -> list[Any] | None:
     distributable ``(module | module) & facet``.
     """
 
-    if isinstance(selector, FacetSelector):
+    if _kind(selector) == "facet":
         return [selector]
-    if not isinstance(selector, CompositeSelector):
+    conjuncts = _composite_children(selector, "and")
+    if conjuncts is not None:
+        return _distribute_module_scopes(conjuncts)
+    alternatives = _composite_children(selector, "or")
+    if alternatives is None:
         return None
-    if selector.operator == "and":
-        return _distribute_module_scopes(selector.selectors)
     branches: list[Any] = []
-    for child in selector.selectors:
+    for child in alternatives:
         branches.extend(_union_branches(child) or [child])
     return branches
 
@@ -55,28 +76,17 @@ def _distribute_module_scopes(children: Sequence[Any]) -> list[Any] | None:
 
     if len(children) != 2:
         return None
-    facets = [child for child in children if isinstance(child, FacetSelector)]
-    scopes = [child for child in children if not isinstance(child, FacetSelector)]
+    facets = [child for child in children if _kind(child) == "facet"]
+    scopes = [child for child in children if _kind(child) != "facet"]
     if len(facets) != 1 or len(scopes) != 1:
         return None
-    modules = _module_alternatives(scopes[0])
-    if modules is None:
+    modules = _composite_children(scopes[0], "or")
+    if modules is None or not all(_kind(module) == "module" for module in modules):
         return None
     return [_fold_module_facet(module, facets[0]) for module in modules]
 
 
-def _module_alternatives(selector: Any) -> list[Any] | None:
-    """Return the module selectors of a ``|`` made only of ``tl.module(...)``."""
-
-    if not isinstance(selector, CompositeSelector) or selector.operator != "or":
-        return None
-    modules = list(selector.selectors)
-    if not all(getattr(module, "selector_kind", None) == "module" for module in modules):
-        return None
-    return modules
-
-
-def split_facet_union(site_target: Any) -> tuple[tuple[FacetSelector, ...], Any] | None:
+def split_facet_union(site_target: Any) -> tuple[tuple[Any, ...], Any] | None:
     """Split a union holding facet selectors into facet branches and a remainder.
 
     Parameters
@@ -86,27 +96,32 @@ def split_facet_union(site_target: Any) -> tuple[tuple[FacetSelector, ...], Any]
 
     Returns
     -------
-    tuple[tuple[FacetSelector, ...], Any] | None
+    tuple[tuple[Any, ...], Any] | None
         The distinct facet branches in first-appearance order and the ``|`` of
         the remaining non-facet branches (``None`` when there are none), or
-        ``None`` when ``site_target`` is not such a union.
+        ``None`` when ``site_target`` is not a composite holding a facet branch.
     """
 
-    if not isinstance(site_target, CompositeSelector):
+    if _composite_children(site_target, "and") is None and (
+        _composite_children(site_target, "or") is None
+    ):
         return None
     branches = _union_branches(site_target)
     if branches is None:
         return None
-    facets = tuple(dict.fromkeys(b for b in branches if isinstance(b, FacetSelector)))
-    rest = [b for b in branches if not isinstance(b, FacetSelector)]
-    if not facets or any(selector_contains_kind(b, "facet", unwrap=True) for b in rest):
+    facets = tuple(dict.fromkeys(b for b in branches if _kind(b) == "facet"))
+    if not facets:
         return None
+    rest = [b for b in branches if _kind(b) != "facet"]
     remainder = functools.reduce(operator.or_, rest) if rest else None
     return facets, remainder
 
 
 def is_facet_union(site_target: Any) -> bool:
-    """Return whether ``site_target`` is a union the write doors split into facets.
+    """Return whether ``site_target`` is a union made only of facet branches.
+
+    The set door writes one value into every branch, so a union that also
+    holds non-facet sites keeps the single-site refusal there.
 
     Parameters
     ----------
@@ -116,10 +131,11 @@ def is_facet_union(site_target: Any) -> bool:
     Returns
     -------
     bool
-        Whether :func:`split_facet_union` splits it.
+        Whether :func:`split_facet_union` splits it into facets alone.
     """
 
-    return split_facet_union(site_target) is not None
+    split = split_facet_union(site_target)
+    return split is not None and split[1] is None
 
 
 def split_facet_union_entries(
