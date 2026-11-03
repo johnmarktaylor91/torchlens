@@ -77,7 +77,8 @@ def test_resolve_all_falls_back_to_the_scan_when_the_index_is_unavailable() -> N
 def test_grad_fn_op_reads_do_not_scan_the_rows() -> None:
     trace = _trace()
     out = trace[trace.output_layers[0]].out
-    torch.autograd.grad(out.sum(), trace.input_ops[0].out, retain_graph=True)
+    source = next(op for op in trace._layer_list if not op.is_input).out
+    torch.autograd.grad(out.sum(), source, retain_graph=True)
     grad_fns = [gf for gf in trace.autograd.grad_fns if gf.op_label is not None]
     if not grad_fns:
         pytest.skip("no GradFn carries an op label in this capture")
