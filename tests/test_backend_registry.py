@@ -1310,3 +1310,46 @@ def test_registered_backends_list_only_recorded_trace_options() -> None:
         listed = set(spec.capabilities.trace_options)
         assert listed <= recorded, (spec.name, listed - recorded)
         assert not (listed & gated), (spec.name, listed & gated)
+
+
+_FRESH_BACKEND_ATTRIBUTE_SCRIPT = """
+import importlib.util
+import sys
+
+import torchlens as tl
+from torchlens._errors import MissingDependencyError
+
+frameworks = {"jax": "jax", "mlx": "mlx", "paddle": "paddle", "tf": "tensorflow", "tinygrad": "tinygrad"}
+imported = sorted(m for m in frameworks.values() if m in sys.modules)
+assert not imported, f"import torchlens imported frameworks: {imported}"
+for name, module in frameworks.items():
+    try:
+        cls = getattr(tl.backends, name).GradOptions
+    except MissingDependencyError:
+        assert importlib.util.find_spec(module) is None, f"tl.backends.{name} refused with {module} installed"
+        continue
+    assert cls.__name__ == "GradOptions", cls
+assert tl.backends.torch.__name__ == "torchlens.backends.torch"
+assert not hasattr(tl.backends, "no_such_backend")
+print("ok")
+"""
+
+
+def test_backend_packages_resolve_in_a_fresh_process() -> None:
+    """``tl.backends.<name>.GradOptions`` works before any capture (backend-table defect 10).
+
+    The per-framework packages resolve lazily on first access, so the documented
+    spelling needs no prior capture and ``import torchlens`` imports no framework.
+    """
+
+    import subprocess
+
+    completed = subprocess.run(
+        [sys.executable, "-c", _FRESH_BACKEND_ATTRIBUTE_SCRIPT],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr[-3000:]
+    assert completed.stdout.strip().endswith("ok")
