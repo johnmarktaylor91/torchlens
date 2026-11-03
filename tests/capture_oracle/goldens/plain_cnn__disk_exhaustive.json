@@ -23,7 +23,7 @@
           "blobs/0000000001.safetensors",
           "blobs/0000000002.safetensors",
           "blobs/0000000003.safetensors",
-          "blobs/0000000004.safetensors",
+          "blobs/0000000007.safetensors",
           "manifest.json",
           "metadata.pkl"
         ]
@@ -604,20 +604,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 1534677,
+      "python_peak_memory_median_bytes": 1528623,
       "sample_count": 3,
       "torch_version": "2.13.0+cpu",
-      "wall_time_median_ms": 155.24580492638052
+      "wall_time_median_ms": 307.2486240416765
     }
   },
   "sha256_chunks": [
-    "214850d0",
-    "74f88db6",
-    "a7f406fc",
-    "94cafdf3",
-    "73db92ac",
-    "e61933d7",
-    "30c26f52",
-    "35c0d598"
+    "5ca1732d",
+    "b891c26b",
+    "3c2744f2",
+    "0ea641a5",
+    "666715f8",
+    "168926f4",
+    "0311cd92",
+    "3e269994"
   ]
 }
