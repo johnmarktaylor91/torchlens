@@ -1176,8 +1176,8 @@
   public surface; payloads never inlined; `max_ops` truncation disclosed, never silent).
   `trace.explain(max_tokens=N)` budget-prunes the text report by whole
   sections low-value-first with a disclosed `Truncation` section; capture-status honesty
-  facts and partial-capture failure evidence never drop, and `max_tokens` refuses typed
-  with `format="json"`. Doc: `docs/for-ai-agents.md`.
+  facts and partial-capture failure evidence never drop; the JSON form is
+  `trace.to_agent_json()`, which takes no token budget. Doc: `docs/for-ai-agents.md`.
 - STRUCTURAL FINGERPRINT (`tl.fingerprint`): `tl.fingerprint.model(model, inputs)`,
   `tl.fingerprint.trace(trace)` and `tl.fingerprint.content(...)` compute address-free
   structural hashes; `tl.fingerprint.assert_unchanged(...)` asserts a model still matches a
