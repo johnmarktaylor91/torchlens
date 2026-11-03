@@ -366,7 +366,9 @@ def test_structural_site_key_mismatch_refuses():
     subject = tl.trace(_A(), torch.randn(1, 4))
     reference = tl.trace(_C(), torch.randn(1, 4))
     try:
-        assert layer_site_key(subject["linear_1_1"]) != layer_site_key(reference["linear_1_1"])
+        assert layer_site_key(subject.layers["linear_1_1"]) != layer_site_key(
+            reference.layers["linear_1_1"]
+        )
         with pytest.raises(SelectionError) as excinfo:
             subject[tl.changed(reference, "linear_1_1")]
         # Since leverage B4 the guarded join is the pairing authority: the

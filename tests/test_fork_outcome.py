@@ -71,7 +71,7 @@ def test_mutated_fork_cannot_save_as_attested_complete(parent_trace: tl.Trace, t
 
     fork = parent_trace.fork()
     # A hand edit on the mutation surface: overwrite one saved activation.
-    op = fork["relu_1_2"].ops[0]
+    op = fork.layers["relu_1_2"].ops[0]
     op.out = torch.zeros_like(op.out)
     path = os.path.join(tmp_path, "mutated_fork.tlspec")
     fork.save(path)

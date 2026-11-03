@@ -55,7 +55,7 @@ def test_layer_annotations_do_not_alias_op_annotations() -> None:
 
     log = tl.trace(_Tiny(), torch.randn(2, 4))
     op = [o for o in log.ops if o.type == "relu"][0]
-    layer = log[op.layer_label]
+    layer = log.layers[op.layer_label]
 
     assert layer.annotations is not op.annotations
     op.annotations["op_user_key"] = 1
