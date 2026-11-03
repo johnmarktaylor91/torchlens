@@ -554,7 +554,7 @@ def test_bare_functional_op_chain_is_not_a_loop() -> None:
     tanh_layers = [label for label in trace.layer_labels if label.startswith("tanh")]
     assert len(tanh_layers) == 2
     for label in tanh_layers:
-        assert trace[label].num_passes == 1
+        assert trace.layers[label].num_passes == 1
 
 
 def test_reused_single_op_module_stays_a_loop() -> None:

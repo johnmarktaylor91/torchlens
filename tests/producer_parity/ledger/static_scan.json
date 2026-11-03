@@ -9924,7 +9924,7 @@
   "field": "parents",
   "file": "torchlens/validation/_invariants_topology.py",
   "has_default": false,
-  "sites": 9,
+  "sites": 10,
   "via_getattr": false
  },
  {

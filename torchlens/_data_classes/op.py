@@ -1160,6 +1160,8 @@ if TYPE_CHECKING:
 
 
 def _warn_synthesized_out_read(source_trace: Any) -> None:
+    """Fire the once-per-trace synthesized-value warning for an ``Op.out`` read when due."""
+
     if _synthesized_out_read_due(source_trace):
         from .._quickstart._gate import warn_on_raw_read
 

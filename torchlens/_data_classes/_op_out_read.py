@@ -34,7 +34,7 @@ def _synthesized_out_read_due(source_trace: Any) -> bool:
     ``Op.out``; the gate itself dedupes per trace.
     """
 
-    record = getattr(source_trace, "_provenance_input_preprocessor", None)
+    record = source_trace._provenance_input_preprocessor
     return (
         record is not None
         and not getattr(record, "verified", True)

@@ -306,7 +306,7 @@ def _final_trace_output(log: Any) -> Any:
     import torch
 
     for label in getattr(log, "output_layers", []) or []:
-        out = getattr(log.layers[label], "out", None)
+        out = getattr(log[label], "out", None)
         if isinstance(out, torch.Tensor):
             return out
     for layer in reversed(log._layer_list):

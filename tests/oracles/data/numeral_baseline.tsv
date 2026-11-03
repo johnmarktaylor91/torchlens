@@ -4045,6 +4045,7 @@ package-docstrings	torchlens/_data_classes/_op_dedup.py	20
 package-docstrings	torchlens/_data_classes/_op_dedup.py	256
 package-docstrings	torchlens/_data_classes/_op_dedup.py	32
 package-docstrings	torchlens/_data_classes/_op_dedup.py	35
+package-docstrings	torchlens/_data_classes/_op_out_read.py	17
 package-docstrings	torchlens/_data_classes/_op_relations.py	62
 package-docstrings	torchlens/_data_classes/_op_relations.py	742
 package-docstrings	torchlens/_data_classes/_op_save.py	34

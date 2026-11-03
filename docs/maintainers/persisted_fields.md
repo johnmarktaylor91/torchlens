@@ -441,7 +441,7 @@ record, by record; a rename appears as one removed and one added row.
 | `_layer_dict_main_keys` | scalar | required: every level | keep | fact | none (storage only) |
 | `_layer_list` | scalar | required: every level | keep | fact | `Trace.buffer_read_ops`, `Trace.buffer_write_ops`, `Trace.compute_ops`, `Trace.model_ops` and 16 more |
 | `_layer_logs` | scalar | required: every level | keep | fact | `Trace.layers`, `Trace.saved_layers` |
-| `_layer_num_calls` | scalar | required: every level | keep | fact | `Trace.compute_ops`, `Trace.input_ops`, `Trace.ops`, `Trace.ops_with_params` and 5 more |
+| `_layer_num_calls` | scalar | required: every level | keep | fact | `Trace.compute_ops`, `Trace.input_ops`, `Trace.ops`, `Trace.ops_with_params` and 7 more |
 | `_layer_num_to_lookup_keys_dict` | scalar | required: every level | keep | fact | none (storage only) |
 | `_layer_nums_to_save` | scalar | required: every level | keep | fact | none (storage only) |
 | `_layers_logged` | scalar | required: every level | keep | fact | none (storage only) |
@@ -537,7 +537,7 @@ record, by record; a rename appears as one removed and one added row.
 | `_source_init_signature` | computed | required: every level | keep | fact | `Trace.source.init_signature` |
 | `_source_snapshots` | scalar | required: every level | keep | fact | `Trace.source.snapshots` |
 | `_spec_revision` | scalar | required: every level | keep | fact | none (storage only) |
-| `_tracing_finished` | scalar | required: every level | keep | fact | `Trace.input_ops`, `Trace.output_ops` |
+| `_tracing_finished` | scalar | required: every level | keep | fact | none (storage only) |
 | `annotations` | scalar: `dict[str, Any]` | required: every level | keep | fact | `Trace.annotations` (field) |
 | `backend_runtime_device_summary` | scalar: `dict[str, Any] | None` | required: every level | keep | fact | `Trace.backend_runtime_device_summary` (field) |
 | `backward_peak_memory_reason` | scalar | required: every level | keep | fact | `Trace.backward_peak_memory_reason` (field) |
@@ -588,8 +588,8 @@ Session-only (`drop`): `_active_backward_pass_index`, `_autograd_escape_detector
 | `_layer_label_raw` | interned | required: every level | keep | fact | none (storage only) |
 | `_param_barcodes` | interned | required: every level | keep | fact | `Op.has_params`, `Layer.has_params` |
 | `_param_logs` | scalar | required: every level | keep | fact | `Op.num_param_tensors_frozen`, `Op.num_param_tensors_trainable`, `Op.param_dtypes`, `Op.param_names` and 8 more |
-| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `Op.gradient_transform`, `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace` and 40 more |
-| `_tracing_finished` | interned | required: every level | keep | fact | `Trace.input_ops`, `Trace.output_ops` |
+| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `Op.gradient_transform`, `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace` and 38 more |
+| `_tracing_finished` | interned | required: every level | keep | fact | none (storage only) |
 | `activation_memory` | interned | required: every level | keep | fact | `Op.activation_memory` (field) |
 | `address` | interned | required: every level | keep | fact | `Op.address` (field) |
 | `annotations` | scalar | required: every level | keep | fact | `Op.annotations` (field) |
@@ -764,7 +764,7 @@ Session-only (`drop`): `_arg_expressions_cache`, `_construction_done`, `_facets_
 | `_is_in_conditional_body` | scalar | required: every level | keep | fact | none (storage only) |
 | `_param_barcodes` | scalar | required: every level | keep | fact | `Layer.has_params`, `Op.has_params` |
 | `_param_logs` | scalar | required: every level | keep | fact | `Layer.num_param_tensors_frozen`, `Layer.num_param_tensors_trainable`, `Layer.param_dtypes`, `Layer.param_names` and 8 more |
-| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace`, `GradFn.trace` and 40 more |
+| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace`, `GradFn.trace` and 38 more |
 | `activation_memory` | scalar | required: every level | keep | fact | `Layer.activation_memory` (field) |
 | `address` | scalar | required: every level | keep | fact | `Layer.address` (field) |
 | `annotations` | scalar | required: every level | keep | fact | `Layer.annotations` (field) |
@@ -898,7 +898,7 @@ Session-only (`drop`): `activation_transform`, `func`, `grad_fn`, `grad_fn_handl
 | key | type | written | policy | tier | accessor |
 | --- | --- | --- | --- | --- | --- |
 | `_executed_flops_record` | scalar: `dict[str, Any] | None` | required: every level | keep | fact | `BackwardPass.flops_attribution` |
-| `_source_trace_ref` | scalar: `Any` | required: every level | weakref_strip | fact | `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace`, `GradFn.trace` and 40 more |
+| `_source_trace_ref` | scalar: `Any` | required: every level | weakref_strip | fact | `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace`, `GradFn.trace` and 38 more |
 | `backward_call_context` | scalar: `object | None` | required: every level | keep | fact | `BackwardPass.backward_call_context` (field) |
 | `duration` | scalar: `Duration | None` | required: every level | keep | fact | `BackwardPass.duration` (field) |
 | `engine_flags` | scalar: `dict[str, object] | None` | required: every level | keep | fact | `BackwardPass.engine_flags` (field) |
@@ -978,7 +978,7 @@ Session-only (`drop`): `_frame_func_obj`, `_linecache_entry`.
 
 | key | type | written | policy | tier | accessor |
 | --- | --- | --- | --- | --- | --- |
-| `_source_trace_ref` | scalar: `Any` | required: every level | weakref_strip | fact | `GradFn.trace`, `GradFnCall.ordinal_index`, `GradFnCall.trace`, `BackwardPass.aten_ops` and 40 more |
+| `_source_trace_ref` | scalar: `Any` | required: every level | weakref_strip | fact | `GradFn.trace`, `GradFnCall.ordinal_index`, `GradFnCall.trace`, `BackwardPass.aten_ops` and 38 more |
 | `backward_docstring` | scalar: `str | None` | required: every level | keep | fact | `GradFn.backward_docstring` (field) |
 | `backward_duration` | computed | required: every level | keep | fact | `GradFn.backward_duration` (field) |
 | `backward_signature` | scalar: `str | None` | required: every level | keep | fact | `GradFn.backward_signature` (field) |
@@ -1036,7 +1036,7 @@ Session-only (`drop`): `_frame_func_obj`, `_linecache_entry`.
 
 | key | type | written | policy | tier | accessor |
 | --- | --- | --- | --- | --- | --- |
-| `_source_trace_ref` | scalar: `Any` | required: every level | weakref_strip | fact | `GradFnCall.ordinal_index`, `GradFnCall.trace`, `BackwardPass.aten_ops`, `BackwardPass.flops_attribution` and 40 more |
+| `_source_trace_ref` | scalar: `Any` | required: every level | weakref_strip | fact | `GradFnCall.ordinal_index`, `GradFnCall.trace`, `BackwardPass.aten_ops`, `BackwardPass.flops_attribution` and 38 more |
 | `_time_finished` | scalar: `float | None` | required: every level | keep | fact | `GradFnCall.backward_duration` |
 | `_time_started` | scalar: `float | None` | required: every level | keep | fact | `GradFnCall.backward_duration` |
 | `backward_duration` | computed | required: every level | keep | fact | `GradFnCall.backward_duration` (field) |
@@ -1055,7 +1055,7 @@ Session-only (`drop`): `_frame_func_obj`, `_linecache_entry`.
 
 | key | type | written | policy | tier | accessor |
 | --- | --- | --- | --- | --- | --- |
-| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `Module.buffers`, `Module.handle`, `Module.layers`, `Module.num_input_edges` and 40 more |
+| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `Module.buffers`, `Module.handle`, `Module.layers`, `Module.num_input_edges` and 38 more |
 | `address` | scalar: `str` | required: every level | keep | fact | `Module.address` (field) |
 | `address_children` | scalar: `list[str]` | required: every level | keep | fact | `Module.address_children` (field) |
 | `address_depth` | scalar: `int` | required: every level | keep | fact | `Module.address_depth` (field) |
@@ -1144,7 +1144,7 @@ Session-only (`drop`): `_attribute_writes`, `_buffer_accessor`, `_facets_cache`,
 
 | key | type | written | policy | tier | accessor |
 | --- | --- | --- | --- | --- | --- |
-| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `ModuleCall.autograd_memory`, `ModuleCall.func_calls_duration`, `ModuleCall.grad`, `ModuleCall.grads` and 40 more |
+| `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `ModuleCall.autograd_memory`, `ModuleCall.func_calls_duration`, `ModuleCall.grad`, `ModuleCall.grads` and 38 more |
 | `address` | scalar: `str` | required: every level | keep | fact | `ModuleCall.address` (field) |
 | `all_addresses` | scalar: `list[str]` | required: every level | keep | fact | `ModuleCall.all_addresses` (field) |
 | `autograd_memory` | computed | required: every level | keep | fact | `ModuleCall.autograd_memory` (field) |
@@ -1241,7 +1241,7 @@ Session-only (`drop`): `_grad_records`, `_lazy_at_prep`, `_param_ref`, `_param_r
 
 ## Private keys with no public accessor
 
-44 keys: `trace._activation_transform_repr`, `trace._ambiguous_lookup_keys`, `trace._annotation_blobs`, `trace._append_history`, `trace._append_sequence_id`, `trace._buffer_initial_values`, `trace._buffer_num_calls`, `trace._buffer_persistence`, `trace._by_pass`, `trace._capture_outcome`, `trace._containers`, `trace._decoded_output`, `trace._final_to_raw_layer_labels`, `trace._grad_fn_param_refs`, `trace._grad_op_nums_to_save`, `trace._has_direct_writes`, `trace._layer_dict_main_keys`, `trace._layer_num_to_lookup_keys_dict`, `trace._layer_nums_to_save`, `trace._layers_logged`, `trace._layers_saved`, `trace._lookup_keys_to_layer_num_dict`, `trace._num_backward_passes`, `trace._num_layers_with_params`, `trace._num_ops`, `trace._num_param_tensors`, `trace._num_saved_ops`, `trace._orphan_labels`, `trace._orphan_records`, `trace._out_recipe_revision`, `trace._phase_timings`, `trace._primitive_op_profile`, `trace._raw_to_final_layer_labels`, `trace._raw_to_final_op_labels`, `trace._raw_to_final_parent_layer_labels`, `trace._replay_arg_version_data_complete`, `trace._source_code_blob`, `trace._spec_revision`, `op._address_normalized`, `op._edge_uses`, `op._is_in_conditional_body`, `op._layer_label_raw`, `layer._is_in_conditional_body`, `param._derived_grad_record_path`.
+46 keys: `trace._activation_transform_repr`, `trace._ambiguous_lookup_keys`, `trace._annotation_blobs`, `trace._append_history`, `trace._append_sequence_id`, `trace._buffer_initial_values`, `trace._buffer_num_calls`, `trace._buffer_persistence`, `trace._by_pass`, `trace._capture_outcome`, `trace._containers`, `trace._decoded_output`, `trace._final_to_raw_layer_labels`, `trace._grad_fn_param_refs`, `trace._grad_op_nums_to_save`, `trace._has_direct_writes`, `trace._layer_dict_main_keys`, `trace._layer_num_to_lookup_keys_dict`, `trace._layer_nums_to_save`, `trace._layers_logged`, `trace._layers_saved`, `trace._lookup_keys_to_layer_num_dict`, `trace._num_backward_passes`, `trace._num_layers_with_params`, `trace._num_ops`, `trace._num_param_tensors`, `trace._num_saved_ops`, `trace._orphan_labels`, `trace._orphan_records`, `trace._out_recipe_revision`, `trace._phase_timings`, `trace._primitive_op_profile`, `trace._raw_to_final_layer_labels`, `trace._raw_to_final_op_labels`, `trace._raw_to_final_parent_layer_labels`, `trace._replay_arg_version_data_complete`, `trace._source_code_blob`, `trace._spec_revision`, `trace._tracing_finished`, `op._address_normalized`, `op._edge_uses`, `op._is_in_conditional_body`, `op._layer_label_raw`, `op._tracing_finished`, `layer._is_in_conditional_body`, `param._derived_grad_record_path`.
 
 ## Group view members with no stored key
 

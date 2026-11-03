@@ -487,7 +487,9 @@ class TestModuleAccessorSummary:
         # ``Layer._single_pass_or_error()`` for any multi-pass (recurrent) layer.
         # None of these three surfaces were covered by the assertions above, which
         # is exactly why the regression slipped through hotfix2.
-        multi_pass_labels = [label for label in fc1.layer_labels if log[label].num_passes > 1]
+        multi_pass_labels = [
+            label for label in fc1.layer_labels if log.layers[label].num_passes > 1
+        ]
         assert multi_pass_labels, "fixture must contain a multi-pass layer to exercise this gap"
 
         # 1) Layer.to_pandas() directly.

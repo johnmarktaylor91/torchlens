@@ -3923,3 +3923,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 41af16c4ded22ae82aea56223521aab1a37fc418 (dirty)
 recorded: 2026-11-03T09:12:12.203416+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push rulings-gap-1: selection, accessors and group views on fae90e0a94a820c6246ec4510952d1d0b99f29e6
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: fae90e0a94a820c6246ec4510952d1d0b99f29e6 (dirty)
+recorded: 2026-11-03T10:38:23.943549+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push rulings-gap-1: selection, accessors and group views on fae90e0a94a820c6246ec4510952d1d0b99f29e6
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: fae90e0a94a820c6246ec4510952d1d0b99f29e6 (dirty)
+recorded: 2026-11-03T10:38:35.463579+00:00

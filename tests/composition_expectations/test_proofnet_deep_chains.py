@@ -142,12 +142,12 @@ def test_chain_multipass_pass_qualified_edit_is_exact() -> None:
         )
         fork = trace.fork()
         try:
-            pass_one_before = trace[tanh_layer].ops[0].out.clone()
+            pass_one_before = trace.layers[tanh_layer].ops[0].out.clone()
             fork.do(f"{tanh_layer}:2", tl.zero_ablate())
-            assert torch.equal(fork[tanh_layer].ops[0].out, pass_one_before), (
+            assert torch.equal(fork.layers[tanh_layer].ops[0].out, pass_one_before), (
                 "editing pass 2 CHANGED pass 1 -- donor semantics corrupted"
             )
-            assert torch.count_nonzero(fork[tanh_layer].ops[1].out) == 0, (
+            assert torch.count_nonzero(fork.layers[tanh_layer].ops[1].out) == 0, (
                 "the addressed pass 2 was not edited"
             )
             # After the pass-2 OUTPUT is zeroed, exactly one step remains:

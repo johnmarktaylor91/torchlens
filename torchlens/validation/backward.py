@@ -301,7 +301,7 @@ def _reconstruct_candidate_output_for_loss(trace: Any) -> Any:
         Single output tensor, rebuilt output container, or flat list fallback.
     """
 
-    output_layers = [trace.layers[layer_label].out for layer_label in trace.output_layers]
+    output_layers = [trace[layer_label].out for layer_label in trace.output_layers]
     if len(output_layers) == 1:
         return output_layers[0]
     root_call = None

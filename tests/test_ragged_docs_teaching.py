@@ -128,7 +128,7 @@ def test_ragged_fixture_pins_the_false_reading(episode_log: tl.Trace) -> None:
     rows = episode_log.annotations["episode"]["rows"]
     assert len(rows) == N_STEPS
     assert episode_log.layers[label].num_passes == 2
-    assert episode_log[label].num_passes < len(rows)
+    assert episode_log.layers[label].num_passes < len(rows)
 
 
 def test_false_example_killed_in_docstrings() -> None:
