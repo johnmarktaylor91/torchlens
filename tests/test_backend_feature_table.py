@@ -9,6 +9,7 @@ their framework marker, so each backend's CI job runs its own row on the pinned 
 
 from __future__ import annotations
 
+import importlib
 import os
 import re
 import sys
@@ -159,6 +160,16 @@ def _act_op(trace: Any, func_name: str) -> Any:
     return next(trace[label] for label in trace.op_labels if trace[label].func_name == func_name)
 
 
+def _grad_options(backend: str) -> Any:
+    """The preview's ``GradOptions`` class.
+
+    ``tl.backends.<name>`` exists only once that backend's module is imported (a first
+    capture imports it), so a fresh process imports it by its full module name.
+    """
+
+    return importlib.import_module(f"torchlens.backends.{backend}").GradOptions
+
+
 def _with_nan(array: np.ndarray, index: tuple[int, ...]) -> np.ndarray:
     poisoned = array.copy()
     poisoned[index] = np.nan
@@ -205,7 +216,7 @@ def _jax_subject() -> _Subject:
         def fn(p: Any, inp: Any) -> Any:
             return jax_nn.relu(inp @ p["w"] + p["b"])
 
-        options = tl.backends.jax.GradOptions(
+        options = _grad_options("jax")(
             params=params,
             loss_fn=lambda out: jnp.sum(out * out),
             input_grad_argnums=(0,),
@@ -257,9 +268,7 @@ def _tf_subject() -> _Subject:
     )
     subject.gradients = lambda: _derived_gradients(
         subject,
-        tl.backends.tf.GradOptions(
-            loss_fn=lambda out: tf.reduce_sum(out * out), input_grad_argnums=(0,)
-        ),
+        _grad_options("tf")(loss_fn=lambda out: tf.reduce_sum(out * out), input_grad_argnums=(0,)),
     )
     return subject
 
@@ -297,7 +306,7 @@ def _mlx_subject() -> _Subject:
     )
     subject.gradients = lambda: _derived_gradients(
         subject,
-        tl.backends.mlx.GradOptions(loss_fn=lambda out: mx.sum(out * out), input_grad_argnums=(0,)),
+        _grad_options("mlx")(loss_fn=lambda out: mx.sum(out * out), input_grad_argnums=(0,)),
     )
     return subject
 
@@ -323,9 +332,7 @@ def _paddle_subject() -> _Subject:
     )
     subject.gradients = lambda: _derived_gradients(
         subject,
-        tl.backends.paddle.GradOptions(
-            loss_fn=lambda out: paddle.sum(out * out), input_grad_argnums=(0,)
-        ),
+        _grad_options("paddle")(loss_fn=lambda out: paddle.sum(out * out), input_grad_argnums=(0,)),
     )
     return subject
 
@@ -361,9 +368,7 @@ def _tinygrad_subject() -> _Subject:
     )
     subject.gradients = lambda: _derived_gradients(
         subject,
-        tl.backends.tinygrad.GradOptions(
-            loss_fn=lambda out: (out * out).sum(), input_grad_argnums=(0,)
-        ),
+        _grad_options("tinygrad")(loss_fn=lambda out: (out * out).sum(), input_grad_argnums=(0,)),
     )
     return subject
 
@@ -390,14 +395,18 @@ def _select(subject: _Subject, tmp_path: Path) -> None:
 
 def _extract(subject: _Subject, tmp_path: Path) -> None:
     del tmp_path
-    full = _act_op(subject.trace(), subject.act_func)
-    kept = _act_op(subject.trace(save=tl.func(subject.act_func)), subject.act_func)
+    # Hold each Trace while reading its ops: an op does not keep its trace alive.
+    full_trace = subject.trace()
+    kept_trace = subject.trace(save=tl.func(subject.act_func))
+    full = _act_op(full_trace, subject.act_func)
+    kept = _act_op(kept_trace, subject.act_func)
     np.testing.assert_allclose(_np(kept.out), _np(full.out))
 
 
 def _inspect(subject: _Subject, tmp_path: Path) -> None:
     del tmp_path
-    op = _act_op(subject.trace(), subject.act_func)
+    trace = subject.trace()
+    op = _act_op(trace, subject.act_func)
     assert op.label.split(":")[0] in str(op)
     assert tuple(op.shape) == _np(op.out).shape
 
