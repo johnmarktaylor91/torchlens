@@ -133,6 +133,13 @@ class DistributedCaptureUnsupportedError(CompatibilityError, RuntimeError):
 
     The structured findings are retained on ``fields["findings"]`` so callers
     branch on :attr:`DistributedFinding.kind` rather than parsing message text.
+
+    Examples
+    --------
+    >>> issubclass(DistributedCaptureUnsupportedError, tl.errors.CompatibilityError)
+    True
+    >>> issubclass(DistributedCaptureUnsupportedError, RuntimeError)
+    True
     """
 
 
