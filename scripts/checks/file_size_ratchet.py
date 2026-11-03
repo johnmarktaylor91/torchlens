@@ -140,7 +140,11 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # verbatim to _op_save.py, _op_relations.py, _op_cost.py, _labels.py,
     # intervention/_op_edits.py and receptive_field/_op_fields.py; re-keyed
     # down to the next 50-line step above the measurement (3635).
-    "torchlens/_data_classes/op.py": 3650,
+    # 3650 -> 3550 (2026-11-03 replay-templates merge): the train's record
+    # deletions and replay-default's template gating both land on one tree;
+    # re-keyed down to the next 50-line step above the merged measurement
+    # (3535).
+    "torchlens/_data_classes/op.py": 3550,
     "torchlens/_io/runnable.py": 5000,
     # 4950 -> 5100 (2026-10-01 L8 floor2 fix): two find_spec-detected
     # structural-extras rows (the vendored torch.distributed.pipeline
