@@ -104,7 +104,8 @@ PyTorch model (see [landscape.md](landscape.md)).
   local eager forward; for serving-scale capture see
   [where to go instead](where_to_go_instead.md#capture-at-serving-scale-on-remote-gpus-or-across-devices)
   and [landscape.md](landscape.md), which lists
-  Neuronpedia's interp-engine and vllm-lens beside nnsight.
+  Neuronpedia's interp-engine and vllm-lens beside nnsight. To check those hooks against
+  TorchLens on a small model, see [cross-engine checks](cross_engine.md).
 - Source-local tracing syntax: edits are written inline inside a `with model.trace(...)` block and
   read as ordinary indexing. TorchLens separates capture from edit, so the same task is two steps.
 

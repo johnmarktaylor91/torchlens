@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1426 modules, 634491 lines, 0 modules without a docstring.
+83 packages, 1426 modules, 634516 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -79,7 +79,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1912 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 790 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 365 |
-| `torchlens.mechinterp` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 26 | 8490 |
+| `torchlens.mechinterp` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 26 | 8515 |
 | `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 6 | 3841 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 8 | 2474 |
 | `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 22 | 12495 |
@@ -1722,12 +1722,12 @@ Public I/O and administrative helpers for TorchLens. (1 modules, 365 lines)
 
 ### `torchlens.mechinterp`
 
-torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). (26 modules, 8490 lines)
+torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). (26 modules, 8515 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 107 |
-| `_aliases` | The alias layer: a RESOLVER, not a dict (mikit ). | 438 |
+| `_aliases` | The alias layer: a RESOLVER, not a dict (mikit ). | 463 |
 | `_anchors` | Shared dataflow anchors: the lm-head / final-norm resolution (internal). | 141 |
 | `_appliance` | The ''"mi"'' appliance behind ''trace.using("mi")''. | 76 |
 | `_compose` | Stack composition helpers: norm folding, generic stackers, full grain | 290 |
