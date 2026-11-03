@@ -34,13 +34,13 @@ from pathlib import Path
 
 import pytest
 import torch
-import torchvision
 from torch import nn
 
 import torchlens as tl
 from torchlens._utils import _torch_compat
 
 pytestmark = [pytest.mark.heavy, pytest.mark.real_model, pytest.mark.real_class]
+torchvision = pytest.importorskip("torchvision")
 
 # Module-level skip: set_stance is the capability the zero-compile leg needs, and
 # the skip must run before any import-time torch.compile (see

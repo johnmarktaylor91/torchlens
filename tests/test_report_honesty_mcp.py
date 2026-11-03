@@ -158,10 +158,8 @@ def test_served_schema_field_parity() -> None:
     served = {declaration["name"]: declaration for declaration in list_tools()}
     specs = {spec.name: spec for spec in tool_specs()}
     assert set(served) == set(specs)
-    # The handler map carries the registry plus the bridge-local
-    # experiment-ledger extension (raw torchlens.experiment.read_ledger payloads).
-    ledger_names = {spec["name"] for spec in mcp.LEDGER_TOOL_SPECS}
-    assert set(mcp.TOOL_HANDLERS) == set(specs) | ledger_names
+    # The handler map carries exactly the registry.
+    assert set(mcp.TOOL_HANDLERS) == set(specs)
     for name, spec in specs.items():
         declaration = served[name]
         assert declaration["description"] == spec.description
@@ -175,9 +173,8 @@ def test_served_schema_field_parity() -> None:
         assert declaration["default_limits"] == dict(spec.default_limits)
         assert spec.input_schema["additionalProperties"] is False
         assert mcp.TOOL_HANDLERS[name] is spec.handler
-    # The bridge's frozen TOOL_SPECS snapshot cannot drift from the registry:
-    # the registry rows lead verbatim, the ledger extension trails.
-    assert list(mcp.TOOL_SPECS) == list_tools() + list(mcp.LEDGER_TOOL_SPECS)
+    # The bridge's frozen TOOL_SPECS snapshot cannot drift from the registry.
+    assert list(mcp.TOOL_SPECS) == list_tools()
 
 
 def test_memory_shaped_stats_reads_do_not_attach(artifact: Path) -> None:

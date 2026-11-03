@@ -140,15 +140,16 @@ def test_gradient_and_node_sites_are_told_apart() -> None:
     assert not addresses_autograd_nodes(tl.func("relu"))
 
 
-def test_rule_signal_is_derived_and_direction_stays_undeclared() -> None:
+def test_rule_signal_is_derived_and_rule_has_no_direction() -> None:
     forward_rule = tl.when(tl.func("relu"), tl.scale(0.5)).rules[0]
     node_rule = tl.when(tl.grad_fn("ReluBackward0"), lambda g, *, ctx: g).rules[0]
     mixed_rule = tl.when(tl.label("relu_1_2") | tl.grad_fn("ReluBackward0"), tl.scale(0.5)).rules[0]
     assert forward_rule.signal == "forward"
     assert node_rule.signal == "backward"
     assert mixed_rule.signal == "both"
-    assert forward_rule.direction is None
-    assert mixed_rule.direction is None
+    # Walk names.5 (JMT 2026-11-01): Rule.direction is removed; the site decides.
+    assert not hasattr(forward_rule, "direction")
+    assert not hasattr(mixed_rule, "direction")
     assert "signal='forward'" in repr(forward_rule)
 
 

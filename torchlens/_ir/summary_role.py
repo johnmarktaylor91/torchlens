@@ -180,17 +180,27 @@ def ensure_summary_output_owns_storage(output: Any, live: Any) -> Any:
     live_storage = getattr(live, "untyped_storage", None)
     if output_storage is None or live_storage is None:
         return output
-    try:
-        aliases = output_storage().data_ptr() == live_storage().data_ptr()
-    except (AttributeError, NotImplementedError, RuntimeError):
-        aliases = True
-    if not aliases:
-        return output
-    # The defensive copy is a TorchLens-internal tensor op running while
-    # capture logging is live; pause so the clone is never itself captured.
-    from .._state import pause_logging
+    # The whole check is TorchLens-internal work running while capture logging
+    # is live. ``untyped_storage()`` is a wrapped torch call: unpaused, its
+    # wrapper preamble registers the reducer output as a first-seen tensor,
+    # which applies the summary transform again and re-enters this function
+    # (a first-in-process ``save="stats"`` capture recursed to the interpreter
+    # limit). Pause so neither the storage reads nor the clone are captured,
+    # and mark the pointer reads internal so a witness-armed capture never
+    # records them as user raw-pointer escapes.
+    from .._utils.tensor_utils import _paused_internal_reads
 
-    with pause_logging():
+    with _paused_internal_reads():
+        try:
+            aliases = output_storage().data_ptr() == live_storage().data_ptr()
+        except RecursionError:
+            # Never "aliasing unprovable": a recursion here means capture
+            # re-entered itself, a defect that must surface, not a clone.
+            raise
+        except (AttributeError, NotImplementedError, RuntimeError):
+            aliases = True
+        if not aliases:
+            return output
         return output.clone()
 
 

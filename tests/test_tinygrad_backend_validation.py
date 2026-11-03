@@ -117,5 +117,6 @@ def test_tinygrad_audit_only_payload_validation_raises() -> None:
     trace.tinygrad_uop_captures = ()
     trace.tinygrad_payload_policy = "audit_only"
 
-    with pytest.raises(BackendUnsupportedError, match="audit-only|realized-copy"):
+    with pytest.raises(BackendUnsupportedError, match="audit-only|realized-copy") as info:
         trace.validate_forward_pass([_validation_block(Tensor([1.0, -2.0, 3.0]))])
+    assert info.value.code == "live_payloads_required"

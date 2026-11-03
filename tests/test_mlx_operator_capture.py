@@ -89,29 +89,7 @@ def test_roster_row_intermediates_match_numpy(row) -> None:
             np.testing.assert_allclose(captured, np.asarray(reference), rtol=1e-5, atol=1e-5)
 
 
-#: Rows whose replay validation is a known, root-caused red on this branch: the
-#: MLX module tree addresses Sequential children ``block.layers.0`` while the shared
-#: finalization derives ``address_parent`` by splitting the address, so the
-#: module-hierarchy metadata invariant (the tripwire) fails. Fix: canonical MLX
-#: module addresses without container segments (packet report, "Known reds").
-_KNOWN_VALIDATION_REDS: dict[str, str] = {
-    "mod_nested_residual": "module address container segment vs address_parent rsplit",
-}
-
-
-@pytest.mark.parametrize(
-    "row",
-    [
-        pytest.param(
-            row,
-            marks=pytest.mark.xfail(strict=True, reason=_KNOWN_VALIDATION_REDS[row.family]),
-        )
-        if row.family in _KNOWN_VALIDATION_REDS
-        else row
-        for row in CONFIG_BUILT
-    ],
-    ids=lambda row: row.family,
-)
+@pytest.mark.parametrize("row", CONFIG_BUILT, ids=lambda row: row.family)
 def test_roster_row_parity_and_validation(row) -> None:
     """Outputs equal the unwrapped forward exactly and replay validation passes."""
 
@@ -131,6 +109,46 @@ def test_roster_row_parity_and_validation(row) -> None:
     assert set(status.exempted_reason_counts) <= VALIDATION_REASONS
     for decision in status.decisions:
         assert decision["reason"] is None or decision["reason"] in VALIDATION_REASONS
+
+
+def test_sequential_list_container_has_its_own_module_record() -> None:
+    """The list holding a Sequential's children is a module record; addresses stay unchanged."""
+
+    from torchlens.validation._invariants_conditional_modules import _check_module_hierarchy
+
+    row = next(row for row in CONFIG_BUILT if row.family == "mod_nested_residual")
+    model, x = row.builder()
+    trace = tl.trace(model, x, backend="mlx")
+    container = trace.modules["block.layers"]
+    assert container.class_name == "list"
+    assert container.address_parent == "block"
+    assert list(trace.modules["block"].address_children) == ["block.layers"]
+    assert list(container.address_children) == ["block.layers.0", "block.layers.1"]
+    assert trace.modules["block.layers.0"].address_parent == "block.layers"
+    _check_module_hierarchy(trace)
+
+
+def test_dict_container_has_its_own_module_record() -> None:
+    """A dict of sub-modules gets a record too, like a torch ``ModuleDict``."""
+
+    from torchlens.validation._invariants_conditional_modules import _check_module_hierarchy
+
+    class Heads(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.heads = {"left": nn.Linear(4, 4), "right": nn.Linear(4, 4)}
+
+        def __call__(self, v: mx.array) -> mx.array:
+            return self.heads["left"](v) + self.heads["right"](v)
+
+    trace = tl.trace(Heads(), mx.array(X24), backend="mlx")
+    container = trace.modules["heads"]
+    assert container.class_name == "dict"
+    assert container.address_parent == "self"
+    assert list(container.address_children) == ["heads.left", "heads.right"]
+    assert trace.modules["heads.left"].address_parent == "heads"
+    _check_module_hierarchy(trace)
+    assert _validate(trace).state == "passed"
 
 
 def test_roster_folds_into_runner_records() -> None:
