@@ -261,7 +261,12 @@ def _clear_reachable_tensor_metadata(
     namespace = getattr(value, "__dict__", None)
     if namespace is None:
         return
-    for item in namespace.values():
+    for name, item in namespace.items():
+        # ``__annotations__`` holds classes, strings and typing forms, never a
+        # stamped tensor; descending into it walked the whole ``torch.Tensor``
+        # class namespace (every wrapped method) from each module ``forward``.
+        if name == "__annotations__":
+            continue
         if item is not None and type(item) not in _scalar_leaves:
             _clear_session_tensor_metadata(item, seen, depth + 1, visit)
 

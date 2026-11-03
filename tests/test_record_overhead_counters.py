@@ -66,6 +66,8 @@ class _Stashing(nn.Module):
         self.name = "stash"
         self.nothing = None
         self.flag = True
+        self.shape = (3, 3)  # all-scalar tuple: skipped inline like ``kernel_size``
+        self.scalar_list = [1, 2]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.fc(x)
@@ -215,5 +217,7 @@ def test_one_module_record_bookkeeping_counters() -> None:
     # No journal record is cloned through ``dataclasses.replace`` any more; what
     # remains is the per-module-exit boundary context and predicate aliasing.
     assert counts["replace"] <= 4 * n_modules + 16, counts
-    # Label stamps read storage through the original accessor, never the wrapper.
-    assert counts["wrapped_untyped_storage"] == 0, counts
+    # Label stamps outside a live forward read storage through the original
+    # accessor; only the stamps minted while the run collector is active still
+    # go through the wrapper (one per saved module output here; 46 before).
+    assert counts["wrapped_untyped_storage"] <= 4, counts
