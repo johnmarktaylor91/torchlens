@@ -88,7 +88,11 @@ def _zero(t: torch.Tensor) -> torch.Tensor:
 
 @pytest.mark.parametrize("door", ("do", "do_value", "set"))
 def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) -> None:
-    """Each Layer door on a two-pass layer edits both passes, matching plain torch."""
+    """Each Layer door on a two-pass layer edits both passes, matching plain torch.
+
+    ``do`` propagates at once (the fold of set or attach plus push); ``set`` stages
+    the value on both passes and leaves the outputs as captured.
+    """
 
     model, x, trace = captured
     shared, _fresh = _linear_labels(trace)
@@ -101,9 +105,10 @@ def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) ->
             layer.do(torch.zeros(2, 3))
         else:
             layer.set(torch.zeros(2, 3), confirm_mutation=True)
-            # The staged recipe applies on a rerun, which re-resolves the same two sites.
-            fork.run(model, x)
-    want = _oracle(model, x, shared_edit=_double if door == "do" else _zero)
+    if door == "set":
+        want = _oracle(model, x)
+    else:
+        want = _oracle(model, x, shared_edit=_double if door == "do" else _zero)
     assert torch.allclose(fork[fork.output_layers[0]].out, want, atol=1e-6)
     for pass_index in (1, 2):
         assert fork[f"{shared}:{pass_index}"].edits

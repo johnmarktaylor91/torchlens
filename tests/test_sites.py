@@ -48,7 +48,7 @@ def test_sites_can_expand_to_hook_pairs() -> None:
         return out
 
     log.do(
-        [(_sites("relu", ops=["relu"], modes=["observe"]), hook_fn)],
+        _sites("relu", ops=["relu"], modes=["observe"]).to_hook_pairs(hook_fn),
         intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
     )
     assert len(log._intervention_spec.hook_specs) == 1

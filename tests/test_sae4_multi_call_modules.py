@@ -18,6 +18,7 @@ from torch import nn
 import torchlens as tl
 from tests.test_sae4_latent_facets import TOL, W_DEC, X, _HandSAE, _latents, _trace
 from torchlens._errors import InvalidArgumentError
+from torchlens.errors import TorchLensWarning
 
 #: Stage a sticky hook on the trace without propagating it.
 _STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
@@ -86,7 +87,9 @@ def test_head_selector_writes_on_a_model_that_calls_a_relu_twice() -> None:
     clean = _head_trace(model, x)
     clean_out = _output(clean).clone()
     edited = clean.fork("head")
-    edited.do({tl.head(1): tl.zero_ablate()}, intervention=_STAGE)
+    with pytest.warns(TorchLensWarning, match=r"tl\.head\(1\) writes 3 sites") as fanout:
+        edited.do({tl.head(1): tl.zero_ablate()}, intervention=_STAGE)
+    assert [w.message.fields["code"] for w in fanout] == ["facet_selector_fanout"]
     edited.run(model, x)
     assert not torch.allclose(_output(edited), clean_out)
     assert torch.count_nonzero(edited.modules["attn"].facets.head(1).q) == 0
