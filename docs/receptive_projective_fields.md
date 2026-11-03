@@ -76,9 +76,13 @@ Never read a numeric box without its `status`.
 
 This is deliberately conservative. Skip connections are composed over the real DAG; norms that
 couple examples, unmasked attention, and global mixing can widen an answer to the whole relevant
-extent. Transposed convolutions, masked attention, interpolation, gathers, and data-dependent
-routing are never promoted to `EXACT` without a proof. A gradient mask can preserve sparse or
-masked structure that an interval box cannot express.
+extent. Causally masked attention (`is_causal=True`, or a softmax whose saved weights are zero
+above the diagonal) narrows the sequence axis in `.of()` set queries: position `i` reaches
+positions `i` and later, and is reached by positions `i` and earlier. The axis-level descriptor
+keeps the sequence axis a whole-extent upper bound through the score product, because one
+input axis feeds both the query and the key side there. Transposed convolutions, interpolation,
+gathers, and data-dependent routing are never promoted to `EXACT` without a proof. A gradient
+mask can preserve sparse or masked structure that an interval box cannot express.
 
 An empty endpoint (a model input or output with a zero extent, such as a zero-size `split`
 chunk) has no units, so its field is empty: it seeds no geometry and no descriptor names it.
