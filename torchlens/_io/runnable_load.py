@@ -98,6 +98,7 @@ from .._utils._callable_safety import (
 from .._utils._torch_compat import resolve_runnable_torch_alias
 from ..backends import TORCH_BACKEND_NAME
 from ..errors._base import TorchLensError
+from ..intervention._intervened_rerun_guard import carries_intervened_values
 from ..intervention.types import FunctionRegistryKey
 from ._runnable_synthetic import TORCHLENS_SYNTHETIC_CALLABLES
 from ._torch_symbols import torch_attr
@@ -3034,8 +3035,6 @@ def _store_readiness(
     attachments: Mapping[str, Callable[..., Any]] | None,
 ) -> None:
     """Store transient descriptor/readiness state with atomic callable attachment."""
-
-    from ..intervention._intervened_rerun_guard import carries_intervened_values
 
     trace._runnable.descriptor = descriptor
     trace._runnable.readiness = report

@@ -14,6 +14,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
+from .. import _state
+
 if TYPE_CHECKING:
     from .hooks import NormalizedHookEntry
 
@@ -61,10 +63,6 @@ def retire_live_hook_handles(handle_ids: Iterable[str]) -> int:
         Number of live plan entries retired (``0`` when no run is live or no
         entry carried one of the handles).
     """
-
-    # Imported here: the capture-state hub sits in the package's import cycle
-    # and this module stays outside it (scripts/checks/layering.py).
-    from .. import _state
 
     plan = _state._active_hook_plan
     if not plan:
