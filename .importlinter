@@ -621,7 +621,6 @@ forbidden_modules =
     torchlens._notebook
     torchlens._visualization
     torchlens.bridge
-    torchlens.experiment
     torchlens.report
     torchlens.semantic
     torchlens.visualization
