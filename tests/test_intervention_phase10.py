@@ -41,7 +41,7 @@ from torchlens.intervention.types import (
 from torchlens.io import load_intervention_spec
 
 _INTERVENTION_RESOLVER = importlib.import_module("torchlens.intervention._resolver_registry")
-#: Stage sticky hooks without propagating (the spelling that replaced attach_hooks).
+#: Stage sticky hooks on the trace without propagating them.
 _STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
 
 

@@ -172,7 +172,7 @@ def test_page_states_no_torchlens_verb_edits_the_model() -> None:
     # The authored spellings the fences depend on; a rename must retouch the page.
     for spelling in (
         "tl.site(",
-        "attach_hooks(",
+        ".do(recipe, intervention=stage_only)",
         "tl.io.save_intervention(",
         "tl.io.load_intervention_spec(",
         "tl.intervention.check_spec_compat(",

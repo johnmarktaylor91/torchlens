@@ -21,6 +21,9 @@ from torchlens.intervention.types import Edit, FireRecord, InterventionSpec
 from torchlens.options import CaptureOptions
 from torchlens.validation import _SUPPORTED_JSON_SCHEMA_KEYWORDS, validate_tlspec
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 
 class UnifiedTinyModel(nn.Module):
     """Tiny model with one intervention-friendly operation."""
@@ -625,7 +628,7 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
         x,
         capture=CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0), confirm_mutation=True)
+    log.do(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0), intervention=_STAGE)
     log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "trace_backward_intervention.tlspec"
 

@@ -22,6 +22,9 @@ from torchlens._utils._torch_compat import HAS_MODULE_CALL_DISPATCH_FRAME
 from torchlens.backends.torch._tl import get_module_meta
 from torchlens.errors import PathDivergenceError
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 pytestmark = pytest.mark.skipif(
     not HAS_MODULE_CALL_DISPATCH_FRAME, reason="torch build cannot tell a direct forward() call"
 )
@@ -240,8 +243,8 @@ def test_fast_run_steers_through_a_module(parent_type: type[nn.Module]) -> None:
         plain = model(x)
     direction = torch.tensor([1.0, -2.0, 0.5])
     trace = tl.trace(model, x)
-    trace.attach_hooks(
-        tl.module("parent.inner"), tl.steer(direction, strength=3.0, dim=-1), confirm_mutation=True
+    trace.do(
+        {tl.module("parent.inner"): tl.steer(direction, strength=3.0, dim=-1)}, intervention=_STAGE
     )
     trace.run(model, x)
     assert trace.last_run["engine"] == "rerun"

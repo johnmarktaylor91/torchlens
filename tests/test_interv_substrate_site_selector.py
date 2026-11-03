@@ -22,6 +22,9 @@ from torchlens._errors import ArgumentTypeError
 from torchlens.intervention.errors import SelectorCapabilityError
 from torchlens.intervention.site_keys import mint_keys_in_execution_order
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 
 class _TinyModel(nn.Module):
     def __init__(self) -> None:
@@ -230,6 +233,6 @@ def test_rerun_with_sticky_site_hook_refuses_at_preflight() -> None:
     model = _TinyModel()
     log = _ready(model)
     fork = log.fork()
-    fork.attach_hooks(site(func="relu"), tl.scale(0.0), confirm_mutation=True)
+    fork.do([(site(func="relu"), tl.scale(0.0))], intervention=_STAGE)
     with pytest.raises(SelectorCapabilityError):
         fork.run(model, torch.randn(2, 4))

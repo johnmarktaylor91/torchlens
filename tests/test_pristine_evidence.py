@@ -29,6 +29,9 @@ from torchlens.backends._intervention_evidence import records_intervention_evide
 from torchlens.intervention.errors import BaselineUndeterminedError
 from torchlens.options import CaptureOptions
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 _DIM = 8
 _HERE = Path(__file__).parent
 _V9_ARTIFACT = _HERE / "goldens" / "legacy" / "tlspec_v9.tlspec"
@@ -128,7 +131,7 @@ def test_zero_fire_capture_reads_not_pristine(tmp_path: Path) -> None:
 
 def test_staged_hook_stays_not_pristine_after_clear_and_save(tmp_path: Path) -> None:
     trace = _ready(_model())
-    trace.attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+    trace.do({tl.func("relu"): tl.zero_ablate()}, intervention=_STAGE)
     assert trace.is_pristine is False
     assert "staged_spec" in pristine_touch_evidence(trace)
     trace.clear_hooks(confirm_mutation=True)

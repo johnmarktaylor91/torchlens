@@ -17,6 +17,9 @@ from torchlens.io import load_intervention_spec
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 _HAS_TORCH_FUNC = hasattr(torch, "func")
 
 
@@ -751,7 +754,7 @@ def test_loaded_func_transform_hook_spec_executes_after_round_trip(tmp_path: Pat
             x,
             capture=tl.options.CaptureOptions(replayable=True),
         )
-    log.attach_hooks(tl.func_transform("vmap"), tl.zero_ablate(), confirm_mutation=True)
+    log.do([(tl.func_transform("vmap"), tl.zero_ablate())], intervention=_STAGE)
     path = tmp_path / "func_transform_hook.tlspec"
 
     log.save_intervention(path, level="portable")
