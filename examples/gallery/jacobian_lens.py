@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import html
 import importlib
+import json
 import subprocess
 import sys
 import time
@@ -308,6 +310,96 @@ def save_lens(
     return gallery.artifact_record(target, replay)
 
 
+def draw_readouts(
+    model: Any,
+    tokenizer: Any,
+    addresses: list[str],
+    norm: Any,
+    matrices: dict[int, torch.Tensor],
+    out: Path,
+    arch: str,
+) -> None:
+    """Save the full ASCII-face layer-by-position readout as real text grids.
+
+    Parameters
+    ----------
+    model, tokenizer, addresses, norm, matrices:
+        Pinned model, live-state addresses and already fitted Jacobians.
+    out, arch:
+        Output directory and architecture name; existing other-model grids are joined.
+    """
+    # Question: what does the fitted lens read at each face-prompt position?
+    # Both architectures use the same prompt, corpus and readout transformation.
+    # Cells are categorical top-one tokens, not numerical accuracy or probabilities.
+    # No expected semantic token is assumed for this miniature two-sentence fit.
+    prompt = PROBES[2]
+    ids = tokenizer(prompt, return_tensors="pt").input_ids
+    with torch.no_grad():
+        trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(save_mode="view"))
+        rows = {}
+        for layer, matrix in matrices.items():
+            residuals = trace[addresses[layer]].out[0]
+            top_ids = model.lm_head(norm(residuals @ matrix.T)).argmax(-1).tolist()
+            rows[layer] = [repr(tokenizer.decode([token])) for token in top_ids]
+    record = {
+        "architecture": arch,
+        "prompt": prompt,
+        "input_tokens": [repr(tokenizer.decode([token])) for token in ids[0].tolist()],
+        "rows": rows,
+    }
+    (out / f"{arch}_readout_grid.json").write_text(json.dumps(record, indent=2) + "\n")
+    grids = [json.loads(path.read_text()) for path in sorted(out.glob("*_readout_grid.json"))]
+    write_readout_html(grids, out)
+
+
+def write_readout_html(grids: list[dict], out: Path) -> None:
+    """Render comparable readout grids with selectable, untruncated cell text.
+
+    Parameters
+    ----------
+    grids:
+        Architecture records, including input tokens and all pre-final layers.
+    out:
+        Destination for the self-contained static HTML figure.
+    """
+    panels = []
+    for grid in grids:
+        headings = "".join(
+            f"<th scope='col'>{html.escape(token)}</th>" for token in grid["input_tokens"]
+        )
+        rows = []
+        for layer, tokens in sorted(grid["rows"].items(), key=lambda item: int(item[0])):
+            cells = "".join(f"<td>{html.escape(token)}</td>" for token in tokens)
+            rows.append(f"<tr><th scope='row'>{layer}</th>{cells}</tr>")
+        panels.append(
+            f"<section><h2>{html.escape(grid['architecture'].upper())}</h2>"
+            f"<table><thead><tr><th scope='col'>Layer</th>{headings}</tr></thead>"
+            f"<tbody>{''.join(rows)}</tbody></table></section>"
+        )
+    document = (
+        "<!doctype html><html lang='en'><meta charset='utf-8'>"
+        "<meta name='viewport' content='width=device-width, initial-scale=1'>"
+        "<title>Jacobian lens: ASCII-face readouts</title><style>"
+        "body{font:16px system-ui,sans-serif;color:#1f1f1e;background:white;margin:24px}"
+        "h1{font-size:24px}h2{font-size:20px}p{max-width:78ch;line-height:1.5}"
+        ".grids{display:flex;align-items:flex-start;gap:24px;overflow:auto}"
+        "section{flex:1;min-width:680px}table{border-collapse:collapse;width:100%;table-layout:fixed}"
+        "th,td{font:12px monospace;text-align:left;border:1px solid #ddd;padding:6px;"
+        "overflow-wrap:anywhere;vertical-align:top}thead th{background:#eef5fa}"
+        "tbody th{width:40px}tbody tr:nth-child(even){background:#f7f7f7}</style>"
+        "<h1>Jacobian-lens readouts at every layer and position</h1>"
+        f"<p>Prompt: <code>{html.escape(PROBES[2])}</code>. Columns are input tokens; "
+        "rows are zero-based pre-final layers. Each cell is the top token after transporting "
+        "that residual through its fitted Jacobian, final normalization and unembedding. "
+        "Quotes preserve token whitespace. Scroll horizontally to compare architectures.</p>"
+        "<p>Both lenses use the same two-sentence CC0 corpus. This is a single deterministic "
+        "readout, with no uncertainty intervals or claim of reproducing the paper's full-corpus "
+        "semantic result. JSON sidecars contain the exact displayed data.</p>"
+        f"<div class='grids'>{''.join(panels)}</div></html>"
+    )
+    (out / "jacobian_lens.html").write_text(document)
+
+
 def measure_arch(arch: str, args: argparse.Namespace, entry: gallery.Entry, fitting: Any) -> None:
     """Measure one architecture's oracles, controls and artifact.
 
@@ -405,6 +497,7 @@ def measure_arch(arch: str, args: argparse.Namespace, entry: gallery.Entry, fitt
         artifact["replay"]["matched"],
     )
     entry.artifact = artifact
+    draw_readouts(model, tokenizer, addresses, norm, matrices, args.out, arch)
 
 
 def main() -> int:

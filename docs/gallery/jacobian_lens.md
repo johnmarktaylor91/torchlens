@@ -43,6 +43,12 @@ SHA-256 and a held-out residual. Replay checks the sidecar hash and recomputes t
 using the same pinned model's final norm and unembedding. It must reproduce the top-ten
 token ids exactly. Model weights are a required replay input. No artifacts exist yet.
 
+The script also writes `jacobian_lens.html`, a side-by-side layer-by-position top-token
+grid for the ASCII-face prompt, and one `*_readout_grid.json` per architecture containing
+the exact displayed data. The grid keeps token whitespace and full cell text. It shows
+this miniature-corpus fit's readouts and does not assume that the paper's full-corpus
+semantic example will reappear.
+
 ## Basis-grid row
 
 Core verbs: capture, read, save. The TorchLens region counts fitting and held-out capture

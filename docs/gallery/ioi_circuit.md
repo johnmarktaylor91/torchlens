@@ -33,7 +33,8 @@ Rules are fixed before running. On the first 32 selected rows, independently rep
 every name occurrence with a seeded ordinary random token removes the repeated-name IOI
 structure. Its head ROC AUC must lie in [0.40, 0.60]. Reversing clean and corrupt inputs,
 while retaining the metric, must give a Pearson correlation of edge scores at most -0.90
-with the normal run on the same rows. A failed control fails the entry. Both controls passed: scrambled-name AUC was **0.403846**, passing [0.40, 0.60];
+with the normal run on the same rows. A failed control fails the entry. Both controls
+passed: scrambled-name AUC was **0.403846**, passing [0.40, 0.60];
 reversed-role Pearson was **-0.996254**, passing the -0.90 bar. Both used 32 rows.
 
 ## Artifact and replay
@@ -42,10 +43,18 @@ The script saves `ioi_circuit.tlspec`, a representative clean trace containing t
 aggregate edge-score table in its annotations, and `edge_scores.json`. Reloading the trace
 recomputes the top-k ranking from the saved scores and checks exact head-name agreement.
 This is ranking replay, using a representative capture; the intermediate integration
-captures are not archived. The portable directory totals **52,632,361 bytes**, with the gallery helper's sorted-path
-and content SHA-256 `e7b5583962688481f0a99f39b3c14a9c98e6964607ba1a3c6465aa6eec7c2a2d`.
+captures are not archived. The portable directory totals **52,632,361 bytes**, with the
+gallery helper's sorted-path and content SHA-256
+`e7b5583962688481f0a99f39b3c14a9c98e6964607ba1a3c6465aa6eec7c2a2d`.
 Reload reproduced all 26 ranked head names exactly. This verifies saved-score replay,
 not an independent rerun of the model or all interpolation captures.
+
+The plotting helpers write `ioi_roc.png` / `.svg` and `ioi_circuit.png` / `.svg` from
+the saved scores. The graph shows the 20 strongest absolute head-to-head q/k/v edges,
+with Wang's head classes colored and all other heads grey. Arrow width encodes absolute
+attribution, without asserting that an edge is necessary. The ROC uses all 144 heads
+against the 26-head membership set. These are single-run diagnostics, with no uncertainty
+intervals; they do not replace the oracle or controls.
 
 ## Basis-grid row
 

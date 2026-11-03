@@ -289,6 +289,116 @@ def save_measurement(
 # endregion
 
 
+def draw_measurement(scores: dict[str, float], out: Path) -> None:
+    """Draw the recorded head ROC and strongest head-to-head connections.
+
+    Parameters
+    ----------
+    scores:
+        Complete aggregate edge table from one run; no uncertainty intervals.
+    out:
+        Destination for PNG and vector SVG figures.
+    """
+    import matplotlib.pyplot as plt
+
+    # Question: does outgoing attribution recover Wang membership? Primary: ROC.
+    # Context: chance diagonal; all 144 heads, 26 positives, one fixed-seed run.
+    # Diagnostic: 20 largest absolute head-to-head edges; q/k/v scores stay separate.
+    # Expected direction: above chance. Audience: gallery; 760-pixel display width.
+    heads = head_scores(scores)
+    members = {f"a{layer}.h{head}" for group in HEAD_GROUPS.values() for layer, head in group}
+    ordered = sorted(heads, key=lambda name: (-heads[name], name))
+    true_positive = false_positive = 0
+    xs, ys = [0.0], [0.0]
+    for index, name in enumerate(ordered):
+        true_positive += name in members
+        false_positive += name not in members
+        if index == len(ordered) - 1 or heads[name] != heads[ordered[index + 1]]:
+            xs.append(false_positive / (len(heads) - len(members)))
+            ys.append(true_positive / len(members))
+    fig, ax = plt.subplots(figsize=(7.6, 5.2), layout="constrained")
+    ax.plot(xs, ys, color="#0072b2", linewidth=2)
+    ax.plot([0, 1], [0, 1], color="#888888", linestyle=":")
+    ax.text(0.65, 0.5, "Chance", color="#555555")
+    ax.set(xlim=(0, 1), ylim=(0, 1.03), xlabel="False positive rate", ylabel="True positive rate")
+    ax.set_title(f"Wang head membership: ROC AUC {roc_auc(heads, members):.4f}")
+    for suffix in ("png", "svg"):
+        fig.savefig(out / f"ioi_roc.{suffix}", dpi=200)
+    plt.close(fig)
+    draw_connections(scores, out)
+
+
+def draw_connections(scores: dict[str, float], out: Path) -> None:
+    """Draw the strongest directed head connections, with Wang classes colored.
+
+    Parameters
+    ----------
+    scores:
+        Signed edge scores; width encodes absolute magnitude, not causal necessity.
+    out:
+        Figure destination.
+    """
+    import matplotlib.pyplot as plt
+
+    colors = ("#0072b2", "#d55e00", "#009e73", "#cc79a7", "#e69f00", "#56b4e9", "#000000")
+    fig, ax = plt.subplots(figsize=(7.6, 6.4), layout="constrained")
+    edges = [name for name in scores if re.fullmatch(r"a\d+\.h\d+->a\d+\.h\d+<[qkv]>", name)]
+    selected = sorted(edges, key=lambda name: (-abs(scores[name]), name))[:20]
+    scale = max((abs(scores[name]) for name in selected), default=1.0)
+    for name in selected:
+        source, target = name.split("->")
+        x0, y0 = map(int, re.findall(r"\d+", source))
+        x1, y1 = map(int, re.findall(r"\d+", target))
+        ax.annotate(
+            "",
+            (x1, y1),
+            (x0, y0),
+            arrowprops={
+                "arrowstyle": "->",
+                "color": "#888888",
+                "alpha": 0.65,
+                "lw": 0.5 + 2 * abs(scores[name]) / scale,
+            },
+            zorder=1,
+        )
+    ax.scatter(
+        [i for i in range(12) for _ in range(12)],
+        list(range(12)) * 12,
+        s=18,
+        color="#dddddd",
+        zorder=2,
+    )
+    for (label, group), color in zip(HEAD_GROUPS.items(), colors, strict=True):
+        ax.scatter(
+            [layer for layer, _ in group],
+            [head for _, head in group],
+            s=48,
+            color=color,
+            label=label,
+            zorder=3,
+        )
+    ax.set(
+        xticks=range(12),
+        yticks=range(12),
+        xlabel="Layer (zero-based)",
+        ylabel="Head index (zero-based)",
+        xlim=(-0.4, 11.4),
+        ylim=(-0.4, 11.4),
+    )
+    ax.set_title("Twenty strongest head-to-head attribution edges")
+    ax.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.12),
+        ncol=3,
+        fontsize=9,
+        frameon=False,
+        title="Wang head classes; grey nodes are other heads",
+    )
+    for suffix in ("png", "svg"):
+        fig.savefig(out / f"ioi_circuit.{suffix}", dpi=200)
+    plt.close(fig)
+
+
 def main() -> int:
     """Run the fixed oracle, controls, persistence and report.
 
@@ -390,6 +500,7 @@ def main() -> int:
         "plain": gallery.count_region_lines(Path(__file__), "plain"),
         "reference": "not measured",
     }
+    draw_measurement(scores, args.out)
     gallery.report(entry, args.out, "cpu", started)
     return 0
 
