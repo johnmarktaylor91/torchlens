@@ -349,7 +349,14 @@ class DryRun:
         return to_pandas(self)
 
     def draw(self, **kwargs: Any) -> str:
-        """Render a flat Graphviz graph of trace operation events."""
+        """Render a flat Graphviz graph of trace operation events.
+
+        This is the dry run's flat event view: it accepts only ``vis_outpath``,
+        ``vis_save_only`` and ``vis_fileformat``. The full drawing options
+        (``vis_mode``, nesting depth, rolled recurrent views) belong to
+        ``Trace.draw``; record the model with ``tl.record`` and call
+        ``Recording.to_trace().draw(...)`` for them.
+        """
 
         from .._visualization.fastlog_live import draw
 
@@ -439,6 +446,17 @@ _RAW_METADATA_FIELDS = (
 @dataclass(frozen=True, slots=True)
 class Recording(TraceLike):
     """Result of a fastlog recording session.
+
+    A Recording is the event stream, not the graph. It has ``to_pandas()``,
+    ``summary()`` and ``narrate()``; it has no ``draw()`` and no facets. Call
+    ``to_trace()`` to cook it into a ``Trace`` with every ``Trace.draw``
+    option (``vis_mode``, nesting depth, rolled recurrent views) and the
+    ``modules[...].facets`` views. Recorded ops carry the same parameter and
+    argument equivalence classes exhaustive capture gives them, so the cooked
+    Trace groups a reused layer into passes the way ``tl.trace`` does; a loop
+    whose body has no parameters stays single-pass (a recording keeps no
+    call sites). ``tl.recording.dry_run(...).draw()`` renders only a flat event graph and
+    takes ``vis_outpath``, ``vis_save_only`` and ``vis_fileformat`` alone.
 
     Notes
     -----

@@ -207,7 +207,13 @@ log = tl.trace(model, x, save=tl.in_module('features.6'), halt=tl.in_module('fea
 
 # Lightweight sparse recording for tight loops -- materialize structure later
 recording = tl.record(model, x, save=tl.func('relu'))
-trace = recording.to_trace()
+trace = recording.to_trace()   # a Recording has no draw() or facets; the cooked
+                               # Trace has every Trace.draw option and groups
+                               # recurrent layers into passes like tl.trace
+
+# Pull several layers at once (extract takes only model, inputs, layers and
+# detach_saved_activations; every other option lives on tl.trace)
+acts = tl.extract(model, x, ['relu_1_2', 'conv2d_3_7'])
 
 # One-line activation pull
 act = tl.pluck(model, x, 'relu_1_2')   # returns tensor directly

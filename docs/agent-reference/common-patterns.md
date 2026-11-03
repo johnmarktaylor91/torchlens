@@ -106,6 +106,10 @@ ablated.run(model, x)
 disk_log = tl.trace(model, x, save=tl.in_module("encoder"), storage=tl.to_disk("run.tlspec"))
 recording = tl.record(model, x, save=tl.func("relu"))
 full_structure = recording.to_trace()
+# A Recording has to_pandas(), summary() and narrate() but no draw() and no
+# facets; the cooked Trace has every Trace.draw option and modules[...].facets,
+# and groups a reused layer into passes like tl.trace (parameter-free loop
+# bodies stay single-pass: a recording keeps no call sites).
 
 # Selection algebra (L6): compose regions, resolve explicitly, edit with do().
 log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))

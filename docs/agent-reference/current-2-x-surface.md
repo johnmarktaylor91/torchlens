@@ -78,7 +78,10 @@
   (beams, batches, several return sequences, `use_cache=False`, `intervene=`) refuses with
   `record_generation_unsupported`.
   `Recording.to_trace()` cooks the event stream into a full-structure `Trace`, with unsaved
-  payload reads rejected explicitly. `tl.record()`/fastlog is torch-only in the backend-v1
+  payload reads rejected explicitly; recorded ops carry capture-time equivalence classes and
+  parameter identity, so the cooked Trace groups recurrent layers into passes like `tl.trace`.
+  A `Recording` has no `draw()` and no facets (both need `to_trace()`); `tl.extract` takes only
+  `model`, `inputs`, `layers` and `detach_saved_activations`. `tl.record()`/fastlog is torch-only in the backend-v1
   registry. The old `keep_op=`/`keep_module=` alias kwargs are removed; `save=` is the only
   predicate spelling. Failed forwards default to
   the historical `on_forward_error="raise"` behavior; opt into
