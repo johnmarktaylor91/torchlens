@@ -175,11 +175,14 @@ def adopt_minted_parameter_label(trace: Any, param: Any, sources: tuple[Any, ...
 
     ``nn.Parameter(data)`` (``Tensor._make_subclass``) returns a new Parameter
     object on ``data``'s storage carrying none of ``data``'s TorchLens metadata.
-    Inside the captured pass that tensor is a logged factory output
-    (``torch.empty`` in ``nn.Linear.__init__``), so the Parameter adopts its
-    label: the Parameter's first read or in-place initializer binds to the op
-    that produced the storage instead of consuming unattributed data. A prepared
-    Parameter never qualifies, and neither does a pending lazy slot: its
+    When that tensor is a fresh allocation logged inside the captured pass (a
+    parentless internal source such as ``torch.empty`` in
+    ``nn.Linear.__init__``), the Parameter adopts its label: the Parameter's
+    first read or in-place initializer binds to the op that produced the storage
+    instead of consuming unattributed data. A Parameter minted from a captured
+    value (``nn.Parameter(y.detach())``) never adopts: TorchLens gives it no
+    provenance, so source-provenance validation keeps failing it honestly. A
+    prepared Parameter never qualifies, and neither does a pending lazy slot: its
     materialization is constructor plumbing and the materialized Parameter
     registers late (``late_register_forward_created_parameter``).
 
@@ -190,10 +193,11 @@ def adopt_minted_parameter_label(trace: Any, param: Any, sources: tuple[Any, ...
     param:
         The Parameter the call returned or rebound.
     sources:
-        Call arguments; the first labeled plain tensor on ``param``'s storage is
+        Call arguments; the first internal-source plain tensor on ``param``'s storage is
         the origin.
     """
 
+    internal_sources = getattr(trace, "internal_source_ops", ())
     if (
         _is_uninitialized_param(param)
         or not is_unregistered_parameter(trace, param)
@@ -203,7 +207,7 @@ def adopt_minted_parameter_label(trace: Any, param: Any, sources: tuple[Any, ...
     for source in sources:
         if isinstance(source, torch.Tensor) and not isinstance(source, torch.nn.Parameter):
             label = get_tensor_label(source)
-            if label is not None and _same_storage(source, param):
+            if label in internal_sources and _same_storage(source, param):
                 set_tensor_label(param, label)
                 return
 
