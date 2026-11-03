@@ -80,7 +80,7 @@ torchlens/_data_classes/_op_dedup.py::_dedup_saved_activation_out	109
 torchlens/_data_classes/_op_save.py::_log_tensor_grad	104
 torchlens/_data_classes/_op_save.py::save_activation	171
 torchlens/_data_classes/_op_transforms.py::validate_train_mode_transform_output	65
-torchlens/_data_classes/_trace_fork.py	846
+torchlens/_data_classes/_trace_fork.py	841
 torchlens/_data_classes/_trace_fork.py::_fill_layer_shells	62
 torchlens/_data_classes/_trace_fork.py::build_fork	178
 torchlens/_data_classes/_trace_inventory.py::build_bill_of_materials	90
@@ -105,10 +105,10 @@ torchlens/_data_classes/module.py	2635
 torchlens/_data_classes/module.py::Module.__init__	210
 torchlens/_data_classes/module.py::ModuleCall.__init__	129
 torchlens/_data_classes/module.py::ModuleCall.__setstate__	61
-torchlens/_data_classes/op.py	3640
+torchlens/_data_classes/op.py	3591
 torchlens/_data_classes/op.py::Op.__getattribute__	96
 torchlens/_data_classes/op.py::Op.__init__	96
-torchlens/_data_classes/op.py::_pool_container_cells	88
+torchlens/_data_classes/op.py::_pool_container_cells	66
 torchlens/_data_classes/op.py::_pool_container_members	74
 torchlens/_data_classes/param.py	1083
 torchlens/_data_classes/param.py::Param.__init__	75
@@ -178,7 +178,7 @@ torchlens/_io/_portability_preflight.py::preflight_metadata_portability	64
 torchlens/_io/_safe_unpickle.py	1404
 torchlens/_io/_safe_unpickle.py::_BundleAllowlistPolicy._resolve_global	314
 torchlens/_io/_source_privacy.py::_scrub_signature_string	66
-torchlens/_io/bundle.py	4270
+torchlens/_io/bundle.py	4269
 torchlens/_io/bundle.py::_attach_fast_copy_specs	64
 torchlens/_io/bundle.py::_bind_archived_activation_payload	111
 torchlens/_io/bundle.py::_bind_embedded_nonpersistent_buffer_payload	87
@@ -186,7 +186,7 @@ torchlens/_io/bundle.py::_bind_embedded_weight_payload	81
 torchlens/_io/bundle.py::_build_manifest	61
 torchlens/_io/bundle.py::_capture_activation_blob_specs	115
 torchlens/_io/bundle.py::_collect_provenance	96
-torchlens/_io/bundle.py::_contains_nested_blob_refs	69
+torchlens/_io/bundle.py::_contains_nested_blob_refs	67
 torchlens/_io/bundle.py::_fast_copy_tensor_blob	66
 torchlens/_io/bundle.py::_load_trace_payload	177
 torchlens/_io/bundle.py::_load_unified_tlspec	96
@@ -297,7 +297,7 @@ torchlens/_ir/container_registry.py::ContainerRegistry.register_snapshot	73
 torchlens/_ir/container_registry.py::_build_container_spec_unguarded	81
 torchlens/_ir/op_record.py	1081
 torchlens/_ir/op_record.py::op_record_from_event	144
-torchlens/_ir/op_record_scatter.py::scatter_record_to_cells	203
+torchlens/_ir/op_record_scatter.py::scatter_record_to_cells	202
 torchlens/_ir/selector_eval.py	1676
 torchlens/_kernel_telemetry.py::_payload_from_events	86
 torchlens/_merged/_artifact.py	1065
@@ -486,7 +486,7 @@ torchlens/_snoop/_stats.py::sampled_stats	67
 torchlens/_state.py	1394
 torchlens/_trace_core/core.py::TraceCore.fork	61
 torchlens/_trace_core/fact_blocks.py::convert_fact_cells	98
-torchlens/_trace_core/op_store.py	1970
+torchlens/_trace_core/op_store.py	1907
 torchlens/_trace_core/op_store.py::OpRowStore.__init__	72
 torchlens/_trace_core/op_store.py::_evict_payloads_in_cell	72
 torchlens/_trace_core/relation_views.py::freeze_op_relation_views	140
