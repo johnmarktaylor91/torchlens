@@ -438,7 +438,7 @@ class TraceOpAccessor(Accessor[Op]):
         token = split_pass_token(key)
         if token is None:
             return None
-        passes = [op for op in self._list if token[0] in {op.layer_label, op.short_layer_label}]
+        passes = self._layer_matches(token[0])
         if not passes:
             return None
         if token[1] == PASS_TOKEN_ALL:
@@ -466,7 +466,21 @@ class TraceOpAccessor(Accessor[Op]):
         direct = self._resolve_pass_qualified(key)
         if direct is not None:
             return [direct]
-        return [op for op in self._list if key in {op.layer_label, op.short_layer_label}]
+        return self._layer_matches(key)
+
+    def _layer_matches(self, label: str) -> list[Op]:
+        """Return every Op whose layer label or short layer label is ``label``, in list order.
+
+        Served from the ``layer`` alias index when it is available, so a bare-label
+        read (``GradFn.op`` makes one per op on every backward pass) costs one
+        dictionary lookup rather than a scan of every row; the scan is the fallback
+        the index itself falls back to.
+        """
+
+        indexes = self._ensure_alias_indexes()
+        if indexes is not None:
+            return list(indexes.layer.get(label, ()))
+        return [op for op in self._list if label in {op.layer_label, op.short_layer_label}]
 
     def _ensure_alias_indexes(self) -> _AliasIndexes | None:
         """Build the alias reverse indexes once, or report them unavailable.
