@@ -57,6 +57,11 @@ class Registry:
         self._detectors: list[Detector] = []
         self._counter = 0
 
+    def _public_namespace(self) -> str:
+        """Return the public spelling of this registry for messages."""
+
+        return "tl.postprocessing" if self.kind == "output" else f"tl._autoroute.{self.kind}"
+
     def register(
         self, *, name: str, priority: int = 100
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
@@ -97,7 +102,7 @@ class Registry:
             if any(detector.name == name for detector in self._detectors):
                 raise ValueError(
                     f"detector {name!r} is already registered on {self.kind} registry; "
-                    f"call tl._autoroute.{self.kind}.unregister({name!r}) first to replace"
+                    f"call {self._public_namespace()}.unregister({name!r}) first to replace"
                 )
             self._counter += 1
             self._detectors.append(

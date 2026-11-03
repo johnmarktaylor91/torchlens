@@ -451,7 +451,8 @@ def fused_sdpa_facet(module: Any, facet: ReconstructionFacet, recipe_id: str) ->
     if isinstance(value, MissingFacet):
         return needs_capture(
             value.reason,
-            "reconstruction_ready=True or save_args=True including SDPA arguments",
+            "tl.trace(model, x, capture=tl.options.CaptureOptions(reconstruction_ready=True)) or "
+            "capture=tl.options.CaptureOptions(save_args=True) including SDPA arguments",
         )
     return value
 
@@ -466,13 +467,15 @@ def fused_sdpa_pattern(module: Any) -> Any:
     return needs_capture(
         f"attention pattern not captured: model uses a fused attention kernel "
         f"(SDPA/FlashAttention) at {label}. "
-        f"{value.detail} To READ pattern/scores/z, re-run with reconstruction_ready=True "
-        "(or save_args=True). To EDIT the pattern, capture a model that runs eager / "
+        f"{value.detail} To READ pattern/scores/z, re-run as "
+        "tl.trace(model, x, capture=tl.options.CaptureOptions(reconstruction_ready=True)) (or "
+        "capture=tl.options.CaptureOptions(save_args=True)). To EDIT the pattern, capture a model that runs eager / "
         "unfused attention so it is a real, editable op -- e.g. load HF models with "
         "attn_implementation='eager' (AutoModel.from_pretrained(..., attn_implementation='eager')). "
         "The reconstructed pattern is read-only by design: editing it would silently change the "
         "attention kernel, so capture eager for a consistent baseline.",
-        "reconstruction_ready=True or save_args=True including SDPA arguments",
+        "tl.trace(model, x, capture=tl.options.CaptureOptions(reconstruction_ready=True)) or "
+        "capture=tl.options.CaptureOptions(save_args=True) including SDPA arguments",
     )
 
 

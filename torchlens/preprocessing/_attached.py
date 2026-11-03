@@ -22,6 +22,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from ._records import as_model_metadata
+
 if TYPE_CHECKING:
     from torchlens._data_classes.trace import ResolvedPreprocessing
 
@@ -110,12 +112,12 @@ def discover_attached(model: Any) -> Resolution | None:
         The attached authority re-stamped as model metadata, or ``None``.
     """
 
-    from ._authorities import _as_model_metadata, resolve
+    from ._authorities import resolve
 
     authority = getattr(model, "__dict__", {}).get(_ATTACHED_ATTR)
     if authority is None:
         return None
-    return _as_model_metadata(resolve(authority))
+    return as_model_metadata(resolve(authority))
 
 
 def discover_open_clip(model: Any) -> Resolution | None:
@@ -143,10 +145,10 @@ def discover_open_clip(model: Any) -> Resolution | None:
         from open_clip.transform import PreprocessCfg, image_transform_v2
     except ImportError:
         return None
-    from ._authorities import _adapt_compose, _as_model_metadata
+    from ._authorities import _adapt_compose
 
     transform = image_transform_v2(PreprocessCfg(**dict(config)), is_train=False)
-    resolution = _as_model_metadata(_adapt_compose(transform))
+    resolution = as_model_metadata(_adapt_compose(transform))
     record = resolution.preprocessing
     record.source = "open_clip_preprocess_cfg"
     record.identifier = type(model).__name__

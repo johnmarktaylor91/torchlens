@@ -3039,7 +3039,12 @@ deprecation shim owed*
 **torchlens.preprocessing.attach_authority(model, authority)** — *unstable — no deprecation shim owed*
 : Records a model's preprocessing authority on the model so discovery finds
   it: a torchvision model built with `weights=` keeps no handle to its
-  weights, and the preset cannot be inferred from the class. Afterwards
+  weights, and the preset cannot be inferred from the class. Without a
+  handle, discovery matches the model's loaded state against the presets
+  whose checkpoints are already in the torch hub cache (exact tensor
+  equality, one unique match, never a download) and records the match as
+  model metadata with `resolution_method="state_match"`; `attach_authority`
+  remains the explicit route when no cached checkpoint matches. Afterwards
   `resolve(model=model)`, PIL-input autorouting and `check_card` resolve the
   attached authority as model metadata. Accepts any recognized authority;
   an opaque callable refuses `preprocessing_attach_opaque`. Returns the model.
@@ -3052,6 +3057,26 @@ deprecation shim owed*
   `authority=`), returns the field-level `PreprocessingComparison`, and warns
   `preprocessing_card_mismatch` when a field disagrees. Nothing runs it
   automatically. An opaque record compares as unknown, never as a match.
+
+**torchlens.postprocessing** — *unstable — no deprecation shim owed*
+: The public home of custom output detectors (the registry
+  `Trace.decode_output` and the end-of-capture decode consult):
+  `register(name=, priority=)` (a decorator; lower priority runs first),
+  `unregister(name)`, `list(pattern=None)`, `info(name)`, the `snapshot()`
+  save-and-restore context manager, the frozen `Detector` metadata record
+  and the `ResolvedPostprocessing` record a detector returns. A detector
+  receives `(outputs, meta)` and returns `ResolvedPostprocessing` or `None`;
+  registering a name twice refuses `ValueError` naming `unregister`.
+
+**image file path as `tl.trace` input** — *unstable — no deprecation shim owed*
+: A `str` or `os.PathLike` naming an existing file with an image suffix
+  (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.webp`, `.tif`, `.tiff`), or a
+  list of them, is opened as an RGB PIL image before routing, so
+  `tl.trace(vision_model, "dog.jpg")` takes the image path with resolved
+  preprocessing instead of the text path. A path string with whitespace is
+  text. A missing image path refuses `image_path_missing` unless the model
+  has a text tokenizer (then the string is text); an undecodable file
+  refuses `image_path_unreadable`.
 
 **torchlens.bridge.pyreft.read(directory, *, repo=None, revision=None)** — *documented-unstable*
 : Read a pyreft LoReFT artifact (the directory `ReftModel.save` writes: `config.json` plus
@@ -3820,9 +3845,12 @@ describe each surface in depth.
 | `tl.experiment.sweep_grid` | Sweep the product of named axes (sites, at most one axis of edits); one member per cell, baseline first |
 | `tl.facets.FacetFunction` | Registered facet recipe metadata |
 | `tl.facets.MissingGrad` | Sentinel for a known facet gradient that is not currently saved |
+| `tl.facets.child_output_spec` | Recipe helper: a child module's output as a `FacetSpec` (`module, child_name, recipe_id`), or an absence reason |
+| `tl.facets.config_value` | Recipe helper: the first available attribute of a `Module` record, checking record attributes and the `custom_attributes` snapshot, or an absence reason |
 | `tl.facets.describe` | List registered facet function names and declared facets for a class name |
 | `tl.facets.enable_transformer_lens_aliases` | Enable or disable opt-in TransformerLens-style facet aliases |
 | `tl.facets.functions` | List registered facet functions, optionally filtered by target scope and class-name glob |
+| `tl.facets.parameter_spec` | Recipe helper: a module parameter as a `FacetSpec` (`module, name, recipe_id`), or an absence reason |
 | `tl.mechinterp.HeadScores` | Per-head taxonomy scores |
 | `tl.mechinterp.LogitLensPrediction` | Streaming per-layer prediction summary (one row per projected layer) |
 | `tl.mechinterp.LogitLensPredictions` | Result of a streaming :func:`logit_lens_predictions` sweep |
@@ -3834,6 +3862,13 @@ describe each surface in depth.
 | `tl.neuro.PlanSite` | One requested site's measured plan row |
 | `tl.neuro.export_npz` | Export extracted features as npz interchange (D-21) |
 | `tl.neuro.plan_extraction` | Build a measured extraction plan from two real probe captures (D-15) |
+| `tl.postprocessing.Detector` | Frozen metadata of one registered output detector (`name`, `priority`, `registration_order`, `func`) |
+| `tl.postprocessing.ResolvedPostprocessing` | The output-decoding provenance record a detector returns (same class as `Trace.provenance.output_postprocessor`); fields `source`, `identifier`, `verified`, `config`, `description`, `style`, `selected_output_head`, `label_source`, `label_source_version`, `confidence`, `top_n_captured`, `ambiguous`, filled by keyword (`identifier=`, `description=`, `selected_output_head=`, `label_source=`, `label_source_version=`, `top_n_captured=`) |
+| `tl.postprocessing.info` | Describe one registered output detector by name |
+| `tl.postprocessing.list` | List registered output detectors, optionally filtered by name glob (`name_glob=`) |
+| `tl.postprocessing.register` | Decorator registering a custom output detector (`name=`, `priority=`; lower runs first) |
+| `tl.postprocessing.snapshot` | Context manager saving and restoring the output detector registry |
+| `tl.postprocessing.unregister` | Remove a registered output detector by name |
 | `tl.recording.ModuleStackFrame` | One module frame in a predicate record context stack |
 | `tl.recording.cleanup_partial` | Remove partial recording bundles and sibling temp directories |
 | `tl.recording.dry_run` | Run predicates over one forward pass without retaining tensor payloads |
@@ -4096,6 +4131,7 @@ describe each surface in depth.
 | `can_intervene=` | keyword of `BackendCapabilities` |
 | `candidate_num_components=` | keyword of `tl.transforms.srp_fidelity_probe`: the candidate numbers of output components (projection widths k) to probe, one report row each |
 | `comet_experiment=` | keyword of `tl.trackers.CometSink`: the Comet experiment to log to |
+| `d_head=` | keyword of `FacetSpec.heads`: head dimension; the default `None` infers it from the last axis when the facet is read |
 | `edit=` | field of `FireRecord`; keyword of `tl.attribution.causal_audit` (keyword-only; default `'zero'`): `"zero"` (default), `"mean"` (each unit's mean over the batch), or a number or tensor (the baseline activation, broadcast to the site); an EDGE table is patched, not ablated, and takes only the default; keyword of `tl.experiment.sweep_grid` (keyword-only; default `None`); keyword of `tl.experiment.sweep_sites` (keyword-only; required): REQUIRED. The edit applied at each candidate site (which ablation is sound is a live scientific argument — no default); keyword of `tl.intervention.keep_grad` (required): A forward `Edit` (`tl.scale(2.0)`, `tl.patch_from(source)`, ...) or a hook callable `fn(out, *, ctx)`; keyword of `tl.positions` (required): Any same-shape forward edit (`tl.zero_ablate()`, `tl.steer(...)`, `tl.patch_from(...)`, or a hook callable taking `(out, *, ctx)`) |
 | `edit_name=` | field of `FireRecord` |
 | `extra_facets=` | keyword of `tl.facets.snapshot` |
@@ -4800,7 +4836,7 @@ alphabetical order.
 | `Trace.cleanup` | Delete log data, break reference cycles and free cached GPU memory |
 | `Trace.completeness_diagnostics` | List of reports of ATen dispatch events the completeness witness could not account for; empty when capture was complete |
 | `Trace.compute_coverage` | Counts of layer-list rows in each of four compute-coverage categories, as a dict |
-| `Trace.decode_output` | Return the decoded output rows captured during tracing, up to `k` ranks per batch item; with `style=`, `head=` or `tokenizer=` decode again on demand from the retained output tensors without touching `decoded_output` (`style="hf_text"` without a tokenizer returns the argmax `token_ids` with `text` `None`); raise if nothing was captured and no output tensor is retained |
+| `Trace.decode_output` | Return the decoded output rows captured during tracing, up to `k` ranks per batch item; with `style=`, `head=` or `tokenizer=` decode again on demand from the retained output tensors without touching `decoded_output` (`style="hf_text"` without a tokenizer returns the argmax `token_ids` with `text` `None`); with nothing captured, run the output detectors over the retained output tensors and raise if none is retained or no detector resolves a style |
 | `Trace.escape_diagnostics` | List of reports of raw torch callables that ran outside their registered wrapper during capture, each with file, line and function |
 | `Trace.factcore` | The single numbers substrate for this trace: counts, identity spine, parameter totals, compute aggregation and memory figures |
 | `Trace.find_nan` | Return the first NaN or Inf found among saved outputs in execution order |
