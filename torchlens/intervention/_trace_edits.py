@@ -54,6 +54,7 @@ from .._ir.selector_eval import normalize_selector_like
 from .._runnable import refuse_poisoned_trace
 from .._selection.selection import Selection, Selector, _trace_edge_records
 from .._selection.selectors import BaseSelector
+from ..backends.torch._trace_backward import _require_live_replay
 from ._param_fingerprint import changed_param_scope
 from .audit import (
     fire_records_since,
@@ -395,10 +396,11 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
         if model is None:
             raise EngineDispatchError("do(..., engine='rerun') requires model= and inputs=.")
         validate_supplied_model_matches_capture(trace, model)
-    # C03 fire-evidence rule: ONE transaction envelope per do() attempt,
-    # written on success, no-fire, AND failure -- intervention_audit is
-    # never empty after an attempt. The monotonic bound scopes exactly
-    # this transaction's FireRecords (the ONE builder stamps every one).
+    elif selected_engine == "replay":
+        # Capture gates (N3, N5, structure-only, stats) run before any site resolves.
+        _require_live_replay(trace)
+    # C03: ONE transaction envelope per do() attempt, written on success, no-fire AND
+    # failure; the monotonic bound scopes exactly this transaction's FireRecords.
     txn = _DoTransaction(
         hooks_or_site=hooks_or_site,
         value_or_hook=value_or_hook,
@@ -442,15 +444,13 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
             assert model is not None
             result = cast("Trace", trace.run(model, x, replay=ReplayOptions(strict=strict_value)))
     except BaseException as exc:
-        # A failed do() must not leave its sticky hooks attached (the next push
-        # would silently re-fire them): detach exactly this call's hooks, re-raise.
+        # A failed do() detaches exactly this call's hooks (the next propagation would re-fire them).
         for handle_id in attached_handles:
             clear_edits(trace, handle=handle_id, confirm_mutation=True)
         record_do_intervention_event(trace, txn, status="error", error=repr(exc))
         raise
     record_do_intervention_event(trace, txn, status=None)
-    # Lane F42: the push/rerun replayed a perturbed cone -- inherited
-    # episode step evidence no longer describes the edited product.
+    # F42: the propagation perturbed the cone; inherited episode step evidence no longer fits.
     quarantine_episode_after_perturbed_replay(result)
     return result
 
@@ -568,9 +568,8 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
         sticky-hook handle ids THIS call attached (for the caller's failure cleanup).
     """
     if isinstance(hooks_or_site, PublicInterventionSpec):
-        # C03 spec door: do(spec) applies the whole immutable spec through
-        # the attach path (one preflight, all rules or none), then the
-        # caller's selected engine propagates.
+        # C03 spec door: do(spec) attaches the whole immutable spec (all rules or none),
+        # then the selected engine propagates.
         if value_or_hook is not None:
             raise InvalidArgumentError(
                 "do(spec, edit) conflicts: the InterventionSpec already "
@@ -586,10 +585,9 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
         )
         return "attach_hooks", tuple(handle.handle_ids)
 
-    # A RegionTarget (F01) is the region-as-a-unit door: the replay lowering
-    # substitutes the region's derived exit values without replaying the
-    # interior. Distinct from the TraceSlice lift below, which keeps its shipped
-    # member-site family semantics. sys.modules gate keeps do() free of the regions import.
+    # A RegionTarget (F01) is the region-as-a-unit door: the replay lowering substitutes the
+    # region's exit values without replaying the interior (unlike the TraceSlice lift below).
+    # The sys.modules gate keeps do() free of the regions import.
     regions_module = sys.modules.get("torchlens.intervention.regions")
     if regions_module is not None and isinstance(hooks_or_site, regions_module.RegionTarget):
         warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
