@@ -363,11 +363,23 @@ def require_graph_reflects_plan(trace: Any, hook_plan: list[Any]) -> None:
         if address not in fired:
             missing.append(f"{_hook_plan_identifier(entry)}@{address}")
     if missing:
+        from .intervention._zero_fire import non_tensor_reason_fields, recorded_non_tensor_details
+
+        reason_fields = non_tensor_reason_fields(
+            recorded_non_tensor_details(trace, [item.rsplit("@", 1)[1] for item in missing])
+        )
+        because = (
+            f". Reason ({reason_fields['reason']}): {reason_fields['reason_detail']}; a rerun "
+            "fires there no more than the capture did."
+            if reason_fields
+            else "; the capture engine reruns once to record them."
+        )
         raise RunCapabilityUnavailableError(
             "Staged intervention entries have not fired in this trace's recorded graph "
-            f"({', '.join(missing)}); the capture engine reruns once to record them.",
+            f"({', '.join(missing)}){because}",
             code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
             detection_stage="fast_rerun_graph_unsteered",
+            **reason_fields,
         )
 
 

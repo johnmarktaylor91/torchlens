@@ -3838,6 +3838,54 @@ recorded: 2026-11-03T02:27:46.336843+00:00
 ---
 generator: producer_parity/test_ledger.py (static half)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: queue family mp-uiq2-4 on 9802fad238dfe8961c16c6beae69fac60951ba37
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9802fad238dfe8961c16c6beae69fac60951ba37 (dirty)
+recorded: 2026-11-03T01:50:16.951878+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: queue family mp-uiq2-4 on 9802fad238dfe8961c16c6beae69fac60951ba37
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 9802fad238dfe8961c16c6beae69fac60951ba37 (dirty)
+recorded: 2026-11-03T01:50:22.989822+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: queue family dlq2-2 on e5a0372bd4ee9e0ad6dc55351353fc35545d5be3
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e5a0372bd4ee9e0ad6dc55351353fc35545d5be3 (dirty)
+recorded: 2026-11-03T01:15:37.138648+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: queue family dlq2-2 on e5a0372bd4ee9e0ad6dc55351353fc35545d5be3
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e5a0372bd4ee9e0ad6dc55351353fc35545d5be3 (dirty)
+recorded: 2026-11-03T01:15:40.575549+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: mp-oneoff-packages: fold checks/snoop into debug, conformance to tests
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e799c312a131a7d9c96e76f30823a61ea11ec61a (dirty)
+recorded: 2026-11-02T10:10:43.028256+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: mp-oneoff-packages: fold checks/snoop into debug, conformance to tests
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e799c312a131a7d9c96e76f30823a61ea11ec61a (dirty)
+recorded: 2026-11-02T10:10:49.866450+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
 reason: c2-rulings fixq3 on 90d6220f9
 env: py3.10-torch2.13.0
 torch: 2.13.0+cpu

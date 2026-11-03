@@ -61,6 +61,13 @@ from .mask import (
     _mask_union,
     _mask_whole,
 )
+from .provenance import (
+    SelectionProvenance,
+    _compose_provenance,
+    _difference_relation,
+    _flip_provenance,
+    _join_relation,
+)
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -77,68 +84,7 @@ __all__ = [
 SelectionKindName = Literal["ACT", "PARAM", "EDGE"]
 _SELECTION_KINDS: tuple[str, ...] = ("ACT", "PARAM", "EDGE")
 
-RelationName = Literal["exact", "upper_bound", "lower_bound", "unknown"]
-_RELATIONS: tuple[str, ...] = ("exact", "upper_bound", "lower_bound", "unknown")
-
 _OPERATOR_SYMBOLS = {"or": "|", "and": "&", "sub": "-"}
-
-
-# ---------------------------------------------------------------------------
-# Provenance relation lattice (closed, S2-routed) + composition tables.
-# ---------------------------------------------------------------------------
-
-_FLIP: dict[str, str] = {
-    "exact": "exact",
-    "upper_bound": "lower_bound",
-    "lower_bound": "upper_bound",
-    "unknown": "unknown",
-}
-
-
-def _join_relation(a: str, b: str) -> str:
-    """JOIN transfer for both ``|`` and ``&`` (symmetric; exact is identity)."""
-
-    if a == "exact":
-        return b
-    if b == "exact":
-        return a
-    if a == b:
-        return a
-    return "unknown"
-
-
-def _difference_relation(a: str, b: str) -> str:
-    """DIFFERENCE transfer (ordered): ``rel(A - B) = join(rel(A), FLIP(rel(B)))``."""
-
-    return _join_relation(a, _FLIP[b])
-
-
-def _meet_relation(a: str, b: str) -> str:
-    """Multi-site MEET (exact on top, unknown on bottom, upper/lower incomparable)."""
-
-    return _join_relation(a, b)
-
-
-@dataclass(frozen=True)
-class SelectionProvenance:
-    """Disclosure attached to one resolved site entry.
-
-    ``relation`` states how the mask relates to true semantic support:
-    ``exact`` (the mask IS the support as a set), ``upper_bound`` (superset),
-    ``lower_bound`` (subset), or ``unknown``. Producer inexactness (interval
-    hulls) rides here — the mask itself is always exact as a set.
-    """
-
-    relation: str
-    source: str = ""
-
-    def __post_init__(self) -> None:
-        """Validate the closed relation vocabulary."""
-
-        if self.relation not in _RELATIONS:
-            raise ValueError(
-                f"provenance relation must be one of {_RELATIONS}; got {self.relation!r}."
-            )
 
 
 # ---------------------------------------------------------------------------
@@ -491,10 +437,7 @@ class Selection:
             Site(
                 kind=entry.kind,
                 key=entry.key,
-                provenance=SelectionProvenance(
-                    relation=_FLIP[entry.provenance.relation],
-                    source=entry.provenance.source,
-                ),
+                provenance=_flip_provenance(entry.provenance),
                 _mask=_mask_complement(entry._mask),
                 structural_site_key=entry.structural_site_key,
             )
@@ -962,14 +905,11 @@ def _entry_compose(
             reason="mask_shape_mismatch",
             site_key=left.key,
         )
-    source = left.provenance.source or right.provenance.source
+    relation = relation_op(left.provenance.relation, right.provenance.relation)
     return Site(
         kind=left.kind,
         key=left.key,
-        provenance=SelectionProvenance(
-            relation=relation_op(left.provenance.relation, right.provenance.relation),
-            source=source,
-        ),
+        provenance=_compose_provenance(left.provenance, right.provenance, relation),
         _mask=mask_op(left._mask, right._mask),
         structural_site_key=left.structural_site_key or right.structural_site_key,
     )
@@ -989,8 +929,8 @@ def _unresolvable(
 ) -> SelectionError:
     """Build the closed-reason resolver refusal.
 
-    ``code`` is always the contracted ``selection_unresolvable``; the explicit
-    keyword exists so a raise site can spell the code visibly (the S-17
+    ``code`` defaults to the contracted ``selection_unresolvable``; the
+    keyword lets a raise site spell its code visibly (the S-17
     census counts site-visible codes, the ``_encoding_error`` pattern).
     """
 

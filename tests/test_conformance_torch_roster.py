@@ -19,10 +19,10 @@ import pytest
 import torch
 
 import torchlens as tl
+from tests.conformance._cases import _captured_op_kinds
+from tests.conformance._rosters import ECOSYSTEM_ENV, torch as torch_roster
 from torchlens._state import pause_logging
 from torchlens.backends.registry import BackendUnsupportedError, get_backend_spec
-from torchlens.conformance._cases import _captured_op_kinds
-from torchlens.conformance._rosters import ECOSYSTEM_ENV, torch as torch_roster
 from torchlens.options import CaptureOptions
 from torchlens.validation.status import ValidationStatus
 
@@ -271,8 +271,8 @@ def test_after_load_cell_reloads_at_the_replay_level(tmp_path: Any) -> None:
 
     from types import SimpleNamespace
 
-    from torchlens.conformance._adapters import TorchReferenceAdapter
-    from torchlens.conformance._protocol_cases import load_for_replay
+    from tests.conformance._adapters import TorchReferenceAdapter
+    from tests.conformance._protocol_cases import load_for_replay
 
     adapter = TorchReferenceAdapter()
     trace, reference, protocol, _model = _capture_row("mlp")

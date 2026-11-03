@@ -30,9 +30,9 @@
 /torchlens/bundle/                   @johnmarktaylor91
 /torchlens/callbacks/                @johnmarktaylor91
 /torchlens/capture/                  @johnmarktaylor91
-/torchlens/checks/                   @johnmarktaylor91
+/torchlens/debug/_checks/                   @johnmarktaylor91
 /torchlens/compat/                   @johnmarktaylor91
-/torchlens/conformance/              @johnmarktaylor91
+/tests/conformance/              @johnmarktaylor91
 /torchlens/_data_classes/             @johnmarktaylor91
 /torchlens/debug/                    @johnmarktaylor91
 /torchlens/distributed/              @johnmarktaylor91
@@ -49,7 +49,7 @@
 /torchlens/mechinterp/               @johnmarktaylor91
 /torchlens/_merged/                   @johnmarktaylor91
 /torchlens/neuro/                    @johnmarktaylor91
-/torchlens/_notebook/                 @johnmarktaylor91
+/torchlens/report/_notebook/                 @johnmarktaylor91
 /torchlens/_observability/            @johnmarktaylor91
 /torchlens/_observe/                  @johnmarktaylor91
 /torchlens/_partial/                  @johnmarktaylor91
@@ -61,7 +61,7 @@
 /torchlens/report/                   @johnmarktaylor91
 /torchlens/schemas/                  @johnmarktaylor91
 /torchlens/semantic/                 @johnmarktaylor91
-/torchlens/_snoop/                    @johnmarktaylor91
+/torchlens/debug/_snoop/                    @johnmarktaylor91
 /torchlens/stats/                    @johnmarktaylor91
 /torchlens/trackers/                 @johnmarktaylor91
 /torchlens/transforms/               @johnmarktaylor91

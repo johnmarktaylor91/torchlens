@@ -501,7 +501,7 @@ repository root).
   (`selector_cross_universe_and`, `selector_cross_universe_not`; `_classify_selector_direction`
   in `torchlens/_selection/selector_base.py`). The theorems are per kind and per direction.
 - **A10 (relation tables).** `_FLIP`, `_join_relation` and `_difference_relation` in
-  `torchlens/_selection/selection.py` are the tables of Lemma R.
+  `torchlens/_selection/provenance.py` are the tables of Lemma R.
 - **A11 (the resolution door).** `trace[q]` is the only public resolution path; a set-naming
   selector returns every match as a `Selection`, a one-thing spelling (an exact `tl.label`, a
   facet) returns one record or refuses `site_spelling_not_unique`. Lifting a record with

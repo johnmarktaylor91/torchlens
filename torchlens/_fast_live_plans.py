@@ -43,7 +43,9 @@ from . import _state
 from ._call_fingerprint import install_module_token_hooks, module_fingerprint_address
 from ._fast_live_steer import apply_steer_paused, install_steer_hooks, session_is_active
 from ._runnable import RunnableErrorCode
+from ._runnable.verification import _contract_check
 from ._utils._module_call_dispatch import forward_entered_through_module_call
+from ._utils.introspection import get_vars_of_type_from_obj
 from .backends.torch import _session_forwards, _tl as _tl_meta
 from .backends.torch.model_prep import shared_module_addresses
 from .backends.torch.wrappers import _MUTATING_TENSOR_PROPERTY_SETTERS
@@ -111,7 +113,6 @@ def _pair_output_leaves(
 
     # Module import: the dotted spelling of this path matches the layer lint's
     # torch-private pattern, but the walker is TorchLens's own, not a torch private.
-    from ._utils.introspection import get_vars_of_type_from_obj
     from .backends.torch import _ops_containers
 
     native = [
@@ -786,3 +787,30 @@ def _remove_fast_live_hooks(handles: list[Any]) -> None:
     handles.clear()
     if first_error is not None:
         raise first_error
+
+
+def _lossy_output_failure(output: Any, output_labels: Sequence[str]) -> Any:
+    """Return the failed contract check for a lossy ``torch.distributions`` output.
+
+    Capture flagged the output lossy (a transform list, a parameter the container
+    contract cannot record), so the fast run refuses it as it refuses an opaque
+    root rather than accept a boundary it knows is incomplete; ``None`` otherwise.
+    """
+
+    # Module import: the dotted spelling of this path matches the layer lint's
+    # torch-private pattern, but the prover is TorchLens's own, not a torch private.
+    from .backends.torch import _ops_containers
+
+    lossy_reason = _ops_containers.lossy_distribution_output_reason(output)
+    if not lossy_reason:
+        return None
+    return _contract_check(
+        "fast_live_model_output_opaque",
+        False,
+        RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
+        f"The model returns a {type(output).__qualname__} whose state capture "
+        f"cannot record losslessly ({lossy_reason}). The fast run cannot pair "
+        "a lossy output boundary; the full run records this output as the "
+        "capture did.",
+        affected_op_labels=tuple(output_labels),
+    )
