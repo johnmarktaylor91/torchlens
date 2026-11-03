@@ -1024,8 +1024,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   first member) and stamps them on the supergraph under the returned name (the metric's name
   unless `name` is given; a callable metric needs an explicit name); `b.stored_comparison(name)`
   reads one back without recomputing (`comparison_unknown` for a name never stored) and
-  `b.stored_comparison_names()` lists the stored names. Session-level state on the built
-  supergraph, never persisted. Every (baseline, member) pair goes through the comparison gate
+  `b.stored_comparison_names()` lists the stored names. A layer that runs more than once has
+  one value per member: the metric over its passes' tensors joined in pass order. Session-level
+  state on the built supergraph, never persisted. Every (baseline, member) pair goes through the comparison gate
   first, the same predicates as `bundle.at(site).compare()`: no ordering path between them, a
   shared graph, and sites that line up (proven-equal input values, or for runs on different inputs
   or checkpoints, equal graph-shape hashes); otherwise the read refuses with the gate's
@@ -1042,8 +1043,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `"combined"` draw the bundle's union op graph for that pass; `nodes="members"` draws one node
   per member and one edge per relation row (`graph` must stay `"forward"`); `rolled=True` draws
   the per-layer graph; `direction=None` is `"bottomup"`. `theme` takes the `Trace.draw` skin
-  names (`None` is `"torchlens"`). `graph="diff"` draws two members side by side with their
-  aligned sites coloured by `metric` distance on the `on` field (the former `show_diff`):
+  names (`None` is `"torchlens"`). `graph="diff"` draws two members side by side, one node per
+  op, coloured by `metric` distance on the `on` field (the former `show_diff`); each pass of a
+  layer that runs more than once is its own node with its own distance, the per-pass rows of
+  `Bundle.compare`:
   `members=(left, right)` names them (default the baseline and the next member); its defaults
   are `theme="paper"`, `file_format="svg"` and a `bundle_diff` file. The diff runs the comparison
   gate on the rendered pair only.

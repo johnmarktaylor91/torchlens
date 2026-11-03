@@ -622,10 +622,9 @@ torchlens/_visualization/auto_collapse.py::_split_run_by_member_uniformity	80
 torchlens/_visualization/auto_collapse.py::_synthetic_child_condensed_flow_graph	87
 torchlens/_visualization/auto_collapse.py::resolve_collapse_fn	89
 torchlens/_visualization/auto_collapse.py::resolve_repeat_folds	180
-torchlens/_visualization/bundle_diff.py	853
-torchlens/_visualization/bundle_diff.py::_add_side_cluster	64
-torchlens/_visualization/bundle_diff.py::_build_dot	128
-torchlens/_visualization/bundle_diff.py::bundle_diff	101
+torchlens/_visualization/bundle_diff.py	805
+torchlens/_visualization/bundle_diff.py::_build_dot	119
+torchlens/_visualization/bundle_diff.py::bundle_diff	99
 torchlens/_visualization/code_panel.py::resolve_code_panel_source	80
 torchlens/_visualization/collapse_ladder.py::collapse_schedule	124
 torchlens/_visualization/collapse_optimizer.py	4084
