@@ -11,7 +11,7 @@ are in [Performance: choosing a fast path](guides/fast_paths.md).
 
 Backend note: `backend=None` preserves the torch eager default, and EVERY preview backend
 auto-routes genuine framework models (MLX, JAX, tinygrad, Paddle, TensorFlow).
-`tl.record()`/fastlog and true backward capture are torch-only in backend v1. Backend-neutral
+`tl.record()` (sparse recording) and true backward capture are torch-only in backend v1. Backend-neutral
 metadata lives on `Trace.provenance.backend`, `Trace.options.module_identity_mode`, `Trace.provenance.param_source`,
 `Trace.autograd.derived_grads`, `Trace.autograd.intermediate_derived_grads`, `Trace.payload_load_status`,
 `Trace.validation_replay_status`, `dtype_ref`, `device_ref`, `backend_address`, and

@@ -474,7 +474,7 @@ and pipeline point-to-point graphs still refuse with typed findings; see the
 | Recurrence grouping (multi-pass layers) | yes | yes | yes (eager) | yes (eager) | yes (eager) | yes (eager; static FuncGraph path stays ungrouped) |
 | Validation oracle (live) | whole-forward replay | per-equation replay + perturbation | per-UOp replay + perturbation | per-op replay + perturbation | replay + perturbation + coverage guard | per-op replay (allowlisted) + self-consistency |
 | Interventions | yes | -- | -- | yes (+`stop_after=`) | yes (+`stop_after=`, value-dependent predicates) | yes (eager entries, static-label, fail-closed) |
-| Halt / fastlog / streaming | yes | -- | -- | halt only | halt only | -- |
+| Halt / recording / streaming | yes | -- | -- | halt only | halt only | -- |
 
 Preview `save=` selectors filter what is exposed, not what is captured (no memory
 reduction); preview `tl.validate(...)` returns a status whose `bool()` raises for
