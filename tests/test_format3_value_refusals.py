@@ -9,6 +9,7 @@ with no supported payload codec, refuses with ``metadata_value_unportable``.
 
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from pathlib import Path
 
@@ -155,5 +156,30 @@ def test_loaded_unencodable_value_resaves_identically(text: str) -> None:
     first = first_encoder.encode(Opaque(), at)
     loaded = decode_value(first, at=at)
     again_encoder = ValueEncoder()
-    assert again_encoder.encode(loaded, at) == first
+    again = again_encoder.encode(loaded, at)
+    assert again == first
+    assert (
+        json.dumps(again, separators=(",", ":")).encode()
+        == json.dumps(first, separators=(",", ":")).encode()
+    )
     assert again_encoder.disclosures == first_encoder.disclosures
+
+
+@pytest.mark.parametrize("position", [0, "0.args[1]"])
+def test_loaded_callable_placeholder_resaves_identically(position: int | str) -> None:
+    """A data-only callable placeholder keeps its position and name without becoming code."""
+
+    first = {
+        "$tl": "callable_placeholder",
+        "position": position,
+        "qualname": "opaque.helper",
+        "repr_length": 300,
+    }
+    loaded = decode_value(first, at="intervention.rules")
+    assert not callable(loaded)
+    again = ValueEncoder().encode(loaded, "intervention.rules")
+    assert again == first
+    assert (
+        json.dumps(again, separators=(",", ":")).encode()
+        == json.dumps(first, separators=(",", ":")).encode()
+    )
