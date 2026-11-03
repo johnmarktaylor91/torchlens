@@ -2,7 +2,7 @@
 
 THE one PEP-562 ``__getattr__`` mechanism (architecture memo section 5.4,
 five-step testable spec, D15): the root package, every appliance namespace
-(``torchlens.neuro``, ``torchlens._notebook``), and the integration namespaces
+(``torchlens.neuro``, ``torchlens.report._notebook``), and the integration namespaces
 (``torchlens.bridge``, ``torchlens.callbacks``) resolve attributes through the
 same ordered steps, so ``hasattr``/``getattr``-with-default can never explode,
 IDE/notebook dunder probes fail fast, and dependency teaching happens per-name
@@ -188,8 +188,8 @@ def resolve_facade_attr(
     """
 
     # Step 1: underscore short-circuit -- no table lookup, no dependency
-    # check. Dunder probes from IPython, copyreg, and inspect must fail fast.
-    if name.startswith("_"):
+    # check. Only the root's existing public version has a lazy dunder row.
+    if name.startswith("_") and (owner, name) != ("torchlens", "__version__"):
         raise _plain_missing(owner, name)
 
     # Step 2: redirect table -> typed teaching AttributeError, no dep check.
@@ -290,5 +290,5 @@ def facade_dir(
         if name.startswith("__") and name.endswith("__") or not name.startswith("_"):
             names.add(name)
     for name_set in name_sets:
-        names.update(name for name in name_set if not name.startswith("_"))
+        names.update(name for name in name_set if not name.startswith("_") or name == "__version__")
     return sorted(names)

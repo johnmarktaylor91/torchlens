@@ -197,8 +197,8 @@ def test_fast_live_module_refusal_fires_before_activation_wipe() -> None:
 
 
 @pytest.mark.smoke
-def test_fast_live_divergence_poisons_half_refreshed_trace() -> None:
-    """A diverged fast-live run marks the mixed-activation user Trace poisoned."""
+def test_fast_live_divergence_poisons_the_result_trace_not_the_source() -> None:
+    """A diverged fast-live run poisons the half-refreshed result Trace; the source stays clean."""
 
     class BranchingFunctionModel(nn.Module):
         """Choose between two same-shape activation functions from tensor data."""
@@ -217,13 +217,17 @@ def test_fast_live_divergence_poisons_half_refreshed_trace() -> None:
 
     from torchlens.errors import PathDivergenceError
 
+    first = captured.run(inputs=2 * torch.ones(2), fast=True)
+    assert first.trace is not captured
+
     with pytest.raises(PathDivergenceError):
         captured.run(inputs=-torch.ones(2), fast=True)
 
-    # Boundary/site payloads were overwritten in place up to the divergence
-    # point, so the user-owned Trace must carry the monotonic poison mark and
-    # refuse downstream faithful consumers.
-    assert captured._runnable.path_faithfulness is PathFaithfulness.DIVERGED
+    # Boundary/site payloads were overwritten on the session's result Trace up
+    # to the divergence point, so the result the user already holds carries the
+    # monotonic poison mark; the source Trace was never written.
+    assert first.trace._runnable.path_faithfulness is PathFaithfulness.DIVERGED
+    assert captured._runnable.path_faithfulness is not PathFaithfulness.DIVERGED
 
 
 def test_fast_live_inherited_divergence_never_unregisters_user_trace() -> None:
@@ -261,7 +265,7 @@ def test_fast_live_inherited_divergence_never_unregisters_user_trace() -> None:
 def test_remove_fast_live_hooks_survives_raising_remove() -> None:
     """One raising handle.remove() must not strand the remaining hooks."""
 
-    from torchlens._fast_run import _remove_fast_live_hooks
+    from torchlens._fast_live_hooks import _remove_fast_live_hooks
 
     removed: list[int] = []
 
@@ -419,9 +423,9 @@ def _saved_all_runnable(model: nn.Module, inputs: torch.Tensor, path: Path) -> P
             inputs,
             capture=CaptureOptions(
                 replayable=True,
-                layers_to_save="all",
                 cache=False,
             ),
+            save="all",
         )
     captured.save(path, level="runnable", include_weights=True)
     return path

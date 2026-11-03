@@ -247,6 +247,10 @@ it where you report the number and call the result a descriptive comparison.
   comparison operands, and `compare`, `rank_changes`, `store_comparison` and `draw(graph="diff")` run the same
   comparison gate as `b.at(site).compare()`. Two calls on different prompts refuse `bundle_gate_input_values_differ`
   instead of reporting distances between unrelated inputs.
+- Row keys of `compare` and `rank_changes`: a multi-pass op (a layer that ran more than once, as in
+  an unrolled recurrence) gives one row per pass, keyed by its pass-qualified label (`tanh_1_1:2`),
+  the spelling `trace["tanh_1_1:2"]` already reads; a single-pass op keeps its bare layer label.
+  Members pair by layer through the structural alignment and the pass suffix carries over.
 - `tl.load(path, lazy=True)` on a saved bundle loads every member lazily (tensors stay on disk
   until read); `map_location` and `materialize_nested` reach the members too.
 
@@ -636,16 +640,16 @@ capture=...)`.
 | Setting | Median | Range over 7 runs | Median / native |
 |---|---|---|---|
 | Native forward | 0.108 s | 0.106 to 0.110 s | 1.0 |
-| `layers_to_save="all"` (the default) | 1.620 s | 1.577 to 1.792 s | 15.0 |
-| `layers_to_save=["transformer.h.8"]` (one block, 92 of 567 ops saved) | 1.583 s | 1.549 to 1.818 s | 14.7 |
-| `layers_to_save=[]` (metadata only) | 1.470 s | 1.452 to 1.654 s | 13.6 |
+| `save="all"` (the default) | 1.620 s | 1.577 to 1.792 s | 15.0 |
+| `save=["transformer.h.8"]` (one block, 92 of 567 ops saved) | 1.583 s | 1.549 to 1.818 s | 14.7 |
+| `save=[]` (metadata only) | 1.470 s | 1.452 to 1.654 s | 13.6 |
 
 Wall-clock time on a shared host is noisy: other jobs ran beside this one, and single runs moved by
 up to 15 percent. Read the ratios as the size of the cost, not as a benchmark. Most of the cost is
 recording every operation's metadata, so retaining fewer activations saves little time; it saves
 memory. A harness capture adds this cost once per traced call, on top of native generation.
 
-A `layers_to_save` selection also decides whether the member keeps its token-id input: only the
+A `save=` selection also decides whether the member keeps its token-id input: only the
 default `"all"` retained it in this measurement's checks, and without retained ids
 `token_spans="auto"` refuses `bundle_relation_auto_spans_unavailable` and spans stay declared.
 Capture harness members with the default retention, or with a selection that names the input

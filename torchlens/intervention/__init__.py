@@ -90,6 +90,7 @@ from .types import (
     ArgComponent as ArgComponent,
     FireRecord,
     FrozenInterventionSpec as FrozenInterventionSpec,
+    SamplingRecord,
 )
 
 __all__ = [
@@ -117,6 +118,7 @@ __all__ = [
     "Population",
     "population",
     "SamplingPlan",
+    "SamplingRecord",
     "model_output",
     "resample_rows_from",
     "sample_from",

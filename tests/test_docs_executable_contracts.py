@@ -170,11 +170,11 @@ def test_root_agent_runnable_example_runs(tmp_path: Path) -> None:
         model,
         inputs,
         capture=CaptureOptions(
-            layers_to_save="all",
             replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
+        save="all",
     )
     artifact = tmp_path / "architecture.tlspec"
     trace.save(artifact, level="runnable", include_weights=True)
@@ -195,8 +195,7 @@ def test_root_agent_receptive_gradient_and_overlay_run() -> None:
     trace = tl.trace(
         model,
         inputs,
-        capture=CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     target = trace.find_sites(tl.func("conv2d")).first()
     unit = target.receptive_field.center_unit(batch_index=0)

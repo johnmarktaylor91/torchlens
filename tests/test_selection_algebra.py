@@ -24,16 +24,14 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._selection.selection import (
+from torchlens._selection.provenance import (
     _FLIP,
     _RELATIONS,
-    Selection,
-    Selector,
-    Site,
     _difference_relation,
     _join_relation,
     _meet_relation,
 )
+from torchlens._selection.selection import Selection, Selector, Site
 from torchlens._selection.selectors import CompositeSelector, NotSelector
 from torchlens.errors import SelectionError
 
@@ -674,8 +672,7 @@ def test_gradient_rf_lift():
     armed = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     armed_op = armed["relu_2_4"]
     unit = armed_op.receptive_field.center_unit(batch_index=0)

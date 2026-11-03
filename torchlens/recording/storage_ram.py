@@ -5,7 +5,7 @@ from __future__ import annotations
 import torch
 
 from ._storage_resolver import _resolve_storage
-from .options import RecordingOptions
+from .options import _RecordingConfig
 from .types import (
     ActivationRecord,
     CaptureSpec,
@@ -37,7 +37,7 @@ class RamStorageBackend:
         spec: CaptureSpec,
         intent: StorageIntent,
         *,
-        options: RecordingOptions,
+        options: _RecordingConfig,
         ctx: RecordContext | GradRecordContext | None,
         kind: str = "activation",
     ) -> tuple[

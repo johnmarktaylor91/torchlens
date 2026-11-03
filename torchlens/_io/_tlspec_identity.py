@@ -8,6 +8,7 @@ schema v2 backend fields a non-torch or sparse runnable trace adds.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from hashlib import sha256
 from typing import TYPE_CHECKING, Any
 
@@ -113,13 +114,33 @@ def _model_fingerprint(
             parameter_hash = raw_parameter_hash
         else:
             parameter_hash = _EMPTY_META_HASH
-        buffer_hash = _EMPTY_META_HASH
+        buffer_hash = _hash_named_tensor_meta(_carried_buffer_values(source))
     return {
         "parameter_meta_hash": parameter_hash,
         "buffer_meta_hash": buffer_hash,
         "class_qualname": model_signature,
         "extra_metadata": _extra_metadata_for_source(source),
     }
+
+
+def _carried_buffer_values(source: Any) -> list[tuple[str, Any]]:
+    """The registered buffers a trace without a live model still knows.
+
+    The pre-forward value channel (``Trace._buffer_initial_values``) is keyed by every
+    registered buffer in model traversal order, each value a tensor carrying the buffer's
+    shape and dtype, so a loaded trace recomputes the same buffer fingerprint the live
+    capture hashed from ``named_buffers()``. Empty when the channel was not persisted
+    (``include_buffer_values=False``), which the manifest discloses.
+    """
+
+    captured = getattr(source, "_buffer_initial_values", None)
+    if not isinstance(captured, Mapping):
+        return []
+    return [
+        (str(name), value)
+        for name, value in captured.items()
+        if hasattr(value, "shape") and hasattr(value, "dtype")
+    ]
 
 
 def _bundle_fingerprint(bundle: Any, model_signature: str) -> dict[str, Any]:

@@ -29,7 +29,10 @@ from torchlens.report import backward_status
 from torchlens.validation.invariants import check_metadata_invariants
 
 _OPTIONS = tl.options.CaptureOptions(backward_ready=True)
-_ARMED_OPTIONS = tl.options.CaptureOptions(backward_ready=True, aten_ops=True)
+_REFERENCE_OPTIONS = tl.options.CaptureOptions(backward_ready=True, save_mode="reference")
+_ARMED_OPTIONS = tl.options.CaptureOptions(
+    backward_ready=True, save_mode="reference", aten_ops=True
+)
 _MATMULS = ("mm", "addmm")
 
 
@@ -42,8 +45,8 @@ def _two_captures(
     first = nn.Linear(4, 3) if first is None else first
     second = nn.Linear(3, 2)
     x1, x2 = torch.randn(5, 4), torch.randn(5, 3)
-    capture = _ARMED_OPTIONS if armed else _OPTIONS
-    kwargs: dict[str, Any] = {"capture": capture, "save_mode": "reference"}
+    capture = _ARMED_OPTIONS if armed else _REFERENCE_OPTIONS
+    kwargs: dict[str, Any] = {"capture": capture}
     trace1, trace2 = tl.trace(first, x1, **kwargs), tl.trace(second, x2, **kwargs)
     return trace1, trace2, first, second
 

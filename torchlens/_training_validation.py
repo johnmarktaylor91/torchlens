@@ -75,7 +75,7 @@ def effective_inference_only(capture_options: CaptureOptions, *, backward_reques
         The ``inference_only`` value the capture runs with.
     """
 
-    if capture_options.is_field_explicit("inference_only"):
+    if capture_options._is_field_explicit("inference_only"):
         return bool(capture_options.inference_only)
     return not backward_requested and autograd_disabled_at_entry()
 

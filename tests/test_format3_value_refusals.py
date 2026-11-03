@@ -9,6 +9,7 @@ with no supported payload codec, refuses with ``metadata_value_unportable``.
 
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from pathlib import Path
 
@@ -140,3 +141,45 @@ def test_known_tuple_subtype_retains_its_closed_identity(value: tuple) -> None:
     assert cell["$tl"] == "tuple"
     assert cell["items"] == [2, 3]
     assert cell["subtype"] == f"{type(value).__module__}.{type(value).__qualname__}"
+
+
+@pytest.mark.parametrize("text", ["Opaque()", "x" * 300])
+def test_loaded_unencodable_value_resaves_identically(text: str) -> None:
+    """A loaded disclosure keeps its original type, bounded text, full length and location."""
+
+    class Opaque:
+        def __repr__(self) -> str:
+            return text
+
+    at = "trace.annotations['opaque']"
+    first_encoder = ValueEncoder()
+    first = first_encoder.encode(Opaque(), at)
+    loaded = decode_value(first, at=at)
+    again_encoder = ValueEncoder()
+    again = again_encoder.encode(loaded, at)
+    assert again == first
+    assert (
+        json.dumps(again, separators=(",", ":")).encode()
+        == json.dumps(first, separators=(",", ":")).encode()
+    )
+    assert again_encoder.disclosures == first_encoder.disclosures
+
+
+@pytest.mark.parametrize("position", [0, "0.args[1]"])
+def test_loaded_callable_placeholder_resaves_identically(position: int | str) -> None:
+    """A data-only callable placeholder keeps its position and name without becoming code."""
+
+    first = {
+        "$tl": "callable_placeholder",
+        "position": position,
+        "qualname": "opaque.helper",
+        "repr_length": 300,
+    }
+    loaded = decode_value(first, at="intervention.rules")
+    assert not callable(loaded)
+    again = ValueEncoder().encode(loaded, "intervention.rules")
+    assert again == first
+    assert (
+        json.dumps(again, separators=(",", ":")).encode()
+        == json.dumps(first, separators=(",", ":")).encode()
+    )

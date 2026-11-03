@@ -39,7 +39,7 @@ def _refuse_loaded_backward_capture(trace: Trace, entry_point: str) -> None:
     handles tied to its recorded forward, so ``log_backward`` used to hook
     whatever FOREIGN graph the caller's loss came from, half-mutate the trace
     (backward passes and grad_fns from an unrelated forward), and die with an
-    untyped ``AttributeError`` -- after which ``draw_backward`` silently
+    untyped ``AttributeError`` -- after which the backward drawing silently
     rendered that wrong graph. Refuse typed BEFORE any mutation.
     """
     try:
@@ -83,6 +83,19 @@ def _refuse_stats_capture(trace: Any, purpose: str) -> None:
         f"{action} on that trace; tl.validate(model, x, scope='forward') runs its own full capture",
         purpose=purpose,
     )
+
+
+def _require_live_replay(trace: Any) -> None:
+    """Refuse a live replay that the trace's capture cannot drive.
+
+    The gates every push runs before touching the graph, shared by ``Trace.push``
+    and the ``do()`` push that starts only from its own hooks: a halted or failed
+    capture, a structure-only capture, and a ``save="stats"`` trace.
+    """
+
+    require_capture_capability(trace, "live_replay")
+    require_structure_only_capability(trace, "live_replay")
+    _refuse_stats_capture(trace, "live_replay")
 
 
 def log_backward(trace: Trace, loss: torch.Tensor, **backward_kwargs: Any) -> Trace:

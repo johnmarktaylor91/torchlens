@@ -19,7 +19,6 @@ from torchlens._utils.hashing import make_short_barcode_from_input
 from torchlens._utils.tensor_utils import tensor_nanequal
 from torchlens._visualization._render_common import GRADIENT_ARROW_COLOR
 from torchlens.errors import MetadataInvariantError
-from torchlens.options import SaveOptions
 from torchlens.validation import (
     check_metadata_invariants,
     validate_forward_pass,
@@ -361,9 +360,8 @@ def test_view_mutation_output_recomputes_transformed_payload_metadata(
     trace = tl.trace(
         _ViewMutationOutputTransformModel(),
         input_value,
-        save=SaveOptions(
-            activation_transform=lambda value: value + 10,
-            save_raw_activations=save_raw_activations,
+        capture=tl.options.CaptureOptions(
+            activation_transform=lambda value: value + 10, save_raw_activations=save_raw_activations
         ),
     )
     output_op = trace[trace.output_layers[0]]
@@ -390,7 +388,8 @@ def test_conditional_then_children_merge_across_multipass_layerlog() -> None:
     trace = tl.trace(
         _AlternatingRecurrentModel(),
         torch.ones(1, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_source_context=True),
+        capture=tl.options.CaptureOptions(save_source_context=True),
+        save="all",
     )
     conditional_id = trace.graph.conditional_records[0].id
     parent_layer = next(
@@ -412,7 +411,8 @@ def test_conditional_then_invariant_catches_derived_view_corruption() -> None:
     trace = tl.trace(
         _AlternatingRecurrentModel(),
         torch.ones(1, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_source_context=True),
+        capture=tl.options.CaptureOptions(save_source_context=True),
+        save="all",
     )
     parent_layer = next(
         layer for layer in trace._layer_logs.values() if layer.conditional_then_children
@@ -574,10 +574,9 @@ def test_rolled_forward_graph_supports_grad_arrows(tmp_path: Path) -> None:
     )
     trace[trace.output_layers[0]].out.backward()
     dot = trace.draw(
-        vis_mode="rolled",
+        rolled=True,
         path=str(tmp_path / "rolled_grad"),
         file_format="dot",
-        vis_save_only=True,
-    )
+    ).dot
 
     assert GRADIENT_ARROW_COLOR in dot

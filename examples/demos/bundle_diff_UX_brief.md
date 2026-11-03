@@ -38,7 +38,7 @@ L2 norm delta.
 Snapshot tests use two independent acceptance paths and pass if either path succeeds:
 
 1. Semantic SVG normalization followed by byte comparison.
-   - Strip Graphviz-generated random IDs, including `id="node\d+"`.
+   - Strip Graphviz-generated random IDs, including node ids matching `node\d+`.
    - Strip timestamps and Graphviz comment IDs.
    - Normalize whitespace.
 2. Image threshold comparison.

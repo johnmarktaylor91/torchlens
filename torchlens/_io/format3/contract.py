@@ -48,6 +48,35 @@ WRITER_IDENTITY_FIELDS: Final[tuple[str, ...]] = (
     "platform",
     "created_at",
 )
+#: Identity grammar, code-owned: the pattern each writer identity string must fully match
+#: (``re.fullmatch``). The contract states no stricter version-string pattern than
+#: "non-empty"; tightening one starts here, in the prose contract, never in a shipped schema
+#: file. Ruled 2 Nov 2026.
+IDENTITY_FIELD_PATTERNS: Final[dict[str, str]] = dict.fromkeys(WRITER_IDENTITY_FIELDS, r"(?s).+")
+#: Optional manifest summaries (the 2.x unified manifest carried them; a 3.0 writer may).
+#: When present each must match its closed shape below; the reader refuses
+#: ``manifest_schema_invalid`` otherwise. Ruled 2 Nov 2026.
+MANIFEST_SUMMARY_FIELDS: Final[tuple[str, ...]] = ("model_fingerprint", "backward_summary")
+#: ``model_fingerprint`` model shape: two SHA-256 hex digests, a class name, an object.
+MODEL_FINGERPRINT_HASH_FIELDS: Final[tuple[str, ...]] = ("parameter_meta_hash", "buffer_meta_hash")
+#: ``model_fingerprint`` backend shape: ``{"backend_fingerprint": {<these keys>}}``.
+BACKEND_FINGERPRINT_FIELDS: Final[tuple[str, ...]] = (
+    "backend",
+    "model_signature",
+    "graph_digest",
+    "module_identity_mode",
+    "param_source",
+)
+#: ``backward_summary`` non-negative integer counters.
+BACKWARD_SUMMARY_COUNT_FIELDS: Final[tuple[str, ...]] = (
+    "num_backward_passes",
+    "num_grad_fns",
+    "num_grad_fn_calls",
+    "num_saved_grad_records",
+    "gradient_blob_count",
+)
+#: Gradient blob kinds ``backward_summary.gradient_blob_kinds`` may name, each at most once.
+GRADIENT_BLOB_KINDS: Final[tuple[str, ...]] = ("grad", "grad_fn_grad", "transformed_grad")
 #: Manifest keys the reader requires before it opens any other file.
 MANIFEST_REQUIRED_FIELDS: Final[tuple[str, ...]] = (
     "format",
@@ -66,6 +95,13 @@ MANIFEST_REQUIRED_FIELDS: Final[tuple[str, ...]] = (
 ARTIFACT_KINDS: Final[tuple[str, ...]] = ("trace", "bundle", "intervention")
 #: Payload codec ids the format writes; both are safetensors files.
 PAYLOAD_CODEC_IDS: Final[tuple[str, ...]] = ("torch_safetensors_v1", "numpy_safetensors_v1")
+#: The artifact backend an envelope without a ``backend`` key means: the torch writer's.
+#: An array-backend envelope names its backend; absent means the old meaning.
+DEFAULT_BACKEND: Final[str] = "torch"
+#: The backends an envelope may name: the payload codec registry's backend keys (its
+#: ``numpy`` codec is the raw-input value codec, not a backend); any other ``backend``
+#: is a typed manifest refusal, never a null codec.
+BACKENDS: Final[tuple[str, ...]] = ("torch", "jax", "mlx", "paddle", "tf", "tinygrad")
 #: Save levels, as ``torchlens._io.save_policy`` spells them.
 SAVE_LEVELS: Final[tuple[str, ...]] = (
     "portable",
@@ -124,6 +160,9 @@ JSON_TYPE_BY_STORAGE_KIND: Final[dict[StorageKind, str]] = {
 #: Version of the built-in edit registry a recipe records (``helpers[].version``).
 HELPER_REGISTRY_VERSION: Final = "1"
 
+#: Largest integer a JSON number carries exactly; the writer tags anything beyond it as
+#: ``{"$tl": "int", "v": "<digits>"}`` and the reader refuses a bare number outside it.
+JSON_SAFE_INT: Final = 2**53
 #: The key that marks a typed JSON object; its value is one of the tags below.
 TYPED_VALUE_KEY: Final = "$tl"
 #: Typed-value tags. Every Python value JSON cannot carry directly is one of

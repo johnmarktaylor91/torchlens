@@ -42,7 +42,10 @@ TABLE = TESTS_DIR / "test_arch_spine_surface_table.tsv"
 #: selection door -1 (tl.validation.resolve_sites); tl.debug restore +2
 #: (clone_input_tree, preserved_rng_state). fastlog -> recording, facets.info ->
 #: describe, Reference -> Population and Relationship -> tl.types are net zero.
-DEEP_WALK_FLOOR = 962
+#: 962 -> 961 (renov.3, 31 Oct 2026): the torchlens.conformance namespace left the
+#: package for tests/conformance, -13 names, absorbed by the headroom above the
+#: floor except for one; torchlens.checks -> tl.debug (13 names) is net zero.
+DEEP_WALK_FLOOR = 961
 
 _HEADER = (
     "canonical_path\thome_module\timplementation_layer\tproduct_role\tin_all\tlegacy_top_level"

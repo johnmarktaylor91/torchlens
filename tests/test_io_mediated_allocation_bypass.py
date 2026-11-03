@@ -68,7 +68,6 @@ import struct
 import warnings
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -288,23 +287,42 @@ def test_reconstruct_belt_fires_white_box_and_fails_closed() -> None:
     assert _alloc_refusal_reason(helper, "not-a-tuple") is not None
 
 
-def test_reconstruct_gadget_refused_end_to_end_through_tl_load(tmp_path: Path) -> None:
-    """The gadget planted in a real artifact's trace record is refused by ``tl.load``."""
+def _forbid_unpicklers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every unpickler door fails the test if the 3.0 reader reaches one."""
+
+    def _boom(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("an unpickler ran while loading a 3.0 artifact")
+
+    for owner, name in (
+        (pickle, "Unpickler"),
+        (pickle, "loads"),
+        (pickle, "load"),
+        (torch, "load"),
+        (SafeBundleUnpickler, "load"),
+        (_PurePythonBundleUnpickler, "load"),
+        (_RenameAwareUnpickler, "load"),
+    ):
+        monkeypatch.setattr(owner, name, _boom)
+
+
+def test_reconstruct_gadget_refused_end_to_end_through_tl_load(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A gadget planted in a real artifact's trace record is refused at the JSON gate.
+
+    The 3.0 reader parses ``records/trace.json`` as bounded UTF-8 JSON and never runs an
+    unpickler, so the pickle bytes refuse typed before any opcode could allocate.
+    """
 
     path = tmp_path / "hostile.tlspec"
     tl.trace(nn.Linear(3, 2), torch.ones(2, 3), capture=_CAP).save(path)
     (path / "records/trace.json").write_bytes(_reconstruct_pickle("numpy.core.multiarray", _N))
     redigest(path, "records/trace.json")
 
-    with (
-        patch.object(SafeBundleUnpickler, "load") as native_load,
-        patch.object(_PurePythonBundleUnpickler, "load") as python_load,
-    ):
-        with pytest.raises(ArtifactError) as caught:
-            tl.load(path)
-        assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
-        native_load.assert_not_called()
-        python_load.assert_not_called()
+    _forbid_unpicklers(monkeypatch)
+    with pytest.raises(ArtifactError) as caught:
+        tl.load(path)
+    assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
 
 
 # --------------------------------------------------------------------------- #
@@ -529,8 +547,10 @@ def test_legacy_embedded_storage_refused_by_name(
         SafeBundleUnpickler(io.BytesIO(payload)).load()
 
 
-def test_rebuild_amplification_refused_end_to_end_through_tl_load(tmp_path: Path) -> None:
-    """The storage-amplification gadget planted in a real artifact is refused by ``tl.load``."""
+def test_rebuild_amplification_refused_end_to_end_through_tl_load(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The storage-amplification gadget in a real artifact is refused at the JSON gate."""
 
     path = tmp_path / "hostile_rebuild.tlspec"
     tl.trace(nn.Linear(3, 2), torch.ones(2, 3), capture=_CAP).save(path)
@@ -538,15 +558,10 @@ def test_rebuild_amplification_refused_end_to_end_through_tl_load(tmp_path: Path
         _rebuild_amplification_pickle(_embedded_blob(_uint8_typed_storage(), legacy=True), _N)
     )
     redigest(path, "records/trace.json")
-    with (
-        patch.object(SafeBundleUnpickler, "load") as native_load,
-        patch.object(_PurePythonBundleUnpickler, "load") as python_load,
-    ):
-        with pytest.raises(ArtifactError) as caught:
-            tl.load(path)
-        assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
-        native_load.assert_not_called()
-        python_load.assert_not_called()
+    _forbid_unpicklers(monkeypatch)
+    with pytest.raises(ArtifactError) as caught:
+        tl.load(path)
+    assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
 
 
 @pytest.mark.smoke

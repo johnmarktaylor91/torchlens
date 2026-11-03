@@ -77,13 +77,13 @@ torch.manual_seed(1234)
 _TRACE_CACHE: dict = {}
 
 
-def get_trace(model_key: str, variant: str = "plain", builder=None):
+def get_trace(model_key: str, variant: str = "plain", trace_builder=None):
     """Return a cached trace for (model_key, variant)."""
     ck = (model_key, variant)
     if ck in _TRACE_CACHE:
         return _TRACE_CACHE[ck]
-    if builder is not None:
-        trace = builder()
+    if trace_builder is not None:
+        trace = trace_builder()
     else:
         m, x = MODELS[model_key]()
         # Multi-input models supply a tuple; tl.trace takes input_args as a list.
@@ -95,7 +95,7 @@ def get_trace(model_key: str, variant: str = "plain", builder=None):
             out = trace[-1].out
             trace.log_backward(out)
         else:
-            raise ValueError(f"Unknown trace variant {variant!r} without builder")
+            raise ValueError(f"Unknown trace variant {variant!r} without trace_builder")
     _TRACE_CACHE[ck] = trace
     return trace
 
@@ -338,7 +338,7 @@ VACUOUS_DEMO_GUARDS: tuple[VacuousDemoGuard, ...] = (
     VacuousDemoGuard(
         "direction", "tiny_mlp", {"direction": "bottomup"}, {"direction": "leftright"}
     ),
-    VacuousDemoGuard("node_mode:profiling", "tiny_mlp", {}, {"node_mode": "profiling"}),
+    VacuousDemoGuard("node_mode:profiling", "tiny_mlp", {}, {"node_style": "profiling"}),
     VacuousDemoGuard(
         "node_spec_fn:vision",
         "mini_inception",
@@ -392,7 +392,7 @@ VACUOUS_DEMO_GUARDS: tuple[VacuousDemoGuard, ...] = (
         _container_trace("tuple_output"),
     ),
     VacuousDemoGuard("module", "demo_model", {}, {"module": "inner_module"}),
-    VacuousDemoGuard("vis_call_depth", "demo_model", {}, {"vis_call_depth": 1}),
+    VacuousDemoGuard("vis_call_depth", "demo_model", {}, {"depth": 1}),
     VacuousDemoGuard("skip_fn", "tiny_mlp", {}, {"skip_fn": _skip_relus}),
     VacuousDemoGuard("collapse_fn", "block_stack", {}, {"collapse_fn": _collapse_res_blocks}),
     VacuousDemoGuard("node_spec_fn", "tiny_mlp", {}, {"node_spec_fn": _spec_highlight_relu}),
@@ -410,44 +410,44 @@ VACUOUS_DEMO_GUARDS: tuple[VacuousDemoGuard, ...] = (
     VacuousDemoGuard("code_panel", "demo_model", {}, {"code_panel": True}),
     VacuousDemoGuard("font_size", "tiny_mlp", {}, {"font_size": 16}),
     VacuousDemoGuard("dpi", "tiny_mlp", {"dpi": 100}, {"dpi": 200}, file_bytes=True),
-    VacuousDemoGuard("for_paper", "tiny_mlp", {}, {"for_paper": True}),
+    VacuousDemoGuard("for_paper", "tiny_mlp", {}, {"theme": "paper"}),
     VacuousDemoGuard(
         "order_siblings", "mini_inception", {"order_siblings": False}, {"order_siblings": True}
     ),
     VacuousDemoGuard(
         "vis_node_placement",
         "large_chain",
-        {"vis_node_placement": "dot"},
-        {"vis_node_placement": "rank"},
+        {"layout": "dot"},
+        {"layout": "rank"},
     ),
     VacuousDemoGuard(
-        "vis_graph_overrides", "tiny_mlp", {}, {"vis_graph_overrides": {"bgcolor": "#FFFBE6"}}
+        "vis_graph_overrides", "tiny_mlp", {}, {"graph_overrides": {"bgcolor": "#FFFBE6"}}
     ),
     VacuousDemoGuard(
         "vis_edge_overrides",
         "tiny_mlp",
         {},
-        {"vis_edge_overrides": {"color": "red", "penwidth": "2"}},
+        {"edge_overrides": {"color": "red", "penwidth": "2"}},
     ),
     VacuousDemoGuard(
         "vis_module_overrides",
         "demo_model",
         {},
-        {"vis_module_overrides": {"color": "blue", "style": "dashed"}},
+        {"module_overrides": {"color": "blue", "style": "dashed"}},
     ),
     VacuousDemoGuard(
         "vis_intervention_mode",
         "tiny_mlp",
-        {"vis_intervention_mode": "node_mark"},
-        {"vis_intervention_mode": "as_node"},
+        {"intervention_mode": "node_mark"},
+        {"intervention_mode": "as_node"},
         "planned-intervention",
         _intervened_trace("tiny_mlp"),
     ),
     VacuousDemoGuard(
         "vis_show_cone",
         "tiny_mlp",
-        {"vis_show_cone": False},
-        {"vis_show_cone": True},
+        {"show_cone": False},
+        {"show_cone": True},
         "planned-cone",
         _intervened_trace("tiny_mlp"),
     ),
@@ -498,7 +498,7 @@ def _guard_render_value(guard: VacuousDemoGuard, side: str, kwargs: dict[str, An
     trace = get_trace(guard.model_key, trace_variant, trace_builder)
     stem = _PAGES_DIR / "_vacuous_demo_guards" / f"{guard.axis}_{side}"
     fileformat = "png" if guard.file_bytes else "dot"
-    source = trace.draw(path=str(stem), file_format=fileformat, vis_save_only=True, **kwargs)
+    source = trace.draw(path=str(stem), file_format=fileformat, **kwargs)
     if guard.file_bytes:
         rendered = pathlib.Path(f"{stem}.png")
         if not rendered.exists():
@@ -587,8 +587,8 @@ def _collapse_diag_text() -> str:
 
 AXES: dict[str, str] = {
     # --- draw() kwargs x values ---
-    "vis_mode:unrolled": "vis_mode='unrolled' (per-pass op nodes)",
-    "vis_mode:rolled": "vis_mode='rolled' (aggregate layer nodes, (xN) labels)",
+    "vis_mode:unrolled": "rolled=False (per-pass op nodes)",
+    "vis_mode:rolled": "rolled=True (aggregate layer nodes, (xN) labels)",
     "collapse:none": "collapse='none' (full graph)",
     "collapse:auto": "collapse='auto' (readability-targeted engine)",
     "collapse:max": "collapse='max' (aggressive condensation + segments)",
@@ -600,8 +600,8 @@ AXES: dict[str, str] = {
     "direction:bottomup": "direction='bottomup' (default)",
     "direction:topdown": "direction='topdown'",
     "direction:leftright": "direction='leftright'",
-    "node_mode:default": "node_mode='default'",
-    "node_mode:profiling": "node_mode='profiling' (time/memory rows)",
+    "node_mode:default": "node_style='default'",
+    "node_mode:profiling": "node_style='profiling' (time/memory rows)",
     "node_spec_fn:vision": "node_spec_fn=vision_node_mode (conv-oriented rows)",
     "node_spec_fn:attention": "node_spec_fn=attention_node_mode (attention-oriented rows)",
     "theme:torchlens": "theme='torchlens' (default)",
@@ -618,7 +618,7 @@ AXES: dict[str, str] = {
     "containers:nodes": "show_containers='nodes' container overlay nodes (renderer-internal)",
     "container_max_inline": "container_max_inline threshold",
     "module_focus": "module= submodule focus with boundary stubs",
-    "vis_call_depth": "vis_call_depth module-box nesting cutoff",
+    "depth": "vis_call_depth module-box nesting cutoff",
     "skip_fn": "skip_fn layer-hiding predicate (edges chain through)",
     "collapse_fn": "collapse_fn custom module-collapse predicate",
     "node_spec_fn": "node_spec_fn per-node customization callback",
@@ -633,23 +633,23 @@ AXES: dict[str, str] = {
     "code_panel:init_forward": "code_panel='init+forward' source panel",
     "font_size": "font_size= override",
     "dpi": "dpi= render density override",
-    "for_paper": "for_paper=True publication styling",
+    "for_paper": "theme='paper' publication styling",
     "order_siblings:on": "order_siblings=True (default) sibling ordering post-pass",
     "order_siblings:off": "order_siblings=False raw dot order",
-    "placement:dot": "vis_node_placement='dot' Graphviz engine",
-    "placement:rank": "vis_node_placement='rank' internal rank layout",
+    "placement:dot": "layout='dot' Graphviz engine",
+    "placement:rank": "layout='rank' internal rank layout",
     "overrides:graph": "vis_graph_overrides dict",
     "overrides:edge": "vis_edge_overrides dict",
     "overrides:module": "vis_module_overrides dict",
-    "intervention:node_mark": "vis_intervention_mode='node_mark'",
-    "intervention:as_node": "vis_intervention_mode='as_node' hook nodes",
-    "cone:on": "vis_show_cone=True downstream highlighter",
-    "cone:off": "vis_show_cone=False (default)",
+    "intervention:node_mark": "intervention_mode='node_mark'",
+    "intervention:as_node": "intervention_mode='as_node' hook nodes",
+    "cone:on": "show_cone=True downstream highlighter",
+    "cone:off": "show_cone=False (default)",
     "input_transform_summary": "show_input_transform_summary=True input xlabel",
     "raw_io_render": "save_raw_input/save_raw_output thumbnails on boundary nodes",
     # --- draw_backward / draw_combined ---
     "draw_backward:rolled": "draw_backward default rolled grad_fn graph",
-    "draw_backward:unrolled": "draw_backward vis_mode='unrolled'",
+    "draw_backward:unrolled": "draw_backward rolled=False",
     "draw_backward:bwd": "draw_backward bwd= pass selection",
     "draw_combined": "draw_combined forward+backward graph",
     "combined:intervening_cluster": "draw_combined intervening_cluster placement",
@@ -712,7 +712,7 @@ AXES: dict[str, str] = {
 
 # Axes that are deliberately NOT given a page, with the honest reason.
 NA_AXES: dict[str, str] = {
-    "vis_mode:none": "vis_mode='none' renders nothing by definition.",
+    "vis_mode:none": "a trace with no picture requested draws nothing by definition.",
     "vis_renderer:dagua": "Experimental opt-in backend (torchlens.experimental.dagua); "
     "not part of the stable visual language.",
     "placement:auto": "'auto' just selects dot or rank by cost estimate; both concrete "
@@ -724,17 +724,17 @@ NA_AXES: dict[str, str] = {
     "'intervention', the two color-coded overlays, both have pages).",
     "combined:cluster_rest": "intervening_cluster 'outside'/'downstream' mirror the two "
     "placements shown ('upstream'/'own') with different cluster targets.",
-    "overrides:grad_edge": "vis_grad_edge_overrides styles gradient edges via the same "
-    "override dict machinery as vis_edge_overrides (shown).",
-    "plumbing": "vis_outpath / vis_fileformat / vis_save_only / return_graph / "
-    "vis_graph_overrides and the draw() short-form params (view, depth, renderer, "
-    "layout, node_style) have no visual identity of their own.",
+    "overrides:grad_edge": "grad_edge_overrides styles gradient edges via the same "
+    "override dict machinery as edge_overrides (shown).",
+    "plumbing": "path / file_format / open_viewer / graph_overrides and the draw() "
+    "short-form params (rolled, depth, renderer, layout, node_style) have no visual "
+    "identity of their own.",
     "show:dispatcher": "Trace.show(kind='graph'/'repr') dispatches to draw()/repr(). "
     "method='html' returns Trace._repr_html_() -- see the html_repr entry.",
     "html_repr": "Trace._repr_html_() is a bespoke HTML identity card (layers/ops/"
     "save-level/NaN summary) for notebooks; an HTML widget, not a static Graphviz "
     "render, so it cannot appear in this PDF.",
-    "animate_ops": "Trace.animate_ops() returns an HTML play/pause widget for "
+    "animate_ops": "trace.animate(site) returns an HTML play/pause Drawing for "
     "repeated-pass ops; interactive HTML, out of scope for a static PDF.",
     "code_panel:callable": "code_panel=<callable> reuses the same panel box styling "
     "as the string modes; only the text source differs.",
@@ -964,14 +964,14 @@ SECTIONS: list[Section] = [
                 ),
                 panels=[
                     Panel(
-                        "vis_node_placement='dot'",
+                        "layout='dot'",
                         "large_chain",
-                        kwargs={"vis_node_placement": "dot"},
+                        kwargs={"layout": "dot"},
                     ),
                     Panel(
-                        "vis_node_placement='rank'",
+                        "layout='rank'",
                         "large_chain",
-                        kwargs={"vis_node_placement": "rank"},
+                        kwargs={"layout": "rank"},
                     ),
                 ],
                 covers=["placement:dot", "placement:rank"],
@@ -1107,8 +1107,8 @@ SECTIONS: list[Section] = [
                     "box reports the layer/param count it swallowed."
                 ),
                 panels=[
-                    Panel("vis_call_depth=1000 (default)", "demo_model"),
-                    Panel("vis_call_depth=1", "demo_model", kwargs={"vis_call_depth": 1}),
+                    Panel("depth=1000 (default)", "demo_model"),
+                    Panel("depth=1", "demo_model", kwargs={"depth": 1}),
                 ],
                 covers=["vis_call_depth"],
             ),
@@ -1186,19 +1186,19 @@ SECTIONS: list[Section] = [
                 ),
                 panels=[
                     Panel(
-                        "vis_graph_overrides={'bgcolor': '#FFFBE6'}",
+                        "graph_overrides={'bgcolor': '#FFFBE6'}",
                         "tiny_mlp",
-                        kwargs={"vis_graph_overrides": {"bgcolor": "#FFFBE6"}},
+                        kwargs={"graph_overrides": {"bgcolor": "#FFFBE6"}},
                     ),
                     Panel(
-                        "vis_edge_overrides={'color': 'red', 'penwidth': '2'}",
+                        "edge_overrides={'color': 'red', 'penwidth': '2'}",
                         "tiny_mlp",
-                        kwargs={"vis_edge_overrides": {"color": "red", "penwidth": "2"}},
+                        kwargs={"edge_overrides": {"color": "red", "penwidth": "2"}},
                     ),
                     Panel(
                         "vis_module_overrides: dashed blue module boxes",
                         "demo_model",
-                        kwargs={"vis_module_overrides": {"color": "blue", "style": "dashed"}},
+                        kwargs={"module_overrides": {"color": "blue", "style": "dashed"}},
                     ),
                 ],
                 covers=["overrides:graph", "overrides:edge", "overrides:module"],
@@ -1209,7 +1209,7 @@ SECTIONS: list[Section] = [
     Section(
         "D",
         "Loop Rolling & Recurrence",
-        "TorchLens's loop-rolling machinery: vis_mode='rolled' merges repeated "
+        "TorchLens's loop-rolling machinery: rolled=True merges repeated "
         "applications of the SAME parameters into one set of nodes with '(xN)' "
         "multipliers and recurrence back-edges. Unrolled mode shows every pass. "
         "This section walks the machinery from a single reused op to multi-state "
@@ -1227,14 +1227,14 @@ SECTIONS: list[Section] = [
                 ),
                 panels=[
                     Panel(
-                        "vis_mode='unrolled' -- 4 passes",
+                        "rolled=False -- 4 passes",
                         "reused_relu_loop",
-                        kwargs={"vis_mode": "unrolled"},
+                        kwargs={"rolled": False},
                     ),
                     Panel(
-                        "vis_mode='rolled' -- one node, (x4)",
+                        "rolled=True -- one node, (x4)",
                         "reused_relu_loop",
-                        kwargs={"vis_mode": "rolled"},
+                        kwargs={"rolled": True},
                     ),
                 ],
                 covers=["vis_mode:rolled", "label:xN", "edge:self_loop"],
@@ -1254,12 +1254,12 @@ SECTIONS: list[Section] = [
                     Panel(
                         "unrolled -- 4 timesteps explicit",
                         "rnn_cell_seq",
-                        kwargs={"vis_mode": "unrolled"},
+                        kwargs={"rolled": False},
                     ),
                     Panel(
                         "rolled -- recurrence back-edge",
                         "rnn_cell_seq",
-                        kwargs={"vis_mode": "rolled"},
+                        kwargs={"rolled": True},
                     ),
                 ],
                 covers=["edge:back_edge"],
@@ -1280,12 +1280,12 @@ SECTIONS: list[Section] = [
                     Panel(
                         "unrolled",
                         "lstm_cell_seq",
-                        kwargs={"vis_mode": "unrolled", "dpi": 150},
+                        kwargs={"rolled": False, "dpi": 150},
                     ),
                     Panel(
                         "rolled -- h and c back-edges",
                         "lstm_cell_seq",
-                        kwargs={"vis_mode": "rolled", "dpi": 150},
+                        kwargs={"rolled": True, "dpi": 150},
                     ),
                 ],
                 covers=["edge:back_edge", "label:xN"],
@@ -1305,7 +1305,7 @@ SECTIONS: list[Section] = [
                     "structure from nn.LSTM, this page is why you don't get it."
                 ),
                 panels=[
-                    Panel("gru_cell_seq -- rolled", "gru_cell_seq", kwargs={"vis_mode": "rolled"}),
+                    Panel("gru_cell_seq -- rolled", "gru_cell_seq", kwargs={"rolled": True}),
                     Panel(
                         "fused nn.LSTM -- one kernel call (3 output nodes)",
                         "fused_lstm",
@@ -1324,9 +1324,9 @@ SECTIONS: list[Section] = [
                     "across the three panels."
                 ),
                 panels=[
-                    Panel("2 iterations", "weight_tied_loop_2", kwargs={"vis_mode": "rolled"}),
-                    Panel("5 iterations", "weight_tied_loop_5", kwargs={"vis_mode": "rolled"}),
-                    Panel("8 iterations", "weight_tied_loop_8", kwargs={"vis_mode": "rolled"}),
+                    Panel("2 iterations", "weight_tied_loop_2", kwargs={"rolled": True}),
+                    Panel("5 iterations", "weight_tied_loop_5", kwargs={"rolled": True}),
+                    Panel("8 iterations", "weight_tied_loop_8", kwargs={"rolled": True}),
                 ],
                 covers=["label:xN"],
             ),
@@ -1344,9 +1344,9 @@ SECTIONS: list[Section] = [
                     Panel(
                         "unrolled -- per-pass arms",
                         "branching_loop",
-                        kwargs={"vis_mode": "unrolled"},
+                        kwargs={"rolled": False},
                     ),
-                    Panel("rolled", "branching_loop", kwargs={"vis_mode": "rolled"}),
+                    Panel("rolled", "branching_loop", kwargs={"rolled": True}),
                 ],
                 covers=["control_flow:branch", "label:xN"],
             ),
@@ -1359,9 +1359,7 @@ SECTIONS: list[Section] = [
                     "CHECK: back-edge arcs cleanly, its midpoint label (if any) sits clear of node boxes, "
                     "arrow direction closes the loop from output back to input side."
                 ),
-                panels=[
-                    Panel("rnn_cell_loop -- rolled", "rnn_cell_loop", kwargs={"vis_mode": "rolled"})
-                ],
+                panels=[Panel("rnn_cell_loop -- rolled", "rnn_cell_loop", kwargs={"rolled": True})],
                 covers=["edge:back_edge"],
             ),
         ],
@@ -1625,8 +1623,8 @@ SECTIONS: list[Section] = [
                     "human-readable byte sizes)."
                 ),
                 panels=[
-                    Panel("node_mode='default'", "tiny_mlp"),
-                    Panel("node_mode='profiling'", "tiny_mlp", kwargs={"node_mode": "profiling"}),
+                    Panel("node_style='default'", "tiny_mlp"),
+                    Panel("node_style='profiling'", "tiny_mlp", kwargs={"node_style": "profiling"}),
                 ],
                 covers=["node_mode:default", "node_mode:profiling"],
             ),
@@ -1802,7 +1800,7 @@ SECTIONS: list[Section] = [
                     Panel(
                         "rank engine: code panel silently dropped (bug F14)",
                         "demo_model",
-                        kwargs={"code_panel": True, "vis_node_placement": "rank"},
+                        kwargs={"code_panel": True, "layout": "rank"},
                     ),
                 ],
                 covers=["code_panel:true", "code_panel:init_forward", "code_panel:fallback"],
@@ -1813,7 +1811,7 @@ SECTIONS: list[Section] = [
                 caption=(
                     "font_size scales label text; dpi scales the RASTER density (the layout is unchanged "
                     "but the rendered bitmap has more pixels, so the middle panel appears larger on this "
-                    "page and stays crisper when zoomed); for_paper=True switches to publication styling "
+                    "page and stays crisper when zoomed); theme='paper' switches to publication styling "
                     "(paper theme defaults, tuned linework).\n"
                     "CHECK: font_size=16 text is larger relative to its boxes; the dpi=200 panel is the "
                     "same GRAPH at higher pixel density; for_paper looks print-ready (neutral fill, "
@@ -1822,7 +1820,7 @@ SECTIONS: list[Section] = [
                 panels=[
                     Panel("font_size=16", "tiny_mlp", kwargs={"font_size": 16}),
                     Panel("dpi=200", "tiny_mlp", kwargs={"dpi": 200}),
-                    Panel("for_paper=True", "tiny_mlp", kwargs={"for_paper": True}),
+                    Panel("theme='paper'", "tiny_mlp", kwargs={"theme": "paper"}),
                 ],
                 covers=["font_size", "dpi", "for_paper"],
             ),
@@ -1949,14 +1947,14 @@ SECTIONS: list[Section] = [
                         "draw_backward (rolled default)",
                         "linear_relu",
                         "draw_backward",
-                        kwargs={"vis_graph_overrides": {"dpi": "150"}},
+                        kwargs={"graph_overrides": {"dpi": "150"}},
                         trace_variant="backward",
                     ),
                     Panel(
-                        "draw_backward vis_mode='unrolled'",
+                        "draw_backward rolled=False",
                         "linear_relu",
                         "draw_backward",
-                        kwargs={"vis_mode": "unrolled", "vis_graph_overrides": {"dpi": "150"}},
+                        kwargs={"rolled": False, "graph_overrides": {"dpi": "150"}},
                         trace_variant="backward",
                     ),
                 ],
@@ -1979,12 +1977,12 @@ SECTIONS: list[Section] = [
                 ),
                 panels=[
                     Panel(
-                        "vis_direction='leftright'",
+                        "direction='leftright'",
                         "linear_relu",
                         "draw_backward",
                         kwargs={
-                            "vis_direction": "leftright",
-                            "vis_graph_overrides": {"dpi": "150"},
+                            "direction": "leftright",
+                            "graph_overrides": {"dpi": "150"},
                         },
                         trace_variant="backward",
                     ),
@@ -1992,7 +1990,7 @@ SECTIONS: list[Section] = [
                         "bwd=1 (select first backward pass)",
                         "linear_relu",
                         "draw_backward",
-                        kwargs={"bwd": 1, "vis_graph_overrides": {"dpi": "150"}},
+                        kwargs={"bwd": 1, "graph_overrides": {"dpi": "150"}},
                         trace_variant="backward",
                     ),
                 ],
@@ -2016,14 +2014,14 @@ SECTIONS: list[Section] = [
                         "linear_relu -- draw_combined",
                         "linear_relu",
                         "draw_combined",
-                        kwargs={"vis_graph_overrides": {"dpi": "150"}},
+                        kwargs={"graph_overrides": {"dpi": "150"}},
                         trace_variant="backward",
                     ),
                     Panel(
                         "scalar_out -- draw_combined",
                         "scalar_out",
                         "draw_combined",
-                        kwargs={"vis_graph_overrides": {"dpi": "150"}},
+                        kwargs={"graph_overrides": {"dpi": "150"}},
                         trace_variant="backward",
                     ),
                     Panel(
@@ -2032,7 +2030,7 @@ SECTIONS: list[Section] = [
                         "draw_combined",
                         kwargs={
                             "backward_node_spec_fn": _bwd_spec_gold,
-                            "vis_graph_overrides": {"dpi": "150"},
+                            "graph_overrides": {"dpi": "150"},
                         },
                         trace_variant="backward",
                     ),
@@ -2061,7 +2059,7 @@ SECTIONS: list[Section] = [
                         "draw_combined",
                         kwargs={
                             "intervening_cluster": "upstream",
-                            "vis_graph_overrides": {"dpi": "150"},
+                            "graph_overrides": {"dpi": "150"},
                         },
                         trace_variant="backward",
                     ),
@@ -2071,7 +2069,7 @@ SECTIONS: list[Section] = [
                         "draw_combined",
                         kwargs={
                             "intervening_cluster": "own",
-                            "vis_graph_overrides": {"dpi": "150"},
+                            "graph_overrides": {"dpi": "150"},
                         },
                         trace_variant="backward",
                     ),
@@ -2132,16 +2130,16 @@ SECTIONS: list[Section] = [
                 ),
                 panels=[
                     Panel(
-                        "vis_intervention_mode='node_mark' (default)",
+                        "intervention_mode='node_mark' (default)",
                         "tiny_mlp",
-                        kwargs={"vis_intervention_mode": "node_mark"},
+                        kwargs={"intervention_mode": "node_mark"},
                         trace_variant="intervened",
                         trace_builder=_intervened_trace("tiny_mlp"),
                     ),
                     Panel(
-                        "vis_intervention_mode='as_node'",
+                        "intervention_mode='as_node'",
                         "tiny_mlp",
-                        kwargs={"vis_intervention_mode": "as_node"},
+                        kwargs={"intervention_mode": "as_node"},
                         trace_variant="intervened",
                         trace_builder=_intervened_trace("tiny_mlp"),
                     ),
@@ -2154,7 +2152,7 @@ SECTIONS: list[Section] = [
                 caption=(
                     "Same planned-intervention trace as the previous page. The intervention CONE is every "
                     "op downstream of an intervention site -- the region "
-                    "whose values the intervention could have changed. vis_show_cone=True lays a translucent "
+                    "whose values the intervention could have changed. show_cone=True lays a translucent "
                     "purple highlighter under its arrows and node outlines; False (the default) marks "
                     "the edited sites only.\n"
                     "CHECK: LEFT -- arrows and outlines downstream of the first edited relu carry the "
@@ -2163,16 +2161,16 @@ SECTIONS: list[Section] = [
                 ),
                 panels=[
                     Panel(
-                        "vis_show_cone=True",
+                        "show_cone=True",
                         "tiny_mlp",
-                        kwargs={"vis_show_cone": True},
+                        kwargs={"show_cone": True},
                         trace_variant="intervened",
                         trace_builder=_intervened_trace("tiny_mlp"),
                     ),
                     Panel(
-                        "vis_show_cone=False (default)",
+                        "show_cone=False (default)",
                         "tiny_mlp",
-                        kwargs={"vis_show_cone": False},
+                        kwargs={"show_cone": False},
                         trace_variant="intervened",
                         trace_builder=_intervened_trace("tiny_mlp"),
                     ),
@@ -2373,12 +2371,12 @@ SECTIONS: list[Section] = [
                 ),
                 panels=[
                     Panel(
-                        "size_by='dims' (scale='sqrt' default)",
+                        "size_by='dims' (size_scale='sqrt' default)",
                         "small_conv",
                         kwargs={"size_by": "dims"},
                     ),
                     Panel(
-                        "size_by='dims', scale='linear' (literal area motif)",
+                        "size_by='dims', size_scale='linear' (literal area motif)",
                         "small_conv",
                         kwargs={"size_by": "dims", "scale": "linear"},
                     ),
@@ -2432,8 +2430,11 @@ def _render_panel(page: Page, panel: Panel, idx: int) -> tuple[str, pathlib.Path
 
             fn = functools.partial(tl.viz.bundle_diff, trace)
         else:
-            fn = getattr(trace, panel.method)
-        fn(path=str(stem), file_format="png", vis_save_only=True, **kwargs)
+            if panel.method in ("draw_backward", "draw_combined"):
+                fn = functools.partial(trace.draw, graph=panel.method.removeprefix("draw_"))
+            else:
+                fn = getattr(trace, panel.method)
+        fn(path=str(stem), file_format="png", **kwargs)
         png = pathlib.Path(str(stem) + ".png")
         if not png.exists():
             raise FileNotFoundError(f"expected {png}")

@@ -28,6 +28,7 @@ import torch
 from ..._data_classes._state_adapter import state_items
 from ..field_registry import RECORD_CONTRACT_CLASSES, component_spec_tables
 from ..format_errors import ArtifactError
+from ._carriers import CallablePlaceholder, UnencodableValue
 from .contract import (
     CALLABLE_PLACEHOLDER_FIELDS,
     TYPED_VALUE_KEY,
@@ -81,6 +82,27 @@ def tuple_subtypes() -> dict[str, type]:
         }
     )
     return result
+
+
+# Complexity: one recursive copy bridge preserves closed container subtypes and record identity.
+def _replace_record_copies(value: Any, copies: Mapping[int, Any]) -> Any:
+    """Replace live record references while retaining declared value-container identities."""
+
+    if id(value) in copies:
+        return copies[id(value)]
+    if isinstance(value, list):
+        return [_replace_record_copies(item, copies) for item in value]
+    if isinstance(value, tuple) and not hasattr(value, "_fields"):
+        items = tuple(_replace_record_copies(item, copies) for item in value)
+        return type(value)(items) if type(value) in tuple_subtypes().values() else items
+    if isinstance(value, defaultdict):
+        return defaultdict(
+            value.default_factory,
+            {key: _replace_record_copies(item, copies) for key, item in value.items()},
+        )
+    if isinstance(value, dict):
+        return {key: _replace_record_copies(item, copies) for key, item in value.items()}
+    return value
 
 
 def class_path(cls: type) -> str:
@@ -530,7 +552,34 @@ def _encode_device(encoder: ValueEncoder, value: torch.device, at: str, depth: i
     return tagged("device", name=str(value))
 
 
+def _encode_carrier(
+    encoder: ValueEncoder,
+    value: UnencodableValue | CallablePlaceholder,
+    at: str,
+    depth: int,
+) -> dict[str, Any]:
+    """Preserve a decoded carrier's original wire fields without stringifying it again."""
+
+    if isinstance(value, UnencodableValue):
+        fields = {
+            "type": value.type_name,
+            "repr": value.repr_text,
+            "repr_length": value._repr_length,
+            "at": value.at,
+        }
+        encoder.disclosures.append(fields)
+        return tagged("unencodable", **fields)
+    return tagged(
+        "callable_placeholder",
+        position=value.position,
+        qualname=value.qualname,
+        repr_length=value.repr_length,
+    )
+
+
 _HANDLERS: dict[type, Callable[[ValueEncoder, Any, str, int], Any]] = {
+    UnencodableValue: _encode_carrier,
+    CallablePlaceholder: _encode_carrier,
     bytes: _encode_bytes,
     bytearray: _encode_bytes,
     complex: _encode_complex,

@@ -170,8 +170,36 @@ def _assert_identical(replayed: Any, live: Any, where: str) -> None:
             assert isinstance(got, torch.Tensor), f"{where}: leaf {index} is not a tensor"
             assert got.dtype == want.dtype and got.shape == want.shape, f"{where}: leaf {index}"
             torch.testing.assert_close(got, want, rtol=0, atol=0, equal_nan=True)
+        elif isinstance(want, torch.distributions.Distribution):
+            # Distribution.__eq__ is object identity; compare every state field exactly.
+            assert type(got) is type(want), f"{where}: distribution type"
+            assert vars(got).keys() == vars(want).keys(), f"{where}: distribution fields"
+            for key, expected in vars(want).items():
+                if not isinstance(expected, torch.Tensor):
+                    assert type(vars(got)[key]) is type(expected), f"{where}: {key} type"
+                _assert_identical(vars(got)[key], expected, f"{where}: distribution.{key}")
         else:
             assert got == want, f"{where}: leaf {index}"
+
+
+def test_distribution_output_oracle_compares_state_exactly() -> None:
+    """Independent Normal outputs compare by exact parameters, never object identity."""
+
+    want = torch.distributions.Normal(torch.zeros(2), torch.ones(2))
+    got = torch.distributions.Normal(torch.zeros(2), torch.ones(2))
+    assert got is not want and got != want
+    _assert_identical(got, want, "normal")
+    for field in ("loc", "scale"):
+        changed = torch.distributions.Normal(torch.zeros(2), torch.ones(2))
+        setattr(changed, field, getattr(changed, field) + 1)
+        with pytest.raises(AssertionError):
+            _assert_identical(changed, want, field)
+    got._batch_shape = torch.Size([3])
+    with pytest.raises(AssertionError):
+        _assert_identical(got, want, "batch shape")
+    got._batch_shape = [2]
+    with pytest.raises(AssertionError):
+        _assert_identical(got, want, "batch shape type")
 
 
 def _attempt(action: Any) -> tuple[Any, TorchLensError | None]:

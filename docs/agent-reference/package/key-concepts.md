@@ -33,7 +33,7 @@ facets, strict protocol with legacy flat-name properties) through the ONE commit
 the typed `OpAmendment` lane (nine exact-set families, `append_amendment` the single
 writer) and every amended-state read folds through the capture-event journal's amended-op fold.
 ONE sanctioned in-place carve-out exists: the fastlog ancestry-closure backfill
-(`recording/types.py::_backfill_cooked_ancestry`) replaces op-lane cells on the
+(`recording/_types_ancestry.py::_backfill_cooked_op_records`) replaces op-lane cells on the
 `_copy_for_replay` projection a cook owns — never the sealed Recording stream — and nulls
 `_amended_fold_cache` afterwards. Every in-place op-lane writer (this one included) is
 pinned by the closed reason-bearing ledger in
@@ -81,7 +81,7 @@ Intervention specs can be saved at audit, executable-with-callables, or portable
 
 ### Appliances
 The appliance subfolders `notebook` and `neuro` are part of the 2.x package layout. Their
-extras enforcement is DEFERRED, never import-time: `import torchlens._notebook` /
+extras enforcement is DEFERRED, never import-time: `import torchlens.report._notebook` /
 `torchlens.neuro` stays inert by design, and the dependency check fires on first
 attribute access via PEP-562 `__getattr__` — precisely so a bare import can never run
 foreign code without a trust opt-in (RCE-hardened, gated by

@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import importlib
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field, fields
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Final, Literal, TypeVar, cast
 
 import torch
 
@@ -24,10 +24,10 @@ from ._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
     FoldRepeatsLiteral,
+    OnNonfiniteLiteral,
     OutputDeviceLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
-    VisModeLiteral,
     VisNodeModeLiteral,
     VisNodePlacementLiteral,
     VisRendererLiteral,
@@ -49,8 +49,10 @@ from ._options_validation import (
     _validate_intervention_mode,
     _validate_node_style,
     _validate_visualization_flag_fields,
+    visualization_to_render_kwargs as visualization_to_render_kwargs,
 )
 from ._save_budget import SaveBudgetOption
+from ._utils.tensor_utils import SaveMode
 from ._vocab.node_spec import NodeSpec
 
 if TYPE_CHECKING:
@@ -64,7 +66,6 @@ _GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
 
 
 _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
-    "layers_to_save",
     "input_transform",
     "save_raw_input",
     "batch_render",
@@ -97,22 +98,31 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "cache",
     "cache_dir",
     "module_filter",
-    "stop_after",
     "jax_control_flow",
     "jax_max_control_flow_unroll",
     "module_identity_mode",
     "payload_policy",
-    "save_preview",
     "emit_nvtx",
     "measure_python_peak_memory",
     "save_budget",
     "distributed_witness",
-    "raise_on_nan",
-    "track_nonfinite",
+    "on_nonfinite",
     "track_device_memory",
     "structure_only",
     "log_injections",
     "measure_host_peak_memory",
+    "activation_transform",
+    "grad_transform",
+    "save_raw_activations",
+    "save_raw_grads",
+    "save_mode",
+    "reconstruction_ready",
+    "lookback",
+    "lookback_payload_policy",
+    "grouping",
+    "jax_static_argnums",
+    "grad_options",
+    "chunk_size",
     "aten_ops",
 )
 _SAVE_FIELDS: Final[tuple[str, ...]] = (
@@ -122,10 +132,11 @@ _SAVE_FIELDS: Final[tuple[str, ...]] = (
     "save_raw_gradients",
 )
 _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
-    "view",
+    "graph",
+    "rolled",
     "depth",
     "container_path",
-    "save_only",
+    "open_viewer",
     "file_format",
     "show_buffers",
     "direction",
@@ -150,13 +161,11 @@ _VISUALIZATION_FIELDS: Final[tuple[str, ...]] = (
     "show_legend",
     "color_by",
     "size_by",
-    "scale",
+    "size_scale",
     "stack_by",
     "show_redundant_args",
     "font_size",
     "dpi",
-    "for_paper",
-    "return_graph",
     "order_siblings",
 )
 _REPLAY_FIELDS: Final[tuple[str, ...]] = (
@@ -183,7 +192,6 @@ _STREAMING_FIELDS: Final[tuple[str, ...]] = (
     "max_pending_bytes",
 )
 _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
-    "layers_to_save": "layers_to_save",
     "input_transform": "input_transform",
     "save_raw_input": "save_raw_input",
     "batch_render": "batch_render",
@@ -216,14 +224,24 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "cache": "cache",
     "cache_dir": "cache_dir",
     "module_filter": "module_filter",
-    "stop_after": "stop_after",
     "jax_control_flow": "jax_control_flow",
     "jax_max_control_flow_unroll": "jax_max_control_flow_unroll",
     "module_identity_mode": "module_identity_mode",
     "payload_policy": "payload_policy",
-    "save_preview": "save_preview",
-    "raise_on_nan": "raise_on_nan",
+    "on_nonfinite": "on_nonfinite",
     "structure_only": "structure_only",
+    "activation_transform": "activation_transform",
+    "grad_transform": "grad_transform",
+    "save_raw_activations": "save_raw_activations",
+    "save_raw_grads": "save_raw_grads",
+    "save_mode": "save_mode",
+    "reconstruction_ready": "reconstruction_ready",
+    "lookback": "lookback",
+    "lookback_payload_policy": "lookback_payload_policy",
+    "grouping": "grouping",
+    "jax_static_argnums": "jax_static_argnums",
+    "grad_options": "grad_options",
+    "chunk_size": "chunk_size",
 }
 _SAVE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "activation_transform": "activation_transform",
@@ -232,7 +250,7 @@ _SAVE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "save_raw_grads": "save_raw_gradients",
 }
 _VISUALIZATION_FLAT_TO_GROUP: Final[dict[str, str]] = {
-    "view": "view",
+    "rolled": "rolled",
     "depth": "depth",
     "layout": "layout",
     "node_style": "node_style",
@@ -338,7 +356,18 @@ def _merge_grouped_options(
             )
         values[group_field] = flat_value
         specified_fields = frozenset((*specified_fields, group_field))
-    return option_factory().from_values(values, specified_fields)
+    return _build_option(option_factory, values, specified_fields)
+
+
+def _build_option(
+    option_factory: Any, values: Mapping[str, Any], specified_fields: frozenset[str]
+) -> Any:
+    """Build an option object from resolved values through its (possibly private) builder."""
+
+    builder = getattr(option_factory, "_from_values", None)
+    if builder is None:
+        builder = option_factory.from_values
+    return builder(values, specified_fields)
 
 
 @dataclass(frozen=True, init=False)
@@ -347,8 +376,6 @@ class CaptureOptions:
 
         Parameters
         ----------
-        layers_to_save:
-            Activation layer selector to capture.
         input_transform:
     Optional callable applied once to the user input before ``model.forward``.
         save_raw_input:
@@ -467,9 +494,9 @@ class CaptureOptions:
         cache_dir:
             Optional directory for content-hash cache entries.
         module_filter:
-            Optional THIRD save gate composed (AND) with ``save=`` /
-            ``layers_to_save``: an op's payload is retained only when the
-            save selection picks it AND this predicate returns truthy. The
+            Optional THIRD save gate composed (AND) with ``save=``: an op's
+            payload is retained only when the save selection picks it AND this
+            predicate returns truthy. The
             predicate receives an op-record namespace (the legacy-shaped
             ``SimpleNamespace`` of captured op fields such as ``func_name``,
             ``layer_label``, and ``modules``), NEVER an
@@ -478,21 +505,6 @@ class CaptureOptions:
             ZERO payloads. Returning ``False`` keeps metadata but skips payload
             saving; a capture whose every selected payload was suppressed by
             this gate emits a ``module_filter_zero_saved`` warning.
-        stop_after:
-            Inclusive stop-early site for torch captures (DOCUMENTED-UNSTABLE
-            spelling): capture halts immediately AFTER the named site is
-            captured, returning a partial halted trace that includes it. The
-            site compiles into the halt engine on emission identity: a string
-            halts at the first emission whose module address
-            (``"encoder.layer.4"``, at that module's exit boundary) or function
-            name (``"relu"``) matches, a live selector (``tl.func("relu")``,
-            ``tl.module(...)``) halts at its first match, and a callable
-            predicate halts when it returns True. Finalized postprocess labels
-            (``"relu_1_2"``) do not exist during capture and refuse typed
-            (``stop_after_site_not_live``). A selector-shaped site that never
-            fires refuses typed (``stop_after_never_fired``); a callable that
-            never fires warns. Cannot combine with ``halt=``
-            (``stop_after_halt_conflict``) or ``chunk_size``. Torch-only.
         jax_control_flow:
             Declared JAX control-flow policy. Backends other than torch reject
             explicit use until their implementation phase supports it.
@@ -502,9 +514,6 @@ class CaptureOptions:
             Declared backend module-mode selection passthrough.
         payload_policy:
             Declared payload materialization/codec policy passthrough.
-        save_preview:
-            Non-torch preview backends' declared flag reserving extended ``save=``
-            semantics; the shipped torch ``save=`` kwarg is independent of it.
         emit_nvtx:
             Whether torch capture emits NVIDIA Tools Extension (NVTX) CUDA profiling
             ranges around each logged operation. Range names carry call identity
@@ -558,14 +567,18 @@ class CaptureOptions:
             Devices whose headroom cannot be measured are left unbudgeted and
             emit a ``UserWarning`` on their first non-empty charge; use an absolute byte
             cap to enforce those devices.
-        raise_on_nan:
-            Whether capture should stop at the first NaN or Inf tensor.
-        track_nonfinite:
-            Whether torch capture records a per-op finiteness verdict
-            (DOCUMENTED-UNSTABLE), served by ``Trace.nonfinite_ops`` /
+        on_nonfinite:
+            Non-finite (NaN or Inf) policy for torch captures. ``"ignore"``
+            (the default) neither checks nor records. ``"track"`` records a
+            per-op finiteness verdict, served by ``Trace.nonfinite_ops`` /
             ``Trace.nonfinite_coverage``; covers unsaved ops, never changes
-            control flow, reads device flags in one post-forward batch. A
-            session-time knob. Doc: ``docs/reference/capture_outcomes.md``.
+            control flow, reads device flags in one post-forward batch (a
+            session-time knob; doc: ``docs/reference/capture_outcomes.md``).
+            ``"warn"`` tracks the same way and, once per capture, warns
+            ``capture_nonfinite_detected`` naming the first non-finite op when
+            any op produced one. ``"raise"`` stops the capture at the first
+            non-finite tensor and raises. Cannot combine with
+            ``structure_only=True`` except as ``"ignore"``.
         track_device_memory:
             Whether torch capture samples device allocator counters around each op call, served by
             ``torchlens._observe.device_memory_samples`` (DOCUMENTED-UNSTABLE; a session-time knob):
@@ -592,6 +605,39 @@ class CaptureOptions:
             ``ru_maxrss`` readings and cannot be undone, so it is opt-in. The default
             ``False`` writes nothing: CPU peaks read ``None`` with a reason naming this
             option. CUDA peaks and the MPS allocator delta ignore it.
+        activation_transform:
+            Optional transform applied to each saved activation before storage
+            (``torchlens.UserTransformError`` on a transform failure).
+        grad_transform:
+            Optional transform applied to each saved gradient before storage.
+        save_raw_activations:
+            Whether raw activations remain available when transformed.
+        save_raw_grads:
+            Whether raw gradients remain available when transformed.
+        save_mode:
+            Tensor save policy: ``"copy"`` (the safe cloning default),
+            ``"reference"`` (keep the live tensor), ``"view"`` or
+            ``"cpu_async"``.
+        reconstruction_ready:
+            Whether the capture keeps what tensor reconstruction needs.
+        lookback:
+            Number of preceding ops kept in the live predicate window
+            (``tl.followed_by`` / ``tl.preceded_by`` reach); ``0`` disables it.
+        lookback_payload_policy:
+            What the lookback window retains: ``"metadata_only"`` (the default)
+            or a payload-retaining policy.
+        grouping:
+            Postprocess grouping knob (UNSTABLE, closed vocabulary); only
+            ``"structural"`` (the default) is entry-legal today.
+        jax_static_argnums:
+            Static argument positions for ``jax.make_jaxpr`` when
+            ``backend="jax"``; refused on other backends.
+        grad_options:
+            Backend gradient options (``jax``, ``mlx``, ``tinygrad``,
+            ``paddle`` and ``tf`` only); refused on torch.
+        chunk_size:
+            Chunked-forward batch size; ``None`` runs one forward. Cannot
+            combine with ``stop_after=``.
         aten_ops:
             Whether the capture records the public ATen operations that each logged
             torch call dispatched to, served by ``Op.aten_ops`` and ``Trace.aten_ops``
@@ -603,12 +649,13 @@ class CaptureOptions:
 
         Examples
         --------
-        >>> opts = CaptureOptions(layers_to_save=["fc1"], seed=0)
-        >>> opts.layers_to_save
-        ['fc1']
+        >>> opts = CaptureOptions(seed=0)
+        >>> opts.seed
+        0
     """
 
-    layers_to_save: str | list[Any] | None = "all"
+    _layers_to_save: ClassVar[Any] = "all"
+    _layers_to_save_explicit: ClassVar[bool] = False
     input_transform: Callable[[Any], Any] | None = None
     save_raw_input: str | bool = "small"
     batch_render: str = "auto"
@@ -641,28 +688,36 @@ class CaptureOptions:
     cache: bool = False
     cache_dir: str | Path | None = None
     module_filter: Callable[[Any], bool] | None = None
-    stop_after: Any | None = None
     jax_control_flow: Literal["reject", "unroll", "region"] = "unroll"
     jax_max_control_flow_unroll: int = 64
     module_identity_mode: str | None = None
     payload_policy: str | None = None
-    save_preview: bool = False
     emit_nvtx: bool = False
     measure_python_peak_memory: bool = False
     save_budget: SaveBudgetOption = "auto"
     distributed_witness: str = "none"
-    raise_on_nan: bool = False
-    track_nonfinite: bool = False
+    on_nonfinite: OnNonfiniteLiteral = "ignore"
     track_device_memory: bool = False
     structure_only: bool = False
     log_injections: bool = False
     measure_host_peak_memory: bool = False
+    activation_transform: _ActivationPostfunc | None = None
+    grad_transform: _GradientPostfunc | None = None
+    save_raw_activations: bool = True
+    save_raw_grads: bool = True
+    save_mode: SaveMode = "copy"
+    reconstruction_ready: bool = False
+    lookback: int = 0
+    lookback_payload_policy: str = "metadata_only"
+    grouping: str = "structural"
+    jax_static_argnums: int | Sequence[int] | None = None
+    grad_options: Any | None = None
+    chunk_size: int | None = None
     aten_ops: bool = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
         self,
-        layers_to_save: str | list[Any] | None | MissingType = MISSING,
         input_transform: Callable[[Any], Any] | None | MissingType = MISSING,
         save_raw_input: str | bool | MissingType = MISSING,
         batch_render: str | MissingType = MISSING,
@@ -695,160 +750,43 @@ class CaptureOptions:
         cache: bool | MissingType = MISSING,
         cache_dir: str | Path | None | MissingType = MISSING,
         module_filter: Callable[[Any], bool] | None | MissingType = MISSING,
-        stop_after: Any | None | MissingType = MISSING,
         jax_control_flow: Literal["reject", "unroll", "region"] | MissingType = MISSING,
         jax_max_control_flow_unroll: int | MissingType = MISSING,
         module_identity_mode: str | None | MissingType = MISSING,
         payload_policy: str | None | MissingType = MISSING,
-        save_preview: bool | MissingType = MISSING,
         emit_nvtx: bool | MissingType = MISSING,
         measure_python_peak_memory: bool | MissingType = MISSING,
         save_budget: SaveBudgetOption | MissingType = MISSING,
         distributed_witness: str | MissingType = MISSING,
-        raise_on_nan: bool | MissingType = MISSING,
+        on_nonfinite: OnNonfiniteLiteral | MissingType = MISSING,
         *,
-        track_nonfinite: bool | MissingType = MISSING,
         track_device_memory: bool | MissingType = MISSING,
         structure_only: bool | MissingType = MISSING,
         log_injections: bool | MissingType = MISSING,
         measure_host_peak_memory: bool | MissingType = MISSING,
+        activation_transform: _ActivationPostfunc | None | MissingType = MISSING,
+        grad_transform: _GradientPostfunc | None | MissingType = MISSING,
+        save_raw_activations: bool | MissingType = MISSING,
+        save_raw_grads: bool | MissingType = MISSING,
+        save_mode: SaveMode | MissingType = MISSING,
+        reconstruction_ready: bool | MissingType = MISSING,
+        lookback: int | MissingType = MISSING,
+        lookback_payload_policy: str | MissingType = MISSING,
+        grouping: str | MissingType = MISSING,
+        jax_static_argnums: int | Sequence[int] | None | MissingType = MISSING,
+        grad_options: Any | None | MissingType = MISSING,
+        chunk_size: int | None | MissingType = MISSING,
         aten_ops: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen capture option bundle."""
 
+        supplied = locals().copy()  # every parameter is named after its field
         specified: set[str] = set()
         values: dict[str, Any] = {
-            "layers_to_save": _resolve_option_value(
-                "layers_to_save", layers_to_save, "all", specified
-            ),
-            "input_transform": _resolve_option_value(
-                "input_transform", input_transform, None, specified
-            ),
-            "save_raw_input": _resolve_option_value(
-                "save_raw_input", save_raw_input, "small", specified
-            ),
-            "batch_render": _resolve_option_value("batch_render", batch_render, "auto", specified),
-            "output_transform": _resolve_option_value(
-                "output_transform", output_transform, None, specified
-            ),
-            "save_transformed_output": _resolve_option_value(
-                "save_transformed_output", save_transformed_output, "small", specified
-            ),
-            "layer_visualizers": _resolve_option_value(
-                "layer_visualizers", layer_visualizers, None, specified
-            ),
-            "save_visualizations": _resolve_option_value(
-                "save_visualizations", save_visualizations, False, specified
-            ),
-            "keep_orphans": _resolve_option_value("keep_orphans", keep_orphans, False, specified),
-            "output_device": _resolve_option_value(
-                "output_device", output_device, "same", specified
-            ),
-            "save_args": _resolve_option_value("save_args", save_args, False, specified),
-            "save_grads": _resolve_option_value("save_grads", save_grads, None, specified),
-            "capture_tensor_grad_hooks": _resolve_option_value(
-                "capture_tensor_grad_hooks",
-                capture_tensor_grad_hooks,
-                True,
-                specified,
-            ),
-            "save_source_context": _resolve_option_value(
-                "save_source_context", save_source_context, False, specified
-            ),
-            "save_rng": _resolve_option_value("save_rng", save_rng, False, specified),
-            "seed": _resolve_option_value("seed", seed, None, specified),
-            "source_context_lines": _resolve_option_value(
-                "source_context_lines", source_context_lines, 7, specified
-            ),
-            "optimizer": _resolve_option_value("optimizer", optimizer, None, specified),
-            "compute_input_output_distances": _resolve_option_value(
-                "compute_input_output_distances",
-                compute_input_output_distances,
-                True,
-                specified,
-            ),
-            "detach_saved_activations": _resolve_option_value(
-                "detach_saved_activations", detach_saved_activations, False, specified
-            ),
-            "recurrence_detection": _resolve_option_value(
-                "recurrence_detection", recurrence_detection, True, specified
-            ),
-            "replayable": _resolve_option_value("replayable", replayable, False, specified),
-            "capture_container_structure": _resolve_option_value(
-                "capture_container_structure",
-                capture_container_structure,
-                False,
-                specified,
-            ),
-            "hooks": _resolve_option_value("hooks", hooks, None, specified),
-            "unwrap_when_done": _resolve_option_value(
-                "unwrap_when_done", unwrap_when_done, False, specified
-            ),
-            "verbose": _resolve_option_value("verbose", verbose, False, specified),
-            "backward_ready": _resolve_option_value(
-                "backward_ready", backward_ready, False, specified
-            ),
-            "inference_only": _resolve_option_value(
-                "inference_only", inference_only, False, specified
-            ),
-            "carry_state": _resolve_option_value("carry_state", carry_state, False, specified),
-            "name": _resolve_option_value("name", name, None, specified),
-            "cache": _resolve_option_value("cache", cache, False, specified),
-            "cache_dir": _resolve_option_value("cache_dir", cache_dir, None, specified),
-            "module_filter": _resolve_option_value("module_filter", module_filter, None, specified),
-            "stop_after": _resolve_option_value("stop_after", stop_after, None, specified),
-            "jax_control_flow": _resolve_option_value(
-                "jax_control_flow", jax_control_flow, "unroll", specified
-            ),
-            "jax_max_control_flow_unroll": _resolve_option_value(
-                "jax_max_control_flow_unroll",
-                jax_max_control_flow_unroll,
-                64,
-                specified,
-            ),
-            "module_identity_mode": _resolve_option_value(
-                "module_identity_mode", module_identity_mode, None, specified
-            ),
-            "payload_policy": _resolve_option_value(
-                "payload_policy", payload_policy, None, specified
-            ),
-            "save_preview": _resolve_option_value("save_preview", save_preview, False, specified),
-            "emit_nvtx": _resolve_option_value("emit_nvtx", emit_nvtx, False, specified),
-            "measure_python_peak_memory": _resolve_option_value(
-                "measure_python_peak_memory",
-                measure_python_peak_memory,
-                False,
-                specified,
-            ),
-            "save_budget": _resolve_option_value(
-                "save_budget",
-                save_budget,
-                "auto",
-                specified,
-            ),
-            "distributed_witness": _resolve_option_value(
-                "distributed_witness",
-                distributed_witness,
-                "none",
-                specified,
-            ),
-            "raise_on_nan": _resolve_option_value("raise_on_nan", raise_on_nan, False, specified),
-            "track_nonfinite": _resolve_option_value(
-                "track_nonfinite", track_nonfinite, False, specified
-            ),
-            "track_device_memory": _resolve_option_value(
-                "track_device_memory", track_device_memory, False, specified
-            ),
-            "structure_only": _resolve_option_value(
-                "structure_only", structure_only, False, specified
-            ),
-            "log_injections": _resolve_option_value(
-                "log_injections", log_injections, False, specified
-            ),
-            "measure_host_peak_memory": _resolve_option_value(
-                "measure_host_peak_memory", measure_host_peak_memory, False, specified
-            ),
-            "aten_ops": _resolve_option_value("aten_ops", aten_ops, False, specified),
+            field_name: _resolve_option_value(
+                field_name, supplied[field_name], _CAPTURE_DEFAULTS[field_name], specified
+            )
+            for field_name in _CAPTURE_FIELDS
         }
         _validate_capture_values(values)
         _set_frozen_fields(self, _CAPTURE_FIELDS, values)
@@ -859,16 +797,21 @@ class CaptureOptions:
 
         return {field_name: getattr(self, field_name) for field_name in _CAPTURE_FIELDS}
 
-    def is_field_explicit(self, field_name: str) -> bool:
-        """Return whether a field was explicitly supplied by the caller."""
+    def _is_field_explicit(self, field_name: str) -> bool:
+        """Return whether a field was explicitly supplied by the caller (private)."""
 
         return _field_is_explicit(self, field_name)
 
     @classmethod
-    def from_values(
-        cls, values: Mapping[str, Any], specified_fields: frozenset[str]
+    def _from_values(
+        cls,
+        values: Mapping[str, Any],
+        specified_fields: frozenset[str],
+        *,
+        _layers_to_save: Any = "all",
+        _layers_to_save_explicit: bool = False,
     ) -> CaptureOptions:
-        """Build an instance from already-resolved field values.
+        """Build an instance from already-resolved field values (private).
 
         Applies the same invariants as ``__init__`` (via
         :func:`_validate_capture_values`) so this construction path -- used by
@@ -879,13 +822,26 @@ class CaptureOptions:
         _validate_capture_values(values)
         instance = object.__new__(cls)
         _set_frozen_fields(instance, _CAPTURE_FIELDS, values)
+        object.__setattr__(instance, "_layers_to_save", _layers_to_save)
+        object.__setattr__(instance, "_layers_to_save_explicit", _layers_to_save_explicit)
         object.__setattr__(instance, "_specified_fields", specified_fields)
         return instance
 
 
+# The public default of each capture field is its dataclass declaration above.
+_CAPTURE_DEFAULTS: Final[Mapping[str, Any]] = {
+    option_field.name: option_field.default
+    for option_field in fields(CaptureOptions)
+    if option_field.name in _CAPTURE_FIELDS
+}
+
+
 @dataclass(frozen=True, init=False)
-class SaveOptions:
-    """Grouped out-save options for ``trace``.
+class _SaveTransforms:
+    """Internal carrier of the save-transform fields of :class:`CaptureOptions`.
+
+    Built by :func:`_save_transforms_from_capture`; not a public option
+    class (``tl.options.SaveOptions`` was folded into ``CaptureOptions``).
 
     Parameters
     ----------
@@ -900,7 +856,7 @@ class SaveOptions:
 
     Examples
     --------
-    >>> opts = SaveOptions(activation_transform=lambda x: x.detach())
+    >>> opts = _SaveTransforms(activation_transform=lambda x: x.detach())
     >>> opts.save_raw_activations
     True
     """
@@ -951,7 +907,7 @@ class SaveOptions:
     @classmethod
     def from_values(
         cls, values: Mapping[str, Any], specified_fields: frozenset[str]
-    ) -> SaveOptions:
+    ) -> _SaveTransforms:
         """Build an instance from already-resolved field values."""
 
         instance = object.__new__(cls)
@@ -962,10 +918,15 @@ class SaveOptions:
 
 #: Alias properties removed by the 2026-10-01 shim removal (no alias kept).
 _REMOVED_VISUALIZATION_OPTION_MEMBERS: dict[str, str] = {
-    "mode": "use VisualizationOptions.view -- the mode alias was removed",
+    "mode": "use VisualizationOptions.rolled (a bool) -- the mode alias was removed",
+    "view": "use VisualizationOptions.rolled (True for the rolled graph); a picture is drawn whenever visualization options are passed",
+    "save_only": "use VisualizationOptions.open_viewer (True opens the viewer; the default never does)",
+    "for_paper": 'use VisualizationOptions.theme="paper"',
+    "return_graph": "read Drawing.dot on the returned Drawing",
     "max_module_depth": "use VisualizationOptions.depth -- the max_module_depth alias was removed",
     "layout_engine": "use VisualizationOptions.layout -- the layout_engine alias was removed",
     "node_mode": "use VisualizationOptions.node_style -- the node_mode alias was removed",
+    "animate": "use trace.animate(site) -- the animation is its own door, not a draw keyword",
 }
 
 
@@ -975,14 +936,18 @@ class VisualizationOptions:
 
     Parameters
     ----------
-    view:
-        Graph view: ``"none"``, ``"rolled"``, or ``"unrolled"``.
+    graph:
+        Which graph: ``"forward"``, ``"backward"`` or ``"combined"``.
+    rolled:
+        ``True`` draws each repeated module once (the rolled graph); ``False``
+        (default) draws every pass.
     depth:
         Maximum module nesting depth shown in the graph.
     container_path:
         Output path stem for rendered graph files.
-    save_only:
-        Whether rendering saves without opening a viewer.
+    open_viewer:
+        ``True`` opens the written picture in the system viewer (default
+        ``False``: never).
     file_format:
         Graph output file format.
     show_buffers:
@@ -1051,25 +1016,22 @@ class VisualizationOptions:
         Optional Graphviz font size.
     dpi:
         Optional Graphviz output DPI.
-    for_paper:
-        Convenience toggle forcing the paper theme preset.
-    return_graph:
-        Whether rendering returns the renderer object instead of DOT source.
     order_siblings:
         Whether Graphviz ``dot`` renders should verify and apply execution-order
         placement for true parallel siblings.
 
     Examples
     --------
-    >>> opts = VisualizationOptions(view="rolled", depth=2)
+    >>> opts = VisualizationOptions(rolled=True, depth=2)
     >>> opts.layout
     'auto'
     """
 
-    view: VisModeLiteral = "none"
+    graph: Literal["forward", "backward", "combined"] = "forward"
+    rolled: bool = False
     depth: int = 1000
     container_path: str = "graph.gv"
-    save_only: bool = False
+    open_viewer: bool = False
     file_format: str = "pdf"
     show_buffers: BufferVisibilityLiteral = "meaningful"
     direction: VisDirectionLiteral = "bottomup"
@@ -1099,17 +1061,16 @@ class VisualizationOptions:
     show_redundant_args: bool = False
     font_size: int | None = None
     dpi: int | None = None
-    for_paper: bool = False
-    return_graph: bool = False
     order_siblings: bool = True
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
     def __init__(
         self,
-        view: VisModeLiteral | MissingType = MISSING,
+        graph: Literal["forward", "backward", "combined"] | MissingType = MISSING,
+        rolled: bool | MissingType = MISSING,
         depth: int | MissingType = MISSING,
         container_path: str | MissingType = MISSING,
-        save_only: bool | MissingType = MISSING,
+        open_viewer: bool | MissingType = MISSING,
         file_format: str | MissingType = MISSING,
         show_buffers: BufferVisibilityLiteral | bool | MissingType = MISSING,
         direction: VisDirectionLiteral | MissingType = MISSING,
@@ -1136,25 +1097,26 @@ class VisualizationOptions:
         show_legend: bool | None | MissingType = MISSING,
         color_by: str | Callable[[Any], Any] | None | MissingType = MISSING,
         size_by: str | Callable[[Any], Any] | None | MissingType = MISSING,
-        scale: str | None | MissingType = MISSING,
+        size_scale: str | None | MissingType = MISSING,
         stack_by: str | bool | Callable[[Any], Any] | None | MissingType = MISSING,
         show_redundant_args: bool | MissingType = MISSING,
         font_size: int | None | MissingType = MISSING,
         dpi: int | None | MissingType = MISSING,
-        for_paper: bool | MissingType = MISSING,
-        return_graph: bool | MissingType = MISSING,
         order_siblings: bool | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen visualization option bundle."""
 
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
-            "view": _resolve_option_value("view", view, "none", specified_fields),
+            "graph": _resolve_option_value("graph", graph, "forward", specified_fields),
+            "rolled": _resolve_option_value("rolled", rolled, False, specified_fields),
             "depth": _resolve_option_value("depth", depth, 1000, specified_fields),
             "container_path": _resolve_option_value(
                 "container_path", container_path, "graph.gv", specified_fields
             ),
-            "save_only": _resolve_option_value("save_only", save_only, False, specified_fields),
+            "open_viewer": _resolve_option_value(
+                "open_viewer", open_viewer, False, specified_fields
+            ),
             "file_format": _resolve_option_value(
                 "file_format", file_format, "pdf", specified_fields
             ),
@@ -1213,17 +1175,13 @@ class VisualizationOptions:
             ),
             "color_by": _resolve_option_value("color_by", color_by, None, specified_fields),
             "size_by": _resolve_option_value("size_by", size_by, None, specified_fields),
-            "scale": _resolve_option_value("scale", scale, None, specified_fields),
+            "size_scale": _resolve_option_value("size_scale", size_scale, None, specified_fields),
             "stack_by": _resolve_option_value("stack_by", stack_by, None, specified_fields),
             "show_redundant_args": _resolve_option_value(
                 "show_redundant_args", show_redundant_args, False, specified_fields
             ),
             "font_size": _resolve_option_value("font_size", font_size, None, specified_fields),
             "dpi": _resolve_option_value("dpi", dpi, None, specified_fields),
-            "for_paper": _resolve_option_value("for_paper", for_paper, False, specified_fields),
-            "return_graph": _resolve_option_value(
-                "return_graph", return_graph, False, specified_fields
-            ),
             "order_siblings": _resolve_option_value(
                 "order_siblings", order_siblings, True, specified_fields
             ),
@@ -1580,7 +1538,7 @@ def to_disk(
     Parameters
     ----------
     path:
-        Destination bundle directory; it must not exist yet (``bundle_save_failed``).
+        Destination bundle directory; it must not exist yet (``bundle_path_exists``).
     retain_in_memory:
         Whether streamed payloads also remain as RAM copies. The model output the forward
         returns stays in memory either way (the output op's payload may alias it). A streamed
@@ -1626,11 +1584,12 @@ def to_disk(
 def merge_capture_options(
     *,
     capture: CaptureOptions | None,
+    _layers_to_save: Any = MISSING,
     **flat_values: Any,
 ) -> CaptureOptions:
-    """Merge individual capture kwargs into a grouped options object."""
+    """Merge capture kwargs, preserving the private resolved ``save=`` selection."""
 
-    return cast(
+    merged = cast(
         CaptureOptions,
         _merge_grouped_options(
             option=capture,
@@ -1643,31 +1602,29 @@ def merge_capture_options(
             ),
         ),
     )
+    explicit = _layers_to_save is not MISSING or getattr(capture, "_layers_to_save_explicit", False)
+    if _layers_to_save is MISSING:
+        _layers_to_save = getattr(capture, "_layers_to_save", "all")
+    object.__setattr__(merged, "_layers_to_save", _layers_to_save)
+    object.__setattr__(merged, "_layers_to_save_explicit", explicit)
+    return merged
 
 
-def merge_save_options(*, save: SaveOptions | None, **flat_values: Any) -> SaveOptions:
-    """Merge individual save kwargs into a grouped options object."""
+def _save_transforms_from_capture(capture: CaptureOptions) -> _SaveTransforms:
+    """Return the save-transform carrier for a merged ``CaptureOptions``."""
 
-    return cast(
-        SaveOptions,
-        _merge_grouped_options(
-            option=save,
-            option_factory=SaveOptions,
-            flat_to_group=_SAVE_FLAT_TO_GROUP,
-            flat_values=flat_values,
-            group_name="save",
-            conflict_message=(
-                "conflicting save options: pass either SaveOptions or individual kwargs, not both"
-            ),
-        ),
+    return _SaveTransforms(
+        activation_transform=capture.activation_transform,
+        grad_transform=capture.grad_transform,
+        save_raw_activations=capture.save_raw_activations,
+        save_raw_grads=capture.save_raw_grads,
     )
 
 
 def merge_visualization_options(
     *,
-    function_default_mode: VisModeLiteral,
     visualization: VisualizationOptions | None,
-    view: VisModeLiteral | MissingType = MISSING,
+    rolled: bool | MissingType = MISSING,
     depth: int | MissingType = MISSING,
     layout: VisNodePlacementLiteral | MissingType = MISSING,
     node_style: VisNodeModeLiteral | MissingType = MISSING,
@@ -1677,23 +1634,14 @@ def merge_visualization_options(
     order_siblings: bool | MissingType = MISSING,
 ) -> VisualizationOptions:
     """Merge the canonical flat visualization kwargs into a grouped options object."""
-
     if visualization is None:
         values = VisualizationOptions().to_dict()
-        values["view"] = function_default_mode
         specified_fields: frozenset[str] = frozenset()
     else:
         values = visualization.to_dict()
         specified_fields = _explicit_fields(visualization)
-        if "view" not in specified_fields:
-            # The grouped object's non-explicit view default ("none") must not
-            # shadow the calling function's default mode: show_model_graph
-            # with a VisualizationOptions that leaves view unset used to merge
-            # to view="none" and silently render NOTHING (D04 integration fix).
-            values["view"] = function_default_mode
-
     flat_values: dict[str, Any] = {
-        "view": view,
+        "rolled": rolled,
         "depth": depth,
         "layout": layout,
         "node_style": node_style,
@@ -1782,73 +1730,6 @@ def merge_streaming_options(
     )
 
 
-def visualization_to_render_kwargs(visualization: VisualizationOptions) -> dict[str, Any]:
-    """Translate grouped visualization options into ``Trace.draw`` kwargs.
-
-    Parameters
-    ----------
-    visualization:
-        Resolved grouped visualization options.
-
-    Returns
-    -------
-    dict[str, Any]
-        Keyword arguments expected by ``Trace.draw``.
-    """
-
-    kwargs: dict[str, Any] = {
-        "vis_mode": visualization.view,
-        "vis_call_depth": visualization.depth,
-        "path": visualization.container_path,
-        "vis_graph_overrides": visualization.graph_overrides,
-        "node_mode": visualization.node_style,
-        "node_spec_fn": visualization.node_spec_fn,
-        "collapsed_node_spec_fn": visualization.collapsed_node_spec_fn,
-        "collapse_fn": visualization.collapse_fn,
-        "collapse": visualization.collapse,
-        "skip_fn": visualization.skip_fn,
-        "vis_edge_overrides": visualization.edge_overrides,
-        "vis_grad_edge_overrides": visualization.grad_edge_overrides,
-        "vis_module_overrides": visualization.module_overrides,
-        "vis_save_only": visualization.save_only,
-        "file_format": visualization.file_format,
-        "show_buffers": visualization.show_buffers,
-        "direction": visualization.direction,
-        "vis_node_placement": visualization.layout,
-        "vis_renderer": visualization.renderer,
-        "theme": visualization.theme,
-        "vis_intervention_mode": visualization.intervention_mode,
-        "vis_show_cone": visualization.show_cone,
-    }
-    if visualization.fold_repeats is not None or visualization.is_field_explicit("fold_repeats"):
-        kwargs["fold_repeats"] = visualization.fold_repeats
-    phase7_kwargs = {
-        "node_overlay": visualization.node_overlay,
-        "node_label_fields": visualization.node_label_fields,
-        "show_legend": visualization.show_legend,
-        "color_by": visualization.color_by,
-        "size_by": visualization.size_by,
-        "scale": visualization.size_scale,
-        "stack_by": visualization.stack_by,
-        "show_redundant_args": visualization.show_redundant_args,
-        "font_size": visualization.font_size,
-        "dpi": visualization.dpi,
-        "for_paper": visualization.for_paper,
-        "return_graph": visualization.return_graph,
-        "order_siblings": visualization.order_siblings,
-    }
-    for field_name, value in phase7_kwargs.items():
-        if field_name == "order_siblings":
-            should_include = visualization.is_field_explicit(field_name) or value is False
-        else:
-            should_include = visualization.is_field_explicit(field_name) or (
-                value is not None and value is not False
-            )
-        if should_include:
-            kwargs[field_name] = value
-    return kwargs
-
-
 __all__ = [
     "RecordingOptions",
     "HtmlReportOptions",
@@ -1857,7 +1738,6 @@ __all__ = [
     "EpisodeOptions",
     "InterventionOptions",
     "ReplayOptions",
-    "SaveOptions",
     "StorageOptions",
     "VisualizationOptions",
     "suppress_mutate_warnings",

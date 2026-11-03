@@ -208,6 +208,7 @@ class _Comparison:
         text = self.barcode_pattern.sub(lambda match: self.barcodes[match.group(0)], text)
         return _PARAM_TOKEN_RUN.sub(_sorted_param_run, text)
 
+    # Complexity: one recursive visitor preserves the same equality oracle across value kinds.
     def compare(self, decoded: Any, live: Any, at: str) -> None:
         if isinstance(live, Accessor) and isinstance(decoded, list):
             # An accessor of records is an edge: written as its member list.
@@ -235,6 +236,7 @@ class _Comparison:
             return
         self.compare_plain(decoded, live, at)
 
+    # Complexity: one equality oracle covers the closed scalar and container type alternatives.
     def compare_plain(self, decoded: Any, live: Any, at: str) -> None:
         if isinstance(live, str):
             if decoded != self.translate(live):

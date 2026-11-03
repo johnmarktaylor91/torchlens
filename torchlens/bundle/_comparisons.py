@@ -18,7 +18,7 @@ from .._errors import InvalidArgumentError
 from .._selection.resolver import _resolve_sites
 from .._selection.selectors import label as _exact_label
 from ..intervention.types import Relationship
-from ._aligned_sites import aligned_site_labels, resolve_aligned_site
+from ._aligned_sites import aligned_site_labels, resolve_aligned_site, site_row_key
 from ._deltas import _distance_value
 
 if TYPE_CHECKING:
@@ -178,7 +178,8 @@ def rank_changes(
         self._require_comparable("at", pairs=pairs)
     aligned = aligned_site_labels(self._ensure_supergraph(), baseline_name)
     for site in baseline_sites:
-        members = resolve_aligned_site(self._members, str(site.layer_label), aligned)
+        key = site_row_key(site)
+        members = resolve_aligned_site(self._members, key, aligned)
         if members is None:
             continue
         outs = {
@@ -193,10 +194,9 @@ def rank_changes(
         for name, out in outs.items():
             if name == baseline_name or not isinstance(out, torch.Tensor):
                 continue
-            label = str(site.layer_label)
-            distances.append(_distance_value(base, out, metric, site=label))
+            distances.append(_distance_value(base, out, metric, site=key))
         if distances:
-            scored.append((str(site.layer_label), sum(distances) / len(distances)))
+            scored.append((key, sum(distances) / len(distances)))
     scored.sort(key=lambda row: row[1], reverse=True)
     return scored[:k]
 
@@ -233,8 +233,10 @@ def diff_members(
     rows: list[tuple[str, float]] = []
     aligned = aligned_site_labels(self._ensure_supergraph(), left_name)
     for left_site in left_log._layer_list:
-        label = str(left_site.layer_label)
-        right_label = aligned.get(label, {}).get(right_name, label)
+        layer_label = str(left_site.layer_label)
+        label = site_row_key(left_site)
+        suffix = label[len(layer_label) :]
+        right_label = aligned.get(layer_label, {}).get(right_name, layer_label) + suffix
         try:  # exact label: a bare string would be a substring selector
             right_sites = _resolve_sites(right_log, _exact_label(right_label), max_fanout=1)
         except Exception:  # noqa: BLE001 - missing sites are not common sites

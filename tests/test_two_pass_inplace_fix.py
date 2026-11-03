@@ -9,7 +9,6 @@ from torchlens._ir.intervention import FunctionEventInput
 from torchlens._utils import _call_site
 from torchlens.backends.torch.aliasing import detect_torch_alias_contract
 from torchlens.errors import TorchLensWarning
-from torchlens.options import CaptureOptions
 
 
 def _assert_layer_present(trace: tl.Trace, layer_label: str) -> None:
@@ -55,7 +54,7 @@ def test_two_pass_succeeds_with_relu_module(inplace: bool) -> None:
     )
     x = torch.randn(2, 3, 8, 8)
 
-    trace = tl.trace(model, x, capture=CaptureOptions(layers_to_save=["conv2d_1_1"]))
+    trace = tl.trace(model, x, save=["conv2d_1_1"])
 
     _assert_layer_present(trace, "conv2d_1_1")
     trace.cleanup()
@@ -84,7 +83,7 @@ def test_two_pass_preserves_identity_pass_through_detection() -> None:
     identity_label = identity_labels[0]
     exhaustive_log.cleanup()
 
-    trace = tl.trace(model, x, capture=CaptureOptions(layers_to_save=[identity_label]))
+    trace = tl.trace(model, x, save=[identity_label])
 
     _assert_layer_present(trace, identity_label)
     assert trace[identity_label].has_saved_activation
@@ -136,7 +135,7 @@ def test_two_pass_succeeds_with_function_level_inplace_relu() -> None:
     )
     x = torch.randn(4, 10)
 
-    trace = tl.trace(model, x, capture=CaptureOptions(layers_to_save=["linear_1_1"]))
+    trace = tl.trace(model, x, save=["linear_1_1"])
 
     _assert_layer_present(trace, "linear_1_1")
     trace.cleanup()
@@ -241,7 +240,7 @@ def test_two_pass_succeeds_with_multiple_inplace_relu_modules() -> None:
     x = torch.randn(2, 3, 8, 8)
 
     for selector in (["conv2d_1_1"], ["conv2d_2_3"], [-1]):
-        trace = tl.trace(model, x, capture=CaptureOptions(layers_to_save=selector))
+        trace = tl.trace(model, x, save=selector)
         assert trace is not None
         trace.cleanup()
 
@@ -271,7 +270,7 @@ def test_two_pass_succeeds_with_resnet50_inplace_relu_modules() -> None:
     for selector, detached_spills in ((["conv2d_1_1"], 1), ([final_linear], 0), ([-1], 0)):
         if detached_spills:
             with pytest.warns(TorchLensWarning) as caught:
-                trace = tl.trace(model, x, capture=CaptureOptions(layers_to_save=selector))
+                trace = tl.trace(model, x, save=selector)
             # Every TorchLens warning is caught here, so pin that the spill is the only one.
             coded = [
                 (fields.get("code"), fields.get("detached_spill_count"))
@@ -283,6 +282,6 @@ def test_two_pass_succeeds_with_resnet50_inplace_relu_modules() -> None:
             ]
             assert coded == [("escrow_spill_detached", detached_spills)], coded
         else:
-            trace = tl.trace(model, x, capture=CaptureOptions(layers_to_save=selector))
+            trace = tl.trace(model, x, save=selector)
         assert trace is not None
         trace.cleanup()

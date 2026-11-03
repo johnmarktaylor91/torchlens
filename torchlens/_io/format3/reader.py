@@ -12,55 +12,57 @@ from __future__ import annotations
 import math
 import re
 import sys
-from collections.abc import Callable, Iterator, Mapping
-from functools import cache
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, Final
 
 import torch
 
-from ..._data_classes._state_adapter import state_new, state_restore
-from ..._data_classes.field_policy import StorageKind
+from ..._data_classes._state_adapter import state_new
 from ..format_contract import BlobRef
+from ..prerelease import PRERELEASE_STATE_KEY, validate_prerelease_state
 from ..state_contract import governed_artifact_load
 from . import contract
+from ._payload_headers import validate_payload_headers
+from ._record_refs import _RecordResolver
+from ._tables import read_record_table, record_class, refuse_cells, refuse_table_columns
+from .codec_policy import codec_backend
+from .container import iter_members, read_member_index
 from .decode import (
     CELL_CODE,
     DEVICE_TEXT,
     MAX_TENSOR_NUMEL,
     STORABLE_DTYPES,
     Decoder,
-    PendingRecord,
     UnencodableValue,
     _element_size,
     build_component,
     cell_error,
 )
-from .schema import record_schema
+from .restore import restore_record
 from .validate import (
     BELOW_FLOOR,
     TLSPEC_KEY,
     artifact_error,
     check_record_anchors,
+    check_runnable_slots,
+    check_runtime_policy,
     check_version_window,
-    integrity_error,
     is_int,
     legacy_stamp,
     manifest_schema_errors,
     pre3_error,
     read_json_file,
-    read_record_table,
-    record_class,
-    refuse_unknown_columns,
     symlink_guard,
     validate_records,
     verify_listed_files,
 )
-from .values import RowRef, dtype_table
+from .values import dtype_table
 
 __all__ = [
     "DecodedArtifact",
     "attach_disclosure_advisory",
+    "decode_checked",
     "install_load_hooks",
     "load_bundle",
     "load_intervention_recipe",
@@ -74,7 +76,6 @@ _CODES: Final = contract.REFUSAL_CODES
 _CORRUPT: Final = _CODES["record_file_corrupt"]
 #: Root entries that mark an artifact written by torchlens 2.x (pickle carrier).
 PRE3_ROOT_MARKERS: Final[tuple[str, ...]] = ("metadata.pkl", "bundle.json")
-_MEMBER_DIR = re.compile(r"^members/(\d+)-([A-Za-z0-9_.-]+)$")
 #: The column whose string identifies a row of each kind (a repeat refuses; ``ref`` cells link).
 IDENTITY_FIELDS: Final[dict[str, str]] = {
     "op": "label",
@@ -153,6 +154,7 @@ def read_manifest(path: str | Path) -> dict[str, Any]:
         raise pre3_error(root, "manifest.json without a format key", code=BELOW_FLOOR)
     _refuse_schema_errors(manifest_path, manifest_schema_errors(manifest))
     check_version_window(manifest, root)
+    check_runtime_policy(manifest)
     if manifest["save_level"] not in contract.SAVE_LEVELS:
         raise artifact_error(
             f"Artifact manifest {manifest_path} names save_level {manifest['save_level']!r}; "
@@ -179,13 +181,51 @@ def _refuse_schema_errors(manifest_path: Path, errors: list[str]) -> None:
     )
 
 
-def validate_artifact(path: str | Path) -> dict[str, Any]:
-    """Validate the manifest and every listed file (bytes, SHA-256, no unlisted file;
-    ``bundle_metadata_integrity_refused`` otherwise); return the manifest."""
+class ValidatedManifest(dict[str, Any]):
+    """The manifest ``validate_artifact`` returns; for a ``trace`` artifact ``decoded`` carries
+    the checked tables, so the load door builds records from the one validation pass."""
+
+    decoded: DecodedArtifact | None
+
+    def __init__(self, manifest: Mapping[str, Any], *, decoded: DecodedArtifact | None) -> None:
+        super().__init__(manifest)
+        self.decoded = decoded
+
+
+def validate_artifact(path: str | Path, *, expect_kind: str | None = None) -> ValidatedManifest:
+    """Validate an artifact as ``tl.load`` would, short of building its record objects.
+
+    The envelope first (manifest, every listed file's bytes and SHA-256, the runnable slot
+    cross-check), then the same bounded typed-record decode, reference resolution,
+    cross-record invariants and manifest anchor check the load doors run, on the artifact's
+    own tables and, for a bundle, on every member's. One code path with the doors: every
+    load door calls this function, so what load refuses, validation refuses, with the same
+    code. ``expect_kind`` is the door's kind: a mismatch refuses before any table is read.
+    """
+
+    root = Path(path)
+    manifest = _validate_envelope(root)
+    if expect_kind is not None:
+        _require_kind(manifest, root, expect_kind)
+    decoded: DecodedArtifact | None = None
+    if manifest["kind"] == "bundle":
+        metadata = read_member_index(root, manifest)
+        for _name, member_root in iter_members(root, manifest, metadata):
+            decode_checked(member_root, _validate_envelope(member_root))
+    elif manifest["kind"] == "trace":
+        decoded = decode_checked(root, manifest)
+    return ValidatedManifest(manifest, decoded=decoded)
+
+
+def _validate_envelope(path: str | Path) -> dict[str, Any]:
+    """The envelope checks every door runs before it opens a record file: the manifest, every
+    listed file (bytes, SHA-256; an unlisted file is named in a warning, never read) and the
+    runnable slot cross-check."""
 
     root = Path(path)
     manifest = read_manifest(root)
     verify_listed_files(root, manifest)
+    check_runnable_slots(root, manifest)
     return manifest
 
 
@@ -193,17 +233,23 @@ def validate_artifact(path: str | Path) -> dict[str, Any]:
 
 
 class TensorRefSink:
-    """Collects the tensor cells a decode meets, as ``BlobRef`` markers plus lazy-layer entries.
+    """Collects the tensor cells a decode meets (``BlobRef`` markers plus lazy-layer entries that
+    become the tensor index); a structure-only cell decodes to ``None``; codec, chunk and
+    ``t<k>`` key are checked; repeats must agree."""
 
-    The entries become the manifest's tensor index for the rehydrate path. A structure-only
-    cell decodes to ``None``; codec, chunk and ``t<k>`` key are checked; repeats must agree.
-    """
-
-    def __init__(self, *, codecs: tuple[str, ...], files: Mapping[str, Mapping[str, Any]]) -> None:
+    def __init__(
+        self,
+        *,
+        codecs: tuple[str, ...],
+        files: Mapping[str, Mapping[str, Any]],
+        backend: str = "torch",
+    ) -> None:
         self.entries: dict[str, dict[str, Any]] = {}
         self.structure_only_refs = 0
         self._codecs = codecs
         self._files = files
+        #: The artifact's backend: the codec every payload cell must use.
+        self.backend = backend
 
     def add(self, ref: Mapping[str, Any], at: str) -> Any:
         """Check one tensor reference cell's geometry and return its placeholder."""
@@ -218,7 +264,10 @@ class TensorRefSink:
         if blob is None and key is None:
             self.structure_only_refs += 1
             return None
-        declared = numel * _element_size(dtype_name) * (2 if is_complex else 1)
+        backend = codec_backend(codec_id, codec_metadata, at, manifest_backend=self.backend)
+        # A complex dtype's element size already counts both parts; the real view on disk
+        # holds exactly numel * element_size bytes.
+        declared = numel * _element_size(dtype_name)
         listed = self._listed_chunk(blob, key, at, declared)
         blob_id = f"{blob}#{key}"
         declaration = (list(shape), dtype_name, device, ref["requires_grad"], codec_id)
@@ -241,7 +290,6 @@ class TensorRefSink:
                 )
             return BlobRef(blob_id, seen["kind"])
         kind = _tensor_kind(at)
-        backend = "torch" if codec_id == _TORCH_CODEC else "numpy"
         self.entries[blob_id] = {
             "blob_id": blob_id,
             "kind": kind,
@@ -350,17 +398,22 @@ def _tensor_kind(at: str) -> str:
 # ---- Record tables ---------------------------------------------------------
 
 
-class DecodedArtifact:
+class DecodedArtifact(_RecordResolver):
     """One trace artifact's decoded tables and the record objects built from them."""
 
     def __init__(self, root: Path, manifest: Mapping[str, Any]) -> None:
         self.root = root
         self.manifest = manifest
         self.version: int = manifest[TLSPEC_KEY]
-        self.sink = TensorRefSink(codecs=tuple(manifest["codecs"]), files=manifest["files"])
+        self.sink = TensorRefSink(
+            codecs=tuple(manifest["codecs"]),
+            files=manifest["files"],
+            backend=manifest.get("backend", contract.DEFAULT_BACKEND),
+        )
         self.decoder = Decoder(self.sink.add, defer_records=True)
         self.tables: dict[str, list[dict[str, Any]]] = {}
         self.objects: dict[str, list[Any]] = {}
+        self._deferred_trace_refs = 0
         self.identities: dict[str, dict[str, int]] = {}
 
     # -- decode -------------------------------------------------------------
@@ -368,10 +421,13 @@ class DecodedArtifact:
     def decode_tables(self) -> None:
         """Decode every record table the manifest lists, in record order."""
 
+        # Essential complexity: decode each closed table and establish its row identities together.
         for kind in self.manifest["records"]:
             raw_rows = read_record_table(self.root, self.manifest, kind)
+            if kind == "trace" and raw_rows:
+                self._check_prerelease_marker(raw_rows[0])
             if raw_rows:
-                refuse_unknown_columns(kind, raw_rows[0], declared_version=self.version)
+                refuse_table_columns(kind, raw_rows[0], self.manifest)
             self.tables[kind] = [
                 {
                     name: self.decoder.decode(cell, at=f"{kind}[{index}].{name}")
@@ -379,10 +435,18 @@ class DecodedArtifact:
                 }
                 for index, row in enumerate(raw_rows)
             ]
+            refuse_cells(kind, self.tables[kind])
             cls = record_class(kind)
-            self.objects[kind] = [state_new(cls) for _ in raw_rows]
+            self.objects[kind] = [] if kind == "trace" else [state_new(cls) for _ in raw_rows]
             self._index_identities(kind)
-        self.objects["trace"] = [state_new(record_class("trace"))]
+
+    def _check_prerelease_marker(self, fields: dict[str, Any]) -> None:
+        """Pop the pre-release marker of a switch-on write; refuse typed unless the switch is on."""
+
+        if PRERELEASE_STATE_KEY in fields:
+            at = f"trace.{PRERELEASE_STATE_KEY}"
+            marker = self.decoder.decode(fields.pop(PRERELEASE_STATE_KEY), at=at)
+            validate_prerelease_state({PRERELEASE_STATE_KEY: marker}, cls_name="Trace")
 
     def _index_identities(self, kind: str) -> None:
         """Index a decoded table's rows by their identity column."""
@@ -418,56 +482,23 @@ class DecodedArtifact:
                 for name in list(row):
                     row[name] = self._settle(row[name], f"{kind}[{row_number}].{name}")
 
-    def _settle(self, value: Any, at: str) -> Any:
-        """Replace the references inside a decoded value with the built objects."""
-
-        if isinstance(value, RowRef):
-            return self._lookup(value, at)
-        if isinstance(value, PendingRecord):
-            fields = {k: self._settle(v, f"{at}.{k}") for k, v in value.fields.items()}
-            return build_component(value.cls, fields, at=at)
-        if isinstance(value, list):
-            return [self._settle(item, f"{at}[{i}]") for i, item in enumerate(value)]
-        if isinstance(value, BlobRef):
-            return value
-        if isinstance(value, tuple):
-            items = [self._settle(item, f"{at}[{i}]") for i, item in enumerate(value)]
-            maker = getattr(type(value), "_make", None)  # a named tuple keeps its type
-            return maker(items) if callable(maker) else tuple(items)
-        if isinstance(value, (set, frozenset)):
-            return type(value)(self._settle(item, at) for item in value)
-        if isinstance(value, dict):
-            return {key: self._settle(item, f"{at}.{key}") for key, item in value.items()}
-        return value
-
-    def _lookup(self, reference: RowRef, at: str) -> Any:
-        """Return the object a row reference names, refusing a dangling one."""
-
-        rows = self.objects.get(reference.record)
-        if rows is None:
-            raise cell_error(
-                at, f"references the {reference.record} table, which is absent", code=CELL_CODE
-            )
-        if not 0 <= reference.row < len(rows):
-            raise cell_error(
-                at, f"row {reference.row} is outside the {reference.record} table", code=CELL_CODE
-            )
-        return rows[reference.row]
-
     # -- construction -------------------------------------------------------
 
     def build_records(self) -> None:
         """Run each record's state hook, leaves first, under the governed load."""
 
+        # Essential complexity: leaf-first restoration and computed-slot repair share one governed load.
+        if not self.objects.get("trace"):
+            self.objects["trace"] = [state_new(record_class("trace"))]
+            if self._deferred_trace_refs:
+                self.resolve_references()
         with governed_artifact_load():
             for kind in LOAD_ORDER:
                 for row_number, (obj, row) in enumerate(
                     zip(self.objects.get(kind, ()), self.tables.get(kind, ()), strict=True)
                 ):
                     cells = self._rebuild_accessors(kind, row_number, row)
-                    _restore_record(
-                        obj, cells, version=self.version, computed=computed_columns(kind)
-                    )
+                    restore_record(obj, cells, version=self.version, kind=kind)
                     # After the hook: the state contract knows the column, not its slot.
                     for column, slot in _RESTORED_COMPUTED.get(kind, {}).items():
                         if cells.get(column) is not None:
@@ -487,7 +518,12 @@ class DecodedArtifact:
             self._calls_by_label = {row.get("label"): call for row, call in pairs}
         call = self._calls_by_label.get(labels[0])
         for column, slot in _TEMPLATE_SLOTS.items():
-            if call is not None and cells.get(column) is not None and slot not in call.__dict__:
+            # The call's state hook default-fills the slot with None; a None slot is unset.
+            if (
+                call is not None
+                and cells.get(column) is not None
+                and call.__dict__.get(slot) is None
+            ):
                 call.__dict__[slot] = cells[column]
 
     def _rebuild_accessors(
@@ -495,6 +531,7 @@ class DecodedArtifact:
     ) -> Mapping[str, Any]:
         """Return ``row`` with each flattened accessor column rebuilt from its member rows."""
 
+        # Essential complexity: member lookup, positional and keyed forms are one rebuild.
         rebuilt: dict[str, Any] | None = None
         for (owner, column), (member_kind, key, build) in _ACCESSOR_COLUMNS.items():
             if owner != kind or row.get(column) is None:
@@ -567,35 +604,9 @@ class DecodedArtifact:
     def manifest_for_rehydrate(self) -> dict[str, Any]:
         """The manifest as the rehydrate path reads it: the tensor index from the cells."""
 
-        manifest = {"backend": "torch", **self.manifest}
+        manifest = {"backend": contract.DEFAULT_BACKEND, **self.manifest}
         manifest["tensors"] = list(self.sink.entries.values())
         return manifest
-
-
-@cache
-def computed_columns(kind: str) -> frozenset[str]:
-    """Columns the writer fills from a read-only property; loaded objects recompute them."""
-
-    return frozenset(
-        name
-        for name, column in record_schema(kind).items()
-        if column.storage == StorageKind.COMPUTED.value
-    )
-
-
-def _restore_record(
-    obj: Any, row: Mapping[str, Any], *, version: int, computed: frozenset[str] = frozenset()
-) -> None:
-    """Run the record's state hook on its decoded row, computed columns dropped."""
-
-    state = {name: value for name, value in row.items() if name not in computed}
-    state[TLSPEC_KEY] = version
-    setstate = getattr(type(obj), "__setstate__", None)
-    if setstate is not None and setstate is not getattr(object, "__setstate__", None):
-        setstate(obj, state)
-        return
-    state.pop(TLSPEC_KEY)
-    state_restore(obj, state)
 
 
 # ---- Doors -----------------------------------------------------------------
@@ -650,18 +661,25 @@ def _require_kind(manifest: Mapping[str, Any], root: Path, expected: str) -> Non
         )
 
 
-def read_tables(root: Path, manifest: Mapping[str, Any]) -> DecodedArtifact:
+def decode_checked(root: Path, manifest: Mapping[str, Any]) -> DecodedArtifact:
     """Decode every table, resolve every reference, run the cross-record validators and the
-    manifest anchor check, then the state hooks. Nothing here touches the rehydrate path."""
+    manifest anchor check: the bounded checks shared by the load doors and ``validate_artifact``.
+    No record object is built and no tensor is read."""
 
     artifact = DecodedArtifact(root, manifest)
     artifact.decode_tables()
     artifact.resolve_references()
-    validate_records(artifact.tables, manifest=manifest, root=root)
+    validate_records(artifact.tables, manifest=manifest, root=root, objects=artifact.objects)
+    check_record_anchors(manifest, artifact.tables["trace"][0], root)
+    validate_payload_headers(root, artifact.sink.entries)
+    return artifact
+
+
+def read_tables(root: Path, manifest: Mapping[str, Any]) -> DecodedArtifact:
+    """``decode_checked`` then the state hooks. Nothing here touches the rehydrate path."""
+
+    artifact = decode_checked(root, manifest)
     artifact.build_records()
-    layer_list = artifact.tables["trace"][0].get("_layer_list")
-    persisted_rows = len(layer_list) if isinstance(layer_list, list) else None
-    check_record_anchors(manifest, persisted_rows, root)
     return artifact
 
 
@@ -677,9 +695,10 @@ def load_trace(
     under the governed load, then the installed ``trace`` step (tensors, accessors, recipe)."""
 
     root = Path(path)
-    manifest = validate_artifact(root)
-    _require_kind(manifest, root, "trace")
-    artifact = read_tables(root, manifest)
+    manifest = validate_artifact(root, expect_kind="trace")
+    artifact = manifest.decoded
+    assert artifact is not None  # a trace manifest always decodes
+    artifact.build_records()
     return _hook("trace", root)(
         artifact,
         lazy=lazy,
@@ -715,13 +734,14 @@ def load_bundle(path: str | Path, **options: Any) -> Any:
     """Load one ``kind: bundle`` artifact: ``members/<index>-<name>/`` plus ``relations.json``."""
 
     root = Path(path)
-    manifest = validate_artifact(root)
+    manifest = _validate_envelope(root)
     _require_kind(manifest, root, "bundle")
-    metadata = _read_relations(root, manifest)
+    # Each member goes through ``load_trace``, hence ``validate_artifact``, once.
+    metadata = read_member_index(root, manifest)
     policy = options.pop("unknown_relations", "opaque")
     members = [
         (name, load_trace(member_root, **options))
-        for name, member_root in _iter_members(root, manifest, metadata)
+        for name, member_root in iter_members(root, manifest, metadata)
     ]
     return _hook("bundle", root)(
         members,
@@ -732,62 +752,12 @@ def load_bundle(path: str | Path, **options: Any) -> Any:
     )
 
 
-def _read_relations(root: Path, manifest: Mapping[str, Any]) -> dict[str, Any]:
-    """Read ``relations.json``: an object whose ``members`` list names each member's path."""
-
-    target = root / "relations.json"
-    if "relations.json" not in manifest["files"]:
-        raise integrity_error(target, "a bundle must list relations.json", code=_CORRUPT)
-    data, _ = read_json_file(target, code=_CORRUPT, what="relations")
-    members = data.get("members") if isinstance(data, dict) else None
-    if not isinstance(members, list) or not all(
-        isinstance(member, dict)
-        and isinstance(member.get("name"), str)
-        and isinstance(member.get("path"), str)
-        for member in members
-    ):
-        raise integrity_error(
-            target, "relations.json must be {members: [{name, path}, ...], ...}", code=_CORRUPT
-        )
-    return data
-
-
-def _iter_members(
-    root: Path, manifest: Mapping[str, Any], metadata: Mapping[str, Any]
-) -> Iterator[tuple[str, Path]]:
-    """Members in ``relations.json`` order; every ``members/`` file must belong to one."""
-
-    declared: dict[str, str] = {}
-    for member in metadata["members"]:
-        path, name = member["path"], member["name"]
-        if _MEMBER_DIR.match(path) is None or path in declared or name in declared.values():
-            raise integrity_error(
-                root / path,
-                "bundle members must be distinct members/<index>-<name>/ directories",
-                code=_CORRUPT,
-            )
-        declared[path] = name
-    for relpath in manifest["files"]:
-        parts = relpath.split("/")
-        if parts[0] == "members" and "/".join(parts[:2]) not in declared:
-            raise integrity_error(
-                root / relpath, "member files must belong to a declared member", code=_CORRUPT
-            )
-    for path, name in declared.items():
-        member_root = root / path
-        symlink_guard(member_root, "bundle member")
-        yield name, member_root
-
-
 def load_intervention_recipe(path: str | Path) -> Any:
-    """Load the intervention recipe (``intervention.json``) of a trace or intervention artifact.
-
-    Built-in edits come back through the helper registry; a callable placeholder loads as an
-    audit-only edit every rerun door refuses (``run_intervention_spec_not_persisted``).
-    """
+    """Load the recipe (``intervention.json``) of a trace or intervention artifact: built-in edits
+    through the helper registry; a callable placeholder is an audit-only edit (rerun refuses)."""
 
     root = Path(path)
-    manifest = validate_artifact(root)
+    manifest = _validate_envelope(root)
     if manifest["kind"] not in ("trace", "intervention"):
         _require_kind(manifest, root, "intervention")
     if contract.INTERVENTION_FILE not in manifest["files"]:

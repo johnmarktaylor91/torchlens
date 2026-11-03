@@ -212,8 +212,9 @@ def test_validator_rejects_present_weights_with_missing_entries(tmp_path: Path) 
     manifest["runnable"].pop("state_dict_family")
     manifest["runnable"].pop("state_dict_tensors")
     _write_manifest(path, manifest)
-    with pytest.raises(ValueError, match="weight entries disagree with tensor slots"):
+    with pytest.raises(ArtifactError, match="weight entries disagree with tensor slots") as caught:
         validate_tlspec(path)
+    assert caught.value.fields["code"] == "manifest_schema_invalid"
 
 
 def test_validator_rejects_relabelled_weight_entries(tmp_path: Path) -> None:
@@ -231,8 +232,9 @@ def test_validator_rejects_relabelled_weight_entries(tmp_path: Path) -> None:
         f"bogus.{name}": reference for name, reference in references.items()
     }
     _write_manifest(path, manifest)
-    with pytest.raises(ValueError, match="weight entries disagree with tensor slots"):
+    with pytest.raises(ArtifactError, match="weight entries disagree with tensor slots") as caught:
         validate_tlspec(path)
+    assert caught.value.fields["code"] == "manifest_schema_invalid"
 
 
 @pytest.mark.parametrize("include_weights", [False, True])

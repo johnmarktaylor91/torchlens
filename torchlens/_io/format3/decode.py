@@ -17,6 +17,7 @@ import dataclasses
 import enum
 import math
 import re
+from collections import defaultdict
 from collections.abc import Callable, Mapping
 from functools import cache
 from typing import Any, Final
@@ -25,6 +26,7 @@ import torch
 
 from ..._data_classes._state_adapter import state_new, state_restore
 from ..field_registry import component_spec_tables
+from ._carriers import CallablePlaceholder, UnencodableValue
 from ._families import (
     CELL_CODE,
     PendingRecord,
@@ -33,6 +35,7 @@ from ._families import (
     cell_error,
 )
 from .contract import (
+    JSON_SAFE_INT,
     RECORD_INDEX,
     TENSOR_REFERENCE_FIELDS,
     TYPED_VALUE_KEY,
@@ -40,6 +43,7 @@ from .contract import (
     UNENCODABLE_REPR_LIMIT,
 )
 from .values import (
+    _DEFAULT_FACTORIES,
     BYTES_LIMIT,
     TAG_FIELDS,
     RowRef,
@@ -48,6 +52,7 @@ from .values import (
     dtype_table,
     enum_table,
     record_type_table,
+    tuple_subtypes,
 )
 
 # Decoding: the closed vocabulary back to Python values
@@ -95,29 +100,15 @@ _INT_TEXT = re.compile(r"-?[0-9]+")
 _DOTTED_NAME = re.compile(r"[A-Za-z_][\w.]{0,255}")
 _PLACEHOLDER_POSITION = re.compile(r"\d+(\.[\w\[\]\.]+)?")
 #: Fields a tag may carry beyond its required ones (the tensor cell's payload fields).
-_OPTIONAL_FIELDS: Final[dict[str, tuple[str, ...]]] = {"tensor": TENSOR_REFERENCE_FIELDS}
-
-
-@dataclasses.dataclass(frozen=True)
-class UnencodableValue:
-    """A value the writer could not encode: its type name, repr text and where it was.
-
-    ``_repr_length`` (the unbounded repr's length) is carried for round trips, not public.
-    """
-
-    type_name: str
-    repr_text: str
-    at: str
-    _repr_length: int = dataclasses.field(default=0, repr=False, compare=False)
-
-
-@dataclasses.dataclass(frozen=True)
-class CallablePlaceholder:
-    """A callable the recipe could not persist: rule position and qualname (section 8)."""
-
-    position: int | str
-    qualname: str
-    repr_length: int
+_OPTIONAL_FIELDS: Final[dict[str, tuple[str, ...]]] = {
+    "tensor": TENSOR_REFERENCE_FIELDS,
+    "tuple": ("subtype",),
+    "dict": ("subtype", "default_factory"),
+}
+#: The one mapping subtype the ``dict`` tag may declare.
+_DEFAULTDICT_SUBTYPE: Final = "collections.defaultdict"
+#: Builtin factories a defaultdict cell may name; the artifact string only selects here.
+_FACTORY_TABLE: Final[dict[str, type]] = {cls.__name__: cls for cls in _DEFAULT_FACTORIES}
 
 
 def _is_int(value: Any) -> bool:
@@ -221,9 +212,18 @@ class Decoder:
             Current nesting depth.
         """
 
+        # Essential complexity: one branch per JSON value kind; the typed-tag vocabulary is closed.
         if depth > MAX_CELL_DEPTH:
             raise cell_error(at, f"nesting deeper than {MAX_CELL_DEPTH}", code=CELL_CODE)
-        if data is None or isinstance(data, (bool, int, str)):
+        if data is None or isinstance(data, (bool, str)):
+            return data
+        if isinstance(data, int):
+            if abs(data) > JSON_SAFE_INT:
+                raise cell_error(
+                    at,
+                    f"a bare integer beyond {JSON_SAFE_INT}; the writer tags such values",
+                    code=CELL_CODE,
+                )
             return data
         if isinstance(data, float):
             if not math.isfinite(data):
@@ -291,7 +291,23 @@ class Decoder:
             Current typed-value nesting depth.
         """
 
-        return tuple(self._items(data, at, depth, "tuple"))
+        items = tuple(self._items(data, at, depth, "tuple"))
+        subtype = data.get("subtype")
+        if subtype is None:
+            return items
+        # The wire string only selects from the code-owned constructor table; nothing is
+        # imported or looked up by name from the artifact.
+        cls = tuple_subtypes().get(subtype) if isinstance(subtype, str) else None
+        if cls is None:
+            raise cell_error(
+                at, f"tuple subtype {subtype!r} is not a known tuple type", code=CELL_CODE
+            )
+        try:
+            return cls(items)
+        except (TypeError, ValueError):
+            raise cell_error(
+                at, f"tuple subtype {subtype!r} does not accept these items", code=CELL_CODE
+            ) from None
 
     def _set(self, data: Mapping[str, Any], at: str, depth: int) -> set[Any]:
         """Decode a set after checking member hashability.
@@ -355,6 +371,36 @@ class Decoder:
             if key in result:
                 raise cell_error(at, f"dict key {key!r} repeats", code=CELL_CODE)
             result[key] = self.decode(pair[1], at=f"{at}[{index}]", depth=depth)
+        return self._mapping_subtype(data, result, at, depth)
+
+    def _mapping_subtype(
+        self, data: Mapping[str, Any], result: dict[Any, Any], at: str, depth: int
+    ) -> dict[Any, Any]:
+        """Apply a declared ``dict`` subtype: a defaultdict whose factory is a builtin name
+        rebuilds with that factory; a disclosed foreign factory reloads as a plain dict (the
+        disclosure is counted by the manifest's load advisory). No factory ever executes here.
+        """
+
+        subtype = data.get("subtype")
+        if subtype is None:
+            if "default_factory" in data:
+                raise cell_error(at, "default_factory needs a dict subtype", code=CELL_CODE)
+            return result
+        if subtype != _DEFAULTDICT_SUBTYPE:
+            raise cell_error(at, f"dict subtype {subtype!r} is not a known mapping", code=CELL_CODE)
+        if "default_factory" not in data:
+            raise cell_error(at, "a defaultdict cell names its default_factory", code=CELL_CODE)
+        factory = data["default_factory"]
+        if isinstance(factory, str):
+            cls = _FACTORY_TABLE.get(factory)
+            if cls is None:
+                raise cell_error(at, f"default_factory {factory!r} is not builtin", code=CELL_CODE)
+            return defaultdict(cls, result)
+        disclosed = self.decode(factory, at=f"{at}.default_factory", depth=depth)
+        if not isinstance(disclosed, UnencodableValue):
+            raise cell_error(
+                at, "default_factory must be a builtin name or a disclosure", code=CELL_CODE
+            )
         return result
 
     # -- scalars ------------------------------------------------------------
@@ -682,6 +728,14 @@ def build_component(cls: type, fields: Mapping[str, Any], *, at: str = "value") 
     return state_restore(obj, state)
 
 
+class TensorCellFields(dict[str, Any]):
+    """The reference fields of a ``tensor`` cell :func:`decode_value` meets, hashed by identity
+    like the tensor it stands for, so a set or frozenset member decodes without a payload."""
+
+    __slots__ = ()
+    __hash__ = object.__hash__  # type: ignore[assignment]
+
+
 def decode_value(data: Any, *, schema: Any = None, at: str = "value") -> Any:
     """Decode one tagged JSON value through the closed vocabulary (the encoder's inverse).
 
@@ -690,7 +744,7 @@ def decode_value(data: Any, *, schema: Any = None, at: str = "value") -> Any:
     ``schema`` optionally applies one family node after decoding.
     """
 
-    value = Decoder(lambda fields, _at: dict(fields)).decode(data, at=at)
+    value = Decoder(lambda fields, _at: TensorCellFields(fields)).decode(data, at=at)
     if schema is not None:
         _apply_family(schema, value, at)
     return value

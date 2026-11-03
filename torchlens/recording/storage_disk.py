@@ -27,7 +27,7 @@ from .._utils._torch_symbols import torch_dtype_named
 from ._indexes import write_label_index, write_pass_index
 from ._storage_resolver import _resolve_storage
 from .exceptions import PredicateError, RecordingConfigError
-from .options import RecordingOptions
+from .options import _RecordingConfig
 from .storage_ram import RamStorageBackend
 from .types import (
     ActivationRecord,
@@ -96,7 +96,7 @@ def _tighten_bundle_tree(root: Path) -> None:
 class DiskStorageBackend:
     """Persist fastlog records to a sync directory bundle."""
 
-    def __init__(self, options: RecordingOptions, recording: Recording) -> None:
+    def __init__(self, options: _RecordingConfig, recording: Recording) -> None:
         """Initialize a disk-backed fastlog storage backend.
 
         Parameters
@@ -195,7 +195,7 @@ class DiskStorageBackend:
         spec: CaptureSpec,
         intent: StorageIntent,
         *,
-        options: RecordingOptions,
+        options: _RecordingConfig,
         ctx: RecordContext | GradRecordContext | None = None,
         kind: str = "activation",
     ) -> tuple[
@@ -475,8 +475,6 @@ def _torch_dtype_from_ref(dtype: Any) -> torch.dtype | None:
 def _ctx_from_json(data: dict[str, Any]) -> Any:
     """Convert JSON data into a RecordContext."""
 
-    from .types import RecordContext
-
     values = dict(data)
     values["module_stack"] = tuple(ModuleStackFrame(**frame) for frame in values["module_stack"])
     values["recent_events"] = ()
@@ -541,7 +539,21 @@ def _dtype_from_name(name: str | None) -> torch.dtype | None:
     return dtype_obj
 
 
-def _write_metadata(path: Path, recording: Recording, options: RecordingOptions) -> None:
+def _setting_reprs(recording: Recording) -> dict[str, str]:
+    """Return scrubbed reprs of the callable settings a bundle cannot store."""
+
+    from .._data_classes._transform_repr import _scrubbed_transform_repr
+
+    settings = recording.options
+    reprs: dict[str, str] = {}
+    for name in ("keep_op", "activation_transform", "grad_transform", "save_grads", "stop_after"):
+        value = getattr(settings, name)
+        if callable(value):
+            reprs[name] = _scrubbed_transform_repr(value) or "<callable>"
+    return reprs
+
+
+def _write_metadata(path: Path, recording: Recording, options: _RecordingConfig) -> None:
     """Write fastlog JSON metadata."""
 
     metadata = {
@@ -553,10 +565,13 @@ def _write_metadata(path: Path, recording: Recording, options: RecordingOptions)
         "halted": recording.is_stopped,
         "stop_reason": recording.stop_reason,
         "halts_by_pass": recording.stops_by_pass,
-        "keep_op_repr": recording.keep_op_repr,
-        "_activation_transform_repr": recording._activation_transform_repr,
         "save_raw_activations": options.save_raw_activations,
         "history_size": options.history_size,
+        # ``Recording.options`` plain values; callables and objects are not stored.
+        "settings": recording.options._persisted_values(),
+        # Audit trail only (scrubbed of bound values and heap addresses): the
+        # recovered record reads None for these settings.
+        "_settings_reprs": _setting_reprs(recording),
     }
     with path.open("w", encoding="utf-8") as handle:
         json.dump(metadata, handle, indent=2, sort_keys=True)

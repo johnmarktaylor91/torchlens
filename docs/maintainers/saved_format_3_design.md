@@ -38,10 +38,10 @@ faster (section 12). About 16,450 lines of `torchlens/_io/` leave or shrink to a
 
 ## 1. The layer
 
-One package, `torchlens/_io/format3/`. Nine modules plus `__init__`, every one under the
-800-line file cap (`scripts/checks/file_cap.py`, no new allowlist row). Nine is the smallest count that keeps each under the cap and gives the three
-build streams disjoint write territories (writer: `writer.py`, `payloads.py`, `values.py`,
-`schema.py`; reader: `decode.py`, `reader.py`, `validate.py`; runnable: `runnable.py`).
+One package, `torchlens/_io/format3/`. Each carrier and grammar module stays under the
+800-line file cap (`scripts/checks/file_cap.py`, no new allowlist row). The table names
+the current components; `__init__` provides their thin package entry.
+
 
 | Module | Holds | Budget (lines) | Stream |
 | --- | --- | ---: | --- |
@@ -50,6 +50,9 @@ build streams disjoint write territories (writer: `writer.py`, `payloads.py`, `v
 | `values.py` | the typed-value codec: Python value to tagged JSON and back, both directions in one module so tags stay symmetric; dtype table; disclosure builder | 450 | writer |
 | `decode.py` | the decoder half of the value codec: tagged JSON back to Python values through the closed vocabulary, field and name checks per tag, `record` construction; split from `values.py` because the encoder and its tables fill that module's budget | 400 | reader |
 | `_families.py` | the generic applier of the family grammar nodes in `schema.FAMILIES` (section 9): node shapes, closed vocabularies and within-cell constraints checked on each decoded cell before record construction; split from `decode.py` for its budget | 400 | reader |
+| `_family_nodes.py` | the family grammar nodes themselves (section 9): the core, collective and intervention-audit declaration blocks that `schema.FAMILIES` joins; data only, split from `schema.py` for its budget | 560 | reader |
+| `_tables.py` | the record tables (section 3): record file reading with the digest and shape checks, the column contract (a column the bindings do not persist, the save level's exact column set) and the typed scalar cells checked against their declared annotations; split from `validate.py` and `reader.py` for their budgets | 260 | reader |
+| `_carriers.py` | the opaque carrier values (sections 5 and 8): `UnencodableValue` and `CallablePlaceholder`, shared by both halves of the codec so a decoded carrier re-encodes exactly; below `decode.py` and `values.py` | 46 | reader |
 | `payloads.py` | safetensors chunk writer and reader with opaque keys; `LazyActivationRef` rebuilt on (chunk, key) | 450 | writer |
 | `writer.py` | `write_trace`, `write_bundle`, `write_intervention_recipe`: include-flag resolution (reuses `save_policy.py`), privacy and barcode policies carried over from `scrub.py`, record-table emission, manifest, reload check, atomic publish | 750 | writer |
 | `recipe.py` | the intervention recipe (section 8): rule and value encoding with callable placeholders at rule level and in edit arguments, recipe tensors on the shared key counter, typed rebinding at load; `write_intervention_recipe` and the trace writer call it | 700 | writer |
@@ -59,6 +62,12 @@ build streams disjoint write territories (writer: `writer.py`, `payloads.py`, `v
 | `runnable.py` | thin adapter: descriptor JSON and state chunks under `runnable/`; delegates to `_io/runnable.py` (producer) and `_io/runnable_load.py` (loader), which keep their frozen contracts | 200 | Pure wire descriptor and state families; save preparation and runtime binding remain above the carrier |
 | `runnable_families.py` | Fixed runnable family names, shared chunk writer, checked tensor references |
 | `container.py` | Bundle members, manifest bindings and relations |
+| `codec_policy.py` | Tensor carrier roles and backend agreement checked before codec lookup | 100 | reader |
+| `restore.py` | Declared record-state restoration while retaining saved cell values | 200 | reader |
+| `summaries.py` | Closed model-identity and backward-summary schemas | 200 | reader |
+| `codec_policy.py` | the payload codec boundary (section 9): payload columns take the artifact's codec, raw-value cells the array codec, disagreeing hints refuse before codec lookup | 100 | reader |
+| `restore.py` | record restore: the state hook on one decoded row, then the true-up that puts back saved nulls and level-omitted columns so load then save is lossless | 150 | reader |
+| `summaries.py` | closed shapes of the optional manifest summaries (`model_fingerprint`, `backward_summary`), refused `manifest_schema_invalid` when present and malformed | 150 | reader |
 
 Public doors do not move: `tl.load`, `Trace.save`, `Bundle.save`, `tl.io`
 (`torchlens/io/__init__.py`), `Trace.save_intervention`. `_io/bundle.py` becomes the dispatch
@@ -557,8 +566,9 @@ map is the binding list; this table says when each fires in the 3.0 reader and w
 | Situation | Code | Where |
 | --- | --- | --- |
 | no `manifest.json` | `manifest_missing` | reader, before any other file |
-| manifest not UTF-8 JSON / not an object / fails the manifest schema | `manifest_unreadable` / `manifest_not_json_object` / `manifest_schema_invalid` | reader |
+| manifest not UTF-8 JSON / not an object / fails the manifest schema (a missing field, a wrong type, a version stamp that is not PEP 440) | `manifest_unreadable` / `manifest_not_json_object` / `manifest_schema_invalid` | reader |
 | `manifest.json` without `format`, or a `metadata.pkl` or `bundle.json` at the root, or `tlspec_version` below 11 | `artifact_version_below_floor` (`ArtifactTooOldError`), one error, remedy: re-save with TorchLens 2.36.x | reader (replaces `_pre3_module_paths`) |
+| a `torchlens_version` older than the first TorchLens that writes format 3 (an impossible pairing) | `artifact_version_below_floor`, before the runtime identity advisories | reader |
 | `format_version` above 3 or `tlspec_version` above the runtime's | `artifact_version_above_runtime` | reader |
 | `kind` not the kind the door expects | `artifact_kind_mismatch` | reader |
 | `save_level` unknown | `artifact_save_level_invalid` | reader |

@@ -160,7 +160,6 @@ def test_fold_honesty_uniform_plateau_dot_differs(tmp_path) -> None:
         trace.draw(
             collapse="auto",
             fold_repeats=True,
-            vis_save_only=True,
             file_format="dot",
             path=str(outpath),
         )
@@ -187,7 +186,6 @@ def test_fold_honesty_dot_sources_differ(tmp_path) -> None:
         trace.draw(
             collapse="max",
             fold_repeats=True,
-            vis_save_only=True,
             file_format="dot",
             path=str(outpath),
         )
@@ -275,7 +273,6 @@ def test_fold_honesty_topology_dot_differs(tmp_path) -> None:
             trace.draw(
                 collapse=mode,
                 fold_repeats=True,
-                vis_save_only=True,
                 file_format="dot",
                 path=str(outpath),
             )
@@ -359,7 +356,6 @@ def test_fold_honesty_scalar_operand_dot_differs(tmp_path) -> None:
             trace.draw(
                 collapse=mode,
                 fold_repeats=True,
-                vis_save_only=True,
                 file_format="dot",
                 path=str(outpath),
             )
@@ -444,7 +440,6 @@ def test_fold_honesty_exterior_binding_dot_differs(tmp_path) -> None:
             trace.draw(
                 collapse=mode,
                 fold_repeats=True,
-                vis_save_only=True,
                 file_format="dot",
                 path=str(outpath),
             )
@@ -560,7 +555,6 @@ def test_fold_repeats_true_root_child_dot_not_inert(tmp_path) -> None:
         trace.draw(
             collapse="none",
             fold_repeats=fold_repeats,
-            vis_save_only=True,
             file_format="dot",
             path=str(outpath),
         )
