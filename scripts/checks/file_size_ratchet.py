@@ -38,6 +38,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from _common import example_section_lines
 from _harness import PACKAGE_ROOT, REPO_ROOT, run_checks
 
 _PROJECT_ROOT = REPO_ROOT
@@ -188,7 +189,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # are unchanged. Harness bundles phase 2 moved the bundle-container
     # loaders to _io/bundle_container.py and re-keyed the row back down to
     # the 4450 baseline (4700 -> 4450).
-    "torchlens/_io/bundle.py": 4350,
+    "torchlens/_io/bundle.py": 4250,
     "torchlens/_io/runnable_load.py": 3850,
     # 4450 -> 4500 (2026-10-01 ci-fix ratchet settle): "preserve checkpoint
     # hook identity across token swap" (8397d1469) plus the round-1 feature
@@ -498,6 +499,8 @@ _MAX_LEDGER_SLACK = 100
 #: call, so the growth is mechanical spelling verbosity, not new test content.
 #: Next 50-line step above the post-codemod measure; the debloat pass owns
 #: shrinking these back via helper extraction.
+#: 2026-11-03 docstring standard: Examples sections leave the count; _io/bundle.py
+#: re-keyed down 4350->4250 (measured 4235 without its examples).
 #: 2026-10-02 L17 integration: test_validation 8700->8750 (ci-fix b6a5d958d
 #: warms the float8-fill probe before the teardown fence test, measured 8715),
 #: test_real_world_models 5150->5200 (ci-fix's pyg-lib skip, deberta jit gap
@@ -553,8 +556,10 @@ def _line_counts(root: Path = _PACKAGE_ROOT) -> dict[str, int]:
         if _is_generated_module(path):
             continue
         relative = path.relative_to(_PROJECT_ROOT).as_posix()
-        with path.open(encoding="utf-8") as handle:
-            counts[relative] = sum(1 for _ in handle)
+        text = path.read_text(encoding="utf-8")
+        # Docstring ``Examples`` sections are not counted (the docstring standard asks
+        # for one on every public function and class); every other line is.
+        counts[relative] = len(text.splitlines()) - len(example_section_lines(text))
     return counts
 
 

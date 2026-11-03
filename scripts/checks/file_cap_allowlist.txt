@@ -107,7 +107,7 @@ torchlens/_data_classes/module.py	2723
 torchlens/_data_classes/module.py::Module.__init__	210
 torchlens/_data_classes/module.py::ModuleCall.__init__	129
 torchlens/_data_classes/module.py::ModuleCall.__setstate__	61
-torchlens/_data_classes/op.py	3640
+torchlens/_data_classes/op.py	3624
 torchlens/_data_classes/op.py::Op.__getattribute__	96
 torchlens/_data_classes/op.py::Op.__init__	96
 torchlens/_data_classes/op.py::_pool_container_cells	88
@@ -182,7 +182,7 @@ torchlens/_io/_portability_preflight.py::preflight_metadata_portability	64
 torchlens/_io/_safe_unpickle.py	1404
 torchlens/_io/_safe_unpickle.py::_BundleAllowlistPolicy._resolve_global	314
 torchlens/_io/_source_privacy.py::_scrub_signature_string	66
-torchlens/_io/bundle.py	4270
+torchlens/_io/bundle.py	4235
 torchlens/_io/bundle.py::_attach_fast_copy_specs	64
 torchlens/_io/bundle.py::_bind_archived_activation_payload	111
 torchlens/_io/bundle.py::_bind_embedded_nonpersistent_buffer_payload	87
@@ -196,9 +196,9 @@ torchlens/_io/bundle.py::_load_trace_payload	177
 torchlens/_io/bundle.py::_load_unified_tlspec	96
 torchlens/_io/bundle.py::_preflight_unified_trace_manifest	90
 torchlens/_io/bundle.py::_scrub_trace_for_bundle	66
-torchlens/_io/bundle.py::cleanup_tmp	120
-torchlens/_io/bundle.py::load	168
-torchlens/_io/bundle.py::save	648
+torchlens/_io/bundle.py::cleanup_tmp	110
+torchlens/_io/bundle.py::load	156
+torchlens/_io/bundle.py::save	635
 torchlens/_io/bundle_container.py::_load_unified_bundle	81
 torchlens/_io/bundle_container.py::_load_unified_bundle_directory	98
 torchlens/_io/bundle_metadata.py::_load_gated_member_relations	88
@@ -1272,7 +1272,7 @@ torchlens/neuro/_rdms.py::_matrix_mode	95
 torchlens/neuro/_rdms.py::_source_mode	114
 torchlens/neuro/_rdms.py::_validated_matrix	77
 torchlens/neuro/_rdms.py::rdms	127
-torchlens/options.py	1900
+torchlens/options.py	1864
 torchlens/options.py::CaptureOptions.__init__	193
 torchlens/options.py::VisualizationOptions.__init__	132
 torchlens/options.py::_merge_grouped_options	74
