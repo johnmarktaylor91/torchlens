@@ -36,7 +36,7 @@ remedy — never silent zeros. Joined-but-kernel-less nodes read honest n/a.
 
 ### size_by + scale — box minimums (D4 default mapping)
 
-`draw(size_by="dims", scale="sqrt")` sizes nodes by the numel of the
+`draw(size_by="dims", size_scale="sqrt")` sizes nodes by the numel of the
 non-batch output shape (the conservative area-only mapping, applied as the
 D4 default), emitted as width/height MINIMUMS under `fixedsize=false`:
 labels never truncate, fonts never scale, encoded area clamps at 4x the
@@ -51,7 +51,7 @@ size dominates the minimum — the taper motif reads on compact nodes.
 ### stack_by — rank columns (the classic timestep diagram)
 
 `draw(stack_by=True, direction="leftright")` pins nodes sharing an
-annotation value to one Graphviz rank. The auto form derives `pass_index`
+annotation value to one Graphviz rank. The auto form derives `pass_number`
 on multi-pass ops under the LOCKSTEP LICENSE (globally monotone execution
 windows); the caption and legend disclose the annotation used.
 

@@ -19,9 +19,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens._partial as tl_partial
+import torchlens._capture.finalize.settle as capture_settle
 from torchlens._utils._exception_notes import annotate_guarded
-from torchlens.errors import ScalarEscapeWarning
+from torchlens.errors import ScalarEscapeWarning, TraceCaptureError
 
 
 class _Boom(nn.Module):
@@ -62,7 +62,7 @@ class _NaNModel(nn.Module):
 
 
 class _FrozenError(RuntimeError):
-    """An exception that rejects attribute assignment (partial_log included).
+    """An exception that rejects attribute assignment.
 
     Like a real frozen exception (attrs ``frozen=True``), it still accepts the
     attributes the interpreter and stdlib write while raising: from Python 3.11
@@ -115,9 +115,10 @@ def test_helper_notes_or_warns_by_python_version() -> None:
 def test_success_note_reaches_the_user_and_its_remedy_runs() -> None:
     """Site backend.py partial attached: the note names the recovery that works."""
 
-    exc, texts = _crash_texts(lambda: tl.trace(_Boom(), torch.randn(2, 4)), RuntimeError)
-    assert any("exc.partial_log" in text for text in texts), texts
-    recovered = tl_partial.from_failed_capture(exc)
+    exc, _texts = _crash_texts(lambda: tl.trace(_Boom(), torch.randn(2, 4)), TraceCaptureError)
+    assert isinstance(exc.__cause__, RuntimeError)
+    assert ".partial_trace" in str(exc)
+    recovered = exc.partial_trace
     assert recovered is not None
 
 
@@ -130,8 +131,9 @@ def test_construction_failure_note_appears(monkeypatch: pytest.MonkeyPatch) -> N
         raise ValueError("planted construction failure")
 
     monkeypatch.setattr(PartialTrace, "from_trace", _broken)
-    _, texts = _crash_texts(lambda: tl.trace(_Boom(), torch.randn(2, 4)), RuntimeError)
+    exc, texts = _crash_texts(lambda: tl.trace(_Boom(), torch.randn(2, 4)), TraceCaptureError)
     assert any("partial-trace construction also failed" in text for text in texts), texts
+    assert exc.partial_trace is None
 
 
 def test_suppressed_advisory_note_appears(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -145,20 +147,25 @@ def test_suppressed_advisory_note_appears(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(PartialTrace, "from_trace", _broken)
     _, texts = _crash_texts(
         lambda: tl.trace(_Boom(), torch.randn(2, 4)),
-        RuntimeError,
+        TraceCaptureError,
         ("TorchLens could not construct partial-trace recovery", RuntimeWarning),
     )
     assert any("TorchLens advisory suppressed" in text for text in texts), texts
 
 
-def test_attachment_failure_note_appears_and_its_remedy_runs() -> None:
-    """Site backend.py attachment refused: the registry note and its recovery work."""
+def test_frozen_forward_exception_is_never_written_to() -> None:
+    """A forward exception that rejects attributes is chained untouched.
 
-    exc, texts = _crash_texts(
-        lambda: tl.trace(_Boom(_FrozenError), torch.randn(2, 4)), _FrozenError
+    The partial capture and every TorchLens note ride the TraceCaptureError,
+    so nothing is written onto (or refused by) the forward's own exception.
+    """
+
+    exc, _texts = _crash_texts(
+        lambda: tl.trace(_Boom(_FrozenError), torch.randn(2, 4)), TraceCaptureError
     )
-    assert any("exception-identity registry" in text for text in texts), texts
-    assert tl_partial.from_failed_capture(exc) is not None
+    assert isinstance(exc.__cause__, _FrozenError)
+    assert not getattr(exc.__cause__, "__notes__", [])
+    assert exc.partial_trace is not None
 
 
 def test_scalar_escape_advisory_note_appears() -> None:
@@ -166,7 +173,7 @@ def test_scalar_escape_advisory_note_appears() -> None:
 
     _, texts = _crash_texts(
         lambda: tl.trace(_ScalarThenBoom(), torch.randn(2, 4)),
-        RuntimeError,
+        TraceCaptureError,
         (".*", ScalarEscapeWarning),
     )
     assert any("scalar-escape advisory suppressed" in text for text in texts), texts
@@ -175,12 +182,10 @@ def test_scalar_escape_advisory_note_appears() -> None:
 def test_nonfinite_prefix_failure_note_appears(monkeypatch: pytest.MonkeyPatch) -> None:
     """Site _capture/_nonfinite_prefix: a failed prefix finalization leaves a note."""
 
-    import torchlens._capture.trace as capture_trace
-
     def _broken(*_args: Any, **_kwargs: Any) -> Any:
         raise ValueError("planted prefix failure")
 
-    monkeypatch.setattr(capture_trace, "_extract_and_mark_outputs", _broken)
+    monkeypatch.setattr(capture_settle, "_extract_and_mark_outputs", _broken)
     _, texts = _crash_texts(
         lambda: tl.trace(
             _NaNModel(),

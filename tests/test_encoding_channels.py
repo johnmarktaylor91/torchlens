@@ -23,6 +23,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._data_classes._layer_spec import _LAYER_MIRROR_SPEC, _LAYER_STATE_ORDER
 from torchlens._data_classes.layer import Layer
+from torchlens._record_type import record_type
 from torchlens._visualization._encoding import (
     DARK_RAMP,
     LAYER_SOURCE_ROWS,
@@ -117,11 +118,10 @@ def uniform_log() -> Any:
 def _draw(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 def _state(log: tl.Trace) -> Any:
@@ -135,7 +135,7 @@ def _varying_layer(log: tl.Trace) -> Layer:
     # multi-pass Layer, but it does no FLOPs; the varying population is fc's linear.
     return next(
         layer
-        for layer in log.layer_logs.values()
+        for layer in log._layer_logs.values()
         if len(layer.ops) > 1 and layer.layer_label.startswith("linear_")
     )
 
@@ -281,7 +281,7 @@ def test_callable_raise_chains_typed(mlp_log: tl.Trace, tmp_path: Path) -> None:
 
 def test_non_finite_degrades_to_unencoded(mlp_log: tl.Trace, tmp_path: Path) -> None:
     def source(node: Any) -> float:
-        return float("nan") if node.layer_type == "relu" else float(node.raw_index)
+        return float("nan") if record_type(node) == "relu" else float(node.raw_index)
 
     _draw(mlp_log, tmp_path, color_by=source)
     state = _state(mlp_log)
@@ -468,7 +468,7 @@ def test_varying_reconciled_field_unencoded_with_note(
 
     layer = _varying_layer(varying_log)
     assert "activation_memory" in layer.annotations["varying_across_passes"]
-    dot = _draw(varying_log, tmp_path, color_by="activation_memory", vis_mode="rolled")
+    dot = _draw(varying_log, tmp_path, color_by="activation_memory", rolled=True)
     state = _state(varying_log)
     assert layer.layer_label not in state.colors
     assert NOTE_VARIES in state.notes
@@ -480,7 +480,7 @@ def test_uniform_multipass_field_encodes(uniform_log: tl.Trace, tmp_path: Path) 
 
     layer = _varying_layer(uniform_log)
     assert "varying_across_passes" not in layer.annotations
-    _draw(uniform_log, tmp_path, color_by="activation_memory", vis_mode="rolled")
+    _draw(uniform_log, tmp_path, color_by="activation_memory", rolled=True)
     state = _state(uniform_log)
     assert layer.layer_label in state.colors
     assert NOTE_VARIES not in state.notes
@@ -490,7 +490,7 @@ def test_per_pass_builtin_degrades_on_rolled(varying_log: tl.Trace, tmp_path: Pa
     """'time' (func_duration) is per-pass: rolled nodes stay unencoded."""
 
     layer = _varying_layer(varying_log)
-    _draw(varying_log, tmp_path, color_by="time", vis_mode="rolled")
+    _draw(varying_log, tmp_path, color_by="time", rolled=True)
     state = _state(varying_log)
     assert layer.layer_label not in state.colors
     # The per-pass row carries its OWN note now (themes memo item 11): the
@@ -503,11 +503,11 @@ def test_per_pass_builtin_degrades_on_rolled(varying_log: tl.Trace, tmp_path: Pa
 def test_single_pass_layers_unaffected_by_allowlist(varying_log: tl.Trace, tmp_path: Path) -> None:
     """Single-pass layers in the same graph encode normally."""
 
-    _draw(varying_log, tmp_path, color_by="activation_memory", vis_mode="rolled")
+    _draw(varying_log, tmp_path, color_by="activation_memory", rolled=True)
     state = _state(varying_log)
     single_pass = [
         layer.layer_label
-        for layer in varying_log.layer_logs.values()
+        for layer in varying_log._layer_logs.values()
         if len(layer.ops) == 1 and layer.activation_memory
     ]
     assert any(label in state.colors for label in single_pass)
@@ -521,7 +521,7 @@ def test_callable_on_rolled_bypasses_with_disclosure(varying_log: tl.Trace, tmp_
         varying_log,
         tmp_path,
         color_by=lambda node: float(node.total_flops_forward or 0),
-        vis_mode="rolled",
+        rolled=True,
     )
     state = _state(varying_log)
     assert layer.layer_label in state.colors
@@ -538,7 +538,7 @@ def test_callable_per_pass_read_on_rolled_chains_tripwire(
             varying_log,
             tmp_path,
             color_by=lambda node: float(node.func_duration),
-            vis_mode="rolled",
+            rolled=True,
         )
     assert excinfo.value.fields["code"] == "encoding_callable_error"
 
@@ -553,12 +553,12 @@ def test_alias_rows_flops(varying_log: tl.Trace, tmp_path: Path) -> None:
     """
 
     layer = _varying_layer(varying_log)
-    _draw(varying_log, tmp_path, color_by="flops_forward", vis_mode="rolled")
+    _draw(varying_log, tmp_path, color_by="flops_forward", rolled=True)
     per_pass_state = _state(varying_log)
     assert layer.layer_label not in per_pass_state.colors
     assert NOTE_VARIES in per_pass_state.notes
 
-    dot = _draw(varying_log, tmp_path, color_by="total_flops_forward", vis_mode="rolled")
+    dot = _draw(varying_log, tmp_path, color_by="total_flops_forward", rolled=True)
     total_state = _state(varying_log)
     assert layer.layer_label in total_state.colors
     assert any("total_flops_forward" in line for line in total_state.aggregation_lines)
@@ -581,7 +581,7 @@ def test_mirrored_per_call_numeric_unencoded(varying_log: tl.Trace, tmp_path: Pa
     assert layer.raw_index == per_pass_truth[0]  # the mirror IS a pass-1 projection
 
     for source in ("raw_index", "step_index", "ordinal_index", "transformed_gradient_memory"):
-        dot = _draw(varying_log, tmp_path, color_by=source, vis_mode="rolled")
+        dot = _draw(varying_log, tmp_path, color_by=source, rolled=True)
         state = _state(varying_log)
         assert layer.layer_label not in state.colors, source
         assert NOTE_FIRST_PASS_ONLY in state.notes, source
@@ -624,7 +624,7 @@ def test_unclassified_source_on_rolled_refuses(varying_log: tl.Trace, tmp_path: 
     assert "num_inputs" in LAYER_PASS_LOG_FIELD_ORDER
     assert "num_inputs" not in LAYER_SOURCE_ROWS
     with pytest.raises(Exception) as excinfo:
-        _draw(varying_log, tmp_path, color_by="num_inputs", vis_mode="rolled")
+        _draw(varying_log, tmp_path, color_by="num_inputs", rolled=True)
     assert excinfo.value.fields["code"] == "encoding_source_invalid"
     assert "rolled" in str(excinfo.value)
 
@@ -635,7 +635,7 @@ def test_unrolled_per_pass_nodes_encode_their_own_pass(
     """Unrolled mode: per-pass Op nodes of the varying layer encode per-pass."""
 
     layer = _varying_layer(varying_log)
-    _draw(varying_log, tmp_path, color_by="activation_memory", vis_mode="unrolled")
+    _draw(varying_log, tmp_path, color_by="activation_memory", rolled=False)
     state = _state(varying_log)
     pass_keys = [key for key in state.values if key.startswith(layer.layer_label + ":")]
     assert len(pass_keys) == len(layer.ops)
@@ -683,13 +683,13 @@ def test_annotation_image_node_excluded_from_channel_and_domain(tmp_path: Path) 
     from PIL import Image
 
     Image.new("RGB", (8, 8), "red").save(image_path)
-    target = next(layer for layer in log.layer_list if layer.layer_type == "relu")
+    target = next(layer for layer in log._layer_list if layer.type == "relu")
     log.annotate(target.layer_label, image=str(image_path))
 
     def source(node: Any) -> float:
         # An extreme value: if the image node leaked into the domain, every
         # other node's normalized color would move.
-        return 1e9 if node.layer_type == "relu" else float(node.raw_index)
+        return 1e9 if record_type(node) == "relu" else float(node.raw_index)
 
     _draw(log, tmp_path, color_by=source)
     state = _state(log)
@@ -705,7 +705,7 @@ def test_visualizer_path_node_excluded(tmp_path: Path) -> None:
     from PIL import Image
 
     Image.new("RGB", (8, 8), "blue").save(image_path)
-    target = next(layer for layer in log.layer_list if layer.layer_type == "relu")
+    target = next(layer for layer in log._layer_list if layer.type == "relu")
     target.visualizer_path = str(image_path)
 
     _draw(log, tmp_path, color_by=lambda node: float(node.raw_index))
@@ -759,5 +759,5 @@ def test_dagua_renderer_with_channel_refuses(mlp_log: tl.Trace, tmp_path: Path) 
     """The alternate label path never silently drops an active channel."""
 
     with pytest.raises(Exception) as excinfo:
-        _draw(mlp_log, tmp_path, color_by="bytes", vis_renderer="dagua")
+        _draw(mlp_log, tmp_path, color_by="bytes", renderer="dagua")
     assert excinfo.value.fields["code"] == "encoding_requires_dot_layout"

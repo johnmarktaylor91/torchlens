@@ -235,7 +235,7 @@ class _ModelIndex:
         entry_meta: dict[tuple[str, int], tuple[int, tuple[str, ...], Any, int, Any]] = {}
         label_seen: dict[str, int] = {}
         self.shapes = label_shapes(trace)
-        for index, op in enumerate(getattr(trace, "layer_list", ()) or ()):
+        for index, op in enumerate(trace._layer_list or ()):
             label = str(getattr(op, "layer_label", "?"))
             occurrence = label_seen.get(label, 0)
             label_seen[label] = occurrence + 1
@@ -244,7 +244,7 @@ class _ModelIndex:
                 index,
                 tuple(getattr(op, "module_call_stack", ()) or ()),
                 None if shape is None else tuple(int(dim) for dim in shape),
-                int(getattr(op, "pass_index", occurrence + 1) or (occurrence + 1)),
+                int(getattr(op, "pass_number", occurrence + 1) or (occurrence + 1)),
                 op,
             )
         self.pass_facts: list[_OpFact] = []

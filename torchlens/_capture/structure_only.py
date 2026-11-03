@@ -26,7 +26,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field as dataclasses_field
 from typing import TYPE_CHECKING, Any, Final
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from ..errors._base import CaptureError
+from ._structure_only_facts import _backend_version, _input_geometry, _layer_claims
 
 if TYPE_CHECKING:
     pass
@@ -533,7 +535,7 @@ _L7B_ROW_TEACHING: Final[Mapping[str, str]] = {
         "late-bind posture (state slots declared at capture time, values "
         "bound at run time with mandatory byte digests) when its S2 "
         "StateSource amendment lands — this row's named flip event. Until "
-        "then, capture the real model with intervention_ready=True to "
+        "then, capture the real model with replayable=True to "
         "produce a runnable artifact."
     ),
     "live_replay": (
@@ -649,7 +651,7 @@ def require_structure_only_capability(
     marker persists plainly as of tlspec v8 and the row is supported.
     """
 
-    if not bool(getattr(trace, "structure_only", False)):
+    if not bool(trace._options_structure_only if is_live_trace(trace) else False):
         return None
     row = STRUCTURE_ONLY_CAPABILITIES[capability]
     if row.status_v1.startswith("refuse:"):
@@ -804,17 +806,6 @@ def _refuse_incomparable(reason: str, detail: str) -> None:
     )
 
 
-def _input_geometry(trace: Any) -> tuple[tuple[tuple[int, ...] | None, str], ...]:
-    """The (shape, dtype) tuple of each input layer, for the preflight."""
-
-    facts: list[tuple[tuple[int, ...] | None, str]] = []
-    for label in getattr(trace, "input_layers", ()) or ():
-        layer = trace[label]
-        shape = getattr(layer, "shape", None)
-        facts.append((tuple(shape) if shape else None, str(getattr(layer, "dtype", None))))
-    return tuple(facts)
-
-
 def _discharge_preflight(structure_trace: Any, real_trace: Any) -> None:
     """The comparable-twins preflight (D10/D8): refuses typed, never refutes.
 
@@ -829,8 +820,8 @@ def _discharge_preflight(structure_trace: Any, real_trace: Any) -> None:
     structurally by the W1-RPT alignment (dropout/BN-stat records diverge).
     """
 
-    structure_class = getattr(structure_trace, "model_class_name", None)
-    real_class = getattr(real_trace, "model_class_name", None)
+    structure_class = structure_trace._source_class_name if is_live_trace(structure_trace) else None
+    real_class = real_trace._source_class_name if is_live_trace(real_trace) else None
     if structure_class and real_class and structure_class != real_class:
         _refuse_incomparable(
             "model_class",
@@ -843,8 +834,8 @@ def _discharge_preflight(structure_trace: Any, real_trace: Any) -> None:
             "input_geometry",
             f"structure side inputs {structure_inputs!r} vs real side {real_inputs!r}.",
         )
-    structure_rt = getattr(structure_trace, "backend_runtime_version", None)
-    real_rt = getattr(real_trace, "backend_runtime_version", None)
+    structure_rt = _backend_version(structure_trace)
+    real_rt = _backend_version(real_trace)
     if structure_rt and real_rt and structure_rt != real_rt:
         _refuse_incomparable(
             "backend_runtime_version",
@@ -865,8 +856,8 @@ def _discharge_preflight(structure_trace: Any, real_trace: Any) -> None:
             f"({structure_generation} vs {real_generation}); construct both "
             "twins before the first capture, or both after (W1-ORD).",
         )
-    structure_rescued = bool(getattr(structure_trace, "rescue_rerun", None))
-    real_rescued = bool(getattr(real_trace, "rescue_rerun", None))
+    structure_rescued = bool(structure_trace.__dict__.get("_rescue_rerun"))
+    real_rescued = bool(real_trace.__dict__.get("_rescue_rerun"))
     if structure_rescued != real_rescued:
         _refuse_incomparable(
             "rescue_asymmetry",
@@ -897,9 +888,9 @@ def _structural_alignment_contradiction(structure_trace: Any, real_trace: Any) -
     """
 
     structure_funcs = [
-        str(getattr(layer, "func_name", "?")) for layer in structure_trace.layer_list
+        str(getattr(layer, "func_name", "?")) for layer in structure_trace._layer_list
     ]
-    real_funcs = [str(getattr(layer, "func_name", "?")) for layer in real_trace.layer_list]
+    real_funcs = [str(getattr(layer, "func_name", "?")) for layer in real_trace._layer_list]
     for index, (structure_func, real_func) in enumerate(
         zip(structure_funcs, real_funcs, strict=False)
     ):
@@ -931,7 +922,7 @@ def _structural_alignment_contradiction(structure_trace: Any, real_trace: Any) -
     # Same func stream and count: the digest difference lies in per-record
     # facts (shapes/dtypes) or topology — name the first such divergence.
     for index, (structure_layer, real_layer) in enumerate(
-        zip(structure_trace.layer_list, real_trace.layer_list, strict=False)
+        zip(structure_trace._layer_list, real_trace._layer_list, strict=False)
     ):
         for fact in ("shape", "dtype"):
             structure_fact = getattr(structure_layer, fact, None)
@@ -951,7 +942,9 @@ def _structural_alignment_contradiction(structure_trace: Any, real_trace: Any) -
 def _require_discharge_preconditions(structure_trace: Any, real_trace: Any) -> None:
     """Typed precondition refusals (never silent Nones)."""
 
-    if not bool(getattr(structure_trace, "structure_only", False)):
+    if not bool(
+        structure_trace._options_structure_only if is_live_trace(structure_trace) else False
+    ):
         raise StructureOnlyCapabilityError(
             "discharge_against is only defined on a structure-only capture; "
             "this trace is an ordinary capture. Remedy: call it on the "
@@ -959,7 +952,7 @@ def _require_discharge_preconditions(structure_trace: Any, real_trace: Any) -> N
             code="structure_only_discharge_precondition",
             capability="discharge",
         )
-    if bool(getattr(real_trace, "structure_only", False)):
+    if bool(real_trace._options_structure_only if is_live_trace(real_trace) else False):
         raise StructureOnlyCapabilityError(
             "discharge_against requires an ORDINARY (non-structure-only) real "
             "capture as the oracle; received another structure-only trace. "
@@ -978,20 +971,6 @@ def _require_discharge_preconditions(structure_trace: Any, real_trace: Any) -> N
             code="structure_only_discharge_precondition",
             capability="discharge",
         )
-
-
-def _layer_claims(layer: Any) -> tuple[tuple[str, Any], ...]:
-    """Extract the compared claim kinds from one layer record."""
-
-    shape = getattr(layer, "shape", None)
-    param_shapes = getattr(layer, "param_shapes", None) or ()
-    return (
-        ("shape", tuple(shape) if shape is not None else None),
-        ("dtype", str(getattr(layer, "dtype", None))),
-        # Layer.param_shapes is an ordered sequence of parameter shapes
-        # (weight, bias, ...); order is part of the geometry claim.
-        ("param_geometry", tuple(tuple(entry) for entry in param_shapes)),
-    )
 
 
 def discharge_against(structure_trace: Any, real_trace: Any) -> StructureDischarge:
@@ -1037,7 +1016,7 @@ def discharge_against(structure_trace: Any, real_trace: Any) -> StructureDischar
     claims: list[ClaimComparison] = []
     first_contradiction: str | None = None
     for index, (hyp_layer, real_layer) in enumerate(
-        zip(structure_trace.layer_list, real_trace.layer_list, strict=False)
+        zip(structure_trace._layer_list, real_trace._layer_list, strict=False)
     ):
         site = (
             getattr(hyp_layer, "label", None)

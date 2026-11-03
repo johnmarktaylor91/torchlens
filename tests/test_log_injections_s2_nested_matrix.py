@@ -30,6 +30,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.errors import TraceCaptureError
 
 _LOGGED = tl.options.CaptureOptions(log_injections=True)
 
@@ -101,9 +102,10 @@ def test_hook_calls_never_fire_other_rules_nesting_path_flat(chain) -> None:
         raise AssertionError("a hook fired on an injected op")
 
     spec = tl.when(tl.func("relu"), outer) & tl.when(tl.func("tanh"), never)
-    with pytest.raises(AssertionError):
+    with pytest.raises(TraceCaptureError) as _tce_info:
         # the MODEL tanh legitimately fires the second rule
         tl.trace(model, x, intervene=spec, capture=_LOGGED)
+    assert isinstance(_tce_info.value.__cause__, AssertionError)
     relu_only = tl.when(tl.func("relu"), outer)
     logged = tl.trace(model, x, intervene=relu_only, capture=_LOGGED)
     records = logged.injected_ops
@@ -121,7 +123,7 @@ def test_replay_fork_do_records_nothing_and_preserves_records(chain) -> None:
         model,
         x,
         intervene=tl.when(tl.func("relu"), lambda out, *, ctx: torch.sigmoid(out)),
-        capture=tl.options.CaptureOptions(log_injections=True, intervention_ready=True),
+        capture=tl.options.CaptureOptions(log_injections=True, replayable=True),
     )
     before = logged.injected_ops
     assert len(before) == 1

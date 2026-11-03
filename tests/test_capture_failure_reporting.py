@@ -1,4 +1,4 @@
-"""Failure-arm reporting: routed warning, partial_log note, empty_cache gate.
+"""Failure-arm reporting: routed warning, partial_trace message, empty_cache gate.
 
 Pins the B8-35/B8-44/B8-45/R16-4b fixes in ``backends/torch/backend.py``:
 
@@ -8,7 +8,7 @@ Pins the B8-35/B8-44/B8-45/R16-4b fixes in ``backends/torch/backend.py``:
   machine-readable stdout, and was unfilterable. It is now ONE accurate
   routed ``RuntimeWarning`` naming the failure and the recovery surface.
 - The SUCCESS path of partial-log attachment adds an ``add_note`` telling the
-  user ``exc.partial_log`` exists (previously only the two attachment-FAILURE
+  user ``exc.partial_trace`` exists (previously only the two attachment-FAILURE
   arms carried notes).
 - ``cleanup_forward_memory`` clears the CUDA allocator cache only when the
   capture actually touched CUDA (the capture-touched-CUDA predicate), never
@@ -17,6 +17,7 @@ Pins the B8-35/B8-44/B8-45/R16-4b fixes in ``backends/torch/backend.py``:
 
 from __future__ import annotations
 
+import sys
 import warnings
 
 import pytest
@@ -24,6 +25,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.errors import TraceCaptureError
 
 
 class _BoomError(RuntimeError):
@@ -38,8 +40,9 @@ class _FailingModel(nn.Module):
 def test_failed_capture_emits_routed_warning_not_stdout_banner(capsys):
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
-        with pytest.raises(_BoomError):
+        with pytest.raises(TraceCaptureError) as _tce_info:
             tl.trace(_FailingModel(), torch.randn(1, 2))
+        assert isinstance(_tce_info.value.__cause__, _BoomError)
     out = capsys.readouterr().out
     assert "Feature extraction failed" not in out, "stdout banner must be gone"
     routed = [
@@ -50,7 +53,7 @@ def test_failed_capture_emits_routed_warning_not_stdout_banner(capsys):
     ]
     assert len(routed) == 1, [str(record.message) for record in records]
     assert "_BoomError" in str(routed[0].message)
-    assert "partial_log" in str(routed[0].message)
+    assert "partial_trace" in str(routed[0].message)
     # The advisory rides a dedicated RuntimeWarning subclass so the rescue
     # driver can defer it while a rescue re-run may still swallow the failure;
     # user RuntimeWarning filters keep matching.
@@ -63,31 +66,35 @@ def test_failed_capture_emits_routed_warning_not_stdout_banner(capsys):
     not hasattr(BaseException, "add_note"),
     reason="BaseException.add_note requires Python 3.11+",
 )
-def test_failed_capture_success_path_notes_partial_log():
+def test_failed_capture_success_path_names_partial_trace():
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        with pytest.raises(_BoomError) as exc_info:
+        with pytest.raises(TraceCaptureError) as exc_info:
             tl.trace(_FailingModel(), torch.randn(1, 2))
     exc = exc_info.value
-    assert getattr(exc, "partial_log", None) is not None
-    notes = getattr(exc, "__notes__", [])
-    assert any("partial_log" in note for note in notes), notes
+    assert isinstance(exc.__cause__, _BoomError)
+    assert getattr(exc, "partial_trace", None) is not None
+    assert ".partial_trace" in str(exc)
+    # The forward's own exception is never mutated: no partial, no notes.
+    assert not hasattr(exc.__cause__, "partial_trace")
+    assert not getattr(exc.__cause__, "__notes__", [])
 
 
 def test_failed_capture_advisory_never_replaces_user_exception_under_error_filter():
     """b3-opus-R07-1: a warnings-as-error filter raises the terminal advisory
     AT THE WARN SITE, replacing the user's real forward exception (and killing
-    the ``exc.partial_log`` recovery the advisory's own text advertises). The
+    the ``exc.partial_trace`` recovery the advisory's own text advertises). The
     user's exception must propagate; the advisory degrades to a note."""
     from torchlens.backends.torch.rescue import CaptureAttemptFailedWarning
 
     with warnings.catch_warnings():
         warnings.simplefilter("always")
         warnings.filterwarnings("error", category=CaptureAttemptFailedWarning)
-        with pytest.raises(_BoomError) as exc_info:
+        with pytest.raises(TraceCaptureError) as exc_info:
             tl.trace(_FailingModel(), torch.randn(1, 2))
+        assert isinstance(exc_info.value.__cause__, _BoomError)
     exc = exc_info.value
-    assert getattr(exc, "partial_log", None) is not None
+    assert getattr(exc, "partial_trace", None) is not None
     if hasattr(BaseException, "add_note"):
         notes = getattr(exc, "__notes__", [])
         assert any("advisory" in note for note in notes), notes
@@ -105,8 +112,9 @@ def test_partial_construction_failure_warning_never_replaces_user_exception(monk
     with warnings.catch_warnings():
         warnings.simplefilter("always")
         warnings.filterwarnings("error", category=RuntimeWarning)
-        with pytest.raises(_BoomError):
+        with pytest.raises(TraceCaptureError) as _tce_info2:
             tl.trace(_FailingModel(), torch.randn(1, 2))
+        assert isinstance(_tce_info2.value.__cause__, _BoomError)
 
 
 def test_cleanup_forward_memory_gated_on_capture_touched_cuda(monkeypatch):
@@ -128,7 +136,7 @@ def test_cleanup_double_fault_still_raises_the_primary_error(monkeypatch):
     When ``backend.cleanup_failed_forward_session`` itself raised while
     handling an ordinary forward failure, the SECONDARY cleanup exception
     escaped instead of ``raise e``: the settled CaptureOutcome named the
-    primary while the caller caught an unrelated error with no partial_log.
+    primary while the caller caught an unrelated error with no partial_trace.
     The secondary now rides the primary as a note (or warning on 3.10),
     mirroring the interrupt arm.
     """
@@ -149,12 +157,73 @@ def test_cleanup_double_fault_still_raises_the_primary_error(monkeypatch):
     monkeypatch.setattr(TorchBackend, "cleanup_failed_forward_session", raising_cleanup)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        with pytest.raises(ValueError, match="primary-user-error") as excinfo:
+        with pytest.raises(TraceCaptureError, match="primary-user-error") as excinfo:
             tl.trace(_FailingModel(), torch.ones(2))
+        assert isinstance(excinfo.value.__cause__, ValueError)
     exc = excinfo.value
     notes = getattr(exc, "__notes__", [])
     noted = any("secondary-cleanup-error" in note for note in notes)
     assert noted or not hasattr(exc, "add_note"), (
         f"cleanup double-fault not disclosed on the primary: notes={notes}"
     )
-    assert getattr(exc, "partial_log", None) is not None
+    assert getattr(exc, "partial_trace", None) is not None
+
+
+class _NoNotesError(tl.errors.CaptureError):
+    """A primary error without PEP 678 notes: drives the 3.10 warning fallback everywhere.
+
+    A TorchLens error propagates from the door as itself (a non-TorchLens
+    forward exception would be wrapped in a ``TraceCaptureError``, which has
+    notes on 3.11+), so the double-fault note targets this class directly.
+    """
+
+    add_note = None  # type: ignore[assignment]
+
+
+def test_cleanup_double_fault_warning_points_at_the_users_trace_line(monkeypatch):
+    """Where notes do not exist, the double-fault warning blames the user's ``trace`` call.
+
+    The note helper has one home (``annotate_guarded``); every arm hands it the
+    dynamic ``user_stacklevel``, so the fallback ``RuntimeWarning`` names the
+    user's own line, not the stage frame that noticed the double fault.
+    """
+
+    from torchlens.backends.torch.backend import TorchBackend
+
+    class _FailingModel(nn.Module):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            x = torch.relu(x)
+            raise _NoNotesError("primary-user-error")
+
+    real_cleanup = TorchBackend.cleanup_failed_forward_session
+
+    def raising_cleanup(self, session, model_tuple, exc):
+        real_cleanup(self, session, model_tuple, exc)
+        raise KeyError("secondary-cleanup-error")
+
+    monkeypatch.setattr(TorchBackend, "cleanup_failed_forward_session", raising_cleanup)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(_NoNotesError, match="primary-user-error"):
+            tl.trace(_FailingModel(), torch.ones(2))  # the line the warning must name
+    call_line = sys._getframe(0).f_lineno - 1
+    double_fault = [w for w in caught if "secondary-cleanup-error" in str(w.message)]
+    assert len(double_fault) == 1, [str(w.message) for w in caught]
+    assert double_fault[0].category is RuntimeWarning
+    assert double_fault[0].filename == __file__
+    assert double_fault[0].lineno == call_line
+
+
+def test_note_helper_fallback_points_at_the_callers_caller():
+    """``annotate_guarded`` with ``user_stacklevel(1)`` blames the first frame outside the package."""
+
+    from torchlens._utils._exception_notes import annotate_guarded
+    from torchlens._utils.display import user_stacklevel
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        annotate_guarded(_NoNotesError("x"), "the note", stacklevel=user_stacklevel(1))
+    call_line = sys._getframe(0).f_lineno - 1
+    assert [str(w.message) for w in caught] == ["the note"]
+    assert caught[0].filename == __file__
+    assert caught[0].lineno == call_line

@@ -145,7 +145,7 @@ def _trace_with_mds_and_images() -> Any:
     """
 
     trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
-    trace.raw_input = _pil_stimuli(8)
+    trace.input = _pil_stimuli(8)
     repgeom.mds_evolution(trace, save=tl.func("linear"), min_stimuli=8)
     return trace
 
@@ -621,7 +621,7 @@ def test_rdm_node_spec_sets_one_draw_time_heatmap_for_annotated_layer() -> None:
     """The RDM hook should set one bounded heatmap image for annotated layers."""
 
     trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
-    trace.raw_input = _pil_stimuli(8)
+    trace.input = _pil_stimuli(8)
     repgeom.rdm_evolution(trace, save=tl.func("linear"), min_stimuli=8)
     layer = next(layer for layer in trace.layers if layer.layer_type == "linear")
     hook = tl.viz.nodes.rdm(max_stimuli=8)
@@ -705,7 +705,6 @@ def test_mds_scatter_draw_uses_one_contained_image_per_annotated_node(tmp_path: 
 
     trace.draw(
         path=str(output_path),
-        vis_save_only=True,
         file_format="svg",
         node_spec_fn=tl.viz.nodes.mds_scatter(max_thumbnails=8),
     )
@@ -741,7 +740,6 @@ def test_mds_scatter_draw_embeds_data_uri_and_survives_save_load(tmp_path: Path)
 
     loaded.draw(
         path=str(output_path),
-        vis_save_only=True,
         file_format="svg",
         node_spec_fn=tl.viz.nodes.mds_scatter(max_thumbnails=8),
     )
@@ -758,7 +756,7 @@ def test_rdm_node_spec_draw_uses_one_contained_image_and_survives_save_load(
     """RDM SVG output should inline one heatmap image per annotated node after reload."""
 
     trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
-    trace.raw_input = _pil_stimuli(8)
+    trace.input = _pil_stimuli(8)
     repgeom.rdm_evolution(trace, save=tl.func("linear"), min_stimuli=8)
     annotated_layers = [layer for layer in trace.layers if layer.layer_type == "linear"]
     bundle_path = tmp_path / "rdm_source.tlspec"
@@ -768,7 +766,6 @@ def test_rdm_node_spec_draw_uses_one_contained_image_and_survives_save_load(
 
     loaded.draw(
         path=str(output_path),
-        vis_save_only=True,
         file_format="svg",
         node_spec_fn=tl.viz.nodes.rdm(max_stimuli=8),
     )
@@ -807,7 +804,6 @@ def test_scree_node_spec_draw_uses_one_contained_image_and_survives_save_load(
 
     loaded.draw(
         path=str(output_path),
-        vis_save_only=True,
         file_format="svg",
         node_spec_fn=tl.viz.nodes.scree(max_components=8),
     )
@@ -856,7 +852,6 @@ def test_mds_scatter_cap_overlap_and_more_indicator(tmp_path: Path) -> None:
     output_path = tmp_path / "scatter_cap.svg"
     trace.draw(
         path=str(output_path),
-        vis_save_only=True,
         file_format="svg",
         node_spec_fn=hook,
     )
@@ -867,7 +862,7 @@ def test_mds_scatter_fallback_renders_points_without_raw_images() -> None:
     """Coords without matching raw PIL images should render a points fallback."""
 
     trace = _trace_with_mds_and_images()
-    trace.raw_input = None
+    trace.input = None
     layer = next(layer for layer in trace.layers if layer.layer_type == "linear")
     hook = tl.viz.nodes.mds_scatter(max_thumbnails=8)
 
@@ -892,8 +887,8 @@ def test_mds_scatter_off_keeps_default_render_byte_identical(tmp_path: Path) -> 
     first_path = tmp_path / "default_first.svg"
     second_path = tmp_path / "default_second.svg"
 
-    trace.draw(path=str(first_path), vis_save_only=True, file_format="svg")
-    trace.draw(path=str(second_path), vis_save_only=True, file_format="svg")
+    trace.draw(path=str(first_path), file_format="svg")
+    trace.draw(path=str(second_path), file_format="svg")
 
     assert first_path.read_bytes() == second_path.read_bytes()
 
@@ -908,8 +903,8 @@ def test_plain_trace_draw_without_rdm_hook_does_not_create_annotation_blobs(
     second_path = tmp_path / "plain_default_second.svg"
 
     assert trace._annotation_blobs is None
-    trace.draw(path=str(first_path), vis_save_only=True, file_format="svg")
-    trace.draw(path=str(second_path), vis_save_only=True, file_format="svg")
+    trace.draw(path=str(first_path), file_format="svg")
+    trace.draw(path=str(second_path), file_format="svg")
 
     assert trace._annotation_blobs is None
     assert first_path.read_bytes() == second_path.read_bytes()
@@ -955,9 +950,7 @@ def test_mds_evolution_recurrent_pass_qualified_selector_uses_op_key() -> None:
     """A single recurrent pass selection should read op.out and store op coords."""
 
     trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
-    linear_op = next(
-        op for op in trace.layer_list if op.layer_type == "linear" and op.pass_index == 2
-    )
+    linear_op = next(op for op in trace._layer_list if op.type == "linear" and op.pass_number == 2)
 
     coords_by_key = repgeom.mds_evolution(trace, save=tl.label(linear_op.label), min_stimuli=8)
 
@@ -1004,8 +997,8 @@ def _recurrent_linear_ops(trace: tl.Trace) -> list[Any]:
         The three linear ops, sorted by pass index.
     """
 
-    ops = [op for op in trace.layer_list if op.layer_type == "linear"]
-    return sorted(ops, key=lambda op: op.pass_index)
+    ops = [op for op in trace._layer_list if op.type == "linear"]
+    return sorted(ops, key=lambda op: op.pass_number)
 
 
 def test_rdm_evolution_default_sweep_expands_recurrent_passes() -> None:
@@ -1019,7 +1012,7 @@ def test_rdm_evolution_default_sweep_expands_recurrent_passes() -> None:
 
     keys = [f"op:{op.label}" for op in ops]
     assert len(ops) == 3
-    assert [op.pass_index for op in ops] == [1, 2, 3]
+    assert [op.pass_number for op in ops] == [1, 2, 3]
     assert list(matrices_by_key) == keys
     assert trace._annotation_blobs is not None
     for key, hand_rdm in zip(keys, expected, strict=True):
@@ -1098,9 +1091,7 @@ def test_rdm_evolution_recurrent_pass_qualified_selector_uses_op_key() -> None:
     """A single recurrent pass selection should read op.out and store op RDM."""
 
     trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
-    linear_op = next(
-        op for op in trace.layer_list if op.layer_type == "linear" and op.pass_index == 2
-    )
+    linear_op = next(op for op in trace._layer_list if op.type == "linear" and op.pass_number == 2)
 
     matrices_by_key = repgeom.rdm_evolution(trace, save=tl.label(linear_op.label), min_stimuli=8)
 
@@ -1117,9 +1108,7 @@ def test_scree_evolution_recurrent_pass_qualified_selector_uses_op_key(tmp_path:
     """A single recurrent pass selection should read op.out and store op scree."""
 
     trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
-    linear_op = next(
-        op for op in trace.layer_list if op.layer_type == "linear" and op.pass_index == 2
-    )
+    linear_op = next(op for op in trace._layer_list if op.type == "linear" and op.pass_number == 2)
 
     spectra_by_key = repgeom.scree_evolution(trace, save=tl.label(linear_op.label), min_stimuli=8)
 

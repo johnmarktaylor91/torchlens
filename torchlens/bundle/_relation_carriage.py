@@ -1,6 +1,6 @@
-"""Relation-carriage dynamic methods for ``Bundle`` (C07X, foldB S6).
+"""Relation-carriage method bodies for ``Bundle`` (C07X, foldB S6).
 
-The budget-preserving dynamic methods that carry the S6 member-relation
+The method bodies that carry the S6 member-relation
 table: ``Bundle.relate`` appends validated rows (R4 new-table install) and
 ``Bundle.episode_status`` folds ``episode_member`` rows into the
 derived episode status (a DERIVATION, never Bundle-level settlement).
@@ -11,13 +11,18 @@ both names and installs them on the accessor table.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
 from ..errors.episode import BundleRelationError
 from ._compare_gate import _ORDERING_RELATION_KINDS
 from ._fed_by import FED_BY_KIND, settle_fed_by_params
-from ._relations import MEMBER_ROW_KINDS, MemberRelationRow, MemberRelationTable
+from ._relations import (
+    MEMBER_ROW_KINDS,
+    MemberRelationRow,
+    MemberRelationTable,
+    OpaqueRelationRow,
+)
 
 if TYPE_CHECKING:
     from .._capture._episode_fold import EpisodeFoldResult
@@ -29,7 +34,7 @@ if TYPE_CHECKING:
 def _bundle_relate(
     self: Bundle, *rows: str | MemberRelationRow | Mapping[str, Any], **params: Any
 ) -> Bundle:
-    """Append S6 relation rows, installing a NEW validated table (R4).
+    """Append member-relation rows, installing a NEW validated table (``Bundle._build_relation_table``).
 
     Two spellings. The POSITIONAL form reads as the sentence it records:
     ``b.relate("fed_by", "critique", "draft", token_spans=[[3, 7, 3, 7]])``
@@ -219,7 +224,7 @@ def _bundle_upstream(self: Bundle, name: str | Trace) -> tuple[str, ...]:
     Walks the ordering relation kinds (``fed_by``, ``selected_by``,
     ``successor_of``, ``forked_from``, ``escalates``) from the later member to the earlier one:
     for "critique fed_by draft", ``upstream("critique")`` is ``("draft",)``.
-    Exposed as the dynamic method ``Bundle.upstream``.
+    The body of ``Bundle.upstream``.
     """
 
     return _ordering_walk(self, name, upstream=True)
@@ -229,26 +234,11 @@ def _bundle_downstream(self: Bundle, name: str | Trace) -> tuple[str, ...]:
     """Return every member that transitively came after ``name``, nearest first.
 
     The reverse of :func:`_bundle_upstream` over the same ordering rows:
-    ``downstream("draft")`` is ``("critique", ...)``. Exposed as the dynamic
-    method ``Bundle.downstream``.
+    ``downstream("draft")`` is ``("critique", ...)``. The body of
+    ``Bundle.downstream``.
     """
 
     return _ordering_walk(self, name, upstream=False)
-
-
-def register_relation_walks(table: dict[str, Callable[..., Any]]) -> None:
-    """Install the walk helpers on the Bundle dynamic-method table."""
-
-    from ._alternatives import _bundle_add_alternative
-    from ._token_divergence import _bundle_token_divergence
-    from ._token_spans import register_token_pairs
-
-    table["upstream"] = _bundle_upstream
-    table["downstream"] = _bundle_downstream
-    register_token_pairs(table)
-    # Steer one call and re-run the harness (harness.2).
-    table["token_divergence"] = _bundle_token_divergence
-    table["add_alternative"] = _bundle_add_alternative
 
 
 def _bundle_derive_episode_status(
@@ -327,4 +317,65 @@ def _bundle_derive_episode_status(
         n_declared=n_declared,
         ledger=ledger,
         escalation_members=frozenset(excluded),
+    )
+
+
+def build_relation_table(
+    self: Bundle,
+    existing_rows: Sequence[MemberRelationRow | OpaqueRelationRow],
+    new_rows: Sequence[MemberRelationRow | OpaqueRelationRow | Mapping[str, Any]],
+    *,
+    assess_unclaimed: bool = False,
+) -> MemberRelationTable:
+    """Return a NEW validated relation table (existing + coerced new rows)."""
+
+    rows: list[MemberRelationRow | OpaqueRelationRow] = list(existing_rows)
+    for row in new_rows:
+        if isinstance(row, (MemberRelationRow, OpaqueRelationRow)):
+            rows.append(row)
+            continue
+        try:
+            rows.append(MemberRelationRow.from_payload(row))
+        except BundleRelationError:
+            # Distinct-code refusals (evidence over budget) keep their
+            # own code; re-wrapping would flatten them to schema_invalid.
+            raise
+        except (TypeError, ValueError) as exc:
+            raise BundleRelationError(
+                f"Bundle member-relation row is outside the closed S6 schema: {exc}",
+                code="bundle_relation_schema_invalid",
+            ) from exc
+    table = MemberRelationTable(rows)
+    table.validate_against_members(self._members.keys())
+    return settle_relation_rows(
+        table, self._members, first_new=len(existing_rows), assess_unclaimed=assess_unclaimed
+    )
+
+
+def relation_table_for_removal(
+    self: Bundle,
+    removed_names: Sequence[str],
+    *,
+    cascade_relations: bool,
+    operation: str,
+) -> MemberRelationTable | None:
+    """Return the cascaded relation table a removal must install, or ``None``."""
+
+    removed = set(removed_names)
+    related = sorted({name for name in removed if self._member_relations.rows_naming(name)})
+    if not related:
+        return None
+    if not cascade_relations:
+        raise BundleRelationError(
+            f"Bundle.{operation} would orphan member-relation rows naming "
+            f"{related}; pass cascade_relations=True to drop those rows "
+            "explicitly, or remove the relations first (S6 R5).",
+            code="bundle_member_has_relations",
+            operation=operation,
+            related_members=related,
+        )
+    return MemberRelationTable(
+        tuple(
+            row for row in self._member_relations.rows if not (set(row.named_members()) & removed)
+        )
     )

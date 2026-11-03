@@ -12,7 +12,7 @@ For the general speed knobs and benchmark tables, see the [performance guide](..
 | You want to | Use | Cost, measured |
 | --- | --- | --- |
 | Steer or patch the model over many forwards, including generation | `tl.when(site, action).bind(model)`, and `.bind(model).generate(...)` for HF `generate()` | 1.0 to 1.2x a plain forward hook, exact |
-| Steer and also keep a few activations as evidence, every step | `tl.record(model, x, save=..., intervene=spec, return_output=True)` | about 1 ms per op (CPU decoders); 9 s per step on Qwen3.5-9B |
+| Steer and also keep a few activations as evidence, every step | `tl.record(model, x, save=..., intervene=spec)`, output in `recording.output` | about 1 ms per op (CPU decoders); 9 s per step on Qwen3.5-9B |
 | Steer and refresh a trace's saved activations on each new input, including generation | trace once with `intervene=`, then `trace.run(model, x)` per input | about 1.5 to 2x a plain forward hook per step, exact; see [Fast steered rerun](#fast-steered-rerun) |
 | Inspect the full graph, metadata and activations of one forward | `tl.trace(model, x, save=...)` | about 3 ms per op; 47 s for one Qwen3.5-9B trace |
 | Make one trace cheaper | a `tl.func(...)` save selector, `CaptureOptions(inference_only=True)`, and for Qwen3.5-class models flash-linear-attention | see [Cut the cost of a trace](#cut-the-cost-of-a-trace) |
@@ -149,8 +149,8 @@ prompt rather than every step, see [the KV-cache recipe](kv_cache.md).
 
 When each step must also keep a few activations, use `tl.record` with `intervene=`. It applies
 the same edits during a recording pass and keeps only the payloads `save=` selects, without
-building the full graph a trace builds. `return_output=True` returns the model output alongside
-the `Recording`. Call `recording.to_trace()` later only if you need graph structure.
+building the full graph a trace builds. `recording.output` is the model output, exactly as the
+model returned it. Call `recording.to_trace()` later only if you need graph structure.
 
 ```python
 import torch
@@ -164,9 +164,8 @@ x = torch.randn(2, 8)
 direction = torch.randn(8)
 spec = tl.when(tl.module("1"), tl.steer(direction, strength=4.0, dim=-1))
 
-output, recording = tl.record(
-    model, x, save=tl.func("linear"), intervene=spec, return_output=True
-)
+recording = tl.record(model, x, save=tl.func("linear"), intervene=spec)
+output = recording.output
 
 assert torch.equal(output, spec.bind(model)(x))  # the same steered output as bind
 print(recording.n_records)
@@ -190,7 +189,7 @@ Cost and caveats:
 A trace costs about 3.2 ms of host Python per recorded op with default settings, linear in the
 op count with no meaningful fixed cost. The device does not change it: a GPU trace costs the
 same as a CPU trace of the same model. So the levers are fewer ops and less work per op.
-`trace.num_ops` tells you how many ops a forward recorded.
+`len(trace.ops)` tells you how many ops a forward recorded.
 
 ```python
 import torch
@@ -209,7 +208,7 @@ trace = tl.trace(
     capture=CaptureOptions(inference_only=True),
 )
 
-print(trace.num_ops)
+print(len(trace.ops))
 relu = trace.find_sites(tl.func("relu")).first()
 assert relu.out.shape == (2, 8)
 ```
@@ -228,7 +227,7 @@ assert relu.out.shape == (2, 8)
 - **`CaptureOptions(inference_only=True)`** runs the forward under `torch.no_grad()`. It saved
   about 5% per trace in the measurement above. A capture entered inside `torch.no_grad()` or
   `torch.inference_mode()` implies it unless a backward option (`backward_ready`, `save_grads`)
-  asks for one; `trace.inference_only` reports the value in force.
+  asks for one; `trace.options.inference_only` reports the value in force.
 - **`tl.record` skips gradient hooks by default.** It installs them only when
   `backward_ready=True`, `save_grads=` or `default_grad=` is given, so pass one of those before a
   `Recording.backward()`, which refuses otherwise.
@@ -252,7 +251,7 @@ pip install flash-linear-attention
 ```
 
 It provides GPU (Triton) kernels, so it helps on CUDA hosts; CPU-only runs keep the reference
-loops. If a trace of such a model records far more ops than you expect, check `trace.num_ops`
+loops. If a trace of such a model records far more ops than you expect, check `len(trace.ops)`
 and whether the package imports in your environment. With the KV cache on, each decoding step
 processes one token, so the package matters much less for `bind` with `generate()`.
 
@@ -268,7 +267,7 @@ refuse a staged intervention, refuse a change in input, or replay over the captu
 | `trace.run(inputs=x)` | A fresh verified execution of the recorded program | Refuses `run_staged_spec_unapplied` when the trace carries a staged intervention, because it would not apply it |
 | `trace.run(inputs=x, fast=True)` | A guarded static-loop refresh: the model's native forward with targeted hooks | Applies a staged module-selector intervention through the guarded fast engine and admits a growing input while the model's call structure is unchanged; any refusal raises (`PathDivergenceError` for a structural change) instead of falling back. Needs a selective `save=` on the capture (`tl.module(...)` or `tl.func(...)`); a save-everything capture refuses. Unsteered and at a fixed shape: 0.41 s on Qwen3.5-9B against 47 s for a trace |
 | `trace.run(model, x)` on an intervened trace | The guarded fast steered rerun: the native forward with the staged hooks, refreshing the saved sites | About 1.5 to 2x a plain hook per step, exact, and exact on every repeat. When a guard refuses it falls back to recapturing the whole forward with the stored intervention: still exact, at the cost of a trace, with the reason in `last_run["fast_refused"]` |
-| `trace.fork().do(site, action)` | Replays an edit over the captured graph | Same input only, by design. Needs a `CaptureOptions(intervention_ready=True)` capture (about 5 to 6x a default trace), and refuses typed (`ReplayPreconditionError`) on some decoder architectures |
+| `trace.fork().do(site, action)` | Replays an edit over the captured graph | Same input only, by design. Needs a `CaptureOptions(replayable=True)` capture (about 5 to 6x a default trace), and refuses typed (`ReplayPreconditionError`) on some decoder architectures |
 | `episode=` capture with `intervene=` | Captures a whole steered generation as one product | Exact, but diagnostic-tier cost (tens of steps, not hundreds), and `run()` refuses on the coupled product by design; see [episode capture](../reference/episode_capture.md) |
 
 For steering alone, across many inputs or through generation, [`bind`](#steering-and-patching-over-many-forwards-bind)

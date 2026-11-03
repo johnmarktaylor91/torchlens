@@ -12,15 +12,17 @@ from _source_corpus import package_ast, package_files
 
 from torchlens._constants import MODEL_LOG_FIELD_ORDER
 from torchlens._data_classes.trace import Trace
+from torchlens._io import TLSPEC_VERSION
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
-from torchlens._runnable_seam import (
-    LEGACY_RUNNABLE_TRACE_FIELD_MAP,
+from torchlens._io.field_registry import known_state_keys
+from torchlens._io.state_contract import enforce_known_state
+from torchlens._runnable.seam import (
     RUNNABLE_TRACE_PUBLIC_MEMBERS,
     RunnableCoordinator,
     RunnableTraceState,
     normalize_runnable_trace_state,
 )
-from torchlens.errors import ArtifactTooOldError
+from torchlens.errors import ArtifactTooOldError, UnknownPersistedFieldError
 
 _PACKAGE_ROOT = Path(__file__).parents[1] / "torchlens"
 _MIGRATION_DIRECT_READER_ALLOWLIST = frozenset()
@@ -106,7 +108,6 @@ def test_runnable_trace_surface_and_state_are_declared() -> None:
         frozenset(
             {
                 "readiness",
-                "runnable_descriptor",
                 "archived_activations",
                 "load_state_dict",
                 "run",
@@ -167,23 +168,33 @@ def test_trace_runnable_fields_are_collapsed_behind_the_seam() -> None:
     ordered = frozenset(name for name in MODEL_LOG_FIELD_ORDER if name.startswith("_runnable"))
     assert declared == {"_runnable"}
     assert ordered == {"_runnable"}
-    assert frozenset(LEGACY_RUNNABLE_TRACE_FIELD_MAP) == {
-        f"_runnable_{item.name}" for item in fields(RunnableTraceState)
-    }
+    assert not hasattr(Trace, "_PORTABLE_STATE_ALIASES")
     assert _direct_runnable_reader_modules() == _MIGRATION_DIRECT_READER_ALLOWLIST
 
 
-def test_legacy_plain_pickle_fields_normalize_into_collapsed_state() -> None:
-    """Keep plain-pickle compatibility while removing legacy live attributes."""
+def test_legacy_runnable_keys_are_unknown_fields_and_refuse() -> None:
+    """A state carrying a pre-seam ``_runnable_*`` key refuses: v11 carries no alias reader.
+
+    The one runnable field is ``_runnable``; the per-key spellings an earlier writer
+    persisted are unknown to the Trace contract, so the governed load refuses them typed
+    instead of adapting them, and the normalizer leaves them untouched.
+    """
+
+    legacy_keys = {f"_runnable_{item.name}" for item in fields(RunnableTraceState)}
+    assert legacy_keys.isdisjoint(known_state_keys(Trace))
 
     state: dict[str, object] = {
+        "tlspec_version": TLSPEC_VERSION,
         "_runnable_descriptor": "descriptor",
         "_runnable_poisoned": True,
     }
-    runnable_state = normalize_runnable_trace_state(state)
-    assert runnable_state.descriptor == "descriptor"
-    assert runnable_state.poisoned is True
-    assert state == {"_runnable": runnable_state}
+    with pytest.raises(UnknownPersistedFieldError, match="_runnable_descriptor"):
+        enforce_known_state(Trace, state, declared_version=TLSPEC_VERSION)
+
+    normalized = dict(state)
+    runnable_state = normalize_runnable_trace_state(normalized)
+    assert runnable_state.descriptor is None
+    assert normalized["_runnable_descriptor"] == "descriptor"
 
 
 def test_trace_pickled_at_pre_seam_commit_refuses_as_2x() -> None:
@@ -236,9 +247,9 @@ def test_runnable_fork_keeps_mutable_witness_ledgers_independent() -> None:
 def test_public_runnable_schema_has_no_runtime_imports() -> None:
     """Keep the public schema module behavior-free and transport-independent."""
 
-    forbidden = {"_io", "capture", "_runnable_execution", "_runnable_state"}
+    forbidden = {"_io", "capture", "execution", "state"}
     imported: set[str] = set()
-    for node in ast.walk(_module_ast("_runnable.py")):
+    for node in ast.walk(_module_ast("_runnable/__init__.py")):
         if isinstance(node, ast.ImportFrom) and node.module:
             imported.add(node.module.lstrip(".").split(".")[0])
         elif isinstance(node, ast.Import):

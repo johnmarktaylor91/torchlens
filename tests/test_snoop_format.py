@@ -218,7 +218,7 @@ def test_reuse_verdict_grammar_has_no_invented_count(verdict: bool) -> None:
     from torchlens._snoop._stats import reuse_stats
 
     trace = SimpleNamespace(_nonfinite_capture={"events": {"raw": verdict}})
-    record = reuse_stats(trace, "raw", 10, shape=(10,), dtype="f32", device="cpu")
+    record = reuse_stats(trace, "raw", shape=(10,), dtype="f32", device="cpu")
     assert record is not None
     assert render_stats_segment(record) == ("nonfinite present" if verdict else "finite")
 

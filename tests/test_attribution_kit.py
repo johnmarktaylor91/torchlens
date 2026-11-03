@@ -14,6 +14,7 @@ from torch import Tensor, nn
 
 import torchlens as tl
 from torchlens.attribution import occlusion
+from torchlens.attribution._viz import attribution_color_by
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _ATTRIBUTION_PREFIX = "torchlens.attribution"
@@ -252,7 +253,6 @@ _DOCUMENTED_UNSTABLE_TOKENS = {
     "tokenizer",
     "activation",
     "api_key",
-    "graph_value",
     "influence",
     "upload_to_neuronpedia",
 }
@@ -293,7 +293,7 @@ def test_occlusion_routes_named_baselines_through_selection_do() -> None:
     trace = tl.trace(
         _ImageScale(),
         inputs,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         selection = tl.units(trace.input_ops[0].label, [(0, 0, 1, 1)])
@@ -323,7 +323,7 @@ def test_occlusion_rejects_an_implicit_or_invalid_baseline() -> None:
     trace = tl.trace(
         _ImageScale(),
         inputs,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         selection = trace.input_ops[0]
@@ -361,8 +361,8 @@ def test_attribution_kit_lane_is_detachable_from_stage4a_and_capture_core() -> N
         )
     }
     stage4a_files = (
-        "torchlens/_selection.py",
-        "torchlens/_selection_align.py",
+        "torchlens/_selection/selection.py",
+        "torchlens/_selection/align.py",
         "tests/test_selection_algebra.py",
         "tests/test_selection_do.py",
         "tests/test_selection_align.py",
@@ -413,7 +413,7 @@ def test_overlay_paints_attributed_module_outputs_and_nothing_else() -> None:
     result = tl.attribution.layer_attribution(model, inputs, target=1, layer="2")
     trace = tl.trace(model, inputs)
     try:
-        color_by = tl.attribution.overlay(trace, result)
+        color_by = attribution_color_by(trace, result)
         expected = result.values.abs().sum().item()
         assert color_by(trace["conv2d_2_3"]) == pytest.approx(expected)
         assert color_by(trace["relu_1_2"]) is None
@@ -424,24 +424,20 @@ def test_overlay_paints_attributed_module_outputs_and_nothing_else() -> None:
 
 
 @pytest.mark.smoke
-def test_overlay_accepts_mappings_reduces_and_refuses_unknown_keys() -> None:
+def test_overlay_accepts_mappings_and_refuses_unknown_keys() -> None:
     """Mapping keys resolve by module name or layer label; misses refuse typed."""
 
     model = _overlay_model()
     inputs = torch.randn(2, 3, 8, 8)
     trace = tl.trace(model, inputs)
     try:
-        color_by = tl.attribution.overlay(
-            trace, {"2": torch.tensor([[1.0, -3.0]]), "relu_1_2": 0.5}, reduce="max"
-        )
-        assert color_by(trace["conv2d_2_3"]) == pytest.approx(1.0)
+        color_by = attribution_color_by(trace, {"2": torch.tensor([[1.0, -3.0]]), "relu_1_2": 0.5})
+        assert color_by(trace["conv2d_2_3"]) == pytest.approx(4.0)
         assert color_by(trace["relu_1_2"]) == pytest.approx(0.5)
         with pytest.raises(tl.errors.AttributionError, match="matches no module"):
-            tl.attribution.overlay(trace, {"not_a_layer": 1.0})
-        with pytest.raises(tl.errors.AttributionError, match="reduce must be"):
-            tl.attribution.overlay(trace, {"2": 1.0}, reduce="median")
+            attribution_color_by(trace, {"not_a_layer": 1.0})
         with pytest.raises(tl.errors.AttributionError, match="no extra\\['layer'\\]"):
-            tl.attribution.overlay(
+            attribution_color_by(
                 trace,
                 [tl.attribution.saliency(model, inputs, target=0)],
             )

@@ -19,6 +19,27 @@ from typing import Any
 import torch
 from torch import nn
 
+_PLAIN_ATTR_IGNORED_NAMES = frozenset({"_parameters", "_buffers", "_modules"})
+
+
+def _module_plain_attr_names(module: nn.Module) -> set[str]:
+    """Return plain attribute names to snapshot for a module.
+
+    Parameters
+    ----------
+    module:
+        Module whose non-registered attributes should be inspected.
+
+    Returns
+    -------
+    set[str]
+        Attribute names excluding registered parameter, buffer, and child
+        module storage.
+    """
+
+    return set(module.__dict__) - _PLAIN_ATTR_IGNORED_NAMES
+
+
 _FIDELITY_MAX_DEPTH = 4
 _FIDELITY_MAX_CONTAINER_ITEMS = 128
 _OBJECT_GETSTATE = getattr(object, "__getstate__", None)
@@ -42,8 +63,6 @@ def assert_copy_kept_instance_attrs(source: nn.Module, copied: nn.Module) -> Non
         copy. Callers treat this exactly like a failed deepcopy and take the
         disclosed live-model fallback.
     """
-
-    from ._capture_state_helpers import _module_plain_attr_names
 
     source_modules = list(source.modules())
     copied_modules = list(copied.modules())
@@ -284,8 +303,6 @@ def restore_simple_plain_attrs_on_copy(source: nn.Module, copied: nn.Module) -> 
         Deep-copied module tree that should represent ``source`` at validation
         entry.
     """
-
-    from ._capture_state_helpers import _module_plain_attr_names
 
     simple_types = (type(None), bool, int, float, complex, str, bytes)
     # The two trees are zipped POSITIONALLY, so a deepcopy that adds or drops a

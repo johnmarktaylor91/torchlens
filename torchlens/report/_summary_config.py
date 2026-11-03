@@ -2,7 +2,7 @@
 
 Orthogonal axes, one column registry, nothing silent: granularity
 (level/depth/fold_repeats/buffers) x presentation (view/columns) x
-selection (filter) x numbers (flop_convention/units) x output (style).
+selection (where) x numbers (flop_convention/units) x output (style).
 The legacy spellings are REMOVED (clean break, no aliases): each one
 refuses typed and names its successor (``REMOVED_SUMMARY_OPTIONS`` /
 ``REMOVED_SUMMARY_LEVELS``); contradictions raise typed
@@ -40,7 +40,7 @@ REMOVED_SUMMARY_LEVELS: dict[str, str] = {
         "the summary footer carries the memory totals"
     ),
     "control_flow": (
-        "trace.conditional_records and the conditional_* columns of trace.to_pandas() "
+        "trace.graph.conditional_records and the conditional_* columns of trace.to_pandas() "
         "(multi-pass layers: num_passes)"
     ),
     "waterfall": (
@@ -54,6 +54,7 @@ REMOVED_SUMMARY_LEVELS: dict[str, str] = {
 #: typed (``summary_option_invalid``) naming the replacement; there is no
 #: alias and no historical renderer behind them.
 REMOVED_SUMMARY_OPTIONS: dict[str, str] = {
+    "filter": "where= (regex string or callable row -> bool; presentation-only)",
     "preset": "view= ('overview' | 'compute') for the column bundle, level= for row grain",
     "fields": "columns= (bundle name, exact ordered list, or +name/-name deltas)",
     "show_ops": "level='op' (one row per executed op pass)",
@@ -64,7 +65,7 @@ REMOVED_SUMMARY_OPTIONS: dict[str, str] = {
     "print_to": "report.print(file=...) on the returned report, or print_to(str(report))",
     "count_fma_as_two": "flop_convention='fma2' (was True) or flop_convention='fma1' (was False)",
     "show_input_preprocessing_details": (
-        "trace.provenance() and trace.input_preprocessor (verified, source, identifier)"
+        "trace.input_preprocessor (verified, source, identifier); the capture-provenance text block is trace.provenance._summary() until its public spelling is decided"
     ),
 }
 
@@ -130,7 +131,7 @@ class SummaryConfig:
     view: str = "overview"
     depth: Any = "auto"
     columns: tuple[str, ...] | None = None
-    filter: Any = None
+    where: Any = None
     buffers: str = "summary"
     fold_repeats: Any = "auto"
     max_rows: int = DEFAULT_ROW_BUDGET
@@ -302,7 +303,7 @@ GRAMMAR_OPTIONS: tuple[str, ...] = (
     "view",
     "depth",
     "columns",
-    "filter",
+    "where",
     "buffers",
     "fold_repeats",
     "max_rows",
@@ -359,7 +360,7 @@ def resolve_config(**kwargs: Any) -> SummaryConfig:
     fold_repeats = _resolve_fold_repeats(kwargs.pop("fold_repeats", "auto"))
     max_rows = _resolve_max_rows(kwargs.pop("max_rows", DEFAULT_ROW_BUDGET))
     columns = _resolve_columns(kwargs.pop("columns", None), view)
-    filter_ = kwargs.pop("filter", None)
+    where = kwargs.pop("where", None)
     max_scan_elements = _resolve_max_scan_elements(kwargs.pop("max_scan_elements", None), view)
     if kwargs:
         _refuse_unknown_options(sorted(kwargs))
@@ -375,7 +376,7 @@ def resolve_config(**kwargs: Any) -> SummaryConfig:
         view=view,
         depth=depth,
         columns=columns,
-        filter=filter_,
+        where=where,
         buffers=buffers,
         fold_repeats=fold_repeats,
         max_rows=max_rows,

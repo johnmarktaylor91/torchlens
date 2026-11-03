@@ -69,7 +69,7 @@ def test_rolled_draw_reuses_atomic_module_sibling_counts(
     monkeypatch.setattr(_render_nodes, "_atomic_module_sibling_counts", spy_build)
     monkeypatch.setattr(_render_nodes, "_atomic_module_split_range", spy_split)
 
-    trace.draw(vis_mode="rolled", return_graph=True, vis_save_only=True)
+    trace.draw(rolled=True)
 
     assert len(built_counts) == 1
     assert len(received_counts) > 1
@@ -85,14 +85,14 @@ def test_sibling_counts_match_per_layer_scan() -> None:
 
     addresses = {
         layer.modules[-1].rsplit(":", 1)[0]
-        for layer in trace.layer_logs.values()
+        for layer in trace._layer_logs.values()
         if getattr(layer, "modules", None)
     }
     assert addresses
     for address in addresses | {"not_a_module"}:
         expected = sum(
             1
-            for other in trace.layer_logs.values()
+            for other in trace._layer_logs.values()
             if isinstance(other, _render_nodes.Layer)
             and getattr(other, "is_atomic_module", False)
             and other.modules
@@ -106,7 +106,7 @@ def test_split_range_fallback_matches_threaded_counts() -> None:
 
     trace = tl.trace(_SplitReuse(), torch.randn(1, 4))
     counts = _render_nodes._atomic_module_sibling_counts(trace)
-    for layer in trace.layer_logs.values():
+    for layer in trace._layer_logs.values():
         if not getattr(layer, "modules", None):
             continue
         address = layer.modules[-1].rsplit(":", 1)[0]

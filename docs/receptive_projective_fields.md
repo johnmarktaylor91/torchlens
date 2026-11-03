@@ -80,6 +80,9 @@ extent. Transposed convolutions, masked attention, interpolation, gathers, and d
 routing are never promoted to `EXACT` without a proof. A gradient mask can preserve sparse or
 masked structure that an interval box cannot express.
 
+An empty endpoint (a model input or output with a zero extent, such as a zero-size `split`
+chunk) has no units, so its field is empty: it seeds no geometry and no descriptor names it.
+
 ## Receptive, projective, and layer-to-layer queries
 
 The receptive view is target-anchored by default and looks backward to model input(s). The
@@ -189,7 +192,6 @@ unit = op.receptive_field.center_unit(batch_index=0)
 # Highlight the ancestor cone in the graph drawing.
 trace.draw(
     node_spec_fn=tl.receptive_field.node_spec(op, unit=unit),
-    vis_save_only=True,
     file_format="svg",
 )
 
@@ -204,5 +206,5 @@ from becoming an apparently precise answer.
 ## References
 
 - Araujo, Norris, and Sim, [*Computing Receptive Fields of Convolutional Neural Networks*](https://distill.pub/2019/computing-receptive-fields/), Distill, 2019.
-- Luo, Li, Urtasun, and Zemel, [*Understanding the Effective Receptive Field in Deep Convolutional Neural Networks*](https://papers.nips.cc/paper_files/paper/2016/hash/c8067ad1937f728f51288b3eb986afaa-Paper.pdf), NeurIPS 2016.
+- Luo, Li, Urtasun, and Zemel, [*Understanding the Effective Receptive Field in Deep Convolutional Neural Networks*](https://papers.nips.cc/paper_files/paper/2016/file/c8067ad1937f728f51288b3eb986afaa-Paper.pdf), NeurIPS 2016.
 - Lehky and Sejnowski, [*Network model of shape-from-shading: neural function arises from both receptive and projective fields*](https://www.nature.com/articles/333452a0), Nature, 1988.

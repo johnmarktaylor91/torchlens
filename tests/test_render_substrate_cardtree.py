@@ -27,6 +27,7 @@ from torchlens._notebook.cardtree import (
     render_card_html,
     safe_card_html,
 )
+from torchlens.errors import TraceCaptureError
 
 
 def test_typed_leaf_escaping_happens_exactly_once() -> None:
@@ -137,9 +138,10 @@ def test_partial_trace_repr_html_is_failure_first() -> None:
             torch.relu(x)
             raise RuntimeError("mid-forward failure <with markup>")
 
-    with pytest.raises(RuntimeError) as excinfo:
+    with pytest.raises(TraceCaptureError) as excinfo:
         tl.trace(Exploding(), torch.randn(2, 4))
-    partial = tl._partial.from_failed_capture(excinfo.value)
+    assert isinstance(excinfo.value.__cause__, RuntimeError)
+    partial = excinfo.value.partial_trace
     html = partial._repr_html_()
     assert "FAILED CAPTURE" in html
     assert "PartialTrace" in html

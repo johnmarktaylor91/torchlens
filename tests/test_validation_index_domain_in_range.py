@@ -12,6 +12,8 @@ corrupted saved index or output still fails validation.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 import torch
 import torch.nn.functional as F
@@ -225,6 +227,33 @@ def _assert_index_edges_proven_in_domain(
     ), record["verdicts"]
 
 
+@pytest.mark.parametrize(
+    ("func_name", "kwarg"),
+    [("gather", "index"), ("index_select", "index"), ("embedding", "indices")],
+)
+def test_index_slot_is_recognised_under_its_kwarg_spelling(func_name: str, kwarg: str) -> None:
+    """A parent passed by keyword occupies the index slot exactly like a positional one.
+
+    The kwarg branch of ``_parent_is_index_domain_arg`` was reachable only through
+    model-dependent heavy tests; this pins it directly so a falsy return is caught.
+    """
+    by_kwarg = SimpleNamespace(
+        func_name=func_name,
+        parent_arg_positions={"args": {}, "kwargs": {kwarg: "idx_label"}},
+    )
+    assert _parent_is_index_domain_arg(by_kwarg, "idx_label") is True
+    assert _parent_is_index_domain_arg(by_kwarg, "other_label") is False
+    by_position = SimpleNamespace(
+        func_name=func_name,
+        parent_arg_positions={"args": {_INDEX_DOMAIN_ARG_SPECS[func_name][0]: "idx_label"}},
+    )
+    assert _parent_is_index_domain_arg(by_position, "idx_label") is True
+    unregistered = SimpleNamespace(
+        func_name="relu", parent_arg_positions={"kwargs": {kwarg: "idx_label"}}
+    )
+    assert _parent_is_index_domain_arg(unregistered, "idx_label") is False
+
+
 def test_gather_index_edge_is_proven_in_domain(replay_record) -> None:
     torch.manual_seed(0)
     model = GatherByIndex().eval()
@@ -295,7 +324,7 @@ def test_corrupted_saved_index_fails_for_registered_ops(model_factory, index_fun
         capture=tl.options.CaptureOptions(save_args=True, save_rng=True),
     )
     try:
-        index_op = next(op for op in trace.layer_list if op.func_name == index_func)
+        index_op = next(op for op in trace._layer_list if op.func_name == index_func)
         index_op.out.copy_(index_op.out.roll(1, 0))
         assert trace.validate_forward_pass(ground_truth) is False
     finally:
@@ -319,7 +348,7 @@ def test_index_add_never_reaches_the_scatter_overwrite_exemption(replay_record) 
     ):
         trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True))
         try:
-            op = next(o for o in trace.layer_list if o.func_name == func)
+            op = next(o for o in trace._layer_list if o.func_name == func)
             assert (_get_scatter_destination_dim_index(op) is not None) is expect_components, func
         finally:
             trace.cleanup()
@@ -352,11 +381,11 @@ def test_corrupted_saved_gather_still_fails_validation(corrupt: str) -> None:
         capture=tl.options.CaptureOptions(save_args=True, save_rng=True),
     )
     try:
-        gather = next(op for op in trace.layer_list if op.func_name == "gather")
+        gather = next(op for op in trace._layer_list if op.func_name == "gather")
         if corrupt == "saved_gather_output":
             gather.out.add_(1.0)
         else:
-            index_op = next(op for op in trace.layer_list if op.func_name == "argsort")
+            index_op = next(op for op in trace._layer_list if op.func_name == "argsort")
             index_op.out.copy_(index_op.out.flip(1))
         assert trace.validate_forward_pass(ground_truth) is False
     finally:
@@ -364,6 +393,7 @@ def test_corrupted_saved_gather_still_fails_validation(corrupt: str) -> None:
 
 
 @pytest.mark.heavy
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA leg: run on a GPU venue")
 def test_tiny_vjepa2_validates_on_cuda_without_a_device_assert(replay_record) -> None:
     model = _tiny_vjepa2().cuda()

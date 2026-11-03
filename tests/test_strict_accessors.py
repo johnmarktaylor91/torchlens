@@ -72,7 +72,8 @@ def _strict_trace() -> tl.Trace:
     return tl.trace(
         StrictAccessorModel(),
         torch.randn(2, 3, requires_grad=True),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all"),
+        capture=tl.options.CaptureOptions(save_grads="all"),
+        save="all",
     )
 
 
@@ -172,8 +173,6 @@ def _legacy_param_state(address: str) -> dict[str, object]:
         "device": None,
         "used_by_ops": [],
         "used_by_layers": [],
-        "num_uses_by_ops": 0,
-        "num_uses_by_layers": 0,
         "num_calls": 0,
     }
 
@@ -192,8 +191,9 @@ def test_legacy_param_restore_refuses_below_floor() -> None:
 
     first = Param.__new__(Param)
 
-    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x"):
+    with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x") as excinfo:
         first.__setstate__(_legacy_param_state("left.weight"))
+    assert excinfo.value.fields["code"] == "artifact_version_below_floor"
 
 
 def test_ambiguous_op_lookup_error_remains_value_error_compatible() -> None:

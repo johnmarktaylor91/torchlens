@@ -73,9 +73,7 @@ def trace() -> Any:
     """A fully saved trace of the tiny MLP."""
 
     torch.manual_seed(0)
-    return tl.trace(
-        _Tiny(), torch.randn(2, 4), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    return tl.trace(_Tiny(), torch.randn(2, 4), save="all")
 
 
 def test_from_hub_round_trips_a_trace_through_the_safe_loader(trace: Any, tmp_path: Path) -> None:
@@ -90,10 +88,10 @@ def test_from_hub_round_trips_a_trace_through_the_safe_loader(trace: Any, tmp_pa
         {"repo_id": "me/demo", "filename": "torchlens_artifact.tar.gz", "revision": "main"}
     ]
     assert isinstance(loaded, type(trace))
-    assert [op.layer_label for op in loaded.layer_list] == [
-        op.layer_label for op in trace.layer_list
+    assert [op.layer_label for op in loaded._layer_list] == [
+        op.layer_label for op in trace._layer_list
     ]
-    for original, restored in zip(trace.layer_list, loaded.layer_list, strict=True):
+    for original, restored in zip(trace._layer_list, loaded._layer_list, strict=True):
         assert torch.equal(restored.out, original.out)
 
 

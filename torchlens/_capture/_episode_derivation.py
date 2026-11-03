@@ -18,10 +18,13 @@ F40b declared-derivation doc of record (``docs/reference/episode_capture.md``).
 from __future__ import annotations
 
 import hashlib
-import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
+
+from .._utils.collections import _path_component_key
+from .._utils.hashing import sha256_canonical_json
+from ..errors.episode import EpisodeDeclarationError
 
 if TYPE_CHECKING:
     from ._episode_ledger import ResolvedEpisode
@@ -46,8 +49,6 @@ _LEGACY_CAPTURE_DIGEST_SCHEMA = "episode_capture_digest_v1"
 
 def _declaration_error(message: str, *, code: str | None = None) -> Exception:
     """Build the typed entry refusal (import-local to keep the leaf light)."""
-
-    from ..errors.episode import EpisodeDeclarationError
 
     return EpisodeDeclarationError(
         message,
@@ -94,16 +95,7 @@ def _render_container_path(path: Any) -> str:
     to declare; the default source is the whole output).
     """
 
-    parts: list[str] = []
-    for segment in tuple(path or ()):
-        for attr in ("key", "name", "index"):
-            value = getattr(segment, attr, None)
-            if value is not None:
-                parts.append(str(value))
-                break
-        else:
-            parts.append(str(segment))
-    return ".".join(parts)
+    return ".".join(str(_path_component_key(segment)) for segment in tuple(path or ()))
 
 
 def _resolve_step_output_source(trace: Any, resolved: ResolvedEpisode) -> Any:
@@ -573,9 +565,9 @@ def _derive_step_column(
 def _product_identity(trace: Any, address: str, started: int) -> dict[str, Any]:
     """The D4-clause recomputable identity facts of one episode product."""
 
-    labels = [str(getattr(op, "label", op)) for op in (getattr(trace, "layer_list", None) or ())]
+    labels = [str(getattr(op, "label", op)) for op in (trace._layer_list or ())]
     return {
-        "entry_seed": getattr(trace, "random_seed", None),
+        "entry_seed": trace._options_seed,
         "stepped_module": address,
         "stepped_calls": started,
         "op_labels": labels,
@@ -585,8 +577,7 @@ def _product_identity(trace: Any, address: str, started: int) -> dict[str, Any]:
 def _canonical_digest(payload: Mapping[str, Any]) -> str:
     """sha256 over the canonical (sorted, compact) JSON form of ``payload``."""
 
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return sha256_canonical_json(payload, default=str)
 
 
 def _ledger_content(ledger_payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -716,8 +707,6 @@ def rederived_evidence_matches(trace: Any, ledger_payload: Mapping[str, Any]) ->
     ledger). Digests bind content; this check binds the content to the
     product's own values.
     """
-
-    from ..errors.episode import EpisodeDeclarationError
 
     rows = list(ledger_payload.get("rows") or [])
     if not rows or any(

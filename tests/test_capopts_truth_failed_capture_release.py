@@ -21,6 +21,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._save_budget import SaveBudgetExceededError
+from torchlens.errors import TraceCaptureError
 from torchlens.options import CaptureOptions
 
 
@@ -87,19 +88,21 @@ def test_user_forward_failure_also_releases() -> None:
     """The purity contract covers user-code failures, not just TL refusals."""
 
     model = MidForwardBoom()
-    with pytest.raises(RuntimeError, match="user forward failure"):
+    with pytest.raises(TraceCaptureError, match="user forward failure") as _tce_info:
         tl.trace(model, torch.randn(2, 4))
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
     assert "forward" not in model.fc.__dict__
     pickle.dumps(model)
 
 
 def test_partial_recovery_survives_the_release() -> None:
-    """exc.partial_log stays recoverable after the model is released."""
+    """exc.partial_trace stays recoverable after the model is released."""
 
     model = MidForwardBoom()
-    with pytest.raises(RuntimeError) as excinfo:
+    with pytest.raises(TraceCaptureError) as excinfo:
         tl.trace(model, torch.randn(2, 4))
-    partial = tl._partial.from_failed_capture(excinfo.value)
+    assert isinstance(excinfo.value.__cause__, RuntimeError)
+    partial = excinfo.value.partial_trace
     assert partial is not None
     func_names = [getattr(op, "func_name", "") for op in partial.raw_layers]
     assert any(name == "linear" for name in func_names), func_names

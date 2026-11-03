@@ -109,7 +109,6 @@ def _draw(model: torch.nn.Module, inputs: object, tmp_path: Path, name: str, **k
         return str(
             log.draw(
                 path=str(tmp_path / name),
-                vis_save_only=True,
                 file_format="pdf",
                 **kwargs,
             )
@@ -270,6 +269,40 @@ def test_cluster_fit_keeps_moves_or_drops_each_group() -> None:
     assert _spanning_groups(injected) == []
 
 
+_CONTAINER_SKELETON = """digraph M {
+\tsrc [label=<src>]
+\tsubgraph cluster_attn_pass1 {
+\t\tfillcolor=white label=<attn>
+\t\tsrc -> s1 [style=solid]
+\t\tsrc -> s2 [style=solid]
+\t\tsubgraph cluster_container_call_7_tuple {
+\t\t\tlabel=<tuple root> style=dotted
+\t\t\ts1
+\t\t\ts2
+\t\t}
+\t}
+}
+"""
+
+
+@pytest.mark.parametrize("lca_key", ["attn:1", -1])
+def test_cluster_fit_moves_a_group_into_its_container_cluster(lca_key: str | int) -> None:
+    """A group whose members share a container cluster is emitted inside that cluster.
+
+    dot 2.43 takes a node out of a nested cluster when an earlier rank set in
+    the parent already holds it, so a group left in the module cluster emptied
+    the container box (GPT-2's split tuple drew no box with sibling ordering on).
+    """
+
+    chain = _chain(("s1", "s2"), lca_key)
+
+    fitted = _fit((chain,), _CONTAINER_SKELETON)
+
+    assert fitted == (replace(chain, lca_key="container_call_7_tuple"),)
+    _, groups = _cluster_layout(_inject_sibling_rank_groups(_CONTAINER_SKELETON, fitted))
+    assert groups == [(("cluster_attn_pass1", "cluster_container_call_7_tuple"), ("s1", "s2"))]
+
+
 @pytest.mark.parametrize(
     "breakage",
     ["unbalanced", "multiline_label"],
@@ -406,9 +439,7 @@ def test_root_level_chain_moves_into_the_branches_parent_cluster(tmp_path: Path)
 
     log = tl.trace(_InceptionToy(), torch.randn(2, 4))
     try:
-        dot_source = str(
-            log.draw(path=str(tmp_path / "inception"), vis_save_only=True, file_format="pdf")
-        )
+        dot_source = str(log.draw(path=str(tmp_path / "inception"), file_format="pdf").dot)
         decision = log._last_sibling_ordering_decision
     finally:
         log.cleanup()

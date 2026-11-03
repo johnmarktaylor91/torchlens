@@ -12,7 +12,7 @@ from typing import Any, ClassVar
 
 import torch
 
-from .._io import FieldPolicy
+from .._io._field_policy import FieldPolicy
 from .container import (
     ContainerSpec,
     DataclassField,

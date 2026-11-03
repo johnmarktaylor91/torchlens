@@ -6,7 +6,7 @@ import contextlib
 import os
 import random
 import warnings
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import torch
@@ -28,9 +28,9 @@ from ._capture_state_helpers import (
 from ._data_classes.trace import Trace
 from ._deploy_env import restore_state_dict_resilient
 from ._deprecations import MISSING, MissingType
+from ._errors import CaptureNotActiveError, InvalidArgumentError
 from ._input_coerce import _coerce_input_args
 from ._literals import (
-    BufferVisibilityLiteral,
     CollapseLiteral,
     FoldRepeatsLiteral,
     OutputDeviceLiteral,
@@ -40,13 +40,15 @@ from ._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
+from ._record_type import record_type
 from ._robustness import check_model_and_input_variants
 from ._save_budget import SaveBudgetOption
 from ._utils.arg_handling import normalize_input_args, safe_copy_input_tree
 from ._utils.display import warn_parallel
 from ._utils.hashing import compute_graph_shape_hash
+from ._utils.input_leaves import leaf_preserving_input_copies
 from ._utils.introspection import get_vars_of_type_from_obj
-from ._utils.rng import set_random_seed
+from ._utils.rng import restores_rng_streams, set_random_seed
 from ._validation_state_snapshot import (
     COPY_FAILED_CODE,
     StateSnapshot,
@@ -117,9 +119,8 @@ def log_model_metadata(
 ) -> Trace:
     """Return model metadata without saving any outs.
 
-    Equivalent to ``trace(model, input_args, input_kwargs,
-    capture=CaptureOptions(layers_to_save=None,
-    compute_input_output_distances=True))``.
+    Equivalent to ``trace(model, input_args, input_kwargs=input_kwargs,
+    save=None, capture=CaptureOptions(compute_input_output_distances=True))``.
 
     Parameters
     ----------
@@ -141,9 +142,9 @@ def log_model_metadata(
         input_args,
         input_kwargs=input_kwargs,
         capture=CaptureOptions(
-            layers_to_save=None,
             compute_input_output_distances=True,
         ),
+        save=None,
     )
     return model_trace
 
@@ -392,8 +393,6 @@ def _validate_summary_grammar(summary_kwargs: dict[str, Any]) -> None:
 def _validate_summary_modes(execution_mode: str, grad_mode: str) -> None:
     """Refuse unknown one-call summary execution/grad mode tokens typed."""
 
-    from ._errors import InvalidArgumentError
-
     if execution_mode not in ("eval", "train", "same"):
         raise InvalidArgumentError(
             f"execution_mode must be 'eval', 'train', or 'same'; got {execution_mode!r}.",
@@ -436,8 +435,6 @@ def _maybe_weightsfree_summary(
     if not _all_meta_model(model):
         return None
     if input_args is None and not input_kwargs and input_size is None:
-        from ._errors import InvalidArgumentError
-
         raise InvalidArgumentError(
             "summary() on a meta-built model needs input evidence: the "
             "zero-argument inference rung runs real probing forwards, which "
@@ -508,7 +505,7 @@ def _weightsfree_summary_facade(
         capture=_CaptureOptions(structure_only=True),
     )
     try:
-        envelope = trace.structure_evidence
+        envelope = trace._graph_structure_evidence
         if isinstance(envelope, dict) and isinstance(envelope.get("input_plan"), dict):
             envelope["input_plan"]["selection_source"] = "summary_facade_auto"
             if input_size is not None:
@@ -543,7 +540,7 @@ def show_model_graph(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
-    view: VisModeLiteral | MissingType = MISSING,
+    rolled: bool | MissingType = MISSING,
     depth: int | MissingType = MISSING,
     renderer: VisRendererLiteral | MissingType = MISSING,
     layout: VisNodePlacementLiteral | MissingType = MISSING,
@@ -600,7 +597,7 @@ def show_model_graph(
         speed matters.
     visualization:
         Grouped visualization options. When omitted, ``show_model_graph``
-        defaults to ``VisualizationOptions(view="unrolled")``.
+        defaults to ``VisualizationOptions()`` (the unrolled graph).
 
     Returns
     -------
@@ -619,9 +616,8 @@ def show_model_graph(
         recurrence_detection = True
     recurrence_detection_enabled = bool(recurrence_detection)
     visualization_options = merge_visualization_options(
-        function_default_mode="unrolled",
         visualization=visualization,
-        view=view,
+        rolled=rolled,
         depth=depth,
         renderer=renderer,
         layout=layout,
@@ -630,9 +626,6 @@ def show_model_graph(
         fold_repeats=fold_repeats,
         order_siblings=order_siblings,
     )
-
-    if visualization_options.view not in ["none", "rolled", "unrolled"]:
-        raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
     trace = _user_funcs._run_model_and_save_specified_outs(
         model=model,
@@ -662,162 +655,11 @@ def show_model_graph(
         trace.cleanup()
 
 
-def draw_backward(
-    trace: Trace,
-    node_spec_fn: Callable[[Any, Any], Any] | None = None,
-    collapsed_node_spec_fn: Callable[[Any, Any], Any] | None = None,
-    node_style: VisNodeModeLiteral | MissingType = MISSING,
-    code_panel: CodePanelOption = False,
-    vis_mode: VisModeLiteral = "rolled",
-    bwd: int | Iterable[int] | None = None,
-    visualization: VisualizationOptions | None = None,
-) -> str:
-    """Render an existing Trace's captured backward grad_fn_handle graph.
-
-    Parameters
-    ----------
-    trace:
-        Trace with backward metadata captured by ``trace.log_backward(loss)``
-        or ``trace.capture_backward()``.
-    node_spec_fn:
-        Optional callback receiving ``(grad_fn_handle, default_spec)``.
-    collapsed_node_spec_fn:
-        Accepted for forward-visualization API symmetry. Not applied because
-        backward graphs do not render collapsed module nodes.
-    node_style:
-        Node-style preset applied to grad_fn nodes.
-    code_panel:
-        Optional source-code panel mode.
-    vis_mode:
-        ``"rolled"`` renders one node per GradFn; ``"unrolled"`` renders one
-        node per GradFnCall grouped by backward pass.
-    bwd:
-        Optional one-based backward pass number or numbers to render.
-    visualization:
-        Grouped visualization options. Only output path, save behavior, file
-        format, direction, skin (``theme``), graph overrides, and edge
-        overrides are used.
-
-    Returns
-    -------
-    str
-        Graphviz DOT source.
-    """
-
-    if visualization is None:
-        container_path = "backward_modelgraph"
-        save_only = False
-        file_format = "pdf"
-        direction: VisDirectionLiteral = "topdown"
-        graph_overrides = None
-        edge_overrides = None
-        node_mode: VisNodeModeLiteral = "default"
-        theme = "torchlens"
-    else:
-        container_path = visualization.container_path
-        save_only = visualization.save_only
-        file_format = visualization.file_format
-        direction = visualization.direction
-        graph_overrides = visualization.graph_overrides
-        edge_overrides = visualization.edge_overrides
-        node_mode = visualization.node_style
-        theme = visualization.theme
-
-    if node_style is not MISSING:
-        node_mode = cast(VisNodeModeLiteral, node_style)
-
-    return trace.draw_backward(
-        path=container_path,
-        vis_graph_overrides=graph_overrides,
-        node_spec_fn=node_spec_fn,
-        collapsed_node_spec_fn=collapsed_node_spec_fn,
-        vis_node_mode=node_mode,
-        vis_edge_overrides=edge_overrides,
-        vis_save_only=save_only,
-        file_format=file_format,
-        vis_direction=direction,
-        code_panel=code_panel,
-        vis_mode=vis_mode,
-        bwd=bwd,
-        theme=theme,
-    )
-
-
-def draw_combined(
-    trace: Trace,
-    node_spec_fn: Callable[[Any, Any], Any] | None = None,
-    backward_node_spec_fn: Callable[[Any, Any], Any] | None = None,
-    vis_mode: VisModeLiteral = "unrolled",
-    intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
-    show_buffers: BufferVisibilityLiteral = "meaningful",
-    bwd: int | Iterable[int] | None = None,
-    visualization: VisualizationOptions | None = None,
-) -> str:
-    """Render an existing Trace's forward ops and backward grad_fns together.
-
-    Parameters
-    ----------
-    trace:
-        Trace with backward metadata captured by ``trace.log_backward(loss)``
-        or ``trace.capture_backward()``.
-    node_spec_fn:
-        Optional callback receiving ``(layer_log, default_spec)``.
-    backward_node_spec_fn:
-        Optional callback receiving ``(grad_fn_handle, default_spec)``.
-    vis_mode:
-        Combined rendering currently supports only ``"unrolled"``.
-    intervening_cluster:
-        Placement mode for grad_fns without a corresponding forward op.
-    show_buffers:
-        Buffer visibility mode for the forward side.
-    bwd:
-        Optional one-based backward pass number or numbers to render.
-    visualization:
-        Grouped visualization options. Only output path, save behavior, file
-        format, direction, graph overrides, and edge overrides are used.
-
-    Returns
-    -------
-    str
-        Graphviz DOT source.
-    """
-
-    if visualization is None:
-        container_path = "combined_modelgraph"
-        save_only = False
-        file_format = "pdf"
-        direction: VisDirectionLiteral = "leftright"
-        graph_overrides = None
-        edge_overrides = None
-    else:
-        container_path = visualization.container_path
-        save_only = visualization.save_only
-        file_format = visualization.file_format
-        direction = visualization.direction
-        graph_overrides = visualization.graph_overrides
-        edge_overrides = visualization.edge_overrides
-
-    return trace.draw_combined(
-        path=container_path,
-        vis_graph_overrides=graph_overrides,
-        node_spec_fn=node_spec_fn,
-        backward_node_spec_fn=backward_node_spec_fn,
-        vis_edge_overrides=edge_overrides,
-        vis_save_only=save_only,
-        file_format=file_format,
-        vis_direction=direction,
-        vis_mode=vis_mode,
-        intervening_cluster=intervening_cluster,
-        show_buffers=show_buffers,
-        bwd=bwd,
-    )
-
-
 def show_bundle_graph(
     bundle: Any,
     path: str = "bundle_modelgraph",
     vis_mode: VisModeLiteral = "unrolled",
-    direction: str = "forward",
+    signal: str = "forward",
     vis_direction: VisDirectionLiteral = "bottomup",
     vis_graph_overrides: dict[str, Any] | None = None,
     vis_node_overrides: dict[str, Any] | None = None,
@@ -838,8 +680,8 @@ def show_bundle_graph(
         Output path for Graphviz rendering.
     vis_mode:
         ``"rolled"``, ``"unrolled"``, or ``"none"``.
-    direction:
-        Graph content direction: ``"forward"``, ``"backward"``, ``"both"``, or
+    signal:
+        Which pass's graph to draw: ``"forward"``, ``"backward"``, ``"both"``, or
         ``"overlay"``.
     vis_direction:
         Graphviz layout direction.
@@ -861,7 +703,7 @@ def show_bundle_graph(
         ``label`` and, on ``fed_by``, its basis and coverage; solid edges
         carry token spans TorchLens checked, every other row is dashed.
         Node overrides key by member name, edge overrides by
-        ``(earlier, later)``; ``direction`` must stay ``"forward"``.
+        ``(earlier, later)``; ``signal`` must stay ``"forward"``.
     theme:
         Skin preset, the names ``Trace.draw`` takes: ``"torchlens"`` (default),
         ``"paper"``, ``"dark"``, ``"colorblind"`` or ``"high_contrast"``.
@@ -878,14 +720,14 @@ def show_bundle_graph(
 
     if nodes not in {"ops", "members"}:
         raise ValueError("nodes must be 'ops' or 'members'.")
-    if nodes == "members" and direction != "forward":
-        raise ValueError("nodes='members' draws the relation graph; leave direction='forward'.")
+    if nodes == "members" and signal != "forward":
+        raise ValueError("nodes='members' draws the relation graph; leave signal='forward'.")
     if vis_mode == "none":
         return None
     if vis_mode not in {"rolled", "unrolled"}:
         raise ValueError("vis_mode must be 'rolled', 'unrolled', or 'none'.")
-    if direction not in {"forward", "backward", "both", "overlay"}:
-        raise ValueError("direction must be 'forward', 'backward', 'both', or 'overlay'.")
+    if signal not in {"forward", "backward", "both", "overlay"}:
+        raise ValueError("signal must be 'forward', 'backward', 'both', or 'overlay'.")
 
     from ._visualization._bundle_graph import BundlePictureOptions, render_bundle_graph
     from ._visualization._render_utils import direction_to_rankdir
@@ -893,7 +735,7 @@ def show_bundle_graph(
     options = BundlePictureOptions(
         outpath=path,
         vis_mode=vis_mode,
-        direction=direction,
+        direction=signal,
         rankdir=direction_to_rankdir(vis_direction),
         graph_overrides=vis_graph_overrides,
         node_overrides=vis_node_overrides,
@@ -907,6 +749,7 @@ def show_bundle_graph(
     return render_bundle_graph(bundle, options)
 
 
+@restores_rng_streams
 def validate_forward_pass(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
@@ -930,8 +773,7 @@ def validate_forward_pass(
     input_kwargs:
         Keyword arguments for model forward pass.
     seed:
-        Fixed RNG seed for reproducibility. Reseeds the process-global RNG
-        engines without restoring them; see ``tl.trace``'s ``seed``.
+        Fixed RNG seed; like ``tl.trace``, the caller's streams are restored on return.
     verbose:
         If True, print detailed error messages on validation failure.
     validate_metadata:
@@ -1023,6 +865,18 @@ def _restore_validation_replay_state(
         )
 
 
+def _layer_signature(layer: Any) -> tuple[Any, ...]:
+    """Cheap structural signature of one layer record for divergence hints."""
+
+    return (
+        record_type(layer, None),
+        getattr(layer, "func_name", None),
+        len(getattr(layer, "parents", ()) or ()),
+        bool(getattr(layer, "is_output", False)),
+        bool(getattr(layer, "is_buffer", False)),
+    )
+
+
 def _first_reproducibility_divergence(left: Trace, right: Trace) -> str | None:
     """Return a concise first-difference hint for two validation traces.
 
@@ -1040,29 +894,15 @@ def _first_reproducibility_divergence(left: Trace, right: Trace) -> str | None:
         available.
     """
 
-    for index, (left_layer, right_layer) in enumerate(zip(left.layer_list, right.layer_list)):
-        left_sig = (
-            getattr(left_layer, "layer_type", None),
-            getattr(left_layer, "func_name", None),
-            len(getattr(left_layer, "parents", ()) or ()),
-            bool(getattr(left_layer, "is_output", False)),
-            bool(getattr(left_layer, "is_buffer", False)),
-        )
-        right_sig = (
-            getattr(right_layer, "layer_type", None),
-            getattr(right_layer, "func_name", None),
-            len(getattr(right_layer, "parents", ()) or ()),
-            bool(getattr(right_layer, "is_output", False)),
-            bool(getattr(right_layer, "is_buffer", False)),
-        )
-        if left_sig != right_sig:
+    for index, (left_layer, right_layer) in enumerate(zip(left._layer_list, right._layer_list)):
+        if _layer_signature(left_layer) != _layer_signature(right_layer):
             return (
                 f"first divergence at op index {index}: "
                 f"{getattr(left_layer, 'func_name', None)!r} vs "
                 f"{getattr(right_layer, 'func_name', None)!r}"
             )
-    if len(left.layer_list) != len(right.layer_list):
-        return f"op count changed: {len(left.layer_list)} vs {len(right.layer_list)}"
+    if len(left._layer_list) != len(right._layer_list):
+        return f"op count changed: {len(left._layer_list)} vs {len(right._layer_list)}"
     return None
 
 
@@ -1104,7 +944,7 @@ def _warn_if_validation_trace_not_reproducible(
 
     # Read outside the guard below: a trace without its save options must fail
     # loudly, never read as an "unavailable" re-trace.
-    retrace_output_device = cast(OutputDeviceLiteral, first_trace.output_device)
+    retrace_output_device = cast(OutputDeviceLiteral, first_trace._options_output_device)
     retrace_save_budget = first_trace.save_budget
     second_trace: Trace | None = None
     try:
@@ -1161,8 +1001,8 @@ def _warn_if_validation_trace_not_reproducible(
                 extra={
                     "first_graph_hash": first_hash,
                     "retrace_graph_hash": second_hash,
-                    "first_op_count": len(first_trace.layer_list),
-                    "retrace_op_count": len(second_trace.layer_list),
+                    "first_op_count": len(first_trace._layer_list),
+                    "retrace_op_count": len(second_trace._layer_list),
                     "first_divergence": hint,
                 },
             ),
@@ -1172,8 +1012,8 @@ def _warn_if_validation_trace_not_reproducible(
                 message,
                 first_graph_hash=first_hash,
                 retrace_graph_hash=second_hash,
-                first_op_count=len(first_trace.layer_list),
-                retrace_op_count=len(second_trace.layer_list),
+                first_op_count=len(first_trace._layer_list),
+                retrace_op_count=len(second_trace._layer_list),
                 first_divergence=hint,
             ),
             stacklevel=2,
@@ -1303,6 +1143,7 @@ def _refuse_validation_precondition(
 
 
 @_arg_references.with_parameter_reference_fallback
+@leaf_preserving_input_copies()
 def _validate_forward_pass_torch(
     model: nn.Module | Callable[..., Any],
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
@@ -1327,18 +1168,16 @@ def _validate_forward_pass_torch(
        through the wrapper layer it is meant to check (R75-1). If they
        cannot be removed (a capture is active), validation refuses with
        ``False`` rather than blessing a wrap-state-dependent ground truth.
-    2. Run ``trace`` with ``save_args=True`` and ``layers_to_save='all'``
+    2. Run ``trace`` with ``save_args=True`` and ``save='all'``
        to capture every out and its creating function's arguments.
     3. Call ``Trace.validate_forward_pass`` which replays the forward pass
-       layer-by-layer from saved outs, checking that the output matches
-       ground truth.  It also injects random outs and verifies the output
-       changes (proving the saved outs are actually used, not just ignored).
+       layer-by-layer from saved outs, checking that the output matches ground
+       truth, and injects random outs to verify the output changes (the saved outs are used).
     4. If ``validate_metadata=True``, run comprehensive invariant checks on all
        metadata cross-references (graph edges, module containment, labels, etc.).
 
-    **Why save_args=True is required:**  The validation replay re-executes
-    each function using its saved non-tensor arguments (e.g., stride, padding for
-    conv2d).  Without them, replay cannot reconstruct the correct computation.
+    **Why save_args=True is required:**  The validation replay re-executes each
+    function using its saved non-tensor arguments (e.g., stride, padding for conv2d).
 
     Parameters
     ----------
@@ -1349,9 +1188,8 @@ def _validate_forward_pass_torch(
     input_kwargs:
         Keyword arguments for model forward pass.
     seed:
-        Fixed RNG seed for reproducibility (auto-generated if None). Reseeds
-        the process-global RNG engines without restoring them; see
-        ``tl.trace``'s ``random_seed``.
+        Fixed RNG seed (auto-generated if None). Seeds the global RNG engines for the
+        ground-truth and logged runs; the public entries restore the caller's streams.
     verbose:
         If True, print detailed error messages on validation failure.
     validate_metadata:
@@ -1396,7 +1234,6 @@ def _validate_forward_pass_torch(
     # contract as tl.trace -- a bound method of an nn.Module wraps into the
     # TL-authored synthetic root before the module-shaped preflights run;
     # other callables refuse typed (previously a bare AttributeError leak).
-    from ._errors import InvalidArgumentError
     from .backends.torch.bound_root import TLBoundMethodRoot, is_bound_method_of_module
 
     if not isinstance(model, nn.Module):
@@ -1537,9 +1374,8 @@ def _validate_forward_pass_torch(
                 _trace_observer,
                 {"code": COPY_FAILED_CODE} if plain_attr_snapshot.copy_failure else None,
             )
-        from ._errors import CaptureNotActiveError
-        from .backends.torch.ops import _walk_output_tensors_with_paths
-        from .validation._pristine import pristine_torch_oracle
+        from .backends.torch._ops_containers import _walk_output_tensors_with_paths
+        from .validation._pristine import pristine_ground_truth_oracle
 
         # R75-1: the phase-0 ground truth must observe through PRISTINE
         # torch. In a wrapped process this forward used to run through the
@@ -1551,7 +1387,7 @@ def _validate_forward_pass_torch(
         # capture is active), validation REFUSES rather than blessing a
         # wrap-state-dependent ground truth.
         try:
-            with pristine_torch_oracle():
+            with pristine_ground_truth_oracle(ground_truth_model):
                 ground_truth_output = ground_truth_model(*input_args_copy, **input_kwargs_copy)
         except CaptureNotActiveError:
             return _refuse_validation_precondition(
@@ -1833,6 +1669,7 @@ def _validate_forward_pass_torch(
     return outs_are_valid
 
 
+@restores_rng_streams
 def validate_backward_pass(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
@@ -1863,9 +1700,9 @@ def validate_backward_pass(
     validate_metadata:
         If True, run metadata invariant checks on the captured backward trace.
     seed:
-        Fixed RNG seed for stock and candidate passes. Reseeds the
-        process-global RNG engines without restoring them; see
-        ``tl.trace``'s ``seed``.
+        Fixed RNG seed for stock and candidate passes. Like ``tl.trace``, the call
+        seeds the process-global RNG engines for its runs and restores the caller's
+        streams on return and on error.
     atol:
         Absolute allclose tolerance. ``None`` (default) derives the
         tolerance per gradient dtype (R13); the historical fp32 decimal

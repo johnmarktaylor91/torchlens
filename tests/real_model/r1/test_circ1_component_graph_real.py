@@ -96,7 +96,7 @@ def test_component_graph_bar(r1_loader, artifact_id, dtype) -> None:
     model, tokenizer = _load(r1_loader, artifact_id, dtype)
     ceiling = 1e-10 if dtype == torch.float64 else 1e-3
     for name, ids in _inputs(tokenizer, key, model.config.vocab_size).items():
-        trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(layers_to_save="all"))
+        trace = tl.trace(model, ids, save="all")
         try:
             graph = mi.component_graph(trace)
             vocabulary = sum(edge.sender.kind != "bias" for edge in graph.edges.values())
@@ -133,9 +133,9 @@ def test_edge_patch_runs_on_gpt2_small(r1_loader) -> None:
     assert clean_ids.shape == corrupt_ids.shape
     answer = tokenizer(" " + row["indirect_object"])["input_ids"][0]
     distractor = tokenizer(" " + row["subject"])["input_ids"][0]
-    capture = tl.options.CaptureOptions(layers_to_save="all", intervention_ready=True)
-    clean = tl.trace(model, clean_ids, capture=capture)
-    corrupt = tl.trace(model, corrupt_ids, capture=capture)
+    capture = tl.options.CaptureOptions(replayable=True)
+    clean = tl.trace(model, clean_ids, capture=capture, save="all")
+    corrupt = tl.trace(model, corrupt_ids, capture=capture, save="all")
 
     def logit_diff(trace) -> float:
         logits = trace.modules["lm_head"].out

@@ -1,11 +1,11 @@
 # Intervention API Reference
 
-This page documents the public v2 intervention API that shipped in the current
-branch. It avoids proposed naming changes from separate design workstreams.
+This page documents the public intervention API: selectors, edit helpers, hooks,
+replay and bundles.
 
 To apply one intervention to many forwards or a `generate()` loop, use `spec.bind(model)`
-(capture-free, about the cost of a plain hook) or `tl.record(..., intervene=spec,
-return_output=True)` when you need activations too, or rerun a steered trace with
+(capture-free, about the cost of a plain hook) or `tl.record(..., intervene=spec)` (the
+model output is `recording.output`) when you need activations too, or rerun a steered trace with
 `trace.run(model, x)` (the guarded fast engine when the spec targets modules; see the glossary
 entry "Guarded fast rerun"). Recipe: "Steering many forwards / generation" in
 [agent-reference/common-patterns.md](agent-reference/common-patterns.md).
@@ -19,15 +19,16 @@ Selectors resolve against completed `Trace.layers` records.
 | `tl.label` | `label(name: str)` | Exact final, raw, short, or pass-qualified label. |
 | `tl.func` | `func(name: str)` | Match captured function name OR normalized layer type such as `"relu"` or `"add"`. |
 | `tl.module` | `module(address: str)` | Match a module output boundary. |
-| `tl.label_contains` | `contains(substring: str)` | Case-insensitive label substring search. |
-| `tl.label_matches` | `regex(pattern: str)` | Case-sensitive `re.search` over labels. |
+| `tl.label_contains` | `label_contains(substring: str)` | Case-insensitive label substring search. |
+| `tl.label_matches` | `label_matches(pattern: str)` | Case-sensitive `re.search` over labels. |
+| `tl.all_sites` | `all_sites()` | Every site; the named form of `tl.label_matches(".*")`. `tl.all_sites() - region` is the complement of `region` in the whole trace. |
 | `tl.where` | `where(predicate, *, name_hint=None)` | Predicate over layer pass records; non-portable. |
 | `tl.in_module` | `in_module(address: str)` | Match sites contained in a module address. |
 | `tl.grad_fn` | `grad_fn(name=None, *, label=None, is_custom=None)` | Backward grad_fn by autograd class name, label substring or custom flag (backward sites only). |
 
 One interpreter evaluates every selector in every lifecycle (capture-time
-`save=`, post-hoc `find_sites`, live hooks); `contains` is case-insensitive and
-`regex` case-sensitive everywhere. Post-hoc `contains`/`regex` search the
+`save=`, post-hoc `find_sites`, live hooks); `label_contains` is case-insensitive and
+`label_matches` case-sensitive everywhere. Post-hoc `label_contains`/`label_matches` search the
 final `layer_label` only; exact `tl.label` additionally matches raw, short,
 and pass-qualified spellings. Capture-only selectors (`tl.followed_by`,
 `tl.preceded_by`) and mutator-only selectors (`tl.facet`, `tl.head`) refuse
@@ -112,21 +113,36 @@ reconstruction fidelity plus output-level causal effect. The optional
 the feature-level causal-testing knob. See
 `notebooks/sae_splice_tutorial.ipynb` for the end-to-end experiment.
 
-## Backward Helpers
+## Gradient Sites
 
-Backward helpers are Tier-1 live/rerun-only helpers.
+A gradient is addressed as a site, not chosen by a keyword. `tl.grad("relu_3")` names the gradient of
+relu_3's OUTPUT (the tensor `trace["relu_3"].grad` stores), a bare `"relu_3"` names its activation, and
+`tl.grad("relu_3") | "relu_3"` names both. `tl.grad` is an address; it never calls autograd. It wraps a
+forward site once and refuses node selectors (`tl.grad_fn`, ...), facets and selections.
 
-| Helper | Signature | Portability |
-| --- | --- | --- |
-| `tl.hook_grad` | `hook_grad(fn)` | Live/rerun-only; not portable. |
-| `tl.zero_grad` | `zero_grad(*, allow_shape_change=False)` | Live/rerun-only; not portable. |
-| `tl.scale_grad` | `scale_grad(factor, *, allow_shape_change=False)` | Live/rerun-only; not portable. |
+There are no gradient-only helpers. The ordinary edits apply to whichever tensor the site names:
+
+| Edit | On `tl.grad(site)` |
+| --- | --- |
+| `tl.scale(f)`, `tl.zero_ablate()`, `tl.clamp(low=lo, high=hi)`, `tl.add_noise(std, seed=)` | Scale, zero, clamp or add noise to the gradient. |
+| `tl.clip_norm(max_norm, norm_type=2.0)` | Rescale the gradient so its norm is at most `max_norm`, per tensor. Portable. |
+| A callable `fn(grad, *, ctx)` | Receives the gradient; return a replacement or `None`. Audit-only when saved. |
+
+Edits that read recorded forward state (`tl.patch_from`, `tl.mean_ablate`, `tl.splice_module`,
+`tl.swap_with` with a site or trace donor) refuse on a gradient site with `edit_signal_mismatch`.
+
+`trace.do(tl.grad(site), edit, model=model, inputs=x)` reruns the forward with the edit armed; the next
+`result.backward(loss)` applies it. `loss=lambda t: ...` (a callable of the returned trace) does both in
+one call. The audit row status is `"armed"` until a backward settles it. Without `model=` and `x=` (or
+`intervention=tl.options.InterventionOptions(engine="set_only")` to arm in place), `do` refuses
+`replay_gradient_edit_unsupported`.
 
 Hook callables receive one positional tensor and a required keyword-only
-`ctx` context. For forward hooks the positional tensor is the activation; for
-backward hooks it is the gradient. The positional parameter is matched by
+`ctx` context. For an activation site the positional tensor is the activation; for
+a gradient site it is the gradient. The positional parameter is matched by
 position, so `def hook(activation, *, ctx): ...` and
-`lambda g, *, ctx: ...` are both valid. Hooks must return the replacement
+`lambda g, *, ctx: ...` are both valid. `ctx.state` is the per-(site, hook) scratch dict,
+`ctx.run_state` the run-scoped one, and `ctx.signal` is `"forward"` or `"backward"`. Hooks must return the replacement
 tensor.
 
 ## Attribution Patching
@@ -158,11 +174,11 @@ finally:
 If a raw hook returns a new tensor, TorchLens instruments that replacement, so
 downstream op-level graph structure remains available: torch ops the hook runs
 are traced as ordinary ops, and a tensor with no traceable provenance is
-recorded as an `interventionreplacement_*` op marked `intervention_replaced=True`.
+recorded as an `interventionreplacement_*` op marked `is_edited=True`.
 
 A capture-time module edit (`intervene=tl.when(tl.module("block"), ...)`) is
 always recorded as its own `interventionreplacement_*` op, with
-`intervention_replaced=True` and its fire records on `.interventions`, placed
+`is_edited=True` and its fire records on `.interventions`, placed
 between the module's last op and that op's consumers. The module's last op keeps
 the value it computed, before the edit. The edited value is the replacement
 op's `.out`, and it is what `tl.module("block")` reads as the module's output.
@@ -191,15 +207,16 @@ capability statement).
 Forward exceptions keep the historical behavior unless you opt in. With
 `on_forward_error="attach_partial"`, TorchLens attaches `exc.partial_recording` and re-raises
 the original exception. With `on_forward_error="return_partial"`, `tl.record(...)` returns a
-failed partial `Recording`; `return_output=True` returns `(None, partial)` because there is no
-valid model output. Failed partials carry `status="partial_error"`, `failed=True`,
+failed partial `Recording`; its `output` refuses with `output_forward_failed` because there is
+no valid model output. Failed partials carry `status="partial_error"`, `failed=True`,
 string-only error metadata, `num_committed_ops`, and best-effort `last_event_*` fields. user-op
 failures exclude the failing call; TL-side capture failures may include a skipped/partial
 current-call event. Failed partials are not topology-complete, so `Recording.to_trace()` and
 `Recording.backward()` reject them.
 
-For full `tl.trace(...)` failures, inspect `exc.partial_log` directly or call
-`tl._partial.from_failed_capture(exc)`.
+A full `tl.trace(...)` whose forward raises raises `tl.errors.TraceCaptureError`, chained
+`from` the forward's own exception (`exc.__cause__`); inspect the partial capture on
+`exc.partial_trace`.
 
 ## Trace Mutators
 
@@ -267,11 +284,11 @@ returns, so a fork made right after a rerun costs the same as any other
 (about 420,000 calls; about 1.25 million before, when that capture's cleanup
 ran inside whatever came next, typically the next fork).
 
-`Trace.draw(vis_intervention_mode=...)` visualizes the planned intervention
+`Trace.draw(intervention_mode=...)` visualizes the planned intervention
 recipe stored on an intervention-ready trace, such as sites registered with
 `log.set(...)` or `log.do(...)`. Each edited node gets a purple ring and a
 last row naming the edit (`Δ zero_ablate`), and the header names the edits;
-`vis_show_cone=True` (off by default) adds a translucent purple underlay
+`show_cone=True` (off by default) adds a translucent purple underlay
 under the arrows and node outlines the edit changed downstream. Capture-time `intervene=...` calls record
 fire metadata on matched layers, but they are not replay plans and are not
 drawn as planned sites.
@@ -316,4 +333,4 @@ operands they actually read.
 
 | TransformerLens pattern | TorchLens pattern |
 | --- | --- |
-| `act_patch` attribution patching | Attach a `tl.hook_grad(...)` gradient observer at the site, then `log.run(model, x)` under the active spec and score from the captured gradients/outs. |
+| `act_patch` attribution patching | Attach a `tl.observers.tap(tl.grad(site))` gradient observer (or a callable on `tl.grad(site)`), run `log.run(model, x)` under the active spec, call `result.backward(loss)` and score from the captured gradients/outs. |

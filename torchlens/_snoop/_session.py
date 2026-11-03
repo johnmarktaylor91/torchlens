@@ -32,6 +32,7 @@ from collections import deque
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
+from .._errors import original_exception
 from .._state import pause_logging
 from ..errors._base import TorchLensWarning
 from ._errors import NarrationStatsError
@@ -138,7 +139,7 @@ class EchoSession:
         """Resolve the sink, the scope, and the per-pass counters."""
 
         from .._ir.selector_eval import split_followed_by_conjunction
-        from ..intervention.selectors import BaseSelector
+        from .._selection.selectors import BaseSelector
 
         self.options = options
         self.tier = tier
@@ -282,14 +283,10 @@ class EchoSession:
         mode = self._stats_mode
         if mode == "off":
             return None
-        numel = 1
-        for dim in ctx.shape or ():
-            numel *= dim
         if mode == "reuse":
             return reuse_stats(
                 trace,
                 ctx.raw_label or ctx.label,
-                numel,
                 shape=ctx.shape or (),
                 dtype=compact_dtype(ctx.dtype) or "unknown",
                 device=compact_device(ctx.tensor_device) or "unknown",
@@ -325,7 +322,7 @@ class EchoSession:
             kind=kind,
             ordinal=ordinal,
             label=ctx.label,
-            pass_index=ctx.pass_index if ctx.pass_index else self.pass_index,
+            pass_index=ctx.pass_number if ctx.pass_number else self.pass_index,
             step_index=ctx.step_index,
             layer_type=ctx.layer_type,
             func_name=ctx.func_name,
@@ -644,7 +641,10 @@ class EchoSession:
     def render_failure_tail(self, exc: BaseException) -> list[str]:
         """Render the crash tail block, oldest line first (snoop D5)."""
 
-        lines: list[str] = [f"!! forward failed: {type(exc).__name__}: {exc}"]
+        # The headline names the forward's own exception, not the door's
+        # TraceCaptureError wrapper around it.
+        cause = original_exception(exc)
+        lines: list[str] = [f"!! forward failed: {type(cause).__name__}: {cause}"]
         if self._last_completed is not None:
             lines.append(
                 f"!! last completed event={self._last_completed[0]} op={self._last_completed[1]}"

@@ -1,7 +1,7 @@
 """Public-spelling ``repr`` for ``tl.Edit`` (the ``Edit`` dataclass).
 
 A builtin edit prints as the public constructor call that builds it, so the
-printed text is the call a user would type (``tl.scale_grad(2.0)``). Edits that
+printed text is the call a user would type (``tl.clip_norm(1.0)``). Edits that
 no public constructor reproduces from their stored arguments print as
 ``tl.Edit(...)`` with their identity fields.
 """
@@ -53,13 +53,11 @@ def render_edit_repr(spec: Edit) -> str:
             if not _is_signature_default(target, key, value)
         )
         return f"{path}({', '.join(parts)})"
-    fields = [repr(spec.helper_name)]
-    if spec.kind != "forward":
-        fields.append(f"kind={spec.kind!r}")
+    fields = [repr(spec.name)]
     if spec.portability != "builtin":
         fields.append(f"portability={spec.portability!r}")
-    if spec.direction is not None:
-        fields.append(f"direction={spec.direction!r}")
+    if spec.signal is not None:
+        fields.append(f"signal={spec.signal!r}")
     if spec.args:
         fields.append(f"args=({', '.join(_render_value(value) for value in spec.args)},)")
     if spec.kwargs:
@@ -83,7 +81,7 @@ def _public_constructor(spec: Edit) -> tuple[str, Callable[..., Any]] | None:
     Returns
     -------
     tuple[str, Callable[..., Any]] | None
-        Dotted public path such as ``"tl.zero_grad"`` and the constructor, or
+        Dotted public path such as ``"tl.clip_norm"`` and the constructor, or
         ``None``.
     """
 
@@ -91,7 +89,7 @@ def _public_constructor(spec: Edit) -> tuple[str, Callable[..., Any]] | None:
         return None
     from .helpers import builtin_helper_constructor
 
-    target = builtin_helper_constructor(spec.helper_name)
+    target = builtin_helper_constructor(spec.name)
     if target is None:
         return None
     import importlib
@@ -99,13 +97,13 @@ def _public_constructor(spec: Edit) -> tuple[str, Callable[..., Any]] | None:
     for module_name, prefix in _PUBLIC_NAMESPACES:
         namespace = importlib.import_module(module_name)
         try:
-            candidate = getattr(namespace, spec.helper_name)
+            candidate = getattr(namespace, spec.name)
         except (AttributeError, ImportError):
             # Lazy facades raise (typed) AttributeError for absent or
             # redirected names and ImportError for gated extras.
             continue
         if candidate is target:
-            return f"{prefix}.{spec.helper_name}", target
+            return f"{prefix}.{spec.name}", target
     return None
 
 

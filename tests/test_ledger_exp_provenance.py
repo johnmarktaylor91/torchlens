@@ -28,9 +28,7 @@ class _Tiny(nn.Module):
 
 def _ready() -> tl.Trace:
     torch.manual_seed(5)
-    return tl.trace(
-        _Tiny(), torch.randn(2, 3), capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    return tl.trace(_Tiny(), torch.randn(2, 3), capture=tl.options.CaptureOptions(replayable=True))
 
 
 def test_why_exact_on_event_lineage_fork_chain() -> None:

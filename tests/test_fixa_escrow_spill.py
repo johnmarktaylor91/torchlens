@@ -111,7 +111,7 @@ def test_spilled_real_capture_payload_materializes_bit_exact(force_spill):
     torch.manual_seed(0)
     model = _TwoConv().eval()
     x = torch.randn(2, 3, 8, 8)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=["conv2d_2_3"]))
+    log = tl.trace(model, x, save=["conv2d_2_3"])
     oracle = _eager_module_output(model, "conv2", x)
     assert torch.equal(log["conv2d_2_3"].out, oracle), (
         "spilled escrow payload is not bit-exact against the eager module output"
@@ -173,21 +173,17 @@ def test_config_built_clip_visual_projection_bit_equal_through_forced_spill(forc
     }
     kwargs["attention_mask"] = torch.ones_like(kwargs["input_ids"])
 
-    structure = tl.trace(
-        model, (), input_kwargs=kwargs, capture=tl.options.CaptureOptions(layers_to_save="none")
-    )
+    structure = tl.trace(model, (), input_kwargs=kwargs, save="none")
     projection_ops = [
         op
-        for op in structure.layer_list
+        for op in structure._layer_list
         if "visual_projection" in (op.output_of_modules or ())
         and not getattr(op, "is_output", False)
     ]
     assert projection_ops, "no visual_projection op captured on the R0 CLIP fixture"
     label = projection_ops[0].layer_label
 
-    log = tl.trace(
-        model, (), input_kwargs=kwargs, capture=tl.options.CaptureOptions(layers_to_save=[label])
-    )
+    log = tl.trace(model, (), input_kwargs=kwargs, save=[label])
     oracle = _eager_module_output(model, "visual_projection", **kwargs)
     assert torch.equal(log[label].out, oracle), (
         f"R0 CLIP {label} escrow payload not bit-equal to the eager visual projection"
@@ -231,29 +227,31 @@ def test_resnet18_batch8_deferred_spellings_complete_and_materialize_bit_exact()
     # attached default's spill disclosure is pinned in test_module_save_live_retention.
     # grouping rule row 28: each BasicBlock's one ReLU module called twice is one
     # Layer with 2 passes, so layer1.1.conv2 is the 14th Layer, not the 15th.
-    capture = _detached(layers_to_save=["conv2d_5_14"])
-    log = tl.trace(model, x, capture=capture)
+    capture = _detached()
+    log = tl.trace(model, x, capture=capture, save=["conv2d_5_14"])
     op = log["conv2d_5_14"]
     assert op.output_of_modules == ("layer1.1.conv2",)
     assert torch.equal(op.out, _eager_module_output(model, "layer1.1.conv2", x))
 
-    ordinal_capture = _detached(layers_to_save=[5])
-    ordinal_log = tl.trace(model, x, capture=ordinal_capture)
+    ordinal_capture = _detached()
+    ordinal_log = tl.trace(model, x, capture=ordinal_capture, save=[5])
     saved = [
         op
-        for op in ordinal_log.layer_list
+        for op in ordinal_log._layer_list
         if getattr(op, "has_saved_activation", False) and op.output_of_modules
     ]
     assert saved, "positive-ordinal save retained no module-attributed payloads"
     for op in saved:
         assert torch.equal(op.out, _eager_module_output(model, op.output_of_modules[-1], x))
 
-    output_capture = _detached(layers_to_save=["output"])
-    output_log = tl.trace(model, x, capture=output_capture)
+    output_capture = _detached()
+    output_log = tl.trace(model, x, capture=output_capture, save=["output"])
     with torch.no_grad():
         direct = model(x)
     output_ops = [
-        op for op in output_log.layer_list if getattr(op, "is_output", False) and op.out is not None
+        op
+        for op in output_log._layer_list
+        if getattr(op, "is_output", False) and op.out is not None
     ]
     assert output_ops and all(torch.equal(op.out, direct) for op in output_ops), (
         "output-label deferred save did not materialize the returned tensor bit-exactly"
@@ -270,9 +268,17 @@ def test_resnet50_batch1_op_label_selective_save_completes():
 
     model = torchvision.models.resnet50(weights="IMAGENET1K_V1").eval()
     x = torch.randn(1, 3, 224, 224, generator=torch.Generator().manual_seed(1))
-    capture = _detached(layers_to_save=["conv2d_10_30"])
-    log = tl.trace(model, x, capture=capture)
-    op = log["conv2d_10_30"]
+    # The label is resolved from the graph (the tenth conv2d op), never
+    # hard-coded: label numbering shifts whenever the op count before it does.
+    structure = tl.trace(model, x, save="none")
+    convs = [op for op in structure._layer_list if op.layer_type == "conv2d"]
+    assert len(convs) > 9, "expected more than nine conv2d ops on resnet50"
+    label = convs[9].layer_label
+    capture = _detached()
+    log = tl.trace(model, x, capture=capture, save=[label])
+    op = log[label]
+    assert op.layer_type == "conv2d"
+    assert op.output_of_modules, "the tenth conv2d op must be a module output"
     assert torch.equal(op.out, _eager_module_output(model, op.output_of_modules[-1], x))
 
 
@@ -286,17 +292,17 @@ def test_vit_b_16_op_label_selective_save_completes():
 
     model = torchvision.models.vit_b_16(weights="IMAGENET1K_V1").eval()
     x = torch.randn(2, 3, 224, 224, generator=torch.Generator().manual_seed(1))
-    structure = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="none"))
+    structure = tl.trace(model, x, save="none")
     module_linears = [
         op
-        for op in structure.layer_list
+        for op in structure._layer_list
         if op.layer_label.startswith("linear_")
         and op.output_of_modules
         and not getattr(op, "is_output", False)
     ]
     assert len(module_linears) > 4, "expected module-attributed linear ops on vit_b_16"
     target = module_linears[4]
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=[target.layer_label]))
+    log = tl.trace(model, x, save=[target.layer_label])
     op = log[target.layer_label]
     # Door parity is the exact claim: the deferred escrow door must return the
     # SAME BYTES the live predicate door returns for the same op. The bare
@@ -343,7 +349,7 @@ def test_real_clip_linear_73_288_bit_equal_to_visual_projection():
         model,
         (),
         input_kwargs=kwargs,
-        capture=tl.options.CaptureOptions(layers_to_save=["linear_73_300"]),
+        save=["linear_73_300"],
     )
     op = log["linear_73_300"]
     assert op.output_of_modules == ("visual_projection",)

@@ -1,7 +1,7 @@
 """The grouping-policy stamp (``grouping_policy_v1``): writer, loader
 validation (coherence rules C1-C8), and the canonical degraded settlement.
 
-``trace.grouping_policy`` is a site-granular, load-validated record of HOW a
+``trace.options.grouping_policy`` is a site-granular, load-validated record of HOW a
 trace was grouped AND how its product rows were site-joined -- two distinct
 axes: ``policy`` records only the step-7 grouping that actually ran;
 ``site_join`` records the product-layer join (always ``"none"`` from the
@@ -265,13 +265,13 @@ def settle_loaded_grouping_policy(state: dict[str, Any]) -> dict[str, Any]:
     settles with the violated rule's name in the settlement token.
     """
 
-    payload = state.get("grouping_policy")
+    payload = state.get("_options_grouping_policy")
     if payload is None:
         return degraded_grouping_policy_stamp("legacy")
     violated = validate_grouping_policy_stamp(
         payload,
-        recurrence_detection=state.get("recurrence_detection"),
-        grouping=state.get("grouping"),
+        recurrence_detection=state.get("_options_recurrence_detection"),
+        grouping=state.get("_options_grouping"),
     )
     if violated is None:
         return dict(payload)

@@ -9,11 +9,12 @@ plan object's clause selections; ``per_firing`` plans are never suffixed.
 from __future__ import annotations
 
 import torch
+from support.sampling import sampling_draws
 from torch import nn
 
 import torchlens as tl
 from torchlens.intervention import population, sample_from
-from torchlens.intervention.stochastic import assign_batch_donor_groups, sampling_records
+from torchlens.intervention.stochastic import assign_batch_donor_groups
 
 
 class _TwoBlock(nn.Module):
@@ -31,15 +32,15 @@ def _trace() -> tl.Trace:
     return tl.trace(
         _TwoBlock(),
         torch.randn(5, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True, seed=0),
+        capture=tl.options.CaptureOptions(replayable=True, seed=0),
     )
 
 
 def _draws(fork: tl.Trace) -> dict[str, list[int]]:
     return {
-        row["logical_firing_coordinate"][0]: row["donor_ids"]
-        for row in sampling_records(fork)
-        if row["share_draw"] == "per_firing"
+        row.logical_firing_coordinate[0]: row.draw_indices
+        for row in sampling_draws(fork)
+        if row.share_draw == "per_firing"
     }
 
 
@@ -67,9 +68,9 @@ def test_per_firing_batch_equals_sequential_in_any_order() -> None:
     assert _draws(batch) == expected, "batch do() must reproduce sequential do()"
     assert _draws(reversed_batch) == expected, "clause order never moves a draw"
     for fork in (batch, reversed_batch):
-        assert {row["donor_group_id"] for row in sampling_records(fork)} == {
-            plan_a.donor_group_id
-        }, "per_firing plans are never suffixed: the coordinate already carries the site"
+        assert {row.donor_group_id for row in sampling_draws(fork)} == {plan_a.donor_group_id}, (
+            "per_firing plans are never suffixed: the coordinate already carries the site"
+        )
     assert torch.equal(batch["relu_2_4"].out, reversed_batch["relu_2_4"].out)
 
 
@@ -91,7 +92,7 @@ def test_per_group_disambiguation_is_order_independent() -> None:
     backward.do([(site_b, tl.patch_from(plan_b)), (site_a, tl.patch_from(plan_a))])
 
     def by_group(fork: tl.Trace) -> dict[str, list[int]]:
-        return {row["donor_group_id"]: row["donor_ids"] for row in sampling_records(fork)}
+        return {row.donor_group_id: row.draw_indices for row in sampling_draws(fork)}
 
     forward_groups = by_group(forward)
     assert len(forward_groups) == 2, "kwargs coincidence never shares a donor group"

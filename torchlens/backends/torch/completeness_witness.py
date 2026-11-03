@@ -59,10 +59,6 @@ import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is
 
 from ... import _state
 from ..._errors import CaptureGapWarning
-from ..._split_rebind import (
-    rebind_contextmanager as _rebind_contextmanager,
-    rebind_function as _rebind_function,
-)
 from ..._utils import _exception_notes, _torch_compat
 from ..._utils._callable_safety import private_c_forward_op_module_names
 from ..._utils._torch_compat import (
@@ -71,18 +67,6 @@ from ..._utils._torch_compat import (
 )
 from ..._utils._torch_symbols import torch_attr
 from ...errors import ScalarEscapeWarning
-from . import (
-    _completeness_boundaries as _completeness_boundaries,
-    _completeness_cross_thread as _completeness_cross_thread,
-    _completeness_dispatch as _completeness_dispatch,
-    _completeness_dispatch_names as _completeness_dispatch_names,
-    _completeness_escape_state as _completeness_escape_state,
-    _completeness_finalize as _completeness_finalize,
-    _completeness_metadata as _completeness_metadata,
-    _completeness_origins as _completeness_origins,
-    _completeness_patches as _completeness_patches,
-    _completeness_storage as _completeness_storage,
-)
 from ._completeness_audited import (
     _EXPECTED_OPAQUE_WRAPPERS,
     AUDITED_COMPLETENESS_BOUNDARIES,
@@ -96,6 +80,9 @@ from ._completeness_types import (
     _StorageOriginRegistry,
     _TensorOriginRegistry,
     _WitnessState,
+)
+from ._internal_read import (
+    _internal_read_state,  # noqa: F401  (one per-thread counter, re-exported)
 )
 from ._modes import _TorchLensDispatchMode
 from ._tl import (
@@ -498,7 +485,7 @@ between input and read can canonicalize it -- so the honest verdict is "cannot v
 the r35 three-state rule). A same-stride runtime input compares equal and stays VERIFIED, so
 honest channels_last-on-channels_last models are untouched (zero collateral). The mirrored
 consumer constants live in ``torchlens._io.runnable._INPUT_METADATA_FACT_NAMES`` and
-``torchlens._runnable_execution._INPUT_DERIVED_LAYOUT_FACT_NAME``.
+``torchlens._runnable.execution._INPUT_DERIVED_LAYOUT_FACT_NAME``.
 
 Scope / documented residuals (future intermediate-metadata escape kinds route HERE):
 
@@ -706,7 +693,7 @@ STATE_METADATA_MIRROR: Mapping[str, tuple[str, str]] = MappingProxyType(
 
 Keys are EXACTLY the input net's accessor union (pinned by the T-X1 parity test). ``detail``
 is the state read KIND for ``read_kind`` rows (the ``_STATE_METADATA_READ_REQUIRED_DIMS``
-vocabulary in ``torchlens._runnable_state``), the persisted fact name for ``declared_fact``
+vocabulary in ``torchlens._runnable.state``), the persisted fact name for ``declared_fact``
 rows (the closed ``_STATE_METADATA_FACT_NAMES`` vocabulary in ``torchlens._io.runnable``),
 and a documentation pointer for ``structural`` rows.
 """
@@ -815,7 +802,7 @@ safetensors re-lays stride). Recording the read KIND per state name lets the run
 refuse the save exactly when a read dim was non-canonical at capture
 (``producer_state_metadata``), while an UNREAD non-canonical slot (a channels-last conv weight)
 stays saveable and ``verified``. Kept weak-keyed off the schema; read kinds are the
-``_STATE_METADATA_READ_REQUIRED_DIMS`` vocabulary in ``torchlens._runnable_state``.
+``_STATE_METADATA_READ_REQUIRED_DIMS`` vocabulary in ``torchlens._runnable.state``.
 """
 
 _HOST_ESCAPE_UNATTRIBUTABLE_BOOL: weakref.WeakSet[Any] = weakref.WeakSet()
@@ -1113,10 +1100,6 @@ _TORCHLENS_ROOT = _COMPLETENESS_WITNESS_FILE.parents[2]
 
 _MAX_ESCAPE_STACK_DEPTH = 60
 """Bounded stack walk when classifying an escape dispatch's origin."""
-
-
-_internal_read_state = threading.local()
-"""Per-thread depth counter for the explicit TorchLens internal-scalar-read marker."""
 
 
 _DISPATCH_TENSOR_ORIGINS: weakref.WeakKeyDictionary[Any, _TensorOriginRegistry] = (
@@ -1604,440 +1587,40 @@ absent on a given torch build (feature-gated members) are skipped at install.
 """
 
 
+# Late imports (after this module's own definitions): the split modules import this
+# module's classes and constants back, so they must exist before the splits load.
+from ._completeness_boundaries import (  # noqa: E402
+    _in_replacement_hook_frame,
+)
+from ._completeness_dispatch import (  # noqa: E402
+    _as_strided_result_contained,
+    _dispatch_credit_refs,
+    _dispatch_result_holds_tensor,
+    _sample_writeback_at_consumption,
+)
+from ._completeness_dispatch_names import (  # noqa: E402
+    _dispatch_callsite,
+    _is_aten_operator,
+    _is_buffer_state_view_dispatch,
+    _is_mutating_operator,
+    _operator_base_name,
+    _operator_name,
+)
+from ._completeness_finalize import (  # noqa: E402
+    _collect_authorized_internal_caller_modules,
+)
+from ._completeness_origins import (  # noqa: E402
+    _operator_is_growth_resize,
+    _record_host_escape_source,
+    _register_dispatch_result_origins,
+    internal_scalar_read,
+)
+
 # Import-time roster collection for the witness's internal-caller
 # authorization (see ``_caller_frame_is_torchlens_internal``). Runs at the
-# BOTTOM of the module so every function above is already defined, and before
+# BOTTOM of the module, after the late imports, so every split module is loaded, and before
 # any user code can run a capture. ``buffer_writes`` is the one other module
 # whose functions legitimately call ``_raw_storage_ptr_no_observe`` (the
 # journaled-write alias prefilter); this module imports from it at the top,
 # so its namespace is guaranteed complete here.
-
-
-# Private implementation slices; public names remain owned by this module.
-_in_replacement_hook_frame = _rebind_function(
-    _completeness_boundaries._in_replacement_hook_frame, globals()
-)
-_is_expected_opaque_dispatch = _rebind_function(
-    _completeness_boundaries._is_expected_opaque_dispatch, globals()
-)
-completeness_scope_for_wrapper = _rebind_function(
-    _completeness_boundaries.completeness_scope_for_wrapper, globals()
-)
-record_runnable_input_storage_sites = _rebind_function(
-    _completeness_boundaries.record_runnable_input_storage_sites, globals()
-)
-_classify_input_storage_alias = _rebind_function(
-    _completeness_boundaries._classify_input_storage_alias, globals()
-)
-_input_base_tensor = _rebind_function(_completeness_boundaries._input_base_tensor, globals())
-_record_input_metadata_read_at_site = _rebind_function(
-    _completeness_boundaries._record_input_metadata_read_at_site, globals()
-)
-_record_input_metadata_read = _rebind_function(
-    _completeness_boundaries._record_input_metadata_read, globals()
-)
-_observe_input_metadata_read = _rebind_function(
-    _completeness_boundaries._observe_input_metadata_read, globals()
-)
-_observe_input_derived_layout_read = _rebind_function(
-    _completeness_metadata._observe_input_derived_layout_read, globals()
-)
-_resolve_layout_rooting_labels = _rebind_function(
-    _completeness_metadata._resolve_layout_rooting_labels, globals()
-)
-_layout_storage_rooting_labels = _rebind_function(
-    _completeness_metadata._layout_storage_rooting_labels, globals()
-)
-record_storage_rebind_barrier = _rebind_function(
-    _completeness_metadata.record_storage_rebind_barrier, globals()
-)
-storage_rebind_barrier_labels = _rebind_function(
-    _completeness_metadata.storage_rebind_barrier_labels, globals()
-)
-_layout_ancestry_tainted = _rebind_function(
-    _completeness_metadata._layout_ancestry_tainted, globals()
-)
-_state_derived_addresses = _rebind_function(
-    _completeness_metadata._state_derived_addresses, globals()
-)
-_observe_state_metadata_read = _rebind_function(
-    _completeness_metadata._observe_state_metadata_read, globals()
-)
-host_escape_state_metadata_reads = _rebind_function(
-    _completeness_metadata.host_escape_state_metadata_reads, globals()
-)
-_state_direct_address = _rebind_function(_completeness_metadata._state_direct_address, globals())
-_observe_state_metadata_read_direct = _rebind_function(
-    _completeness_metadata._observe_state_metadata_read_direct, globals()
-)
-_expand_state_alias_addresses = _rebind_function(
-    _completeness_metadata._expand_state_alias_addresses, globals()
-)
-_record_state_metadata_read = _rebind_function(
-    _completeness_metadata._record_state_metadata_read, globals()
-)
-_record_state_metadata_observation = _rebind_function(
-    _completeness_metadata._record_state_metadata_observation, globals()
-)
-host_escape_state_metadata_observations = _rebind_function(
-    _completeness_metadata.host_escape_state_metadata_observations, globals()
-)
-_observe_state_placement_read = _rebind_function(
-    _completeness_metadata._observe_state_placement_read, globals()
-)
-_placement_read_witnessed = _rebind_function(
-    _completeness_metadata._placement_read_witnessed, globals()
-)
-_discharge_placement_dispatch = _rebind_function(
-    _completeness_metadata._discharge_placement_dispatch, globals()
-)
-_observe_state_metadata_fact = _rebind_function(
-    _completeness_metadata._observe_state_metadata_fact, globals()
-)
-host_escape_state_metadata_facts = _rebind_function(
-    _completeness_metadata.host_escape_state_metadata_facts, globals()
-)
-_observe_state_property_read = _rebind_function(
-    _completeness_metadata._observe_state_property_read, globals()
-)
-_tensor_receiver_origin = _rebind_function(
-    _completeness_metadata._tensor_receiver_origin, globals()
-)
-_register_storage_handle_origin = _rebind_function(
-    _completeness_metadata._register_storage_handle_origin, globals()
-)
-_register_storage_origin = _rebind_function(
-    _completeness_metadata._register_storage_origin, globals()
-)
-_lazy_storage_state_ptr_names = _rebind_function(
-    _completeness_metadata._lazy_storage_state_ptr_names, globals()
-)
-_resolve_storage_origin = _rebind_function(
-    _completeness_metadata._resolve_storage_origin, globals()
-)
-_record_input_storage_nbytes = _rebind_function(
-    _completeness_metadata._record_input_storage_nbytes, globals()
-)
-input_metadata_view_read = _rebind_function(
-    _completeness_escape_state.input_metadata_view_read, globals()
-)
-host_escape_source_labels = _rebind_function(
-    _completeness_escape_state.host_escape_source_labels, globals()
-)
-host_escape_state_source_names = _rebind_function(
-    _completeness_escape_state.host_escape_state_source_names, globals()
-)
-host_escape_has_unattributable_bool = _rebind_function(
-    _completeness_escape_state.host_escape_has_unattributable_bool, globals()
-)
-host_escape_has_unattributable_opaque = _rebind_function(
-    _completeness_escape_state.host_escape_has_unattributable_opaque, globals()
-)
-host_escape_state_source_labels = _rebind_function(
-    _completeness_escape_state.host_escape_state_source_labels, globals()
-)
-host_escape_bool_source_labels = _rebind_function(
-    _completeness_escape_state.host_escape_bool_source_labels, globals()
-)
-host_escape_bool_consumer_locations = _rebind_function(
-    _completeness_escape_state.host_escape_bool_consumer_locations, globals()
-)
-host_escape_label_leaf_origins = _rebind_function(
-    _completeness_escape_state.host_escape_label_leaf_origins, globals()
-)
-_record_escape_label_fallback = _rebind_function(
-    _completeness_escape_state._record_escape_label_fallback, globals()
-)
-pruned_rng_control_source_labels = _rebind_function(
-    _completeness_escape_state.pruned_rng_control_source_labels, globals()
-)
-record_pruned_rng_control_source = _rebind_function(
-    _completeness_escape_state.record_pruned_rng_control_source, globals()
-)
-alias_mutation_candidate_labels = _rebind_function(
-    _completeness_escape_state.alias_mutation_candidate_labels, globals()
-)
-record_alias_mutation_candidate = _rebind_function(
-    _completeness_escape_state.record_alias_mutation_candidate, globals()
-)
-pruned_alias_mutation_source_labels = _rebind_function(
-    _completeness_escape_state.pruned_alias_mutation_source_labels, globals()
-)
-record_pruned_alias_mutation_source = _rebind_function(
-    _completeness_escape_state.record_pruned_alias_mutation_source, globals()
-)
-data_alias_mutation_detected = _rebind_function(
-    _completeness_escape_state.data_alias_mutation_detected, globals()
-)
-record_data_alias_mutation = _rebind_function(
-    _completeness_escape_state.record_data_alias_mutation, globals()
-)
-host_escape_has_mutable_writeback = _rebind_function(
-    _completeness_escape_state.host_escape_has_mutable_writeback, globals()
-)
-host_escape_has_raw_pointer = _rebind_function(
-    _completeness_escape_state.host_escape_has_raw_pointer, globals()
-)
-host_escape_has_cross_thread_captured_tensor = _rebind_function(
-    _completeness_escape_state.host_escape_has_cross_thread_captured_tensor, globals()
-)
-_register_authorized_caller_namespace = _rebind_function(
-    _completeness_escape_state._register_authorized_caller_namespace, globals()
-)
-_caller_frame_is_torchlens_internal = _rebind_function(
-    _completeness_escape_state._caller_frame_is_torchlens_internal, globals()
-)
-_raw_storage_ptr_no_observe = _rebind_function(
-    _completeness_escape_state._raw_storage_ptr_no_observe, globals()
-)
-_nonowner_ptr_is_captured = _rebind_function(
-    _completeness_cross_thread._nonowner_ptr_is_captured, globals()
-)
-_nonowner_touch_is_captured = _rebind_function(
-    _completeness_cross_thread._nonowner_touch_is_captured, globals()
-)
-_nonowner_escape_observe = _rebind_function(
-    _completeness_cross_thread._nonowner_escape_observe, globals()
-)
-observe_nonowner_operands = _rebind_function(
-    _completeness_cross_thread.observe_nonowner_operands, globals()
-)
-_torch_ops_call_classes = _rebind_function(
-    _completeness_cross_thread._torch_ops_call_classes, globals()
-)
-_make_nonowner_ops_call = _rebind_function(
-    _completeness_cross_thread._make_nonowner_ops_call, globals()
-)
-_private_c_forward_op_modules = _rebind_function(
-    _completeness_cross_thread._private_c_forward_op_modules, globals()
-)
-_private_c_module_callables = _rebind_function(
-    _completeness_cross_thread._private_c_module_callables, globals()
-)
-_make_nonowner_private_c_callable = _rebind_function(
-    _completeness_cross_thread._make_nonowner_private_c_callable, globals()
-)
-string_escape_is_owner_thread = _rebind_function(
-    _completeness_cross_thread.string_escape_is_owner_thread, globals()
-)
-host_escape_observer_install_failed = _rebind_function(
-    _completeness_cross_thread.host_escape_observer_install_failed, globals()
-)
-record_host_string_escape_source = _rebind_function(
-    _completeness_cross_thread.record_host_string_escape_source, globals()
-)
-audit_disable_current_modes_sites = _rebind_function(
-    _completeness_cross_thread.audit_disable_current_modes_sites, globals()
-)
-_internal_read_active = _rebind_function(
-    _completeness_cross_thread._internal_read_active, globals()
-)
-internal_scalar_read = _rebind_contextmanager(_completeness_origins.internal_scalar_read, globals())
-_escape_source_is_torchlens_internal = _rebind_function(
-    _completeness_origins._escape_source_is_torchlens_internal, globals()
-)
-_output_is_host_value = _rebind_function(_completeness_origins._output_is_host_value, globals())
-_iter_tensor_operands = _rebind_function(_completeness_origins._iter_tensor_operands, globals())
-_record_host_escape_source = _rebind_function(
-    _completeness_origins._record_host_escape_source, globals()
-)
-_escape_storage_ptr = _rebind_function(_completeness_origins._escape_storage_ptr, globals())
-_param_derived_addresses = _rebind_function(
-    _completeness_origins._param_derived_addresses, globals()
-)
-_iter_tensors_deep = _rebind_function(_completeness_origins._iter_tensors_deep, globals())
-_operand_origins = _rebind_function(_completeness_origins._operand_origins, globals())
-_operand_leaf_origins = _rebind_function(_completeness_origins._operand_leaf_origins, globals())
-_operator_is_seeded_rng = _rebind_function(_completeness_origins._operator_is_seeded_rng, globals())
-_operator_uninit_family_tail = _rebind_function(
-    _completeness_origins._operator_uninit_family_tail, globals()
-)
-_python_tensor_method_uninit_family_tail = _rebind_function(
-    _completeness_origins._python_tensor_method_uninit_family_tail, globals()
-)
-_operator_is_growth_resize = _rebind_function(
-    _completeness_origins._operator_is_growth_resize, globals()
-)
-_operator_total_writer_destination = _rebind_function(
-    _completeness_origins._operator_total_writer_destination, globals()
-)
-_live_deterministic_fill_governs = _rebind_function(
-    _completeness_origins._live_deterministic_fill_governs, globals()
-)
-_register_dispatch_result_origins = _rebind_function(
-    _completeness_origins._register_dispatch_result_origins, globals()
-)
-_resolved_dispatch_origins = _rebind_function(
-    _completeness_dispatch_names._resolved_dispatch_origins, globals()
-)
-_record_escape_source_tensor = _rebind_function(
-    _completeness_dispatch_names._record_escape_source_tensor, globals()
-)
-_operator_name = _rebind_function(_completeness_dispatch_names._operator_name, globals())
-_operator_base_name = _rebind_function(_completeness_dispatch_names._operator_base_name, globals())
-_is_aten_operator = _rebind_function(_completeness_dispatch_names._is_aten_operator, globals())
-_is_mutating_operator = _rebind_function(
-    _completeness_dispatch_names._is_mutating_operator, globals()
-)
-_is_buffer_state_view_dispatch = _rebind_function(
-    _completeness_dispatch_names._is_buffer_state_view_dispatch, globals()
-)
-_dispatch_callsite = _rebind_function(_completeness_dispatch_names._dispatch_callsite, globals())
-record_uncaptured_owner_callsite = _rebind_function(
-    _completeness_dispatch.record_uncaptured_owner_callsite, globals()
-)
-_dispatch_result_holds_tensor = _rebind_function(
-    _completeness_dispatch._dispatch_result_holds_tensor, globals()
-)
-_dispatch_credit_refs = _rebind_function(_completeness_dispatch._dispatch_credit_refs, globals())
-_event_builds_boundary_output = _rebind_function(
-    _completeness_dispatch._event_builds_boundary_output, globals()
-)
-_event_is_capture_accounted = _rebind_function(
-    _completeness_dispatch._event_is_capture_accounted, globals()
-)
-runnable_ledger_facts = _rebind_function(_completeness_dispatch.runnable_ledger_facts, globals())
-_tensor_abs_byte_span = _rebind_function(_completeness_dispatch._tensor_abs_byte_span, globals())
-_as_strided_result_contained = _rebind_function(
-    _completeness_dispatch._as_strided_result_contained, globals()
-)
-_finalize_runnable_ledger = _rebind_function(
-    _completeness_dispatch._finalize_runnable_ledger, globals()
-)
-_whole_storage_uint8 = _rebind_function(_completeness_dispatch._whole_storage_uint8, globals())
-_snapshot_writeback_source = _rebind_function(
-    _completeness_dispatch._snapshot_writeback_source, globals()
-)
-_iter_dispatch_tensors = _rebind_function(_completeness_dispatch._iter_dispatch_tensors, globals())
-_sample_writeback_at_consumption = _rebind_function(
-    _completeness_dispatch._sample_writeback_at_consumption, globals()
-)
-_has_state_toctou_watch = _rebind_function(
-    _completeness_dispatch._has_state_toctou_watch, globals()
-)
-_sample_state_toctou_at_consumption = _rebind_function(
-    _completeness_dispatch._sample_state_toctou_at_consumption, globals()
-)
-_split_consumed_state_items = _rebind_function(
-    _completeness_dispatch._split_consumed_state_items, globals()
-)
-_sample_param_toctou_at_consumption = _rebind_function(
-    _completeness_dispatch._sample_param_toctou_at_consumption, globals()
-)
-_param_baseline_differs = _rebind_function(
-    _completeness_dispatch._param_baseline_differs, globals()
-)
-_sample_buffer_toctou_at_consumption = _rebind_function(
-    _completeness_dispatch._sample_buffer_toctou_at_consumption, globals()
-)
-_buffer_expected_differs = _rebind_function(
-    _completeness_dispatch._buffer_expected_differs, globals()
-)
-_make_invisible_escape_wrapper = _rebind_function(
-    _completeness_dispatch._make_invisible_escape_wrapper, globals()
-)
-_nonowner_storage_observe = _rebind_function(
-    _completeness_storage._nonowner_storage_observe, globals()
-)
-_record_state_value_escape = _rebind_function(
-    _completeness_storage._record_state_value_escape, globals()
-)
-_attribute_storage_placement = _rebind_function(
-    _completeness_storage._attribute_storage_placement, globals()
-)
-_make_storage_metadata_wrapper = _rebind_function(
-    _completeness_storage._make_storage_metadata_wrapper, globals()
-)
-_make_storage_property_wrapper = _rebind_function(
-    _completeness_storage._make_storage_property_wrapper, globals()
-)
-_make_storage_raw_pointer_wrapper = _rebind_function(
-    _completeness_storage._make_storage_raw_pointer_wrapper, globals()
-)
-_completeness_census_active = _rebind_function(
-    _completeness_storage._completeness_census_active, globals()
-)
-_make_host_value_escape_method = _rebind_function(
-    _completeness_storage._make_host_value_escape_method, globals()
-)
-_first_scalar_escape_source = _rebind_function(
-    _completeness_storage._first_scalar_escape_source, globals()
-)
-_record_bool_consumer_location = _rebind_function(
-    _completeness_storage._record_bool_consumer_location, globals()
-)
-_record_plain_direct_escape = _rebind_function(
-    _completeness_storage._record_plain_direct_escape, globals()
-)
-_make_plain_scalar_escape_method = _rebind_function(
-    _completeness_storage._make_plain_scalar_escape_method, globals()
-)
-_external_warning_stacklevel = _rebind_function(
-    _completeness_storage._external_warning_stacklevel, globals()
-)
-capture_scalar_escape_warning = _rebind_contextmanager(
-    _completeness_storage.capture_scalar_escape_warning, globals()
-)
-_make_host_value_predicate_module_wrapper = _rebind_function(
-    _completeness_storage._make_host_value_predicate_module_wrapper, globals()
-)
-_make_module_escape_wrapper = _rebind_function(
-    _completeness_storage._make_module_escape_wrapper, globals()
-)
-_make_invisible_escape_property = _rebind_function(
-    _completeness_storage._make_invisible_escape_property, globals()
-)
-_make_input_metadata_wrapper = _rebind_function(
-    _completeness_patches._make_input_metadata_wrapper, globals()
-)
-_make_input_metadata_bool_method = _rebind_function(
-    _completeness_patches._make_input_metadata_bool_method, globals()
-)
-_make_input_metadata_grad_property = _rebind_function(
-    _completeness_patches._make_input_metadata_grad_property, globals()
-)
-_observe_invisible_host_escapes = _rebind_contextmanager(
-    _completeness_patches._observe_invisible_host_escapes, globals()
-)
-_STORAGE_RAW_POINTER_TARGETS = _rebind_function(
-    _completeness_finalize._STORAGE_RAW_POINTER_TARGETS, globals()
-)
-_MODULE_ESCAPE_TARGETS = _rebind_function(_completeness_finalize._MODULE_ESCAPE_TARGETS, globals())
-_check_writeback_watch = _rebind_function(_completeness_finalize._check_writeback_watch, globals())
-_effective_mode = _rebind_function(_completeness_finalize._effective_mode, globals())
-_barcode_text = _rebind_function(_completeness_finalize._barcode_text, globals())
-_finalize_census = _rebind_function(_completeness_finalize._finalize_census, globals())
-_is_value_free_capture = _rebind_function(_completeness_finalize._is_value_free_capture, globals())
-_reports_include_non_input_boundary = _rebind_function(
-    _completeness_finalize._reports_include_non_input_boundary, globals()
-)
-_finalize_input_semantics_without_census = _rebind_function(
-    _completeness_finalize._finalize_input_semantics_without_census, globals()
-)
-_init_witness_fields = _rebind_function(_completeness_finalize._init_witness_fields, globals())
-_build_witness_state = _rebind_function(_completeness_finalize._build_witness_state, globals())
-_plane_p_requested = _rebind_function(_completeness_finalize._plane_p_requested, globals())
-_finalize_plane_p = _rebind_function(_completeness_finalize._finalize_plane_p, globals())
-capture_completeness_witness = _rebind_contextmanager(
-    _completeness_finalize.capture_completeness_witness, globals()
-)
-_collect_authorized_internal_caller_modules = _rebind_function(
-    _completeness_finalize._collect_authorized_internal_caller_modules, globals()
-)
-
-_split_namespace = {name: value for name, value in globals().items() if not name.startswith("__")}
-for _split_module in (
-    _completeness_boundaries,
-    _completeness_metadata,
-    _completeness_escape_state,
-    _completeness_cross_thread,
-    _completeness_origins,
-    _completeness_dispatch_names,
-    _completeness_dispatch,
-    _completeness_storage,
-    _completeness_patches,
-    _completeness_finalize,
-):
-    _split_module.__dict__.update(_split_namespace)
-
 _collect_authorized_internal_caller_modules()

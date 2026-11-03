@@ -32,8 +32,8 @@ from typing import Any
 
 import torch
 
-from . import ArtifactError
 from ._canonical_pickle import dump_canonical_metadata
+from .format_errors import ArtifactError
 from .state_contract import governed_artifact_load
 
 __all__ = [
@@ -94,7 +94,7 @@ def sanitize_state_annotations(state: dict[str, Any]) -> None:
     into an annotation still carries its ``tl_*`` capture attributes, so it
     pickles through the loader-denied ``_rebuild_from_type_v2`` and the saved
     artifact could never be read back. The scrubbed trace-level mapping and
-    each scrubbed record's mapping (``layer_list`` ops, ``layer_logs`` layers,
+    each scrubbed record's mapping (``_layer_list`` ops, ``_layer_logs`` layers,
     ...) are rebuilt with plain detached tensors through
     :func:`sanitize_annotation_tensors`; containers are copied, never mutated
     in place, so the live trace keeps its session-time objects.

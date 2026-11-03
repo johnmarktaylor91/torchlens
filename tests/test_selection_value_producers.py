@@ -21,7 +21,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._selection import _FLIP, SelectionProvenance
+from torchlens._selection.selection import _FLIP, SelectionProvenance
 from torchlens.bundle import Bundle
 from torchlens.errors import SelectionError
 
@@ -505,7 +505,7 @@ def test_do_zero_ablates_top_k_units(model):
     trace = tl.trace(
         model,
         torch.randn(1, 1, 10, 10),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         selection = tl.top_k(_RELU, 6)

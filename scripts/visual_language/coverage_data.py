@@ -470,7 +470,7 @@ ROWS: Mapping[str, Row] = {
         "output.all_draw_parameters",
         "cheat-sheet",
         C,
-        "torchlens._data_classes._trace_viz:TraceVisualizationMixin.draw",
+        "torchlens._data_classes.trace:Trace.draw",
     ),
     # Side pictures
     "VS01": _R("side.bundle_graph", "other-pictures", C, "_bundle_graph:_add_bundle_forward_nodes"),
@@ -498,72 +498,58 @@ ROWS: Mapping[str, Row] = {
 
 #: Grouped ``VisualizationOptions`` field to the ``Trace.draw`` kwarg it becomes
 #: (``torchlens.options.visualization_to_render_kwargs``). Every field is listed, identity
-#: included, so a new field fails until someone maps it.
+#: included, so a new field fails until someone maps it. Since the one draw door, every
+#: keyword is its field name; ``container_path`` is the one exception (``path`` on draw).
 VIS_OPTION_ALIASES: Mapping[str, str] = {
-    "view": "vis_mode",
-    "depth": "vis_call_depth",
+    "graph": "graph",
+    "rolled": "rolled",
+    "depth": "depth",
     "container_path": "path",
-    "save_only": "vis_save_only",
+    "open_viewer": "open_viewer",
     "file_format": "file_format",
     "show_buffers": "show_buffers",
     "direction": "direction",
-    "graph_overrides": "vis_graph_overrides",
-    "node_style": "node_mode",
+    "graph_overrides": "graph_overrides",
+    "node_style": "node_style",
     "node_spec_fn": "node_spec_fn",
     "collapsed_node_spec_fn": "collapsed_node_spec_fn",
     "collapse_fn": "collapse_fn",
     "collapse": "collapse",
     "fold_repeats": "fold_repeats",
     "skip_fn": "skip_fn",
-    "edge_overrides": "vis_edge_overrides",
-    "grad_edge_overrides": "vis_grad_edge_overrides",
-    "module_overrides": "vis_module_overrides",
-    "layout": "vis_node_placement",
-    "renderer": "vis_renderer",
+    "edge_overrides": "edge_overrides",
+    "grad_edge_overrides": "grad_edge_overrides",
+    "module_overrides": "module_overrides",
+    "layout": "layout",
+    "renderer": "renderer",
     "theme": "theme",
-    "intervention_mode": "vis_intervention_mode",
-    "show_cone": "vis_show_cone",
+    "intervention_mode": "intervention_mode",
+    "show_cone": "show_cone",
     "node_overlay": "node_overlay",
     "node_label_fields": "node_label_fields",
     "show_legend": "show_legend",
     "color_by": "color_by",
     "size_by": "size_by",
-    "size_scale": "scale",
+    "size_scale": "size_scale",
     "stack_by": "stack_by",
+    "animate": "animate",
     "show_redundant_args": "show_redundant_args",
     "font_size": "font_size",
     "dpi": "dpi",
-    "for_paper": "for_paper",
-    "return_graph": "return_graph",
     "order_siblings": "order_siblings",
 }
 
-#: Cheat-sheet lines for the backward and combined entry points (``Trace.draw`` uses
-#: ``slides.CHEAT_GROUPS``): the parameters no panel passes explicitly.
+#: Cheat-sheet lines per entry point for the parameters no panel passes explicitly. The
+#: backward and combined pictures are ``Trace.draw(graph="backward")`` and
+#: ``Trace.draw(graph="combined")``, so their keywords are lessons of ``Trace.draw``: the
+#: pass selection and the backward-only labels and callbacks.
 ENTRY_CHEATS: Mapping[str, tuple[str, ...]] = {
-    "Trace.draw_backward": (
-        "path",
-        "node_spec_fn",
-        "collapsed_node_spec_fn",
-        "vis_node_mode",
-        "vis_edge_overrides",
-        "vis_direction",
-        "code_panel",
+    "Trace.draw": (
         "bwd",
         "show_module_paths",
         "show_grad_values",
-        "theme",
-    ),
-    "Trace.draw_combined": (
-        "path",
-        "node_spec_fn",
         "backward_node_spec_fn",
-        "vis_edge_overrides",
-        "vis_direction",
-        "vis_mode",
         "intervening_cluster",
-        "show_buffers",
-        "bwd",
     ),
 }
 

@@ -8,7 +8,7 @@ Every walker of the MODEL-INPUT boundary tree routes through
 * W2 -- capture metadata-read-site walker
   (``torchlens._capture.trace._record_runnable_input_tensor_sites``),
 * W3 -- runtime literal-path walker
-  (``torchlens._runnable_execution._runtime_nontensor_leaf_paths``).
+  (``torchlens._runnable.execution._runtime_nontensor_leaf_paths``).
 
 One shared container dispatch is an HONESTY invariant, not a refactor: the walkers
 witness the same physical tree for different fact families (literal values vs
@@ -63,6 +63,8 @@ from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from torchlens._errors import InvalidArgumentError
+
 __all__ = [
     "COMPOSITE_LITERAL_COMPONENT_POLICY",
     "INPUT_CONTAINER_KINDS",
@@ -115,8 +117,6 @@ def raise_input_tree_depth_refusal(*, depth: int) -> None:
         Nesting depth at which the ceiling was crossed.
     """
 
-    from torchlens._errors import InvalidArgumentError
-
     raise InvalidArgumentError(
         "Model-input tree nesting exceeds the supported input-boundary depth "
         f"ceiling ({INPUT_TREE_MAX_DEPTH}).",
@@ -147,8 +147,6 @@ def raise_input_tree_stack_refusal(cause: BaseException | None = None) -> None:
         The caught ``RecursionError``, chained as ``__cause__``.
     """
 
-    from torchlens._errors import InvalidArgumentError
-
     error = InvalidArgumentError(
         "Walking the model-input tree exhausted the Python stack budget before "
         f"reaching the depth ceiling ({INPUT_TREE_MAX_DEPTH}): capture was "
@@ -170,8 +168,6 @@ def raise_input_tree_cycle_refusal(*, kind: str) -> None:
     kind:
         Container kind (closed vocabulary) at which the cycle closed.
     """
-
-    from torchlens._errors import InvalidArgumentError
 
     raise InvalidArgumentError(
         f"Model-input tree contains a self-referential {kind} container "
@@ -199,8 +195,6 @@ def raise_input_tree_namedtuple_refusal(*, declared: int, physical: int) -> None
     physical:
         Concrete builtin tuple arity.
     """
-
-    from torchlens._errors import InvalidArgumentError
 
     raise InvalidArgumentError(
         "Model-input tree contains a tuple subclass declaring a namedtuple "
@@ -1334,7 +1328,7 @@ def snapshot_input_boundary(value: Any) -> dict[str, Any]:
     instance state, non-total namedtuple schemas, unset declared fields, container cycles
     or over-deep nests, throwing/nonconforming or state-incomplete registrations -- and
     the runnable producer refuses the save on any of them (the existing
-    ``missing_input_container_contract``); analysis captures are unaffected.
+    ``input_container_contract_missing``); analysis captures are unaffected.
 
     ``size`` on a namedtuple node is the PHYSICAL tuple arity. Without it, two instances
     of a one-field namedtuple built as ``tuple.__new__(P, (t, extra))`` with different

@@ -27,7 +27,7 @@ extras gate appliance and bridge namespaces; see `pyproject.toml` for the curren
 
 ## Torch Version Compatibility
 
-TorchLens supports torch 2.1 -> 2.12+ for eager torch capture. The declared floor stays
+TorchLens supports torch 2.1 -> 2.15 for eager torch capture (the newest gating CI row; newer releases run in the non-gating nightly canary). The declared floor stays
 `torch>=2.1`; torch 2.0 may work best-effort through guarded fallbacks, but it is not a
 declared support floor.
 
@@ -63,7 +63,7 @@ Required reading for this area: [Current 2.x Surface](docs/agent-reference/curre
 - Do not expect fused kernels to expose hidden internal tensors.
 - Do not put opaque callables in portable artifacts unless audit-only behavior is
   acceptable.
-- Do not add new top-level API names casually; use submodules. Interim-phase policy is remove-and-rename, never deprecation shims (tests/test_deprecation_inventory.py pins the package deprecation-free).
+- Do not add new top-level API names casually; use submodules. Interim-phase policy is remove-and-rename, never deprecation shims (scripts/checks/deprecation_inventory.py pins the package deprecation-free).
 
 ## Validation Integrity (LOCKED PRINCIPLE — never violate)
 
@@ -132,10 +132,10 @@ pytest tests/ -m "not rare and not slow" -x --tb=short  # phase-boundary backsto
 Byte goldens enforce only in the pinned environment (python 3.10, torch 2.13.0) and fail closed
 outside it and outside CI, so only the script's answer equals CI's (`tests/AGENTS.md`, "The smoke tier").
 
-Tiers by cost: `smoke` selects ~1.5k tests (1,500/24,471 collect-only, measured 2026-10-16),
+Tiers by cost (every tier's count: `tests/tiers/collection.json`): `smoke` selects
+~1.5k tests (1,474/39,361 collect-only, measured 2026-11-02),
 a coverage-chosen subset of the former ~9.9k-test tier (see `tests/AGENTS.md`, "The smoke
-tier"); under `-m smoke` the conftest skips test modules with no smoke mark before import.
-The instrumented smoke wall measurement (measured 2026-10-02, one 4-core Linux worker,
+tier"). The instrumented smoke wall measurement (measured 2026-10-02, one 4-core Linux worker,
 serial, 4 torch threads) took 186s (~3 min), collection included; `-n 4` with one thread
 per worker took 236s on a busier worker. The size ceiling is `SMOKE_TIER_SIZE_CEILING`
 (1,500) in `tests/conftest.py`. Smoke is NOT
@@ -143,15 +143,26 @@ sub-minute and NOT a per-step gate — per-step verification is the targeted tes
 the code touched; smoke is the commit-level gate, `not rare and not slow and not heavy`
 the mid backstop, and `not slow` the phase-boundary backstop. Partition: `smoke` tests
 must each run <5s measured, `heavy` carries the 5-20s tests, `slow` the >20s ones.
-`tests/test_marker_lint.py` enforces it: combining `smoke` with `heavy`/`slow`/`serial`/`rare`
-fails (markers are additive — the test would still run under `-m smoke`), and the runtime
-tripwire holds smoke/unmarked tests to budget 5s and heavy 20s (load-scaled 1x-4x plus a 2s
-boundary-noise grace, charged on min(wall, cpu)) — an offender fails the session it ran in. `pytest-xdist` ships in the
+`tests/_tiers_plugin.py` refuses a session at collection when `smoke` combines with
+`heavy`/`slow`/`serial`/`rare` (markers are additive — the test would still run under
+`-m smoke`). Duration is a repository check, not a runtime tripwire: `tests/tiers/durations.csv`
+records every test file's measured test count, summed seconds, slowest test and loosest tier
+marker, and `scripts/tier_durations.py check` (the `tier-durations` row of
+`scripts/checks/run_all.py`) holds smoke/unmarked files to budget 5s and heavy 20s per test
+(the slowest measured test per file in `tests/tiers/durations.csv`, allowed up to 4x under a
+parallel or coverage-instrumented measurement, plus a 2s grace). Regenerate the file from a
+`--junitxml` run with `python scripts/tier_durations.py regenerate --source-commit SHA --junit
+FILE --workers N`; `python scripts/tier_durations.py shards --count N --index I` prints one
+duration-balanced shard of test files for a parallel gate. `pytest-xdist` ships in the
 `dev` extra: run `OMP_NUM_THREADS=1 pytest tests/ -m smoke -n N` with N equal to the cores you
 declared (never `-n auto`). Measured 2026-10-02 on a 32-core Linux worker: smoke took 5.5 min at
-`-n 8` against 28 min serial. Every worker collects the whole suite first (about 100-140 s), so the gain
-shrinks below 4 workers; tests/conftest.py merges the workers' duration ledgers so the tripwire
-still fires.
+`-n 8` against 28 min serial. Every worker collects first, so the gain shrinks below 4 workers.
+Smoke runs collect only the smoke file list: under `-m smoke` the tiers plugin skips every test
+module off it before import, and `python scripts/tier_durations.py files --tier smoke` recomputes
+the list from the tree on every call, so nothing needs regenerating. Measured 2026-11-02 on a
+4-core Linux worker: smoke collection took about 40-45 s, serial or `-n 4`, against about 60-65 s
+for the whole tree; passing the listed files as arguments took 130-140 s, because pytest re-walks
+the directory for every file argument.
 
 Use `pytest.importorskip()` for optional migration dependencies. Keep tests
 deterministic and run documentation examples when they are meant to be executable.

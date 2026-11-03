@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 import torchlens as tl
-from torchlens._user_funcs import _filter_trace_kwargs_for_backend
+from torchlens._capture.prepare.dispatch import _filter_trace_kwargs_for_backend
 from torchlens.backends import BackendSpec
 from torchlens.backends._options import (
     JAX_PREVIEW_TRACE_OPTION_POLICY,
@@ -28,11 +28,8 @@ _PUBLIC_SPINE_OPTION_VALUES: dict[str, Any] = {
     "jax_max_control_flow_unroll": 4,
     "module_identity_mode": "object_module",
     "payload_policy": "full",
-    "save_preview": True,
     "capture_container_structure": True,
     "inference_only": True,
-    "output_style": "label",
-    "output_head": "default",
     "chunk_size": 2,
     "chunk_paths": [("args", 0)],
 }

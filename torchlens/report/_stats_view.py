@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING, Any
 from .._errors import InvalidArgumentError
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from .._data_classes.trace import Trace
     from ._stats_table import StatsTable, StatsTableRow
     from ._summary_config import SummaryConfig
@@ -107,6 +109,8 @@ def _with_identity(columns: tuple[str, ...]) -> tuple[str, ...]:
 
 
 def _refuse_column(item: Any) -> None:
+    """Refuse an unknown stats column, naming the columns the view has."""
+
     raise InvalidArgumentError(
         f"summary(view='stats') has no column {item!r}; the stats columns are "
         f"{', '.join(STATS_COLUMNS)}.",
@@ -116,43 +120,46 @@ def _refuse_column(item: Any) -> None:
 
 
 def _number(value: Any, *, sampled: bool = False) -> str:
+    """Format one numeric cell; blank for no value, ``~`` prefix for a sampled family."""
+
     if value is None:
         return ""
-    if isinstance(value, float):
-        text = f"{value:.4g}"
-    else:
-        text = str(value)
+    text = f"{value:.4g}" if isinstance(value, float) else str(value)
     return f"~{text}" if sampled else text
+
+
+#: Cells read from the row itself, present whatever the row's payload state.
+_ROW_CELLS: dict[str, Callable[[StatsTableRow], str]] = {
+    "name": lambda row: row.label,
+    "state": lambda row: row.state,
+    "same_as_parent": lambda row: row.parent_mark or "",
+    "reason": lambda row: row.reason or "",
+}
+
+#: Cells read from the row's statistics record (blank when the row has none).
+_STATS_CELLS: dict[str, Callable[[Any], str]] = {
+    "n": lambda stats: _number(stats.numel),
+    "mean": lambda stats: _number(stats.mean, sampled=stats.mean_evidence.is_sampled),
+    "sd": lambda stats: _number(stats.std, sampled=stats.std_evidence.is_sampled),
+    "min": lambda stats: _number(stats.finite_min),
+    "max": lambda stats: _number(stats.finite_max),
+    "zero_count": lambda stats: _number(stats.num_zero),
+    "nan_count": lambda stats: _number(stats.num_nan),
+}
 
 
 def _cell(row: StatsTableRow, column: str) -> str:
     """One rendered cell; sampled families carry the ``~`` mark, never a clearance."""
 
+    row_cell = _ROW_CELLS.get(column)
+    if row_cell is not None:
+        return row_cell(row)
     stats = row.stats
-    if column == "name":
-        return row.label
-    if column == "state":
-        return row.state
-    if column == "same_as_parent":
-        return row.parent_mark or ""
-    if column == "reason":
-        return row.reason or ""
     if stats is None:
         return ""
-    if column == "n":
-        return _number(stats.numel)
-    if column == "mean":
-        return _number(stats.mean, sampled=stats.mean_evidence.is_sampled)
-    if column == "sd":
-        return _number(stats.std, sampled=stats.std_evidence.is_sampled)
-    if column == "min":
-        return _number(stats.finite_min)
-    if column == "max":
-        return _number(stats.finite_max)
-    if column == "zero_count":
-        return _number(stats.num_zero)
-    if column == "nan_count":
-        return _number(stats.num_nan)
+    stats_cell = _STATS_CELLS.get(column)
+    if stats_cell is not None:
+        return stats_cell(stats)
     inf = _inf_count(stats)
     return "" if inf is None else _number(inf)
 
@@ -223,14 +230,8 @@ def build_stats_summary(trace: Trace, config: SummaryConfig) -> SummaryReport:
     table = build_stats_table(trace, max_scan_elements=config.max_scan_elements, grain=grain)
     columns = resolve_stats_columns(config.columns)
     text = render_stats_text(table, columns, grain=grain)
-    rows, totals, capture = build_summary_data(trace)
-    return SummaryReport(
-        text,
-        rows=rows,
-        totals=totals,
-        capture=capture,
-        stats=table,
-        stats_columns=columns,
+    return SummaryReport._with_stats(
+        text, data=build_summary_data(trace), stats=table, stats_columns=columns
     )
 
 

@@ -31,9 +31,13 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._utils import rng as rng_module
+import torchlens._capture.run as capture_run
 from torchlens._utils._torch_compat import autocast_is_enabled
-from torchlens._utils.rng import AutocastRestore, host_nondeterminism_monitor
+from torchlens._utils.rng import (
+    AutocastRestore,
+    host_nondeterminism_monitor,
+    monitor_state as rng_monitor_state,
+)
 
 # Surfaces the monitor patches that are NOT also decorated by ``wrap_torch`` (the torch
 # RNG capture wrappers legitimately outlive a capture until ``unwrap_torch()``).
@@ -68,7 +72,7 @@ def _profile_slots_clean():
     yield
     sys.setprofile(None)
     threading.setprofile(None)
-    rng_module._PATCH_STACKS.clear()
+    rng_monitor_state._PATCH_STACKS.clear()
 
 
 def _tiny_model() -> nn.Module:
@@ -90,13 +94,13 @@ def test_base_exception_during_arm_leaks_nothing(monkeypatch):
         tl.trace(
             _tiny_model(),
             torch.randn(1, 4),
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
 
     assert _surface_leaks(before) == []
     assert sys.getprofile() is None
     assert threading.getprofile() is None
-    assert rng_module._ACTIVE_MONITOR is None
+    assert rng_monitor_state._ACTIVE_MONITOR is None
 
 
 def test_base_exception_after_profile_install_leaks_nothing(monkeypatch):
@@ -116,7 +120,7 @@ def test_base_exception_after_profile_install_leaks_nothing(monkeypatch):
         tl.trace(
             _tiny_model(),
             torch.randn(1, 4),
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
 
     assert _surface_leaks(before) == []
@@ -195,10 +199,8 @@ def test_patch_stacks_do_not_grow_across_captures():
 
     model = _tiny_model()
     for _ in range(3):
-        tl.trace(
-            model, torch.randn(1, 4), capture=tl.options.CaptureOptions(intervention_ready=True)
-        )
-    assert rng_module._PATCH_STACKS == {}
+        tl.trace(model, torch.randn(1, 4), capture=tl.options.CaptureOptions(replayable=True))
+    assert rng_monitor_state._PATCH_STACKS == {}
 
 
 def test_in_window_thread_hook_self_uninstalls_after_teardown():
@@ -360,19 +362,17 @@ def test_autocast_restore_exits_outer_contexts_when_inner_raises():
 def test_rng_monitor_verdict_is_prestamped_fail_closed(monkeypatch):
     """An unreached verdict stamp must read as UNCERTAIN, never as a clean window."""
 
-    import torchlens._capture.trace as capture_trace
-
     def _raise(*args, **kwargs):
         raise RuntimeError("injected after the monitor window")
 
-    monkeypatch.setattr(capture_trace, "host_rng_advanced", _raise, raising=False)
+    monkeypatch.setattr(capture_run, "host_rng_advanced", _raise, raising=False)
     with pytest.raises(Exception) as excinfo:
         tl.trace(
             _tiny_model(),
             torch.randn(1, 4),
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
-    partial = getattr(excinfo.value, "partial_log", None)
+    partial = getattr(excinfo.value, "partial_trace", None)
     assert partial is not None, "the failed capture must still expose its partial trace"
     runnable = partial.trace._runnable
     assert runnable.rng_monitor_uncertain is True

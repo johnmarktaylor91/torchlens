@@ -94,7 +94,7 @@ def test_csv_export_preamble(export_trace: tl.Trace, tmp_path: Path) -> None:
     text = destination.read_text(encoding="utf-8")
     assert text.startswith("# torchlens capture honesty: status=complete")
     frame = pd.read_csv(destination, comment="#")
-    assert len(frame) == len(export_trace.layer_list)
+    assert len(frame) == len(export_trace._layer_list)
 
 
 @pytest.mark.smoke
@@ -118,7 +118,7 @@ def test_parquet_export_carries_schema_metadata(export_trace: tl.Trace, tmp_path
     facts = json_module.loads(metadata[b"torchlens_capture_honesty"])
     assert facts["capture_status"] == "complete"
     # read_parquet consumers are unaffected.
-    assert len(pd.read_parquet(destination)) == len(export_trace.layer_list)
+    assert len(pd.read_parquet(destination)) == len(export_trace._layer_list)
 
 
 @pytest.mark.smoke

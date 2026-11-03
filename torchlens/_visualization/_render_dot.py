@@ -11,7 +11,6 @@ from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavai
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
 from . import _render_utils
-from ._boundary_bundle import bundle_member_nodes
 from ._draw_validation import _validate_draw_flag_options, _validate_draw_options
 from ._edit_highlighter import (
     HighlighterStyle,
@@ -39,6 +38,8 @@ from ._render_ordering import (
     _warn_sibling_order_fallback_once,
 )
 from ._render_regions import (
+    _collapsed_container_nodes_for_draw,
+    _container_overlay_parts,
     _queue_container_clusters,
     _setup_combined_special_clusters,
     _setup_subgraphs,
@@ -272,15 +273,8 @@ def _resolve_draw_request(
     """
 
     show_buffer_layers = _normalize_buffer_visibility(request.show_buffer_layers)
-    theme = resolve_theme(request.theme, for_paper=request.for_paper)
-    node_overlay = request.node_overlay
-    if (
-        node_overlay is None
-        or isinstance(node_overlay, str)
-        and node_overlay == getattr(trace, "_node_overlay_name", None)
-    ):
-        node_overlay = getattr(trace, "_node_overlay_scores", None)
-    node_overlay = resolve_overlay_request(trace, node_overlay)
+    theme = resolve_theme(request.theme)
+    node_overlay = resolve_overlay_request(trace, request.node_overlay)
     overrides = VisualizationOverrides(
         graph=graphviz_graph_overrides(cast(Optional[Dict[str, Any]], request.graph_overrides)),
         edge=cast(Optional[Dict[str, Any]], request.edge_overrides) or {},
@@ -386,7 +380,7 @@ def _resolve_collapse_request(
                 "'rank' in v1: the rank backend cannot position "
                 "segment-family chip nodes yet",
                 code="pattern_rank_layout_unsupported",
-                remedy="render with vis_node_placement='dot' (or 'auto')",
+                remedy="render with layout='dot' (or 'auto')",
             )
         from .collapse_patterns import match_patterns
 
@@ -434,7 +428,7 @@ def _build_graphviz_shell(
     graph_caption = f"<<FONT COLOR='{theme.default_font}'>{caption_body}</FONT>>"
 
     dot = graphviz.Digraph(
-        name=trace.model_class_name,
+        name=trace._source_class_name,
         comment="Computational graph for the feedforward sweep",
         format=target.fileformat,
     )
@@ -611,19 +605,14 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
     emitted_segment_nodes: set[str] = set()
     captured_forward_edges: list[CapturedForwardEdge] = []
     pending_container_collapse_nodes: list[dict[str, Any]] = []
+    container_summary_lines: dict[str, list[str]] = {}
     container_clusters: list[ContainerClusterSpec] = []
-    collapsed_container_nodes = _collapsed_container_leaf_nodes(
+    collapsed_container_nodes = _collapsed_container_nodes_for_draw(
         trace,
+        request,
         context.source_graph.entries_to_plot,
-        vis_mode=request.vis_mode,
-        show_containers=request.show_containers,
-        container_max_inline=request.container_max_inline,
-        pending_nodes=pending_container_collapse_nodes,
-    )
-    collapsed_container_nodes.update(
-        bundle_member_nodes(
-            trace, context.source_graph.entries_to_plot, request, request.collapse_fn
-        )
+        pending_container_collapse_nodes,
+        container_summary_lines,
     )
     # Checked suppression (L5 M4, DEFAULT-ON): the trace-bearing prepass
     # proves which constructor-arg rows duplicate captured shapes on THIS
@@ -693,6 +682,16 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
                 suppressed_args=suppressed_args,
                 show_saved_for_backward=request.show_saved_for_backward,
             )
+    draw_container_nodes = request.show_containers == "nodes" and request.vis_mode == "unrolled"
+    container_overlay_nodes, container_overlay_edges, pending_container_collapse_nodes = (
+        _container_overlay_parts(
+            trace,
+            request,
+            collapsed_container_nodes,
+            container_summary_lines,
+            pending_container_collapse_nodes,
+        )
+    )
     for node_args in pending_container_collapse_nodes:
         forward_ir_builder.node(**node_args)
     from ._mutated_params import add_mutated_parameter_nodes
@@ -701,15 +700,8 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
         trace, context, forward_ir_builder, module_cluster_dict
     )
 
-    container_overlay_edges: list[ContainerOverlayEdge] = []
-    if request.show_containers == "nodes" and request.vis_mode == "unrolled":
+    if draw_container_nodes:
         context.dot.graph_attr.update({"pad": "0.20"})
-        container_overlay_nodes, container_overlay_edges = _container_nodes_and_overlay_edges(
-            trace,
-            collapsed_container_nodes,
-            vis_call_depth=request.vis_call_depth,
-            collapse_fn=request.collapse_fn,
-        )
         for overlay_node in container_overlay_nodes:
             if overlay_node.owner_key is None:
                 forward_ir_builder.node(**overlay_node.args)
@@ -717,7 +709,7 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
                 module_cluster_dict[overlay_node.owner_key].setdefault("nodes", []).append(
                     overlay_node.args
                 )
-    if request.show_containers in {"cluster", "nodes"}:
+    if request.show_containers == "nodes":
         container_clusters = _container_clusters_for_graphviz(
             trace,
             context.source_graph.entries_to_plot,
@@ -1143,10 +1135,9 @@ def _publish_forward_render(
     Returns
     -------
     Any
-        The Graphviz graph when ``return_graph`` was requested, else the source.
+        The published DOT source.
     """
 
-    request = context.request
     dot = context.dot
     compose_code_panel = context.source_text is not None and _code_panel_composition_available(
         target.fileformat, context.engine
@@ -1229,8 +1220,6 @@ def _publish_forward_render(
             )
         except subprocess.CalledProcessError as error:
             _raise_graphviz_failure("forward graph", source_path, error)
-    if request.return_graph:
-        return dot
     return final_source
 
 
@@ -1315,8 +1304,6 @@ def draw(
     show_legend: bool | None = None,
     font_size: int | None = None,
     dpi: int | None = None,
-    for_paper: bool = False,
-    return_graph: bool = False,
     order_siblings: bool = True,
     show_containers: ShowContainersLiteral = False,
     container_max_inline: int = 12,
@@ -1329,6 +1316,7 @@ def draw(
     stack_by: "str | bool | Callable[[Any], Any] | None" = None,
     show_redundant_args: bool = False,
     show_saved_for_backward: bool = False,
+    announce_path: bool | None = None,
 ) -> Any:
     """Render the computational graph through the resolved forward IR pipeline.
 
@@ -1340,7 +1328,7 @@ def draw(
     Returns
     -------
     Any
-        Renderer-specific result, Graphviz graph, or final DOT source.
+        Renderer-specific result or the final DOT source.
     """
     _validate_draw_options(node_mode, vis_intervention_mode, collapse, fold_repeats)
     _validate_draw_flag_options(
@@ -1348,8 +1336,6 @@ def draw(
         vis_save_only=vis_save_only,
         vis_show_cone=vis_show_cone,
         show_legend=show_legend,
-        for_paper=for_paper,
-        return_graph=return_graph,
         order_siblings=order_siblings,
         show_input_transform_summary=show_input_transform_summary,
         show_orphans=show_orphans,
@@ -1394,8 +1380,6 @@ def draw(
         show_legend=show_legend,
         font_size=font_size,
         dpi=dpi,
-        for_paper=for_paper,
-        return_graph=return_graph,
         order_siblings=order_siblings,
         container_max_inline=container_max_inline,
         show_input_transform_summary=show_input_transform_summary,
@@ -1444,7 +1428,9 @@ def draw(
         raise_encoding_dagua_refusal(request.encoding.active_channels())
     # a bare draw (no vis_outpath) writes a collision-safe file and
     # always prints where; an explicit path is written exactly, as before.
-    announce_path = vis_outpath is None
+    # ``Trace.draw`` resolves the collision-safe path itself and says so.
+    if announce_path is None:
+        announce_path = vis_outpath is None
     resolved_outpath = (
         collision_safe_outpath(DEFAULT_DRAW_STEM, vis_fileformat)
         if vis_outpath is None
@@ -1622,7 +1608,7 @@ def _disclose_rank_layout_omissions(trace: "Trace", context: _ForwardRenderConte
     if omitted:
         _warn_render_omission(
             f"The rank layout does not draw {' or '.join(omitted)}; they are omitted from "
-            "this render. Remedy: force Graphviz dot with vis_node_placement='dot'."
+            "this render. Remedy: force Graphviz dot with layout='dot'."
         )
 
 

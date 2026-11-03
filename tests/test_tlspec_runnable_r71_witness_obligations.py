@@ -49,7 +49,7 @@ from torchlens._runnable import (
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 def _trace(model: nn.Module, inputs: Any) -> tl.Trace:
@@ -307,16 +307,37 @@ def test_r71_registry_closure_meta() -> None:
             assert spec.site_prefix == f"{family}:", family
         else:
             assert spec.site_prefix is None, family
-    # Named runtime consumers must exist (replay-consumed, never decorative).
-    import torchlens._runnable_execution as execution
-    import torchlens._runnable_state as state
+    # Named runtime consumers must exist (replay-consumed, never decorative):
+    # each is defined in exactly one runnable module (its home), never only as
+    # a from-import copy on a hub.
+    import importlib
+    import pkgutil
+
+    import torchlens
+    import torchlens._runnable.execution  # noqa: F401  (loads every runnable split)
+
+    runnable_modules = [
+        importlib.import_module(f"torchlens.{info.name}")
+        for info in pkgutil.iter_modules(torchlens.__path__)
+        if info.name.startswith("_runnable")
+    ] + [
+        importlib.import_module(f"torchlens._runnable.{info.name}")
+        for info in pkgutil.iter_modules(torchlens._runnable.__path__)
+    ]
 
     symbolic = {"terminal_slot_accounting", "strict_state_preparation"}
     for family, spec in WITNESS_FAMILY_REGISTRY.items():
         if spec.runtime_consumer in symbolic:
             continue
-        assert hasattr(execution, spec.runtime_consumer) or hasattr(state, spec.runtime_consumer), (
-            f"{family}: runtime consumer {spec.runtime_consumer!r} does not exist"
+        homes = [
+            module.__name__
+            for module in runnable_modules
+            if getattr(module.__dict__.get(spec.runtime_consumer), "__module__", None)
+            == module.__name__
+        ]
+        assert len(homes) == 1, (
+            f"{family}: runtime consumer {spec.runtime_consumer!r} must be defined in "
+            f"exactly one runnable module, found {homes}"
         )
     # Closed gap registry: every kind registered, every source family resolvable.
     assert set(WitnessGapKind) == set(WITNESS_GAP_REGISTRY)
@@ -842,17 +863,20 @@ def test_r71_floor_source_scan_tripwire() -> None:
     the single derivation function + the parse-time equality/re-assert belts."""
 
     import torchlens._io.runnable_load as runnable_load
-    import torchlens._runnable_execution as execution
-    import torchlens._runnable_state as state
+    import torchlens._runnable.execution as execution
+    import torchlens._runnable.path_faithfulness
+    import torchlens._runnable.state as state
 
     # The verdict gate consults ONLY the derived floor.
-    verdict_source = inspect.getsource(execution._path_faithfulness)
+    verdict_source = inspect.getsource(torchlens._runnable.path_faithfulness._path_faithfulness)
     assert "derived_witness_completeness" in verdict_source
     assert "descriptor.witness_completeness" not in verdict_source
     # The ONLY raw read left in the executor is the run-preparation equality
     # re-assert (defense in depth), and staging never reads it at all.
     execution_source = "\n".join(
-        path.read_text() for path in sorted(Path(execution.__file__).parent.glob("_runnable_*.py"))
+        path.read_text()
+        for path in sorted(Path(execution.__file__).parent.glob("*.py"))
+        if path.name != "__init__.py"
     )
     assert execution_source.count("descriptor.witness_completeness") == 1
     assert "witness_completeness" not in inspect.getsource(state._apply_state_metadata_facts)

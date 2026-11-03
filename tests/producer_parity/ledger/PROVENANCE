@@ -3011,3 +3011,731 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: c28998a909cb3f9f6c8a7706be7b16b35e3f46f5 (dirty)
 recorded: 2026-10-31T14:58:50.222369+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push batch B1 (round-2 renames, format cut, debug restore, inventory, pkg paths, lockstep precision, glossary step 8): owning-tool refresh after the merges
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7d4e7370cf28a53c20cdfbf8133dd61e38273c7d (dirty)
+recorded: 2026-10-31T20:09:46.055004+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push batch B1 (round-2 renames, format cut, debug restore, inventory, pkg paths, lockstep precision, glossary step 8): owning-tool refresh after the merges
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7d4e7370cf28a53c20cdfbf8133dd61e38273c7d (dirty)
+recorded: 2026-10-31T20:09:52.929157+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push lane cx-selector: compile-once selector evaluation on 6a9ede918
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 0c8697f3ab44674fcb7b1182a6ef3e0d61928cea (dirty)
+recorded: 2026-11-01T12:38:16.989345+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push lane cx-selector: compile-once selector evaluation on 6a9ede918
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 0c8697f3ab44674fcb7b1182a6ef3e0d61928cea (dirty)
+recorded: 2026-11-01T12:38:23.718591+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push rng lane: _utils/rng rebuilt as a package; tl.validate restores RNG streams
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8756b4b09ef61a550ec7fba4a6ebf0f27a341d44 (dirty)
+recorded: 2026-11-01T12:23:19.938555+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push rng lane: _utils/rng rebuilt as a package; tl.validate restores RNG streams
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8756b4b09ef61a550ec7fba4a6ebf0f27a341d44 (dirty)
+recorded: 2026-11-01T12:23:26.678711+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: gradient-site integration (P5): Trace.armed_edits (SPEC ARMED_PROP) joins the public surface; producer sites for the gradient settle rows
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6e1129926b3a8c4e2c100dc5fb0bfa29f08eb527 (dirty)
+recorded: 2026-11-01T04:17:56.190177+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-D batch regen on d806ba9c5a07fab2a7693315cda872381e88d271
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: d806ba9c5a07fab2a7693315cda872381e88d271 (dirty)
+recorded: 2026-11-01T07:59:12.134567+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-D batch regen on d806ba9c5a07fab2a7693315cda872381e88d271
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: d806ba9c5a07fab2a7693315cda872381e88d271 (dirty)
+recorded: 2026-11-01T07:59:17.790235+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-D batch regen on f20d994bcc2646db8640af263e653fe743d6b4bb
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f20d994bcc2646db8640af263e653fe743d6b4bb (dirty)
+recorded: 2026-11-01T09:26:42.444845+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-D batch regen on f20d994bcc2646db8640af263e653fe743d6b4bb
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f20d994bcc2646db8640af263e653fe743d6b4bb (dirty)
+recorded: 2026-11-01T09:26:48.835468+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: fba40da9d16f13579613d9d06638d6179732599b (dirty)
+recorded: 2026-11-01T10:54:14.064010+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:29:40.252562+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: v11 saved format: group branch onto the batch D head (lane v11-group)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
+recorded: 2026-11-01T11:29:49.193920+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: P0c: backends/_constants.py reads op fields (parents, unattributed/dropped tensor args) and declares its own ConstantRecord fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c00d8b7f2938b57582aecd4c688a6494c3ce9c9f (clean)
+recorded: 2026-11-01T02:20:27.332719+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: closure constants as constant source ops; loaded-callable resolution for replay
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 71e4a4b6e034b8ae277f1f4e0859bf2d47f14e7b (dirty)
+recorded: 2026-11-01T04:06:21.347490+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: closure constants as constant source ops; loaded-callable resolution for replay
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 71e4a4b6e034b8ae277f1f4e0859bf2d47f14e7b (dirty)
+recorded: 2026-11-01T04:06:26.317099+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: pp-union merge of the preview-protocol packets
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ec75e117144031b3ac962def9b1684d7654f9242 (clean)
+recorded: 2026-11-01T05:42:00.316101+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: pp-union merge of the preview-protocol packets
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 82ee4d195e750019f4d19f845ed735d5d8504c04 (clean)
+recorded: 2026-11-01T06:03:45.029571+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: pp-union merge of the preview-protocol packets
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 50f2ffdcb3515f6f2283119a921623c12c38d6c6 (clean)
+recorded: 2026-11-01T06:43:57.326181+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-F batch regen on b62199b4dabca844214cdd3809c57851446bf573
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: b62199b4dabca844214cdd3809c57851446bf573 (dirty)
+recorded: 2026-11-01T10:34:24.442997+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-F batch regen on b62199b4dabca844214cdd3809c57851446bf573
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: b62199b4dabca844214cdd3809c57851446bf573 (dirty)
+recorded: 2026-11-01T10:34:35.906113+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-F batch regen on 4f9e93be96f51ae1a498ef739a77d9655b032761
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 4f9e93be96f51ae1a498ef739a77d9655b032761 (clean)
+recorded: 2026-11-01T12:30:26.360187+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-F batch regen on 4f9e93be96f51ae1a498ef739a77d9655b032761
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 4f9e93be96f51ae1a498ef739a77d9655b032761 (clean)
+recorded: 2026-11-01T12:30:32.112471+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-G batch G regen on 7cbbb8d06545ca2a71a6cee31d27df6af10b48ad
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7cbbb8d06545ca2a71a6cee31d27df6af10b48ad (dirty)
+recorded: 2026-11-01T11:51:44.220778+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-G batch G regen on 7cbbb8d06545ca2a71a6cee31d27df6af10b48ad
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 7cbbb8d06545ca2a71a6cee31d27df6af10b48ad (dirty)
+recorded: 2026-11-01T11:51:55.582907+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: ret-netfix file-cap extraction moved OpEvent read sites between modules (orphan seeds, replay groups, staged spec, input layout)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 4fceb9f8cd7717775c907a28a239eb81def8b64f (clean)
+recorded: 2026-11-01T09:08:11.778253+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: returns group ret-modelprep: helper moves changed producer sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 3b2314309e661855b2d5a49e2668e374ead88a60 (dirty)
+recorded: 2026-11-01T08:15:04.483935+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: returns group ret-modelprep: helper moves changed producer sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 3b2314309e661855b2d5a49e2668e374ead88a60 (dirty)
+recorded: 2026-11-01T08:15:10.801102+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: ret-geom returns group: buffer_writes split
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e550e61d30b9fb871d56d3e48a243a78b455e857 (dirty)
+recorded: 2026-11-01T08:07:56.693263+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: ret-geom returns group: buffer_writes split
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e550e61d30b9fb871d56d3e48a243a78b455e857 (dirty)
+recorded: 2026-11-01T08:08:06.405207+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: ret-net-f26: aliased-output occurrence map and container type probes moved to _ir siblings, streaming _restrict_mode to _durability and the small raw previews and conditional record helpers to siblings (file-cap returns)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 935286ddbb68d64173a83fb2c822f9728dc7c517 (dirty)
+recorded: 2026-11-01T07:50:13.419170+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: ret-w3g1 recut of wave-3 group 1 plus fastrun-forward onto the train
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 592a61d0d355370a9410444f0ca3a0e905e76af4 (clean)
+recorded: 2026-11-01T07:42:04.633484+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: ret-w3g1 recut of wave-3 group 1 plus fastrun-forward onto the train
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 592a61d0d355370a9410444f0ca3a0e905e76af4 (clean)
+recorded: 2026-11-01T07:42:13.693522+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-E batch E regen on c2bd98f79218e94cfe3cd94541ed26376559f84c
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c2bd98f79218e94cfe3cd94541ed26376559f84c (dirty)
+recorded: 2026-11-01T10:18:24.328784+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-E batch E regen on c2bd98f79218e94cfe3cd94541ed26376559f84c
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c2bd98f79218e94cfe3cd94541ed26376559f84c (dirty)
+recorded: 2026-11-01T10:18:32.180829+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: interv-bundle: Bundle split, Bundle.draw, real methods
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 669800d5f09b4ef5a2a6b6489bd2779c770a2d23 (dirty)
+recorded: 2026-11-01T12:02:17.770379+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: interv-bundle: Bundle split, Bundle.draw, real methods
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 669800d5f09b4ef5a2a6b6489bd2779c770a2d23 (dirty)
+recorded: 2026-11-01T12:02:26.001613+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: interv-select: selection package move
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 07bd3654ee257522641bc2e0c62b88d99dfbc370 (dirty)
+recorded: 2026-11-01T14:15:37.290093+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: interv-select: selection package move
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 07bd3654ee257522641bc2e0c62b88d99dfbc370 (dirty)
+recorded: 2026-11-01T14:15:42.743346+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: interv-select-2: selection package, one spec path, train merge
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: a514a7862c6a1c2cf94fafc33cecbf0164b2c52a (dirty)
+recorded: 2026-11-01T14:44:33.775614+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: interv-select-2: selection package, one spec path, train merge
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: a514a7862c6a1c2cf94fafc33cecbf0164b2c52a (dirty)
+recorded: 2026-11-01T14:44:36.928186+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: capture seam: moved read sites and mutators re-keyed to their new modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: bffe53c314416ec1562c6acee402a29af661dc39 (dirty)
+recorded: 2026-11-01T11:15:55.578429+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: capture seam: moved read sites and mutators re-keyed to their new modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: bffe53c314416ec1562c6acee402a29af661dc39 (dirty)
+recorded: 2026-11-01T11:16:02.340550+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: capture seam: moved read sites and mutators re-keyed to their new modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: bffe53c314416ec1562c6acee402a29af661dc39 (dirty)
+recorded: 2026-11-01T11:16:02.340550+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: capture WRAP split: transform wrappers, predicate forward and output collection re-keyed to their new modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c32bb6996547966cbb279706fc23ec29fbecc4ae
+recorded: 2026-11-01T13:18:00+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: capture seam: moved read sites and mutators re-keyed to their new modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: bffe53c314416ec1562c6acee402a29af661dc39 (dirty)
+recorded: 2026-11-01T11:16:02.340550+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: capture-f: finalize arms, epilogue fold and outcome split moved producer sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2f56dfe96ed248085e08f309dab0736eafe7e04e (dirty)
+recorded: 2026-11-01T13:08:47.758346+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: capture-f: finalize arms, epilogue fold and outcome split moved producer sites
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2f56dfe96ed248085e08f309dab0736eafe7e04e (dirty)
+recorded: 2026-11-01T13:08:53.137204+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: PREPARE stage split: the door selective-layer stamp is one shared stage function (two identical layer_type sites became one)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 977cc1afcf8136c3d1b40a1aea0282c7f4d4c45b (dirty)
+recorded: 2026-11-01T13:57:16.024703+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-cap capture batch regen on 0ade93886
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 0ade938865ccb3b4aa102395b230002a60ea9055 (clean)
+recorded: 2026-11-01T15:42:28.565202+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-cap capture batch regen on 0ade93886
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 0ade938865ccb3b4aa102395b230002a60ea9055 (clean)
+recorded: 2026-11-01T15:42:34.278761+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push postprocess-pipeline: named PIPELINE table replaces the ranked registry
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f5742c973f5343a8609794d215a16d7a28f52f4f (dirty)
+recorded: 2026-11-01T13:41:37.425281+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push postprocess-pipeline: named PIPELINE table replaces the ranked registry
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f5742c973f5343a8609794d215a16d7a28f52f4f (dirty)
+recorded: 2026-11-01T13:41:42.736095+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push postprocess-pipeline: named PIPELINE table replaces the ranked registry
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1a2efe800237f7fee4f7bb78ad15473fa3f5b15f (dirty)
+recorded: 2026-11-01T13:55:34.507619+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push postprocess-pipeline: named PIPELINE table replaces the ranked registry
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1a2efe800237f7fee4f7bb78ad15473fa3f5b15f (dirty)
+recorded: 2026-11-01T13:55:43.333678+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push utils lane: producer scan rows re-keyed to _utils/_onramp on the rebuild over train a95b45bbd
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: f3dae29e761e1c19202248322b40a46f0afec0af (dirty)
+recorded: 2026-11-01T15:09:28.040842+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-H batch H regen on 8b4949fd7791df484354a39f5a4691f7512ce08a
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8b4949fd7791df484354a39f5a4691f7512ce08a (dirty)
+recorded: 2026-11-01T16:07:26.631000+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-H batch H regen on 8b4949fd7791df484354a39f5a4691f7512ce08a
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8b4949fd7791df484354a39f5a4691f7512ce08a (dirty)
+recorded: 2026-11-01T16:07:31.949764+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-I batch I regen on 8f2a98102e0919b9ac547fd983fb3d564b58f740
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8f2a98102e0919b9ac547fd983fb3d564b58f740 (clean)
+recorded: 2026-11-01T16:54:32.711130+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-I batch I regen on 8f2a98102e0919b9ac547fd983fb3d564b58f740
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8f2a98102e0919b9ac547fd983fb3d564b58f740 (clean)
+recorded: 2026-11-01T16:54:38.471042+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-H batch H regen on bd9a88737
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: bd9a88737e4c0a87fa04a07b8bc60555a3b4ab5c (clean)
+recorded: 2026-11-01T17:34:56.977064+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push rng-2: CUDA probes moved to the leaf _utils/_cuda_probe.py
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 16eeb5a018336369c229f3dece27222cb3265749 (dirty)
+recorded: 2026-11-01T15:37:01.870190+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: max-push rng-2: CUDA probes moved to the leaf _utils/_cuda_probe.py
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 16eeb5a018336369c229f3dece27222cb3265749 (dirty)
+recorded: 2026-11-01T15:37:07.834566+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: batch J read-site rename intervention_replaced -> is_edited (replay lane ported onto the v11 train); regenerated in the pinned env (intj-static-6)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: b4bcd7b3bd7094bfc60d220a5e556e75260aa4c0 (clean)
+recorded: 2026-11-01T19:35:11.264369+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: batch J read-site rename intervention_replaced -> is_edited (replay lane ported onto the v11 train); regenerated in the pinned env (intj-static-6)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: b4bcd7b3bd7094bfc60d220a5e556e75260aa4c0 (clean)
+recorded: 2026-11-01T19:35:14.526276+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-K batch K regen on b46153d5309da0430f4bb41e2b6759e708fbfdcc
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: b46153d5309da0430f4bb41e2b6759e708fbfdcc (dirty)
+recorded: 2026-11-01T21:30:58.653449+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-K batch K regen on b46153d5309da0430f4bb41e2b6759e708fbfdcc
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: b46153d5309da0430f4bb41e2b6759e708fbfdcc (dirty)
+recorded: 2026-11-01T21:31:04.687325+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: record-a: Trace stats bodies moved to _trace_views/report._trace_facts/_trace_collapse/_trace_tables; field read sites re-keyed, none added
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 6d6333c1c94548d367e5189a39f3464c6b27d896 (clean)
+recorded: 2026-11-01T21:46:30.357713+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: intervention bodies moved to function modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2676c36aaf2b6b9ef2ac5d82e7a44958c7958435
+recorded: 2026-11-01T22:02:38.358653+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: intervention bodies moved to function modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 2676c36aaf2b6b9ef2ac5d82e7a44958c7958435
+recorded: 2026-11-01T22:02:44.095654+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: record-e: Op bodies moved to function modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 48d07761bb2f2eac71530e9011c4be1c064d6c87 (dirty)
+recorded: 2026-11-01T22:07:20.605840+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: record-f: Layer bodies moved to _layer_views and receptive_field/_layer_fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 95cb3f0be5193efef806c7b5aa09d7c6071bd29f (clean)
+recorded: 2026-11-01T21:57:35.968076+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: record-f: Layer bodies moved to _layer_views and receptive_field/_layer_fields
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 95cb3f0be5193efef806c7b5aa09d7c6071bd29f (clean)
+recorded: 2026-11-01T21:57:39.185346+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: record-g: Bundle read sites moved verbatim from bundle/__init__.py into the bundle function modules (DESIGN 5.8); no producer or consumer added
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 4290f9504a226c095fc6c191eab6fb07bdeaa309 (dirty)
+recorded: 2026-11-01T22:05:48.080925+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: exemption table declares a kind field on ExemptionRow; the static scan records the ambiguous site
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: dbe337fac2e4edc2a5711179729f0558a5e9f1f1 (dirty)
+recorded: 2026-11-01T22:44:31.357038+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: exemption table declares a kind field on ExemptionRow; the static scan records the ambiguous site
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: dbe337fac2e4edc2a5711179729f0558a5e9f1f1 (dirty)
+recorded: 2026-11-01T22:44:37.889208+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-L batch L regen on c4e6f60b89a14f417fa9f345c2aade2667132347
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c4e6f60b89a14f417fa9f345c2aade2667132347 (dirty)
+recorded: 2026-11-01T23:49:15.588032+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: integ-L batch L regen on c4e6f60b89a14f417fa9f345c2aade2667132347
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c4e6f60b89a14f417fa9f345c2aade2667132347 (dirty)
+recorded: 2026-11-01T23:49:21.414123+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: names-rulings: merge batch L b30f2aaaf (released_candidates moves to bundle/_operations.py)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 76718acd874d55d0408d0e2ae42bb8240e9b3c20 (dirty)
+recorded: 2026-11-02T08:57:50.408980+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: names-rulings: merge batch L b30f2aaaf (released_candidates moves to bundle/_operations.py)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 76718acd874d55d0408d0e2ae42bb8240e9b3c20 (dirty)
+recorded: 2026-11-02T08:57:57.259416+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: frozen-grad stack on the train: param_mutation gains late registration, new frozen_parameter_gradients and _fused_attention_hold modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 93007be8a0c99826f47e0b7c9d9c810b19c54ed0 (clean)
+recorded: 2026-11-02T09:11:32.532337+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: frozen-grad stack on the train: param_mutation gains late registration, new frozen_parameter_gradients and _fused_attention_hold modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 93007be8a0c99826f47e0b7c9d9c810b19c54ed0 (clean)
+recorded: 2026-11-02T09:11:36.052884+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: frozen-grad stack on the train: param_mutation gains late registration, new frozen_parameter_gradients and _fused_attention_hold modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c5378f30b2f4daf196e3214e94795ee67a04ff31 (clean)
+recorded: 2026-11-02T09:21:25.274060+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: frozen-grad stack on the train: param_mutation gains late registration, new frozen_parameter_gradients and _fused_attention_hold modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: c5378f30b2f4daf196e3214e94795ee67a04ff31 (clean)
+recorded: 2026-11-02T09:21:28.637009+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: frozen-grad stack under the file-cap rows: get_arg_names, the identity shim views, the robustness offenses and the direct forward routes moved into sibling modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1f7059f727a051dccea09555f395fe939fac357e (clean)
+recorded: 2026-11-02T10:09:58.285204+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: frozen-grad stack under the file-cap rows: get_arg_names, the identity shim views, the robustness offenses and the direct forward routes moved into sibling modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1f7059f727a051dccea09555f395fe939fac357e (clean)
+recorded: 2026-11-02T10:10:01.634327+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: menagerie-r4-port: rung-4 validation fixes move parent_arg_positions read sites from core.py (7 to 5) into _domain_perturbations.py, _saved_value_proofs.py and _structural_slot_checks.py and the finalization.py kind read into _conditional_records.py; reviewed against the integ3 merge diff
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8840b4f586c9c5d4e3406399a01ef89d6369a1d9 (dirty)
+recorded: 2026-11-02T15:09:42.754673+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: menagerie-r4-port: rung-4 validation fixes move parent_arg_positions read sites from core.py (7 to 5) into _domain_perturbations.py, _saved_value_proofs.py and _structural_slot_checks.py and the finalization.py kind read into _conditional_records.py; reviewed against the integ3 merge diff
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8840b4f586c9c5d4e3406399a01ef89d6369a1d9 (dirty)
+recorded: 2026-11-02T15:09:49.261630+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: record-s2 fold regen on e4426118b
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e4426118bb468a7acee6e79d963b9db12e77084d (dirty)
+recorded: 2026-11-02T09:22:54.549551+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: record-s2 fold regen on e4426118b
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: e4426118bb468a7acee6e79d963b9db12e77084d (dirty)
+recorded: 2026-11-02T09:23:00.304908+00:00

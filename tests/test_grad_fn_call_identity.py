@@ -40,15 +40,19 @@ class _TraceStandIn:
         """Return the accessor over the stand-in's calls."""
 
         return TraceGradFnCallAccessor(
-            OrderedDict((f"{call.label}:{index}", call) for index, call in enumerate(self._calls))
+            OrderedDict(
+                (f"{call.grad_fn_label}:{index}", call) for index, call in enumerate(self._calls)
+            )
         )
 
 
 def _twin_calls() -> tuple[GradFnCall, GradFnCall]:
     """Two like-labeled calls with distinct multi-element grad payloads."""
 
-    left = GradFnCall(call_index=1, label="AddmmBackward0_1", grad_inputs=(torch.randn(4),))
-    right = GradFnCall(call_index=1, label="AddmmBackward0_1", grad_inputs=(torch.randn(4),))
+    left = GradFnCall(call_index=1, grad_fn_label="AddmmBackward0_1", grad_inputs=(torch.randn(4),))
+    right = GradFnCall(
+        call_index=1, grad_fn_label="AddmmBackward0_1", grad_inputs=(torch.randn(4),)
+    )
     return left, right
 
 
@@ -58,7 +62,7 @@ def test_eq_on_tensor_payloads_never_raises():
 
     left, right = _twin_calls()
     assert (left == right) is False  # distinct random payloads
-    same = GradFnCall(call_index=1, label="AddmmBackward0_1", grad_inputs=left.grad_inputs)
+    same = GradFnCall(call_index=1, grad_fn_label="AddmmBackward0_1", grad_inputs=left.grad_inputs)
     assert left == same
     assert left != object()
     assert left == left
@@ -68,7 +72,7 @@ def test_grad_fn_call_is_hashable_and_eq_consistent():
     """Equal calls hash equal; the class is usable in sets/dicts."""
 
     left, _right = _twin_calls()
-    same = GradFnCall(call_index=1, label="AddmmBackward0_1", grad_inputs=left.grad_inputs)
+    same = GradFnCall(call_index=1, grad_fn_label="AddmmBackward0_1", grad_inputs=left.grad_inputs)
     assert hash(left) == hash(same)
     assert len({left, same}) == 1
 
@@ -85,8 +89,8 @@ def test_ordinal_index_survives_like_labeled_tensor_payload_twins():
 
     left, right = _twin_calls()
     trace = _TraceStandIn([left, right])
-    left.source_trace = trace
-    right.source_trace = trace
+    left._source_trace = trace
+    right._source_trace = trace
     assert left.ordinal_index == 0
     assert right.ordinal_index == 1
 
@@ -99,7 +103,8 @@ def test_ordinal_index_on_live_backward_trace():
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all"),
+        capture=tl.options.CaptureOptions(save_grads="all"),
+        save="all",
     )
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
     calls = list(trace.autograd.grad_fn_calls.values())
@@ -111,7 +116,7 @@ def test_ordinal_index_on_live_backward_trace():
 def test_ordinal_index_without_trace_is_minus_one():
     """A trace-less call keeps the historical -1 sentinel."""
 
-    orphan = GradFnCall(call_index=1, label="orphan")
+    orphan = GradFnCall(call_index=1, grad_fn_label="orphan")
     assert orphan.ordinal_index == -1
 
 
@@ -123,12 +128,12 @@ def test_ordinal_index_sweep_is_linear_not_quadratic():
     """
 
     calls = [
-        GradFnCall(call_index=index, label=f"Fn_{index}", grad_inputs=(torch.randn(2),))
+        GradFnCall(call_index=index, grad_fn_label=f"Fn_{index}", grad_inputs=(torch.randn(2),))
         for index in range(200)
     ]
     trace = _TraceStandIn(calls)
     for call in calls:
-        call.source_trace = trace
+        call._source_trace = trace
 
     builds = 0
     original = _TraceStandIn.grad_fn_calls.fget

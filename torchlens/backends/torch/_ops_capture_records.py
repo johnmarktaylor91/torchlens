@@ -1,7 +1,10 @@
 """Ancestor storage, producer policy, and exhaustive record freezing."""
 
+from __future__ import annotations
+
 import contextlib
 import dataclasses
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
@@ -18,11 +21,11 @@ from ..._ir.events import (
 )
 from ..._ir.refs import ParamRef, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
-from ..._state import pause_logging
 from ..._utils._torch_compat import (
     tensor_version_or_none,
 )
 from . import module_stack as _mstack
+from ._completeness_origins import internal_scalar_read
 from ._tl import (
     active_label_session_token,
     get_param_meta,
@@ -30,28 +33,14 @@ from ._tl import (
     set_same_object_mutation,
     set_tensor_label,
 )
-from .completeness_witness import internal_scalar_read
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
-
-from .ops import (
-    CaptureProducerMode,
-    CaptureProducerPolicy,
-)
-
-if TYPE_CHECKING:
-    from .ops import (
-        _ANCESTOR_FIELD_NAMES,
-        _ANCESTOR_SLOT_DESCRIPTORS,
-        _CAPTURE_PRODUCER_POLICIES,
-        _EMIT_BY_MODE,
-        _FUNCTION_REF_PER_OUTPUT_FIELDS,
-        _INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_EXCLUSIONS,
-        _LABEL_VERSION_SNAPSHOT,
-        _VIEW_MUTATION_RELABELS,
-        _AncestorBitset,
+    from .ops import (  # annotations only; runtime binding at the bottom
+        CaptureProducerMode,
+        CaptureProducerPolicy,
     )
+
 
 __all__ = (
     "_get_ancestor_field",
@@ -79,7 +68,7 @@ __all__ = (
 )
 
 
-def _get_ancestor_field(op: Op, field_name: str) -> "set[str] | frozenset[str]":
+def _get_ancestor_field(op: Op, field_name: str) -> set[str] | frozenset[str]:
     """Return one public ancestor closure view.
 
     During postprocess the cell holds the mutable staging set and is returned
@@ -138,7 +127,43 @@ def _delete_ancestor_field(op: Op, field_name: str) -> None:
     _ANCESTOR_SLOT_DESCRIPTORS[field_name].__delete__(op)
 
 
-def _compact_ancestor_sets(trace: "Trace") -> None:
+def _get_root_ancestors(op: Op) -> set[str] | frozenset[str]:
+    """Return ``op.root_ancestors``: staging set or frozen closure view."""
+
+    return _get_ancestor_field(op, "root_ancestors")
+
+
+def _set_root_ancestors(op: Op, value: set[str]) -> None:
+    """Assign ``op.root_ancestors`` through its preserved slot descriptor."""
+
+    _set_ancestor_field(op, "root_ancestors", value)
+
+
+def _delete_root_ancestors(op: Op) -> None:
+    """Delete ``op.root_ancestors`` through its preserved slot descriptor."""
+
+    _delete_ancestor_field(op, "root_ancestors")
+
+
+def _get_internal_source_ancestors(op: Op) -> set[str] | frozenset[str]:
+    """Return ``op.internal_source_ancestors``: staging set or frozen closure view."""
+
+    return _get_ancestor_field(op, "internal_source_ancestors")
+
+
+def _set_internal_source_ancestors(op: Op, value: set[str]) -> None:
+    """Assign ``op.internal_source_ancestors`` through its preserved slot descriptor."""
+
+    _set_ancestor_field(op, "internal_source_ancestors", value)
+
+
+def _delete_internal_source_ancestors(op: Op) -> None:
+    """Delete ``op.internal_source_ancestors`` through its preserved slot descriptor."""
+
+    _delete_ancestor_field(op, "internal_source_ancestors")
+
+
+def _compact_ancestor_sets(trace: Trace) -> None:
     """Replace finished Ops' two large ancestor sets with interned integer bitmaps.
 
     The original slot descriptors remain the storage authority. Public attribute
@@ -153,7 +178,7 @@ def _compact_ancestor_sets(trace: "Trace") -> None:
         Finished trace whose retained Op metadata should be compacted.
     """
 
-    ops = getattr(trace, "layer_list", None)
+    ops = trace._layer_list
     if not ops:
         return
 
@@ -247,12 +272,16 @@ def _bind_writeback_receiver_label(func_name: str, args: tuple[Any, ...]) -> Non
     op, and the write-back ``__setitem__`` then recorded ONE parent at slot 0 (the whole
     tensor) and slot 2 (the slice): one label for two different values, which a
     per-(parent, child) version snapshot cannot carry, so argument logging failed on
-    every such call. In exactly that write-back (slot 2 IS the view the in-place op
-    wrote through and ``x[idx]`` addresses the same elements) every element the call
-    leaves untouched still holds the pre-mutation producer's value and the mutated
-    region is overwritten from slot 2, so slot 0 binds to the pre-mutation label for
-    this call; the setitem's own label then advances ``x`` like any in-place op. Any
-    other shape (another region, advanced indexing, a later relabel) is left as is.
+    every such call. When slot 2 IS the view the in-place op wrote through, slot 0
+    binds to the pre-mutation label for this call, so each slot has its own label:
+    the value slot the mutation op, the receiver slot the base's own lineage. For a
+    same-region write-back the binding is exact on its own (the call overwrites
+    precisely the region the mutation wrote); when the view is written to ANOTHER
+    region of its base (``v = m[:, 0:2]; v.mul_(3); m[:, 2:4] = v``) the receiver
+    slot consumes a later version of that label and its actual content reaches
+    replay through the per-child version snapshot. The setitem's own label then
+    advances ``x`` like any in-place op. Advanced indexing or a later relabel of
+    the receiver is left as is.
 
     Parameters
     ----------
@@ -285,20 +314,7 @@ def _bind_writeback_receiver_label(func_name: str, args: tuple[Any, ...]) -> Non
         or get_tensor_label(value) != mutation_label
     ):
         return
-    with pause_logging(), internal_scalar_read():
-        try:
-            region = receiver[args[1]]
-            same_region = (
-                region.untyped_storage().data_ptr() == value.untyped_storage().data_ptr()
-                and region.storage_offset() == value.storage_offset()
-                and tuple(region.shape) == tuple(value.shape)
-                and tuple(region.stride()) == tuple(value.stride())
-            )
-        except (IndexError, RuntimeError, TypeError, ValueError):
-            # An index this receiver cannot re-address proves nothing about the region.
-            return
-    if same_region:
-        set_tensor_label(receiver, prior_label)
+    set_tensor_label(receiver, prior_label)
 
 
 def _label_version_baseline(t: Any) -> int | None:
@@ -374,13 +390,13 @@ def get_capture_producer_policy(mode: CaptureProducerMode) -> CaptureProducerPol
 
     policy = _CAPTURE_PRODUCER_POLICIES.get(mode)
     if policy is None:
-        emit = globals()[_EMIT_BY_MODE[mode]]
+        emit = _EMIT_BY_MODE[mode]
         policy = CaptureProducerPolicy(mode, emit)
         _CAPTURE_PRODUCER_POLICIES[mode] = policy
     return policy
 
 
-def set_capture_producer_policy(trace: "Trace", mode: CaptureProducerMode) -> None:
+def set_capture_producer_policy(trace: Trace, mode: CaptureProducerMode) -> None:
     """Attach a precomputed producer policy to ``trace``.
 
     Compiled once at session setup; the hot path only ever touches the
@@ -402,7 +418,7 @@ def set_capture_producer_policy(trace: "Trace", mode: CaptureProducerMode) -> No
     trace._capture_producer_policy = get_capture_producer_policy(mode)
 
 
-def _should_keep_alias_mutation_contract(trace: "Trace") -> bool:
+def _should_keep_alias_mutation_contract(trace: Trace) -> bool:
     """Return whether mutation-position alias contracts can be consumed.
 
     Parameters
@@ -417,17 +433,17 @@ def _should_keep_alias_mutation_contract(trace: "Trace") -> bool:
         mutation-position metadata.
     """
 
-    save_grads = getattr(trace, "save_grads", None)
+    save_grads = trace._options_save_grads
     return bool(
-        getattr(trace, "save_arg_values", False)
-        or getattr(trace, "intervention_ready", False)
-        or getattr(trace, "backward_ready", False)
+        trace._options_save_args
+        or getattr(trace, "is_replayable", False)
+        or trace._options_backward_ready
         or save_grads not in (None, False)
         or getattr(trace, "_validation_active", False)
     )
 
 
-def _snapshot_exhaustive_module_stack(self: "Trace") -> list[tuple[str, int]]:
+def _snapshot_exhaustive_module_stack(self: Trace) -> list[tuple[str, int]]:
     """Return the raw hook-stack module context.
 
     Parameters
@@ -442,7 +458,7 @@ def _snapshot_exhaustive_module_stack(self: "Trace") -> list[tuple[str, int]]:
     """
 
     return [
-        (frame.address, frame.pass_index)
+        (frame.address, frame.pass_number)
         for frame in _mstack.snapshot(self._module_capture_ws.exhaustive_module_stack)
     ]
 
@@ -592,7 +608,7 @@ def _parent_edges_from_fields(fields_dict: dict[str, Any]) -> tuple[ParentEdge, 
         ParentEdge(
             parent_label_raw=label,
             arg_position=positions_by_label.get(label, (None, "arg"))[0],
-            edge_use=positions_by_label.get(label, (None, "arg"))[1],
+            _edge_use=positions_by_label.get(label, (None, "arg"))[1],
         )
         for label in fields_dict["parents"]
     )
@@ -724,11 +740,34 @@ def _exhaustive_output_ref(
     )
 
 
-def _exhaustive_capture_policy(trace: "Trace", fields_dict: dict[str, Any]) -> CapturePolicy:
+def _exhaustive_capture_policy(trace: Trace, fields_dict: dict[str, Any]) -> CapturePolicy:
     """Return the exhaustive freeze's capture policy (shared by both shapes)."""
 
     return CapturePolicy(
         save_payload=fields_dict["has_saved_activation"],
         save_grad=fields_dict["save_grads"],
-        save_mode=getattr(trace, "save_mode", "copy"),
+        save_mode=trace._options_save_mode,
     )
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_exhaustive import _emit_exhaustive_operation_events  # noqa: E402
+from ._ops_predicate_events import _emit_predicate_operation_events  # noqa: E402
+from .ops import (  # noqa: E402
+    _ANCESTOR_FIELD_NAMES,
+    _ANCESTOR_SLOT_DESCRIPTORS,
+    _CAPTURE_PRODUCER_POLICIES,
+    _FUNCTION_REF_PER_OUTPUT_FIELDS,
+    _INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_EXCLUSIONS,
+    _LABEL_VERSION_SNAPSHOT,
+    _VIEW_MUTATION_RELABELS,
+    CaptureProducerPolicy,
+    _AncestorBitset,
+)
+
+# Producer routing by capture mode; the emitters live in their home modules above.
+_EMIT_BY_MODE: dict[CaptureProducerMode, Callable[..., Any]] = {
+    "exhaustive": _emit_exhaustive_operation_events,
+    "predicate": _emit_predicate_operation_events,
+}

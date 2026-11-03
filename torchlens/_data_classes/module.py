@@ -54,6 +54,7 @@ from ._call_tree import (
     _resolve_call_ops,
     _sum_call_ops_field,
 )
+from ._module_facade_fields import _MODULE_CALL_STORED_FIELDS, _MODULE_STORED_FIELDS
 from ._runtime_handles import runtime_handle_from_trace
 from .attribute_write import AttributeWrite
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
@@ -64,6 +65,7 @@ if TYPE_CHECKING:
 
     from .._ir.container import ContainerSpec
     from ..receptive_field._view import ReceptiveFieldView
+    from ..viz._drawing import Drawing
     from .buffer import BufferAccessor
     from .func_call_location import FuncCallLocation
     from .op import Op
@@ -86,8 +88,6 @@ _TO_PANDAS_EXCLUDED_MODULE_FIELDS: frozenset[str] = frozenset(
         "layers",  # list[Layer] -- use trace.layers.to_pandas() for per-layer rows
         "params",  # ParamAccessor -- use trace.params.to_pandas()
         "recursive_params",  # ParamAccessor -- same as params
-        "call_parent_module",  # Module reference -- call_parent already carries the label
-        "call_children_modules",  # list[Module] -- call_children already carries the labels
         "output_structure",  # ContainerSpec -- structural, not a flat scalar
         "forward_args_template",  # arbitrary structural template, not a flat scalar
         "forward_kwargs_template",  # arbitrary structural template, not a flat scalar
@@ -230,7 +230,7 @@ class ModuleCallAccessor(Accessor["ModuleCall"]):
             if key == only_call.address:
                 return only_call
         for call in self._dict.values():
-            if key == call.call_label:
+            if key == call.label:
                 return call
         parent_matches = [call for call in self._dict.values() if key == call.address]
         if len(parent_matches) > 1:
@@ -315,7 +315,7 @@ class ModuleCall:
         "class_qualname": FieldPolicy.KEEP,
         "cls": FieldPolicy.DROP,
         "call_index": FieldPolicy.KEEP,
-        "call_label": FieldPolicy.KEEP,
+        "label": FieldPolicy.KEEP,
         "ordinal_index": FieldPolicy.KEEP,
         "ops": FieldPolicy.KEEP,
         "input_ops": FieldPolicy.KEEP,
@@ -351,10 +351,10 @@ class ModuleCall:
         # poison every later ``Trace.save``. DROP like Op's slot of the same name.
         "_facets_cache": FieldPolicy.DROP,
     }
-    FIELD_POLICY = build_record_field_policy_table(
+    _FIELD_POLICY = build_record_field_policy_table(
         MODULE_PASS_LOG_FIELD_ORDER, _PORTABLE_STATE_SPEC, schema_key="module_call"
     )
-    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(_FIELD_POLICY)
 
     address: str
     all_addresses: list[str]
@@ -362,7 +362,7 @@ class ModuleCall:
     class_name: str
     class_qualname: str
     call_index: int
-    call_label: str
+    label: str
     ordinal_index: int
     ops: list[str]
     input_ops: list[str]
@@ -392,7 +392,7 @@ class ModuleCall:
         self,
         address: str,
         call_index: int,
-        call_label: str,
+        label: str,
         ops: list[str],
         input_layers: list[str],
         output_layers: list[str],
@@ -427,7 +427,7 @@ class ModuleCall:
             Module address in the owning model.
         call_index:
             Zero-based invocation index for this module address.
-        call_label:
+        label:
             Pass-qualified module call label.
         ops:
             Operation labels executed inside this module call.
@@ -487,7 +487,7 @@ class ModuleCall:
         self.class_name = class_name
         self.class_qualname = class_qualname
         self.call_index = call_index
-        self.call_label = call_label  # e.g. "features.0:1"
+        self.label = label  # e.g. "features.0:1"
         self.ordinal_index = ordinal_index
         self.ops = ops  # pass-qualified Op labels
         self.input_layers = input_layers
@@ -533,14 +533,8 @@ class ModuleCall:
 
     @property
     def num_layers(self) -> int:
-        """Number of distinct Layers among this call's Ops (``num_ops`` counts each pass)."""
+        """Number of distinct Layers among this call's Ops (``len(ops)`` counts each pass)."""
         return len({str(op_label).rsplit(":", 1)[0] for op_label in self.ops})
-
-    @property
-    def num_ops(self) -> int:
-        """Number of Ops in this module call."""
-
-        return len(self.ops)
 
     @property
     def name(self) -> str:
@@ -566,7 +560,7 @@ class ModuleCall:
         return self.forward_args is not None or self.forward_kwargs is not None
 
     @property
-    def had_pre_hook_input_change(self) -> bool | None:
+    def has_pre_hook_input_change(self) -> bool | None:
         """Return whether any user pre-hook changed effective module inputs.
 
         This public name is provisional pending the TorchLens human naming
@@ -576,9 +570,9 @@ class ModuleCall:
         case an empty effects tuple cannot honestly establish ``False``.
         """
 
-        if any(effect.changed is True for effect in self.forward_pre_hook_effects):
+        if any(effect.has_changes is True for effect in self.forward_pre_hook_effects):
             return True
-        if any(effect.changed is None for effect in self.forward_pre_hook_effects):
+        if any(effect.has_changes is None for effect in self.forward_pre_hook_effects):
             return None
         if not self.forward_pre_hook_effects:
             snapshots = (self.inputs_before_pre_hooks, self.inputs_after_pre_hooks)
@@ -915,7 +909,7 @@ class ModuleCall:
             from ..intervention.errors import MultiOutputModuleError
 
             raise MultiOutputModuleError(
-                f"ModuleCall '{self.call_label}' has {len(values)} outputs; "
+                f"ModuleCall '{self.label}' has {len(values)} outputs; "
                 "use .outs[i] or resolve .output_ops[i]."
             )
         return values[0]
@@ -944,7 +938,7 @@ class ModuleCall:
                 for index, label in enumerate(self.output_ops)
             )
             raise MultiOutputModuleError(
-                f"ModuleCall {self.call_label!r} has {len(self.output_ops)} output ops; "
+                f"ModuleCall {self.label!r} has {len(self.output_ops)} output ops; "
                 f"select one candidate explicitly: {candidates or 'none'}."
             )
         trace = self._source_trace
@@ -964,7 +958,7 @@ class ModuleCall:
             from ..intervention.errors import MultiOutputModuleError
 
             raise MultiOutputModuleError(
-                f"ModuleCall {self.call_label!r} has {len(self.output_ops)} output ops."
+                f"ModuleCall {self.label!r} has {len(self.output_ops)} output ops."
             )
         trace = self._source_trace
         if trace is None:
@@ -1043,9 +1037,7 @@ class ModuleCall:
 
         return fail_open(
             lambda: module_call_repr_line(self),
-            lambda _error: (
-                f"<ModuleCall {getattr(self, 'call_label', '<unbound>')}: repr degraded>"
-            ),
+            lambda _error: f"<ModuleCall {getattr(self, 'label', '<unbound>')}: repr degraded>",
         )
 
     def __str__(self) -> str:
@@ -1110,8 +1102,8 @@ class ModuleCall:
             state["address"] = state.pop("module_address")
         if "call_index" not in state and "pass_num" in state:
             state["call_index"] = state.pop("pass_num")
-        if "call_label" not in state and "pass_label" in state:
-            state["call_label"] = state.pop("pass_label")
+        if "label" not in state and "pass_label" in state:
+            state["label"] = state.pop("pass_label")
         if "all_addresses" not in state and "all_module_addresses" in state:
             state["all_addresses"] = state.pop("all_module_addresses")
         if "ops" not in state and "layers" in state:
@@ -1271,10 +1263,10 @@ class Module:
         # poison every later ``Trace.save``. DROP like Op's slot of the same name.
         "_facets_cache": FieldPolicy.DROP,
     }
-    FIELD_POLICY = build_record_field_policy_table(
+    _FIELD_POLICY = build_record_field_policy_table(
         MODULE_LOG_FIELD_ORDER, _PORTABLE_STATE_SPEC, schema_key="module"
     )
-    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(_FIELD_POLICY)
 
     address: str
     all_addresses: list[str]
@@ -1597,11 +1589,6 @@ class Module:
         return len(self.all_addresses) > 1
 
     @property
-    def num_layers(self) -> int:
-        """Number of unique layers in this module."""
-        return len(self.layer_labels)
-
-    @property
     def layers(self) -> list[Any]:
         """Layer records belonging to this Module."""
 
@@ -1661,23 +1648,6 @@ class Module:
 
         return module_collapse_score(self)
 
-    @property
-    def call_parent_module(self) -> "Module | None":
-        """Parent Module in the dynamic call tree, if any."""
-
-        if self.call_parent is None or self._source_trace is None:
-            return None
-        return cast("Module", self._source_trace.modules[self.call_parent])
-
-    @property
-    def call_children_modules(self) -> list["Module"]:
-        """Child Modules in the dynamic call tree."""
-
-        trace = self._source_trace
-        if trace is None:
-            return []
-        return [cast("Module", trace.modules[address]) for address in self.call_children]
-
     def _recursive_modules_depth_first(self) -> list["Module"]:
         """Return this Module and address descendants in stable depth-first order."""
 
@@ -1711,23 +1681,17 @@ class Module:
         module_addresses = [module.address for module in self._recursive_modules_depth_first()]
         recursive_param_dict: dict[str, Any] = {}
         for module_address in module_addresses:
-            for param in trace.param_logs:
+            for param in trace._param_logs:
                 if (
                     param.module_address == module_address
                     and param.address not in recursive_param_dict
                 ):
                     recursive_param_dict[param.address] = param
         # A never-called descendant has no Module record; its params are still in the subtree.
-        for param in trace.param_logs:
+        for param in trace._param_logs:
             if self.address == "self" or str(param.module_address).startswith(f"{self.address}."):
                 recursive_param_dict.setdefault(param.address, param)
         return ParamAccessor(recursive_param_dict)
-
-    @property
-    def recursive_param_addresses(self) -> list[str]:
-        """Parameter addresses in the same order as ``recursive_params``."""
-
-        return list(self.recursive_params.keys())
 
     @property
     def num_recursive_params(self) -> int:
@@ -2177,12 +2141,6 @@ class Module:
             )
 
     @property
-    def num_param_tensors(self) -> int:
-        """Number of parameter tensors owned by this Module (the root owns all)."""
-
-        return len(self.params)
-
-    @property
     def num_param_tensors_trainable(self) -> int:
         """Number of trainable parameter tensors owned by this Module (the root owns all)."""
 
@@ -2440,7 +2398,7 @@ class Module:
             return iter(self.layer_labels)
         return iter(self._source_trace[label] for label in self.layer_labels)
 
-    def draw(self, **kwargs: Any) -> str:
+    def draw(self, **kwargs: Any) -> "Drawing":
         """Render this module's focused graph.
 
         Parameters
@@ -2450,8 +2408,8 @@ class Module:
 
         Returns
         -------
-        str
-            Graphviz DOT source string.
+        Drawing
+            The picture, as ``Trace.draw(module=self, ...)`` returns it.
 
         Raises
         ------
@@ -2466,7 +2424,7 @@ class Module:
                 code="record_not_bound",
                 remedy="keep the owning Trace alive and read records through it",
             )
-        return cast(str, trace.draw(module=self, **kwargs))
+        return trace.draw(module=self, **kwargs)
 
     def to_pandas(self) -> "pd.DataFrame":
         """Export this module's layers as a pandas DataFrame.
@@ -2657,96 +2615,6 @@ class ModuleAccessor(Accessor["Module"]):
                 f"{len(ml.layer_labels):>7} {ml.num_calls:>7}"
             )
         return "\n".join(lines)
-
-
-# ---------------------------------------------------------------------------
-# The M8 facades: declared stored fields become row-cell descriptors; the
-# instance dict keeps the store binding, user extras, and the handful of
-# names whose access paths hardcode ``__dict__`` (the template/source-trace/
-# facets slots poked directly by their properties).
-# ---------------------------------------------------------------------------
-
-_MODULE_CALL_STORED_FIELDS: tuple[str, ...] = (
-    "address",
-    "all_addresses",
-    "cls",
-    "class_name",
-    "class_qualname",
-    "call_index",
-    "call_label",
-    "ordinal_index",
-    "ops",
-    "input_layers",
-    "output_layers",
-    "input_ops",
-    "output_ops",
-    "output_structure",
-    "output_paths",
-    "forward_args",
-    "forward_kwargs",
-    "inputs_before_pre_hooks",
-    "inputs_after_pre_hooks",
-    "forward_pre_hook_effects",
-    "forward_arg_names",
-    "num_forward_pos_args",
-    "num_forward_kwargs",
-    "num_forward_args_total",
-    "forward_args_summary",
-    "forward_kwargs_summary",
-    "forward_duration",
-    "code_context",
-    "module_call_stack",
-    "call_parent",
-    "call_children",
-)
-
-_MODULE_STORED_FIELDS: tuple[str, ...] = (
-    "address",
-    "all_addresses",
-    "cls",
-    "class_name",
-    "class_qualname",
-    "class_source_file",
-    "class_source_line",
-    "init_source_file",
-    "init_source_line",
-    "forward_source_file",
-    "forward_source_line",
-    "class_docstring",
-    "init_signature",
-    "init_docstring",
-    "forward_signature",
-    "forward_docstring",
-    "address_parent",
-    "address_children",
-    "address_depth",
-    "call_parent",
-    "call_children",
-    "call_depth",
-    "num_calls",
-    "ops",
-    "call_labels",
-    "layer_labels",
-    "input_ops",
-    "input_layers",
-    "output_ops",
-    "output_layers",
-    "params",
-    "num_params",
-    "num_params_trainable",
-    "num_params_frozen",
-    "buffer_layers",
-    "_buffer_accessor",
-    "training",
-    "forward_pre_hooks",
-    "forward_hooks",
-    "backward_pre_hooks",
-    "backward_hooks",
-    "full_backward_pre_hooks",
-    "full_backward_hooks",
-    "custom_attributes",
-    "custom_methods",
-)
 
 
 def _install_module_facades() -> None:

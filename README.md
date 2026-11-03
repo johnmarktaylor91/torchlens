@@ -46,7 +46,7 @@ Every verb climbs the same three-rung **input ladder** ([full guide](docs/quicks
 ```python
 # API sketch; `model` is your model and `lm` any HuggingFace language model.
 log = tl.trace(model, x)                             # best: your real input
-log = tl.trace(model, input_size=(1, 3, 224, 224))   # your shape, random values; disclosed
+log = tl.trace(model, input_shape=(1, 3, 224, 224))   # your shape, random values; disclosed
 log = tl.trace(model)                                # inferred shape + random values; disclosed, or a teach
 log = tl.trace(lm, "The quick brown fox")            # HF models: a string is a real input
 ```
@@ -56,7 +56,7 @@ log = tl.trace(lm, "The quick brown fox")            # HF models: a string is a 
 **Quick Links**
 
 - [Paper](https://www.nature.com/articles/s41598-023-40807-0) |
-  [10-minute tutorial notebook](notebooks/torchlens_in_10_minutes.ipynb) |
+  [Learn TorchLens: eleven notebooks](notebooks/learn/README.md) |
   [Facets tutorial](notebooks/facets_tutorial.ipynb) |
   [5-minute gallery](examples/5min/README.md) |
   [50-minute gallery](examples/50min/README.md)
@@ -65,7 +65,8 @@ log = tl.trace(lm, "The quick brown fox")            # HF models: a string is a 
   [Receptive & projective fields](docs/receptive_projective_fields.md) |
   [AI-agent quick reference](docs/for-ai-agents.md) |
   [Limitations and remedies](docs/reference/limitations.md) |
-  [Migration tables](docs/migration/)
+  [Migration tables](docs/migration/) |
+  [Maintainer docs](docs/maintainers/architecture.md)
 
 
 ## Validated across thousands of catalog entries
@@ -120,8 +121,8 @@ asserted from metadata; the full platform statement is in
 | Component | Supported | How it is verified |
 |---|---|---|
 | Python | 3.10, 3.11, 3.12, 3.13 | one smoke-tier CI row per interpreter, plus clean-venv wheel installs at release |
-| PyTorch | 2.1+ on Python 3.10/3.11; 2.2+ on 3.12; 2.6+ on 3.13 (the first torch with wheels for each interpreter) | floor rows pin the exact floor pair per interpreter; newest-admitted rows pin the current release; a daily canary runs latest |
-| transformers (`torchlens[hf]`) | Policy: track the latest released transformers. 4.45 (the floor) and the current 4.x release install, import, pass the version-policy lockstep and every real-model R0 row that is not keyed to the 5.x band (the op-count goldens and four fixtures recorded on 5.x, including the T5 sdpa construction pin that only 5.18+ satisfies, are deselected on the 4.x legs until per-band expectations land); both the release-gating R0 deep sweep (`tests.yml`) and the nightly `hf-band-legs` candidate leg pin exactly the latest released 5.x (5.18.0), re-recorded on every release bump. The candidate leg additionally runs the offline, real-checkpoint R1 + 20-scenario RG workflow gallery against an exact passed-ID floor; its three remaining known limitations (typed, pinned refusals, not crashes) are enumerated in `tests/workflow_gallery/rg_enumerated_red_hf5.tsv` | floor / current / candidate constraint legs under `tests/support/proofnet/constraints/` (nightly `hf-band-legs`); release-gating pin in `.github/workflows/tests.yml` |
+| PyTorch | 2.1+ on Python 3.10/3.11; 2.2+ on 3.12; 2.6+ on 3.13 (the first torch with wheels for each interpreter) | floor rows pin the exact floor pair per interpreter; newest-admitted rows pin the current release; a gating nightly row runs torch 2.15.0 on Python 3.11; a daily canary runs latest |
+| transformers (`torchlens[hf]`) | Policy: track the latest released transformers. 4.45 (the floor) and the current 4.x release install, import, pass the version-policy lockstep and every real-model R0 row that is not keyed to the 5.x band (the op-count goldens and four fixtures recorded on 5.x, including the T5 sdpa construction pin that only 5.18+ satisfies, are deselected on the 4.x legs until per-band expectations land); both the release-gating R0 deep sweep (`pr.yml`) and the nightly `hf-band-legs` candidate leg pin exactly the latest released 5.x (5.18.0), re-recorded on every release bump. The candidate leg additionally runs the offline, real-checkpoint R1 + 20-scenario RG workflow gallery against an exact passed-ID floor; its three remaining known limitations (typed, pinned refusals, not crashes) are enumerated in `tests/workflow_gallery/rg_enumerated_red_hf5.tsv` | floor / current / candidate constraint legs under `tests/support/proofnet/constraints/` (nightly `hf-band-legs`); release-gating pin in `.github/workflows/pr.yml` |
 | Platforms | Linux/CPU is the tested platform; macOS and Windows run a nightly import + capture + save/load canary only | see the CI-attested platforms section of the limitations doc |
 
 `pip install torchlens` installs the CPU-agnostic core (torch is resolved by pip for
@@ -176,8 +177,8 @@ Visualize the graph as a PDF:
 
 ```python
 log.draw()                        # unrolled by default
-log.draw(vis_mode='rolled')       # rolled (compact for recurrent)
-log.draw(vis_mode='unrolled')     # every pass as a distinct node
+log.draw(rolled=True)             # rolled (compact for recurrent)
+log.draw(rolled=False)            # every pass as a distinct node
 ```
 
 <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/alexnet.png" width=30% height=30%>
@@ -199,10 +200,11 @@ log = tl.trace(model, x, save=tl.in_module('classifier'))
 # Save conv2d ops that are immediately followed by a relu, keeping a 4-op lookback window
 conv_before_relu = tl.func('conv2d') & tl.followed_by(tl.func('relu'))
 log = tl.trace(model, x, save=conv_before_relu,
-               lookback=4, lookback_payload_policy='detached_raw')
+               capture=tl.options.CaptureOptions(lookback=4,
+                                                 lookback_payload_policy='detached_raw'))
 
 # Stop capture early (can be faster than a plain forward pass)
-log = tl.trace(model, x, save=tl.in_module('features.6'), halt=tl.in_module('features.6'))
+log = tl.trace(model, x, save=tl.in_module('features.6'), stop_after=tl.in_module('features.6'))
 
 # Lightweight sparse recording for tight loops -- materialize structure later
 recording = tl.record(model, x, save=tl.func('relu'))
@@ -217,7 +219,7 @@ tl.extract_dataset(model, dataset, layers=['relu_1_2', 'conv2d_3_7'],
                    batch_size=32, path='torchlens-activations/')
 ```
 
-**Performance note:** With `halt=` and `tl.record`, capture can run *faster
+**Performance note:** With `stop_after=` and `tl.record`, capture can run *faster
 than the raw forward pass* -- measured at 0.84x raw on ResNet-18 and 0.83x on
 GPT-2 (HookedTransformer) at 25% depth. Full exhaustive capture runs at
 roughly 14x the raw forward and amortizes on large models. See
@@ -332,8 +334,8 @@ modules_df = log.modules.to_pandas()
 
 ```python
 log.draw()                           # default: unrolled with sibling ordering
-log.draw(vis_mode='rolled')          # compact rolled layout
-log.draw(vis_mode='unrolled')        # every pass as a distinct node
+log.draw(rolled=True)                # compact rolled layout
+log.draw(rolled=False)               # every pass as a distinct node
 ```
 
 Control nesting depth to zoom in on submodules:
@@ -360,7 +362,7 @@ recurrent_model = SimpleRecurrent()
 seq = torch.randn(6, 5)
 recurrent_log = tl.trace(recurrent_model, seq)
 print(recurrent_log['linear_1:2'].out)     # second pass of the linear layer
-recurrent_log.draw(vis_mode='rolled')
+recurrent_log.draw(rolled=True)
 ```
 
 And the HTML export is already **interactive** -- one self-contained file with
@@ -394,7 +396,7 @@ Available helpers: `tl.zero_ablate`, `tl.mean_ablate`,
 `tl.add_noise`, `tl.project_onto`, `tl.project_out`, `tl.swap_with`, `tl.splice_module`.
 
 For post-hoc DAG replay and isolated experiments, capture with
-`intervention_ready=True` and use `log.fork()` + `log.push()` /
+`capture=tl.options.CaptureOptions(intervention_ready=True)` and use `log.fork()` + `log.push()` /
 `log.run(model, x)`. Live hooks during rerun require capture-time selectors
 (e.g. `tl.func(...)`, `tl.module(...)`); finalized labels resolve via
 `log.find_sites(...)`. See [docs/intervention_api.md](docs/intervention_api.md)
@@ -471,7 +473,7 @@ and pipeline point-to-point graphs still refuse with typed findings; see the
 | Gradients | full backward graph | leaf-level + zero-tap T1 intermediate derived | leaf-level + T1 intermediate derived | leaf-level + custom-VJP-tap T1 intermediate derived | leaf-level + T1 intermediate derived | leaf + exact T1 intermediate derived (eager entries, `tl.backends.tf.GradOptions`) |
 | Recurrence grouping (multi-pass layers) | yes | yes | yes (eager) | yes (eager) | yes (eager) | yes (eager; static FuncGraph path stays ungrouped) |
 | Validation oracle (live) | whole-forward replay | per-equation replay + perturbation | per-UOp replay + perturbation | per-op replay + perturbation | replay + perturbation + coverage guard | per-op replay (allowlisted) + self-consistency |
-| Interventions | yes | -- | -- | yes (+`halt=`) | yes (+`halt=`, value-dependent predicates) | yes (eager entries, static-label, fail-closed) |
+| Interventions | yes | -- | -- | yes (+`stop_after=`) | yes (+`stop_after=`, value-dependent predicates) | yes (eager entries, static-label, fail-closed) |
 | Halt / fastlog / streaming | yes | -- | -- | halt only | halt only | -- |
 
 Preview `save=` selectors filter what is exposed, not what is captured (no memory
@@ -527,15 +529,15 @@ For training loops, build the sparse recorder once and log whichever steps
 you like; discovery helpers list what there is to ask for:
 
 ```python
+import torchlens.inventory as inv
 from torchlens.recording import Recorder
-from torchlens._utils import list_modules, list_ops
 
 with Recorder(model, save=tl.func('relu')) as rec:
     for step in range(2):                    # your optimizer loop
         rec(torch.rand(1, 3, 64, 64))        # sparse capture of this step
 
-print(list_modules(model)[:3])               # every module address + class
-print(list_ops(model, torch.randn(1, 3, 64, 64))[:3])   # op counts per forward
+print(inv.list_sites(model).rows[:3])        # no forward: every module address + class
+print(inv.list_sites(model, torch.randn(1, 3, 64, 64)).rows[:3])   # one forward: executed sites
 ```
 
 FLOP totals follow a declared convention (fma=2 by default; `flop_convention="fma1"`
@@ -667,7 +669,19 @@ saved activations are unaffected either way.
 
 | Resource | Description |
 |---|---|
-| [torchlens_in_10_minutes.ipynb](notebooks/torchlens_in_10_minutes.ipynb) | Core workflow: trace, index, visualize |
+| [Learn TorchLens](notebooks/learn/README.md) | Start here: eleven notebooks in order, each runs on a laptop CPU in about a minute |
+| [00_quickstart.ipynb](notebooks/learn/00_quickstart.ipynb) | You have a model and want to see inside it |
+| [01_capture_and_look.ipynb](notebooks/learn/01_capture_and_look.ipynb) | A model in hand |
+| [02_address_and_read.ipynb](notebooks/learn/02_address_and_read.ipynb) | You want a number out |
+| [03_see_it.ipynb](notebooks/learn/03_see_it.ipynb) | The summary is too long to read |
+| [04_keep_what_you_need.ipynb](notebooks/learn/04_keep_what_you_need.ipynb) | Memory or time ran out |
+| [05_change_and_rerun.ipynb](notebooks/learn/05_change_and_rerun.ipynb) | Does this layer matter? |
+| [06_gradients.ipynb](notebooks/learn/06_gradients.ipynb) | What drives this unit? |
+| [07_compare_runs.ipynb](notebooks/learn/07_compare_runs.ipynb) | You ran it twice |
+| [08_semantic_shortcuts.ipynb](notebooks/learn/08_semantic_shortcuts.ipynb) | You keep typing "head 3's query" |
+| [09_scale.ipynb](notebooks/learn/09_scale.ipynb) | Thousands of batches |
+| [10_beyond_one_forward.ipynb](notebooks/learn/10_beyond_one_forward.ipynb) | Your field's experiment |
+| [torchlens_in_10_minutes.ipynb](notebooks/torchlens_in_10_minutes.ipynb) | Older tutorial: trace, index, visualize |
 | [facets_tutorial.ipynb](notebooks/facets_tutorial.ipynb) | Attention heads, LSTM facets, patching |
 | [backward_tutorial.ipynb](notebooks/backward_tutorial.ipynb) | Gradient capture and backward visualization |
 | [training_tutorial.ipynb](notebooks/training_tutorial.ipynb) | Training with captured activations |

@@ -27,6 +27,20 @@ from torchlens.validation import last_validation_failure
 from torchlens.validation._source_provenance import source_provenance_gaps
 
 _GLOBAL_TABLE = torch.randn(4)
+
+
+def _unseen(t: torch.Tensor) -> torch.Tensor:
+    """Copy ``t`` with logging paused: a tensor the capture never sees.
+
+    A pre-forward closure or global tensor is recorded as a ``constant`` source
+    op, so a genuine provenance gap is planted with a tensor first built
+    mid-forward while logging is paused.
+    """
+
+    with _state.pause_logging():
+        return t.clone()
+
+
 _HAS_CUSTOM_OP = hasattr(torch.library, "custom_op")
 
 
@@ -155,14 +169,14 @@ def test_cpp_extension_torch_library_op_is_recorded_and_validates(tmp_path: Path
 
 class _GlobalIntoRawAten(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.ops.aten.mul.Tensor(x, _GLOBAL_TABLE) + 1.0
+        return torch.ops.aten.mul.Tensor(x, _unseen(_GLOBAL_TABLE)) + 1.0
 
 
 class _ClosureIntoCustomOp(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         table = torch.randn(4)
-        self.forward = lambda x: torch.ops.aten.add.Tensor(x, table) * 2.0  # type: ignore[method-assign]
+        self.forward = lambda x: torch.ops.aten.add.Tensor(x, _unseen(table)) * 2.0  # type: ignore[method-assign]
 
 
 @pytest.mark.parametrize(
@@ -196,15 +210,17 @@ def test_recorders_are_wrapped_epoch_scoped() -> None:
 # --- Boundary review fixes: operators that mutate an argument and return nothing ----
 
 if _HAS_CUSTOM_OP:
-    _VF_MUL_ = torch._C.TensorBase.mul_
+    # Unpatchable C writes go through ``torch._C.TensorBase`` attribute access at call
+    # time: a module global bound to the pristine method would be rebound to its
+    # wrapper by the wrap-time module sweep.
 
     @torch.library.custom_op("tltest_r11::scale_", mutates_args=("x",))
     def _scale_(x: torch.Tensor, scale: float) -> None:
-        _VF_MUL_(x, scale)  # an unpatchable C write, like a C++ kernel
+        torch._C.TensorBase.mul_(x, scale)  # an unpatchable C write, like a C++ kernel
 
     @torch.library.custom_op("tltest_r11::doubled", mutates_args=("x",))
     def _doubled(x: torch.Tensor) -> None:
-        _VF_MUL_(x, 2.0)
+        torch._C.TensorBase.mul_(x, 2.0)
 
     @torch.library.custom_op("tltest_r11::write_into", mutates_args=("dst",))
     def _write_into(src: torch.Tensor, dst: torch.Tensor) -> None:
@@ -215,7 +231,7 @@ if _HAS_CUSTOM_OP:
         # A wrapped metadata read that logs nothing, like torch 2.7's Python
         # ``check_aliasing_constraint`` calling ``untyped_storage()`` in every kernel.
         x.untyped_storage()
-        _VF_MUL_(x, scale)
+        torch._C.TensorBase.mul_(x, scale)
 
     @torch.library.custom_op("tltest_r15::body_mul_", mutates_args=("x",))
     def _body_mul_(x: torch.Tensor) -> None:
@@ -385,12 +401,14 @@ if _HAS_CUSTOM_OP:
 
     @torch.library.custom_op("tltest_r13::mut_ret", mutates_args=("x",))
     def _mut_ret(x: torch.Tensor) -> torch.Tensor:
-        _VF_MUL_(x, 2.0)  # state update, then a fresh output (KV-cache, running stats)
+        torch._C.TensorBase.mul_(
+            x, 2.0
+        )  # state update, then a fresh output (KV-cache, running stats)
         return torch._C._VariableFunctions.add(x, 0.0)
 
     @torch.library.custom_op("tltest_r13::unknown_ret", mutates_args="unknown")
     def _unknown_ret(x: torch.Tensor) -> torch.Tensor:
-        _VF_MUL_(x, 2.0)
+        torch._C.TensorBase.mul_(x, 2.0)
         return torch._C._VariableFunctions.add(x, 1.0)
 
     @torch.library.custom_op("tltest_r13::buf_ret", mutates_args=("buf",))
@@ -402,7 +420,7 @@ if _HAS_CUSTOM_OP:
     _R13_LIB.define("inplace(Tensor(a!) x) -> Tensor(a!)")
 
     def _r13_inplace(x: torch.Tensor) -> torch.Tensor:
-        _VF_MUL_(x, 2.0)
+        torch._C.TensorBase.mul_(x, 2.0)
         return x
 
     _R13_LIB.impl("inplace", _r13_inplace, "CPU")

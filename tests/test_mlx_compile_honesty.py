@@ -67,8 +67,9 @@ def test_compiled_entry_refuses_typed() -> None:
     model = _TinyMLP()
     compiled = mx.compile(model)
     x = mx.random.normal((2, 4))
-    with pytest.raises(BackendUnsupportedError, match="traced-transform"):
+    with pytest.raises(BackendUnsupportedError, match="traced-transform") as info:
         tl.trace(compiled, x, backend="mlx")
+    assert info.value.code == "traced_transform_entry_unsupported"
 
 
 @pytest.mark.optional
@@ -80,8 +81,9 @@ def test_compiled_plain_function_entry_refuses_typed() -> None:
 
         return nn.relu(x + 1.0)
 
-    with pytest.raises(BackendUnsupportedError, match="traced-transform"):
+    with pytest.raises(BackendUnsupportedError, match="traced-transform") as info:
         tl.trace(mx.compile(f), mx.ones((3,)), backend="mlx")
+    assert info.value.code == "traced_transform_entry_unsupported"
 
 
 @pytest.mark.optional
@@ -93,10 +95,10 @@ def test_compiled_attribute_ceilings_capture_verified() -> None:
     x = mx.random.normal((2, 4))
     with pytest.warns(UserWarning, match="capture_verified=False"):
         log = tl.trace(model, x, backend="mlx")
-    assert log.capture_verified is False
-    assert log.capture_verification_reason == "mlx_compiled_attribute_not_logged"
+    assert log.provenance.verified is False
+    assert log.provenance.verification_reason == "mlx_compiled_attribute_not_logged"
     # The eager forward is still honestly captured.
-    assert log.num_ops > 0
+    assert log._num_ops > 0
 
 
 @pytest.mark.optional
@@ -119,5 +121,5 @@ def test_plain_capture_stays_unceilinged() -> None:
     model = _TinyMLP()
     x = mx.random.normal((2, 4))
     log = tl.trace(model, x, backend="mlx")
-    assert getattr(log, "capture_verified", None) is None
-    assert getattr(log, "capture_verification_reason", None) is None
+    assert getattr(log, "_provenance_verified", None) is None
+    assert getattr(log, "_provenance_verification_reason", None) is None

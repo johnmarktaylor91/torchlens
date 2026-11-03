@@ -1,11 +1,11 @@
-"""Layer-level site accessors: ``site_key``, ``site_peers``, ``shape_summary``.
+"""Layer-level site accessors: ``layer_site_key``, ``site_peers``, ``shape_summary``.
 
 Implementation home for the thin ``Layer`` properties (extracted per the
 file-size ratchet). The Layer surface exposes the op-granular
 ``site_key_v1`` bridging relation (:mod:`..postprocess._site_key`) with the
 L1 design memo's typed refusals:
 
-* ``Layer.site_key`` returns the single key iff every op in the layer
+* ``layer_site_key(layer)`` returns the single key iff every op in the layer
   shares exactly one; a site-SPANNING layer (within-call-instance
   recurrence, root loops) refuses typed -- a silent single-key read on a
   spanning layer is exactly the failure the tripwire exists to catch
@@ -123,7 +123,7 @@ def layer_site_peers(layer: Layer) -> tuple[Layer, ...]:
         )
     peers: list[Layer] = []
     for candidate_label in trace.layer_labels:
-        candidate = trace.layer_logs.get(candidate_label)
+        candidate = trace._layer_logs.get(candidate_label)
         if candidate is None or candidate is layer:
             continue
         candidate_keys = {op.site_key for op in candidate.ops.values()}

@@ -53,9 +53,7 @@ def _captured_backward_trace() -> tl.Trace:
     torch.manual_seed(0)
     model = _ValidationModel()
     x = torch.randn(3, 4, requires_grad=True)
-    trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all")
-    )
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads="all"), save="all")
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss)
     check_metadata_invariants(trace)
@@ -104,7 +102,7 @@ def test_backward_event_flow_invariants_trip_on_projection_mismatch() -> None:
 
     trace = _captured_backward_trace()
     try:
-        victim = next(layer for layer in trace.layer_list if getattr(layer, "_grad_records", ()))
+        victim = next(layer for layer in trace._layer_list if getattr(layer, "_grad_records", ()))
         victim._grad_records.clear()
 
         with pytest.raises(MetadataInvariantError, match="projected op gradient records"):

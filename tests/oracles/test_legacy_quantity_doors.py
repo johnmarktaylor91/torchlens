@@ -75,11 +75,12 @@ def test_parameter_counts_on_every_door(fixture_a, fixture_b) -> None:
     for value in (trace.num_params, layer.num_params, op.num_params, module.num_params):
         assert int(value) == A_PARAMS
     assert int(report.total_params) == int(report.totals.params_total) == A_PARAMS
-    by_name = {param.address: param for param in trace.param_logs}
+    by_name = {param.address: param for param in trace.params}
     assert int(by_name["weight"].num_params) == 8 * 16
     assert int(by_name["bias"].num_params) == 16
-    for value in (trace, module, call):
-        assert int(value.num_param_tensors) == A_TENSORS
+    assert len(trace.params) == A_TENSORS
+    assert len(module.params) == A_TENSORS
+    assert int(call.num_param_tensors) == A_TENSORS
 
     trace, report = fixture_b
     layers = {layer.layer_label: layer for layer in trace.layers.compute}
@@ -110,15 +111,15 @@ def test_parameter_bytes_on_every_door(fixture_a, fixture_b) -> None:
         layer.total_param_memory,
         module.param_memory,
         call.param_memory,
-        trace.total_param_memory,
+        trace.cost.total_param_memory,
     ):
         assert int(value) == A_PARAMS * FP32
-    by_name = {param.address: param for param in trace.param_logs}
+    by_name = {param.address: param for param in trace.params}
     assert int(by_name["weight"].param_memory) == 8 * 16 * FP32
     assert int(by_name["bias"].param_memory) == 16 * FP32
     trace, _ = fixture_b
     # Declared parameters, the never-called module included.
-    assert int(trace.total_param_memory) == (B_A + B_B + B_DEAD) * FP32
+    assert int(trace.cost.total_param_memory) == (B_A + B_B + B_DEAD) * FP32
 
 
 def test_macs_and_flops_on_every_door(fixture_a, fixture_b) -> None:
@@ -164,7 +165,7 @@ def test_op_pass_and_edge_counts_on_every_door(fixture_a, fixture_b) -> None:
     module, call = _only(trace.modules), _only(trace.module_calls)
     assert len(layer.ops) == 1 and int(layer.num_passes) == 1 and int(op.num_passes) == 1
     # A module call counts its boundary ops: input, linear, output.
-    assert int(call.num_ops) == 3
+    assert len(call.ops) == 3
     # input -> linear -> output.
     assert int(module.num_edges) == int(call.num_edges) == 2
     trace, _ = fixture_b
@@ -180,7 +181,7 @@ def test_activation_bytes_on_every_compute_door(fixture_a) -> None:
     for value in (op.activation_memory, layer.activation_memory, layer.total_activation_memory):
         assert int(value) == A_OUT_BYTES
     # The trace total sums every retained activation: the input and the output.
-    assert int(trace.total_activation_memory) == A_IN_BYTES + A_OUT_BYTES
+    assert int(trace.cost.total_activation_memory) == A_IN_BYTES + A_OUT_BYTES
 
 
 class BufferHolder(nn.Module):

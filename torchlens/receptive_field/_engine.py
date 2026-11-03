@@ -22,6 +22,7 @@ from .._capture.arg_positions import (
     _normalize_func_name,
     _schema_arg_is_parent_candidate,
 )
+from .._record_type import record_type
 from ..backends import TORCH_BACKEND_NAME
 from ._engine_descriptor import _descriptor
 from ._engine_geometry import (
@@ -256,7 +257,7 @@ def _solve_uncached(
         Newly computed immutable solution.
     """
 
-    operations = tuple(op for op in trace.layer_list if _operation_is_live(op))
+    operations = tuple(op for op in trace._layer_list if _operation_is_live(op))
     by_reference = {
         reference: op
         for op in operations
@@ -503,16 +504,14 @@ def _rule_result_uncached(op: Op) -> tuple[_RuleResult, str]:
     name = _normalize_func_name(op.func_name)
     rule = _RF_RULES.get(name)
     if rule is None:
-        # Some preview backends capture a generic implementation-call name as
-        # func_name that loses the actual operation identity -- tinygrad
-        # reconstructs its graph from the UOp DAG, so an elementwise binary op
-        # (add, mul, ...) carries its Python lambda wrapper's own name
-        # ("<lambda>") as func_name, with the real semantic category only on
-        # layer_type. Fall back to layer_type before reporting unsupported, so
-        # RF rules keyed by canonical op name (e.g. "add") still dispatch for
-        # those ops; this only ever widens dispatch (torch/mlx/tf/jax/paddle
-        # already resolve on the first, unchanged lookup).
-        fallback_name = _normalize_func_name(str(getattr(op, "layer_type", "") or ""))
+        # Some preview backends capture a generic implementation-call name as func_name that
+        # loses the actual operation identity -- tinygrad reconstructs its graph from the UOp
+        # DAG, so an elementwise binary op (add, mul, ...) carries its Python lambda wrapper's
+        # own name ("<lambda>") as func_name, with the real semantic category only on the op
+        # type. Fall back to it before reporting unsupported, so RF rules keyed by canonical
+        # op name (e.g. "add") still dispatch for those ops; this only ever widens dispatch
+        # (torch/mlx/tf/jax/paddle already resolve on the first, unchanged lookup).
+        fallback_name = _normalize_func_name(str(record_type(op, "") or ""))
         if fallback_name != name:
             fallback_rule = _RF_RULES.get(fallback_name)
             if fallback_rule is not None:
@@ -1371,7 +1370,7 @@ def _edge_is_geometry_neutral(
     edge_kinds = tuple(getattr(record, "edge_use", None) for record in records)
     if all(kind == "control" for kind in edge_kinds):
         return True
-    if tuple(parent.shape) or getattr(op.source_trace, "backend", None) != TORCH_BACKEND_NAME:
+    if tuple(parent.shape) or op.source_trace._provenance_backend != TORCH_BACKEND_NAME:
         return False
     for record, edge_kind in zip(records, edge_kinds):
         if edge_kind == "control":
@@ -1639,7 +1638,7 @@ def _graph_revision(trace: Trace) -> tuple[object, ...]:
             _geometry_args_snapshot(op),
             _edge_uses_snapshot(op),
         )
-        for op in trace.layer_list
+        for op in trace._layer_list
         if _operation_is_live(op)
     )
 

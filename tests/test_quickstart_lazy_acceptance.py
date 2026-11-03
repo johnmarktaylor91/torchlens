@@ -75,7 +75,7 @@ class TestFourClauseAcceptance:
         model = _lazy_head_model()
         log = tl.trace(model, torch.randn(1, 3, 16, 16))
         head_rows = [
-            pl for pl in log.param_logs if getattr(pl, "shape", None) not in (None, (0,), ())
+            pl for pl in log._param_logs if getattr(pl, "shape", None) not in (None, (0,), ())
         ]
         ground_truth = {tuple(p.shape) for p in model.parameters()}
         recorded = {tuple(pl.shape) for pl in head_rows}
@@ -106,7 +106,7 @@ class TestFlipSignal:
         ground_truth = sum(p.numel() for p in model.parameters())
         assert log.num_params == ground_truth
         assert log.num_params_trainable + log.num_params_frozen == log.num_params
-        assert int(log.total_param_memory) > 0
+        assert int(log.cost.total_param_memory) > 0
 
     def test_summary_totals_are_truthful(self) -> None:
         """The one-call summary's totals include the materialized head."""
@@ -145,7 +145,7 @@ class TestLazyBoundaries:
             tl.trace(
                 model,
                 torch.randn(1, 3, 16, 16),
-                capture=tl.options.CaptureOptions(intervention_ready=True),
+                capture=tl.options.CaptureOptions(replayable=True),
             )
         assert excinfo.value.fields["code"] == "state_baseline_unavailable"
         assert isinstance(model[4].weight, UninitializedParameter)
@@ -157,7 +157,7 @@ class TestLazyBoundaries:
         x = torch.randn(1, 3, 16, 16)
         with torch.no_grad():
             model(x)  # the taught self-prime
-        log = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+        log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
         assert log.num_params == sum(p.numel() for p in model.parameters())
 
     @pytest.mark.smoke

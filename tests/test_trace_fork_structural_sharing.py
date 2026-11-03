@@ -55,12 +55,12 @@ def cond_trace() -> Iterator[tl.Trace]:
 def _owned_object_ids(trace: tl.Trace) -> set[int]:
     """Return ids of the child objects a Trace owns outright."""
 
-    owned = {id(op) for op in trace.layer_list}
-    owned |= {id(layer) for layer in trace.layer_logs.values()}
+    owned = {id(op) for op in trace._layer_list}
+    owned |= {id(layer) for layer in trace._layer_logs.values()}
     owned |= {id(module) for module in trace.modules}
     owned |= {id(call) for module in trace.modules for call in module.calls.values()}
-    owned |= {id(conditional) for conditional in trace.conditionals}
-    owned |= {id(arm) for conditional in trace.conditionals for arm in conditional.arms}
+    owned |= {id(conditional) for conditional in trace.graph.conditionals}
+    owned |= {id(arm) for conditional in trace.graph.conditionals for arm in conditional.arms}
     return owned
 
 
@@ -75,11 +75,11 @@ def test_fork_back_references_point_at_the_fork(cond_trace: tl.Trace) -> None:
     """Owner back-references inside the fork resolve to the fork itself."""
 
     fork = cond_trace._fork_trace(name="selfconsistent")
-    assert all(op.source_trace is fork for op in fork.layer_list)
-    assert all(layer.source_trace is fork for layer in fork.layer_logs.values())
+    assert all(op.source_trace is fork for op in fork._layer_list)
+    assert all(layer.source_trace is fork for layer in fork._layer_logs.values())
     assert all(module._source_trace is fork for module in fork.modules)
-    assert fork.conditionals, "fixture must produce at least one conditional"
-    for conditional in fork.conditionals:
+    assert fork.graph.conditionals, "fixture must produce at least one conditional"
+    for conditional in fork.graph.conditionals:
         for arm in conditional.arms:
             assert arm._trace is fork
 
@@ -88,10 +88,10 @@ def test_fork_lookup_containers_agree_on_identity(cond_trace: tl.Trace) -> None:
     """Every lookup container hands back the same fork Op object."""
 
     fork = cond_trace._fork_trace(name="identity")
-    by_position = fork.layer_list
-    assert set(map(id, fork.layer_dict_main_keys.values())) <= set(map(id, by_position))
-    assert set(map(id, fork.layer_dict_all_keys.values())) <= set(map(id, by_position))
-    for layer in fork.layer_logs.values():
+    by_position = fork._layer_list
+    assert set(map(id, fork._layer_dict_main_keys.values())) <= set(map(id, by_position))
+    assert set(map(id, fork._layer_dict_all_keys.values())) <= set(map(id, by_position))
+    for layer in fork._layer_logs.values():
         for op in layer.ops.values():
             assert any(op is candidate for candidate in by_position)
 
@@ -99,26 +99,26 @@ def test_fork_lookup_containers_agree_on_identity(cond_trace: tl.Trace) -> None:
 def test_fork_mutation_does_not_reach_parent(cond_trace: tl.Trace) -> None:
     """Mutating fork state leaves every parent-visible value untouched."""
 
-    before = [dict(op.annotations) for op in cond_trace.layer_list]
+    before = [dict(op.annotations) for op in cond_trace._layer_list]
     before_arms = [
-        [arm.fired for arm in conditional.arms] for conditional in cond_trace.conditionals
+        [arm.fired for arm in conditional.arms] for conditional in cond_trace.graph.conditionals
     ]
     fork = cond_trace._fork_trace(name="mutation")
-    for op in fork.layer_list:
+    for op in fork._layer_list:
         op.annotations["__probe__"] = "fork-only"
-    for conditional in fork.conditionals:
+    for conditional in fork.graph.conditionals:
         for arm in conditional.arms:
             arm.fired = not arm.fired
-    assert [dict(op.annotations) for op in cond_trace.layer_list] == before
+    assert [dict(op.annotations) for op in cond_trace._layer_list] == before
     assert [
-        [arm.fired for arm in conditional.arms] for conditional in cond_trace.conditionals
+        [arm.fired for arm in conditional.arms] for conditional in cond_trace.graph.conditionals
     ] == before_arms
 
 
 def test_fork_memo_rollback_discards_partial_entries() -> None:
     """A field copy that raises must not leave half-built objects in the memo."""
 
-    from torchlens._data_classes._trace_intervention import _ForkMemo, _memoized_deep_copy
+    from torchlens._data_classes._trace_fork import _ForkMemo, _memoized_deep_copy
 
     class _Boom:
         """Object whose deep copy always fails after the memo is seeded."""

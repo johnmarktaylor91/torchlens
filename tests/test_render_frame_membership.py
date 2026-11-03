@@ -91,18 +91,17 @@ def _shared_child_trace() -> tuple[Any, str, str, str]:
 
     torch.manual_seed(0)
     trace = tl.trace(_TwoParents(), torch.randn(2, 4))
-    layers = list(trace.layer_logs.values())
+    layers = list(trace._layer_logs.values())
     (linear,) = [layer.layer_label for layer in layers if layer.layer_type == "linear"]
     first_relu, second_relu = [layer.layer_label for layer in layers if layer.layer_type == "relu"]
-    assert trace.layer_logs[linear].num_passes == 2
+    assert trace._layer_logs[linear].num_passes == 2
     return trace, linear, first_relu, second_relu
 
 
 def _draw_dot(trace: Any, tmp_path: Path, vis_mode: str) -> str:
     return str(
         trace.draw(
-            vis_mode=vis_mode,
-            vis_save_only=True,
+            rolled=vis_mode == "rolled",
             file_format="svg",
             path=str(tmp_path / vis_mode),
         )
@@ -149,8 +148,7 @@ def _rank_frame_boxes(
 
     monkeypatch.setattr(layout_mod, "_run_neato_with_fallbacks", _fake_neato)
     trace.draw(
-        vis_node_placement="rank",
-        vis_save_only=True,
+        layout="rank",
         file_format="svg",
         path=str(tmp_path / "rank"),
         **kwargs,
@@ -178,13 +176,13 @@ def test_rank_layout_edit_marks_keep_module_frames(
     trace = tl.trace(
         _ResStack(),
         torch.randn(1, 8),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     plain = _rank_frame_boxes(trace, tmp_path, monkeypatch)
     fork = trace.fork("edited")
     fork.do(tl.label("linear_1_1"), tl.zero_ablate())
     fork.do(tl.label("relu_2_5"), tl.scale(0.5))
-    edited = _rank_frame_boxes(fork, tmp_path, monkeypatch, vis_show_cone=show_cone)
+    edited = _rank_frame_boxes(fork, tmp_path, monkeypatch, show_cone=show_cone)
     assert len(plain) == 4
     assert edited == plain
 

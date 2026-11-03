@@ -63,7 +63,7 @@ def _scores(model, dtype: torch.dtype):
     # interiors head_scores reads, then the recapture saves only those.
     # Saving every activation of this batch crossed the default save budget
     # on a CI runner.
-    meta = tl.trace(model, _tokens(), capture=tl.options.CaptureOptions(layers_to_save="none"))
+    meta = tl.trace(model, _tokens(), save="none")
     try:
         plan = torchlens.mechinterp.retention_plan(meta, "head_scores")
     finally:

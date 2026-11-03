@@ -60,10 +60,18 @@ from torchlens._runnable import (
 )
 from torchlens._utils.rng import (
     HOST_NONDETERMINISM_REGISTRY,
-    TORCH_RNG_SURFACE,
-    _call_site_explicit_time_value,
-    _torch_rng_holder_module,
     host_nondeterminism_monitor,
+    inventory_types as rng_inventory_types,
+)
+from torchlens._utils.rng.call_sites import _call_site_explicit_time_value
+from torchlens._utils.rng.registry import TORCH_RNG_SURFACE, _torch_rng_holder_module
+from torchlens.backends.torch._completeness_escape_state import (
+    host_escape_has_cross_thread_captured_tensor,
+    host_escape_has_raw_pointer,
+    host_escape_has_unattributable_bool,
+    host_escape_has_unattributable_opaque,
+    host_escape_source_labels,
+    host_escape_state_source_names,
 )
 from torchlens.backends.torch.completeness_witness import (
     HOST_VALUE_ESCAPE_METHODS,
@@ -71,12 +79,6 @@ from torchlens.backends.torch.completeness_witness import (
     INVISIBLE_HOST_ESCAPE_FUNCS,
     INVISIBLE_HOST_ESCAPE_PROPERTIES,
     STORAGE_BRIDGE_ESCAPE_FUNCS,
-    host_escape_has_cross_thread_captured_tensor,
-    host_escape_has_raw_pointer,
-    host_escape_has_unattributable_bool,
-    host_escape_has_unattributable_opaque,
-    host_escape_source_labels,
-    host_escape_state_source_names,
 )
 from torchlens.errors.runnable import (
     PathDivergenceError,
@@ -89,7 +91,7 @@ try:  # POSIX-only; the getrusage recipe skips on platforms without it.
 except ImportError:  # pragma: no cover - non-POSIX platforms
     _resource = None  # type: ignore[assignment]
 
-_CAP = {"intervention_ready": True, "capture_container_structure": True, "cache": False}
+_CAP = {"replayable": True, "capture_container_structure": True, "cache": False}
 
 # Pre-window held references (module import time == before any monitor window).
 _HELD_TIME = _time.time
@@ -447,7 +449,7 @@ def _check_held_ref_registry_channel_marks(target: str) -> None:
         pytest.skip("resource module unavailable on this platform")
     if (
         target in {"numpy.random.get_state", "numpy.random.set_state", "numpy.random.seed"}
-        and rng_mod._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST
+        and rng_inventory_types._NUMPY_RNG_METHODS_NEED_FRAME_DIGEST
     ):
         pytest.skip(
             "numpy>=2 binds the legacy singleton's state methods as profile-silent Cython "
@@ -718,7 +720,7 @@ class _AttrHolder:
 def test_sweep_cap_exhaustion_flags_uncertain(monkeypatch: Any) -> None:
     """Cap invariant: ANY cap exhaustion flags ``inventory_budget_exhausted``, never silent."""
 
-    monkeypatch.setattr(rng_mod, "_INVENTORY_NODE_CAP", 40)
+    monkeypatch.setattr(rng_inventory_types, "_INVENTORY_NODE_CAP", 40)
     holder = _AttrHolder(**{f"a{i}": i for i in range(100)})
     with host_nondeterminism_monitor(holder) as result:
         pass
@@ -1216,7 +1218,10 @@ def test_live_inexecutable_divergent_input_typed_and_rolls_back() -> None:
     assert exc.value.fields.get("path_faithfulness") is PathFaithfulness.DIVERGED
     check = exc.value.fields.get("contract_check")
     assert check is not None and check.name.startswith("input_shape:")
-    assert isinstance(exc.value.__cause__, RuntimeError)  # native torch error preserved
+    # The native torch error is preserved, chained under the capture's
+    # TraceCaptureError the divergence classification wraps.
+    assert isinstance(exc.value.__cause__, TraceCaptureError)
+    assert isinstance(exc.value.__cause__.__cause__, RuntimeError)
     rerun = trace.run(inputs=x)
     assert rerun.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert rerun.report.is_poisoned is False
@@ -1260,8 +1265,9 @@ def test_live_non_divergent_native_failure_reraises_raw() -> None:
     x = torch.zeros(2, 4)
     model = _ValueGate()
     trace = _capture(model, x)
-    with pytest.raises(ValueError, match="boom"):
+    with pytest.raises(TraceCaptureError, match="boom") as _tce_info:
         trace.run(inputs=torch.full((2, 4), 100.0))
+    assert isinstance(_tce_info.value.__cause__, ValueError)
 
 
 # ======================================================================================
@@ -1728,6 +1734,8 @@ def test_unregistered_submodule_undrawn_generator_stays_verified(tmp_path: Path)
 
 import functools  # noqa: E402
 import weakref  # noqa: E402
+
+from torchlens.errors import TraceCaptureError  # noqa: E402
 
 _R53_FIRED: list[str] = []
 """Side-effect ledger: ANY entry means the inventory executed user code (hard fail)."""

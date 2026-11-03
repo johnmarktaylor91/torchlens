@@ -14,6 +14,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens._postprocess.graph_traversal import output_payload_aliases_parent
+from torchlens._record_type import record_type
 from torchlens.validation import check_metadata_invariants
 
 # =============================================================================
@@ -88,7 +89,7 @@ def test_save_new_outs_multiple_calls():
         log.save_new_outs(model, x, seed=42)
 
     # Still valid after 5 calls
-    assert len(log.layer_list) > 0
+    assert len(log._layer_list) > 0
     assert log[log.output_layers[0]].has_saved_activation
     log.cleanup()
 
@@ -164,7 +165,7 @@ def test_save_new_outs_fast_path_does_not_attach_streaming_refs() -> None:
     log.save_new_outs(model, torch.randn(2, 5), seed=42, layers_to_save=[output_label])
 
     assert getattr(log, "_out_writer", None) is None
-    assert all(getattr(layer, "out_ref", None) is None for layer in log.layer_list)
+    assert all(getattr(layer, "out_ref", None) is None for layer in log._layer_list)
     log.cleanup()
 
 
@@ -192,10 +193,10 @@ def _assert_save_new_outs_matches_fresh_log(
     try:
         log.save_new_outs(model, x2, seed=42)
         fresh_log = trace_fn(model, x2, capture=tl.options.CaptureOptions(seed=42))
-        fresh_layers_by_label = {layer.layer_label: layer for layer in fresh_log.layer_list}
+        fresh_layers_by_label = {layer.layer_label: layer for layer in fresh_log._layer_list}
 
         compared_layers = 0
-        for layer in log.layer_list:
+        for layer in log._layer_list:
             if layer.out is None:
                 continue
             assert layer.layer_label in fresh_layers_by_label
@@ -239,16 +240,17 @@ def test_save_new_outs_resnet_rejects_buffer_sink_refresh() -> None:
     log = trace_fn(model, x, capture=tl.options.CaptureOptions(seed=42))
     try:
         assert any(
-            log.layer_dict_all_keys[label].layer_type == "buffer" for label in log.internal_sink_ops
+            record_type(log._layer_dict_all_keys[label]) == "buffer"
+            for label in log.internal_sink_ops
         )
         x2 = torch.randn(1, 3, 224, 224)
         log.save_new_outs(model, x2, seed=42)
         fresh = trace_fn(model, x2, capture=tl.options.CaptureOptions(seed=42))
         try:
-            fresh_by_label = {layer.layer_label: layer for layer in fresh.layer_list}
+            fresh_by_label = {layer.layer_label: layer for layer in fresh._layer_list}
             compared = 0
-            for layer in log.layer_list:
-                if layer.layer_type != "batchnorm" or layer.out is None:
+            for layer in log._layer_list:
+                if layer.type != "batchnorm" or layer.out is None:
                     continue
                 fresh_out = fresh_by_label[layer.layer_label].out
                 assert torch.allclose(layer.out, fresh_out, rtol=1e-4, atol=1e-5)
@@ -330,7 +332,7 @@ class TestSaveNewActivationsRegression:
                 expected = model(next_x)
                 output = log[log.output_layers[0]].out
                 assert output is not None
-                assert log.num_saved_ops > 0
+                assert len(log.saved_ops) > 0
                 assert torch.allclose(output, expected)
         finally:
             log.cleanup()
@@ -356,21 +358,17 @@ class TestSaveNewActivationsStateReset:
     def test_timing_reset(self) -> None:
         """func_calls_duration should be fresh."""
         model = _SimpleLinear()
-        log = trace_fn(
-            model, torch.randn(2, 10), capture=tl.options.CaptureOptions(layers_to_save="all")
-        )
+        log = trace_fn(model, torch.randn(2, 10), save="all")
         try:
             log.save_new_outs(model, torch.randn(2, 10), layers_to_save="all")
-            assert log.func_calls_duration >= 0
+            assert log.cost.func_calls_duration >= 0
         finally:
             log.cleanup()
 
     def test_lookup_keys_clean(self) -> None:
         """Lookup caches should not have stale entries."""
         model = _SimpleLinear()
-        log = trace_fn(
-            model, torch.randn(2, 10), capture=tl.options.CaptureOptions(layers_to_save="all")
-        )
+        log = trace_fn(model, torch.randn(2, 10), save="all")
         try:
             labels_pass1 = set(log.layer_labels)
             log.save_new_outs(model, torch.randn(2, 10), layers_to_save="all")
@@ -387,17 +385,15 @@ class TestSaveNewActivationsStateReset:
     def test_5x_stress(self, trace_kwargs: dict[str, str]) -> None:
         """Stress test: repeated refreshes stay aligned for default and explicit-all saves."""
         model = _SimpleLinear()
-        capture_kwargs = (
-            {"capture": tl.options.CaptureOptions(**trace_kwargs)} if trace_kwargs else {}
-        )
-        log = trace_fn(model, torch.randn(2, 10), **capture_kwargs)
+        save_kwargs = {"save": trace_kwargs["layers_to_save"]} if trace_kwargs else {}
+        log = trace_fn(model, torch.randn(2, 10), **save_kwargs)
         try:
             for _ in range(5):
                 next_x = torch.randn(2, 10)
                 log.save_new_outs(model, next_x, **trace_kwargs)
                 output = log[log.output_layers[0]].out
                 assert output is not None
-                assert log.num_saved_ops > 0
+                assert len(log.saved_ops) > 0
                 assert torch.allclose(output, model(next_x))
         finally:
             log.cleanup()
@@ -405,9 +401,7 @@ class TestSaveNewActivationsStateReset:
     def test_different_values(self) -> None:
         """Each pass should reflect new input values."""
         model = _SimpleLinear()
-        log = trace_fn(
-            model, torch.ones(2, 10), capture=tl.options.CaptureOptions(layers_to_save="all")
-        )
+        log = trace_fn(model, torch.ones(2, 10), save="all")
         try:
             input_val_1 = log["input_1"].out.clone()
             log.save_new_outs(model, torch.zeros(2, 10), layers_to_save="all")
@@ -569,8 +563,8 @@ class TestGraphConsistencyValidation:
         try:
             log.save_new_outs(model, x2)
             fresh_log = trace_fn(model, x2, capture=tl.options.CaptureOptions(save_args=True))
-            refreshed_sub = next(op for op in log.layer_list if op.layer_type == "sub")
-            fresh_sub = next(op for op in fresh_log.layer_list if op.layer_type == "sub")
+            refreshed_sub = next(op for op in log._layer_list if op.type == "sub")
+            fresh_sub = next(op for op in fresh_log._layer_list if op.type == "sub")
             assert refreshed_sub.parents == fresh_sub.parents
             assert refreshed_sub.parent_arg_positions == fresh_sub.parent_arg_positions
             assert refreshed_sub.out is not None
@@ -590,7 +584,7 @@ class TestGraphConsistencyValidation:
 # contradiction belt, the refreshed rerun's own journal as the O1 write
 # tripwire, and target-vs-refreshed evidence equality as the O2 widening.
 # Every refusal is the TYPED BufferSinkRoutingError carrying the frozen
-# ``buffer_sink_routing_mutable`` code and the pinned "computational graph
+# ``buffer_sink_routing_unsupported`` code and the pinned "computational graph
 # changed" message term.
 #
 # O3 (honesty rule): the train-mode refusal tests below are PINNED FOREVER --
@@ -626,9 +620,9 @@ def _buffer_sinks(log):
     """Return the buffer-typed internal sink layers of one trace."""
 
     return [
-        log.layer_dict_all_keys[label]
+        log._layer_dict_all_keys[label]
         for label in log.internal_sink_ops
-        if log.layer_dict_all_keys[label].layer_type == "buffer"
+        if record_type(log._layer_dict_all_keys[label]) == "buffer"
     ]
 
 
@@ -644,7 +638,7 @@ def _assert_buffer_sink_refusal(exc_info):
 def _tamper_recorded_training_literal(log, sink, value):
     """Flip the recorded literal mode argument on one sink's producing op."""
 
-    source = log.layer_dict_all_keys[sink.buffer_source]
+    source = log._layer_dict_all_keys[sink.buffer_source]
     args = list(source.non_tensor_pos_args)
     index = next(i for i, arg in enumerate(args) if isinstance(arg, bool))
     args[index] = value
@@ -665,8 +659,8 @@ def test_eval_mode_batchnorm_refresh_allowed_default_path():
         log.save_new_outs(model, x2, seed=1)
         fresh = trace_fn(model, x2, capture=tl.options.CaptureOptions(seed=1))
         try:
-            refreshed_bn = next(op for op in log.layer_list if op.layer_type == "batchnorm")
-            fresh_bn = next(op for op in fresh.layer_list if op.layer_type == "batchnorm")
+            refreshed_bn = next(op for op in log._layer_list if op.type == "batchnorm")
+            fresh_bn = next(op for op in fresh._layer_list if op.type == "batchnorm")
             assert torch.allclose(refreshed_bn.out, fresh_bn.out)
         finally:
             fresh.cleanup()

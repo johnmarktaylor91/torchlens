@@ -72,9 +72,7 @@ def test_site_whose_trailing_axis_is_another_width_refuses_and_the_remedy_runs(
 
 def test_site_whose_feature_axis_is_not_last_refuses_and_the_remedy_runs(tmp_path: Path) -> None:
     artifact = tl.bridge.pyreft.read(_write(tmp_path / "artifact"))
-    trace = tl.trace(
-        _Transposed().eval(), _X, capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    trace = tl.trace(_Transposed().eval(), _X, capture=tl.options.CaptureOptions(replayable=True))
     transposed = _site_of_shape(trace, (2, _D, 5))
     with pytest.raises(InvalidArgumentError) as excinfo:
         artifact.subspace(transposed)

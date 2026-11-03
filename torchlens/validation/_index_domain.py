@@ -75,6 +75,9 @@ _INDEX_DOMAIN_ARG_SPECS: dict[str, tuple[int, frozenset[str]]] = {
 #: Class-target ops whose ``ignore_index`` marks targets that contribute nothing.
 _IGNORE_INDEX_OPS = frozenset({"cross_entropy", "nll_loss"})
 
+#: Perturbation strategy that moves one index entry within its domain.
+_INDEX_SINGLE_ENTRY_STRATEGY = "index_single_entry"
+
 
 def _parent_is_index_domain_arg(layer: Op, parent_label: str) -> bool:
     """Return whether ``parent_label`` occupies the op's index/target arg slot.
@@ -400,3 +403,25 @@ def _saved_integer_index_tensor(layer: Op) -> torch.Tensor | None:
     if saved_index.dtype not in _INDEX_DOMAIN_INT_DTYPES:
         return None
     return saved_index
+
+
+def _raise_retry_strategies(layer: Op, layers_to_perturb: list[str]) -> tuple[str, ...]:
+    """Return the retries for a first perturbation whose execution raised.
+
+    Parameters
+    ----------
+    layer:
+        Child op being validated.
+    layers_to_perturb:
+        Labels of the parents this check perturbs.
+
+    Returns
+    -------
+    tuple of str
+        ``step_up``/``step_down``; only the in-domain single-entry move for an
+        index-domain parent (see ``core._perturbation_retry_strategies``).
+    """
+
+    if any(_parent_is_index_domain_arg(layer, label) for label in layers_to_perturb):
+        return (_INDEX_SINGLE_ENTRY_STRATEGY,)
+    return ("step_up", "step_down")

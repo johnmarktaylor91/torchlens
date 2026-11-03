@@ -151,16 +151,16 @@ def test_save_scrub_remaps_process_local_identity_tokens(tmp_path: Path) -> None
     first = _save_seeded_trace(first_path, seed=1)
     second = _save_seeded_trace(second_path, seed=2)
 
-    first_param_ops = [op for op in first.layer_list if op.has_params]
-    second_param_ops = [op for op in second.layer_list if op.has_params]
+    first_param_ops = [op for op in first._layer_list if op.has_params]
+    second_param_ops = [op for op in second._layer_list if op.has_params]
     assert [op._param_barcodes for op in first_param_ops] == [
         op._param_barcodes for op in second_param_ops
     ]
     assert [op.equivalence_class for op in first_param_ops] == [
         op.equivalence_class for op in second_param_ops
     ]
-    assert first.model_object_id == second.model_object_id == 1
-    assert first.input_object_id == second.input_object_id == 1
+    assert first.provenance.model_object_id == second.provenance.model_object_id == 1
+    assert first.provenance.input_object_id == second.provenance.input_object_id == 1
 
     first_manifest = json.loads((first_path / "manifest.json").read_text(encoding="utf-8"))
     second_manifest = json.loads((second_path / "manifest.json").read_text(encoding="utf-8"))
@@ -179,14 +179,14 @@ def test_save_scrub_remaps_autograd_identity_joins(tmp_path: Path) -> None:
     trace.save(path)
 
     loaded = tl.load(path)
-    expected_ids = list(range(1, len(loaded.grad_fn_order) + 1))
-    assert loaded.grad_fn_order == expected_ids
-    assert list(loaded.grad_fn_logs) == expected_ids
-    assert set(loaded.backward_root_grad_fn_object_ids) <= set(expected_ids)
+    expected_ids = list(range(1, len(loaded.autograd.grad_fn_order) + 1))
+    assert loaded.autograd.grad_fn_order == expected_ids
+    assert list(loaded._grad_fn_logs) == expected_ids
+    assert set(loaded.autograd.backward_root_grad_fn_object_ids) <= set(expected_ids)
     assert all(
         grad_fn.grad_fn_object_id == grad_fn_id
         and set(grad_fn.next_grad_fn_ids) <= set(expected_ids)
-        for grad_fn_id, grad_fn in loaded.grad_fn_logs.items()
+        for grad_fn_id, grad_fn in loaded._grad_fn_logs.items()
     )
 
 
@@ -196,9 +196,8 @@ def test_bundle_writer_resolves_lazy_conjugate_payloads(tmp_path: Path) -> None:
     trace = tl.trace(
         _ComplexModel(),
         torch.tensor([1 + 2j], dtype=torch.complex64),
-        capture=tl.options.CaptureOptions(
-            layers_to_save="all", activation_transform=lambda value: value.conj()
-        ),
+        capture=tl.options.CaptureOptions(activation_transform=lambda value: value.conj()),
+        save="all",
     )
     expected = trace.output_ops[0].transformed_out.clone()
     path = tmp_path / "conjugate.tlspec"
@@ -286,7 +285,7 @@ def test_explicit_unknown_resolver_status_is_not_upgraded() -> None:
     trace = tl.trace(_LinearModel(), torch.ones(1, 2))
     op = trace.output_ops[0]
     op.resolver_status = None
-    layer = trace.layer_logs[op.layer_label]
+    layer = trace._layer_logs[op.layer_label]
     layer.resolver_status = None
 
     restored_op = pickle.loads(pickle.dumps(op))
@@ -296,7 +295,11 @@ def test_explicit_unknown_resolver_status_is_not_upgraded() -> None:
 
 
 def test_rehydrated_trace_retains_source_tlspec_version() -> None:
-    """Trace pickle state preserves its validated source artifact version."""
+    """Trace pickle state preserves its validated source artifact version.
+
+    The only readable stamp is the current one; an older stamp is a torchlens 2.x
+    file and refuses typed instead of rehydrating.
+    """
 
     from torchlens._io import TLSPEC_VERSION
 
@@ -305,6 +308,7 @@ def test_rehydrated_trace_retains_source_tlspec_version() -> None:
     state["tlspec_version"] = TLSPEC_VERSION
     restored = tl.Trace.__new__(tl.Trace)
     restored.__setstate__(state)
+    assert restored.tlspec_version == TLSPEC_VERSION
 
     assert restored.tlspec_version == TLSPEC_VERSION
 
@@ -341,7 +345,7 @@ def test_intervention_overwrite_rename_failure_restores_previous_artifact(
     trace = tl.trace(
         _LinearModel(),
         torch.ones(1, 2),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     path = tmp_path / "intervention.tlspec"
     trace.save_intervention(path, level="audit")
@@ -576,7 +580,7 @@ def test_computed_record_fields_are_not_portable() -> None:
     }
     for record_type, field_names in expected_drops.items():
         for field_name in field_names:
-            assert record_type.FIELD_POLICY[field_name].portable_policy is FieldPolicy.DROP
+            assert record_type._FIELD_POLICY[field_name].portable_policy is FieldPolicy.DROP
 
 
 def test_save_succeeds_for_multi_pass_recurrent_trace(tmp_path: Path) -> None:
@@ -602,7 +606,7 @@ def test_save_succeeds_for_multi_pass_recurrent_trace(tmp_path: Path) -> None:
     assert any(layer.num_passes > 1 for layer in trace.layers.values())
     path = tmp_path / "recurrent.tlspec"
     trace.save(path)
-    assert tl.load(path).num_ops == trace.num_ops
+    assert tl.load(path)._num_ops == trace._num_ops
 
 
 def test_canonical_metadata_relation_sets_round_trip(tmp_path: Path) -> None:

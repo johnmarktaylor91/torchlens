@@ -1,9 +1,9 @@
 ## Public Surface
 
-`torchlens.__all__` is intentionally small and currently has 87 names. New user-facing
+`torchlens.__all__` is intentionally small and currently has 85 names. New user-facing
 objects should usually live under submodules (`torchlens.io`, `torchlens.options`,
 `torchlens.bridge`, `torchlens.errors`, etc.). Interim-phase policy is remove-and-rename,
-never deprecation shims (tests/test_deprecation_inventory.py pins the package
+never deprecation shims (scripts/checks/deprecation_inventory.py pins the package
 deprecation-free).
 
 Unified capture examples:
@@ -46,7 +46,7 @@ Use `include_activations=True` independently to archive exactly the existing cap
 selection as `selected_activation_v2` (with physical `InputAttestationFingerprint` eligibility
 records). Inspect it through `Trace.archived_activations`; never use those blobs as DAG inputs.
 Eligible original-input/capture-equivalent-state runs byte-attest raw saved slots (`attested` or
-transactional `numeric_attestation_failed`), while changed-input (logical or physical),
+transactional `replay_value_mismatch`), while changed-input (logical or physical),
 random/non-equivalent-state, and nondeterministic-capture-context runs are `not_applicable`;
 `attested` always implies `verified`.
 `trace.run(inputs=..., seed=..., on_divergence="raise")` reports readiness, state source,
@@ -55,7 +55,7 @@ Use `on_divergence="return"` only when a permanently poisoned diagnostic result 
 through `RunnableErrorCode`; the complete frozen taxonomy is in
 `docs/reference/runnable_tlspec_contract.md`. r37: overlapping/unprovable distinct-object state
 alias topology and zero-tensor-leaf or instance-stateful container outputs refuse at save
-(`state_alias_topology_unsupported` / `missing_output_container_contract`); tied live-identity
+(`state_alias_topology_unsupported` / `output_container_contract_missing`); tied live-identity
 state stages as one alias-group allocation; persisted context values validate at parse
 (`context_field_invalid`); non-global host RNG/entropy/clock touches permanently ceiling replay
 (r39: numpy instances via a chained `sys`/`threading.setprofile` classifier + a cheap
@@ -72,10 +72,9 @@ run preparation behind a no-allocation readiness capability gate.
 Provisional semantic I/O examples (review-day names):
 
 ```python
-classifier_trace = tl.trace(
-    model, x, capture=tl.options.CaptureOptions(output_style="classification", output_head="logits")
-)
+classifier_trace = tl.trace(model, x)
 classifier_trace.output_table(k=5)
+classifier_trace.decode_output(style="classification", head="logits")  # read-time override
 
 input_trace = tl.trace(
     model,
@@ -91,7 +90,6 @@ image_trace = tl.trace(
     capture=tl.options.CaptureOptions(input_transform=image_batch_to_tensor),
     save=mds_layers,
     save_raw_input=True,
-    output_style="classification",
 )
 image_trace.model_profile
 image_trace.output_table(k=5)
@@ -108,16 +106,15 @@ image_trace.draw(node_spec_fn=tl.viz.nodes.scree())
 Sprint B annotation/MDS names are provisional until review-day signoff. `Trace.model_profile`
 is computed, not persisted. `tl.repgeom.mds_evolution(...)` requires the target batch
 activations to have been saved at capture time; use a curated `save=` subset, not exhaustive
-`layers_to_save="all"`,
+`save="all"`,
 for image batches. `Trace._annotation_blobs` is public-provisional only for render-time
 annotation payloads and compatibility review.
 Sprint C RDM, feature-map, and scree node visuals are PIL-only render-time images composed
 from `tl.viz.render_*` primitives and are provisional until review-day signoff.
 
 `record(keep_op=...)` and `record(keep_module=...)` are removed and raise `TypeError`.
-`record(save=...)` is the only selective-capture spelling. `capture=CaptureOptions(
-layers_to_save=[...])` remains the final-label selection door (the bare flat kwarg is
-removed); it is NOT two-pass-only —
+`record(save=...)` is the only selective-capture spelling. On `trace`, `save=[...]`
+also accepts final-label selections.
 `_trace_selector_helpers.py` builds a live single-pass predicate whenever early labels
 suffice, falling back to two-pass resolution otherwise. An
 unqualified recurrent layer label saves all passes, while `"label:2"` saves only pass 2.

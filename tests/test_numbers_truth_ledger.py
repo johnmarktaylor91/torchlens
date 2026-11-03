@@ -46,11 +46,11 @@ def test_witness_side_one_constructions_are_zero_by_rule() -> None:
     log = tl.trace(
         _ConstructionModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save=None),
+        save=None,
     )
     try:
         by_func: dict[str, list] = {}
-        for op in log.layer_list:
+        for op in log._layer_list:
             by_func.setdefault(op.func_name, []).append(op)
         for name in ("arange", "tensor", "zeros", "ones_like"):
             assert name in by_func, f"construction {name} not captured"
@@ -73,9 +73,7 @@ def test_witness_side_two_ambiguous_names_stay_unknown() -> None:
     assert compute_forward_flops("rand", (2, 3), (), (), {}) is None
     assert compute_forward_flops("linspace", (8,), (), (), {}) is None
 
-    log = tl.trace(
-        _AmbiguousModel(), torch.randn(2, 3), capture=tl.options.CaptureOptions(layers_to_save=None)
-    )
+    log = tl.trace(_AmbiguousModel(), torch.randn(2, 3), save=None)
     try:
         unknown_names = {group.func_name for group in log.unknown_flop_ops}
         assert "rand" in unknown_names
@@ -92,9 +90,7 @@ def test_unknown_ledger_names_reasons_and_remedies() -> None:
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             return torch.nn.functional.pad(torch.nn.functional.pad(x, (1, 0)), (0, 1))
 
-    log = tl.trace(
-        _PadTwice(), torch.randn(2, 3), capture=tl.options.CaptureOptions(layers_to_save=None)
-    )
+    log = tl.trace(_PadTwice(), torch.randn(2, 3), save=None)
     try:
         ledger = log.unknown_flop_ops
         assert len(ledger) == 1
@@ -123,10 +119,10 @@ def test_four_way_classification_is_total() -> None:
     for model, x in models:
         if hasattr(model, "eval"):
             model.eval()
-        log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=None))
+        log = tl.trace(model, x, save=None)
         try:
             coverage = log.compute_coverage
-            assert sum(coverage.values()) == len(log.layer_list)
+            assert sum(coverage.values()) == len(log._layer_list)
             assert coverage["unknown"] == len(log.unknown_flop_ops) or coverage["unknown"] == sum(
                 group.count for group in log.unknown_flop_ops
             )
@@ -144,14 +140,14 @@ def test_gpt2_reaches_full_coverage_sentence() -> None:
     model.eval()
     ids = torch.randint(0, 50257, (1, 16))
     with torch.no_grad():
-        log = tl.trace(model, ids, capture=tl.options.CaptureOptions(layers_to_save=None))
+        log = tl.trace(model, ids, save=None)
     try:
         coverage = log.compute_coverage
         assert coverage["unknown"] == 0
         assert log.unknown_flop_ops == ()
         # The 25 former "unknowns" (tensor x24, arange x1) are zero-by-rule.
         assert coverage["zero_by_rule"] >= 25
-        assert coverage["known"] + coverage["zero_by_rule"] == log.num_ops
+        assert coverage["known"] + coverage["zero_by_rule"] == log._num_ops
         # Reclassification adds ZERO FLOPs: the partition pin is unchanged.
         assert int(log.cost.total_flops_forward) == 3_974_725_648
     finally:

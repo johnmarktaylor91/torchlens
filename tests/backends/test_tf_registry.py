@@ -45,7 +45,7 @@ def test_tf_backend_registered_with_alias_capabilities_and_priority() -> None:
     assert spec.capabilities.backward_capture == tf_capabilities.supports_backward_capture
     assert spec.capabilities.has_validation_replay == tf_capabilities.supports_validation_replay
     assert spec.capabilities.fastlog == tf_capabilities.supports_fastlog
-    assert spec.capabilities.interventions == tf_capabilities.supports_intervention
+    assert spec.capabilities.can_intervene == tf_capabilities.supports_intervention
     assert (
         spec.capabilities.intermediate_derived_grads
         == tf_capabilities.supports_intermediate_derived_grads
@@ -172,8 +172,8 @@ def test_tf_capture_trace_routes_to_eager_capture() -> None:
 
     trace = tl.trace(_TFModule(), tf.constant([1.0]), backend="tf")
 
-    assert trace.backend == "tf"
-    assert trace.num_ops == 1
+    assert trace.provenance.backend == "tf"
+    assert trace._num_ops == 1
 
 
 @pytest.mark.tf_backend

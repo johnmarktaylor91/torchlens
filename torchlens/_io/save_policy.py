@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 from . import ArtifactError
 
@@ -29,11 +30,11 @@ def _refuse_incoherent_structure_only_write(scrubbed_state: dict[str, Any]) -> N
     ``_io/forgery_validation.py`` stays strict and unchanged.
     """
 
-    if scrubbed_state.get("structure_only") is not True:
+    if scrubbed_state.get("_options_structure_only") is not True:
         return
     from .forgery_validation import _OP_VALUE_PAYLOAD_FIELDS
 
-    for entry in scrubbed_state.get("layer_list") or ():
+    for entry in scrubbed_state.get("_layer_list") or ():
         for field_name in _OP_VALUE_PAYLOAD_FIELDS:
             if getattr(entry, field_name, None) is not None:
                 label = getattr(entry, "label", "<unknown>")
@@ -112,7 +113,7 @@ def _resolve_include_flags(
     19 and 22; M(weightsfree) W3).
     """
 
-    structure_only = bool(getattr(trace, "structure_only", False))
+    structure_only = bool(trace._options_structure_only if is_live_trace(trace) else False)
     if structure_only and save_level == "executable_with_callables":
         # Item 22: this level's required saved-args/RNG payloads land under
         # the structure-only marker and the M-C2 load coherence gate refuses

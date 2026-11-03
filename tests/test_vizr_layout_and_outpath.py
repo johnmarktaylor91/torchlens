@@ -24,7 +24,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._data_classes._trace_viz import TraceVisualizationMixin
 from torchlens._errors import InvalidArgumentError
 from torchlens._visualization._render_utils import direction_to_rankdir
 
@@ -57,7 +56,7 @@ def _shipped_draw_default() -> Iterator[None]:
     and the caller ``chdir``s into its own ``tmp_path``.
     """
 
-    func = TraceVisualizationMixin.draw
+    func = tl.Trace.draw
     saved = func.__defaults__
     positional = [
         p
@@ -90,10 +89,9 @@ def test_rightleft_forward_draw_emits_rankdir_rl(tmp_path: Path) -> None:
         dot = trace.draw(
             direction="rightleft",
             path=str(tmp_path / "rl"),
-            vis_save_only=True,
             file_format="dot",
-            vis_node_placement="dot",
-        )
+            layout="dot",
+        ).dot
     finally:
         trace.cleanup()
     assert "rankdir=RL" in dot
@@ -101,7 +99,7 @@ def test_rightleft_forward_draw_emits_rankdir_rl(tmp_path: Path) -> None:
 
 
 def test_rightleft_backward_draw_emits_rankdir_rl(tmp_path: Path) -> None:
-    """``draw_backward(vis_direction="rightleft")`` emits ``rankdir=RL`` too."""
+    """``draw_backward(direction="rightleft")`` emits ``rankdir=RL`` too."""
     trace = tl.trace(
         _TwoLayer(),
         torch.randn(2, 3, requires_grad=True),
@@ -109,12 +107,12 @@ def test_rightleft_backward_draw_emits_rankdir_rl(tmp_path: Path) -> None:
     )
     try:
         trace.log_backward(trace[trace.output_layers[0]].out.sum())
-        dot = trace.draw_backward(
-            vis_direction="rightleft",
+        dot = trace.draw(
+            graph="backward",
+            direction="rightleft",
             path=str(tmp_path / "bwd_rl"),
-            vis_save_only=True,
             file_format="dot",
-        )
+        ).dot
     finally:
         trace.cleanup()
     assert "rankdir=RL" in dot
@@ -136,13 +134,13 @@ def test_two_bare_draws_write_two_files_and_print_both(
     """Two bare ``draw()`` calls in one directory write two files and print both paths."""
     monkeypatch.chdir(tmp_path)
     trace = _trace()
-    assert not trace.verbose
+    assert not trace.options.verbose
     try:
         with _shipped_draw_default():
-            trace.draw(vis_save_only=True, file_format="svg")
+            trace.draw(file_format="svg")
             first_out = capsys.readouterr().out
             first_mtime = os.path.getmtime(tmp_path / "modelgraph.svg")
-            trace.draw(vis_save_only=True, file_format="svg")
+            trace.draw(file_format="svg")
             second_out = capsys.readouterr().out
     finally:
         trace.cleanup()
@@ -167,8 +165,8 @@ def test_explicit_outpath_is_exact_and_quiet(
     trace = _trace()
     target = tmp_path / "named"
     try:
-        trace.draw(path=str(target), vis_save_only=True, file_format="svg")
-        trace.draw(path=str(target), vis_save_only=True, file_format="svg")
+        trace.draw(path=str(target), file_format="svg")
+        trace.draw(path=str(target), file_format="svg")
     finally:
         trace.cleanup()
     assert (tmp_path / "named.svg").is_file()

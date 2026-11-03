@@ -67,15 +67,14 @@ def uniform_log() -> Any:
 def _draw(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 def _varying_layer(log: tl.Trace) -> Any:
-    return next(layer for layer in log.layer_logs.values() if len(layer.ops) > 1)
+    return next(layer for layer in log._layer_logs.values() if len(layer.ops) > 1)
 
 
 def test_rolled_varying_layer_gets_summary_row(varying_log: tl.Trace) -> None:
@@ -92,7 +91,7 @@ def test_summary_row_is_escaped_at_the_choke_point(varying_log: tl.Trace, tmp_pa
 
     layer = _varying_layer(varying_log)
     summary = layer.shape_summary
-    dot = _draw(varying_log, tmp_path, vis_mode="rolled")
+    dot = _draw(varying_log, tmp_path, rolled=True)
     if ">" in summary:
         assert summary.replace(">", "&gt;") in dot
         assert f">{summary}<" not in dot
@@ -128,7 +127,7 @@ def test_shape_summary_selector_token(varying_log: tl.Trace, tmp_path: Path) -> 
     )
     assert lines == [layer.layer_label, summary]
     # Skip-when-absent: a single-pass layer contributes no row for the token.
-    single = next(lay for lay in varying_log.layer_logs.values() if len(lay.ops) == 1)
+    single = next(lay for lay in varying_log._layer_logs.values() if len(lay.ops) == 1)
     single_lines = compute_default_node_lines(
         single, vis_mode="rolled", node_label_fields=["name", "shape_summary"]
     )

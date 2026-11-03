@@ -14,8 +14,8 @@ object or tensor-valued intermediates in its sparse core. It can be loaded for a
 when readiness succeeds, replayed through the transactional `Trace.run()` API.
 
 Runnable saving requires replay-template metadata from the original capture. Opt in with
-`capture=tl.options.CaptureOptions(intervention_ready=True)` (or the equivalent flat
-`intervention_ready=True` argument) before calling
+`capture=tl.options.CaptureOptions(replayable=True)` (or the equivalent flat
+`replayable=True` argument) before calling
 `trace.save(path, level="runnable", ...)`. A normal capture remains valid for analysis
 saves, but runnable preflight rejects it with `RunnablePreflightError` and the structured
 `MISSING_CALLABLE_REF` finding; saving cannot reconstruct the missing call templates later.
@@ -182,14 +182,16 @@ subsystem (new run modes, run-time state interventions, segment or backward repl
 products). Everything else inside the runnable machinery is internal and may change
 without notice.
 
-**Binding rule.** `torchlens/_runnable_execution.py` is a namespace-aggregator facade over
-its slice modules; slice modules have no importers besides the aggregator. Every extension
-point below is named on ONE of `torchlens/_runnable.py`, `torchlens/_runnable_seam.py`,
-`torchlens/_runnable_execution.py`, or `torchlens/_runnable_state.py` (the coordinator
-verbs additionally have their transport-side homes in `torchlens/_io/runnable.py` and
-`torchlens/_io/runnable_load.py`, reached through the coordinator boundary). Consumers
-never import a slice module directly; moving a name off its contract module is a contract
-change.
+**Binding rule.** `torchlens/_runnable/execution.py` is the hub of the runnable
+machinery: it defines the shared state and binds the names of its split modules
+(`_runnable/transaction.py`, `_runnable/providers.py`, `_runnable_until.py` and their
+siblings) at the bottom of the module, so every extension point stays reachable from
+the hub. Every extension point below is named on ONE of `torchlens/_runnable/__init__.py`,
+`torchlens/_runnable/seam.py`, `torchlens/_runnable/execution.py`, or
+`torchlens/_runnable/state.py` (the coordinator verbs additionally have their
+transport-side homes in `torchlens/_io/runnable.py` and `torchlens/_io/runnable_load.py`,
+reached through the coordinator boundary). Consumers bind to the contract modules, not to
+a split module; moving a name off its contract module is a contract change.
 
 **E1 -- Descriptor.** `SparseRunDescriptor` plus the closed enums and dataclasses in
 `torchlens._runnable`, mirrored 1:1 by the exhaustive contract document. The registries a
@@ -200,7 +202,7 @@ plus a registered persisted-field family (pre-release fields ship DROP-gated); n
 adds a descriptor field directly.
 
 **E2 -- Provider.** `RunProvider` is a closed enum. The four-verb coordinator boundary is
-`RunnableCoordinator` (`torchlens/_runnable_seam.py`): produce
+`RunnableCoordinator` (`torchlens/_runnable/seam.py`): produce
 (`build_sparse_run_descriptor`), decode (`parse_sparse_run_descriptor`), prepare
 (`attach_sparse_run_readiness` plus preflight), execute (`run_loaded_sparse_trace` /
 `run_live_trace`). Provider dispatch is the one hardcoded ladder inside `Trace.run`; a new

@@ -5,6 +5,50 @@
 
 ### Behavior changes
 
+- **intervention**: `tl.intervention.Rule` has no `direction` field. The site decides the pass
+  (`Rule.signal`, derived): `Rule(site, edit)` edits the activation, `Rule(tl.grad(site), edit)`
+  the gradient, `Rule(tl.grad(site) | site, edit)` both. `Rule(..., direction=...)` and the old
+  third positional value refuse `intervention_direction_invalid`. Rule ids are unchanged.
+  `TapObserver.signal` and `tl.observers.tap(signal=)` stay.
+- **bundle**: `Bundle.measure_members` is gone. `Bundle.map(fn)` is the one per-member read: it
+  returns `fn` over every live member keyed by name, and every effect-table candidate the bundle
+  no longer holds (released, refused or failed) keyed by its candidate id with the value
+  `"unmeasured"`. The `order="chain"` view and the `measure_members_order_unavailable` code go
+  with it; `bundle.history` still lists the operations in ledger order.
+- **draw**: `trace.draw(show_containers=...)` takes four settings: `False` (default), `"labels"`,
+  `"collapsed"` and `"nodes"`. `"auto"` is gone (it drew exactly what `"collapsed"` draws and chose
+  nothing) and so is `"cluster"` (it drew `"labels"` plus a dotted box around an op-returned tuple,
+  which `"nodes"` also draws); both refuse `visualization_show_containers_invalid` with the
+  replacement named. The `overview` lens now pins `"collapsed"`. Each setting is documented in
+  `docs/containers.md`.
+- **fastlog**: the `Recording.enrich` step `"param_addresses"` is gone. It never produced an
+  enrichment (capture records carry no `parent_param_addresses` field, so it always refused);
+  the accepted steps are `"module_path_strings"` and `"all-feasible"`, and any other name
+  refuses as an unknown step.
+- **output decode**: `CaptureOptions.output_style` is gone. Output decoding is not a capture
+  option: every capture runs the automatic detector pass (Hugging Face `config.id2label`
+  classifiers, verified ImageNet models, and text models traced through
+  `tl.bridge.transformers.trace_text`, whose attached tokenizer now switches text decoding on
+  by itself). To force a style, decode again from the retained outputs at read time:
+  `trace.decode_output(style="imagenet")`, `trace.output_table(style="classification")`, or
+  `trace.decode_output(style="hf_text", tokenizer=tok)`; a custom detector registered with
+  `tl._autoroute.output.register(...)` reads `meta["style"]` (was `meta["output_style"]`) and
+  serves `decode_output(style="my_style")`. The read-time result is returned, not stored in
+  `decoded_output`. An unknown style refuses `decode_style_unknown`
+  (`tl.errors.DecodeStyleUnknownError`; was `output_style_unknown` /
+  `OutputStyleUnknownError`).
+- **output decode**: `CaptureOptions.output_head` is gone. Name the head of a multi-output
+  model at read time instead: `trace.decode_output(head="logits")` or
+  `trace.output_table(head="0")`, where the head is an output container path (`"logits"`,
+  `"0"`, `"0.logits"`). A head that is not an output head refuses `decode_head_unknown`; several
+  qualifying heads with none named refuse `decode_head_ambiguous`; both list the available
+  heads. The automatic pass keeps recording the head it selected in
+  `trace.output_postprocessor.selected_output_head`.
+- **validation**: `tl.validate` restores the caller's global RNG streams (Python `random`, NumPy,
+  torch CPU and CUDA generators) on return and on error, the way `tl.trace` does; before, a
+  backward or layer-gradient validation left the process reseeded with the validation seed.
+  The lower-level `torchlens.validation.validate_forward_pass`, `validate_backward_pass`
+  and the `Trace.validate_forward_pass` replay method make the same promise.
 - **root namespaces**: `tl.mechinterp`, `tl.semantic` and `tl.tviz` are not root attributes;
   in a fresh process they raise a typed `AttributeError` (code `facade_redirect`) that names
   the import. Import the subpackage (`import torchlens.mechinterp`) and call
@@ -380,6 +424,48 @@
   before the first request, the key never written into a message (documented-unstable).
 
 ### Bug Fixes
+
+- **capture**: call-site chains no longer include TorchLens's own frames when the package is
+  imported through a relative `sys.path` entry such as `PYTHONPATH=.`; those frames had merged
+  distinct call sites into false loops. The TorchLens-frame test now compares normalised file
+  names.
+- **replay**: a hook-style edit aimed at a buffer version that nothing threads into (an unwritten
+  buffer's initial read, such as `fork.do(tl.label("buffer_1:1"), tl.scale(0.5))`) now fires on
+  the captured value and replays its consumers; the engine used to skip the site with the
+  threading step, so the edit neither applied nor refused and no fire was recorded.
+- **capture**: a module registered under several names (`self.act = nn.Tanh()` reused inside
+  two `nn.Sequential`s) now gets its first registration path as its canonical address, as
+  `named_modules()` reports it and the glossary says; the later paths stay alias addresses. The
+  last path used to win, so backward validation's stock module hooks (keyed by `named_modules()`)
+  and the capture disagreed on the shared module's calls and the verdict was False
+  (`aenet-PyTorch` in the classics corpus).
+- **validation**: backward validation's module-output gradient check now agrees with the
+  capture on what a module's outputs are and on outputs no gradient reaches. The stock side
+  enumerates the tensor leaves of a plain object output (a `torch.distributions` object) with
+  the capture's own fallback walk, and an output that received no gradient in stock autograd
+  and none in the capture is `compared_no_grad` (agreement, recorded, not counted as evidence)
+  instead of a fail-closed gap; stock-has-gradient-capture-none and capture-has-gradient-stock-none
+  still fail, and a run that compares no gradient at all still returns False with a record saying
+  nothing was compared. `IQL (Implicit Q-Learning, rlkit actor)` in the classics corpus now
+  validates.
+- **validation**: every False verdict of `tl.validate(..., scope="backward")` now records a
+  structured failure: `last_validation_failure()` returns a record with `check="backward"` and
+  `extra["reason"]` naming the refusal or mismatch (`parameter_grad_mismatch` with the parameter
+  name and max diffs, `parameter_census_mismatch`, `module_output_grads` with the first mismatched
+  or uncaptured module call, `no_module_output_evidence`, `backward_coverage_gap`,
+  `no_parameter_gradients`, `degenerate_parameter_gradients`, `non_leaf_parameter`,
+  `pristine_oracle_unavailable`, `appended_trace`). Three of these paths used to return a bare
+  False with no warning either. A True backward verdict clears any earlier record.
+- **backward**: a second-order `torch.autograd.grad` inside forward (or a forward op applied to
+  a `create_graph` gradient and differentiated again) no longer fails forward validation on
+  `backward_graph_invariants` ("order 2 does not match creator order + 1 (3)"). GradFn order
+  assignment now runs the creator rule and the topology inference to a fixed point, so the nodes
+  created by differentiating an inferred-order node sit one order above it. The invariant is
+  unchanged.
+- **capture, to_disk**: a forward that returns one tensor in two output slots (`return a, a`)
+  gets one output op per slot, so the trace rebuilds. A streamed save no longer attaches another
+  op's tensor to an output after an orphan op shifted the blob numbering: save-time ids start
+  past the stream's issued count, and staging refuses a colliding id.
 
 - **replay**: replay no longer refuses a template parent as "ambiguous across the 2 passes of
   that layer" when a fused multi-pass layer's public raw label equals another op's final label

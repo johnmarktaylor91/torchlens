@@ -14,8 +14,7 @@ import inspect
 from collections.abc import Callable
 from typing import Any
 
-AUTOGRAD_GRAD_RECORDER_ATTR = "__tl_autograd_grad_recorder__"
-"""Marker set on the TorchLens callable that records an in-forward autograd.grad."""
+from ._autograd_grad_marker import AUTOGRAD_GRAD_RECORDER_ATTR
 
 AUTOGRAD_GRAD_FUNC_NAME = "autogradgrad"
 """Op type / func name of the boundary op."""
@@ -38,23 +37,6 @@ _GRAD_SIGNATURE_FALLBACK = inspect.Signature(
     ]
 )
 _TENSOR_PARAMETERS = frozenset({"outputs", "inputs", "grad_outputs"})
-
-
-def is_autograd_grad_recorder(func: Any) -> bool:
-    """Return whether ``func`` is TorchLens's in-forward autograd.grad recorder.
-
-    Parameters
-    ----------
-    func:
-        An op's recorded callable.
-
-    Returns
-    -------
-    bool
-        ``True`` only for the recorder callable built at capture time.
-    """
-
-    return getattr(func, AUTOGRAD_GRAD_RECORDER_ATTR, False) is True
 
 
 def grad_signature(grad_callable: Callable[..., Any]) -> inspect.Signature:

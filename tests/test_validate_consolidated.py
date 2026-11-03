@@ -100,7 +100,7 @@ def test_validate_backward_scope_detects_corrupted_captured_grad(
         """Corrupt one captured module-output grad after backward logging."""
 
         result = original_log_backward(trace, *args, **kwargs)
-        for op in trace.layer_list:
+        for op in trace._layer_list:
             grad = getattr(op, "grad", None)
             if not isinstance(grad, torch.Tensor) or not getattr(op, "modules", None):
                 continue

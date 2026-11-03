@@ -39,8 +39,11 @@ import pytest
 
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
 from torchlens._utils._callable_safety import is_denied_operator_gadget
+from torchlens.intervention._resolver_registry import (
+    resolve_function_registry_key,
+    resolve_import_ref,
+)
 from torchlens.intervention.errors import ReplayPreconditionError, UntrustedCallableError
-from torchlens.intervention.resolver import resolve_function_registry_key, resolve_import_ref
 from torchlens.intervention.types import FunctionRegistryKey
 
 # Generic operator gadgets / mutators that MUST stay denied even under operator trust.

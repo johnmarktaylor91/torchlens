@@ -105,7 +105,7 @@ def test_one_label_across_every_nan_surface() -> None:
     assert repr(error_label) in str(exc)
     assert exc.affected_sites == [error_label]
 
-    outcome = exc.partial_log.trace.outcome
+    outcome = exc.partial_trace.trace.outcome
     assert outcome.boundary_label == error_label
 
     live = tl.debug.find_nan(_FaultModel(), x)
@@ -121,7 +121,7 @@ def test_one_label_across_every_nan_surface() -> None:
     finally:
         completed.cleanup()
 
-    for text in (str(exc), str(live.message), exc.partial_log.first_nonfinite()):
+    for text in (str(exc), str(live.message), exc.partial_trace.first_nonfinite()):
         _assert_no_raw_spelling(text)
     for parent in exc.fields["parents"]:
         assert not parent.endswith("_raw")
@@ -131,7 +131,7 @@ def test_dead_chain_bystanders_prune_to_none_and_offender_survives() -> None:
     """Pruned bystanders resolve (None, pruned); the offender is always labeled."""
 
     exc = _raise_on_nan_error(_DeadChainFaultModel(), torch.ones(3))
-    trace = exc.partial_log.trace
+    trace = exc.partial_trace.trace
     assert exc.fields["layer_status"] == "final"
     assert isinstance(exc.fields["layer"], str)
 
@@ -151,7 +151,7 @@ def test_offender_on_dead_branch_is_never_elided() -> None:
     label = exc.fields["layer"]
     assert isinstance(label, str) and label.startswith("truediv")
     # The finalized prefix serves the offender through ordinary lookup.
-    assert exc.partial_log.trace[label] is not None
+    assert exc.partial_trace.trace[label] is not None
 
 
 def test_multipass_offender_gets_pass_qualified_canonical_label() -> None:
@@ -182,7 +182,7 @@ def test_failed_finalization_yields_none_plus_status_never_raw(monkeypatch) -> N
     assert exc.fields["layer_status"] == "unavailable"
     assert isinstance(exc.fields["layer_raw"], str)
     _assert_no_raw_spelling(str(exc))
-    outcome = tl._partial.from_failed_capture(exc).trace.outcome
+    outcome = exc.partial_trace.trace.outcome
     assert str(outcome.status) == "CaptureStatus.ABORTED_NONFINITE"
     assert outcome.boundary_label is None
 
@@ -191,7 +191,7 @@ def test_resolver_statuses_are_closed_and_total() -> None:
     """The resolver answers every input with a label or an explicit status."""
 
     exc = _raise_on_nan_error(_FaultModel(), torch.ones(1, 3))
-    trace = exc.partial_log.trace
+    trace = exc.partial_trace.trace
     label, status = resolve_raw_label(trace, exc.fields["layer_raw"])
     assert (label, status) == (exc.fields["layer"], "final")
     assert resolve_raw_label(trace, "never_recorded_9_raw") == (None, "unavailable")
@@ -205,7 +205,8 @@ def test_no_raw_label_strip_sites_outside_the_resolver() -> None:
     The raw-to-final ordinal offset is not a constant, so ``.removesuffix``/
     slice-stripping ``_RAW_LABEL_SUFFIX`` into a user-facing spelling is always
     wrong. The ONLY sanctioned sites are the constant's definition, the
-    explicitly raw-named ``Op.raw_label`` identity property, and the resolver
+    explicitly raw-named ``Op.raw_label`` identity property (its strip lives in
+    ``_data_classes/_labels.py``), and the resolver
     door module itself (``_capture/_nonfinite_prefix.py``, home of both
     ``resolve_raw_label`` and the constant-suffix ``strip_raw_label_suffix``
     the preview/neutral finishers use before any ``Trace`` identity map
@@ -214,7 +215,7 @@ def test_no_raw_label_strip_sites_outside_the_resolver() -> None:
 
     allowlist = {
         TORCHLENS_DIR / "_constants.py",
-        TORCHLENS_DIR / "_data_classes" / "op.py",
+        TORCHLENS_DIR / "_data_classes" / "_labels.py",
         TORCHLENS_DIR / "_capture" / "_nonfinite_prefix.py",
     }
     offenders: list[str] = []

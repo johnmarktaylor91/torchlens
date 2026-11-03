@@ -22,7 +22,7 @@ def _armed_trace():
     torch.manual_seed(0)
     model = ReusedReluNet()
     x = torch.rand(1, 2, 3, 3)
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
 # ---------------------------------------------------------------------------
@@ -58,7 +58,7 @@ def test_cone_preflight_discloses_engine_assumptions():
     assert plan["cone_size"] < plan["total_ops"]
     assert plan["live_lane_ops"] == plan["total_ops"]  # live always runs the full forward
     notes = " ".join(plan["notes"])
-    assert "intervention_ready" in notes
+    assert "replayable" in notes
     assert "never numeric change" in notes
 
 
@@ -78,7 +78,10 @@ def test_cone_preflight_unarmed_capture_reports_not_replay_ready():
 def test_cache_key_ledgers_never_go_stale():
     """Every curated/neutral ledger name is a REAL CaptureOptions field."""
 
-    from torchlens._user_funcs import CAPTURE_CACHE_KEY_CURATED, CAPTURE_CACHE_KEY_NEUTRAL
+    from torchlens._capture.prepare.cache import (
+        CAPTURE_CACHE_KEY_CURATED,
+        CAPTURE_CACHE_KEY_NEUTRAL,
+    )
 
     option_names = {field.name for field in dataclass_fields(tl.options.CaptureOptions)}
     trace_kwarg_ledger_names = {
@@ -101,7 +104,7 @@ def test_cache_key_ledgers_never_go_stale():
 def test_every_capture_option_is_keyed_or_reviewed():
     """The generated-universe property: no option can silently skip the key."""
 
-    from torchlens._user_funcs import (
+    from torchlens._capture.prepare.cache import (
         CAPTURE_CACHE_KEY_CURATED,
         CAPTURE_CACHE_KEY_NEUTRAL,
         _sweep_option_fields_into_cache_config,
@@ -127,14 +130,18 @@ def test_every_capture_option_is_keyed_or_reviewed():
 
 
 def test_swept_option_change_misses_the_cache_key():
-    """Two configs differing in ONE swept semantic option produce different keys."""
+    """Two configs differing in ONE swept semantic option produce different keys.
 
-    from torchlens._capture_state_helpers import _capture_cache_key
-    from torchlens._user_funcs import (
+    ``on_nonfinite`` is hand-curated into the key, so the swept field here is
+    ``measure_python_peak_memory``.
+    """
+
+    from torchlens._capture.prepare.cache import (
         CAPTURE_CACHE_KEY_CURATED,
         CAPTURE_CACHE_KEY_NEUTRAL,
         _sweep_option_fields_into_cache_config,
     )
+    from torchlens._capture_state_helpers import _capture_cache_key
 
     model = torch.nn.Linear(2, 2)
     x = torch.zeros(1, 2)
@@ -151,5 +158,5 @@ def test_swept_option_change_misses_the_cache_key():
         return _capture_cache_key(model, (x,), {}, config)
 
     baseline = key_for(tl.options.CaptureOptions())
-    changed = key_for(tl.options.CaptureOptions(on_nonfinite="track"))
+    changed = key_for(tl.options.CaptureOptions(measure_python_peak_memory=True))
     assert baseline != changed

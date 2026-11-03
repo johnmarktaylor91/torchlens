@@ -19,11 +19,16 @@ metadata invariants, intervention readiness, and unified `.tlspec` manifest sche
 | `_pristine.py` | Pristine-oracle helpers (fixwave-5 R75-1): the untouched-baseline capture the replay oracle compares against |
 | `exemptions.py` | Replay/perturbation exemption registries and dynamic checks |
 | `_index_domain.py` | Index-domain slot/domain facts and in-domain index perturbations (rotation, single-entry move) for the gather/scatter/embedding/cross_entropy family |
+| `_domain_perturbations.py` | Deterministic in-domain parent perturbations for domain-sensitive ops (saturated activations, rounding steps, zero-base powers, Bernoulli probabilities), entered from `core.py`'s parent perturbation |
 | `_destination_coverage.py` | Destination-overwrite coverage proofs for indexed writes (`__setitem__`, `index_put`, `scatter`): exact-once coverage and unique targets; the pure `out=` destination predicate (`_perturbed_parents_only_occupy_out_kwarg`) |
 | `_value_predicates.py` | Saved-value predicates (all zero / inf / NaN / finite, constant along a dim) read by the posthoc value-proof decisions |
 | `_script_metadata_proof.py` | TorchScript-graph proof (nested scripted calls inlined) that a `jitscript` boundary call reads a perturbed tensor argument only through `aten::size`, `aten::dim`, `aten::numel`, `prim::dtype` or `prim::device`; recorded as exemption reason `torchscript_metadata_only_argument` with its proof; any other use, or an argument type that can hold a tensor below the recorded slot map, keeps the perturbation check |
+| `_posthoc_decision.py` | `PosthocPerturbDecision`, the structured decision every posthoc perturbation predicate returns; a leaf so the proof modules and `exemptions.py` form no import cycle |
+| `_saved_value_proofs.py` | Posthoc value proofs keyed on one op family and slot: zero dividend, and-by-zero, in-place bool or with an all-True partner, zero exponent and unit base, size-1 `__setitem__` index dim, and the additive mask of a single-key `scaled_dot_product_attention` (the operand, sdpa and norm proofs decide first) |
 | `_integer_mod_proof.py` | Saved-call proof that an integer `% +-1` is identically zero (used by the `integer_mod_unit_divisor` posthoc decision) |
 | `_replay_device.py` | Replay device alignment when an `output_device` capture keeps saved payloads off the op's device: parent payloads move to the slot's saved-argument device, recomputed outputs to the saved output's device |
+| `_grad_flags.py` | Captured `requires_grad` flags of replay arguments (`_mirror_captured_requires_grad`, `_snapshot_grad_flags`): torch-only helpers shared by `_replay_grad_fidelity.py` and `_replay_storage_context.py` |
+| `_replay_storage_context.py` | Replay of `as_strided_` / `resize_` / `resize_as_` on a clone of the receiver's saved storage context (whole storage, offset, strides), with the swapped-in parent values written into the view; no effect on any other op or slot |
 | `_shift_probe.py` | `VALUE_STEP_STRATEGIES` (the value-step retry rungs, in order) and `lift_min_entry_values`: the non-uniform `lift_min_entry` perturbation retry (lifts one entry above the max), the probe uniform steps cannot give a shift-invariant child such as a saturated softmax |
 | `_completeness_backstop.py` | `completeness_backstop_counts`: dispatcher-witness census vs captured ops, including the module-forward-owned drop rule |
 | `status.py` | Replay-validation status objects |
@@ -54,7 +59,7 @@ Legacy top-level shims for `validate_forward_pass`, `validate_backward_pass`, an
    (R75-1; backward validation's stock-autograd pass does the same). If
    the wrappers cannot be removed because a capture is active, validation
    refuses rather than blessing a wrap-state-dependent ground truth.
-2. Run `trace(..., capture=CaptureOptions(layers_to_save="all", save_args=True))`
+2. Run `trace(..., save="all", capture=CaptureOptions(save_args=True))`
    (the flat kwargs are deprecated aliases that warn).
 3. Check logged output matches ground truth.
 4. Walk backward from outputs, replaying each saved operation from saved parents.
@@ -138,8 +143,11 @@ inf/NaN tensors, and special-value args.
 - `MetadataInvariantError` is the public invariant failure type.
 - `check_metadata_invariants()` should fail loudly on broken graph/log structure.
   It is IMPLEMENTED in `_invariants_entry.py` (with the per-domain checks in
-  the sibling `_invariants_*.py` modules); `invariants.py` only REBINDS the
-  entry function — editing `invariants.py` to change check behavior is a no-op.
+  the sibling `_invariants_*.py` modules); `invariants.py` holds the error type,
+  the contract records and the `METADATA_INVARIANT_CONTRACTS` tuple, and imports
+  the check functions from their home modules after those definitions (the
+  split modules import the hub's classes back). Editing `invariants.py` to
+  change check behavior is a no-op; patch or edit a check in its home module.
 - Keep invariants aligned with primary conditional fields, not only legacy THEN views.
 
 ## __init__.py Schema Checks

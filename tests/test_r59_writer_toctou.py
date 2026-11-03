@@ -22,6 +22,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.errors import ArtifactError
 
 _SENTINEL = "concurrent-artifact-do-not-destroy"
 
@@ -54,8 +55,9 @@ def test_bundle_write_overwrite_false_does_not_destroy_concurrent(
         return real_fsync(path)
 
     monkeypatch.setattr(tlspec_mod, "fsync_tree", racing_fsync)
-    with pytest.raises(FileExistsError):
+    with pytest.raises(ArtifactError) as info:
         tl.Bundle({"m": _trace(1)}).save(target, overwrite=False)
+    assert info.value.fields.get("code") == "bundle_save_failed"
 
     assert (target / "MARKER").read_text(encoding="utf-8") == _SENTINEL
 

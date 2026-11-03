@@ -55,9 +55,7 @@ def _build_trace() -> tl.Trace:
 
     torch.manual_seed(0)
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
-    return tl.trace(
-        model, torch.randn(2, 4), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    return tl.trace(model, torch.randn(2, 4), save="all")
 
 
 @pytest.mark.smoke
@@ -66,7 +64,7 @@ def test_floor_error_is_typed_and_public() -> None:
 
     assert issubclass(ArtifactTooOldError, ArtifactError)
     assert tl.errors.ArtifactTooOldError is ArtifactTooOldError
-    assert MIN_TLSPEC_VERSION == 6
+    assert MIN_TLSPEC_VERSION == TLSPEC_VERSION == 11
 
 
 def test_current_artifacts_load_clean(tmp_path: Path) -> None:
@@ -79,28 +77,28 @@ def test_current_artifacts_load_clean(tmp_path: Path) -> None:
     loaded = tl.load(path)
 
     assert isinstance(loaded, tl.Trace)
-    assert [layer.layer_label for layer in loaded.layer_list] == [
-        layer.layer_label for layer in trace.layer_list
+    assert [layer.layer_label for layer in loaded._layer_list] == [
+        layer.layer_label for layer in trace._layer_list
     ]
 
 
-def test_between_floor_stamp_refuses_as_2x(tmp_path: Path) -> None:
-    """A coherent artifact stamped older than the current format refuses, never loads.
+def test_no_between_floor_range_every_older_stamp_refuses(tmp_path: Path) -> None:
+    """The floor is the current format, so a coherently re-stamped older artifact refuses.
 
-    Every stamp from the floor up to the current one was written by torchlens 2.x, so each
-    refuses at load with the one typed error naming the 2.x origin and the remedy.
+    There is no stamp between the floor and the runtime: the stamp one below the current
+    format refuses at load with the one typed error naming the 2.x origin and the remedy.
     """
 
+    assert MIN_TLSPEC_VERSION == TLSPEC_VERSION, "a between-floor range would need its own test"
     trace = _build_trace()
-    assert MIN_TLSPEC_VERSION < TLSPEC_VERSION, "no between-floor range to exercise"
-    for version in range(MIN_TLSPEC_VERSION, TLSPEC_VERSION):
-        path = tmp_path / f"between_floor_{version}.tlspec"
-        trace.save(path)
-        _stamp_between_floor(path, version)
-        with pytest.raises(ArtifactTooOldError, match=FLOOR_MATCH) as excinfo:
-            tl.load(path)
-        assert excinfo.value.fields["code"] == "artifact_version_below_floor"
-        assert excinfo.value.fields["observed"] == f"tlspec_version={version}"
+    version = TLSPEC_VERSION - 1
+    path = tmp_path / f"older_stamp_{version}.tlspec"
+    trace.save(path)
+    _stamp_between_floor(path, version)
+    with pytest.raises(ArtifactTooOldError, match=FLOOR_MATCH) as excinfo:
+        tl.load(path)
+    assert excinfo.value.fields["code"] == "artifact_version_below_floor"
+    assert excinfo.value.fields["observed"] == f"tlspec_version={version}"
     trace.cleanup()
 
 
@@ -113,7 +111,7 @@ def test_pre_floor_object_states_refuse_typed(cls_and_state: str, version: int |
     source = {
         "trace": trace,
         "op": trace.ops[0],
-        "layer": trace.layer_list[0],
+        "layer": trace._layer_list[0],
     }[cls_and_state]
     state = source.__getstate__()
     if version is None:

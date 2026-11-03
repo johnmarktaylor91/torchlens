@@ -111,9 +111,10 @@ print("ok")
 def test_fastlog_teaches_recording() -> None:
     """Round 2 renamed the root fastlog namespace to recording; the old name teaches it."""
 
+    removed = "fastlog"
     assert tl._REDIRECTS["fastlog"] == "use torchlens.recording -- fastlog was renamed recording"
     with pytest.raises(FacadeTeachingError, match=r"torchlens\.recording"):
-        getattr(tl, "fastlog")
+        getattr(tl, removed)
 
 
 def test_subpackage_rows_are_the_ruled_three() -> None:

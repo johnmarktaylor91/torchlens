@@ -16,6 +16,7 @@ from fixtures.capture_outcome_models import ThreeStageModel, halt_on_relu
 from torch import nn
 
 import torchlens as tl
+import torchlens._capture.finalize.arms as finalize_arms
 from torchlens._capture.outcome import (
     CaptureOutcomeError,
     CaptureStatus,
@@ -23,6 +24,7 @@ from torchlens._capture.outcome import (
 )
 from torchlens._data_classes.trace import Trace
 from torchlens._io.bundle import save as _save_bundle
+from torchlens.errors import TraceCaptureError
 from torchlens.recording._halt import StopSignal
 
 
@@ -40,8 +42,9 @@ def _failed_partial_trace() -> Trace:
     try:
         with torch.no_grad():
             tl.trace(ExplodingModel(), torch.ones(1, 3))
-    except RuntimeError as exc:
-        return tl._partial.from_failed_capture(exc).trace
+    except TraceCaptureError as exc:
+        assert isinstance(exc.__cause__, RuntimeError)
+        return exc.partial_trace.trace
     raise AssertionError("capture unexpectedly succeeded")
 
 
@@ -67,7 +70,7 @@ def test_halted_tlspec_round_trip_adopts_attestation(tmp_path) -> None:
     loaded = tl.load(bundle)
     assert loaded.outcome.status is CaptureStatus.STOPPED
     assert loaded.outcome.is_derived is False
-    assert loaded.outcome.reason == trace.halt_reason
+    assert loaded.outcome.reason == trace.stop_reason
 
 
 def test_pickle_round_trip_adopts_attestation() -> None:
@@ -146,8 +149,9 @@ def test_n1_raw_partial_trace_object_refuses_save_not_attributeerror(tmp_path) -
     try:
         with torch.no_grad():
             tl.trace(ExplodingModel(), torch.ones(1, 3))
-    except RuntimeError as exc:
-        partial = tl._partial.from_failed_capture(exc)
+    except TraceCaptureError as exc:
+        assert isinstance(exc.__cause__, RuntimeError)
+        partial = exc.partial_trace
     else:
         raise AssertionError("capture unexpectedly succeeded")
     assert not hasattr(partial, "_runnable")
@@ -268,7 +272,7 @@ def test_swallowed_predicate_halt_fails_closed() -> None:
     with pytest.raises(StopSignalSwallowedError) as exc_info:
         tl.trace(SwallowingHaltModel(), torch.ones(1, 3), stop_after=halt_on_relu)
     assert exc_info.value.fields["kind"] == "halt"
-    partial = tl._partial.from_failed_capture(exc_info.value)
+    partial = exc_info.value.partial_trace
     assert partial.outcome.status is CaptureStatus.FAILED
 
 
@@ -312,7 +316,7 @@ def test_swallowed_nonfinite_abort_fails_closed_as_failed() -> None:
             torch.ones(1, 3),
             capture=tl.options.CaptureOptions(on_nonfinite="raise"),
         )
-    partial = tl._partial.from_failed_capture(exc_info.value)
+    partial = exc_info.value.partial_trace
     assert partial.outcome.status is CaptureStatus.FAILED
     assert partial.outcome.status is not CaptureStatus.ABORTED_NONFINITE
 
@@ -387,8 +391,9 @@ def test_partial_trace_wrapper_has_one_outcome_answer() -> None:
     try:
         with torch.no_grad():
             tl.trace(ExplodingModel(), torch.ones(1, 3))
-    except RuntimeError as exc:
-        partial = tl._partial.from_failed_capture(exc)
+    except TraceCaptureError as exc:
+        assert isinstance(exc.__cause__, RuntimeError)
+        partial = exc.partial_trace
     else:
         raise AssertionError("capture unexpectedly succeeded")
 
@@ -416,7 +421,6 @@ def test_halted_arm_interrupt_settles_failed_interrupted(
     the fail-closed no-sidecar default instead of a settled record. It must
     settle FAILED/INTERRUPT exactly like the outer interrupt arm."""
 
-    import torchlens._capture.trace as trace_module
     from torchlens._capture.outcome import FailureOrigin, outcome_for
 
     seen: list[object] = []
@@ -425,7 +429,7 @@ def test_halted_arm_interrupt_settles_failed_interrupted(
         seen.append(trace_self)
         raise KeyboardInterrupt
 
-    monkeypatch.setattr(trace_module, "_finalize_halted_trace", _interrupt)
+    monkeypatch.setattr(finalize_arms, "_finalize_halted_trace", _interrupt)
     with pytest.raises(KeyboardInterrupt):
         tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=halt_on_relu)
     assert len(seen) == 1
@@ -450,14 +454,6 @@ def test_hand_built_partial_wrapper_around_settled_trace_still_refuses_save(tmp_
     with pytest.raises(CaptureOutcomeError) as exc_info:
         _save_bundle(wrapper, tmp_path / "wrapper.tlspec", overwrite=True)
     assert exc_info.value.fields["code"] == "N1"
-
-
-def test_partial_lookup_error_is_typed_and_valueerror() -> None:
-    from torchlens.errors import PartialCaptureLookupError
-
-    with pytest.raises(PartialCaptureLookupError):
-        tl._partial.from_failed_capture(RuntimeError("no capture here"))
-    assert issubclass(PartialCaptureLookupError, ValueError)
 
 
 def test_fork_settles_derived_outcome_not_parent_attestation() -> None:
@@ -527,7 +523,7 @@ def test_f3a_halted_frontier_recovery_precedes_cleanup(monkeypatch) -> None:
         return ctx.kind == "op" and ctx.func_name == "relu"
 
     trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=_halt_without_frontier)
-    assert trace.halted is True
+    assert trace.is_stopped is True
     assert order  # cleanup ran (after the scan; a broken order crashes above)
 
 

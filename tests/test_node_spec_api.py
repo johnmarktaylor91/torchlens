@@ -21,11 +21,10 @@ def _render_dot(log: tl.Trace, tmp_path: Any, **kwargs: Any) -> str:
 
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 def test_default_nodespec_for_conv2d_includes_args(tmp_path: Any) -> None:
@@ -55,11 +54,10 @@ def test_default_nodespec_for_linear_suppresses_proven_redundant_args(tmp_path: 
     assert "out_features" not in dot
 
     dot_all = log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "graph_all"),
         show_redundant_args=True,
-    )
+    ).dot
     assert "in_features=16" in dot_all
     assert "out_features=32" in dot_all
 
@@ -148,7 +146,7 @@ def test_intervention_node_spec_cone_matches_short_label(
         graph_overrides=None,
         user_node_spec_fn=None,
     )
-    layer = SimpleNamespace(layer_label="relu_1_2", layer_label_short="relu")
+    layer = SimpleNamespace(layer_label="relu_1_2", short_layer_label="relu")
     default = NodeSpec(lines=["relu"], color="black", penwidth=1.0)
 
     assert node_spec_fn is not None
@@ -177,7 +175,7 @@ def test_intervention_node_spec_cone_matches_call_labels(
     )
     layer = SimpleNamespace(
         layer_label="relu_1",
-        layer_label_short="relu",
+        short_layer_label="relu",
         call_labels=["relu_1_1", "relu_1_2"],
     )
     default = NodeSpec(lines=["relu"], color="black", penwidth=1.0)
@@ -190,7 +188,7 @@ def test_intervention_node_spec_cone_matches_call_labels(
 
     unrelated = SimpleNamespace(
         layer_label="linear_1",
-        layer_label_short="linear",
+        short_layer_label="linear",
         call_labels=["linear_1_1"],
     )
     assert node_spec_fn(unrelated, default).color == "black"
@@ -199,7 +197,7 @@ def test_intervention_node_spec_cone_matches_call_labels(
 def test_external_overlay_value_matches_short_label() -> None:
     """External overlay scores can be keyed by short label."""
 
-    node = SimpleNamespace(layer_label="relu_1_2", layer_label_short="relu")
+    node = SimpleNamespace(layer_label="relu_1_2", short_layer_label="relu")
 
     assert external_overlay_value(node, {"relu": 7}) == 7
 

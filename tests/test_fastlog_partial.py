@@ -15,7 +15,7 @@ import torchlens._state as torchlens_state
 from torchlens import Recording
 from torchlens._io.streaming import PARTIAL_SENTINEL
 from torchlens.backends.torch.backend import TorchBackend
-from torchlens.errors import PredicateError, RecorderStateError
+from torchlens.errors import PredicateError, RecorderStateError, TraceCaptureError
 from torchlens.recording import RecordContext, Recorder
 
 
@@ -146,23 +146,25 @@ def test_successful_recording_failure_fields_default_complete() -> None:
 def test_default_raise_preserves_original_exception() -> None:
     """Default on_forward_error='raise' preserves the historical exception path."""
 
-    with pytest.raises(RuntimeError, match="intentional forward boom") as exc_info:
+    with pytest.raises(TraceCaptureError, match="intentional forward boom") as exc_info:
         tl.record(FailingAfterOps(), torch.tensor(1.0), save=_save_ops)
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
 
-    assert type(exc_info.value) is RuntimeError
+    assert type(exc_info.value.__cause__) is RuntimeError
     assert not hasattr(exc_info.value, "partial_recording")
 
 
 def test_attach_partial_reraises_original_with_failed_recording() -> None:
     """attach_partial attaches a failed Recording and re-raises the original."""
 
-    with pytest.raises(RuntimeError, match="intentional forward boom") as exc_info:
+    with pytest.raises(TraceCaptureError, match="intentional forward boom") as exc_info:
         tl.record(
             FailingAfterOps(),
             torch.tensor(1.0),
             save=_save_ops,
             recording=tl.options.RecordingOptions(on_forward_error="attach_partial"),
         )
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
 
     partial = exc_info.value.partial_recording
     _assert_failed_partial(partial)
@@ -170,7 +172,7 @@ def test_attach_partial_reraises_original_with_failed_recording() -> None:
 
 
 def test_return_partial_one_shot_returns_failed_recording() -> None:
-    """return_partial returns the failed Recording when return_output=False."""
+    """return_partial returns the failed Recording."""
 
     recording = tl.record(
         FailingAfterOps(),
@@ -185,18 +187,21 @@ def test_return_partial_one_shot_returns_failed_recording() -> None:
     assert "caveat=" in summary
 
 
-def test_return_partial_with_return_output_returns_none_output() -> None:
-    """return_partial with return_output=True returns ``(None, partial)``."""
+def test_return_partial_output_refuses_naming_the_failure() -> None:
+    """A failed partial recording has no output; ``output`` refuses, never ``None``."""
 
-    output, recording = tl.record(
+    from torchlens._errors import PayloadUnavailableError
+
+    recording = tl.record(
         FailingAfterOps(),
         torch.tensor(1.0),
         save=_save_ops,
-        return_output=True,
         recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
     )
 
-    assert output is None
+    with pytest.raises(PayloadUnavailableError) as exc_info:
+        _ = recording.output
+    assert exc_info.value.fields["code"] == "output_forward_failed"
     _assert_failed_partial(recording)
 
 
@@ -231,13 +236,14 @@ def test_failed_forward_leaves_global_state_clean(mode: str) -> None:
             recording=tl.options.RecordingOptions(on_forward_error=mode),
         )
     else:
-        with pytest.raises(RuntimeError, match="intentional forward boom"):
+        with pytest.raises(TraceCaptureError, match="intentional forward boom") as _tce_info:
             tl.record(
                 FailingAfterOps(),
                 torch.tensor(1.0),
                 save=_save_ops,
                 recording=tl.options.RecordingOptions(on_forward_error=mode),
             )
+        assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
     _assert_global_state_clean()
     _assert_subsequent_record_works()
@@ -274,13 +280,14 @@ def test_partial_build_double_fault_reraises_original(monkeypatch: pytest.Monkey
         classmethod(raise_from_capture_events),
     )
 
-    with pytest.raises(RuntimeError, match="intentional forward boom") as exc_info:
+    with pytest.raises(TraceCaptureError, match="intentional forward boom") as exc_info:
         tl.record(
             FailingAfterOps(),
             torch.tensor(1.0),
             save=_save_ops,
             recording=tl.options.RecordingOptions(on_forward_error="attach_partial"),
         )
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
 
     assert not isinstance(exc_info.value, AssertionError)
     assert not hasattr(exc_info.value, "partial_recording")
@@ -311,13 +318,14 @@ def test_missing_failed_event_snapshot_reraises_original(
         cleanup_without_snapshot,
     )
 
-    with pytest.raises(RuntimeError, match="intentional forward boom") as exc_info:
+    with pytest.raises(TraceCaptureError, match="intentional forward boom") as exc_info:
         tl.record(
             FailingAfterOps(),
             torch.tensor(1.0),
             save=_save_ops,
             recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
         )
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
 
     assert not isinstance(exc_info.value, RecorderStateError)
     assert not hasattr(exc_info.value, "partial_recording")

@@ -126,9 +126,14 @@ created. When attribution cannot be resolved deterministically, `order` is `None
 
 ## Intervention And Replay
 
-Backward interventions use `intervene=tl.when(<backward selector>, <grad helper>)` on `tl.trace`.
-Helpers include `tl.zero_grad`, `tl.scale_grad`, `tl.clip_grad`, `tl.add_grad_noise`, `tl.clamp_grad`,
-and custom hooks.
+Gradient interventions address a gradient as a site: `tl.grad("relu_3")` is the gradient of
+relu_3's output, bare `"relu_3"` is its activation, and `tl.grad("relu_3") | "relu_3"` is both. Use
+`intervene=tl.when(tl.grad(<site>), <edit>)` on `tl.trace`, where the edit is an ordinary one
+(`tl.scale`, `tl.zero_ablate`, `tl.clamp`, `tl.add_noise`, `tl.clip_norm`) or a callable
+`fn(grad, *, ctx)`. The capture arms the edit and `trace.backward(loss)` applies it. On an existing
+trace, `trace.do(tl.grad(<site>), <edit>, model=model, inputs=x)` reruns the forward with the edit armed
+(audit status `"armed"` until a backward settles it); pass `loss=lambda t: ...` to arm and run the
+backward in one call. Replay cannot edit gradients (`replay_gradient_edit_unsupported`).
 
 Differentiable replay creates a new trace:
 
@@ -266,9 +271,9 @@ the public policy for old bundles: legacy class remaps are accepted at load, whi
 backward gradient configuration fields are dropped during state normalization.
 
 The per-call census (`BackwardPass.aten_ops`) is session-time. Saving writes each pass's
-counted executed backward and its attribution as `BackwardPass.executed_flops_record`, so a
-loaded trace reads the same `backward_status` count, rows and unattributed bucket; artifacts
-saved before the field read the executed backward as unknown.
+counted executed backward and its attribution in a private persisted record on the
+`BackwardPass`, so a loaded trace reads the same `backward_status` count, rows and
+unattributed bucket.
 
 ## Limitations And Costs
 
@@ -282,13 +287,13 @@ detach it from engine interception and tensor-hook emission.
 
 MLX currently declares backward capture unsupported and raises tiered backend errors. Torch-only
 features such as autograd node records and live backward intervention remain out of reach unless
-another backend exposes hookable backward graphs. JAX exposes `trace.derived_grads`, populated by
+another backend exposes hookable backward graphs. JAX exposes `trace.autograd.derived_grads`, populated by
 `tl.backends.jax.GradOptions` through a second pure `jax.value_and_grad` run over
 `fn(params, *inputs)`, and can optionally expose exact saved-op records through
 `trace.autograd.intermediate_derived_grads` plus read-only `op.derived_grad` with
 `GradOptions(intermediate_grads=True, max_intermediate_grads=...)`. The JAX intermediate producer
 runs as a separate zero-tap AD replay and only exposes oracle-confirmed `status == "exact"`
-records. MLX exposes `trace.derived_grads`, populated by
+records. MLX exposes `trace.autograd.derived_grads`, populated by
 `tl.backends.mlx.GradOptions` through a second pure `mx.value_and_grad` run that rebinds
 `mlx.nn.Module` params with `model.update(params)` and refuses records unless the AD-rerun raw
 output matches the captured output. MLX can optionally expose exact saved-op records through
@@ -296,10 +301,10 @@ output matches the captured output. MLX can optionally expose exact saved-op rec
 `GradOptions(intermediate_grads=True, max_intermediate_grads=...)`. The MLX intermediate producer
 uses custom-VJP identity taps in that auxiliary AD replay, attaches by unambiguous grouped
 signatures, skips duplicates, and only exposes oracle-confirmed `status == "exact"` records.
-tinygrad exposes `trace.derived_grads`, populated by `tl.backends.tinygrad.GradOptions` through a
+tinygrad exposes `trace.autograd.derived_grads`, populated by `tl.backends.tinygrad.GradOptions` through a
 bracketed `DEV=PYTHON` leaf-gradient run, and can optionally expose exact unambiguous per-op
 records through `trace.autograd.intermediate_derived_grads` plus read-only `op.derived_grad`. These are not
-Paddle exposes `trace.derived_grads`, populated by `tl.backends.paddle.GradOptions` through a
+Paddle exposes `trace.autograd.derived_grads`, populated by `tl.backends.paddle.GradOptions` through a
 second guarded Paddle AD pass over module params and selected inputs, and can optionally expose
 exact saved-op records through `trace.autograd.intermediate_derived_grads` plus read-only
 `op.derived_grad`. Paddle traces keep `has_backward_pass=False`; this is not true backward

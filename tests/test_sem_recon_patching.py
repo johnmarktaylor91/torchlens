@@ -193,7 +193,7 @@ class _StubRecord:
 
 class _StubLayer:
     def __init__(self, records: list[_StubRecord]) -> None:
-        self.interventions = records
+        self.edits = records
 
 
 class _StubPatchedLog:
@@ -201,7 +201,7 @@ class _StubPatchedLog:
 
     def __init__(self, records: list[_StubRecord], hooks_fired: int) -> None:
         self.last_run = {"started_at": 100.0, "timestamp": 101.0, "hooks_fired": hooks_fired}
-        self.layer_list = [_StubLayer(records)]
+        self._layer_list = [_StubLayer(records)]
 
 
 def test_fire_ledger_refuses_never_fired() -> None:
@@ -331,12 +331,12 @@ def test_user_capture_composes_required_fields() -> None:
 
 @pytest.mark.smoke
 def test_explicitly_conflicting_capture_refuses_typed() -> None:
-    with pytest.raises(ValueError, match="require capture options"):
+    with pytest.raises(ValueError, match="require save"):
         tl.facets.patching.activation_patch_attention_output(
             ParamToy(),
             *_inputs(),
             _metric,
-            trace_kwargs={"capture": tl.options.CaptureOptions(layers_to_save=["block"])},
+            trace_kwargs={"save": ["block"]},
         )
 
 
@@ -349,6 +349,6 @@ def test_explicit_matching_capture_passes() -> None:
         clean,
         corrupted,
         _metric,
-        trace_kwargs={"capture": tl.options.CaptureOptions(layers_to_save="all", save_args=True)},
+        trace_kwargs={"capture": tl.options.CaptureOptions(save_args=True)},
     )
     assert table.shape == (1,)

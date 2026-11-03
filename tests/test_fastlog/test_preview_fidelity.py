@@ -66,7 +66,7 @@ def test_missing_record_context_field_errors_in_preview_and_dry_run() -> None:
 
     dot = trace.preview_fastlog(predicate=bad_predicate)
 
-    assert "exception" in dot
+    assert "exception" in dot.dot
     with pytest.raises(RecordContextFieldError):
         tl.recording.dry_run(model, x, save=bad_predicate)
 
@@ -104,7 +104,7 @@ def test_preview_node_spec_consumes_short_label_keys() -> None:
         type(
             "ShortLabelOnlyLayer",
             (),
-            {"layer_label": "missing_label", "layer_label_short": "relu_1"},
+            {"layer_label": "missing_label", "short_layer_label": "relu_1"},
         )(),
         NodeSpec(lines=["relu"]),
     )

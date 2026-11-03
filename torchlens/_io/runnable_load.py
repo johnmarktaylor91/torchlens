@@ -89,7 +89,7 @@ from .._runnable import (
     derive_required_witness_members,
     derived_witness_completeness,
 )
-from .._runnable_state import _INPUT_STRUCTURE_SITE_PREFIX, _STATE_METADATA_FACT_SITE_PREFIX
+from .._runnable.state import _INPUT_STRUCTURE_SITE_PREFIX, _STATE_METADATA_FACT_SITE_PREFIX
 from .._utils._callable_safety import (
     _PURE_TENSOR_PROPERTY_NAMES,
     is_pure_forward_callable,
@@ -340,7 +340,7 @@ def _validate_input_structure_witnesses(witnesses: Sequence[ControlWitness]) -> 
     two-string type ref, and a ``str | int`` component path.
     """
 
-    from .._runnable_execution import _decode_literal  # lazy: layering, not a cycle at import
+    from .._runnable.verification import _decode_literal
 
     field = "control_witnesses.input_structure"
     facts: list[Mapping[str, Any]] = []
@@ -422,7 +422,7 @@ def _validate_state_metadata_fact_witnesses(witnesses: Sequence[ControlWitness])
     refused HERE -- ``context_field_invalid``-class, analysis-only load -- never consumed.
     """
 
-    from .._runnable_execution import _decode_literal  # lazy: layering, not a cycle at import
+    from .._runnable.verification import _decode_literal
 
     for witness in witnesses:
         if witness.kind is not ControlWitnessKind.SHAPE_STRUCTURE_FACT:
@@ -547,7 +547,7 @@ def _validate_required_witness_inventory(
     literal stripping cannot hide behind site-level coverage.
     """
 
-    from .._runnable_execution import _decode_literal
+    from .._runnable.verification import _decode_literal
     from .runnable import (
         EMPTY_CONTAINER_PATH_MARKER,
         required_witness_family_members,
@@ -1183,7 +1183,7 @@ def _validate_input_boundary_metadata_agreement(context: _WitnessValidationConte
         Indexed descriptor state for the validation pass.
     """
 
-    from .._runnable_execution import _decode_literal
+    from .._runnable.verification import _decode_literal
 
     descriptor = context.descriptor
     boundary_tensor_sites: set[tuple[Any, Any, str]] = set()
@@ -1270,7 +1270,7 @@ def _validate_state_metadata_disposition(context: _WitnessValidationContext) -> 
         Indexed descriptor state for the validation pass.
     """
 
-    from .._runnable_execution import _decode_literal
+    from .._runnable.verification import _decode_literal
 
     descriptor = context.descriptor
     facts_by_name: dict[str, tuple[bool, bool]] = {}
@@ -1350,7 +1350,7 @@ def _validate_opaque_leaf_gap_anchors(context: _WitnessValidationContext) -> Non
         Indexed descriptor state for the validation pass.
     """
 
-    from .._runnable_execution import _decode_literal
+    from .._runnable.verification import _decode_literal
 
     descriptor = context.descriptor
     opaque_literal_members: set[str] = set()
@@ -1624,7 +1624,7 @@ def _validate_slot_shape(
     that fits signed 64-bit (torch storage sizes are int64). Deliberately NO
     absolute byte cap here -- real slots (multi-GiB LLM embeddings) must keep
     loading; run-preparation magnitude gating is the allocation preflight in
-    ``_runnable_state.py``, and embedded-payload slots stay value-anchored by
+    ``_runnable/state.py``, and embedded-payload slots stay value-anchored by
     the strict binder and the safetensors header.
     """
 
@@ -1945,7 +1945,7 @@ def attach_sparse_run_readiness(
             "backend context, or physical input fingerprints, and absent "
             "context is never defaulted. Re-capture and re-save with this "
             f"TorchLens version to produce {RUNNABLE_TLSPEC_SCHEMA_VERSION!r}.",
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(trace._provenance_backend),
             detection_stage="descriptor_legacy_version",
             details=(
                 ("capability", capability),
@@ -1956,7 +1956,7 @@ def attach_sparse_run_readiness(
         report = ReadinessReport(
             status=ReadinessStatus.UNAVAILABLE,
             provider=RunProvider.LOADED_SPARSE,
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(trace._provenance_backend),
             capability=capability,
             resolver_records=(),
             state_sources_available=(),
@@ -1974,14 +1974,14 @@ def attach_sparse_run_readiness(
         diagnostic = _diagnostic(
             RunnableErrorCode.CONTEXT_FIELD_INVALID,
             str(exc),
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(trace._provenance_backend),
             detection_stage="context_parse_validation",
             details=(("context_field", exc.field), ("reason", exc.detail)),
         )
         report = ReadinessReport(
             status=ReadinessStatus.UNAVAILABLE,
             provider=RunProvider.LOADED_SPARSE,
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(trace._provenance_backend),
             capability=cast(str | None, raw_descriptor.get("capability")),
             resolver_records=(),
             state_sources_available=(),
@@ -1999,14 +1999,14 @@ def attach_sparse_run_readiness(
         diagnostic = _diagnostic(
             exc.code,
             str(exc),
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(trace._provenance_backend),
             detection_stage="descriptor_parse",
             details=(("descriptor_field", exc.field), ("reason", exc.detail)),
         )
         report = ReadinessReport(
             status=ReadinessStatus.UNAVAILABLE,
             provider=RunProvider.LOADED_SPARSE,
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(trace._provenance_backend),
             capability=cast(str | None, raw_descriptor.get("capability")),
             resolver_records=(),
             state_sources_available=(),
@@ -2019,13 +2019,13 @@ def attach_sparse_run_readiness(
         diagnostic = _diagnostic(
             RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
             f"Sparse runnable descriptor could not be parsed: {exc}",
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(trace._provenance_backend),
             detection_stage="descriptor_parse",
         )
         report = ReadinessReport(
             status=ReadinessStatus.UNAVAILABLE,
             provider=RunProvider.LOADED_SPARSE,
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(trace._provenance_backend),
             capability=cast(str | None, raw_descriptor.get("capability")),
             resolver_records=(),
             state_sources_available=(),
@@ -2051,14 +2051,14 @@ def attach_sparse_run_readiness(
         diagnostic = _diagnostic(
             RunnableErrorCode.CONTEXT_FIELD_INVALID,
             str(exc),
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(trace._provenance_backend),
             detection_stage="container_anchor_validation",
             details=(("context_field", exc.field), ("reason", exc.detail)),
         )
         report = ReadinessReport(
             status=ReadinessStatus.UNAVAILABLE,
             provider=RunProvider.LOADED_SPARSE,
-            backend=str(getattr(trace, "backend", "unknown")),
+            backend=str(trace._provenance_backend),
             capability=cast(str | None, raw_descriptor.get("capability")),
             resolver_records=(),
             state_sources_available=(),
@@ -2078,7 +2078,7 @@ def attach_sparse_run_readiness(
     # left to the resolver's own richer readiness/``ReattachError`` path.
     recorded_func_names = {
         str(getattr(layer, "layer_label", "")): getattr(layer, "func_name", None)
-        for layer in getattr(trace, "layer_list", []) or ()
+        for layer in trace._layer_list or ()
     }
     report, attachments = preflight_sparse_run_descriptor(
         descriptor, recorded_func_names=recorded_func_names
@@ -3016,7 +3016,7 @@ def _readiness_report(
 def _analysis_only_readiness(trace: Any) -> ReadinessReport:
     """Build unsupported readiness for a loaded analysis-only Trace."""
 
-    backend = str(getattr(trace, "backend", "unknown"))
+    backend = str(trace._provenance_backend)
     diagnostic = _diagnostic(
         RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
         "Loaded analysis artifact has no sparse runnable descriptor.",
@@ -3625,7 +3625,7 @@ def _validate_torch_device_literal_shape(qualname: str) -> None:
     """Refuse a malformed ``torch.device(...)`` literal payload at descriptor parse (r41 secC).
 
     Parse-time belt for the run-time typed wrap in
-    ``torchlens._runnable_execution._decode_torch_symbol``: only the DEVICE literal's
+    ``torchlens._runnable.execution._decode_torch_symbol``: only the DEVICE literal's
     payload is validated here -- ``torch.device`` construction is inert (no import, no
     exec; it succeeds for absent backends such as ``cuda:0`` on a CPU-only host, so it
     cannot over-refuse) -- while the symbol ALLOWLIST stays exclusively the runtime

@@ -266,7 +266,6 @@ def test_collapse_surface_survives_multipass_submodule(depth, tmp_path):
     assert isinstance(order, list) and order
     for mode in ("auto", "max"):
         trace.draw(
-            vis_save_only=True,
             file_format="svg",
             collapse=mode,
             path=str(tmp_path / f"dc{depth}_{mode}"),
@@ -298,7 +297,6 @@ def test_segment_collision_render_parity(tmp_path):
     plan = trace.collapse_plan(mode="max")
     out = tmp_path / "collision"
     trace.draw(
-        vis_save_only=True,
         file_format="svg",
         collapse="max",
         path=str(out),
@@ -328,7 +326,6 @@ def test_multipass_op_segments_render_distinct(builder, tmp_path):
     assert len(set(descriptors)) == len(descriptors)
     out = tmp_path / "multipass_max"
     trace.draw(
-        vis_save_only=True,
         file_format="svg",
         collapse="max",
         path=str(out),
@@ -546,7 +543,6 @@ def test_multipass_pass_occurrence_conservation_and_render_parity(builder, requi
             continue
         out = tmp_path / f"multipass_{str(mode).replace('.', '_')}"
         trace.draw(
-            vis_save_only=True,
             file_format="svg",
             collapse=mode,
             path=str(out),
@@ -898,7 +894,6 @@ def test_op_segment_condensed_auto_max_ladder_surfaces(kind, loops, tmp_path):
     for mode in ("max", 0.5):
         out = tmp_path / f"segauto_{kind}_{loops}_{str(mode).replace('.', '_')}"
         trace.draw(
-            vis_save_only=True,
             file_format="svg",
             collapse=mode,
             path=str(out),
@@ -1222,11 +1217,10 @@ def test_op_segment_module_call_containment(kind, calls, tmp_path):
     max_result = results["max"]
     out = tmp_path / f"containment_{kind}_{calls}"
     source = trace.draw(
-        vis_save_only=True,
         file_format="svg",
         collapse="max",
         path=str(out),
-    )
+    ).dot
     assert _svg_node_group_count(str(out) + ".svg") == max_result.plan.total
     node_cluster, _ = _dot_node_clusters(source)
     for name, segment in (max_result.segments or {}).items():
@@ -1296,11 +1290,10 @@ def test_op_segment_per_call_containment_pin(builder, address, calls, tmp_path):
 
     out = tmp_path / f"per_call_{address}"
     source = trace.draw(
-        vis_save_only=True,
         file_format="svg",
         collapse="max",
         path=str(out),
-    )
+    ).dot
     node_cluster, members = _dot_node_clusters(source)
     for segment in descriptors.values():
         assert node_cluster.get(segment.name) == _owner_cluster_name(segment.owner)
@@ -1344,11 +1337,10 @@ def test_op_segment_sibling_merge_keeps_honest_top_level_lca(tmp_path):
         )
     out = tmp_path / "sibling_merge"
     source = trace.draw(
-        vis_save_only=True,
         file_format="svg",
         collapse="max",
         path=str(out),
-    )
+    ).dot
     node_cluster, _ = _dot_node_clusters(source)
     for segment in spanning:
         assert node_cluster.get(segment.name) is None, (
@@ -1619,7 +1611,7 @@ def test_surfaced_exit_op_not_double_represented(tmp_path):
             claimed.append(str(node.op) if isinstance(node.op, str) else str(node.op.layer_label))
         elif isinstance(node, OpSegment):
             claimed.extend(str(label).rsplit(":", 1)[0] for label in node.ops)
-    all_labels = sorted(str(op.layer_label) for op in trace.layer_list)
+    all_labels = sorted(str(op.layer_label) for op in trace._layer_list)
     assert sorted(claimed) == all_labels, (
         f"label claims must cover each op exactly once; claims={sorted(claimed)} ops={all_labels}"
     )
@@ -1627,7 +1619,6 @@ def test_surfaced_exit_op_not_double_represented(tmp_path):
     # 3. SVG: sibling boxes identical, label-op totals honest, parity exact.
     out = tmp_path / "r25_seal"
     trace.draw(
-        vis_save_only=True,
         file_format="svg",
         collapse="max",
         path=str(out),
@@ -1654,8 +1645,8 @@ def test_surfaced_exit_op_not_double_represented(tmp_path):
     ]
     standalone_raw = sum(isinstance(node, RawOp) for node in plan.nodes)
     label_total = sum(int(count) for count in box_counts) + sum(seg_counts) + standalone_raw
-    assert label_total == len(trace.layer_list), (
-        f"total label op-count {label_total} != real op count {len(trace.layer_list)}"
+    assert label_total == len(trace._layer_list), (
+        f"total label op-count {label_total} != real op count {len(trace._layer_list)}"
     )
     assert _svg_node_group_count(str(out) + ".svg") == plan.total == result.visible_count
 

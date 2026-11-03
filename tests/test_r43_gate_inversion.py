@@ -58,8 +58,8 @@ from torchlens._utils._callable_safety import (
     _unwrap_capture_wrapper,  # mechanical capture-unwrap only; NOT the gate decision
     is_pure_forward_callable,
 )
+from torchlens.intervention._resolver_registry import resolve_import_ref
 from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.intervention.resolver import resolve_import_ref
 
 # --------------------------------------------------------------------------- #
 # INDEPENDENT recognized-operator check (re-derived from torch's authorities, NOT

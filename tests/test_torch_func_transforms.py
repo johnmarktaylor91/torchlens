@@ -12,8 +12,8 @@ from _stale_holders import OpaqueCallable
 import torchlens as tl
 from torchlens import Recording, Trace, _state
 from torchlens.backends.torch.wrappers import wrap_torch
+from torchlens.errors import TraceCaptureError
 from torchlens.io import load_intervention_spec
-from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
 
 _HAS_TORCH_FUNC = hasattr(torch, "func")
@@ -534,7 +534,7 @@ def test_vmap_boundary_node_has_clean_parent_edge() -> None:
     """Instrumented vmap emits one boundary node consumed by downstream ops."""
 
     x = torch.randn(3, 4)
-    log = tl.trace(VmapMaskModel().eval(), x, capture=CaptureOptions(layers_to_save="all"))
+    log = tl.trace(VmapMaskModel().eval(), x, save="all")
     vmap_ops = [op for op in log.ops if op.type == "vmap"]
 
     assert len(vmap_ops) == 1
@@ -560,7 +560,7 @@ def test_transform_boundary_warning_fires_for_each_collapsed_region() -> None:
         log = tl.trace(
             TwoVmapBoundaryModel().eval(),
             x,
-            capture=CaptureOptions(layers_to_save="all"),
+            save="all",
         )
 
     boundary_warnings = [
@@ -578,7 +578,7 @@ def test_grad_boundary_node_has_clean_parent_edge() -> None:
     """Instrumented grad emits one boundary node with the input as parent."""
 
     x = torch.randn(4)
-    log = tl.trace(GradInnerModel().eval(), x, capture=CaptureOptions(layers_to_save="all"))
+    log = tl.trace(GradInnerModel().eval(), x, save="all")
     grad_ops = [op for op in log.ops if op.type == "grad"]
 
     assert len(grad_ops) == 1
@@ -598,7 +598,7 @@ def test_grad_over_module_boundary_does_not_crash() -> None:
     log = tl.trace(
         GradOverModuleModel().eval(),
         x,
-        capture=CaptureOptions(layers_to_save="all"),
+        save="all",
     )
 
     assert [op for op in log.ops if op.type == "grad"]
@@ -622,7 +622,7 @@ def test_raw_grad_over_module_wrapper_tensor_leak_does_not_crash() -> None:
         log = tl.trace(
             RawGradOverModuleModel().eval(),
             x,
-            capture=CaptureOptions(layers_to_save="all"),
+            save="all",
         )
 
     assert log._raw_transform_escape_detected is True
@@ -658,7 +658,7 @@ def test_autograd_functional_direct_call_boundary(
     """Legacy autograd.functional transforms emit direct-call boundary nodes."""
 
     x = torch.randn(3)
-    log = tl.trace(model.eval(), x, capture=CaptureOptions(layers_to_save="all"))
+    log = tl.trace(model.eval(), x, save="all")
     transform_ops = [op for op in log.ops if op.type == op_type]
 
     assert len(transform_ops) == 1
@@ -673,7 +673,7 @@ def test_functional_call_substituted_params_are_tensor_parents() -> None:
     log = tl.trace(
         FunctionalCallBasicModel().eval(),
         torch.randn(3),
-        capture=CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     linear = next(op for op in log.ops if op.type == "linear")
 
@@ -689,7 +689,7 @@ def test_functional_call_substituted_buffers_are_tensor_parents() -> None:
     log = tl.trace(
         FunctionalCallBufferModel().eval(),
         torch.randn(3),
-        capture=CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     add_ops = [op for op in log.ops if op.type == "add"]
 
@@ -700,7 +700,7 @@ def test_transform_metadata_pandas_and_tlspec_round_trip(tmp_path: Path) -> None
     """Transform metadata is tabular and portable."""
 
     x = torch.randn(3, 4)
-    log = tl.trace(VmapMaskModel().eval(), x, capture=CaptureOptions(layers_to_save="all"))
+    log = tl.trace(VmapMaskModel().eval(), x, save="all")
     dataframe = log.to_pandas()
     path = tmp_path / "vmap.tlspec"
 
@@ -748,7 +748,7 @@ def test_loaded_func_transform_hook_spec_executes_after_round_trip(tmp_path: Pat
         log = tl.trace(
             ImportableVmapMaskModel().eval(),
             x,
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
     log.attach_hooks(tl.func_transform("vmap"), tl.zero_ablate(), confirm_mutation=True)
     path = tmp_path / "func_transform_hook.tlspec"
@@ -759,7 +759,7 @@ def test_loaded_func_transform_hook_spec_executes_after_round_trip(tmp_path: Pat
         fresh = tl.trace(
             ImportableVmapMaskModel().eval(),
             x,
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
     fresh._intervention_spec = spec
     with pytest.warns(UserWarning, match="captured a vmap transform"):
@@ -856,7 +856,11 @@ def test_arg_spec_table_cannot_silently_cost_a_parent_edge() -> None:
 
 
 def test_foreign_operand_warns_with_its_arg_position() -> None:
-    """A genuinely un-provenanced operand is flagged at its own arg position."""
+    """A genuinely un-provenanced operand is flagged at its own arg position.
+
+    A pre-forward closure tensor is a recorded ``constant`` source, so the
+    operand is copied with logging paused: a tensor the capture never sees.
+    """
 
     foreign = torch.rand(4) + 0.5
 
@@ -877,7 +881,9 @@ def test_foreign_operand_warns_with_its_arg_position() -> None:
                 Scalar reduction of the polygamma output.
             """
 
-            return torch.polygamma(2, (x * 3.0) + foreign).sum()
+            with _state.pause_logging():
+                unseen = foreign.clone()
+            return torch.polygamma(2, (x * 3.0) + unseen).sum()
 
     with pytest.warns(UserWarning, match=r"no graph/source provenance.*arg1"):
         trace = tl.trace(_ForeignOperandModel().eval(), torch.rand(4) + 0.5)
@@ -894,7 +900,7 @@ def test_prebuilt_transform_wrap_order_and_raw_warning_contract() -> None:
     decorated_log = tl.trace(
         PreBuiltTransformModel().eval(),
         x,
-        capture=CaptureOptions(layers_to_save="all"),
+        save="all",
     )
 
     assert [op.transform_kind for op in decorated_log.transforms] == ["vmap"]
@@ -904,7 +910,7 @@ def test_prebuilt_transform_wrap_order_and_raw_warning_contract() -> None:
         raw_log = tl.trace(
             RawPreBuiltTransformModel().eval(),
             x,
-            capture=CaptureOptions(layers_to_save="all"),
+            save="all",
         )
 
     assert raw_log.transforms == ()
@@ -920,14 +926,14 @@ def test_raw_transform_escape_flag_does_not_leak_across_captures() -> None:
         raw_log = tl.trace(
             RawPreBuiltTransformModel().eval(),
             x,
-            capture=CaptureOptions(layers_to_save="all"),
+            save="all",
         )
 
     assert raw_log.transforms == ()
 
     foreign_model = ForeignOutputTensorModel(torch.ones(3, 4)).eval()
     with pytest.raises(RuntimeError, match="could not attribute a model output tensor"):
-        tl.trace(foreign_model, x, capture=CaptureOptions(layers_to_save="all"))
+        tl.trace(foreign_model, x, save="all")
 
 
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
@@ -948,8 +954,9 @@ def test_raw_transform_escape_does_not_validate_vacuously_without_metadata() -> 
 def test_raising_inner_transform_cleans_up_logging_state() -> None:
     """Exceptions from transform bodies leave logging state sane."""
 
-    with pytest.raises(RuntimeError, match="inner transform failure"):
+    with pytest.raises(TraceCaptureError, match="inner transform failure") as _tce_info:
         tl.trace(RaisingInnerFnModel().eval(), torch.randn(3, 4))
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
     assert _state._logging_enabled is False
     log = tl.trace(VmapMaskModel().eval(), torch.randn(3, 4))
@@ -966,7 +973,7 @@ def test_hf_style_runtime_vmap_mask_regression() -> None:
         log = tl.trace(
             HFStyleMaskModel().eval(),
             x,
-            capture=CaptureOptions(layers_to_save="all"),
+            save="all",
         )
 
     assert [op.transform_kind for op in log.transforms] == ["vmap"]
@@ -984,7 +991,7 @@ def test_transform_matrix_completion_rows(tmp_path: Path) -> None:
     expected = model(x)
     assert torch.allclose(model(x), expected)
 
-    log = tl.trace(model, x, capture=CaptureOptions(layers_to_save=["vmap_1_1"]))
+    log = tl.trace(model, x, save=["vmap_1_1"])
     transform = log.transforms[0]
     assert transform.has_saved_activation is True
     assert isinstance(transform.out, torch.Tensor)
@@ -1005,10 +1012,10 @@ def test_transform_matrix_completion_rows(tmp_path: Path) -> None:
     intervened = tl.trace(
         VmapMaskModel().eval(),
         x,
-        capture=CaptureOptions(layers_to_save="all"),
+        save="all",
         intervene=tl.when(tl.func_transform("vmap"), tl.zero_ablate()),
     )
-    assert intervened.transforms[0].intervention_replaced is True
+    assert intervened.transforms[0].is_edited is True
 
 
 class _OneOperandVmapModel(nn.Module):
@@ -1095,13 +1102,13 @@ def test_variadic_vmap_arity_does_not_leak_stale_arg_spec() -> None:
     x = torch.randn(4, 4)
 
     # Arity-1 capture first -- would seed a narrow ``vmap`` positions=(0,) spec.
-    tl.trace(_OneOperandVmapModel().eval(), x, capture=CaptureOptions(layers_to_save="all"))
+    tl.trace(_OneOperandVmapModel().eval(), x, save="all")
 
-    log = tl.trace(_TwoOperandVmapModel().eval(), x, capture=CaptureOptions(layers_to_save="all"))
-    arange_ops = [op for op in log.layer_list if getattr(op, "func_name", None) == "arange"]
+    log = tl.trace(_TwoOperandVmapModel().eval(), x, save="all")
+    arange_ops = [op for op in log._layer_list if getattr(op, "func_name", None) == "arange"]
     # BOTH arange operands must be captured -- neither dropped by a stale spec.
     assert len(arange_ops) == 2
-    vmap_ops = [op for op in log.layer_list if getattr(op, "transform_kind", None) == "vmap"]
+    vmap_ops = [op for op in log._layer_list if getattr(op, "transform_kind", None) == "vmap"]
     assert len(vmap_ops) == 1
     # The outer vmap boundary node must list BOTH arange outputs as parents.
     vmap_parents = set(vmap_ops[0].parents)
@@ -1125,10 +1132,10 @@ def test_variadic_tensor_builtin_arity_does_not_drop_late_operands(func_name: st
         trace = tl.trace(
             _VariadicTensorBuiltinModel(func_name, arity).eval(),
             x,
-            capture=CaptureOptions(layers_to_save="all"),
+            save="all",
         )
-        builtin = next(op for op in trace.layer_list if op.func_name == func_name)
-        add_ops = [op for op in trace.layer_list if op.func_name in {"__add__", "add"}]
+        builtin = next(op for op in trace._layer_list if op.func_name == func_name)
+        add_ops = [op for op in trace._layer_list if op.func_name in {"__add__", "add"}]
 
         assert len(add_ops) == arity
         # grouping rule row 32: the operand comprehension is one ``add`` layer
@@ -1154,7 +1161,7 @@ def test_attribute_held_original_grad_is_rebound_to_a_boundary_op() -> None:
 
     model = _BareRawGradOverModuleModel().eval()
     held = model.raw_grad
-    log = tl.trace(model, torch.randn(4), capture=CaptureOptions(layers_to_save="all"))
+    log = tl.trace(model, torch.randn(4), save="all")
 
     assert [op for op in log.ops if op.type == "grad"]
     assert getattr(log, "_raw_transform_escape_detected", False) is False

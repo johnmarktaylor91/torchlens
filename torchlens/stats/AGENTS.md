@@ -28,12 +28,12 @@ Streaming statistics over activations and dataloaders (`tl.stats`, lazy).
 
 - `tl.trace(model, x, save="stats")` (reduce and discard; `_capture_stats.py`):
   `_trace_selector_helpers._route_save_label_selection` turns `"stats"` into
-  `SaveOptions(activation_transform=<summary-role reducer>,
+  `CaptureOptions(activation_transform=<summary-role reducer>,
   save_raw_activations=False)`, so the capture's reduce-only path keeps one
   packed 16-slot `RunningStats` vector per op in `transformed_out` and no payload.
   `site_stats(trace)` decodes them. `Op.out` on such a trace refuses
   (`activation_reduced_to_stats`) and the replay/validation entry gates in
-  `data_classes/_trace_validation.py` refuse (`stats_capture_not_replayable`).
+  `backends/torch/_trace_backward.py` refuse (`stats_capture_not_replayable`).
   The reducer is `lean_spine`, not `RunningStats.update`: same state, bounded
   float64 working chunks (`_CHUNK`).
 - `measure_trajectory(model, data, ...)` (`_trajectory.py`): logit-lens

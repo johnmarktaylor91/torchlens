@@ -44,7 +44,7 @@ def gpt2_trace(r0_models):
 
     torch.manual_seed(1)
     x = torch.randint(0, 500, (2, 8))
-    log = tl.trace(r0_models["gpt2"], x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(r0_models["gpt2"], x, save="all")
     try:
         yield log
     finally:
@@ -57,7 +57,7 @@ def llama_trace(r0_models):
 
     torch.manual_seed(1)
     x = torch.randint(0, 500, (2, 8))
-    log = tl.trace(r0_models["llama"], x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(r0_models["llama"], x, save="all")
     try:
         yield log
     finally:
@@ -244,13 +244,13 @@ def test_head_scores_plan_from_a_structure_only_capture(r0_models):
     seq = torch.randint(0, 500, (1, 5))
     doubled = torch.cat([seq, seq], dim=1)
     model = r0_models["gpt2"]
-    meta = tl.trace(model, doubled, capture=tl.options.CaptureOptions(layers_to_save="none"))
+    meta = tl.trace(model, doubled, save="none")
     plan = mi.retention_plan(meta, "head_scores")
     assert plan.module_subtrees and all(a.endswith(".attn") for a in plan.module_subtrees)
     assert [site.op_label for site in plan.sites] == [str(op.label) for op in meta.input_ops]
     selective = tl.trace(model, doubled, save=plan.predicate)
-    full = tl.trace(model, doubled, capture=tl.options.CaptureOptions(layers_to_save="all"))
-    assert selective.num_saved_layers < full.num_saved_layers
+    full = tl.trace(model, doubled, save="all")
+    assert len(selective.saved_layers) < len(full.saved_layers)
     got = mi.head_scores(selective, kind="induction")
     want = mi.head_scores(full, kind="induction")
     assert got.scores == want.scores and got.eligible_rows == want.eligible_rows
@@ -282,18 +282,14 @@ def test_head_scores_masks_and_disclosure(r0_models):
     torch.manual_seed(3)
     seq = torch.randint(0, 500, (1, 5))
     doubled = torch.cat([seq, seq], dim=1)
-    log = tl.trace(
-        r0_models["gpt2"], doubled, capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    log = tl.trace(r0_models["gpt2"], doubled, save="all")
     scores = mi.head_scores(log, kind="induction", measure="mul")
     assert all(s is not None for layer in scores.scores for s in layer)
     assert all(count > 0 for count in scores.eligible_rows)
 
     # Distinct tokens -> no duplicate-eligible rows -> None scores, never 0.0.
     distinct = torch.arange(100, 108).reshape(1, 8)
-    log2 = tl.trace(
-        r0_models["gpt2"], distinct, capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    log2 = tl.trace(r0_models["gpt2"], distinct, save="all")
     empty = mi.head_scores(log2, kind="duplicate_token")
     assert all(s is None for layer in empty.scores for s in layer)
     assert all(count == 0 for count in empty.eligible_rows)

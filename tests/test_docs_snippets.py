@@ -55,6 +55,8 @@ DOC_FILE_GROUPS: dict[str, tuple[str, ...]] = {
         "native-torch.md",
         "recipes/lrp_epsilon_litmus.md",
         "guides/grouping.md",
+        # Backend protocol: the reference backend's tutorial (graduation G5).
+        "backends/torch.md",
     ),
     "reference_tooling": (
         "reference/debug.md",
@@ -477,6 +479,28 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
         "test_stats_doc_python_fences_execute (needs the ambient demo model)"
     ),
     "backends.md": "preview-backend snippets need tf/jax/mlx/tinygrad/paddle runtimes",
+    "backends/tf.md": (
+        "tutorial fence executed by tests/backends/test_tf_docs_page.py under the "
+        "tf_backend marker (needs the tensorflow runtime)"
+    ),
+    "backends/jax.md": (
+        "tutorial fence executed by tests/test_jax_docs_page.py under the backend_jax "
+        "marker (needs the jax runtime)"
+    ),
+    "backends/mlx.md": (
+        "tutorial fences executed by tests/test_backend_docs_lockstep.py under the "
+        "backend_mlx marker (needs the mlx runtime: macOS, or Linux with "
+        "TORCHLENS_RUN_UNSTABLE_MLX_TESTS=1)"
+    ),
+    "backends/paddle.md": (
+        "tutorial fences executed by tests/test_paddle_docs_tutorial.py and "
+        "tests/test_backend_docs_lockstep.py under the backend_paddle marker "
+        "(needs the paddle runtime)"
+    ),
+    "backends/tinygrad.md": (
+        "tutorial fences executed by tests/test_backend_docs_lockstep.py under the "
+        "backend_tinygrad marker (needs the tinygrad runtime)"
+    ),
     "backward.md": "pending execution coverage (queued: backward capture snippets)",
     "buffers.md": "pending execution coverage",
     "containers.md": "pending execution coverage",

@@ -7,7 +7,7 @@ table cheaply. Captions are templates: ``{name}`` fields are filled from TorchLe
 constants by :func:`constants`, so a changed constant changes the caption.
 
 Render conventions (applied by the renderer unless a panel sets ``conventions=False`` or
-overrides a key): SVG output, save only, left to right, ``font_size=16``, no legend, the
+overrides a key): SVG output, no viewer opened, left to right, ``font_size=16``, no legend, the
 graph caption hidden, ``collapse="none"``, and two label rows (label and shape) so a picture
 fits a deck card at a legible size; slides that teach rows restore the defaults (``FULL``).
 """
@@ -23,11 +23,11 @@ from typing import Any
 CONVENTIONS: Mapping[str, Any] = MappingProxyType(
     {
         "file_format": "svg",
-        "vis_save_only": True,
+        "open_viewer": False,
         "direction": "leftright",
         "font_size": 16,
         "show_legend": False,
-        "vis_graph_overrides": {"label": ""},
+        "graph_overrides": {"label": ""},
         "collapse": "none",
         "node_label_fields": ["label", "shape"],
     }
@@ -102,7 +102,7 @@ def constants() -> dict[str, Any]:
 
     import inspect
 
-    from torchlens._data_classes._trace_viz import TraceVisualizationMixin
+    from torchlens._data_classes.trace import Trace
     from torchlens._visualization import (
         _edge_multiplicity,
         _encoding,
@@ -117,8 +117,7 @@ def constants() -> dict[str, Any]:
     from torchlens._vocab import node_spec
 
     draw_defaults = {
-        name: param.default
-        for name, param in inspect.signature(TraceVisualizationMixin.draw).parameters.items()
+        name: param.default for name, param in inspect.signature(Trace.draw).parameters.items()
     }
     typo = DEFAULT_TYPOGRAPHY
     # Role colors as the default skin renders them, not the
@@ -163,7 +162,7 @@ def fill(template: str) -> str:
 FULL = {"node_label_fields": None}
 #: Label plus module path, for slides that point at the call a node belongs to.
 CALLS = {"node_label_fields": ["label", "module"]}
-CAP = {"vis_graph_overrides": {}}
+CAP = {"graph_overrides": {}}
 QUIET = {"show_legend": False}
 #: The key rides in the header label; its weight entries name it (a crop, then a mark).
 LEGEND = "text:trainable weights"
@@ -389,7 +388,7 @@ SLIDES: tuple[Slide, ...] = (
         id="loop-unrolled",
         title="Loops, unrolled: a node per pass",
         rule=':2 is the pass number, and the exact key trace["linear_1_1:2"] accepts.',
-        panels=(Panel("a", "Loop2", kwargs={"view": "unrolled", **FULL}),),
+        panels=(Panel("a", "Loop2", kwargs={"rolled": False, **FULL}),),
         keys=(
             Key("linear_1_1:2: second pass of the same layer", "node(text~linear_1_1:2)"),
             Key("One call per pass: @cell:1, then @cell:2", "node(text~@cell:2)", at="@cell:2"),
@@ -406,7 +405,7 @@ SLIDES: tuple[Slide, ...] = (
             Panel(
                 "a",
                 "Loop",
-                kwargs={"view": "rolled", **FULL},
+                kwargs={"rolled": True, **FULL},
                 crop=("node(text~linear)", "node(text~relu)", "edge(text~In)"),
             ),
         ),
@@ -426,14 +425,14 @@ SLIDES: tuple[Slide, ...] = (
             Panel(
                 "a",
                 "LoopGroups",
-                kwargs={"view": "rolled", **CALLS},
+                kwargs={"rolled": True, **CALLS},
                 label="two call groups",
                 crop=("node(text~linear)",),
             ),
             Panel(
                 "b",
                 "LoopShapes",
-                kwargs={"view": "rolled", "depth": 1, **FULL},
+                kwargs={"rolled": True, "depth": 1, **FULL},
                 label="two shapes, depth=1",
                 crop=("node(shape=box3d)",),
             ),
@@ -524,8 +523,8 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="containers",
         title="Dicts and tuples",
-        rule='show_containers="nodes" adds a record box for a returned container; "labels" '
-        "names its keys on the arrows.",
+        rule='show_containers="nodes" adds a record box for a container; "labels" names its '
+        "keys on the arrows.",
         panels=(
             Panel(
                 "a",
@@ -535,11 +534,22 @@ SLIDES: tuple[Slide, ...] = (
                 label='show_containers="nodes"',
                 crop=("node(text~dict)", "node(text~linear_1_1)"),
             ),
+            Panel(
+                "b",
+                "DictMid",
+                capture={"capture_container_structure": True},
+                kwargs={"show_containers": "nodes"},
+                label="the same dict, used inside the model",
+            ),
         ),
         keys=(
             Key("Dashed record box for the returned dict", "node(text~dict)"),
-            Key("Arrowless ties mark membership", "edge(arrowhead=none)"),
             Key("Arrow words name each key: logits, probs", None),
+            Key(
+                "A dict used inside the model: arrowless ties mark membership",
+                "edge(arrowhead=none)",
+                "b",
+            ),
         ),
         footnote='"cluster" draws a dotted group instead.',
         rows=("VN25", "VE12", "VR09"),
@@ -711,27 +721,27 @@ SLIDES: tuple[Slide, ...] = (
         id="interventions",
         title="Interventions: the edit and what it changed",
         rule="A purple 2.5 pt ring and a bold purple \u0394 row name the edited node; with "
-        "vis_show_cone=True a translucent purple underlay runs under the arrows and outlines "
+        "show_cone=True a translucent purple underlay runs under the arrows and outlines "
         'it changed; "as_node" draws the hook as a purple delta diamond.',
         panels=(
             Panel(
                 "a",
                 "Flow",
-                capture={"intervention_ready": True},
+                capture={"replayable": True},
                 intervene="zero_tanh",
                 kwargs={
-                    "vis_intervention_mode": "node_mark",
-                    "vis_show_cone": True,
+                    "intervention_mode": "node_mark",
+                    "show_cone": True,
                     "show_legend": True,
                 },
-                label='"node_mark", vis_show_cone=True, show_legend=True',
+                label='"node_mark", show_cone=True, show_legend=True',
             ),
             Panel(
                 "b",
                 "Flow",
-                capture={"intervention_ready": True},
+                capture={"replayable": True},
                 intervene="zero_tanh",
-                kwargs={"vis_intervention_mode": "as_node"},
+                kwargs={"intervention_mode": "as_node"},
                 label='"as_node"',
             ),
         ),
@@ -740,7 +750,7 @@ SLIDES: tuple[Slide, ...] = (
             Key("The edit, named in the node", "node(text~\u0394)"),
             Key("Changed downstream: purple underlay", "node(class~tl_downstream)"),
             Key("The hook as a purple diamond", "node(shape=diamond)", panel="b"),
-            Key("vis_show_cone=False (the default) leaves the underlay out", None),
+            Key("show_cone=False (the default) leaves the underlay out", None),
         ),
         rows=("VN16", "VN17", "VN18"),
     ),
@@ -755,7 +765,7 @@ SLIDES: tuple[Slide, ...] = (
                 "Shared",
                 call="surgery",
                 kwargs={"highlight": "interventions"},
-                capture={"intervention_ready": True, "save_args": True},
+                capture={"replayable": True, "save_args": True},
                 prep="fork_edit",
                 # The edit fires on pass 1; pass 2 carries the cohort note (one mark per pass
                 # since the F32 fix), so the crop shows both passes.
@@ -784,7 +794,7 @@ SLIDES: tuple[Slide, ...] = (
                 "a",
                 "Shared",
                 call="surgery_diff",
-                capture={"intervention_ready": True, "save_args": True},
+                capture={"replayable": True, "save_args": True},
                 prep="fork_edit",
                 crop=('node(text~"linear_1_1:1")', 'node(text~"linear_1_1:2")'),
             ),
@@ -855,11 +865,11 @@ SLIDES: tuple[Slide, ...] = (
         rule="Area, not side, follows the non-batch element count, clamped at {size_max_area}x; "
         "labels never shrink.",
         panels=(
-            Panel("a", "Sizes", kwargs={"size_by": "dims", "scale": "sqrt", **QUIET}),
+            Panel("a", "Sizes", kwargs={"size_by": "dims", "size_scale": "sqrt", **QUIET}),
             Panel(
                 "b",
                 "Sizes",
-                kwargs={"size_by": "dims", "scale": "sqrt", "show_legend": None},
+                kwargs={"size_by": "dims", "size_scale": "sqrt", "show_legend": None},
                 label="its legend",
                 crop=("text:size_by",),
             ),
@@ -880,13 +890,13 @@ SLIDES: tuple[Slide, ...] = (
             Panel(
                 "a",
                 "Loop2",
-                kwargs={"view": "unrolled", "stack_by": True, **QUIET},
+                kwargs={"rolled": False, "stack_by": True, **QUIET},
                 label="stack_by=True",
             ),
             Panel(
                 "b",
                 "Loop2",
-                kwargs={"view": "unrolled", "stack_by": True, "show_legend": None},
+                kwargs={"rolled": False, "stack_by": True, "show_legend": None},
                 label="its legend",
                 crop=("text:stack_by",),
             ),
@@ -1002,11 +1012,10 @@ SLIDES: tuple[Slide, ...] = (
             Panel(
                 "a",
                 "Grad",
-                call="draw_backward",
                 capture={"save_grads": "all"},
                 prep="log_backward",
-                kwargs=QUIET,
-                label="draw_backward()",
+                kwargs={"graph": "backward", **QUIET},
+                label='draw(graph="backward")',
                 crop=("node(text~sum_back_1_2)", "node(text~accumulategrad)"),
             ),
         ),
@@ -1019,15 +1028,14 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="backward-legend",
         title="The backward key",
-        rule="show_legend=True on draw_backward lists only the styles this graph painted.",
+        rule='show_legend=True with graph="backward" lists only the styles this graph painted.',
         panels=(
             Panel(
                 "a",
                 "HigherOrder",
-                call="draw_backward",
                 capture={"save_grads": "all"},
                 prep="higher_order",
-                kwargs={"vis_mode": "unrolled", "show_legend": True},
+                kwargs={"graph": "backward", "rolled": False, "show_legend": True},
                 label="a double-backward graph with a custom Function",
                 crop=('node(text~"backward key")',),
             ),
@@ -1044,10 +1052,9 @@ SLIDES: tuple[Slide, ...] = (
             Panel(
                 "a",
                 "HigherOrder",
-                call="draw_backward",
                 capture={"save_grads": "all"},
                 prep="higher_order",
-                kwargs={"vis_mode": "unrolled", **QUIET},
+                kwargs={"graph": "backward", "rolled": False, **QUIET},
                 crop=(
                     "node(text~sum_back_2_11)",
                     "node(text~mul_back_1_7)",
@@ -1072,10 +1079,10 @@ SLIDES: tuple[Slide, ...] = (
             Panel(
                 "a",
                 "Grad",
-                call="draw_combined",
                 capture={"save_grads": "all"},
                 prep="log_backward",
-                label="draw_combined()",
+                kwargs={"graph": "combined"},
+                label='draw(graph="combined")',
                 crop=("node(name=mul_1_1pass1)", "node(text~mul_back_1_3)"),
             ),
             Panel(
@@ -1083,7 +1090,7 @@ SLIDES: tuple[Slide, ...] = (
                 "Grad",
                 capture={"save_grads": "all"},
                 prep="log_backward",
-                kwargs={"vis_grad_edge_overrides": {"penwidth": "2"}},
+                kwargs={"grad_edge_overrides": {"penwidth": "2"}},
                 label="draw() with gradients",
                 # Gradient arrows attach to the declared per-pass nodes (the F37 fix removed the
                 # stray bare-label node they used to draw to).
@@ -1101,7 +1108,7 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="skins",
         title="Five skins",
-        rule='Meaning stays, ink changes; for_paper=True forces "paper".',
+        rule='Meaning stays, ink changes; theme="paper" is the print skin.',
         layout="grid",
         panels=tuple(
             Panel(name, "Tiny", kwargs={"theme": skin}, label=skin)
@@ -1226,8 +1233,8 @@ SLIDES: tuple[Slide, ...] = (
             Panel(
                 "a",
                 "Flow",
-                kwargs={"node_spec_fn": "@badge", "vis_edge_overrides": {"color": "#0072B2"}},
-                label="node_spec_fn, vis_edge_overrides",
+                kwargs={"node_spec_fn": "@badge", "edge_overrides": {"color": "#0072B2"}},
+                label="node_spec_fn, edge_overrides",
             ),
             Panel(
                 "b",
@@ -1235,8 +1242,8 @@ SLIDES: tuple[Slide, ...] = (
                 kwargs={
                     "depth": 1,
                     "collapsed_node_spec_fn": "@boxbadge",
-                    "vis_graph_overrides": {"label": "", "bgcolor": "#F7F7F7"},
-                    "vis_module_overrides": {"color": "#0072B2"},
+                    "graph_overrides": {"label": "", "bgcolor": "#F7F7F7"},
+                    "module_overrides": {"color": "#0072B2"},
                 },
                 label="collapsed_node_spec_fn, graph and module overrides",
             ),
@@ -1284,8 +1291,8 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="data-outputs",
         title="Outputs as decoded rows",
-        rule="output_transform turns the output into label and score rows; output_style decodes "
-        "a model that carries its labels.",
+        rule="output_transform turns the output into label and score rows; a model that carries "
+        "its labels decodes automatically, and decode_output(style=, head=) re-decodes on demand.",
         panels=(
             Panel(
                 "a",
@@ -1321,8 +1328,8 @@ SLIDES: tuple[Slide, ...] = (
     Slide(
         id="draw-parameters",
         title="Every draw() parameter",
-        rule="Short spellings (view, depth, layout, renderer, node_style) win over their long "
-        "twins when both are given.",
+        rule="Every keyword is a VisualizationOptions field name, so the same picture can be "
+        "asked for at capture time; path is the one positional argument.",
         layout="table",
     ),
     Slide(
@@ -1341,12 +1348,12 @@ CHEAT_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     (
         "Everything once, then less",
         "depth, collapse",
-        ("depth", "vis_call_depth", "collapse", "collapse_fn"),
+        ("depth", "collapse", "collapse_fn"),
     ),
     ("Repeats", "fold_repeats, fold_patterns", ("fold_repeats", "fold_patterns")),
     ("One module", "module=", ("module",)),
     ("Fewer ops", "skip_fn", ("skip_fn",)),
-    ("Loops", "view, stack_by", ("view", "vis_mode", "stack_by")),
+    ("Loops", "rolled=True, stack_by", ("rolled", "stack_by")),
     (
         "Buffers, containers, orphans",
         "show_buffers, show_containers, show_orphans",
@@ -1354,20 +1361,32 @@ CHEAT_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ),
     (
         "Edits",
-        "vis_intervention_mode, highlight",
-        ("vis_intervention_mode", "vis_show_cone", "highlight"),
+        "intervention_mode, highlight",
+        ("intervention_mode", "show_cone", "highlight"),
     ),
     (
         "Measurements",
         "color_by, size_by, node_overlay",
-        ("color_by", "size_by", "scale", "node_overlay", "show_saved_for_backward"),
+        ("color_by", "size_by", "size_scale", "node_overlay", "show_saved_for_backward"),
     ),
     (
         "Rows",
         "node_style, node_label_fields",
-        ("node_style", "node_mode", "node_label_fields", "show_redundant_args"),
+        ("node_style", "node_label_fields", "show_redundant_args"),
     ),
-    ("Gradients", "vis_grad_edge_overrides", ("vis_grad_edge_overrides",)),
+    (
+        "Gradients",
+        'graph="backward" or "combined" (default "forward"), grad_edge_overrides',
+        (
+            "graph",
+            "grad_edge_overrides",
+            "bwd",
+            "show_module_paths",
+            "show_grad_values",
+            "backward_node_spec_fn",
+            "intervening_cluster",
+        ),
+    ),
     (
         "Data previews and source",
         "show_input_transform_summary, code_panel",
@@ -1378,13 +1397,10 @@ CHEAT_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         "theme, direction, layout",
         (
             "theme",
-            "for_paper",
             "direction",
             "layout",
-            "vis_node_placement",
             "order_siblings",
             "renderer",
-            "vis_renderer",
             "font_size",
             "show_legend",
         ),
@@ -1395,15 +1411,15 @@ CHEAT_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         (
             "node_spec_fn",
             "collapsed_node_spec_fn",
-            "vis_graph_overrides",
-            "vis_edge_overrides",
-            "vis_module_overrides",
+            "graph_overrides",
+            "edge_overrides",
+            "module_overrides",
         ),
     ),
     (
         "Files",
-        "file_format, path",
-        ("file_format", "path", "vis_save_only", "dpi", "return_graph"),
+        "file_format, path, open_viewer",
+        ("file_format", "path", "open_viewer", "dpi"),
     ),
 )
 
@@ -1434,7 +1450,7 @@ OTHER_PICTURES: tuple[tuple[str, str, str, str], ...] = (
     (
         "Bundle diff",
         "two traces side by side, white to red by difference",
-        "bundle.show_diff()",
+        "bundle.draw(graph='diff')",
         "docs/reference/glossary.md",
     ),
     (
@@ -1507,7 +1523,7 @@ ALPHABET: Mapping[str, tuple[tuple[str, str, str, Selector], ...]] = MappingProx
             ("accumulates into a leaf", "backward", "a", "edge(style=dotted)"),
             ("forward op to its grad_fn", "combined", "a", "edge(constraint=false)"),
             ("reader of a changed parameter", "mutated-param", "a", "edge(style=dashed)"),
-            ("member of a container", "containers", "a", "edge(arrowhead=none)"),
+            ("member of a container", "containers", "b", "edge(arrowhead=none)"),
             ("module call (outermost)", "module-boxes", "a", "cluster(penwidth={pen_max})"),
             ("module call (deeper)", "module-boxes", "a", "cluster(label~@block.0:1)"),
             ("module not from the input", "dashed", "a", "cluster(style^dashed)"),

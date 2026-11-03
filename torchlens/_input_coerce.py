@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from ._errors import ArgumentTypeError
 
-def _coerce_input(model: Any, x: Any) -> Any:
+
+def _coerce_input(model: Any, x: Any, *, whole_input: bool = True) -> Any:
     """Convert common ergonomic inputs to model-ready tensors.
 
     Parameters
@@ -15,6 +17,12 @@ def _coerce_input(model: Any, x: Any) -> Any:
         feature-extractor methods.
     x:
         User-provided input.
+    whole_input:
+        Whether ``x`` is the entire model input rather than one positional
+        item. A text item among other positional inputs (``mode="soft"``) is
+        tokenized only when the model exposes a tokenizer; otherwise it is an
+        ordinary string argument and passes through unchanged. Text that is
+        the whole input still raises the tokenizer guidance when none exists.
 
     Returns
     -------
@@ -27,11 +35,13 @@ def _coerce_input(model: Any, x: Any) -> Any:
     if isinstance(x, torch.Tensor):
         return x
 
-    if isinstance(x, str):
-        return _tokenize_text(model, x)
-
-    if isinstance(x, list) and x and all(isinstance(item, str) for item in x):
-        return _tokenize_text(model, x)
+    is_text = isinstance(x, str) or (
+        isinstance(x, list) and bool(x) and all(isinstance(item, str) for item in x)
+    )
+    if is_text:
+        if whole_input or _has_text_tokenizer(model):
+            return _tokenize_text(model, x)
+        return x
 
     if _is_pil_image(x) or (isinstance(x, list) and x and all(_is_pil_image(item) for item in x)):
         return _process_image(model, x)
@@ -74,7 +84,6 @@ def _reject_unrouted_forward_kwargs(forward_kwargs: dict[str, Any]) -> None:
 
     if not forward_kwargs:
         return
-    from ._errors import ArgumentTypeError
 
     unknown = ", ".join(sorted(forward_kwargs))
     raise ArgumentTypeError(
@@ -111,7 +120,6 @@ def _reject_extra_positional_input(extra_positional: tuple[Any, ...]) -> None:
 
     if not extra_positional:
         return
-    from ._errors import ArgumentTypeError
 
     kinds = ", ".join(type(value).__name__ for value in extra_positional)
     raise ArgumentTypeError(
@@ -148,7 +156,6 @@ def _reject_non_mapping_input_kwargs(input_kwargs: Any) -> None:
 
     if input_kwargs is None or isinstance(input_kwargs, collections.abc.Mapping):
         return
-    from ._errors import ArgumentTypeError
 
     raise ArgumentTypeError(
         "input_kwargs must be a Mapping of keyword arguments for "
@@ -189,7 +196,8 @@ def _coerce_input_args(model: Any, input_args: Any) -> Any:
         # is NOT proof of an *args constructor, and the historical inference
         # crashed plain ``tl.trace`` untyped on a tuple subclass carrying a
         # malformed ``_fields``.
-        coerced_items = [_coerce_input(model, item) for item in input_args]
+        whole = len(input_args) == 1
+        coerced_items = [_coerce_input(model, item, whole_input=whole) for item in input_args]
         if all(new is old for new, old in zip(coerced_items, input_args, strict=True)):
             # Nothing coerced: keep the exact original instance (type-faithful,
             # and a fragile subclass constructor is never run needlessly).
@@ -207,8 +215,28 @@ def _coerce_input_args(model: Any, input_args: Any) -> Any:
         # of its items is skipped exactly like other custom wrappers.
         return input_args
     if isinstance(input_args, list):
-        return [_coerce_input(model, item) for item in input_args]
+        whole = len(input_args) == 1
+        return [_coerce_input(model, item, whole_input=whole) for item in input_args]
     return _coerce_input(model, input_args)
+
+
+def _has_text_tokenizer(model: Any) -> bool:
+    """Return whether ``model`` exposes a tokenizer :func:`_tokenize_text` can use.
+
+    Parameters
+    ----------
+    model:
+        Model or model-like object.
+
+    Returns
+    -------
+    bool
+        ``True`` for a ``to_tokens`` method or a callable ``tokenizer``.
+    """
+
+    return hasattr(model, "to_tokens") or (
+        hasattr(model, "tokenizer") and callable(model.tokenizer)
+    )
 
 
 def _tokenize_text(model: Any, x: str | list[str]) -> Any:

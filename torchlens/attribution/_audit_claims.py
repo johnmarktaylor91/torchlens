@@ -119,7 +119,7 @@ class _AuditPlan:
     def intervention(self, units: tuple[tuple[int, ...], ...]) -> tuple[tuple[Any, Any], ...]:
         """Return the ``(tl.units(label, mask), edit)`` pair ablating ``units``."""
 
-        from torchlens._selection import units as unit_selection
+        from torchlens._selection.selection import units as unit_selection
 
         return ((unit_selection(self.label, _unit_mask(self.shape, units)), self.edit()),)
 
@@ -229,7 +229,7 @@ def _trace_once(request: _AuditRequest) -> Any:
             request.model,
             positional,
             input_kwargs=request.input_kwargs or None,
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
 
 

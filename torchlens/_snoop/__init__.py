@@ -9,7 +9,7 @@ package holds one read-only observer slot, one line grammar, and two crash
 tails. All spellings are DOCUMENTED-UNSTABLE pending the naming sprint; the
 grouped option class lives at ``tl.options.NarrationOptions``.
 
-Rely on the partial (``exc.partial_log.narrate(20)``) when you expect an
+Rely on the partial (``exc.partial_trace.narrate(20)``) when you expect an
 exception; turn narration on (``narrate=``) when you expect the process to DIE
 -- file sinks flush per line precisely so bytes survive a hard death.
 """

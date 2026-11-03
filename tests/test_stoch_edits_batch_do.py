@@ -12,12 +12,12 @@ from __future__ import annotations
 
 import pytest
 import torch
+from support.sampling import sampling_draws
 from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens.intervention import population, sample_from
-from torchlens.intervention.stochastic import sampling_records
 
 
 class _TwoBlock(nn.Module):
@@ -35,7 +35,7 @@ def _trace() -> tl.Trace:
     return tl.trace(
         _TwoBlock(),
         torch.randn(5, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 
@@ -89,10 +89,10 @@ def test_shared_plan_identity_shares_one_donor_group() -> None:
             (log["relu_2_4"].__selection__(), tl.patch_from(plan)),
         ]
     )
-    records = sampling_records(fork)
+    records = sampling_draws(fork)
     assert len(records) == 2
-    assert records[0]["donor_group_id"] == records[1]["donor_group_id"]
-    assert records[0]["donor_ids"] == records[1]["donor_ids"], "per_group shares the draw"
+    assert records[0].donor_group_id == records[1].donor_group_id
+    assert records[0].draw_indices == records[1].draw_indices, "per_group shares the draw"
     # Content-digest minting: the same declared inputs reconstruct the same
     # group key (the derived-seed law's rerun-reproducibility half) ...
     plan_a = sample_from(donors, seed=3, share_draw="per_group")
@@ -111,8 +111,8 @@ def test_shared_plan_identity_shares_one_donor_group() -> None:
             (log["relu_2_4"].__selection__(), tl.patch_from(plan_b)),
         ]
     )
-    two_plan_records = sampling_records(fork_two)[-2:]
-    group_ids = {row["donor_group_id"] for row in two_plan_records}
+    two_plan_records = sampling_draws(fork_two)[-2:]
+    group_ids = {row.donor_group_id for row in two_plan_records}
     assert len(group_ids) == 2, "kwargs coincidence never shares a donor group"
     assert all(gid.startswith(f"{plan_a.donor_group_id}#") for gid in group_ids)
     fork_three = log.fork()
@@ -122,7 +122,7 @@ def test_shared_plan_identity_shares_one_donor_group() -> None:
             (log["relu_1_2"].__selection__(), tl.patch_from(plan_a)),
         ]
     )
-    reversed_ids = {row["donor_group_id"] for row in sampling_records(fork_three)[-2:]}
+    reversed_ids = {row.donor_group_id for row in sampling_draws(fork_three)[-2:]}
     assert reversed_ids == group_ids, "clause order never moves a donor group"
 
 
@@ -145,7 +145,7 @@ def _trace64() -> tl.Trace:
     return tl.trace(
         _TwoBlock().double(),
         torch.randn(5, 4, dtype=torch.float64),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 
@@ -173,12 +173,12 @@ def _fingerprint(log: tl.Trace) -> dict:
     """Everything a failed batch must leave as it was (values, spec, ledger rows)."""
 
     ops = {}
-    for op in log.layer_list:
+    for op in log._layer_list:
         store = op.edge_substitutions or {}
         ops[op.label] = (
             None if op.out is None else op.out.clone(),
-            tuple(repr(record) for record in op.interventions or ()),
-            bool(op.intervention_replaced),
+            tuple(repr(record) for record in op.edits or ()),
+            bool(op.is_edited),
             tuple(sorted(repr(key) for key in store)),
         )
     return {
@@ -212,7 +212,7 @@ def test_cross_kind_batch_equals_the_doors_one_at_a_time(order: tuple[str, ...])
     sequential = log.fork()
     for selection, edit in _cross_kind_pairs(sequential, order):
         sequential.do(selection, edit)
-    for batch_op, seq_op in zip(batch.layer_list, sequential.layer_list, strict=True):
+    for batch_op, seq_op in zip(batch._layer_list, sequential._layer_list, strict=True):
         assert batch_op.label == seq_op.label
         assert batch_op.out.dtype == torch.float64
         assert torch.equal(batch_op.out, seq_op.out), batch_op.label
@@ -258,7 +258,7 @@ def test_cross_kind_batch_with_a_refusing_pair_leaves_the_fork_as_before(bad: st
     assert added[0]["status"] == "error", "the fire-evidence rule: one aborted record"
     assert added[0]["selection_batch"]["kinds"] == list(order)
     fork.do(_cross_kind_pairs(fork, order[:2]))
-    for fork_op, probe_op in zip(fork.layer_list, probe.layer_list, strict=True):
+    for fork_op, probe_op in zip(fork._layer_list, probe._layer_list, strict=True):
         assert torch.equal(fork_op.out, probe_op.out), "the fork is usable after the abort"
 
 

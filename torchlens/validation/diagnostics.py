@@ -65,6 +65,29 @@ CHECK_PRECONDITION = "precondition_refusal"
 #: actually needs. ``get_validation_failure(trace)`` returned ``None`` for a
 #: ``False`` result, the bare-``repr(False)`` menagerie's ``convit_*`` rows hit.
 CHECK_RETRACE_MISMATCH = "retrace_mismatch"
+#: ``validate_backward_pass`` verdicts. Every False it returns carries one
+#: record under this check; ``extra["reason"]`` names the refusal or mismatch
+#: (``non_leaf_parameter``, ``appended_trace``, ``pristine_oracle_unavailable``,
+#: ``backward_coverage_gap``, ``module_output_grads``,
+#: ``no_module_output_evidence``, ``no_parameter_gradients``,
+#: ``degenerate_parameter_gradients``, ``parameter_census_mismatch``,
+#: ``parameter_grad_mismatch``). Before this the backward path only warned, so
+#: ``last_validation_failure()`` was None after a False backward verdict.
+CHECK_BACKWARD = "backward"
+#: Replay finished with no failed decision but could not verify every node
+#: (status ``unverified``: an op replay could not check, or no node replayed).
+#: Such a run returns ``False``; ``_non_pass_record.finish_validation_status``
+#: records this check with the first unverified op so the ``False`` is typed.
+CHECK_REPLAY_UNVERIFIED = "replay_unverified"
+#: Diagnostic (never a failure by itself): a perturbed replay raised on every
+#: attempt, so the edge stayed unverified. Carries the exception text per attempt.
+CHECK_PERTURBATION_EXCEPTION = "perturbation_execution_exception"
+#: A perturbation check failed on a degenerate forward: every saved output element
+#: of the op is non-finite, or an in-forward ``autograd.grad`` gradient is
+#: identically zero, so no perturbation could move it and the edge cannot be
+#: checked. Recorded in place of ``CHECK_PERTURBATION`` by
+#: ``_degenerate_forward.perturbation_insensitive_failure``; the run still fails.
+CHECK_DEGENERATE_FORWARD = "degenerate_forward"
 
 
 @dataclass
@@ -249,7 +272,8 @@ def last_validation_failure() -> ValidationFailure | None:
     -------
     ValidationFailure | None
         The structured first mismatch of the last ``validate_saved_outs`` /
-        ``tl.validate`` run, or ``None`` when it passed (or never ran).
+        ``tl.validate`` run (any scope; a False backward verdict records one
+        under ``CHECK_BACKWARD``), or ``None`` when it passed (or never ran).
     """
 
     return _LAST_RUN_FAILURE[0] if _LAST_RUN_FAILURE else None

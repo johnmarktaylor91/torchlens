@@ -28,7 +28,7 @@ def built_in_rule_pack() -> Iterator[None]:
 def _op(trace: object, name: str) -> object:
     """Return the last captured operation with a raw function name."""
 
-    matches = [item for item in trace.layer_list if item.func_name == name]  # type: ignore[union-attr]
+    matches = [item for item in trace._layer_list if item.func_name == name]  # type: ignore[union-attr]
     assert matches
     return matches[-1]
 
@@ -36,7 +36,7 @@ def _op(trace: object, name: str) -> object:
 def _input_op(trace: object) -> object:
     """Return the sole model-input operation from a one-input trace."""
 
-    return next(item for item in trace.layer_list if item.is_input)  # type: ignore[union-attr]
+    return next(item for item in trace._layer_list if item.is_input)  # type: ignore[union-attr]
 
 
 def _trace(model: nn.Module, inputs: torch.Tensor) -> object:

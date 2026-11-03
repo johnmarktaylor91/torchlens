@@ -30,7 +30,7 @@ from torchlens._visualization.surgery_visuals import (
 from torchlens._vocab.node_spec import NodeSpec
 from torchlens.viz import intervention_diff
 
-_CAPTURE = tl.options.CaptureOptions(intervention_ready=True, save_args=True)
+_CAPTURE = tl.options.CaptureOptions(replayable=True, save_args=True)
 
 #: The execution-removal verbs no surgery wording may ever contain (the F38
 #: lint's vocabulary; unrepresentable here by construction).
@@ -189,11 +189,10 @@ def test_rendered_passes_carry_only_their_own_marks(tmp_path) -> None:
     fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
     source = fork.draw(
         highlight="interventions",
-        vis_mode="unrolled",
+        rolled=False,
         path=str(tmp_path / "surgery_passes"),
         file_format="svg",
-        vis_save_only=True,
-    )
+    ).dot
     edited = _dot_node_statement(source, "linear_1_1pass1")
     cohort = _dot_node_statement(source, "linear_1_1pass2")
     assert "edited:" in edited
@@ -264,7 +263,7 @@ def test_live_lane_wording_never_borrows_replay_text() -> None:
         model,
         x,
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     text = surgery_census(log).to_text()
     assert _LIVE_WORDING in text
@@ -281,7 +280,7 @@ def test_zero_fire_rule_is_disclosed(chain_capture) -> None:
             model,
             x,
             intervene=tl.when(tl.func("sigmoid"), tl.zero_ablate()),
-            capture=tl.options.CaptureOptions(intervention_ready=True),
+            capture=tl.options.CaptureOptions(replayable=True),
         )
     text = surgery_census(log).to_text()
     assert "declared and never fired" in text
@@ -318,7 +317,7 @@ def test_injection_hosts_mark_and_census_count() -> None:
         x,
         save=tl.func("relu"),
         intervene=tl.when(tl.func("relu"), tl.splice_module(splice)),
-        capture=tl.options.CaptureOptions(intervention_ready=True, log_injections=True),
+        capture=tl.options.CaptureOptions(replayable=True, log_injections=True),
     )
     facts = surgery_facts(log)
     host_marks = [mark for mark in facts.marks if mark.kind == "injection_host"]
@@ -363,7 +362,7 @@ def test_highlight_interventions_census_travels_with_figure(chain_capture, tmp_p
     _model, _x, log = chain_capture
     fork = _edited_fork(log)
     outpath = str(tmp_path / "surgery_fig")
-    fork.draw(path=outpath, highlight="interventions", file_format="svg", vis_save_only=True)
+    fork.draw(path=outpath, highlight="interventions", file_format="svg")
     figure = tmp_path / "surgery_fig.svg"
     sidecar = tmp_path / "surgery_fig.census.txt"
     assert figure.exists()
@@ -387,13 +386,13 @@ def test_bare_highlight_draw_writes_census_beside_written_file(
 
     import inspect
 
-    from torchlens._data_classes._trace_viz import TraceVisualizationMixin
+    from torchlens._data_classes.trace import Trace
 
     _model, _x, log = chain_capture
     fork = _edited_fork(log)
     # The autouse conftest fixture gives draw() a tmp_path default path; put the
     # shipped default (None: a bare draw picks a collision-safe name) back here.
-    draw = TraceVisualizationMixin.draw
+    draw = Trace.draw
     positional = [
         name
         for name, parameter in inspect.signature(draw).parameters.items()
@@ -403,8 +402,8 @@ def test_bare_highlight_draw_writes_census_beside_written_file(
     defaults[positional.index("path") - (len(positional) - len(defaults))] = None
     monkeypatch.setattr(draw, "__defaults__", tuple(defaults))
     monkeypatch.chdir(tmp_path)
-    fork.draw(highlight="interventions", file_format="svg", vis_save_only=True)
-    fork.draw(highlight="interventions", file_format="svg", vis_save_only=True)
+    fork.draw(highlight="interventions", file_format="svg")
+    fork.draw(highlight="interventions", file_format="svg")
     figures = sorted(path.name for path in tmp_path.glob("*.svg"))
     censuses = sorted(path.name for path in tmp_path.glob("*.census.txt"))
     assert figures == ["modelgraph-2.svg", "modelgraph.svg"], figures
@@ -419,7 +418,7 @@ def test_unknown_highlight_refuses_naming_allowed_values(chain_capture, tmp_path
     _model, _x, log = chain_capture
     for bad in ("intervention", "surgery", True):
         with pytest.raises(InvalidArgumentError) as excinfo:
-            log.draw(path=str(tmp_path / "never"), highlight=bad, vis_save_only=True)
+            log.draw(path=str(tmp_path / "never"), highlight=bad)
         assert excinfo.value.fields["code"] == "draw_highlight_invalid"
         assert excinfo.value.fields["argument"] == "highlight"
         assert "'interventions'" in str(excinfo.value)
@@ -431,7 +430,7 @@ def test_highlight_interventions_refuses_without_audit_evidence(chain_capture, t
 
     _model, _x, log = chain_capture
     with pytest.raises(InvalidArgumentError) as excinfo:
-        log.draw(path=str(tmp_path / "never"), highlight="interventions", vis_save_only=True)
+        log.draw(path=str(tmp_path / "never"), highlight="interventions")
     assert excinfo.value.fields["code"] == "surgery_evidence_missing"
     assert list(tmp_path.iterdir()) == []
 
@@ -537,7 +536,7 @@ def test_diff_draw_line_styles_and_census_sidecar(tmp_path) -> None:
     fork = subject.fork()
     fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
     diff = intervention_diff(fork, reference)
-    rendered = diff.draw(str(tmp_path / "diff_fig"), vis_fileformat="svg", vis_save_only=True)
+    rendered = diff.draw(str(tmp_path / "diff_fig"), vis_fileformat="svg")
     figure_text = (tmp_path / "diff_fig.svg").read_text()
     assert rendered.endswith("diff_fig.svg")
     assert "stroke-dasharray" in figure_text  # the heuristic join renders dashed

@@ -11,7 +11,7 @@ questions, so pick by what you need back, not by habit.
 | Ask "what if this saved value had been different" on an input you already traced | `trace.fork().do(site, action)` | no: the edit is pushed down the recorded graph from saved values | the fork, with its saved values updated |
 | The same question when the edit may change control flow, randomness or module state | `trace.fork().do(site, action, model=model, inputs=x)`, or `trace.run(model, x)` | yes | the fork, re-executed under the edit |
 | Apply one edit to many forwards or to HF `generate()`, with no trace | `spec.bind(model)`, and `spec.bind(model).generate(...)` for HF `generate()` | yes, every call | the model's own outputs, plus `last_report` fire counts |
-| Apply an edit and keep a few activations on every forward | `tl.record(model, x, save=..., intervene=spec, return_output=True)` | yes, every call | the output and a sparse `Recording` |
+| Apply an edit and keep a few activations on every forward | `tl.record(model, x, save=..., intervene=spec)` | yes, every call | a sparse `Recording`; the output is `recording.output` |
 
 `do()` picks its engine from its arguments: with neither `model=` nor `inputs=` it pushes over the saved
 graph; with both it re-executes the model. Pass
@@ -39,7 +39,7 @@ live = tl.trace(model, x, save=head, intervene=spec)
 live_out = live.find_sites(head).first().out
 
 # do() with no model: edit a saved value and push it down the recorded graph.
-saved = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+saved = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 pushed = saved.fork("pushed")
 pushed.do(site, tl.zero_ablate())
 pushed_out = pushed.find_sites(head).first().out
@@ -94,7 +94,7 @@ import torchlens as tl
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
 x = torch.randn(2, 4)
-clean = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+clean = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 before = clean.find_sites(tl.module("2")).first().out.clone()
 
 candidate = clean.fork("candidate")
@@ -162,7 +162,7 @@ import torchlens as tl
 
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
-options = tl.options.CaptureOptions(intervention_ready=True)
+options = tl.options.CaptureOptions(replayable=True)
 base = tl.trace(model, torch.randn(3, 4), capture=options)
 source = tl.trace(model, torch.randn(3, 4), capture=options)
 site = "linear_1_1"
@@ -236,7 +236,7 @@ import torchlens as tl
 
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
-options = tl.options.CaptureOptions(intervention_ready=True)
+options = tl.options.CaptureOptions(replayable=True)
 x, x_source = torch.randn(3, 4), torch.randn(3, 4)
 site = "linear_1_1"
 rotation = torch.linalg.qr(torch.randn(4, 4))[0].T  # stands in for a learned rotation
@@ -259,7 +259,7 @@ helper = spec.hook_specs[0].helper
 
 RESULT = [
     torch.equal(reloaded[site].out, fork[site].out),  # the same interchange, bit for bit
-    helper.helper_name == "subspace_edit",
+    helper.name == "subspace_edit",
     dict(helper.kwargs)["origin"] == "DAS rotation trained elsewhere",
 ]
 ```
@@ -283,7 +283,7 @@ import torchlens as tl
 
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).double().eval()
-options = tl.options.CaptureOptions(intervention_ready=True)
+options = tl.options.CaptureOptions(replayable=True)
 x = torch.randn(3, 4, dtype=torch.float64)
 site = "linear_1_1"
 rotation = torch.linalg.qr(torch.randn(4, 2, dtype=torch.float64))[0]  # R, [d, k]
@@ -325,7 +325,7 @@ import torchlens as tl
 
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).double().eval()
-options = tl.options.CaptureOptions(intervention_ready=True)
+options = tl.options.CaptureOptions(replayable=True)
 tokens = torch.randn(1, 5, 4, dtype=torch.float64)  # [batch, positions, features]
 site = "linear_1_1"
 rotation = torch.linalg.qr(torch.randn(4, 2, dtype=torch.float64))[0]
@@ -401,11 +401,13 @@ Helpers must be batch-independent and append-compatible. Batch-dependent helpers
 resampling from the current batch are rejected. Training-mode batch normalization warns because
 cross-batch statistics can make chunked evaluation semantically different from one full batch.
 
-## Tier-1 Backward Hook
+## Gradient Sites
 
-Backward helpers (`hook_grad`, `zero_grad`, `scale_grad`) are live/run-only in this release. They
-are not portable `.tlspec/` publication units and are not pushed post hoc over a saved forward
-graph. Use them when the experiment explicitly re-executes the model and backward pass.
+Gradient edits (`tl.grad(site)` with an ordinary edit or a callable) are live/run-only in this
+release. A callable stays audit-only in a saved artifact, and gradient edits are not pushed post hoc
+over a saved forward graph (replay refuses `replay_gradient_edit_unsupported`). Use them when the
+experiment explicitly re-executes the model and backward pass:
+`trace.do(tl.grad(site), edit, model=model, inputs=x, loss=...)`.
 
 ## Attribution-Patching Note
 

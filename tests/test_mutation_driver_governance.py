@@ -201,7 +201,11 @@ def test_every_direct_check_entry_point_is_enrolled() -> None:
         (path, function) for path, function in driver.EXEMPT_MUTANTS.values()
     }
     # Reasoned exclusions only — every entry needs a why.
-    excluded: set[tuple[str, str]] = set()
+    excluded: set[tuple[str, str]] = {
+        # The public validate_saved_outs entry's whole-run body, split out for its
+        # scratch-clearing finally; the reason lives in CORE_CHECK_EXCLUSIONS.
+        ("torchlens/validation/core.py", "_validate_saved_outs_run"),
+    }
     scope = ("torchlens/validation/core.py",)
     unenrolled = []
     for rel in scope:
@@ -558,8 +562,8 @@ def test_operator_label_matches_the_applied_disarm_keyword(tmp_path: Path) -> No
 def test_executor_family_derivation_reaches_every_step() -> None:
     """r7 R74 (sol b9 HIGH): the postprocess executor is enrolled, DERIVED.
 
-    25 ``_run_step_*`` bodies plus the conditional gate predicates had no
-    mutation verdict while R74 explicitly scopes ``postprocess/``. The
+    The 25 ``_run_<step name>`` bodies plus the conditional gate predicates
+    had no mutation verdict while R74 explicitly scopes ``postprocess/``. The
     family derives from the module's defs, so a new step self-enrolls; run
     bodies neuter to ``return None`` (silent skip) and gate predicates to
     ``return False`` (never fires), each the dangerous direction.
@@ -567,17 +571,23 @@ def test_executor_family_derivation_reaches_every_step() -> None:
 
     driver = _load_driver_module()
     mutants = driver.derive_executor_mutants(_REPO_ROOT)
-    run_steps = {mid for mid in mutants if "#_run_step_" in mid}
-    gates = {mid for mid in mutants if "#_should_run_step_" in mid}
+    run_steps = {mid for mid in mutants if "#_run_" in mid}
+    gates = {mid for mid in mutants if "#_should_run_" in mid}
     assert len(run_steps) >= 20, f"only {len(run_steps)} run-step mutants derived"
     assert gates, "no gate-predicate mutants derived"
     for mid, (rel, func, value) in mutants.items():
         assert rel == "torchlens/_postprocess/_executor.py"
-        assert value == ("None" if func.startswith("_run_step_") else "False"), (mid, value)
-    # Cross-check against the live registry: every StepSpec.run is enrolled.
-    from torchlens._postprocess._executor import STEP_REGISTRY
+        assert value == ("None" if func.startswith("_run_") else "False"), (mid, value)
+    # Cross-check against the live pipeline: every step's run body and every
+    # named gate predicate is enrolled.
+    from torchlens._postprocess._pipeline import PIPELINE
 
-    registered_runs = {spec.run.__name__ for spec in STEP_REGISTRY}
+    registered = {step.run.__name__ for step in PIPELINE}
+    registered |= {
+        step.should_run.__name__
+        for step in PIPELINE
+        if step.should_run.__name__.startswith("_should_run_")
+    }
     enrolled_funcs = {func for _, func, _ in mutants.values()}
-    missing = registered_runs - enrolled_funcs
-    assert not missing, f"STEP_REGISTRY steps outside the executor family: {sorted(missing)}"
+    missing = registered - enrolled_funcs
+    assert not missing, f"PIPELINE steps outside the executor family: {sorted(missing)}"

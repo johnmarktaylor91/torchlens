@@ -145,7 +145,7 @@ def test_none_kind_status_only_ledger_admits_value_free_save():
         episode=EpisodeOptions(
             stepped_module=model.step, num_steps=N_STEPS, step_output_kind="none"
         ),
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
     ledger = trace.episode
     assert ledger is not None
@@ -233,7 +233,7 @@ def test_value_free_save_still_refuses_for_evidence_kinds():
             episode=EpisodeOptions(
                 stepped_module=model.step, num_steps=N_STEPS, step_output_kind="digest"
             ),
-            capture=tl.options.CaptureOptions(layers_to_save="none"),
+            save="none",
         )
     assert excinfo.value.fields["code"] == "episode_declaration_invalid"
     assert "step_output_kind='none'" in str(excinfo.value)
@@ -401,7 +401,7 @@ def test_cross_grammar_quarantine_through_the_real_load_path():
     # A quarantined record is not claims: the public accessor serves None,
     # while the capture-kind marker still reads the declaration as episode.
     assert restored.episode is None
-    assert restored.capture_kind == "episode"
+    assert restored.provenance.kind == "episode"
 
 
 def test_cache_len_never_reappears_in_the_grammar():

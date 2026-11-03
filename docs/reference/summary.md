@@ -73,7 +73,7 @@ tl.summary(model, input_args=None, input_kwargs=None,
     view="overview",          # overview | compute | stats (column bundles; stats = per-site payload statistics)
     depth="auto",             # auto | all | int
     columns=None,             # bundle name, exact list, or +name/-name deltas
-    filter=None,              # regex or callable; totals stay whole-model
+    where=None,               # regex or callable; totals stay whole-model
     buffers="summary",        # summary | hide
     fold_repeats="auto", max_rows=48,
     flop_convention="fma2",   # fma2 | fma1 (refuses typed if underivable)
@@ -97,12 +97,12 @@ its successor:
 | `mode=` | `level="op"`, or `fold_repeats=False` to unfold repeated runs |
 | `print_to=` | `report.print(file=...)`, or `print_to(str(report))` |
 | `count_fma_as_two=` | `flop_convention="fma2"` (was `True`) / `"fma1"` (was `False`) |
-| `show_input_preprocessing_details=` | `trace.provenance()` and `trace.input_preprocessor` |
+| `show_input_preprocessing_details=` | `trace.provenance.input_preprocessor`; the capture-provenance text block keeps an interim private spelling (`trace.provenance._summary()`) until its public name is decided |
 | `level="overview"` | `view="overview"` (the default) |
 | `level="compute"`, `level="cost"` | `view="compute"` |
 | `level="graph"` | `trace.to_agent_json()` (op rows, edges, hierarchy) or `trace.draw()` |
 | `level="memory"` | `trace.profile(sort_by="activation_memory")`; totals stay in the footer |
-| `level="control_flow"` | `trace.conditional_records` and the `conditional_*` columns of `trace.to_pandas()` |
+| `level="control_flow"` | `trace.graph.conditional_records` and the `conditional_*` columns of `trace.to_pandas()` |
 | `level="waterfall"` | `trace.profile(level="op")`, or `trace.to_pandas()` in execution order |
 | `level="output"` | `trace.output_table()` |
 
@@ -203,8 +203,9 @@ neither the model nor the Trace and survives cleanup and GC:
 - Projections: `to_pandas(scope="display"|"all")`, `to_dict()` (bounded,
   JSON-safe), `to_markdown()`, `to_html()`, `render(style=)`, `print()`.
 - `report.details()` serves the capture facts;
-  `trace.provenance()` returns the full historical provenance preamble
-  byte-for-byte (it no longer opens the table).
+  the full historical provenance preamble is served byte-for-byte by the
+  provenance group's text block (interim private spelling `trace.provenance._summary()`
+  until its public name is decided; it no longer opens the table).
 
 Capture honesty travels with the table: structure-only, unverified,
 partial, rescued, and episode captures banner ABOVE the table via the one

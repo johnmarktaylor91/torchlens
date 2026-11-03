@@ -32,7 +32,7 @@ from torch import nn
 import torchlens as tl
 import torchlens._user_funcs as user_funcs
 from torchlens import _user_public_impls, _validation_argument_references as arg_references
-from torchlens.backends.torch import _ops_retention
+from torchlens.backends.torch import _ops_arguments, _ops_retention
 from torchlens.options import CaptureOptions
 from torchlens.validation import _replay_device
 from torchlens.validation.diagnostics import get_validation_diagnostics, get_validation_failure
@@ -152,7 +152,7 @@ def _saved_arg_tensors(trace: Any, outputs: bool = True) -> list[torch.Tensor]:
     """
 
     tensors: list[torch.Tensor] = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if not outputs and getattr(op, "is_output", False):
             continue
         values = [*(op.saved_args or ()), *(op.saved_kwargs or {}).values()]
@@ -195,9 +195,9 @@ def test_retained_copy_and_budget_device_follow_the_offload_target() -> None:
     t_args = (bare, [item, 2], [[nested]])
     token = arg_references._ACTIVE.set(references)
     try:
-        devices = _ops_retention._saved_arg_retention_devices(t_args, {"k": item})
-        retained = [_ops_retention._copy_saved_arg_tree(arg, True) for arg in t_args]
-        pre_call = _ops_retention._copy_saved_arg_tree(bare)
+        devices = _ops_arguments._saved_arg_retention_devices(t_args, {"k": item})
+        retained = [_ops_arguments._copy_saved_arg_tree(arg, True) for arg in t_args]
+        pre_call = _ops_arguments._copy_saved_arg_tree(bare)
     finally:
         arg_references._ACTIVE.reset(token)
     assert devices == {id(bare): torch.device("meta"), id(item): torch.device("meta")}
@@ -280,9 +280,9 @@ def test_the_commit_charges_a_saved_alias_only_without_its_parameter_owner() -> 
 
 def test_outside_validation_the_retained_copy_is_the_plain_copy() -> None:
     value = torch.ones(3)
-    copied = _ops_retention._copy_saved_arg_tree(value, True)
+    copied = _ops_arguments._copy_saved_arg_tree(value, True)
     assert copied.device == value.device and copied is not value and not hasattr(copied, _TAG)
-    assert _ops_retention._saved_arg_retention_devices((value,), {}) == {}
+    assert _ops_arguments._saved_arg_retention_devices((value,), {}) == {}
 
 
 def test_offload_is_off_for_same_and_outside_a_validation_session() -> None:
@@ -312,8 +312,8 @@ class _FakeOp:
 
 class _FakeTrace:
     def __init__(self, op: _FakeOp) -> None:
-        self.layer_logs: dict[str, Any] = {}
-        self.layer_dict_all_keys = {"op": op}
+        self._layer_logs: dict[str, Any] = {}
+        self._layer_dict_all_keys = {"op": op}
 
 
 def _tagged(value: torch.Tensor) -> torch.Tensor:
@@ -398,7 +398,7 @@ def test_validation_capture_holds_no_saved_argument_copy_on_the_accelerator() ->
         held = 0
         output_refs = {
             t.untyped_storage().data_ptr()
-            for op in trace.layer_list
+            for op in trace._layer_list
             if getattr(op, "is_output", False)
             for t in op.saved_args or ()
             if isinstance(t, torch.Tensor)
@@ -441,7 +441,8 @@ def test_a_user_trace_keeps_saved_arguments_on_each_ops_device() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", save_args=True, output_device="cpu"),
+        capture=CaptureOptions(save_args=True, output_device="cpu"),
+        save="all",
     )
     saved = _saved_arg_tensors(trace)
     assert saved and {t.device.type for t in saved} == {_ACCEL}
@@ -465,17 +466,17 @@ def test_accelerator_verdicts_equal_the_same_device_run(model_name: str) -> None
 
 
 def _corrupt_relu_input(trace: Any, model: Any) -> None:
-    relu = next(op for op in trace.layer_list if op.func_name == "relu")
+    relu = next(op for op in trace._layer_list if op.func_name == "relu")
     relu.saved_args[0].add_(1.0)
 
 
 def _corrupt_scale_argument(trace: Any, model: Any) -> None:
-    mul = next(op for op in trace.layer_list if op.func_name in {"mul", "__mul__"})
+    mul = next(op for op in trace._layer_list if op.func_name in {"mul", "__mul__"})
     mul.saved_args[1].add_(1.0)
 
 
 def _corrupt_saved_weight(trace: Any, model: Any) -> None:
-    linear = next(op for op in trace.layer_list if op.func_name == "linear")
+    linear = next(op for op in trace._layer_list if op.func_name == "linear")
     with torch.no_grad():
         linear.saved_args[1].add_(1.0)
 
@@ -536,7 +537,7 @@ def _no_corruption(trace: Any, model: Any) -> None:
 
 
 def _corrupt_matmul_weight(trace: Any, model: Any) -> None:
-    matmul = next(op for op in trace.layer_list if op.func_name in {"matmul", "__matmul__"})
+    matmul = next(op for op in trace._layer_list if op.func_name in {"matmul", "__matmul__"})
     with torch.no_grad():
         matmul.saved_args[1].add_(1.0)
 
@@ -602,6 +603,6 @@ def test_parameter_aliases_alone_do_not_trip_the_validation_budget() -> None:
         warnings.simplefilter("ignore")
         assert tl.validate(model, x, scope="forward", output_device="cpu", save_budget=budget)
         assert tl.validate(model, x, scope="forward", output_device="same", save_budget=budget)
-        capture = CaptureOptions(layers_to_save="all", save_args=True, save_budget=budget)
+        capture = CaptureOptions(save_args=True, save_budget=budget)
         with pytest.raises(SaveBudgetExceededError):
-            tl.trace(model, x, capture=capture)
+            tl.trace(model, x, capture=capture, save="all")

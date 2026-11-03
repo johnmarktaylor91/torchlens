@@ -126,7 +126,7 @@ def _op_by_label(trace: Trace, label: str) -> Op | None:
         Canonical captured operation when present.
     """
 
-    return next((op for op in trace.layer_list if op.label == label), None)
+    return next((op for op in trace._layer_list if op.label == label), None)
 
 
 def _empirical_adjoint_checks(
@@ -164,7 +164,7 @@ def _empirical_adjoint_checks(
     for validation in containment:
         for role, receptive in validation.grad.items():
             far_label = next(
-                (op.label for op in trace.layer_list if str(op.io_role or op.label) == role),
+                (op.label for op in trace._layer_list if str(op.io_role or op.label) == role),
                 "",
             )
             support = torch.nonzero(receptive.support_mask, as_tuple=False)

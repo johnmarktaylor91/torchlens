@@ -599,7 +599,7 @@ def _normalize_backward_edges(
             for next_id in grad_fn.next_grad_fn_ids:
                 if next_id not in visible_ids:
                     continue
-                head = trace.grad_fn_logs[next_id]
+                head = trace._grad_fn_logs[next_id]
                 tail_name = _backward_dot_node_name(grad_fn)
                 head_name = _backward_dot_node_name(head)
                 edges.append(
@@ -874,7 +874,7 @@ def _resolve_node_decision(
         container_max_inline=context.container_max_inline,
         pending_nodes=[],
     )
-    theme = resolve_theme(context.theme, for_paper=context.for_paper)
+    theme = resolve_theme(context.theme)
     resolved_specs: list[Any] = []
     if emission.kind == "module_box":
         _build_collapsed_module_node(

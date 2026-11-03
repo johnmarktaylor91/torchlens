@@ -58,20 +58,22 @@ from torchlens._runnable import (
 )
 from torchlens._utils._torch_compat import HAS_GENERATOR_CLONE_STATE
 from torchlens._utils.rng import (
+    HOST_NONDETERMINISM_REGISTRY,
+    host_nondeterminism_monitor,
+    log_current_rng_states,
+    set_random_seed,
+    set_rng_from_saved_states,
+)
+from torchlens._utils.rng.registry import (
     _DEFAULT_GENERATOR_HOLDER_MODULES,
     _TORCH_RNG_DEVICE_SPEC,
     _TORCH_RNG_MODULE_SPECS,
     GENERATOR_METHOD_DISPOSITIONS,
     GENERATOR_METHOD_TABLE,
     GENERATOR_RETURN_FAMILIES,
-    HOST_NONDETERMINISM_REGISTRY,
     TORCH_RNG_DISPOSITIONS,
     TORCH_RNG_SURFACE,
     _torch_rng_holder_module,
-    host_nondeterminism_monitor,
-    log_current_rng_states,
-    set_random_seed,
-    set_rng_from_saved_states,
 )
 from torchlens.options import CaptureOptions
 
@@ -632,6 +634,7 @@ def test_get_offset_marks_fail_closed_at_entry() -> None:
     assert "torch.Generator.get_offset" in result.channels
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA default generator")
 def test_cuda_default_get_offset_is_ceiled(_torch_rng_state_guard) -> None:
     """r66 hon1-F5 device path: a successful default-receiver offset read ceilings."""
@@ -840,7 +843,7 @@ def _capture(model: nn.Module, x: torch.Tensor, *, seed: int) -> tl.Trace:
         model,
         x,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
             seed=seed,
@@ -1059,6 +1062,7 @@ def test_r67_clone_state_initial_seed_ceilings_every_run(run_seed: int, tmp_path
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA default generator")
 def test_r67_cuda_default_get_offset_ceilings_every_run(
     _torch_rng_state_guard, tmp_path: Path

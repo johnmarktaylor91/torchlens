@@ -19,6 +19,7 @@ from torchlens._notebook._axis_labels import axis_labels, decode_token_labels, s
 from torchlens._notebook._grid import array_grid_html
 from torchlens._notebook._motifs import classify_value, resolve_signed_bounds
 from torchlens._notebook.cardtree import Card, CardText, render_card_html
+from torchlens.errors import TraceCaptureError
 
 
 class _Recurrent(nn.Module):
@@ -65,7 +66,7 @@ def test_trace_card_content_and_proof_row(recurrent_log) -> None:
 def test_layer_card_pass_rows_are_the_shape(recurrent_log) -> None:
     """A reused layer renders N pass rows via ops[k]; no pooled stats."""
 
-    html = recurrent_log.layer_logs["relu_1_2"]._repr_html_()
+    html = recurrent_log._layer_logs["relu_1_2"]._repr_html_()
     assert "3 passes" in html
     for pass_index in (1, 2, 3):
         assert f"pass {pass_index}/3: relu_1_2:{pass_index}" in html
@@ -75,7 +76,7 @@ def test_layer_card_pass_rows_are_the_shape(recurrent_log) -> None:
 def test_single_pass_layer_degenerates_to_op_card(recurrent_log) -> None:
     """ONE code path: a single-pass layer renders the Op card."""
 
-    html = recurrent_log.layer_logs["linear_2_3"]._repr_html_()
+    html = recurrent_log._layer_logs["linear_2_3"]._repr_html_()
     assert "TorchLens Op" in html
     assert "card unavailable" not in html
 
@@ -116,13 +117,15 @@ def test_partial_trace_card_failure_first() -> None:
             torch.relu(self.a(x))
             raise RuntimeError("<script>alert(1)</script> boom")
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(TraceCaptureError) as _tce_info:
         tl.trace(Dies(), torch.randn(2, 4))
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
     # Recover the partial through the documented door.
     try:
         tl.trace(Dies(), torch.randn(2, 4))
-    except RuntimeError as error:
-        partial = tl._partial.from_failed_capture(error)
+    except TraceCaptureError as error:
+        assert isinstance(error.__cause__, RuntimeError)
+        partial = error.partial_trace
     assert partial is not None
     html = partial._repr_html_()
     assert "FAILED CAPTURE" in html
@@ -168,8 +171,9 @@ def test_partial_trace_card_renders_under_inference_mode() -> None:
     with torch.inference_mode():
         try:
             tl.trace(DiesInInference(), torch.randn(2, 4))
-        except RuntimeError as error:
-            partial = tl._partial.from_failed_capture(error)
+        except TraceCaptureError as error:
+            assert isinstance(error.__cause__, RuntimeError)
+            partial = error.partial_trace
         assert partial is not None
         html = partial._repr_html_()
     assert "card unavailable" not in html and "Traceback" not in html
@@ -186,15 +190,15 @@ def test_render_side_effect_free(recurrent_log) -> None:
     """Pinned regression: rendering must not perturb the trace."""
 
     before = (
-        recurrent_log.num_ops,
+        len(recurrent_log.ops),
         tuple(recurrent_log.layer_labels),
         str(recurrent_log.outcome.status),
     )
     recurrent_log._repr_html_()
     recurrent_log["relu_1_2:2"]._repr_html_()
-    recurrent_log.layer_logs["relu_1_2"]._repr_html_()
+    recurrent_log._layer_logs["relu_1_2"]._repr_html_()
     after = (
-        recurrent_log.num_ops,
+        len(recurrent_log.ops),
         tuple(recurrent_log.layer_labels),
         str(recurrent_log.outcome.status),
     )

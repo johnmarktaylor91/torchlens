@@ -248,7 +248,7 @@ def _leaf_unchanged(value: Any, snapshot: Any) -> bool:
     """Compare a value with a non-container observer snapshot."""
 
     from ._capture_state_helpers import _PlainAttrIdentitySnapshot
-    from ._runnable_state import declared_slot_unchanged
+    from ._runnable.state import declared_slot_unchanged
 
     if isinstance(snapshot, _PlainAttrIdentitySnapshot):
         return value is snapshot.value
@@ -290,7 +290,7 @@ def _skeleton(value: Any, depth: int = 0) -> Any:
     by identity).
     """
 
-    from ._runnable_state import declared_state_versions
+    from ._runnable.state import declared_state_versions
 
     if isinstance(value, torch.Tensor):
         return declared_state_versions((value,)).get(id(value))
@@ -415,7 +415,7 @@ def _copy_left_by_forward(value: Any, originals: set[int], depth: int = 0) -> An
 def _restore_tensor(obj: Any, snapshot: torch.Tensor, version: int | None) -> None:
     """Write a tensor's snapshot back in place (the buffer rules: only changed bytes)."""
 
-    from ._runnable_state import write_back_slot
+    from ._runnable.state import write_back_slot
 
     if not isinstance(obj, torch.Tensor):
         return

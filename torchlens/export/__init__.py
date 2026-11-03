@@ -24,10 +24,12 @@ from .._capture.structure_only import (
     require_structure_only_capability as _require_structure_only_capability,
 )
 from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._io._json import loads_bounded
 from .._utils.display import atomic_write_text
 from ._common import _iter_layers, _scalarize_cell, _static_graph_data
 from ._graphs import netron
+from ._naming import _duration_us, _layer_display_name, _safe_id, _sanitize_flamegraph_frame
 from ._registry import (
     describe_target,
     list_targets,
@@ -404,7 +406,7 @@ def speedscope(trace: Any, path: str | Path) -> Path:
         "profiles": [
             {
                 "type": "evented",
-                "name": getattr(trace, "model_class_name", "TorchLens forward"),
+                "name": trace._source_class_name if is_live_trace(trace) else "TorchLens forward",
                 "unit": "microseconds",
                 "startValue": 0,
                 "endValue": cursor_us,
@@ -446,7 +448,7 @@ def flamegraph(trace: Any, path: str | Path) -> Path:
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     lines = []
-    model_class_name = str(getattr(trace, "model_class_name", "TorchLens"))
+    model_class_name = str(trace._source_class_name if is_live_trace(trace) else "TorchLens")
     # The folded-stack format has no comment/metadata slot, so the honesty
     # facts ride a ZERO-WEIGHT synthetic frame: standard flamegraph tools
     # accept the line and render nothing for weight 0, but the exported file
@@ -562,7 +564,7 @@ def memory_timeline_v2(trace: Any, path: str | Path) -> Path:
 
 _XARRAY_SITE_REMEDY = (
     "export only sites that share the presentation axis: re-capture with "
-    "capture=tl.options.CaptureOptions(layers_to_save=[name, ...]) (unsaved layers are "
+    "save=[name, ...] (unsaved layers are "
     "skipped and disclosed), or export one site with "
     "tl.bridge.xarray.data_array(trace, site)"
 )
@@ -848,43 +850,6 @@ def json(
     return destination
 
 
-def _duration_us(layer: Any) -> int:
-    """Return a positive microsecond duration for a layer.
-
-    Parameters
-    ----------
-    layer:
-        Layer entry.
-
-    Returns
-    -------
-    int
-        Duration in microseconds.
-    """
-
-    duration = float(getattr(layer, "func_duration", 0.0) or 0.0)
-    return max(1, int(duration * 1_000_000))
-
-
-def _layer_display_name(layer: Any) -> str:
-    """Return a human-readable layer name.
-
-    Parameters
-    ----------
-    layer:
-        Layer entry.
-
-    Returns
-    -------
-    str
-        Display name.
-    """
-
-    label = str(getattr(layer, "layer_label", ""))
-    func_name = str(getattr(layer, "func_name", "") or getattr(layer, "layer_type", ""))
-    return f"{label} ({func_name})" if func_name and func_name != label else label
-
-
 def _chrome_trace_events(log: Any) -> list[dict[str, Any]]:
     """Return Chrome trace events for a model log.
 
@@ -905,7 +870,9 @@ def _chrome_trace_events(log: Any) -> list[dict[str, Any]]:
             "ph": "M",
             "pid": 1,
             "tid": 0,
-            "args": {"name": str(getattr(log, "model_class_name", "TorchLens forward"))},
+            "args": {
+                "name": str(log._source_class_name if is_live_trace(log) else "TorchLens forward")
+            },
         }
     ]
     cursor_us = 0
@@ -935,18 +902,18 @@ def _chrome_trace_events(log: Any) -> list[dict[str, Any]]:
 def _chrome_trace_diff_deltas(bundle: Any) -> tuple[dict[str, dict[str, float]], dict[str, Any]]:
     """Return the per-node deltas and their status for a bundle timeline.
 
-    The timeline (one process per member, one event per supergraph node) never
-    needs the deltas. The deltas are ``bundle.norm_delta()``, which runs the
-    Bundle comparison gate: when the gate refuses (members on different
-    inputs, foreign models, ordering-joined members), only the delta part is
-    refused -- every event's ``delta`` is ``None`` and the status records the
-    gate's stable code and message. The gate is never bypassed.
+    The timeline (one process per member, one event per supergraph node) never needs
+    the deltas. They are the per-node relative L2 distances from the baseline
+    (``Bundle.compare`` with ``metric="relative_l2"``) and run the Bundle comparison
+    gate; when it refuses (members on different inputs, foreign models, ordering-joined
+    members) only the delta part is refused: every event's ``delta`` is ``None`` and the
+    status records the gate's stable code and message. The gate is never bypassed.
     """
 
     from ..intervention.errors import BundleComparisonError
 
     try:
-        return bundle.norm_delta(), {"status": "computed", "operation": "norm_delta"}
+        return bundle._norm_delta(), {"status": "computed", "operation": "norm_delta"}
     except BundleComparisonError as exc:
         return {}, {
             "status": "refused",
@@ -1050,23 +1017,6 @@ def _parquet_cell(value: Any) -> Any:
     return _scalarize_cell(value)
 
 
-def _sanitize_flamegraph_frame(frame: str) -> str:
-    """Return a folded-stack-safe frame name.
-
-    Parameters
-    ----------
-    frame:
-        Raw frame name.
-
-    Returns
-    -------
-    str
-        Sanitized frame name.
-    """
-
-    return frame.replace(";", "_").replace("\n", " ").strip() or "<unknown>"
-
-
 def _render_svg(data: dict[str, Any], *, editable: bool) -> str:
     """Render serialized graph data as SVG.
 
@@ -1117,23 +1067,6 @@ def _render_svg(data: dict[str, Any], *, editable: bool) -> str:
         + "".join(node_markup)
         + "</svg>"
     )
-
-
-def _safe_id(value: str) -> str:
-    """Return a CSS/SVG-safe identifier fragment.
-
-    Parameters
-    ----------
-    value:
-        Raw identifier.
-
-    Returns
-    -------
-    str
-        Sanitized identifier.
-    """
-
-    return "".join(char if char.isalnum() else "-" for char in value).strip("-")
 
 
 def safetensors(trace: Any, path: str | Path) -> Path:

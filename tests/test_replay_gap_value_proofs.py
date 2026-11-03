@@ -38,11 +38,11 @@ TINY = 1e-30
 
 def _capture(model: nn.Module, x: torch.Tensor) -> Any:
     torch.manual_seed(0)
-    return tl.trace(model, x, capture=CaptureOptions(layers_to_save="all", save_args=True, seed=0))
+    return tl.trace(model, x, capture=CaptureOptions(save_args=True, seed=0), save="all")
 
 
 def _op(trace: Any, *func_names: str) -> Any:
-    return next(op for op in trace.layer_list if op.func_name in func_names)
+    return next(op for op in trace._layer_list if op.func_name in func_names)
 
 
 def _edge(trace: Any, op: Any, slot: Any) -> Any:

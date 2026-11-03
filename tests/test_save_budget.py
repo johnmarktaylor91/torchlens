@@ -157,8 +157,8 @@ def test_default_budget_does_not_fire_on_an_ordinary_model() -> None:
     """The shipped default must never refuse a normal capture."""
 
     trace = tl.trace(_model(), _input())
-    assert trace.num_saved_ops > 0
-    assert int(trace.saved_activation_memory) > 0
+    assert len(trace.saved_ops) > 0
+    assert int(trace.cost.saved_activation_memory) > 0
 
 
 def test_default_capture_is_unchanged_by_the_budget() -> None:
@@ -170,8 +170,10 @@ def test_default_capture_is_unchanged_by_the_budget() -> None:
     unbudgeted = tl.trace(model, x, capture=CaptureOptions(save_budget=None))
 
     assert budgeted.layer_labels == unbudgeted.layer_labels
-    assert budgeted.num_saved_ops == unbudgeted.num_saved_ops
-    assert int(budgeted.saved_activation_memory) == int(unbudgeted.saved_activation_memory)
+    assert len(budgeted.saved_ops) == len(unbudgeted.saved_ops)
+    assert int(budgeted.cost.saved_activation_memory) == int(
+        unbudgeted.cost.saved_activation_memory
+    )
 
 
 def test_disabled_budget_allows_what_a_tiny_budget_refuses() -> None:
@@ -179,7 +181,7 @@ def test_disabled_budget_allows_what_a_tiny_budget_refuses() -> None:
 
     model = _model()
     x = _input()
-    assert tl.trace(model, x, capture=CaptureOptions(save_budget=None)).num_saved_ops > 0
+    assert len(tl.trace(model, x, capture=CaptureOptions(save_budget=None)).saved_ops) > 0
     with pytest.raises(SaveBudgetExceededError):
         tl.trace(model, x, capture=CaptureOptions(save_budget=64))
 
@@ -191,11 +193,9 @@ def test_metadata_only_capture_is_never_charged() -> None:
     never going to allocate anything.
     """
 
-    trace = tl.trace(
-        _model(), _input(), capture=CaptureOptions(save_budget=64, layers_to_save="none")
-    )
+    trace = tl.trace(_model(), _input(), capture=CaptureOptions(save_budget=64), save="none")
     assert len(trace.layer_labels) > 0
-    assert trace.num_saved_ops == 0
+    assert len(trace.saved_ops) == 0
 
 
 def test_disk_streamed_payloads_are_not_charged(tmp_path: Path) -> None:
@@ -266,7 +266,7 @@ def test_refusal_message_names_footprint_site_and_remedies() -> None:
     # (raises ArgumentTypeError) or the deprecated bare layers_to_save= kwarg.
     assert "save='all'" not in message
     assert "layers_to_save='none' (the graph" not in message
-    assert "capture=tl.options.CaptureOptions(layers_to_save='none')" in message
+    assert "save='none'" in message
 
 
 def test_refusal_names_the_configured_source_not_a_bare_number() -> None:
@@ -342,11 +342,11 @@ def test_aliasing_raw_and_transformed_payloads_are_charged_once() -> None:
         torch.randn(8),
         capture=CaptureOptions(
             save_budget=40,
-            layers_to_save=tl.func("relu"),
             activation_transform=lambda tensor: tensor,
         ),
+        save=tl.func("relu"),
     )
-    relu = next(op for op in trace.layer_list if getattr(op, "func_name", None) == "relu")
+    relu = next(op for op in trace._layer_list if getattr(op, "func_name", None) == "relu")
     assert relu.out is relu.transformed_out
     assert int(trace._save_budget_accountant.ledgers["cpu"].committed_bytes) == 32
 
@@ -362,7 +362,7 @@ def test_budget_refusal_leaves_the_model_reusable() -> None:
     # The model still runs normally, and a subsequent ordinary capture works.
     assert model(x).shape == (8, 64)
     trace = tl.trace(model, x)
-    assert trace.num_saved_ops > 0
+    assert len(trace.saved_ops) > 0
 
 
 def test_typed_error_is_reachable_from_public_errors_namespace() -> None:
@@ -485,8 +485,8 @@ def test_lookback_promotions_stay_charged_after_capture() -> None:
     ledger = trace._save_budget_accountant.ledgers["cpu"]
     # linear_1 is promoted (2 KB) and linear_2's candidate is still in the
     # bounded window (2 KB): both are genuinely retained, so both stay charged.
-    assert trace.num_saved_ops == 1
-    assert int(trace.saved_activation_memory) == 2048
+    assert len(trace.saved_ops) == 1
+    assert int(trace.cost.saved_activation_memory) == 2048
     assert ledger.committed_bytes == 4096
 
 
@@ -623,8 +623,8 @@ def test_save_budget_is_a_session_knob_not_a_portable_field() -> None:
     from torchlens._constants import MODEL_LOG_FIELD_ORDER
     from torchlens._io import FieldPolicy
 
-    assert Trace.FIELD_POLICY["save_budget"].portable_policy is FieldPolicy.DROP
-    assert Trace.FIELD_POLICY["_save_budget_accountant"].portable_policy is FieldPolicy.DROP
+    assert Trace._FIELD_POLICY["save_budget"].portable_policy is FieldPolicy.DROP
+    assert Trace._FIELD_POLICY["_save_budget_accountant"].portable_policy is FieldPolicy.DROP
     assert "save_budget" not in MODEL_LOG_FIELD_ORDER
     assert "_save_budget_accountant" not in MODEL_LOG_FIELD_ORDER
 
@@ -791,7 +791,8 @@ def test_output_parent_promotion_is_charged() -> None:
     trace = tl.trace(
         _model(),
         _input(),
-        capture=CaptureOptions(layers_to_save=["relu"], save_budget=10_000_000),
+        capture=CaptureOptions(save_budget=10_000_000),
+        save=["relu"],
     )
     ledger = trace._save_budget_accountant.ledgers["cpu"]
     # relu_1 (selected, 2 KB) + linear_2 (promoted output parent, 2 KB).

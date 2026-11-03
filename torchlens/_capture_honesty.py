@@ -20,7 +20,12 @@ resolved absolute-path URIs (returned text is publishable data).
 from __future__ import annotations
 
 import contextlib
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ._data_classes.trace import Trace
+
+from ._data_classes._trace_missing_attrs import is_live_trace
 
 #: Schema identifier stamped on the shared honesty fact block.
 CAPTURE_HONESTY_SCHEMA = "torchlens.capture_honesty.v1"
@@ -41,7 +46,7 @@ HOST_TENSOR_SOURCE_FUNCS: tuple[str, ...] = ("from_numpy", "from_dlpack", "fromb
 #: ``_warn_unattributed_tensor_args``).
 ADVISORY_MODULE_BOUNDARY_ADOPTION = "module_boundary_adoption"
 #: Advisory kind recorded when the module-held plain-tensor scan was cut
-#: (``backends/torch/buffer_writes.warn_held_scan_truncated``).
+#: (``warn_held_scan_truncated`` below).
 ADVISORY_HELD_SCAN_TRUNCATED = "held_tensor_scan_truncated"
 #: Advisory kind recorded when an orphan-pruned op had source-less tensor arguments
 #: (``G.sum().item()``, a control-flow predicate on a closure tensor): the pruned op
@@ -50,6 +55,16 @@ ADVISORY_ORPHAN_UNATTRIBUTED_ARGS = "orphan_unattributed_tensor_args"
 #: Advisory kind recorded when a direct ``torch.ops`` call wrote its arguments, returned
 #: nothing, and could not be recorded in place (``backends/torch/_torch_ops_calls.py``).
 ADVISORY_UNRECORDED_OPERATOR_MUTATION = "unrecorded_operator_mutation"
+#: Advisory kind recorded when capture held torch's fused attention fast path off so the
+#: forward, its replay and the validation ground truth all run the unfused program
+#: (``_capture._fused_attention_hold.hold_fused_attention_fastpath_off``). A disclosure, not a gap.
+ADVISORY_FUSED_ATTENTION_FASTPATH_HELD = "fused_attention_fastpath_held_off"
+#: Advisory kind recorded when a parameter the captured forward itself created (a lazy
+#: module built inside forward whose pending slot torch materialized in place) was
+#: registered late, at the wrapped call that first consumed it
+#: (``backends/torch/param_mutation``). A disclosure, not a gap: the parameter is a
+#: live slot of the captured model's own module tree and carries session provenance.
+ADVISORY_PARAMETER_CREATED_IN_FORWARD = "parameter_created_in_forward"
 
 
 def append_capture_advisory(trace: Any, kind: str, entries: list[str]) -> None:
@@ -114,9 +129,11 @@ def capture_verification(log: Any) -> dict[str, Any]:
     status_value = getattr(status, "value", None)
     return {
         "capture_status": str(status_value) if status_value is not None else "unknown",
-        "capture_verified": getattr(log, "capture_verified", None),
-        "capture_verification_reason": getattr(log, "capture_verification_reason", None),
-        "rescue_rerun": bool(getattr(log, "rescue_rerun", None) or False),
+        "capture_verified": log._provenance_verified if is_live_trace(log) else None,
+        "capture_verification_reason": log._provenance_verification_reason
+        if is_live_trace(log)
+        else None,
+        "rescue_rerun": bool(getattr(log, "__dict__", {}).get("_rescue_rerun") or False),
     }
 
 
@@ -252,7 +269,7 @@ def record_host_tensor_source_advisory(trace: Any) -> None:
         Completed capture.
     """
 
-    if getattr(trace, "capture_verified", None) is not None:
+    if trace._provenance_verified is not None:
         return
     annotations = getattr(trace, "annotations", None)
     if not isinstance(annotations, dict):
@@ -328,7 +345,7 @@ def intervention_facts(log: Any) -> dict[str, Any] | None:
     :func:`capture_honesty_facts` must therefore carry the intervention evidence,
     or an agent reading a zero-ablated dump has no way to know the numbers are
     not the model's. Evidence is read from the persisted record, never inferred:
-    per-op ``intervention_replaced`` flags and ``FireRecord`` lists, plus the
+    per-op ``is_edited`` flags and ``FireRecord`` lists, plus the
     ``intervention_audit`` rows (fork-side ``do()`` / ``PARAM`` / ``EVENT`` kinds).
 
     Parameters
@@ -346,10 +363,13 @@ def intervention_facts(log: Any) -> dict[str, Any] | None:
 
     replaced: list[str] = []
     fires = 0
-    for layer in getattr(log, "layer_list", None) or ():
-        records = getattr(layer, "interventions", None) or ()
+    # Export subjects include accessors, records, a PartialTrace and husked
+    # traces; only a live Trace has layers whose edit records count here.
+    layers = log._layer_list if is_live_trace(log) else None
+    for layer in layers or ():
+        records = getattr(layer, "edits", None) or ()
         fires += len(records)
-        if bool(getattr(layer, "intervention_replaced", False)):
+        if bool(getattr(layer, "is_edited", False)):
             label = getattr(layer, "layer_label", None)
             if isinstance(label, str):
                 replaced.append(label)
@@ -387,7 +407,7 @@ def capture_honesty_facts(log: Any) -> dict[str, Any]:
     facts: dict[str, Any] = {
         "schema": CAPTURE_HONESTY_SCHEMA,
         **capture_verification(log),
-        "structure_only": bool(getattr(log, "structure_only", False)),
+        "structure_only": bool(log._options_structure_only if is_live_trace(log) else False),
         **poison_facts(log),
     }
     if facts["structure_only"]:
@@ -422,7 +442,7 @@ def _structure_evidence_facts(log: Any) -> dict[str, Any]:
         "claim_status": claim_status_for(log).value,
         "values_available": False,
     }
-    envelope = getattr(log, "structure_evidence", None)
+    envelope = log._graph_structure_evidence if is_live_trace(log) else None
     if isinstance(envelope, dict):
         facts["substrate"] = envelope.get("substrate")
         facts["structure_evidence"] = envelope
@@ -657,7 +677,7 @@ _PRESENTER_REMEDIES: dict[str, str] = {
         "merged.to_pandas()) or report on one member rank Trace"
     ),
     "TraceSlice": (
-        "report on the slice's source trace (slice.source_trace.explain()); "
+        "report on the trace the slice was taken from (trace.explain()); "
         "the slice itself discloses via slice.summary()"
     ),
     "Bundle": "report on one member Trace (e.g. bundle[name].explain())",
@@ -713,6 +733,44 @@ def _bounded_text(value: Any, limit: int = 500) -> str:
     if len(text) <= limit:
         return text
     return text[: limit - 3] + "..."
+
+
+def warn_held_scan_truncated(truncations: list[str], trace: Trace | None = None) -> None:
+    """Disclose, once per capture, held-tensor scans cut by their bounds.
+
+    Parameters
+    ----------
+    truncations:
+        Descriptions collected by ``iter_module_held_plain_tensors``.
+    trace:
+        Capture trace; when given, the cut is persisted as a
+        ``held_tensor_scan_truncated`` capture advisory BEFORE warning, which
+        forward validation reads as a source-provenance failure.
+    """
+
+    if not truncations:
+        return
+    import warnings
+
+    from ._errors import TorchLensWarning
+
+    if trace is not None:
+        append_capture_advisory(trace, ADVISORY_HELD_SCAN_TRUNCATED, truncations)
+
+    shown = "; ".join(truncations[:5])
+    suffix = "" if len(truncations) <= 5 else f" (+{len(truncations) - 5} more)"
+    warnings.warn(
+        TorchLensWarning(
+            f"TorchLens stopped scanning module-held containers for plain tensors at "
+            f"{len(truncations)} place(s): {shown}{suffix}. A tensor past a cut that "
+            "the forward reads gets no buffer source: the capture warns about an input "
+            "with no provenance and the graph shows the read without the held tensor; "
+            "forward validation of this capture fails. Remedy: register tensors the forward "
+            "reads with register_buffer, or hold them in shallower or smaller containers",
+            code="held_tensor_scan_truncated",
+        ),
+        stacklevel=3,
+    )
 
 
 __all__ = [

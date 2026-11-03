@@ -1,6 +1,6 @@
 """The private candidate engine + the ``site_sweep`` face (F03 items 6-8).
 
-ONE engine, three customers (ledger memo D3a): the ``site_sweep`` face, the
+ONE engine, three customers: the ``site_sweep`` face, the
 tier-c selector conversion (:meth:`EffectsView.to_selection`), and the shipped
 occlusion attribution loop it generalizes. Given a baseline trace, an
 ordered candidate plan, a lane, a metric, and a retention policy, the engine
@@ -29,7 +29,7 @@ from __future__ import annotations
 import hashlib
 import math
 from collections.abc import Callable, Collection, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
 from ..bundle import Bundle
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
     from .._data_classes.trace import Trace
 
-__all__ = ["EffectsView", "TopK", "sweep_sites", "top_k"]
+__all__ = ["TopK", "sweep_sites", "top_k"]
 
 _ENGINE_LANES = ("live_hook", "replay")
 
@@ -89,6 +89,12 @@ class _Candidate:
     #: executes as its structural site key plus the edit masked to its units.
     unit_entries: tuple[Any, ...] | None = None
     unit_digest: str = ""
+    #: The resolved site labels (empty for a facet selector, which resolves
+    #: through the intervention mutators, never post-hoc).
+    labels: tuple[str, ...] = ()
+    #: The edit this candidate executes (the shared edit for ``sweep_sites``;
+    #: per cell when a grid carries an edit axis).
+    edit: Any = None
 
 
 def _candidate_pairs(candidates: Any) -> list[tuple[str, Any]]:
@@ -119,6 +125,26 @@ def _candidate_pairs(candidates: Any) -> list[tuple[str, Any]]:
     return pairs
 
 
+def _require_resolved(candidate_id: str, where: Any, labels: tuple[str, ...]) -> None:
+    """Refuse a candidate that resolves to no site (a silent no-op otherwise).
+
+    A zero-site candidate would execute nothing and measure the baseline
+    value under its own name: the quiet null result the engine exists to
+    prevent, so it refuses typed before any candidate runs.
+    """
+
+    if labels:
+        return
+    raise BundleExperimentError(
+        f"candidate {candidate_id!r} ({where!r}) resolves to no site on the "
+        "baseline. Check the spelling against baseline.ops (labels renumber "
+        "between captures) or pass a selector that matches.",
+        code="site_sweep_candidate_unresolved",
+        candidate_id=candidate_id,
+        where=repr(where),
+    )
+
+
 def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candidate:
     """Resolve one candidate's site count + canonical digest on the baseline.
 
@@ -130,26 +156,13 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
     never as one.
     """
 
-    from .._selection import Selection, Selector
-    from ..intervention.selectors import FacetSelector
+    from .._selection.selection import Selection, Selector
+    from .._selection.selectors import FacetSelector
 
     if isinstance(where, FacetSelector):
         # Checked BEFORE the Selection lift: facet selectors resolve through
         # the intervention mutators, never post-hoc site resolution.
-        fully_scoped = (
-            where.module_address is not None
-            and where.head_index is not None
-            and where.name is not None
-        )
-        return _Candidate(
-            candidate_id=candidate_id,
-            where=where,
-            execution_where=where,
-            resolved_site_count=1 if fully_scoped else None,
-            resolution_digest=_digest(
-                ("facet", where.name, where.head_index, where.module_address)
-            ),
-        )
+        return _facet_candidate(candidate_id, where)
     lifted = where
     converter = getattr(lifted, "__selection__", None)
     if not isinstance(lifted, (Selector, Selection)) and callable(converter):
@@ -160,6 +173,7 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
         # are (layer_label, pass_index) tuples; the structural L1 key rides
         # structural_site_key and the label backstop derives it.
         labels = tuple(str(entry.key[0]) for entry in resolved)
+        _require_resolved(candidate_id, where, labels)
         parts = tuple(_unit_digest_part(entry) for entry in resolved)
         units_selected = any(isinstance(part, tuple) for part in parts)
         return _Candidate(
@@ -173,31 +187,46 @@ def _resolve_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candi
             # the plain structural lowering.
             unit_entries=tuple(resolved) if units_selected else None,
             unit_digest=str(getattr(resolved, "resolve_digest", "")),
+            labels=labels,
         )
-    if isinstance(where, str):
-        from ..intervention.resolver import _resolve_sites
+    return _sites_candidate(baseline, candidate_id, where)
 
-        table = _resolve_sites(baseline, where, max_fanout=100_000)
-        labels = tuple(str(getattr(site, "label", site)) for site in table)
-        return _Candidate(
-            candidate_id=candidate_id,
-            where=where,
-            execution_where=_site_key_term(baseline, candidate_id, labels),
-            resolved_site_count=len(labels),
-            resolution_digest=_digest(("sites",) + tuple(sorted(labels))),
-        )
-    from ..intervention.resolver import _resolve_sites
 
-    table = _resolve_sites(baseline, where, max_fanout=100_000)
-    labels = tuple(str(getattr(site, "label", site)) for site in table)
+def _facet_candidate(candidate_id: str, where: Any) -> _Candidate:
+    """A facet selector: ONE site when fully scoped (name, head, module), else unknown."""
+
+    fully_scoped = (
+        where.module_address is not None and where.head_index is not None and where.name is not None
+    )
     return _Candidate(
         candidate_id=candidate_id,
         where=where,
-        # Callable/selector spellings are structural already (valid in every
-        # lane); they execute as spelled.
         execution_where=where,
+        resolved_site_count=1 if fully_scoped else None,
+        resolution_digest=_digest(("facet", where.name, where.head_index, where.module_address)),
+    )
+
+
+def _sites_candidate(baseline: Trace, candidate_id: str, where: Any) -> _Candidate:
+    """Resolve a label string or structural spelling through ``_resolve_sites``."""
+
+    from .._selection.resolver import _resolve_sites
+
+    table = _resolve_sites(baseline, where, max_fanout=100_000)
+    labels = tuple(str(getattr(site, "label", site)) for site in table)
+    _require_resolved(candidate_id, where, labels)
+    # A label string lowers to its structural site key (valid in every lane);
+    # callable/selector spellings are structural already and execute as spelled.
+    execution_where = (
+        _site_key_term(baseline, candidate_id, labels) if isinstance(where, str) else where
+    )
+    return _Candidate(
+        candidate_id=candidate_id,
+        where=where,
+        execution_where=execution_where,
         resolved_site_count=len(labels),
         resolution_digest=_digest(("sites",) + tuple(sorted(labels))),
+        labels=labels,
     )
 
 
@@ -251,7 +280,7 @@ def _site_key_term(baseline: Trace, candidate_id: str, labels: tuple[str, ...]) 
     executes identically on live_hook and replay.
     """
 
-    from ..intervention.selectors import site as site_selector
+    from .._selection.selectors import site as site_selector
 
     keys: list[str] = []
     for label in labels:
@@ -334,7 +363,7 @@ def _record_run_envelope(member: Any, spec: Any, *, started: float) -> None:
     """Write the run-door transaction envelope (the historical fourth-door gap).
 
     ``attach_hooks`` stages the spec and ``run()`` fires it, but the run door
-    wrote no InterventionEvent before this engine — exactly the ledger memo's
+    wrote no InterventionEvent before this engine — exactly the design memo's
     3.1 finding ("three of the four write doors record nothing"). The engine
     is the run door's first experiment customer, so it writes the envelope
     through the ONE shared writer with the fires this run minted.
@@ -372,7 +401,7 @@ def _capture_options_like(baseline: Trace) -> Any:
 
     from ..options import CaptureOptions
 
-    return CaptureOptions(intervention_ready=True)
+    return CaptureOptions(replayable=True)
 
 
 def _measure(metric: Callable[[Any], Any], member: Any, candidate_id: str) -> float:
@@ -442,38 +471,63 @@ def _declared_multi_ids(pairs: list[tuple[str, Any]], multi_site: Any) -> set[st
     return set()
 
 
+def _edit_identity(edit: Any) -> str:
+    """Identity of an edit for duplicate detection (helper edits by content)."""
+
+    from ..intervention.types import Edit
+
+    if isinstance(edit, Edit):
+        return _digest(("edit", edit.name, repr(edit.args), repr(edit.kwargs)))
+    return _digest(("edit", repr(edit)))
+
+
 def _preflight_candidates(
     baseline: Trace,
-    pairs: list[tuple[str, Any]],
+    plan: list[tuple[str, Any, Any]],
     declared_multi: set[str],
     replicates: bool,
 ) -> tuple[list[_Candidate], list[tuple[_Candidate, str]]]:
     """Resolve every candidate ONCE, before any candidate runs.
 
-    Undeclared multi-site candidates become REFUSED rows; undeclared
-    duplicate resolutions refuse the whole sweep typed.
+    ``plan`` rows are ``(candidate_id, where, edit)``. Undeclared multi-site
+    candidates become REFUSED rows; undeclared duplicate resolutions refuse
+    the whole sweep typed.
     """
 
     resolved: list[_Candidate] = []
     refused: list[tuple[_Candidate, str]] = []
-    for candidate_id, where in pairs:
-        candidate = _resolve_candidate(baseline, candidate_id, where)
-        count = candidate.resolved_site_count
-        if (count is None or count > 1) and candidate_id not in declared_multi:
-            shown = "unprovable" if count is None else str(count)
-            refused.append(
-                (
-                    candidate,
-                    f"resolved_site_count={shown} without a multi_site "
-                    "declaration (an undeclared broadcast is the measured "
-                    "tl.head(5) 36-site defect class)",
-                )
-            )
+    for candidate_id, where, edit in plan:
+        candidate = replace(_resolve_candidate(baseline, candidate_id, where), edit=edit)
+        reason = _multi_site_reason(candidate, declared_multi)
+        if reason is not None:
+            refused.append((candidate, reason))
             continue
         resolved.append(candidate)
-    seen_digests: dict[str, str] = {}
+    _refuse_duplicates(resolved, replicates)
+    return resolved, refused
+
+
+def _multi_site_reason(candidate: _Candidate, declared_multi: set[str]) -> str | None:
+    """The refusal text for an undeclared multi-site candidate, else None."""
+
+    count = candidate.resolved_site_count
+    if (count is None or count > 1) and candidate.candidate_id not in declared_multi:
+        shown = "unprovable" if count is None else str(count)
+        return (
+            f"resolved_site_count={shown} without a multi_site "
+            "declaration (an undeclared broadcast is the measured "
+            "tl.head(5) 36-site defect class)"
+        )
+    return None
+
+
+def _refuse_duplicates(resolved: list[_Candidate], replicates: bool) -> None:
+    """Refuse two candidates with one identity (sites, units AND edit) typed."""
+
+    seen: dict[tuple[str, str], str] = {}
     for candidate in resolved:
-        prior = seen_digests.get(candidate.resolution_digest)
+        key = (candidate.resolution_digest, _edit_identity(candidate.edit))
+        prior = seen.get(key)
         if prior is not None and not replicates:
             raise BundleExperimentError(
                 f"site_sweep candidates {prior!r} and {candidate.candidate_id!r} "
@@ -483,8 +537,7 @@ def _preflight_candidates(
                 first=prior,
                 second=candidate.candidate_id,
             )
-        seen_digests.setdefault(candidate.resolution_digest, candidate.candidate_id)
-    return resolved, refused
+        seen.setdefault(key, candidate.candidate_id)
 
 
 def _preflight_retention(
@@ -516,13 +569,14 @@ class _SweepState:
     bundle: Bundle
     baseline: Trace
     lane: str
-    edit: Any
+    edit_repr: str
     metric: Callable[[Any], Any]
     model: nn.Module | None
     x: Any
     retain: Any
     baseline_value: float
     attempted: int
+    extra_params: dict[str, Any] = field(default_factory=dict)
     rows: list[MemberEffectRow] = field(default_factory=list)
     completed_rows: dict[str, MemberEffectRow] = field(default_factory=dict)
     retained: list[tuple[float, str]] = field(default_factory=list)
@@ -661,35 +715,14 @@ def _record_sweep_operation(state: _SweepState) -> Any:
             "released": released,
             "refused": sum(1 for r in state.rows if r.status == "refused"),
             "failed": sum(1 for r in state.rows if r.status == "failed"),
-            "edit_repr": repr(state.edit),
+            "edit_repr": state.edit_repr,
             "baseline_value": state.baseline_value,
+            **state.extra_params,
         },
     )
     for name in state.completed_rows:
         state.bundle._member_construction[name]["operation_id"] = operation.operation_id
     return operation
-
-
-def _finalize_ledger_step(armed: Any, step_id: Any, bundle: Bundle, operation: Any) -> None:
-    """Finalize AFTER material work: a dead sink quarantines the entry and
-    the material Bundle is returned unharmed (D4g rule 3)."""
-
-    if armed is None or step_id is None:
-        return
-    from ._ledger import EvidenceRef
-
-    armed.end_step(
-        step_id,
-        outcome="completed",
-        refs=[
-            EvidenceRef(
-                kind="bundle",
-                uri=f"live://{bundle.id}",
-                object_id=f"{bundle.id}:{operation.operation_id}",
-            )
-        ],
-        material_result=bundle,
-    )
 
 
 def sweep_sites(
@@ -711,7 +744,7 @@ def sweep_sites(
     Parameters
     ----------
     baseline:
-        The un-edited capture (``intervention_ready``); becomes the
+        The un-edited capture (``replayable``); becomes the
         ``"baseline"`` member and the comparison anchor.
     candidates:
         Ordered candidate plan: ``{candidate_id: site}`` or a sequence of
@@ -758,51 +791,64 @@ def sweep_sites(
 
     _validate_sweep_entry(engine=engine, metric=metric, retain=retain, model=model, x=inputs)
 
-    # Emission (item 9b): ONE material step per top-level operation — a
-    # 144-candidate sweep is ONE step referencing the effect table, never
-    # 144 (the operation context; nested member verbs never emit). The
-    # durable started event precedes material work (D4g rule 2); an unarmed
-    # context emits nothing and behavior is byte-identical.
-    from ._ledger import active_ledger
-
-    armed = active_ledger()
-    step_id = armed.begin_step("site_sweep") if armed is not None else None
-
     # ---- preflight (once, before any candidate runs) ----------------------
     pairs = _candidate_pairs(candidates)
     declared_multi = _declared_multi_ids(pairs, multi_site)
-    resolved, refused = _preflight_candidates(baseline, pairs, declared_multi, replicates)
-    _preflight_retention(baseline, retain, retain_ceiling_bytes, len(resolved))
-    baseline_value = _measure(metric, baseline, "baseline")
-
-    # ---- serial execution, stable order -----------------------------------
-    bundle = Bundle({"baseline": baseline}, baseline="baseline")
-    state = _SweepState(
-        bundle=bundle,
-        baseline=baseline,
-        lane=engine,
-        edit=edit,
+    plan = [(candidate_id, where, edit) for candidate_id, where in pairs]
+    resolved, refused = _preflight_candidates(baseline, plan, declared_multi, replicates)
+    run = _SweepRun(
+        attempted=len(pairs),
         metric=metric,
+        retain=retain,
+        engine=engine,
         model=model,
         x=inputs,
-        retain=retain,
-        baseline_value=baseline_value,
-        attempted=len(pairs),
+        retain_ceiling_bytes=retain_ceiling_bytes,
+        edit_repr=repr(edit),
     )
-    state.rows.append(
-        MemberEffectRow(
-            candidate_id="__baseline__",
-            status="completed",
-            member_name="baseline",
-            resolved_site_count=0,
-            value=baseline_value,
-            retained=True,
-        )
-    )
+    return _run_plan(baseline, resolved, refused, run)
+
+
+@dataclass(frozen=True)
+class _SweepRun:
+    """The run settings one sweep face hands the shared engine.
+
+    ``extra_params`` ride the recorded ``site_sweep`` operation (a grid's
+    axes), so a loaded artifact can rebuild the caller's shape.
+    """
+
+    attempted: int
+    metric: Callable[[Any], Any]
+    retain: Any
+    engine: str
+    model: nn.Module | None
+    x: Any
+    retain_ceiling_bytes: int | None
+    edit_repr: str
+    extra_params: Mapping[str, Any] | None = None
+
+
+def _run_plan(
+    baseline: Trace,
+    resolved: list[_Candidate],
+    refused: list[tuple[_Candidate, str]],
+    run: _SweepRun,
+) -> Bundle:
+    """Execute a preflighted plan: the ONE engine behind both sweep faces.
+
+    ``resolved`` candidates run serially in order, each with its own
+    ``edit``; ``refused`` candidates land as refused rows without running.
+    """
+
+    _preflight_retention(baseline, run.retain, run.retain_ceiling_bytes, len(resolved))
+    state = _open_sweep(baseline, run)
+    baseline_value = state.baseline_value
+
+    # ---- serial execution, stable order -----------------------------------
     for candidate, reason in refused:
         state.record_refusal(candidate, reason)
     for candidate in resolved:
-        spec = _candidate_spec(baseline, candidate, edit)
+        spec = _candidate_spec(baseline, candidate, candidate.edit)
         member: Any = None
         try:
             member, value = _execute_and_measure(state, candidate, spec)
@@ -815,230 +861,54 @@ def sweep_sites(
         state.session_selections[candidate.candidate_id] = candidate.where
         state.retain_or_release(candidate, member, value, delta)
     state.rows.extend(state.completed_rows.values())
+    return _close_sweep(state)
+
+
+def _close_sweep(state: _SweepState) -> Bundle:
+    """Record the operation and persist its effect table on the Bundle."""
 
     operation = _record_sweep_operation(state)
     table = MemberEffectTable(
         operation_id=operation.operation_id,
         rows=tuple(state.rows),
         baseline_member="baseline",
-        metric_repr=getattr(metric, "__qualname__", repr(metric)),
-        edit_repr=repr(edit),
-        lane=engine,
-        retain_policy=repr(retain),
+        metric_repr=getattr(state.metric, "__qualname__", repr(state.metric)),
+        edit_repr=state.edit_repr,
+        lane=state.lane,
+        retain_policy=repr(state.retain),
     )
+    bundle = state.bundle
     bundle._effect_tables[operation.operation_id] = table
     bundle._session_effect_selections = dict(state.session_selections)  # type: ignore[attr-defined]
-    _finalize_ledger_step(armed, step_id, bundle, operation)
     return bundle
 
 
-@dataclass(frozen=True)
-class EffectsView:
-    """Read view over one persisted MemberEffectTable (item 8).
+def _open_sweep(baseline: Trace, run: _SweepRun) -> _SweepState:
+    """Measure the baseline and open the Bundle + state every sweep row joins."""
 
-    ``most_changed()`` here is the MEMBER axis ("which candidate mattered"),
-    unambiguous because rows are per candidate; ``Bundle.rank_changes`` keeps
-    its SITE axis. ``selection()`` is the EXPLICIT tier-c conversion: the
-    union of the top candidates' WHERE regions, session-only (a loaded
-    artifact carries no Selection objects and refuses typed).
-    """
-
-    table: MemberEffectTable
-    _selections: Mapping[str, Any] | None = None
-
-    @property
-    def rows(self) -> tuple[MemberEffectRow, ...]:
-        return self.table.rows
-
-    def __repr__(self) -> str:
-        counts: dict[str, int] = {}
-        for row in self.table.rows:
-            if row.candidate_id == "__baseline__":
-                continue
-            counts[row.status] = counts.get(row.status, 0) + 1
-        summary = ", ".join(f"{status}={count}" for status, count in sorted(counts.items()))
-        return (
-            f"EffectsView(operation={self.table.operation_id!r}, {summary or 'empty'}, "
-            f"retain={self.table.retain_policy}, lane={self.table.lane})"
+    baseline_value = _measure(run.metric, baseline, "baseline")
+    bundle = Bundle({"baseline": baseline}, baseline="baseline")
+    state = _SweepState(
+        bundle=bundle,
+        baseline=baseline,
+        lane=run.engine,
+        edit_repr=run.edit_repr,
+        metric=run.metric,
+        model=run.model,
+        x=run.x,
+        retain=run.retain,
+        baseline_value=baseline_value,
+        attempted=run.attempted,
+        extra_params=dict(run.extra_params or {}),
+    )
+    state.rows.append(
+        MemberEffectRow(
+            candidate_id="__baseline__",
+            status="completed",
+            member_name="baseline",
+            resolved_site_count=0,
+            value=baseline_value,
+            retained=True,
         )
-
-    @property
-    def baseline_value(self) -> float | None:
-        """The un-edited baseline's metric value (None when not measured)."""
-
-        for row in self.table.rows:
-            if row.candidate_id == "__baseline__":
-                return row.value
-        return None
-
-    def rank_changes(self, k: int | None = None) -> list[tuple[str, float]]:
-        """Rank candidates by |value - baseline| descending (member axis)."""
-
-        base = self.baseline_value or 0.0
-        scored = [
-            (row.candidate_id, abs((row.value or 0.0) - base))
-            for row in self.table.rows
-            if row.candidate_id != "__baseline__" and row.value is not None
-        ]
-        scored.sort(key=lambda item: item[1], reverse=True)
-        return scored if k is None else scored[:k]
-
-    def top(self, k: int) -> EffectsView:
-        """Sub-view holding the k largest-effect measured candidates."""
-
-        keep = {name for name, _ in self.rank_changes(k=k)}
-        rows = tuple(
-            row
-            for row in self.table.rows
-            if row.candidate_id == "__baseline__" or row.candidate_id in keep
-        )
-        sub_table = MemberEffectTable(
-            operation_id=self.table.operation_id,
-            rows=rows,
-            baseline_member=self.table.baseline_member,
-            metric_repr=self.table.metric_repr,
-            edit_repr=self.table.edit_repr,
-            lane=self.table.lane,
-            retain_policy=self.table.retain_policy,
-        )
-        return EffectsView(table=sub_table, _selections=self._selections)
-
-    def to_selection(self) -> Any:
-        """EXPLICIT tier-c conversion: the union of this view's WHERE regions.
-
-        Session-only: Selection objects are never persisted, so a view over
-        a loaded artifact refuses typed. The decision rule (this view's
-        candidate subset) is the caller's explicit act — TorchLens supplies
-        no interestingness threshold.
-        """
-
-        if not self._selections:
-            raise BundleExperimentError(
-                "effects.selection() needs the sweep's session WHERE objects; "
-                "a loaded artifact carries only the numeric table (Selections "
-                "are session-only by design). Re-run the sweep, or rebuild the "
-                "region from the candidate ids.",
-                code="effects_selection_unavailable",
-            )
-        composed = None
-        for row in self.table.rows:
-            if row.candidate_id == "__baseline__":
-                continue
-            where = self._selections.get(row.candidate_id)
-            if where is None:
-                continue
-            lifted = where
-            converter = getattr(lifted, "__selection__", None)
-            if callable(converter):
-                lifted = converter()
-            composed = lifted if composed is None else composed | lifted
-        if composed is None:
-            raise BundleExperimentError(
-                "effects.selection() found no convertible WHERE region among "
-                "this view's candidates (facet selectors and labels convert; "
-                "released candidates keep their rows but not their regions).",
-                code="effects_selection_unavailable",
-            )
-        return composed
-
-
-def bundle_effects(bundle: Bundle, operation_id: str | None = None) -> EffectsView:
-    """Serve the stored effect table (latest by default) as an EffectsView."""
-
-    tables = bundle._effect_tables
-    if not tables:
-        raise BundleExperimentError(
-            "this bundle carries no effect tables; run site_sweep (or an "
-            "engine customer) to produce one.",
-            code="effects_table_missing",
-        )
-    if operation_id is None:
-        operation_id = next(reversed(tables))
-    if operation_id not in tables:
-        raise BundleExperimentError(
-            f"no effect table for operation {operation_id!r}; stored tables: {list(tables)}",
-            code="effects_table_missing",
-            operation_id=operation_id,
-        )
-    selections = getattr(bundle, "_session_effect_selections", None)
-    return EffectsView(table=tables[operation_id], _selections=selections)
-
-
-def bundle_measure_members(
-    bundle: Bundle,
-    *,
-    metric: Callable[[Any], Any],
-    order: str = "member",
-) -> dict[str, Any]:
-    """Recompute a NEW metric over members that still exist — and say so.
-
-    Released candidates are NOT silently re-scored: the report separates
-    ``values`` (live members) from ``unmeasured`` (effect-table candidates
-    with no retained member). ``order="member"`` (default) keys the values
-    by member; ``order="chain"`` also returns ``chain``, the members ordered
-    by the bundle's hash-chained operation ledger (each row: ``seq``,
-    ``operation_id``, ``kind``, ``member``, ``value``; members of one
-    operation in the order it added them), after validating that chain, and
-    ``unchained``, the members no operation recorded (the baseline, members
-    added by hand), which are never placed by a guessed position.
-    """
-
-    if order not in ("member", "chain"):
-        raise BundleExperimentError(
-            f"measure_members(order={order!r}) is not available: use "
-            "order='member' (per member) or order='chain' (by the bundle's "
-            "operation ledger).",
-            code="measure_members_order_unavailable",
-            order=order,
-        )
-    if not callable(metric):
-        raise BundleExperimentError(
-            "measure_members(metric=...) must be a callable(member) -> value",
-            code="site_sweep_metric_invalid",
-        )
-    values = {name: metric(member) for name, member in bundle.members.items()}
-    unmeasured: list[str] = []
-    for table in bundle._effect_tables.values():
-        for row in table.rows:
-            if row.candidate_id == "__baseline__":
-                continue
-            if row.member_name is None or row.member_name not in bundle._members:
-                unmeasured.append(row.candidate_id)
-    report: dict[str, Any] = {"values": values, "unmeasured": sorted(set(unmeasured))}
-    if order == "chain":
-        report.update(_chain_keyed_values(bundle, values))
-    report["order"] = order
-    return report
-
-
-def _chain_keyed_values(bundle: Bundle, values: Mapping[str, Any]) -> dict[str, Any]:
-    """Order measured members by the validated operation chain (``measure_members``)."""
-
-    from ..bundle._lineage import validate_operation_chain
-
-    operations = bundle.history
-    validate_operation_chain(operations)
-    by_id = {operation.operation_id: operation for operation in operations}
-    construction = bundle._member_construction
-    chained: list[tuple[int, int, str]] = []
-    unchained: list[str] = []
-    for position, name in enumerate(values):
-        operation_id = construction.get(name, {}).get("operation_id")
-        operation = by_id.get(operation_id) if isinstance(operation_id, str) else None
-        if operation is None:
-            unchained.append(name)
-        else:
-            chained.append((operation.seq, position, name))
-    chain = []
-    for _seq, _position, name in sorted(chained):
-        operation = by_id[construction[name]["operation_id"]]
-        chain.append(
-            {
-                "seq": operation.seq,
-                "operation_id": operation.operation_id,
-                "kind": operation.kind,
-                "member": name,
-                "value": values[name],
-            }
-        )
-    return {"chain": chain, "unchained": unchained}
+    )
+    return state

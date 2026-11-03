@@ -6,10 +6,10 @@ through live references (``Param._param_ref``, released by postprocess ->
 ``_source_model_ref`` -> ``named_parameters()``), so a caller that never held the model
 plus one ``gc.collect()`` between trace and save killed the whole chain. BN-like models
 with two same-shape+dtype ``(C,)`` params then had NO identity rung left and refused
-``unsupported_tensor_constant`` -- and, one stage further, the persistent-buffer slot
+``tensor_constant_unsupported`` -- and, one stage further, the persistent-buffer slot
 enumeration silently returned on the dead model, dropping never-forward-used buffers
 (``num_batches_tracked``) from the declared universe so the embedded snapshot failed
-strict binding with ``state_unexpected_key``. User-facing spelling:
+strict binding with ``state_key_unknown``. User-facing spelling:
 ``tl.trace(Model(), x).save(level="runnable")`` refused nondeterministically for any
 BN-carrying model. Fail-closed (over-refusal), never a wrong verdict -- but a red gate.
 
@@ -39,9 +39,10 @@ from torch import nn
 import torchlens as tl
 from torchlens._io.runnable import build_sparse_run_descriptor
 from torchlens._runnable import PathFaithfulness, RunnableErrorCode, StateSource
+from torchlens._state import pause_logging
 from torchlens.options import CaptureOptions
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 class _BNModel(nn.Module):
@@ -60,13 +61,25 @@ class _BNModel(nn.Module):
 _HOSTILE_CONSTANT = torch.randn(4, 4)
 
 
+def _unseen(t: torch.Tensor) -> torch.Tensor:
+    """Copy ``t`` with logging paused: a tensor the capture never sees.
+
+    A pre-forward closure or global tensor is recorded as a ``constant`` source
+    op, so a genuine provenance gap is planted with a tensor first built
+    mid-forward while logging is paused.
+    """
+
+    with pause_logging():
+        return t.clone()
+
+
 class _ForeignConstantModel(nn.Module):
     """Consumes a non-module, non-parameter tensor constant (no provenance)."""
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Add a free global tensor the sparse recipe cannot rebuild."""
+        """Add a tensor the capture never saw, which the sparse recipe cannot rebuild."""
 
-        return x + _HOSTILE_CONSTANT
+        return x + _unseen(_HOSTILE_CONSTANT)
 
 
 def _x() -> torch.Tensor:
@@ -92,7 +105,7 @@ def test_r75_inline_model_gc_full_save_load_run(tmp_path: Path) -> None:
 
     Pins the second leg too: ``num_batches_tracked`` (never used by the eval forward, so
     absent from the graph) must still be declared, or the embedded snapshot refuses with
-    ``state_unexpected_key``.
+    ``state_key_unknown``.
     """
 
     x = _x()

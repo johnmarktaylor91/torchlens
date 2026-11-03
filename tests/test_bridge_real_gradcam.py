@@ -48,7 +48,7 @@ def resnet() -> Iterator[tuple[torch.nn.Module, torch.Tensor, Any]]:
     torch.manual_seed(0)
     model = torchvision.models.resnet18(weights=None).eval()
     x = torch.randn(2, 3, 64, 64)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(model, x, save="all")
     try:
         yield model, x, log
     finally:
@@ -73,7 +73,7 @@ def _targets() -> list[Any]:
 def _layer4_label(log: Any) -> str:
     """Return the label of the last op whose outermost module is ``layer4``."""
 
-    labels = [layer.layer_label for layer in log.layer_list if _outermost(layer) == "layer4"]
+    labels = [layer.layer_label for layer in log._layer_list if _outermost(layer) == "layer4"]
     assert labels, "resnet18 trace has no op that is layer4's output"
     return labels[-1]
 
@@ -132,7 +132,9 @@ def test_label_of_a_module_that_runs_twice_is_refused(resnet) -> None:
     """A basic block's relu runs twice; a label naming one of its calls refuses typed."""
 
     _model, _x, log = resnet
-    labels = [layer.layer_label for layer in log.layer_list if _outermost(layer) == "layer4.1.relu"]
+    labels = [
+        layer.layer_label for layer in log._layer_list if _outermost(layer) == "layer4.1.relu"
+    ]
     assert labels, "expected an op whose outermost module is layer4.1.relu"
     with pytest.raises(InvalidArgumentError) as info:
         tl.bridge.pytorch_grad_cam.layer(log, labels[0])

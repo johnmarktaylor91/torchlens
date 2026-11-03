@@ -38,7 +38,7 @@ def _until_outcome(trace: tl.Trace, x: torch.Tensor, site: str) -> tuple:
     """Where an ``until=`` run stopped, or the typed refusal it raised.
 
     The until= door must treat a stage name exactly as the layer label it names;
-    eval-mode BatchNorm prefixes currently refuse ``buffer_sink_routing_mutable``
+    eval-mode BatchNorm prefixes currently refuse ``buffer_sink_routing_unsupported``
     (lane RUN-A's bug 1), and the refusal must then be identical too.
     """
 

@@ -28,7 +28,7 @@ __tl_layer__ = "FACADE"
 #: capture recaptures with disclosure, never silently serves the eval trace).
 _LADDER_DEFAULTS: dict[str, Any] = {
     "capture": None,
-    "save": None,
+    "save": MISSING,
     "intervene": None,
     "stop_after": None,
     "storage": None,

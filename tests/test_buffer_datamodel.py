@@ -511,16 +511,19 @@ def test_buffer_write_models_validate_and_expose_entities(
             model_factory(), x.clone(), seed=123, validate_metadata=True
         )
 
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True))
     if isinstance(model, DataCopyWrite):
-        # `.data.copy_` writes through a detached `.data` view, which severs graph
-        # provenance for the copy target; TorchLens deliberately warns about the
-        # unattributed argument (postprocess `_warn_unattributed_tensor_args`).
-        # Expect that documented warning here instead of letting the warning-hygiene
-        # filter promote a known `.data` limitation to a fatal error.
-        with pytest.warns(UserWarning, match="no graph/source provenance"):
-            trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True))
-    else:
-        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True))
+        # `.data.copy_` writes through the detached `.data` alias; storage-alias
+        # label propagation advances the buffer to the copy, so the later read of
+        # `b` binds to it and no unattributed-argument warning is raised (the
+        # runnable data-alias ceiling is pinned in test_tlspec_runnable_r25_producer).
+        copy_op = next(op for op in trace.ops if op.func_name == "copy_")
+        add_op = next(op for op in trace.ops if op.func_name == "__add__")
+        assert copy_op.unattributed_tensor_args == ()
+        # The read of ``b`` after the write is the buffer's post-write version
+        # node, whose parent is the copy.
+        buffer_read = next(label for label in add_op.parents if label.startswith("buffer"))
+        assert copy_op.layer_label in trace._layer_dict_all_keys[buffer_read].parents
     for address, overwrite_count in expected_overwrites.items():
         assert address in trace.buffers
         buffer = trace.buffers[address]
@@ -535,17 +538,17 @@ def test_batchnorm_buffer_reads_materialize_in_raw_index_order() -> None:
 
     model = nn.BatchNorm1d(3).train()
     trace = tl.trace(model, torch.randn(4, 3), capture=tl.options.CaptureOptions(save_args=True))
-    raw_indices = [op.raw_index for op in trace.layer_list]
-    add_op = trace.layer_dict_all_keys["add_1_1"]
-    buffer_2_op = trace.layer_dict_all_keys["buffer_2"]
-    batchnorm_op = trace.layer_dict_all_keys["batchnorm_1_2"]
-    buffer_5_op = trace.layer_dict_all_keys["buffer_5"]
+    raw_indices = [op.raw_index for op in trace._layer_list]
+    add_op = trace._layer_dict_all_keys["add_1_1"]
+    buffer_2_op = trace._layer_dict_all_keys["buffer_2"]
+    batchnorm_op = trace._layer_dict_all_keys["batchnorm_1_2"]
+    buffer_5_op = trace._layer_dict_all_keys["buffer_5"]
 
     assert raw_indices == sorted(raw_indices)
     assert add_op.raw_index < buffer_2_op.raw_index
-    assert trace.layer_list.index(add_op) < trace.layer_list.index(buffer_2_op)
+    assert trace._layer_list.index(add_op) < trace._layer_list.index(buffer_2_op)
     assert batchnorm_op.raw_index < buffer_5_op.raw_index
-    assert trace.layer_list.index(batchnorm_op) < trace.layer_list.index(buffer_5_op)
+    assert trace._layer_list.index(batchnorm_op) < trace._layer_list.index(buffer_5_op)
 
 
 def test_buffer_write_lookup_avoids_per_op_full_storage_scan(
@@ -586,8 +589,8 @@ def test_buffer_write_lookup_avoids_per_op_full_storage_scan(
     )
     extra_count = call_count
 
-    assert trace.graph_shape_hash is not None
-    assert trace_extra.graph_shape_hash is not None
+    assert trace.provenance.fingerprint is not None
+    assert trace_extra.provenance.fingerprint is not None
     # A per-op full scan would add ~num_buffers calls for EACH extra op
     # (~16 * 49 = 784); genuine per-op resolution adds only a handful.
     assert extra_count - base_count < extra_ops * (num_buffers // 6)
@@ -597,12 +600,12 @@ def _assert_buffer_op_accessors_partition_buffer_ops(trace: tl.Trace) -> None:
     """Assert derived buffer op accessors partition the flat buffer op population."""
 
     expected_read_ops = [
-        op.label for op in trace.layer_list if op.is_buffer and op.buffer_write_kind is None
+        op.label for op in trace._layer_list if op.is_buffer and op.buffer_write_kind is None
     ]
     expected_write_ops = [
-        op.label for op in trace.layer_list if op.is_buffer and op.buffer_write_kind is not None
+        op.label for op in trace._layer_list if op.is_buffer and op.buffer_write_kind is not None
     ]
-    all_buffer_ops = [op.label for op in trace.layer_list if op.is_buffer]
+    all_buffer_ops = [op.label for op in trace._layer_list if op.is_buffer]
 
     assert trace.buffer_read_ops == expected_read_ops
     assert trace.buffer_write_ops == expected_write_ops

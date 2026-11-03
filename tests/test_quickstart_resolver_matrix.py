@@ -23,7 +23,7 @@ from torchlens._quickstart import (
     trace_input_provenance,
 )
 from torchlens._quickstart._primitive import state_dict_hash
-from torchlens._user_funcs import render
+from torchlens._user_funcs import draw as render
 
 
 def _cnn() -> nn.Module:
@@ -50,8 +50,8 @@ class TestOneResolverOneRecord:
 
         model = _cnn().eval()
         trace_log = tl.trace(model, input_shape=SIZE)
-        trace_record = trace_log.input_preprocessor
-        render_result = render(model, input_shape=SIZE, file=str(tmp_path / "unused.svg"))
+        trace_record = trace_log.provenance.input_preprocessor
+        render_result = render(model, input_shape=SIZE, path=str(tmp_path / "unused.svg"))
         render_record = provenance_to_record(render_result.provenance)
         assert trace_record is not None
         assert dataclasses.asdict(trace_record) == dataclasses.asdict(render_record)
@@ -71,7 +71,7 @@ class TestInferredReuse:
     def test_render_reuses_the_verification_trace(self, tmp_path) -> None:
         """The rung-3 render receipt proves zero additional captures."""
 
-        result = render(_cnn().eval(), file=str(tmp_path / "g.svg"))
+        result = render(_cnn().eval(), path=str(tmp_path / "g.svg"))
         assert result.receipt.policy == "reused_verified_trace"
         assert result.provenance.origin == "inferred"
         assert result.provenance.strategy
@@ -106,7 +106,7 @@ class TestPinnedExecutionPolicy:
         model = _cnn().train()
         hash_before = state_dict_hash(model)
         rng_before = torch.get_rng_state()
-        result = render(model, input_shape=SIZE, file=str(tmp_path / "g.svg"))
+        result = render(model, input_shape=SIZE, path=str(tmp_path / "g.svg"))
         assert model.training is True
         assert state_dict_hash(model) == hash_before
         assert torch.equal(rng_before, torch.get_rng_state())
@@ -120,7 +120,7 @@ class TestRenderFacade:
     def test_default_collapse_is_auto_and_draw_stays_none(self, tmp_path) -> None:
         """render defaults to collapse='auto'; Trace.draw keeps 'none'."""
 
-        result = render(_cnn().eval(), input_shape=SIZE, file=str(tmp_path / "g.svg"))
+        result = render(_cnn().eval(), input_shape=SIZE, path=str(tmp_path / "g.svg"))
         assert result.policy["collapse"] == "auto"
         import inspect
 
@@ -131,42 +131,19 @@ class TestRenderFacade:
         """An explicit collapse= value lands in the result policy."""
 
         result = render(
-            _cnn().eval(), input_size=SIZE, collapse="none", file=str(tmp_path / "g.svg")
+            _cnn().eval(), input_shape=SIZE, collapse="none", path=str(tmp_path / "g.svg")
         )
         assert result.policy["collapse"] == "none"
-
-    def test_curated_kwarg_collision_refuses(self, tmp_path) -> None:
-        """Passing a curated dial's underlying draw spelling refuses typed."""
-
-        with pytest.raises(Exception) as excinfo:
-            render(
-                _cnn().eval(),
-                input_size=SIZE,
-                file=str(tmp_path / "g.svg"),
-                path=str(tmp_path / "other"),
-            )
-        assert excinfo.value.fields["code"] == "render_kwarg_collision"
 
     @pytest.mark.smoke
     def test_result_is_detached_and_resaves_without_the_trace(self, tmp_path) -> None:
         """Drawing.save() re-renders from the stored DOT source."""
 
-        result = render(_cnn().eval(), input_shape=SIZE, file=str(tmp_path / "g.svg"))
+        result = render(_cnn().eval(), input_shape=SIZE, path=str(tmp_path / "g.svg"))
         assert isinstance(result, Drawing)
         assert result.trace is None  # detached by default
         saved = result.save(tmp_path / "again.pdf")
         assert saved.exists() and saved.stat().st_size > 0
-
-    def test_return_trace_retains_and_close_releases(self, tmp_path) -> None:
-        """return_trace=True keeps the trace; close() releases it."""
-
-        result = render(
-            _cnn().eval(), input_size=SIZE, return_trace=True, file=str(tmp_path / "g.svg")
-        )
-        assert result.trace is not None
-        with result:
-            pass
-        assert result.trace is None
 
     def test_collision_safe_default_filename(self, tmp_path, monkeypatch) -> None:
         """Fork F1 branch A: bare script render writes <Class>-graph.<fmt>, never overwrites."""
@@ -186,8 +163,8 @@ class TestRenderFacade:
         with pytest.raises(Exception) as excinfo:
             render(
                 _cnn().eval(),
-                input_size=SIZE,
-                file=str(tmp_path / "g.svg"),
+                input_shape=SIZE,
+                path=str(tmp_path / "g.svg"),
                 color_by="magnitude",
             )
         assert excinfo.value.fields["code"] == "nongold_semantics_unavailable"

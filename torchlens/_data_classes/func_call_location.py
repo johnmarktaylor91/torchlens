@@ -29,7 +29,8 @@ import linecache
 from typing import Any
 
 from .._constants import FUNC_CALL_LOCATION_FIELD_ORDER
-from .._io import TLSPEC_VERSION, FieldPolicy, default_fill_state, read_tlspec_version
+from .._io._field_policy import FieldPolicy
+from .._io.format_contract import TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from .._source_links import vscode_file_line_link
 from .field_policy import build_record_field_policy_table
 
@@ -100,7 +101,7 @@ class FuncCallLocation:
         "_linecache_entry": FieldPolicy.DROP,
     }
 
-    FIELD_POLICY = build_record_field_policy_table(
+    _FIELD_POLICY = build_record_field_policy_table(
         FUNC_CALL_LOCATION_FIELD_ORDER,
         _PORTABLE_STATE_SPEC,
         schema_key="func_call_location",

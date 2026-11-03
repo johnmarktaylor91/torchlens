@@ -47,11 +47,12 @@ Storage is resolved from streaming/recording options:
 - RAM plus disk mirror when `retain_in_memory=True`.
 - Disk-only when `retain_in_memory=False`, rejecting `save_grad=True`.
 
-Forward exceptions are opt-in partials. The default is the historical
-`on_forward_error="raise"` path. `on_forward_error="attach_partial"` attaches a failed
-`Recording` to `exc.partial_recording` and re-raises the original exception.
+Forward exceptions are opt-in partials. The default `on_forward_error="raise"` raises the
+capture's `TraceCaptureError` (chained `from` the forward's exception; TorchLens errors
+propagate as themselves). `on_forward_error="attach_partial"` attaches a failed `Recording`
+to that raised error as `exc.partial_recording` and re-raises it.
 `on_forward_error="return_partial"` swallows the forward exception and returns the failed
-partial; with `return_output=True` the output slot is `None`, and manual `Recorder(...)`
+partial (its `output` refuses with `output_forward_failed`), and manual `Recorder(...)`
 returns `None` while `recorder.recording` holds the partial. Failed partials set
 `status="partial_error"`, `failed=True`, `error_repr`, `error_traceback`,
 `num_committed_ops`, `last_successful_op_label`, and best-effort `last_event_*` fields.
@@ -59,8 +60,10 @@ user-op failures exclude the failing call; TL-side capture failures may include 
 skipped/partial current-call event. `Recording.to_trace()` and `Recording.backward()`
 reject failed partials because the topology is incomplete.
 
-Trace has a separate failed-capture diagnostic: failed `tl.trace(...)` exceptions carry
-`exc.partial_log`, which can be retrieved with `tl._partial.from_failed_capture(exc)`.
+Trace has a separate failed-capture diagnostic: a failed `tl.trace(...)` raises
+`tl.errors.TraceCaptureError` (chained `from` the forward's exception) carrying
+`exc.partial_trace`. Under `on_forward_error="attach_partial"` the failed partial
+`Recording` rides the same `TraceCaptureError` as `exc.partial_recording`.
 
 ## Training Semantics
 `backward_ready=True` promotes omitted defaults to graph-connected out capture. Explicit

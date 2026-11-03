@@ -25,6 +25,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _user_public_impls, _validation_argument_references as arg_references
+from torchlens.errors import TraceCaptureError
 from torchlens.validation.diagnostics import get_validation_diagnostics
 
 
@@ -170,7 +171,7 @@ def test_validation_capture_saves_an_alias_of_its_copys_parameters() -> None:
         forward_storages.append(module.lin.weight.untyped_storage().data_ptr())
 
     def observe(trace: Any) -> None:
-        for op in trace.layer_list:
+        for op in trace._layer_list:
             if op.func_name == "linear" and op.saved_args:
                 saved_weights.append(op.saved_args[1])
 
@@ -201,10 +202,8 @@ def test_a_user_save_arg_values_trace_still_saves_copies_after_validation() -> N
         assert tl.validate(model, x, scope="forward")
     assert arg_references.active_argument_references() is None
     assert arg_references._SESSION.get() is None
-    trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True)
-    )
-    linears = [op for op in trace.layer_list if op.func_name == "linear"]
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True), save="all")
+    linears = [op for op in trace._layer_list if op.func_name == "linear"]
     assert len(linears) == 2
     for op, parameter in zip(linears, (model.lin.weight, model.out.weight), strict=True):
         saved = op.saved_args[1]
@@ -229,7 +228,8 @@ def test_the_reference_context_is_cleared_when_the_capture_raises() -> None:
         warnings.simplefilter("ignore")
         try:
             _user_public_impls._validate_forward_pass_torch(model, torch.randn(2, 4))
-        except ValueError as exc:
+        except TraceCaptureError as exc:
+            assert isinstance(exc.__cause__, ValueError)
             assert "inside the validation capture" in str(exc)
     # The ground truth runs outside the context; the raising forward ran inside it.
     assert seen[0] is None

@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors import PredicateError
+from torchlens.errors import PredicateError, TraceCaptureError
 from torchlens.recording import RecordContext
 
 
@@ -19,13 +19,14 @@ def test_predicate_exception_propagates() -> None:
 
         raise RuntimeError(f"stop at {ctx.label}")
 
-    with pytest.raises(RuntimeError, match="stop at"):
+    with pytest.raises(TraceCaptureError, match="stop at") as _tce_info:
         tl.record(
             nn.Sequential(nn.Linear(3, 3), nn.ReLU()),
             torch.ones(1, 3),
             save=keep_op,
             recording=tl.options.RecordingOptions(on_predicate_error="fail-fast"),
         )
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
 
 def test_predicate_exception_accumulate_preserved() -> None:

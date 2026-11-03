@@ -69,7 +69,7 @@ class TestLivenessGate:
     def test_implied_inference_only_refusal_names_no_grad_and_a_working_remedy(self) -> None:
         with torch.no_grad():
             trace = _trace()
-        assert trace.inference_only is True
+        assert trace.options.inference_only is True
         error = _read_error(
             lambda: ob.read_edge_index(trace),
             "read_addressing_unavailable",
@@ -145,7 +145,7 @@ class TestTargetNormalizer:
         """On a selectively-retained trace the payload route dies before the
         read; the read-level refusal for a non-tensor target is typed."""
 
-        trace = _trace(capture=tl.options.CaptureOptions(layers_to_save=[]))
+        trace = _trace(save=[])
         unsaved = trace["output_1"].out  # None on a zero-retention capture
         assert unsaved is None
         error = _read_error(
@@ -156,7 +156,7 @@ class TestTargetNormalizer:
 
     @_requires_gradient_edge
     def test_wrong_shape_cotangent_names_recorded_shape(self) -> None:
-        trace = _trace(capture=tl.options.CaptureOptions(layers_to_save=[]))
+        trace = _trace(save=[])
         error = _read_error(
             lambda: ob.read(
                 trace,
@@ -281,7 +281,7 @@ class TestPopulationContract:
 
     @_requires_gradient_edge
     def test_explicit_unretained_site_preflight_refusal(self) -> None:
-        trace = _trace(capture=tl.options.CaptureOptions(layers_to_save=[]))
+        trace = _trace(save=[])
         error = _read_error(
             lambda: ob.read(
                 trace,

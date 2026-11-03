@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast
 import torch
 
 from .._quantities import Bytes, Flops
+from ._package_frames import is_torchlens_code
 
 if TYPE_CHECKING:
     from types import FrameType
@@ -26,11 +27,6 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
 _T = TypeVar("_T")
-
-# Package directory, resolved once at import: `user_stacklevel` compares frame
-# filenames against it to find the first non-torchlens frame. Matches the
-# already-established approach in _utils/introspection.py's stack filter.
-_PACKAGE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + os.sep
 
 
 def atomic_write_text(path: str | Path, text: str, *, encoding: str = "utf-8") -> None:
@@ -489,7 +485,7 @@ def in_notebook() -> bool:
 
 def _vprint(trace: "Trace", message: str) -> None:
     """Print a progress message if verbose mode is enabled on the Trace."""
-    if getattr(trace, "verbose", False):
+    if trace._options_verbose:
         print(f"[torchlens] {message}")
 
 
@@ -501,7 +497,7 @@ def _vtimed(trace: "Trace", description: str) -> Iterator[None]:
     on exit.
     """
     bucket = f"postprocess:{description.strip()}"
-    if not getattr(trace, "verbose", False):
+    if not trace._options_verbose:
         with _timed_phase(trace, bucket):
             yield
         return
@@ -545,7 +541,7 @@ def user_stacklevel(extra: int = 0) -> int:
     frame: FrameType | None = sys._getframe(1)
     depth = 1
     while frame is not None:
-        if not frame.f_code.co_filename.startswith(_PACKAGE_ROOT):
+        if not is_torchlens_code(frame.f_code):
             return depth + extra
         frame = frame.f_back
         depth += 1

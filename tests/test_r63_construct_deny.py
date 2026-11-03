@@ -22,8 +22,8 @@ predicate (storage OR ``torch.Tensor`` subclass OR legacy ``tensortype`` class O
 code). The type OBJECTS stay RESOLVABLE at ``find_class`` -- legit ``.tlspec`` metadata
 references ``torch.Tensor`` / ``torch.FloatTensor`` / ``numpy.ndarray`` as inert dtype /
 module_type values -- and the legit payload reconstructors (``_rebuild_tensor_v2`` /
-numpy ``_frombuffer`` / ``_reconstruct``, all FUNCTIONS not alloc TYPES, plus the wrapped
-``_safe_load_from_bytes``) are untouched. Zero-regression is PROVEN: a real
+numpy ``_frombuffer`` / ``_reconstruct``, all FUNCTIONS not alloc TYPES, plus the TorchLens
+inline tensor reconstructor) are untouched. Zero-regression is PROVEN: a real
 embedded-weights ``.tlspec`` performs many REDUCE/NEWOBJ ops and ZERO tensor/ndarray
 constructions, so it round-trips (save -> load -> run) unchanged.
 """
@@ -47,11 +47,12 @@ from torchlens._io._safe_unpickle import (
     SafeBundleUnpickler,
     _is_alloc_constructor_type,
     _is_torch_storage_type,
+    _PurePythonBundleUnpickler,
 )
 from torchlens.options import CaptureOptions
 
 _CAP = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )
@@ -161,22 +162,26 @@ def test_newobj_ex_construction_of_tensor_ndarray_refused(
         SafeBundleUnpickler(io.BytesIO(payload)).load()
 
 
-@pytest.mark.smoke
 def test_white_box_belts_refuse_tensor_and_ndarray() -> None:
-    """The three belts refuse a Tensor/ndarray type placed directly on the stack."""
+    """The three belts refuse a Tensor/ndarray type placed directly on the stack.
+
+    Not a smoke item: ``tests/test_unpickle_c_path.py`` runs the same three refusals
+    end to end (``tensor_reduce``, ``tensor_newobj``, ``tensor_newobj_ex`` and the
+    ndarray twins) through both machines in its one-pass smoke item.
+    """
 
     for target in (torch.Tensor, torch.FloatTensor, np.ndarray):
-        u = SafeBundleUnpickler(io.BytesIO(b""))
+        u = _PurePythonBundleUnpickler(io.BytesIO(b""))
         u.stack = [target, (5,)]  # type: ignore[attr-defined]
         with pytest.raises(pickle.UnpicklingError, match="via REDUCE"):
             u.load_reduce()
 
-        u = SafeBundleUnpickler(io.BytesIO(b""))
+        u = _PurePythonBundleUnpickler(io.BytesIO(b""))
         u.stack = [target, (5,)]  # type: ignore[attr-defined]
         with pytest.raises(pickle.UnpicklingError, match="via NEWOBJ"):
             u.load_newobj()
 
-        u = SafeBundleUnpickler(io.BytesIO(b""))
+        u = _PurePythonBundleUnpickler(io.BytesIO(b""))
         u.stack = [target, (5,), {}]  # type: ignore[attr-defined]
         with pytest.raises(pickle.UnpicklingError, match="via NEWOBJ_EX"):
             u.load_newobj_ex()
@@ -218,7 +223,7 @@ def test_legit_reconstructors_are_not_alloc_types_and_reduce_is_allowed() -> Non
     # A REDUCE whose func is the (function) reconstructor is NOT refused by the belt --
     # the alloc-guard fires on TYPES only. White-box: push func + args and run the belt;
     # the belt must never raise ITS alloc refusal (a downstream ctor error is fine).
-    u = SafeBundleUnpickler(io.BytesIO(b""))
+    u = _PurePythonBundleUnpickler(io.BytesIO(b""))
     u.stack = [rebuild, ()]  # type: ignore[attr-defined]
     try:
         u.load_reduce()
@@ -236,7 +241,7 @@ def test_legit_reconstructors_are_not_alloc_types_and_reduce_is_allowed() -> Non
 def _reduce_belt_admits_construction(resolved: object) -> bool:
     """Return whether the REDUCE belt would let ``resolved`` be CONSTRUCTED (not refused)."""
 
-    u = SafeBundleUnpickler(io.BytesIO(b""))
+    u = _PurePythonBundleUnpickler(io.BytesIO(b""))
     u.stack = [resolved, ()]  # type: ignore[attr-defined]
     try:
         u.load_reduce()

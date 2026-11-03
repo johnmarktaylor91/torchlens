@@ -29,20 +29,6 @@ from ..._utils.introspection import (
 if TYPE_CHECKING:
     pass
 
-if TYPE_CHECKING:
-    from .ops import (
-        _UNSUPPORTED_OUTPUT_CONTAINER_WARNED,
-        _container_type_ref,
-        _fallback_address_to_path,
-        _is_hf_model_output,
-        _is_namedtuple_instance,
-        _iter_sequence_items,
-        _leaf_is_reconstructable,
-        _literal_value_supported,
-        _mapping_reconstruction,
-        _torch_return_type_fields,
-        _try_build_container_spec,
-    )
 
 __all__ = (
     "_build_container_spec",
@@ -667,3 +653,24 @@ def _walk_output_tensors_with_paths(
         return
 
     yield from _walk_supported_output_container(out, root_spec=root_spec, path=())
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_arguments import (  # noqa: E402
+    _literal_value_supported,
+)
+from ._ops_container_base import (  # noqa: E402
+    _container_type_ref,
+    _fallback_address_to_path,
+    _is_hf_model_output,
+    _is_namedtuple_instance,
+    _iter_sequence_items,
+    _leaf_is_reconstructable,
+    _mapping_reconstruction,
+    _torch_return_type_fields,
+    _try_build_container_spec,
+)
+from .ops import (  # noqa: E402
+    _UNSUPPORTED_OUTPUT_CONTAINER_WARNED,
+)

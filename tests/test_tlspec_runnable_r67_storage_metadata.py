@@ -28,23 +28,25 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import PathFaithfulness
-from torchlens._runnable_state import (
+from torchlens._runnable.state import (
     _state_metadata_signature,
     _state_placement_canonical,
 )
 from torchlens.backends.torch import completeness_witness as cw
+from torchlens.backends.torch._completeness_escape_state import host_escape_state_source_names
+from torchlens.backends.torch._completeness_metadata import (
+    host_escape_state_metadata_observations,
+    host_escape_state_metadata_reads,
+)
 from torchlens.backends.torch.completeness_witness import (
     _STORAGE_WRAPPED_DISPOSITIONS,
     STORAGE_BRIDGE_ESCAPE_FUNCS,
     STORAGE_METADATA_ACCESSOR_DISPOSITIONS,
-    host_escape_state_metadata_observations,
-    host_escape_state_metadata_reads,
-    host_escape_state_source_names,
 )
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
 
-_CAPTURE = CaptureOptions(intervention_ready=True, capture_container_structure=True, cache=False)
+_CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
 
 
 def _trace(model: nn.Module, x) -> tl.Trace:
@@ -261,6 +263,7 @@ def test_r67_is_pinned_observed_value_is_the_authority() -> None:
     assert _state_placement_canonical("is_shared", None) is None  # unknown -> refuse
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="pinned memory requires CUDA")
 def test_r67_pinned_state_read_refuses_via_observation(tmp_path: Path) -> None:
     """Observed True on a genuinely pinned CPU slot refuses -- through the observation."""
@@ -563,7 +566,7 @@ def test_r67_hostile_subclass_admission_refuses(surface: str, tmp_path: Path) ->
     # exact-type emit gate silently dropping every subclass op -- the very gap this NOTE
     # lamented). The admission boundary is now the SAVE preflight, which the docstring and
     # the sibling ``MutateThroughHandle`` test already treat as equally fail-closed: the
-    # hostile class object refuses TYPED (``unsupported_literal``: a ``torch._C._TensorMeta``
+    # hostile class object refuses TYPED (``literal_unsupported``: a ``torch._C._TensorMeta``
     # is outside the frozen non-tensor literal grammar), never blessed into an artifact.
     with pytest.raises(RunnablePreflightError, match="preflight failed"):
         trace = _trace(model, payload)

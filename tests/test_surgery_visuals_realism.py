@@ -21,7 +21,7 @@ from torchlens._visualization.surgery_visuals import surgery_census
 
 HF_HUB_CACHE = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))) / "hub"
 
-_CAPTURE = tl.options.CaptureOptions(intervention_ready=True, save_args=True)
+_CAPTURE = tl.options.CaptureOptions(replayable=True, save_args=True)
 
 _REPLAY_WORDING = "exit values were substituted; the interior was not replayed"
 _LIVE_WORDING = "the original op ran; edited values replaced its output after execution"
@@ -53,7 +53,6 @@ def _render_with_sidecar(trace, tmp_path: Path, stem: str) -> tuple[str, str]:
         highlight="interventions",
         path=outpath,
         file_format="svg",
-        vis_save_only=True,
     )
     svg = (tmp_path / f"{stem}.svg").read_text()
     census = (tmp_path / f"{stem}.census.txt").read_text()
@@ -75,7 +74,7 @@ def test_distilgpt2_live_lane_census_and_splice_box(tmp_path) -> None:
         model,
         ids,
         intervene=tl.when(tl.in_module("transformer.h.0") & tl.func("tanh"), tl.scale(0.5)),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     census_text = surgery_census(log).to_text()
     assert "lane capture: 1 transaction(s)" in census_text
@@ -132,7 +131,7 @@ def test_resnet50_block_splice_box_and_marks(tmp_path) -> None:
             tl.in_module("layer1.0") & tl.func("relu"),
             tl.splice_module(torch.nn.ReLU(), input_route="out"),
         ),
-        capture=tl.options.CaptureOptions(intervention_ready=True, log_injections=True),
+        capture=tl.options.CaptureOptions(replayable=True, log_injections=True),
     )
     from torchlens._visualization.surgery_visuals import surgery_facts
 

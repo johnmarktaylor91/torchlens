@@ -18,6 +18,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens.mechinterp  # noqa: F401  (tl.mechinterp is a submodule, not a root name)
 from torchlens._semantic.logit_lens import logit_lens, logit_lens_predictions
 from torchlens.facets import FacetSpec
 
@@ -129,9 +130,7 @@ def _batches(n: int = 3, rows: int = 2) -> list[tuple[torch.Tensor, torch.Tensor
 
 
 def _capture(model: nn.Module, ids: torch.Tensor) -> Any:
-    return tl.trace(
-        model, ids, capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True)
-    )
+    return tl.trace(model, ids, capture=tl.options.CaptureOptions(save_args=True), save="all")
 
 
 def _mask(logits: torch.Tensor, ids: torch.Tensor) -> torch.Tensor:
@@ -201,7 +200,7 @@ def test_trajectory_equals_hand_loop_float64(mask: bool) -> None:
         assert got.position_means[name].dtype == torch.float64
         assert torch.equal(got.position_means[name], want["means"][name]), name
         for layer in got.module_addresses:
-            assert got.running_stats[name][layer].result() == want["spines"][name][layer].result()
+            assert got.running_stats[name][layer].compute() == want["spines"][name][layer].compute()
 
 
 def test_trajectory_default_statistics_without_targets() -> None:
@@ -373,4 +372,4 @@ def test_trajectory_spines_save_and_reload(tmp_path: Any) -> None:
     got = tl.mechinterp.measure_trajectory(_model(), _batches(1))
     spine = got.running_stats["entropy"]["b1"]
     path = tl.stats.save_fitted(spine, tmp_path / "entropy-b1.safetensors")
-    assert tl.stats.load_fitted(path).result() == spine.result()
+    assert tl.stats.load_fitted(path).compute() == spine.compute()

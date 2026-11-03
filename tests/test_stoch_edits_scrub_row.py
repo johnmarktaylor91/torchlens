@@ -28,12 +28,12 @@ from typing import Any
 
 import pytest
 import torch
+from support.sampling import sampling_draws
 
 import torchlens as tl
 from tests.real_model.r0.families import _token_ids, build_gpt2
 from torchlens.intervention import population, sample_from
 from torchlens.intervention.population import OneDatum
-from torchlens.intervention.stochastic import sampling_records
 
 # slow: each leg captures a real (config-built) GPT-2 subject plus six donor
 # runs, ~40-45s measured -- honestly tiered above the smoke/heavy budgets.
@@ -44,7 +44,7 @@ def _capture(model: torch.nn.Module, ids: torch.Tensor) -> tl.Trace:
     return tl.trace(
         model,
         ids,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 
@@ -107,11 +107,11 @@ def test_causal_scrub_row_agreement_seed_and_audit(scrub_world: dict[str, object
     )
     fork = subject.fork()
     fork.do(tl.label(site), tl.patch_from(plan))
-    record = sampling_records(fork)[-1]
+    record = sampling_draws(fork)[-1]
 
     # Agreement law: the donor comes from template A's class, never B's.
-    assert record["eligible_count"] == 3, "class-size pin: three template-A donors"
-    (donor_index,) = record["donor_ids"]
+    assert record.eligible_count == 3, "class-size pin: three template-A donors"
+    (donor_index,) = record.draw_indices
     assert donor_index in (0, 1, 2), "no cross-template donor, ever"
 
     # Whole-event coherence: the patched value IS the donor run's recorded
@@ -137,8 +137,8 @@ def test_causal_scrub_row_agreement_seed_and_audit(scrub_world: dict[str, object
             )
         ),
     )
-    again = sampling_records(fork_again)[-1]
-    assert again["donor_ids"] == record["donor_ids"]
+    again = sampling_draws(fork_again)[-1]
+    assert again.draw_indices == record.draw_indices
     assert torch.equal(fork_again[site].out, fork[site].out)
 
     # A different seed changes the realized draw (derived seed always; with
@@ -155,8 +155,8 @@ def test_causal_scrub_row_agreement_seed_and_audit(scrub_world: dict[str, object
             )
         ),
     )
-    other = sampling_records(fork_other)[-1]
-    assert other["derived_seed"] != record["derived_seed"]
+    other = sampling_draws(fork_other)[-1]
+    assert other.derived_seed != record.derived_seed
 
     # Audit retention: one envelope, one canonical row, the sampling note on
     # the FireRecord (the ONE builder's lift), digest-kind disclosure.
@@ -166,10 +166,9 @@ def test_causal_scrub_row_agreement_seed_and_audit(scrub_world: dict[str, object
         if isinstance(row, dict) and row.get("op") == "intervention_event"
     ]
     assert len(envelopes) == 1 and envelopes[0]["status"] == "fired"
-    fires = list(fork.ops[site].interventions or ())
+    fires = list(fork.ops[site].edits or ())
     assert fires and "sampling[patch_from]" in (fires[-1].determinism_note or "")
-    assert record["digest_kind"] == "address"
-    assert record["population_count"] == 6
+    assert record.population_count == 6
 
 
 def test_recursive_post_scrub_donor_works(scrub_world: dict[str, object]) -> None:

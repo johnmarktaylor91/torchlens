@@ -39,9 +39,10 @@
 - Prebuilt counterfactual helpers: `activation_patch_residual_stream()`,
   `activation_patch_attention_output()`, `activation_patch_attention_heads()`,
   `activation_patch_mlp_output()`, `attribution_patch_attention_heads()`.
-- Built on `trace()` plus the `facet` selector from `intervention/selectors.py`;
-  `_CounterfactualStateGuard` snapshots/restores RNG and stateful tensors so
-  clean/corrupted runs stay comparable.
+- Built on `trace()` plus the `facet` selector from `_selection/selectors.py`;
+  `_CounterfactualStateGuard` (in `_state_guard.py`, with `_teardown`)
+  snapshots/restores RNG and stateful tensors so clean/corrupted runs stay
+  comparable.
 
 ## reconstruction.py
 - Fused-SDPA facet reconstruction: `SDPAReconstruction`,

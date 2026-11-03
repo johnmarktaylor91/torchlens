@@ -80,7 +80,8 @@ class _GateRequirement:
 
 #: Same-input, shared-graph claim: at.compare (``bundle.at(site).compare()``),
 #: most_changed, diff and the
-#: delta family (delta_map, norm_delta, output_delta, compare), which reads
+#: delta family (compare, rank_changes and the private per-node reads behind
+#: them and the diff picture), which reads
 #: per-node distances from a baseline member and so gates its (baseline,
 #: member) operand pairs with the same two predicates.
 _SHARED_GRAPH_SAME_INPUT = _GateRequirement(

@@ -183,8 +183,8 @@ def test_auto_spans_refuse_without_the_evidence(model: _TinyLM) -> None:
 
 
 def test_auto_spans_refuse_when_ids_are_not_retained(model: _TinyLM) -> None:
-    options = tl.options.CaptureOptions(layers_to_save=[])
-    draft = tl.trace(model, torch.tensor([_DRAFT_IDS]), capture=options)
+    options = tl.options.CaptureOptions()
+    draft = tl.trace(model, torch.tensor([_DRAFT_IDS]), capture=options, save=[])
     attach_sidecar(
         draft, TOKEN_BOUNDARY_FAMILY_ID, {"stream": "input", "batch_row": 0, "completion": [3, 7]}
     )
@@ -195,12 +195,14 @@ def test_auto_spans_refuse_when_ids_are_not_retained(model: _TinyLM) -> None:
 
 
 def test_auto_spans_work_with_a_selection_that_names_the_input(model: _TinyLM) -> None:
-    options = tl.options.CaptureOptions(layers_to_save=["input_1", "block"])
-    draft = tl.trace(model, torch.tensor([_DRAFT_IDS]), capture=options)
+    options = tl.options.CaptureOptions()
+    draft = tl.trace(model, torch.tensor([_DRAFT_IDS]), capture=options, save=["input_1", "block"])
     attach_sidecar(
         draft, TOKEN_BOUNDARY_FAMILY_ID, {"stream": "input", "batch_row": 0, "completion": [3, 7]}
     )
-    critique = tl.trace(model, torch.tensor([_CRITIQUE_IDS]), capture=options)
+    critique = tl.trace(
+        model, torch.tensor([_CRITIQUE_IDS]), capture=options, save=["input_1", "block"]
+    )
     bundle = Bundle({"draft": draft, "critique": critique})
     bundle.relate("fed_by", "critique", "draft", token_spans="auto")
     assert bundle.relations[0].params["basis"] == "matched"
@@ -456,7 +458,6 @@ def test_members_render_draws_rows_as_labelled_edges(tmp_path: Path, model: _Tin
         bundle,
         nodes="members",
         path=str(tmp_path / "members"),
-        vis_save_only=True,
         file_format="svg",
     )
     assert source is not None
@@ -476,9 +477,9 @@ def _statement(source: str, head: str) -> str:
     return source[start : source.index("]", start) + 1]
 
 
-def test_members_render_refuses_a_backward_direction(model: _TinyLM) -> None:
-    with pytest.raises(ValueError, match="direction"):
-        _visualization.show_bundle_graph(_harness(model), nodes="members", direction="backward")
+def test_members_render_refuses_a_backward_signal(model: _TinyLM) -> None:
+    with pytest.raises(ValueError, match="signal"):
+        _visualization.show_bundle_graph(_harness(model), nodes="members", signal="backward")
     with pytest.raises(ValueError, match="nodes"):
         _visualization.show_bundle_graph(_harness(model), nodes="layers")  # type: ignore[arg-type]
 
@@ -494,7 +495,7 @@ def test_lazy_load_reaches_bundle_members(tmp_path: Path, model: _TinyLM) -> Non
     for name in ("draft", "critique"):
         assert lazy[name].payload_load_status == "loaded_lazy"
         assert eager[name].payload_load_status != "loaded_lazy"
-        pairs = zip(lazy[name].layer_list, eager[name].layer_list, strict=True)
+        pairs = zip(lazy[name]._layer_list, eager[name]._layer_list, strict=True)
         lazy_op, eager_op = next((a, b) for a, b in pairs if a.has_saved_activation)
         assert lazy_op.out_ref is not None  # the payload stayed on disk until read
         assert torch.equal(lazy_op.out, eager_op.out)

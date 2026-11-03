@@ -97,6 +97,20 @@ _CONSTANT_SPELLED_CODES: dict[str, tuple[str, str]] = {
         "torchlens/_capture/structure_only.py",
         "STRUCTURE_ONLY_EPISODE_UNSUPPORTED",
     ),
+    # sweep_grid per-cell refusals: a refused cell is an effect row, not a
+    # raise, so its code prefixes GridCell.error and is spelled as a module
+    # constant in the grid planner.
+    "grid_cell_unresolved": ("torchlens/experiment/_grid.py", "_UNRESOLVED"),
+    "grid_cell_multi_site": ("torchlens/experiment/_grid.py", "_MULTI_SITE"),
+    # Paddle raises these through the shell's named constants.
+    "runtime_mode_unsupported": (
+        "torchlens/backends/_protocols/paddle.py",
+        "PADDLE_REFUSAL_RUNTIME_MODE",
+    ),
+    "inplace_op_unsupported": (
+        "torchlens/backends/_protocols/paddle.py",
+        "PADDLE_REFUSAL_INPLACE",
+    ),
 }
 
 

@@ -7,7 +7,7 @@
 - `active_logging(trace)` enables logging during the forward; `pause_logging()` protects
   internal TorchLens tensor ops from recursive capture.
 - Stale `from torch import cos` style references are recovered by the rescue re-run
-  (`backends/torch/rescue.py`, disclosed via `trace.rescue_rerun`); the protocol-invisible
+  (`backends/torch/rescue.py`, disclosed in the capture-honesty `rescue_rerun` fact); the protocol-invisible
   constructors keep targeted module-attr patching via the mechanical belt (`backends/torch/belt.py`).
 
 ### Module Containment
@@ -33,7 +33,7 @@ facets, strict protocol with legacy flat-name properties) through the ONE commit
 the typed `OpAmendment` lane (nine exact-set families, `append_amendment` the single
 writer) and every amended-state read folds through the capture-event journal's amended-op fold.
 ONE sanctioned in-place carve-out exists: the fastlog ancestry-closure backfill
-(`recording/types.py::_backfill_cooked_ancestry`) replaces op-lane cells on the
+(`recording/_types_ancestry.py::_backfill_cooked_op_records`) replaces op-lane cells on the
 `_copy_for_replay` projection a cook owns — never the sealed Recording stream — and nulls
 `_amended_fold_cache` afterwards. Every in-place op-lane writer (this one included) is
 pinned by the closed reason-bearing ledger in
@@ -63,7 +63,7 @@ Used non-persistent buffers always ship in the REQUIRED `runnable_nonpersistent_
 `InputAttestationFingerprint` eligibility records. Loaded values are available through
 `Trace.archived_activations` for inspection and eligible byte-exact attestation only; the sparse
 scheduler never consumes them. Original-input, capture-equivalent real-state runs report
-`attested` or fail transactionally with `numeric_attestation_failed`; changed-input (logical or
+`attested` or fail transactionally with `replay_value_mismatch`; changed-input (logical or
 physical), random-state, and nondeterministic-capture-context runs report `not_applicable`, and
 `attested` always implies `verified`.
 The frozen `ReadinessStatus`, `RunProvider`, `StateSource`, `PathFaithfulness`, `DivergencePolicy`,
@@ -72,7 +72,7 @@ documented exhaustively in `docs/reference/runnable_tlspec_contract.md`. r37 add
 `state_alias_topology_unsupported` (save-time state-topology refusal; tied live-identity state
 stages as one alias-group allocation) and `context_field_invalid` (parse-time closed-vocabulary
 context refusal); zero-tensor-leaf and instance-stateful container outputs refuse at save with
-`missing_output_container_contract` via the one per-kind capability table.
+`output_container_contract_missing` via the one per-kind capability table.
 Non-torch preview backends use `payload_policy="array_payloads"` when their codecs can materialize
 payloads; Paddle bf16 payloads carry logical dtype metadata because NumPy transports them as
 `uint16`. TensorFlow preview payloads also use `array_payloads` for dense numeric/bool forward

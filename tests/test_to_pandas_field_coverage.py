@@ -61,8 +61,8 @@ one alias shape -- an underscore-prefixed private field backing a same-named
 public property (e.g. ``_is_in_conditional_body`` / ``is_in_conditional_body``).
 That is narrower than the docstring here previously claimed: it does not
 recognize a KEEP field that is a real, populated value but whose FIELD_ORDER
-counterpart lives at a *different* name (e.g. ``Param._grad_memory`` backs the
-differently-named public ``gradient_memory`` property) or is deliberately
+counterpart lives at a *different* name (a private backing field whose public
+property is spelled differently) or is deliberately
 excluded from FIELD_ORDER by design (e.g. ``Param._derived_grad_payload``
 backs the live-handle ``.grad`` property, which the metadata-only
 ``to_pandas()`` contract excludes everywhere). Both shapes are real,
@@ -118,7 +118,7 @@ from torchlens.options import CaptureOptions  # noqa: E402
 _KEEP_FIELD_DESYNC_EXCLUSIONS: dict[type[Any], frozenset[str]] = {
     Trace: frozenset(
         {
-            # Computed @property (_data_classes/_trace_stats.py); never stored
+            # Computed @property (_data_classes/trace.py); never stored
             # in self.__dict__, so there is no state for FIELD_ORDER to lose.
             # Its sibling `num_ops_with_params` (also computed) correctly has
             # no _PORTABLE_STATE_SPEC entry at all -- this KEEP declaration is
@@ -194,12 +194,12 @@ def coverage_trace() -> Any:
 
 
 def _field_policy_desync(cls: type[Any]) -> list[str]:
-    """Return FIELD_POLICY entries marked KEEP but absent from FIELD_ORDER.
+    """Return _FIELD_POLICY entries marked KEEP but absent from FIELD_ORDER.
 
     Parameters
     ----------
     cls:
-        Record class exposing a ``FIELD_POLICY`` table built by
+        Record class exposing a ``_FIELD_POLICY`` table built by
         ``build_record_field_policy_table``.
 
     Returns
@@ -220,7 +220,7 @@ def _field_policy_desync(cls: type[Any]) -> list[str]:
         can be inspected on its own for auditing.
     """
 
-    table = cls.FIELD_POLICY
+    table = cls._FIELD_POLICY
     desynced = []
     for name, policy in table.items():
         if policy.user_facing or policy.portable_policy is not FieldPolicy.KEEP:
@@ -268,7 +268,7 @@ def test_field_order_has_no_keep_field_desync(cls: type[Any]) -> None:
         if name not in _KEEP_FIELD_DESYNC_EXCLUSIONS.get(cls, frozenset())
     ]
     assert desynced == [], (
-        f"{cls.__name__}.FIELD_POLICY marks {desynced} as FieldPolicy.KEEP but "
+        f"{cls.__name__}._FIELD_POLICY marks {desynced} as FieldPolicy.KEEP but "
         f"they are absent from {cls.__name__}'s FIELD_ORDER constant in "
         "constants.py. Add them to the FIELD_ORDER list next to their sibling "
         "fields so to_pandas() picks them up."

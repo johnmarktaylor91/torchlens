@@ -69,54 +69,54 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
                 "_out_hash_cache",
                 "_out_identity_cache",
                 "_output_transform",
+                "_output_slot",
                 "_runnable",
                 "_source_model_ref",
                 "_transform",
                 "_visualizer_dir",
                 "_warned_direct_write",
                 "_warned_mutate_in_place",
-                "activation_transform",
-                "backward_ready",
+                "_options_activation_transform",
+                "_options_backward_ready",
                 "capture_guard_passes",
-                "capture_owner_thread_id",
-                "capture_owner_thread_qualified",
-                "capture_thread_activity_detected",
-                "capture_thread_count_end",
-                "capture_thread_count_start",
+                "_provenance_owner_thread_id",
+                "_provenance_owner_thread_qualified",
+                "_provenance_thread_activity_detected",
+                "_provenance_thread_count_end",
+                "_provenance_thread_count_start",
                 # capture_verified / capture_verification_reason left this
                 # ledger in fixwave-5 (2020c7c2): the negative verification
                 # verdict now PERSISTS across save/load (FieldPolicy.KEEP).
-                "rescue_rerun",
-                "completeness_decompositions",
+                "_rescue_rerun",
+                "_health_completeness_decompositions",
                 "completeness_diagnostics",
-                "completeness_witness_accounted_count",
-                "completeness_witness_callback_ns",
-                "completeness_witness_event_count",
-                "completeness_witness_expected_opaque_count",
-                "completeness_witness_mode",
-                "completeness_witness_unaccounted_count",
-                "completeness_witness_verified",
-                "escape_detector_backward_coverage",
-                "escape_detector_callback_ns",
-                "escape_detector_event_count",
-                "escape_detector_mode",
-                "escape_detector_verified",
+                "_health_num_accounted_witness_events",
+                "_health_completeness_callback_ns",
+                "_health_num_witness_events",
+                "_health_num_expected_opaque_witness_events",
+                "_health_completeness_mode",
+                "_health_num_unaccounted_witness_events",
+                "_health_completeness_verified",
+                "_autograd_escape_detector_backward_coverage",
+                "_health_escape_detector_callback_ns",
+                "_health_num_escape_detector_events",
+                "_health_escape_detector_mode",
+                "_health_escape_detector_verified",
                 "escape_diagnostics",
-                "facet_registry_snapshot",
-                "grad_transform",
+                "facet_functions",
+                "_options_grad_transform",
                 # grouping/grouping_policy, distributed_scope,
                 # intervention_audit, and structure_only left this ledger at
                 # the tlspec v8 coordinated bump: all five now persist
                 # (FieldPolicy.KEEP) with load validation.
                 "last_run",
                 "layer_visualizers",
-                "module_filter",
-                "num_modules",
-                "parent_run",
+                "_module_filter",
+                "_parent_run",
                 # R2-37: the live pinned-graph disclosure; a loaded trace pins
                 # nothing, so it never persists.
-                "pinned_autograd_memory",
-                "replay_frontier",
+                "_cost_pinned_autograd_memory",
+                "_replay_frontier",
             }
         ),
     ),
@@ -142,7 +142,7 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
                 "input_memory",
                 "input_ops",
                 "input_shapes",
-                # "interventions" became a KEEP (portable) ordered field in
+                # "edits" became a KEEP (portable) ordered field in
                 # cert10, so it is no longer a documented DROP display field.
                 # The public computed flag flipped KEEP->DROP in 00bc67d3; the
                 # raw _is_in_conditional_body datum stays KEEP (portable-only
@@ -226,7 +226,7 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
         "GradFnCall",
         GradFnCall,
         tuple(constants.GRAD_FN_PASS_LOG_FIELD_ORDER),
-        portable_only_fields=frozenset({"label"}),
+        portable_only_fields=frozenset({"grad_fn_label"}),
     ),
     FieldOrderCase(
         "FuncCallLocation",
@@ -306,10 +306,11 @@ def test_known_glossary_aliases_have_backed_field_order_names() -> None:
     assert "memory" not in constants.OP_LOG_FIELD_ORDER
     assert "memory" not in constants.LAYER_LOG_FIELD_ORDER
 
-    assert "buffer_overwrite_index" in constants.BUFFER_LOG_FIELD_ORDER
-    assert "buffer_pass" in constants.BUFFER_LOG_FIELD_ORDER
-    assert hasattr(Buffer, "buffer_overwrite_index")
-    assert hasattr(Buffer, "buffer_pass")
+    assert "overwrite_index" in constants.BUFFER_LOG_FIELD_ORDER
+    assert "buffer_overwrite_index" not in constants.BUFFER_LOG_FIELD_ORDER
+    assert "buffer_pass" not in constants.BUFFER_LOG_FIELD_ORDER
+    assert hasattr(Buffer, "overwrite_index")
+    assert not hasattr(Buffer, "buffer_overwrite_index")
 
     assert "has_op" in constants.GRAD_FN_LOG_FIELD_ORDER
     assert "is_intervening" not in constants.GRAD_FN_LOG_FIELD_ORDER

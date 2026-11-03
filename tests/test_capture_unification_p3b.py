@@ -18,7 +18,7 @@ from torchlens.backends.default_specs import _tf_runtime_supported
 from torchlens.intervention.errors import SelectorCompositionError
 from torchlens.recording import RecordContext
 from torchlens.recording.exceptions import PredicateError
-from torchlens.validation.invariants import _check_backend_neutral_graph_topology
+from torchlens.validation._invariants_payloads import _check_backend_neutral_graph_topology
 
 
 class ViewThenMutate(nn.Module):
@@ -113,7 +113,8 @@ def test_alias_contract_snapshots_unsaved_mutated_parent(
     full = tl.trace(
         model,
         x.clone(),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     selective = tl.trace(
         model,
@@ -123,17 +124,17 @@ def test_alias_contract_snapshots_unsaved_mutated_parent(
     )
     saved_children = [
         op
-        for op in selective.layer_list
+        for op in selective._layer_list
         if op.has_saved_activation and op.func_name in {"__mul__", "mul"}
     ]
     assert saved_children
     unsaved_snapshot_parents = [
         op
-        for op in selective.layer_list
+        for op in selective._layer_list
         if not op.has_saved_activation and bool(op.out_versions_by_child)
     ]
     assert unsaved_snapshot_parents
-    assert any(op.out_versions_by_child for op in full.layer_list)
+    assert any(op.out_versions_by_child for op in full._layer_list)
 
     expected = [model_factory()(x.clone()).detach().clone()]
     try:
@@ -152,10 +153,10 @@ def test_layers_to_save_supports_disk_streaming(tmp_path: Path) -> None:
     log = tl.trace(
         TinyLinear(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save=["linear"]),
+        save=["linear"],
         storage=tl.options.StorageOptions(path=bundle_path),
     )
-    saved = [op for op in log.layer_list if op.has_saved_activation and op.layer_type == "linear"]
+    saved = [op for op in log._layer_list if op.has_saved_activation and op.type == "linear"]
     assert saved
     assert bundle_path.exists()
 
@@ -166,9 +167,9 @@ def test_layers_to_save_absorbed_path_honors_substrings() -> None:
     log = tl.trace(
         TinyLinear(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save=["lin"]),
+        save=["lin"],
     )
-    saved = [op for op in log.layer_list if op.has_saved_activation and op.layer_type == "linear"]
+    saved = [op for op in log._layer_list if op.has_saved_activation and op.type == "linear"]
     assert saved
 
 
@@ -183,7 +184,7 @@ def test_layers_to_save_absorbed_path_honors_pass_qualified_substrings() -> None
     ]
     assert contexts
     predicate = _make_layers_to_save_predicate(["lin:2"])
-    assert [ctx.pass_index for ctx in contexts if predicate(ctx)] == [2]
+    assert [ctx.pass_number for ctx in contexts if predicate(ctx)] == [2]
 
 
 def test_layers_to_save_supports_backward_ready_and_gradients_two_pass() -> None:
@@ -193,17 +194,17 @@ def test_layers_to_save_supports_backward_ready_and_gradients_two_pass() -> None
         TinyLinear(),
         torch.randn(2, 4),
         capture=tl.options.CaptureOptions(
-            layers_to_save=["linear"],
             save_grads=["linear"],
             backward_ready=True,
         ),
+        save=["linear"],
     )
-    saved = [op for op in log.layer_list if op.has_saved_activation and op.layer_type == "linear"]
+    saved = [op for op in log._layer_list if op.has_saved_activation and op.type == "linear"]
     assert saved
     assert saved[0].out.requires_grad
 
     saved[0].out.sum().backward()
-    saved_grad_types = {op.layer_type for op in log.layer_list if op.has_grad}
+    saved_grad_types = {op.type for op in log._layer_list if op.has_grad}
     assert saved_grad_types == {"linear"}
     hooked_raw_labels = {raw_label for raw_label, _tensor_id in log._tl_backward_hooked_tensor_keys}
     assert hooked_raw_labels == {saved[0]._label_raw}
@@ -217,26 +218,26 @@ def test_mixed_live_and_negative_selectors_retain_exact_values(live_selector: in
     live_trace = tl.trace(
         FourOpArithmetic(),
         input_tensor,
-        capture=tl.options.CaptureOptions(layers_to_save=[live_selector]),
+        save=[live_selector],
     )
     tail_trace = tl.trace(
         FourOpArithmetic(),
         input_tensor,
-        capture=tl.options.CaptureOptions(layers_to_save=[-1]),
+        save=[-1],
     )
     mixed_trace = tl.trace(
         FourOpArithmetic(),
         input_tensor,
-        capture=tl.options.CaptureOptions(layers_to_save=[live_selector, -1]),
+        save=[live_selector, -1],
     )
 
     expected = {
         op.raw_index: op.out
         for trace in (live_trace, tail_trace)
-        for op in trace.layer_list
+        for op in trace._layer_list
         if op.has_saved_activation
     }
-    actual = {op.raw_index: op.out for op in mixed_trace.layer_list if op.has_saved_activation}
+    actual = {op.raw_index: op.out for op in mixed_trace._layer_list if op.has_saved_activation}
     assert actual.keys() == expected.keys()
     assert all(torch.equal(actual[index], value) for index, value in expected.items())
 
@@ -247,7 +248,7 @@ def test_missing_explicit_deferred_activation_raises() -> None:
     trace = tl.trace(
         FourOpArithmetic(),
         torch.ones(2),
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
     trace._deferred_retention_selector = [1]
     session = _retention_session(RetentionProfile())
@@ -397,13 +398,13 @@ def test_negative_selector_projects_to_disk_and_callback(tmp_path: Path) -> None
     disk_trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=[-1]),
+        save=[-1],
         storage=tl.options.StorageOptions(path=bundle_path),
     )
     assert bundle_path.exists()
     loaded = tl.load(bundle_path)
-    disk_saved = [op for op in disk_trace.layer_list if op.has_saved_activation]
-    loaded_saved = [op for op in loaded.layer_list if op.has_saved_activation]
+    disk_saved = [op for op in disk_trace._layer_list if op.has_saved_activation]
+    loaded_saved = [op for op in loaded._layer_list if op.has_saved_activation]
     assert disk_saved and len(loaded_saved) == len(disk_saved)
     assert all(
         torch.equal(expected.out, actual.out) for expected, actual in zip(disk_saved, loaded_saved)
@@ -419,10 +420,10 @@ def test_negative_selector_projects_to_disk_and_callback(tmp_path: Path) -> None
     callback_trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=[-1]),
+        save=[-1],
         storage=tl.options.StorageOptions(on_save=capture_value),
     )
-    expected_values = [op.out for op in callback_trace.layer_list if op.has_saved_activation]
+    expected_values = [op.out for op in callback_trace._layer_list if op.has_saved_activation]
     assert callback_values
     assert len(callback_values) == len(expected_values)
     assert all(
@@ -432,42 +433,43 @@ def test_negative_selector_projects_to_disk_and_callback(tmp_path: Path) -> None
 
 @pytest.mark.parametrize(
     "feature",
-    ["intervention_ready", "hooks_tap"],
-    ids=["intervention_ready", "hooks_tap"],
+    ["replayable", "hooks_tap"],
+    ids=["replayable", "hooks_tap"],
 )
 def test_selective_save_with_intervention_features(feature: str) -> None:
     """Legacy selective lists compose with readiness and live tap hooks."""
     x = torch.randn(2, 4)
-    if feature == "intervention_ready":
+    if feature == "replayable":
         trace = tl.trace(
             TinyLinear(),
             x,
             capture=tl.options.CaptureOptions(
-                intervention_ready=True,
-                layers_to_save=["relu"],
+                replayable=True,
             ),
+            save=["relu"],
         )
-        assert trace.intervention_ready is True
-        assert any(op.layer_type == "relu" and op.has_saved_activation for op in trace.layer_list)
+        assert trace.is_replayable is True
+        assert any(op.type == "relu" and op.has_saved_activation for op in trace._layer_list)
         linear_trace = tl.trace(
             TinyLinear(),
             x,
             capture=tl.options.CaptureOptions(
-                layers_to_save=["linear"],
-                intervention_ready=True,
+                replayable=True,
             ),
+            save=["linear"],
         )
         assert any(
-            op.has_saved_activation and op.layer_type == "linear" for op in linear_trace.layer_list
+            op.has_saved_activation and op.type == "linear" for op in linear_trace._layer_list
         )
     else:
         observer = tl.observers.tap(tl.func("relu"))
         trace = tl.trace(
             TinyLinear(),
             x,
-            capture=tl.options.CaptureOptions(layers_to_save=["linear"], hooks=observer),
+            capture=tl.options.CaptureOptions(hooks=observer),
+            save=["linear"],
         )
-        assert any(op.has_saved_activation and op.layer_type == "linear" for op in trace.layer_list)
+        assert any(op.has_saved_activation and op.type == "linear" for op in trace._layer_list)
         assert observer.records
         assert all(record.site_label is not None for record in observer.records)
 
@@ -479,28 +481,25 @@ def test_layers_to_save_supports_intervene_halt_and_save_predicate() -> None:
     intervened = tl.trace(
         TinyLinear(),
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=["linear"]),
+        save=["linear"],
         intervene=tl.when(tl.func("relu"), tl.add(0.0)),
     )
     union_saved = tl.trace(
         TinyLinear(),
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=["linear"]),
-        save=lambda ctx: ctx.kind == "op" and ctx.layer_type == "relu",
+        save=lambda ctx: ctx.kind == "op" and ctx.layer_type in {"linear", "relu"},
     )
     halted = tl.trace(
         TinyLinear(),
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=["linear"]),
+        save=["linear"],
         stop_after=lambda ctx: ctx.kind == "op" and ctx.layer_type == "relu",
     )
 
-    assert any(
-        op.has_saved_activation and op.layer_type == "linear" for op in intervened.layer_list
-    )
-    saved_types = {op.layer_type for op in union_saved.layer_list if op.has_saved_activation}
+    assert any(op.has_saved_activation and op.type == "linear" for op in intervened._layer_list)
+    saved_types = {op.type for op in union_saved._layer_list if op.has_saved_activation}
     assert {"linear", "relu"}.issubset(saved_types)
-    assert getattr(halted, "halted", False) is True
+    assert getattr(halted, "is_stopped", False) is True
 
 
 def test_orphan_records_expose_saved_payload_when_pruned_or_retained() -> None:
@@ -513,9 +512,9 @@ def test_orphan_records_expose_saved_payload_when_pruned_or_retained() -> None:
         save=tl.func("randn"),
         capture=tl.options.CaptureOptions(seed=1),
     )
-    assert pruned.orphan_records
-    assert pruned.orphan_records[0]["raw_label"].startswith("randn")
-    assert isinstance(pruned.orphan_records[0]["payload_ref"], torch.Tensor)
+    assert pruned._orphan_records
+    assert pruned._orphan_records[0]["raw_label"].startswith("randn")
+    assert isinstance(pruned._orphan_records[0]["payload_ref"], torch.Tensor)
     assert not any(label.startswith("randn") for label in pruned.op_labels)
 
     retained = tl.trace(
@@ -524,7 +523,7 @@ def test_orphan_records_expose_saved_payload_when_pruned_or_retained() -> None:
         save=tl.func("randn"),
         capture=tl.options.CaptureOptions(seed=1, keep_orphans=True),
     )
-    assert retained.orphan_records
+    assert retained._orphan_records
     assert retained.graph.orphans
 
 
@@ -539,7 +538,7 @@ def test_followed_by_trace_supported_record_rejected_and_bad_shapes_error() -> N
         save=selector,
         capture=tl.options.CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
     )
-    assert any(op.layer_type == "linear" and op.has_saved_activation for op in traced.layer_list)
+    assert any(op.type == "linear" and op.has_saved_activation for op in traced._layer_list)
 
     with pytest.raises(PredicateError, match="record\\(save=.*followed_by"):
         tl.record(TinyLinear(), x, save=selector)
@@ -587,5 +586,5 @@ def test_tf_trace_exercises_backend_neutral_topology_invariant() -> None:
 
     trace = tl.trace(IdentityModule(), tf.constant([1.0, 2.0]), backend="tf")
 
-    assert trace.backend == "tf"
+    assert trace.provenance.backend == "tf"
     _check_backend_neutral_graph_topology(trace)

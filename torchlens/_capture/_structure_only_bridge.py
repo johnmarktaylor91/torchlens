@@ -14,7 +14,7 @@ the L7b implementation PR flips them with evidence.
 
 S1 CONSUMER DISCIPLINE: late-bound values validate through the published
 seam surface ``validate_nonpersistent_buffer_mapping_for_descriptor``
-(``torchlens/_runnable_state.py`` extension point E3); this module never
+(``torchlens/_runnable/state.py`` extension point E3); this module never
 reads runnable Trace state and never adds a binding/validation layer of its
 own.
 
@@ -195,7 +195,7 @@ def validate_and_digest_bound_buffers(
 
     The one binding path of the declared late-bind posture: values validate
     through the EXISTING S1 surface
-    :func:`torchlens._runnable_state.validate_nonpersistent_buffer_mapping_for_descriptor`
+    :func:`torchlens._runnable.state.validate_nonpersistent_buffer_mapping_for_descriptor`
     (no new validation layer — the memo's resized delta), then every staged
     value receives its mandatory bind-time byte digest and every slot its
     declared geometry digest.
@@ -222,7 +222,7 @@ def validate_and_digest_bound_buffers(
         cannot be computed.
     """
 
-    from .._runnable_state import validate_nonpersistent_buffer_mapping_for_descriptor
+    from .._runnable.state import validate_nonpersistent_buffer_mapping_for_descriptor
 
     staged = validate_nonpersistent_buffer_mapping_for_descriptor(descriptor, values)
     bind_digests = compute_bound_state_digests(staged)

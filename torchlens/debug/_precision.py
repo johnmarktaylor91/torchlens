@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 
 from .._debug_report import FoundReport, rows_of
+from .._utils._stochastic_funcs import _STOCHASTIC_FUNC_NAMES
 from ._common import _compute_ops, _op_label, _safe_out, _source_line, _tensor_unavailable_reason
 
 if TYPE_CHECKING:
@@ -171,7 +172,7 @@ def bisect_precision(
     from ._rerun import isolated_capture
 
     _refuse_unsupported_reference_device(model, reference_dtype)
-    capture = CaptureOptions(layers_to_save="all")
+    capture = CaptureOptions()
     native_trace = reference_trace = None
     try:
         native_trace = isolated_capture(
@@ -343,38 +344,6 @@ def _build_result(
         skipped=tuple(skipped),
         message=message,
     )
-
-
-#: Function names (trailing underscores normalized away) whose outputs depend
-#: on random draws; cross-dtype RNG consumption is not comparable for these.
-_STOCHASTIC_FUNC_NAMES = frozenset(
-    {
-        "alpha_dropout",
-        "bernoulli",
-        "binomial",
-        "dropout",
-        "dropout1d",
-        "dropout2d",
-        "dropout3d",
-        "exponential",
-        "feature_alpha_dropout",
-        "feature_dropout",
-        "geometric",
-        "multinomial",
-        "normal",
-        "poisson",
-        "rand",
-        "rand_like",
-        "randint",
-        "randint_like",
-        "randn",
-        "randn_like",
-        "randperm",
-        "rrelu",
-        "rrelu_with_noise",
-        "uniform",
-    }
-)
 
 
 def _cast_tree(value: Any, dtype: torch.dtype) -> Any:

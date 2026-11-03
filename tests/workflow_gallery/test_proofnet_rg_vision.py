@@ -172,7 +172,7 @@ def test_rg12_runnable_save_load_rerun_verified(
     import torchlens as tl
 
     batch, _ = natural_image_batch
-    trace = tl.trace(resnet, batch, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(resnet, batch, capture=tl.options.CaptureOptions(replayable=True))
     try:
         path = tmp_path / "resnet-runnable.tlspec"
         trace.save(str(path), level="runnable", include_weights=True)
@@ -197,7 +197,7 @@ def test_rg13_render_floors_track_the_captured_graph(
     batch, _ = natural_image_batch
     trace = tl.trace(resnet, batch)
     try:
-        graph = trace.draw(path=str(tmp_path / "resnet-graph"), return_graph=True)
+        graph = trace.draw(path=str(tmp_path / "resnet-graph")).dot
         dot_source = graph.source if hasattr(graph, "source") else str(graph)
         node_count = dot_source.count("label=")
         assert node_count >= 50, (

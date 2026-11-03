@@ -16,7 +16,6 @@ from torchlens._utils.rng import log_current_rng_states, set_rng_from_saved_stat
 from torchlens._utils.tensor_utils import tensor_nanequal
 from torchlens.backends.tf._tf_compat import get_tf_capability_snapshot
 from torchlens.compat import _report as compat_report_module
-from torchlens.options import CaptureOptions
 from torchlens.report import DoctorReport, doctor as report
 
 EXPECTED_COMPAT_ROW_KEYS = {
@@ -48,6 +47,8 @@ EXPECTED_COMPAT_ROW_KEYS = {
     "torch_capabilities",
     "torch_compile",
     "vmap_functorch",
+    # One shipped-scorecard row per registered backend (backends/_scorecard_rows.py).
+    *(f"backend_scorecard:{name}" for name in ("torch", "tf", "jax", "mlx", "paddle", "tinygrad")),
 }
 
 
@@ -428,8 +429,8 @@ def test_rng_snapshot_uses_all_cuda_devices(monkeypatch: pytest.MonkeyPatch) -> 
     calls: list[str] = []
     fake_states = [torch.tensor([1], dtype=torch.uint8), torch.tensor([2], dtype=torch.uint8)]
 
-    monkeypatch.setattr("torchlens._utils.tensor_utils._cuda_available", True)
-    monkeypatch.setattr("torchlens._utils.rng._is_cuda_available", lambda: True)
+    monkeypatch.setattr("torchlens._utils._cuda_probe._cuda_available", True)
+    monkeypatch.setattr("torchlens._utils.rng.streams._is_cuda_available", lambda: True)
     monkeypatch.setattr(torch.cuda, "is_initialized", lambda: True)
     monkeypatch.setattr(torch.cuda, "get_rng_state_all", lambda: fake_states)
 
@@ -458,7 +459,7 @@ def test_device_context_factory_injection_during_active_logging() -> None:
     """Factory functions honor ``torch.device`` contexts while TorchLens is logging."""
 
     model = DeviceContextFactoryModel()
-    log = tl.trace(model, torch.randn(1), capture=CaptureOptions(layers_to_save="none"))
+    log = tl.trace(model, torch.randn(1), save="none")
 
     assert stashed(log, "factory_device_type") == "meta"
 

@@ -538,7 +538,7 @@ OVERRIDES: dict[tuple[str, str, str, int], str] = {
         0,
     ): "apply",
     (
-        "docs/reference/experiment_ledger.md",
+        "docs/reference/experiments.md",
         'retain=, engine="live_hook", model=, x=)` runs ONE candidate engine (the',
         "x",
         0,
@@ -1414,7 +1414,7 @@ OVERRIDES: dict[tuple[str, str, str, int], str] = {
         "input_size",
         0,
     ): "apply",
-    ("torchlens/_runnable_execution.py", "torch.layout,", "layout", -1): "skip",
+    ("torchlens/_runnable/execution.py", "torch.layout,", "layout", -1): "skip",
     (
         "torchlens/_user_public_impls.py",
         '"""Render the caller\'s ``input_size=`` spelling compactly for disclosure."""',
@@ -2979,6 +2979,8 @@ PARAM_ROWS = (
     ParamRow(("CometSink.__init__",), "experiment", "comet_experiment"),
     ParamRow(("MergedTrace.__init__",), "handles", "rank_handles"),
     ParamRow(("summary", "trace", "TraceVisualizationMixin.summary"), "input_size", "input_shape"),
+    # Round 2 spelling. srp_fidelity_probe's keyword (a tuple of candidate sizes) was renamed
+    # again afterwards, to candidate_num_components; this row records round 2 only.
     ParamRow(
         ("classical_mds", "PCA.__init__", "srp", "srp_fidelity_probe"),
         "n_components",

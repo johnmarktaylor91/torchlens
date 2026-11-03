@@ -17,17 +17,16 @@ def _render_dot(log: tl.Trace, tmp_path: Any, **kwargs: Any) -> str:
 
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 def _first_label(log: tl.Trace, layer_type: str) -> str:
     """Return the first layer label with a matching layer type."""
 
-    for layer_log in log.layer_logs.values():
+    for layer_log in log._layer_logs.values():
         if layer_log.layer_type == layer_type:
             return layer_log.layer_label
     raise AssertionError(f"No layer with type {layer_type}")
@@ -36,7 +35,7 @@ def _first_label(log: tl.Trace, layer_type: str) -> str:
 def _first_op_label(log: tl.Trace, layer_type: str) -> str:
     """Return the first op label with a matching layer type."""
 
-    for layer_log in log.layer_logs.values():
+    for layer_log in log._layer_logs.values():
         if layer_log.layer_type == layer_type:
             return layer_log.ops[0].label
     raise AssertionError(f"No layer with type {layer_type}")
@@ -53,7 +52,7 @@ def _op_labels(log: tl.Trace, layer_type: str) -> list[str]:
 
     return [
         layer_log.ops[0].label
-        for layer_log in log.layer_logs.values()
+        for layer_log in log._layer_logs.values()
         if layer_log.layer_type == layer_type
     ]
 

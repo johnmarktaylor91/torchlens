@@ -44,7 +44,7 @@ def _block(step: int, *, with_sketch: bool = False, value: float = 1.0) -> Commi
         stream="activation",
         phase="forward",
         presence="observed",
-        spine=spine.result(),
+        spine=spine.compute(),
         sketch=sketch,
     )
     record = StepBlockRecord(segment_id="seg-a", global_step=step, provenance="explicit")
@@ -67,7 +67,7 @@ class TestRoundTrip:
         rows = reader.observations(step=1)
         assert len(rows) == 1
         row = rows[0]
-        assert row.spine is not None and row.spine.count_total == 3
+        assert row.spine is not None and row.spine.numel == 3
         assert row.sketch is not None and row.sketch.specials["zero"] == 1
         no_sketch = reader.observations(step=0)[0]
         assert no_sketch.sketch is None
@@ -193,7 +193,7 @@ class TestRamRing:
         assert merged_obs.spine is not None
         # Exact count preservation across the pairwise merges.
         total = sum(
-            b.observations[0].spine.count_total  # type: ignore[union-attr]
+            b.observations[0].spine.numel  # type: ignore[union-attr]
             for b in ring.blocks
         )
         assert total == 4 * 3
@@ -217,4 +217,4 @@ class TestRamRing:
         assert merged.coarsened
         assert (merged.step_lo, merged.step_hi) == (0, 1)
         spine = merged.observations[0].spine
-        assert spine is not None and spine.count_total == 6
+        assert spine is not None and spine.numel == 6

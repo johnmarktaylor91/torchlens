@@ -77,41 +77,63 @@ class TapRecord:
 class TapObserver:
     """Callable hook that records outs without modifying them.
 
+    The site alone decides which tensor the tap sees: a bare site observes the
+    activation, ``tl.grad(site)`` the gradient of the site's output, and
+    ``tl.grad(site) | site`` both.
+
     Parameters
     ----------
     site:
         Selector-like site where this tap should be registered.
     signal:
-        Signal on which this tap should fire.
+        Signal on which this tap records; ``"both"`` records every fire.
     """
 
     site: Any
-    signal: Literal["forward", "backward", "both"] = "forward"
+    signal: Literal["forward", "backward", "both"] = "both"
     records: list[TapRecord] = field(default_factory=list)
 
     def __call__(self, out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
-        """Record an out and return it unchanged.
+        """Record the observed tensor and return it unchanged.
 
         Parameters
         ----------
         out:
-            Activation observed at the hook site.
+            Activation (forward fire) or output gradient (backward fire)
+            observed at the hook site.
         ctx:
-            Hook context supplied by TorchLens.
+            Hook context supplied by TorchLens; ``ctx.signal`` says which pass.
 
         Returns
         -------
         torch.Tensor
-            The original out.
+            The original tensor.
         """
 
+        fired = "backward" if getattr(ctx, "signal", "forward") == "backward" else "forward"
+        if self.signal not in ("both", fired):
+            return out
         with _state.pause_logging():
             value = out.detach().clone()
-        span_names = _active_span_names("forward")
+        if fired == "backward":
+            kwargs = getattr(ctx, "kwargs", None) or {}
+            self.records.append(
+                TapRecord(
+                    value=value,
+                    span_names=_active_span_names("backward"),
+                    timestamp=time.monotonic(),
+                    signal="backward",
+                    grad_kind=kwargs.get("grad_kind", "grad_output"),
+                    backward_call_index=kwargs.get("call_index"),
+                    _raw_site_label=_hook_layer_label(ctx.op),
+                    _trace_ref=_active_trace_ref(),
+                )
+            )
+            return out
         self.records.append(
             TapRecord(
                 value=value,
-                span_names=span_names,
+                span_names=_active_span_names("forward"),
                 timestamp=time.monotonic(),
                 signal="forward",
                 _raw_site_label=_hook_layer_label(ctx.op),
@@ -149,19 +171,24 @@ class TapObserver:
 
     def record_backward(
         self,
-        grad_input: tuple[torch.Tensor | None, ...],
+        grad_input: Any,
         *,
-        grad_output: tuple[torch.Tensor | None, ...] | None,
-        grad_fn_handle: Any,
-        call_index: int,
-        run_ctx: dict[str, Any],
-    ) -> None:
+        grad_output: tuple[torch.Tensor | None, ...] | None = None,
+        grad_fn_handle: Any = None,
+        call_index: int | None = None,
+        run_ctx: dict[str, Any] | None = None,
+        ctx: Any = None,
+    ) -> torch.Tensor | None:
         """Record a backward gradient and leave autograd gradients unchanged.
+
+        A gradient site (``tl.grad(site)``) passes the output gradient and its
+        hook context (``ctx``), recorded as :meth:`__call__` records a backward
+        fire; an autograd-node site passes ``grad_input`` with ``grad_output``.
 
         Parameters
         ----------
         grad_input:
-            Autograd grad_input tuple at the grad_fn_handle hook.
+            Output gradient (gradient site) or the autograd ``grad_input`` tuple (node site).
         grad_output:
             Autograd grad_output tuple at the grad_fn_handle hook, when available.
         grad_fn_handle:
@@ -170,26 +197,27 @@ class TapObserver:
             One-based backward call index.
         run_ctx:
             Shared hook run context. Accepted for hook API compatibility.
+        ctx:
+            Hook context of a gradient-site fire.
 
         Returns
         -------
-        None
-            Backward taps observe only and do not mutate gradients.
+        torch.Tensor | None
+            The unchanged gradient for a gradient-site fire; ``None`` for a node fire.
         """
 
         del run_ctx
-        grad_value, grad_kind = _first_tensor_grad(grad_output, "grad_output")
-        if grad_value is None:
-            grad_value, grad_kind = _first_tensor_grad(grad_input, "grad_input")
-        if grad_value is None:
-            return
-        with _state.pause_logging():
-            value = grad_value.detach().clone()
-        span_names = _active_span_names("backward")
+        if ctx is not None:
+            return self(grad_input, ctx=ctx)
+        if self.signal == "forward":
+            return None
+        value, grad_kind = _cloned_node_gradient(grad_input, grad_output)
+        if value is None:
+            return None
         self.records.append(
             TapRecord(
                 value=value,
-                span_names=span_names,
+                span_names=_active_span_names("backward"),
                 timestamp=time.monotonic(),
                 signal="backward",
                 grad_kind=grad_kind,
@@ -198,6 +226,7 @@ class TapObserver:
                 _trace_ref=_active_trace_ref(),
             )
         )
+        return None
 
     def values(self, masked: bool = False) -> list[torch.Tensor]:
         """Return observed out values.
@@ -237,6 +266,25 @@ class TapObserver:
         """
 
         self.records.clear()
+
+
+def _cloned_node_gradient(
+    grad_input: Any,
+    grad_output: tuple[torch.Tensor | None, ...] | None,
+) -> tuple[torch.Tensor | None, Literal["grad_input", "grad_output"] | None]:
+    """Return a detached clone of the first tensor gradient of a node fire.
+
+    Prefers ``grad_output``, falls back to ``grad_input``; ``(None, None)``
+    when neither carries a tensor.
+    """
+
+    grad_value, grad_kind = _first_tensor_grad(grad_output, "grad_output")
+    if grad_value is None:
+        grad_value, grad_kind = _first_tensor_grad(grad_input, "grad_input")
+    if grad_value is None:
+        return None, None
+    with _state.pause_logging():
+        return grad_value.detach().clone(), grad_kind
 
 
 def _first_tensor_grad(
@@ -283,20 +331,19 @@ def _active_trace_ref() -> Callable[[], Any] | None:
         return None
 
 
-def _active_span_names(direction: Literal["forward", "backward"]) -> tuple[str, ...]:
-    """Return active span names whose declared direction includes ``direction``.
+def _active_span_names(signal: Literal["forward", "backward"]) -> tuple[str, ...]:
+    """Return active span names whose declared signal includes ``signal``.
 
-    A span opened with ``direction="forward"`` scopes only forward observation and
-    a ``direction="backward"`` span only backward observation; a ``"both"`` span
+    A span opened with ``signal="forward"`` scopes only forward observation and
+    a ``signal="backward"`` span only backward observation; a ``"both"`` span
     scopes both. Enforcing this here stops a forward-only span from tagging a
-    backward tap record (and vice versa), which previously happened because every
-    active span was attached regardless of its declared direction.
+    backward tap record (and vice versa).
     """
 
     return tuple(
         str(span["name"])
         for span in _state._active_record_spans.get()
-        if span.get("direction") in (direction, "both")
+        if span.get("signal") in (signal, "both")
     )
 
 
@@ -324,16 +371,20 @@ def _hook_layer_label(layer_log: Any) -> str | None:
 def tap(
     site: Any,
     *,
-    signal: Literal["forward", "backward", "both"] = "forward",
+    signal: Literal["forward", "backward", "both"] = "both",
 ) -> TapObserver:
     """Create a tap observer for a site.
 
     Parameters
     ----------
     site:
-        Selector-like site to observe.
+        Selector-like site to observe. ``tl.grad(site)`` observes the gradient
+        of the site's output on each backward pass; ``tl.grad(site) | site``
+        observes both passes.
     signal:
-        Signal on which the tap should fire.
+        Pass filter on top of the site: ``"forward"`` records forward fires
+        only, ``"backward"`` backward fires only, ``"both"`` (default) every
+        pass the site fires on.
 
     Returns
     -------
@@ -350,7 +401,7 @@ def tap(
 def span(
     name: str,
     *,
-    direction: Literal["forward", "backward", "both"] = "both",
+    signal: Literal["forward", "backward", "both"] = "both",
 ) -> Iterator[dict[str, Any]]:
     """Record a named observer span around captures or hook execution.
 
@@ -358,8 +409,9 @@ def span(
     ----------
     name:
         Span name.
-    direction:
-        Direction scope metadata for this span.
+    signal:
+        Which records carry the span name: ``"forward"``, ``"backward"`` or
+        ``"both"`` (default).
 
     Yields
     ------
@@ -367,18 +419,18 @@ def span(
         Mutable span metadata record.
     """
 
-    if direction not in {"forward", "backward", "both"}:
-        raise ValueError("direction must be 'forward', 'backward', or 'both'.")
+    if signal not in {"forward", "backward", "both"}:
+        raise ValueError("signal must be 'forward', 'backward', or 'both'.")
     span_record = {
         "name": str(name),
-        "direction": direction,
+        "signal": signal,
         "start": time.monotonic(),
         "end": None,
     }
     _state._active_record_spans.set(_state._active_record_spans.get() + (span_record,))
     trace = _state._active_trace
     if trace is not None:
-        trace.observer_spans.append(span_record)
+        trace._provenance_observer_spans.append(span_record)
     try:
         yield span_record
     finally:
@@ -442,7 +494,7 @@ _REDIRECTS: dict[str, str] = {
 #: Live names resolved on first access (``register_tensor_connection`` lives
 #: with the capture door).
 _LAZY_ATTRS: dict[str, tuple[str, str | None]] = {
-    "register_tensor_connection": ("torchlens._user_funcs", "register_tensor_connection"),
+    "register_tensor_connection": ("torchlens._capture.run_entry", "register_tensor_connection"),
 }
 
 
@@ -465,7 +517,7 @@ if not TYPE_CHECKING:
 
 
 if TYPE_CHECKING:
-    from ._user_funcs import register_tensor_connection as register_tensor_connection
+    from ._capture.run_entry import register_tensor_connection as register_tensor_connection
 
 __all__ = [
     "TapObserver",

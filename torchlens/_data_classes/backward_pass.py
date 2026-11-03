@@ -50,7 +50,7 @@ _TO_PANDAS_EXCLUDED_BACKWARD_PASS_FIELDS: frozenset[str] = frozenset(
         "grad_fn_calls",
         # Nested per-pass count and attribution record (closed dict), read
         # through ``flops_attribution`` and ``tl.report.backward_status``.
-        "executed_flops_record",
+        "_executed_flops_record",
     }
 )
 
@@ -61,7 +61,7 @@ class BackwardPass:
 
     Parameters
     ----------
-    pass_index:
+    pass_number:
         One-based global backward invocation number.
     trigger:
         Entry point that opened this backward pass.
@@ -69,7 +69,7 @@ class BackwardPass:
         Whether this pass was inferred from orphan tensor-hook emissions.
     outer_context:
         Optional outer TorchLens trigger context when this pass was nested.
-    executed_flops_record:
+    _executed_flops_record:
         The pass's counted executed backward and its attribution as a small
         closed record, written when the trace is saved so a loaded trace
         keeps the counted answer; ``None`` on a live pass (read the census
@@ -77,7 +77,7 @@ class BackwardPass:
     """
 
     _PORTABLE_STATE_POLICY: ClassVar[dict[str, FieldPolicy]] = {
-        "pass_index": FieldPolicy.KEEP,
+        "pass_number": FieldPolicy.KEEP,
         "trigger": FieldPolicy.KEEP,
         "implicit": FieldPolicy.KEEP,
         "outer_context": FieldPolicy.KEEP,
@@ -95,19 +95,19 @@ class BackwardPass:
         "status": FieldPolicy.KEEP,
         "order_attribution_coverage": FieldPolicy.KEEP,
         "grad_fn_calls": FieldPolicy.KEEP,
-        "executed_flops_record": FieldPolicy.KEEP,
+        "_executed_flops_record": FieldPolicy.KEEP,
         "_source_trace_ref": FieldPolicy.WEAKREF_STRIP,
     }
-    FIELD_POLICY = build_record_field_policy_table(
+    _FIELD_POLICY = build_record_field_policy_table(
         BACKWARD_PASS_FIELD_ORDER,
         _PORTABLE_STATE_POLICY,
         schema_key="backward_pass",
     )
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = portable_state_spec_from_policy(
-        FIELD_POLICY
+        _FIELD_POLICY
     )
 
-    pass_index: int
+    pass_number: int
     trigger: str
     implicit: bool
     outer_context: str | None = None
@@ -125,14 +125,14 @@ class BackwardPass:
     status: str = "ok"
     order_attribution_coverage: float | None = None
     grad_fn_calls: list[Any] = field(default_factory=list)
-    executed_flops_record: dict[str, Any] | None = None
+    _executed_flops_record: dict[str, Any] | None = None
     _source_trace_ref: Any = None
 
     def __tl_state_items__(self) -> Any:
         """Yield live state pairs from the backing row (M9 facade hook).
 
         A live pass with a recorded census contributes its counted executed
-        backward as ``executed_flops_record``, so every saved copy carries it.
+        backward as ``_executed_flops_record``, so every saved copy carries it.
         """
 
         from .._trace_core.record_rows import record_state_items
@@ -140,18 +140,18 @@ class BackwardPass:
         live = self._census_record()
         seen = False
         for name, value in record_state_items(self):
-            if name == "executed_flops_record":
+            if name == "_executed_flops_record":
                 seen = True
                 if value is None:
                     value = live
             yield name, value
         if not seen and live is not None:
-            yield "executed_flops_record", live
+            yield "_executed_flops_record", live
 
     def _census_record(self) -> dict[str, Any] | None:
         """The persisted form of this pass's census attribution, if it has one."""
 
-        trace = self.source_trace
+        trace = self._source_trace
         ops = self.aten_ops
         if trace is None or ops is None:
             return None
@@ -193,7 +193,7 @@ class BackwardPass:
             "peak_memory": None,
             "status": "ok",
             "order_attribution_coverage": None,
-            "executed_flops_record": None,
+            "_executed_flops_record": None,
             "_source_trace_ref": None,
         }
         default_fill_state(state, defaults=backward_pass_setstate_defaults)
@@ -210,14 +210,14 @@ class BackwardPass:
         record_state_restore(self, state)
 
     @property
-    def source_trace(self) -> Any:
+    def _source_trace(self) -> Any:
         """Return the owning Trace if it is still alive."""
 
         ref = self._source_trace_ref
         return None if ref is None else ref()
 
-    @source_trace.setter
-    def source_trace(self, value: Any) -> None:
+    @_source_trace.setter
+    def _source_trace(self, value: Any) -> None:
         """Set the owning Trace weakref."""
 
         self._source_trace_ref = weakref.ref(value) if value is not None else None
@@ -226,7 +226,7 @@ class BackwardPass:
     def trace(self) -> Any:
         """Alias for the owning Trace."""
 
-        return self.source_trace
+        return self._source_trace
 
     @property
     def aten_ops(self) -> tuple[Any, ...] | None:
@@ -238,12 +238,12 @@ class BackwardPass:
         ``None`` when this object holds no record for the pass (a loaded
         trace, an implicit pass opened by tensor hooks, another backend).
         """
-        trace = self.source_trace
+        trace = self._source_trace
         if trace is None:
             return None
         from ..backends.torch._backward_dispatch import recorded_ops
 
-        return recorded_ops(trace, self.pass_index)
+        return recorded_ops(trace, self.pass_number)
 
     @property
     def flops_attribution(self) -> Any:
@@ -256,22 +256,22 @@ class BackwardPass:
         pass has no recorded census on this object and was not saved with
         its count (a loaded trace reads the saved record).
         """
-        trace = self.source_trace
+        trace = self._source_trace
         ops = self.aten_ops
         from ..report._backward_attribution import attribute_census, attribution_from_record
 
         if trace is not None and ops is not None:
             return attribute_census(trace, self, ops)
-        record = self.executed_flops_record
+        record = self._executed_flops_record
         if record is None:
             return None
-        return attribution_from_record(trace, self.pass_index, record)
+        return attribution_from_record(trace, self.pass_number, record)
 
     @property
     def ordinal_index(self) -> int:
         """Return this pass's 0-based position in ``trace.autograd.backward_passes``."""
 
-        return self.pass_index - 1
+        return self.pass_number - 1
 
     def to_pandas(self) -> pd.DataFrame:
         """Export this backward pass as a one-row DataFrame.
@@ -306,7 +306,7 @@ class BackwardPass:
 # (dataclass defaults are baked into the generated __init__). Rows adopt
 # into the owning backward epoch's stores.
 _BACKWARD_PASS_STORED_FIELDS: tuple[str, ...] = (
-    "pass_index",
+    "pass_number",
     "trigger",
     "implicit",
     "outer_context",
@@ -324,7 +324,7 @@ _BACKWARD_PASS_STORED_FIELDS: tuple[str, ...] = (
     "status",
     "order_attribution_coverage",
     "grad_fn_calls",
-    "executed_flops_record",
+    "_executed_flops_record",
     "_source_trace_ref",
 )
 
@@ -348,7 +348,7 @@ class BackwardPassAccessor(Accessor[BackwardPass]):
 
         items = [backward_passes[index] for index in sorted(backward_passes)]
         super().__init__(
-            {str(pass_record.pass_index): pass_record for pass_record in items},
+            {str(pass_record.pass_number): pass_record for pass_record in items},
             item_list=items,
         )
 
@@ -357,6 +357,6 @@ class BackwardPassAccessor(Accessor[BackwardPass]):
 
         key = str(pass_index)
         if key not in self._dict:
-            available = [pass_record.pass_index for pass_record in self._list]
+            available = [pass_record.pass_number for pass_record in self._list]
             raise KeyError(f"Backward pass {pass_index} not found. Available passes: {available}.")
         return self._dict[key]

@@ -64,7 +64,7 @@ def _build_bundle(tmp_path: Path, *, name: str = "bundle.tl") -> Path:
     torch.manual_seed(0)
     model = _SecurityIOModel()
     inputs = torch.randn(2, 4)
-    trace = tl.trace(model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", seed=0))
+    trace = tl.trace(model, inputs, capture=tl.options.CaptureOptions(seed=0), save="all")
     bundle_path = tmp_path / name
     trace.save(bundle_path)
     return bundle_path
@@ -183,7 +183,7 @@ def test_lazy_materialize_rejects_tampered_relative_path(tmp_path: Path) -> None
 
     bundle_path = _build_bundle(tmp_path)
     lazy_log = load(bundle_path, lazy=True)
-    layer = next(layer for layer in lazy_log.layer_list if layer.has_saved_activation)
+    layer = next(layer for layer in lazy_log._layer_list if layer.has_saved_activation)
     ref = layer.out_ref
     assert ref is not None
 
@@ -216,4 +216,4 @@ def test_orphaned_extra_blob_only_warns(tmp_path: Path) -> None:
     with pytest.warns(UserWarning, match="unreferenced extra files"):
         restored = load(bundle_path)
 
-    assert restored.model_class_name == "_SecurityIOModel"
+    assert restored.source.class_name == "_SecurityIOModel"

@@ -18,7 +18,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import mean_ablate, project_onto, project_out, splice_module, zero_grad
+from torchlens import mean_ablate, project_onto, project_out, splice_module
 from torchlens._errors import InvalidArgumentError
 from torchlens.intervention import (
     compose,
@@ -62,7 +62,7 @@ def _trace(coords: torch.Tensor = _COORDS) -> tl.Trace:
     return tl.trace(
         _Mlp().eval(),
         coords @ _H,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 
@@ -162,7 +162,7 @@ def test_patch_from_is_the_das_interchange(rank: str) -> None:
         model.lin2.weight.copy_(torch.randn(3, 4, dtype=torch.float64))
     base = torch.randn(5, 4, dtype=torch.float64)
     source = torch.randn(5, 4, dtype=torch.float64)
-    options = tl.options.CaptureOptions(intervention_ready=True)
+    options = tl.options.CaptureOptions(replayable=True)
     target_log = tl.trace(model, base, capture=options)
     source_log = tl.trace(model, source, capture=options)
     fork = target_log.fork()
@@ -235,21 +235,13 @@ _REFUSED: dict[str, tuple[Callable[[], tuple[Any, Any]], Callable[[], tuple[Any,
         lambda: (_subspace_sel(), splice_module(nn.Identity(), input_route="in")),
         lambda: (_subspace_sel(), splice_module(nn.Identity(), input_route="out")),
     ),
-    "grad_zero": (
-        lambda: (_subspace_sel(), zero_grad()),
-        lambda: ("capture", zero_grad()),
-    ),
 }
 
 
 def _run_remedy(target: Any, edit: Any) -> None:
-    """Run one remedy spelling; backward verbs attach at capture time."""
+    """Run one remedy spelling on a fresh fork."""
 
-    if target != "capture":
-        _trace().fork().do(target, edit)
-        return
-    trace = tl.trace(_Mlp(), _COORDS @ _H, intervene=tl.when(tl.module("lin1"), edit))
-    trace[trace.output_layers[0]].out.sum().backward()
+    _trace().fork().do(target, edit)
 
 
 @pytest.mark.parametrize("name", sorted(_REFUSED))
@@ -324,7 +316,7 @@ def test_gradient_reaches_upstream_through_the_component_edit(rank: str, verb: s
     basis = _BASES[rank]
     x = torch.randn(5, 4, dtype=torch.float64, generator=torch.Generator().manual_seed(7))
     source_x = torch.randn(5, 4, dtype=torch.float64, generator=torch.Generator().manual_seed(8))
-    options = tl.options.CaptureOptions(intervention_ready=True)
+    options = tl.options.CaptureOptions(replayable=True)
     model = _random_mlp()
     source = tl.trace(_random_mlp(), source_x, capture=options)
     edit = tl.scale(2.0) if verb == "scale" else tl.patch_from(source)

@@ -5,7 +5,7 @@ The glossary is the **canonical** API spec (maintained privately; `docs/referenc
 - **Rename / add / remove any PUBLIC name** (dataclass field, `@property`, method, top-level `tl.*` name, kwarg) → in the SAME change, update: (1) the **glossary** entry (canonical), (2) the agent-reference examples (`docs/agent-reference/`, moved out of `AGENTS.md`), (3) the audit notebooks (`notebooks/audit/`) and `examples/` that use it.
 - A change that touches code but leaves the glossary/docs stale is **INCOMPLETE.** This is exactly how the v7 `memory → activation_memory` gap and the stale `log_forward_pass`/`vis_opt` examples slipped through.
 - After a rename/conformance sprint: re-file the updated canonical glossary (it supersedes the prior dated version), and confirm a `grep` of every old name is clean across `torchlens/`, `tests/`, `examples/`, `notebooks/`, AND the glossary itself.
-- Tooling: `python tools/name_lockstep check --base ref:<base-branch>` lists every new, renamed and removed public name of the working tree against a base (a member whose defining module moved but whose `Class.name` spelling did not is `moved`: it keeps only the glossary-entry obligation) (ids `root:tl.X`, `export:tl.ns.X`, `member:<module>:<Class>.<name>`, `param:<name>`) and exits 1 with each missing glossary entry, missing agent-reference mention and stale old spelling (`--glossary PATH` adds the canonical copy; a `.member` or `kw=` hit that is a live head name, an imported third-party object's attribute, a URL or an assignment target is attributed there and not reported). `codemod --proposals FILE` applies renames from rows carrying `id` and `proposed`, dry run unless `--apply`; `gate-input` writes each new name with its call-site snippet for the legibility check.
+- Tooling: `python tools/name_lockstep check --base ref:<base-branch>` lists every new, renamed and removed public name of the working tree against a base (a member whose defining module or class moved but whose public `Class.name` spelling did not, including a mixin member folded onto the class it was reached through, is `moved`: it keeps only the glossary-entry obligation) (ids `root:tl.X`, `export:tl.ns.X`, `member:<module>:<Class>.<name>`, `param:<name>`) and exits 1 with each missing glossary entry, missing agent-reference mention and stale old spelling (`--glossary PATH` adds the canonical copy; a `.member` or `kw=` hit that is a live head name, an imported third-party object's attribute, a URL or an assignment target is attributed there and not reported). `codemod --proposals FILE` applies renames from rows carrying `id` and `proposed`, dry run unless `--apply`; `gate-input` writes each new name with its call-site snippet for the legibility check.
 
 ### Trusted custom callable imports
 
@@ -46,7 +46,7 @@ transformed outputs, as `selected_activation_v2` with physical `InputAttestation
 eligibility records. Load exposes them through
 `trace.archived_activations` for inspection. They never seed the sparse DAG. On original-input runs
 with embedded or capture-equivalent staged state, recomputed saved raw slots are compared by exact
-bytes and report `attested`; the first mismatch raises `numeric_attestation_failed` and rolls back.
+bytes and report `attested`; the first mismatch raises `replay_value_mismatch` and rolls back.
 Changed-input (logical or physical), random-state, non-equivalent-state, and
 nondeterministic-capture-context runs report `not_applicable`; `attested` always implies
 `verified`.
@@ -67,7 +67,7 @@ and keeps refusing train-mode writers. Unproven (`None`) evidence, a value-chang
 mode claim contradicting the evidence, a refreshed rerun's own journal recording a
 value-changing write the target does not prove, or diverging target-vs-refreshed evidence
 (compared per sink label) refuses with the typed `BufferSinkRoutingError` carrying
-code `"buffer_sink_routing_mutable"` (provisional spelling, documented-unstable;
+code `"buffer_sink_routing_unsupported"` (provisional spelling, documented-unstable;
 pinned "computational graph changed" message term preserved). A loaded sparse Trace binds cloned
 input leaves plus staged/random state and executes its resolved taken-path DAG under
 `pause_logging()`. Both return `RunResult(output, trace, report)` and leave the source Trace
@@ -91,7 +91,7 @@ keeps the full transactional validation/attestation path. The fast-mode handle
 `tests/test_schema_lockstep.py::PRIVATE_ORDERED_DROP_FIELDS`). Model outputs with ZERO
 tensor leaves (all-literal trees, literal roots, empty containers) and namedtuple/mapping/
 registered-container outputs carrying extra per-instance state refuse at save
-(`missing_output_container_contract`; one per-kind capability table governs capture proof, save
+(`output_container_contract_missing`; one per-kind capability table governs capture proof, save
 refusal, and load-time recompute). Host nondeterminism beyond the two replayable global engines
 -- RNG instances (incl. outside-held NumPy Generators, witnessed by a chained
 `sys`/`threading.setprofile` receiver classifier + a cheap model-attribute state digest -- NO

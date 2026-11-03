@@ -55,7 +55,7 @@ def _assert_conserved(trace: Any) -> Any:
 def _counted_rows_name_their_forward_op(trace: Any, status: Any) -> None:
     """Every row with counted work names a forward op the trace holds, or a node without one."""
 
-    labels = {str(op.layer_label) for op in trace.layer_list}
+    labels = {str(op.layer_label) for op in trace._layer_list}
     for attribution in status.flops_attributions:
         for row in attribution.rows:
             if row.flops and row.op_label is not None:
@@ -146,7 +146,7 @@ def test_two_traces_in_one_backward_each_keep_their_own_nodes() -> None:
             assert attribution.other_trace_ops > 0
             assert "another trace's nodes" in status.reason
             (counted,) = [row for row in attribution.rows if row.flops]
-            assert counted.op_label in {str(op.layer_label) for op in trace.layer_list}
+            assert counted.op_label in {str(op.layer_label) for op in trace._layer_list}
     finally:
         trace1.cleanup()
         trace2.cleanup()
@@ -228,12 +228,12 @@ def test_checkpoint_recompute_is_labeled_and_never_moves_a_flop(mode: str) -> No
             assert row.op_label is None and row.recompute_flops == SEGMENT_FORWARD
         forward = {
             str(op.layer_label): op.flops_forward
-            for op in trace.layer_list
+            for op in trace._layer_list
             if op.func_name == "linear"
         }
         twin_forward = {
             str(op.layer_label): op.flops_forward
-            for op in twin.layer_list
+            for op in twin._layer_list
             if op.func_name == "linear"
         }
         assert forward == twin_forward
@@ -429,8 +429,8 @@ def test_an_unused_output_gets_no_gradient_and_backward_runs(case: str) -> None:
         trace.log_backward(trace[trace.output_layers[0]].out)
         for name, param in model.named_parameters():
             torch.testing.assert_close(param.grad, expected[name])
-        outputs = [op for op in trace.layer_list if op.func_name == func_name]
-        assert outputs, [op.func_name for op in trace.layer_list]
+        outputs = [op for op in trace._layer_list if op.func_name == func_name]
+        assert outputs, [op.func_name for op in trace._layer_list]
         unused = [op for op in outputs if op.multi_output_index == unused_index]
         assert unused and not any(op.has_grad for op in unused)
         used = [op for op in outputs if op.multi_output_index != unused_index]

@@ -236,9 +236,9 @@ def build_commit(root: Path = _REPO_ROOT) -> dict[str, str]:
 def _table_slide(slide: Slide, height: float, env: dict[str, Any], probe: dict[str, Any]) -> Any:
     import inspect
 
-    from torchlens._data_classes._trace_viz import TraceVisualizationMixin
+    from torchlens._data_classes.trace import Trace
 
-    params = inspect.signature(TraceVisualizationMixin.draw).parameters
+    params = inspect.signature(Trace.draw).parameters
     footer = f"TorchLens {env['torchlens']}, commit {env['commit'][:10]}, built {env['built'][:10]}"
     half = (len(CHEAT_GROUPS) + 1) // 2
     groups = CHEAT_GROUPS[half:] if slide.id.endswith("-2") else CHEAT_GROUPS[:half]
@@ -476,7 +476,9 @@ def generated_names() -> list[str]:
         if slide.id in ALPHABET:
             stems.append(f"{slide.id}-a")
         names += [f"{stem}.{ext}" for stem in stems for ext in ("svg", "dot", "json")]
-    names += [f"{stem}.{ext}" for stem in capture.EXPORT_STEMS for ext in ("png", "svg", "pdf")]
+    names += [
+        f"{stem}.{ext}" for stem in capture.EXPORT_STEMS for ext in ("png", "svg", "pdf", "html")
+    ]
     return names
 
 

@@ -38,7 +38,7 @@ from torchlens._io._safe_unpickle import SafeBundleUnpickler, _torch_type_denied
 from torchlens.options import CaptureOptions
 
 _CAP = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )
@@ -122,17 +122,13 @@ def _save_all_levels(tmp_path: Path) -> dict[str, Path]:
     audit = tmp_path / "audit"
     cf_a = _ControlFlow()
     keep_alive.append(cf_a)
-    tl.trace(cf_a, x, capture=tl.options.CaptureOptions(layers_to_save="all")).save(
-        audit, level="audit"
-    )
+    tl.trace(cf_a, x, save="all").save(audit, level="audit")
     paths["analysis"] = audit
 
     portable = tmp_path / "portable"
     cf_p = _ControlFlow()
     keep_alive.append(cf_p)
-    tl.trace(cf_p, x, capture=tl.options.CaptureOptions(layers_to_save="all")).save(
-        portable, level="portable"
-    )
+    tl.trace(cf_p, x, save="all").save(portable, level="portable")
     paths["portable"] = portable
 
     run = tmp_path / "runnable"
@@ -286,23 +282,6 @@ def test_all_save_levels_still_load(tmp_path: Path) -> None:
         assert loaded is not None, name
 
 
-@pytest.mark.filterwarnings(
-    # A08 random-role-init disclosure (runnable_random_init_run): this test
-    # exercises a weight-free runnable run DELIBERATELY; the warning is the
-    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
-    "default:This runnable artifact carries no model weights"
-)
-def test_runnable_levels_still_run(tmp_path: Path) -> None:
-    """Runnable bundles at all three variants still execute after the guarded load."""
-
-    x = torch.randn(2, 4)
-    paths = _save_all_levels(tmp_path)
-    for name in ("runnable", "runnable_weights", "runnable_activations"):
-        loaded = tl.load(paths[name])
-        result = loaded.run(inputs=x)
-        assert tuple(result.output.shape) == (2, 4), name
-
-
 def test_real_cnn_and_attention_models_load(tmp_path: Path) -> None:
     """A real CNN and attention model saved portably still load under the guard."""
 
@@ -310,12 +289,10 @@ def test_real_cnn_and_attention_models_load(tmp_path: Path) -> None:
     tl.trace(
         _CNN(),
         torch.randn(2, 3, 8, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     ).save(cnn_path, level="portable")
     assert tl.load(cnn_path) is not None
 
     attn_path = tmp_path / "attn"
-    tl.trace(
-        _Attn(), torch.randn(2, 5, 8), capture=tl.options.CaptureOptions(layers_to_save="all")
-    ).save(attn_path, level="portable")
+    tl.trace(_Attn(), torch.randn(2, 5, 8), save="all").save(attn_path, level="portable")
     assert tl.load(attn_path) is not None

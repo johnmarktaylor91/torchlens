@@ -4,7 +4,7 @@ Status: CONVERGED (round 2), now HISTORICAL. Basis tree `781a7559`. Every
 schema statement below is as-of that pre-v8 tree: the tlspec v8 coordinated bump has
 since shipped, so "no `TLSPEC_VERSION` bump" and "rows remain `RUNTIME`/DROP-gated"
 sentences describe the sprint's scope at the time, not the current tree — the runtime
-authority is `torchlens/_io/__init__.py` and the per-class `FIELD_POLICY` tables.
+authority is `torchlens/_io/__init__.py` and the per-class `_FIELD_POLICY` tables.
 This document is the
 architecture of record for the columnar re-plumbing sprint: it synthesizes the three
 independent round-1 designs and the three round-2 reconciles into ONE plan. Where the
@@ -177,7 +177,7 @@ point; error/partial paths must produce facade-backed results immediately before
 exposure; partial cores carry `topology_complete=False` and never pretend full
 postprocess ran.
 
-Pack-on-expose dissolves by construction (facades exist from step 0, so `exc.partial_log`
+Pack-on-expose dissolves by construction (facades exist from step 0, so `exc.partial_trace`
 and `on_divergence="return"` traces are facade-backed automatically), but the escape-path
 inventory survives: every place a Trace/Op leaves `torchlens.*` mid-postprocess
 (observers, `tap()`, `span()`, validation internals, bridge adapters) is
@@ -199,7 +199,7 @@ implies a physical layout.
 The current derivation runs backwards (the policy table is built from the FIELD_ORDER
 literal at 10 sites). It is inverted with a byte-provable staged transition: the
 checked-in `constants.py` literals stay hand-written and authoritative as the declared
-schema, and `field_order_from_policy(cls.FIELD_POLICY) == LITERAL` is asserted for all
+schema, and `field_order_from_policy(cls._FIELD_POLICY) == LITERAL` is asserted for all
 12 classes, in both directions, before anything is generated. The twelfth class is the
 DROP-gated `primitive_op` row: its installed wave-0 bindings remain `RUNTIME`, while an
 isolated prerelease audit derives the intended `INTERNED`/`EDGE`/`SCALAR` bindings without
@@ -275,7 +275,7 @@ private; computed collapse metadata stays out of serialization.
 - **`Trace.fork()`**: core-level COW — share frozen base + pools; new facade cache, new
   overlay, detached backward epochs, independent intervention/history state, payload
   handles per today's fork policy. Transactions checkpoint overlay + epochs; rollback
-  discards atomically. The forkcopier (`_trace_intervention.py`) is DELETED in the same
+  discards atomically. The forkcopier (the former `_trace_intervention.py`) is DELETED in the same
   wave that proves fork/rollback/payload-alias/parent-run/GC parity — a strict
   improvement (-331 lines, -3 CPython private APIs, faster fork), not a give-back.
 
@@ -377,7 +377,7 @@ transient fields live in three named per-phase workspaces
 the transient-cleanup seam, with the backend `finalize_forward_session`
 protocol taking the raw-graph workspace as its ownership token; the three
 dead fields (`grad_fn_strong_refs`, `output_container_specs*`) were deleted
-with the dissolution. Postprocess steps 1-20 run in order from `_postprocess/_executor.py::STEP_REGISTRY`; the
+with the dissolution. The postprocess steps run in the order of `_postprocess/_pipeline.py::PIPELINE` (named records, no ranks); the
 declared-contract derivation and the env-gated column audit that once accompanied it were
 removed (2026-10-31).
 The Trace PHYSICAL component decomposition (components as storage owners
@@ -396,7 +396,7 @@ the physical move is mechanical against it.
 `RunnableTraceState` (sizes per plane: the ownership map above is the
 authority; the historical approximate counts here drifted twice). All 220 FIELD_ORDER entries keep emitting the same semantic
 mapping through component-backed properties. Label/address/lookup maps move to core
-indexes; accessors become facade factories. Mixins stay as presentation organization;
+indexes; accessors become facade factories. Thin `Trace` methods over function modules stay as presentation organization;
 internal algorithms move to narrow component/core protocols. `Module` — the second god
 object — gets its own responsibility decomposition into narrow query/presentation
 helpers without moving public methods. `TraceBuildState` actually goes away: its 20
@@ -435,7 +435,7 @@ OUT (documented handoffs, never silent):
 - New physical columnar `.tlspec` (FORK-3); Arrow core dependency; global interning;
   `torchlens/projection/` package (the 26 declared steps' order is load-bearing; the substance —
   declared per-step read/write sets — lands without the relocation); UI regrouping
-  implementation (plan-only, FORK-2); `intervention_ready` rename (separate
+  implementation (plan-only, FORK-2); `replayable` rename (separate
   authorization).
 
 Any capacity cut happens at a completed wave boundary, named plainly — never mid-fan-out,

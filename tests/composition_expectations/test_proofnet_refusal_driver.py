@@ -107,18 +107,18 @@ REFUSAL_ROWS: tuple[RefusalRow, ...] = (
     ),
     RefusalRow(
         "RF-halted-runnable-save",
-        "halted_capture_not_runnable",
+        "stopped_capture_unsupported",
         "HALTED",
         lambda: (
             _tl()
-            .trace(_model(), _x(), halt=_tl().func("relu"))
+            .trace(_model(), _x(), stop_after=_tl().func("relu"))
             .save("/tmp/proofnet-halted-runnable-refused.tlspec", level="runnable")
         ),
     ),
     RefusalRow(
         "RF-edges-without-arming",
         "edge_provenance_unavailable",
-        "intervention_ready",
+        "replayable",
         lambda: _tl().trace(_model(), _x()).graph.edges,
     ),
     RefusalRow(

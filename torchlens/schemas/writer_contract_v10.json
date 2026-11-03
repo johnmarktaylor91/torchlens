@@ -891,8 +891,6 @@
     "_out_sink": "drop",
     "_out_writer": "drop",
     "_output_container_specs_by_raw_label": "drop",
-    "_output_head": "drop",
-    "_output_style": "drop",
     "_output_tokenizer": "drop",
     "_output_transform": "drop",
     "_paddle_alias_annotations": "drop",
@@ -1275,14 +1273,13 @@
     "args": "keep",
     "batch_independent": "keep",
     "compatible_with_append": "keep",
-    "direction": "keep",
     "factory": "drop",
     "helper_name": "keep",
-    "kind": "keep",
     "kwargs": "keep",
     "metadata": "keep",
     "portability": "keep",
-    "selection_recipe": "blob_recursive"
+    "selection_recipe": "blob_recursive",
+    "signal": "keep"
    },
    "torchlens.intervention.types.FireRecord": {
     "backward_pass_index": "keep",
@@ -1290,7 +1287,6 @@
     "call_label": "keep",
     "container_path": "keep",
     "determinism_note": "keep",
-    "direction": "keep",
     "edge_address": "keep",
     "engine": "keep",
     "func_call_id": "keep",
@@ -1299,6 +1295,7 @@
     "helper_name": "keep",
     "replaced": "keep",
     "seed": "keep",
+    "signal": "keep",
     "site_label": "keep",
     "target_label": "keep",
     "timestamp": "keep",
@@ -3413,8 +3410,6 @@
      "_out_sink": "drop",
      "_out_writer": "drop",
      "_output_container_specs_by_raw_label": "drop",
-     "_output_head": "drop",
-     "_output_style": "drop",
      "_output_tokenizer": "drop",
      "_output_transform": "drop",
      "_paddle_alias_annotations": "drop",
@@ -4101,5 +4096,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "ad27e4069d8b1fc942412a7a2362a5aaaf1240d8e027b8c91894e4410c0aad2e"
+ "writer_contract_digest": "9e2dbda0727524e6d2de8c27c78348d6694c054e185d01269baaff74f18896f5"
 }

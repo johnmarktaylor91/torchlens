@@ -11,7 +11,7 @@ pending naming-session ratification.
 ## The accumulators
 
 Every accumulator implements the `tl.stats.StreamingStat` protocol --
-`update(value)` folds one batch, `result()` finalizes:
+`update(value)` folds one batch, `compute()` finalizes (`tl.stats.Histogram` finalizes with `result()`):
 
 | Accumulator | Result | Notes |
 |---|---|---|
@@ -54,18 +54,19 @@ results = tl.stats.aggregate(
 print(results["relu_1_2"]["Mean"], sorted(results["output"]))
 ```
 
-Gradient statistics stream the same way: pass `target="grad"` and a
-`loss_fn=` used to build the backward pass from `(output, *batch_tail)`:
+Gradient statistics stream the same way: key the metric by the gradient site
+`tl.grad(site)` and pass a `loss_fn=` used to build the backward pass from
+`(output, *batch_tail)`. A gradient key without `loss_fn=` refuses
+(`aggregate_loss_fn_required`). The result is keyed by the site's repr:
 
 ```python
 grad_results = tl.stats.aggregate(
     model,
     [(torch.rand(2, 3, 16, 16),) for _ in range(2)],
-    metrics={"relu_1_2": tl.stats.Norm()},
-    target="grad",
+    metrics={tl.grad("relu_1_2"): tl.stats.Norm()},
     loss_fn=lambda output: output.square().mean(),
 )
-print(grad_results["relu_1_2"] >= 0.0)
+print(grad_results["tl.grad('relu_1_2')"] >= 0.0)
 ```
 
 ## Per-unit statistics: neurons, channels and SAE latents
@@ -115,7 +116,7 @@ sae_encoder = nn.Sequential(nn.Linear(8, 16), nn.ReLU()).eval()  # a tiny SAE en
 stimuli = [torch.randn(3, 4) for _ in range(3)]  # 9 examples, ragged batches welcome
 
 relu_label = next(
-    op.layer_label for op in tl.trace(mlp, stimuli[0]).layer_list if op.layer_type == "relu"
+    op.layer_label for op in tl.trace(mlp, stimuli[0]).ops if op.type == "relu"
 )
 per_unit = tl.stats.aggregate(
     mlp,
@@ -238,14 +239,14 @@ with tempfile.TemporaryDirectory() as folder:
 `"none"`: each op's out is folded into a `tl.stats.RunningStats` while the forward
 runs, and no activation payload is kept. The capture logs the same graph as a
 full capture (the reducer's own torch calls never enter it), makes no raw
-copy of an out, and keeps one fixed 16-number float64 vector (128 bytes) per
+copy of an activation, and keeps one fixed 16-number float64 vector (128 bytes) per
 op whatever the batch size. `tl.stats.site_stats(trace)` returns
 `{op label: RunningStats}` in capture order. For a float64 out the counts, the
 extrema, the sum and the mean equal `RunningStats().update(out)` on the full
-capture's out exactly. The reducer folds each out in chunks of 2^16 values,
-so its largest working tensor is 512 KiB whatever the out's size (where
+capture's activation exactly. The reducer folds each activation in chunks of 2^16 values,
+so its largest working tensor is 512 KiB whatever the activation's size (where
 `RunningStats.update` holds full-size float64 copies); the sum of squares, the sum
-of absolute values and M2 are therefore bit-equal for outs up to one chunk
+of absolute values and M2 are therefore bit-equal for activations up to one chunk
 and otherwise equal within float64 reduction-order rounding. A float32 out's sum
 accumulates in float64 without a converted copy, so it can differ from
 `RunningStats.update` in the last bits. The returned spines are live accumulators:
@@ -266,12 +267,12 @@ x = torch.rand(2, 3, 16, 16)
 reduced = tl.trace(model, x, save="stats")
 spines = tl.stats.site_stats(reduced)
 label = next(iter(spines))
-print(label, spines[label].result().count_total, spines[label].result().mean)
+print(label, spines[label].compute().numel, spines[label].compute().mean)
 
 full = tl.trace(model, x)
 reference = tl.stats.RunningStats()
 reference.update(full[label].out)
-print(reference.result() == spines[label].result())
+print(reference.compute() == spines[label].compute())
 ```
 
 ## Trajectory statistics: `tl.mechinterp.measure_trajectory`
@@ -300,6 +301,7 @@ a model fed embeddings, no batches).
 
 ```python
 from torch import nn
+import torchlens.mechinterp
 from torchlens.facets import FacetSpec
 from torchlens._semantic.recipes._helpers import parameter_spec
 
@@ -339,6 +341,8 @@ def doc_head(module):
 lm = DocLM().eval()
 ids = torch.randint(0, 20, (4, 6))
 data = [(ids, ids.roll(-1, dims=1))]          # (input_ids, next-token targets)
+import torchlens.mechinterp  # a submodule: import it before use
+
 traj = tl.mechinterp.measure_trajectory(lm, data, mask_input=False)
 print(traj)
 print(traj.position_means["entropy"].shape)    # [layers, positions]

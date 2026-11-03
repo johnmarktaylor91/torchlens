@@ -57,7 +57,7 @@ def test_grouped_activation_bytes_sum_to_the_ungrouped_view(two_line_trace) -> N
 
     assert grouped["activation_memory"].sum() == ungrouped["activation_memory"].sum()
     assert grouped["flops"].sum() == ungrouped["flops"].sum()
-    assert grouped["op_count"].sum() == len(two_line_trace.layer_list)
+    assert grouped["op_count"].sum() == len(two_line_trace._layer_list)
     assert len(grouped) < len(ungrouped)
 
 

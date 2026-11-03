@@ -87,7 +87,7 @@ class PartialFreeze(nn.Module):
 def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     """Metadata-only capture."""
 
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=None))
+    return tl.trace(model, x, save=None)
 
 
 def test_tied_params_counted_once_by_object_identity() -> None:
@@ -98,7 +98,7 @@ def test_tied_params_counted_once_by_object_identity() -> None:
     try:
         assert log.num_params == sum(p.numel() for p in model.parameters())
         assert log.num_params == 40
-        assert log.num_param_tensors == 1
+        assert len(log.params) == 1
     finally:
         log.cleanup()
 
@@ -130,7 +130,7 @@ def test_shared_storage_views_stay_distinct_parameters() -> None:
         assert log.num_params == 24
         assert log.num_params == sum(p.numel() for p in model.parameters())
         # Two distinct parameter identities, no tie group (different objects).
-        assert log.num_param_tensors == 2
+        assert len(log.params) == 2
         assert log.graph.tied_param_groups == ()
     finally:
         log.cleanup()

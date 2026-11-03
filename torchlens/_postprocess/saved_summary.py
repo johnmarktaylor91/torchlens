@@ -3,6 +3,8 @@
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
+from .._quantities import Bytes
+
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
@@ -19,7 +21,7 @@ def count_saved_module_calls_from_output_ops(
         Trace whose module calls should be counted.
     saved_op_labels:
         Optional saved Op labels. When omitted, labels are derived from saved
-        activations on ``trace.layer_list``.
+        activations on ``trace._layer_list``.
 
     Returns
     -------
@@ -31,7 +33,7 @@ def count_saved_module_calls_from_output_ops(
     if saved_op_labels is None:
         saved_labels = {
             op.label
-            for op in getattr(trace, "layer_list", ())
+            for op in trace._layer_list
             if getattr(op, "has_saved_activation", False) and not getattr(op, "is_orphan", False)
         }
     else:
@@ -68,7 +70,7 @@ def op_label_aliases(trace: "Trace") -> dict[str, str]:
     """
 
     by_layer: dict[str, list[str]] = {}
-    for op in getattr(trace, "layer_list", ()):
+    for op in trace._layer_list:
         by_layer.setdefault(op.layer_label, []).append(op.label)
     return {layer: labels[0] for layer, labels in by_layer.items() if len(labels) == 1}
 
@@ -77,12 +79,12 @@ def refresh_saved_module_call_count(
     trace: "Trace",
     saved_op_labels: Iterable[str] | None = None,
 ) -> int:
-    """Refresh and return ``trace.num_saved_module_calls``.
+    """Return the saved ModuleCall count.
 
     Parameters
     ----------
     trace:
-        Trace whose stored counter should be refreshed.
+        Trace whose saved ModuleCalls are counted.
     saved_op_labels:
         Optional saved Op labels forwarded to
         ``count_saved_module_calls_from_output_ops``.
@@ -90,11 +92,10 @@ def refresh_saved_module_call_count(
     Returns
     -------
     int
-        Refreshed saved ModuleCall count.
+        Saved ModuleCall count.
     """
 
     count = count_saved_module_calls_from_output_ops(trace, saved_op_labels)
-    trace.num_saved_module_calls = count
     return count
 
 
@@ -110,17 +111,16 @@ def refresh_pinned_autograd_memory(trace: "Trace", saved_ops: Iterable[object]) 
 
     Notes
     -----
-    Sets ``trace.pinned_autograd_memory``: ``Bytes(0)`` when every
+    Sets ``trace.cost.pinned_autograd_memory``: ``Bytes(0)`` when every
     payload is detached, ``None`` on a non-torch backend, where the walk does
     not apply.
     """
 
-    from .._quantities import Bytes
     from ..backends import TORCH_BACKEND_NAME
 
-    backend_name = str(getattr(trace, "backend", TORCH_BACKEND_NAME) or TORCH_BACKEND_NAME)
+    backend_name = str(trace._provenance_backend or TORCH_BACKEND_NAME)
     if backend_name != TORCH_BACKEND_NAME:
-        trace.pinned_autograd_memory = None
+        trace._cost_pinned_autograd_memory = None
         return
     from ..backends.torch._pinned_graph import pinned_autograd_bytes
 
@@ -129,4 +129,64 @@ def refresh_pinned_autograd_memory(trace: "Trace", saved_ops: Iterable[object]) 
         for op in saved_ops
         for payload in (getattr(op, "out", None), getattr(op, "transformed_out", None))
     ]
-    trace.pinned_autograd_memory = Bytes(pinned_autograd_bytes(payloads))
+    trace._cost_pinned_autograd_memory = Bytes(pinned_autograd_bytes(payloads))
+
+
+def _has_retained_gradient_payloads(self: "Trace") -> bool:
+    """Return whether any completed backward pass retained gradient payloads.
+
+    Parameters
+    ----------
+    self:
+        Trace whose projected operation and parameter gradients should be
+        inspected.
+
+    Returns
+    -------
+    bool
+        Whether portable scrubbing must include gradient payloads.
+
+    Notes
+    -----
+    The projection is the authority here, rather than ``Trace.options.save_grads``:
+    ``log_backward(save_grads=...)`` may override that capture-time default on
+    each pass.
+    """
+
+    for op in self._layer_list:
+        for record in getattr(op, "grads", ()):
+            if record.grad is not None or record.transformed_grad is not None:
+                return True
+    for param in self._param_logs.values():
+        if any(record.grad is not None for record in getattr(param, "grads", ())):
+            return True
+    return False
+
+
+def _refresh_fast_saved_summary(self: "Trace") -> None:
+    """Refresh saved-output counters after retained layers are finalized.
+
+    Args:
+        self: Trace whose final retained layer entries were updated.
+
+    Returns:
+        None. Mutates aggregate saved-output fields on ``self``.
+    """
+
+    saved_layers = [
+        layer_entry
+        for layer_entry in self._layer_list
+        if getattr(layer_entry, "has_saved_activation", False)
+        and not getattr(layer_entry, "is_orphan", False)
+    ]
+    self._num_saved_ops = len(saved_layers)
+    # F20 (brainpipe D-17): read the ONE byte model -- physically retained
+    # alias-aware bytes -- never a sum of raw activation_memory fields. The
+    # explorer P4 memory truth (reduce-only captures count the retained
+    # TRANSFORMED bytes, raw-retaining captures the raw bytes) is served by
+    # this same aggregate: it counts the payloads capture actually kept.
+    from .._save_budget import retained_activation_bytes
+
+    self._cost_saved_activation_memory = Bytes(retained_activation_bytes(saved_layers))
+    refresh_saved_module_call_count(self, {layer_entry.label for layer_entry in saved_layers})
+    refresh_pinned_autograd_memory(self, saved_layers)

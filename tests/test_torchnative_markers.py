@@ -86,8 +86,8 @@ def test_nvtx_internal_bookkeeping_separated(nvtx_calls) -> None:
 def test_internal_read_marker_names_are_typed_internal() -> None:
     """A wrapped call made inside an internal read is named under ``torchlens::internal::``."""
 
+    from torchlens.backends.torch._completeness_origins import internal_scalar_read
     from torchlens.backends.torch._op_markers import _op_marker_labels
-    from torchlens.backends.torch.completeness_witness import internal_scalar_read
 
     assert _op_marker_labels("linear", 7) == ("torchlens::linear#7", "torchlens::op::7")
     with internal_scalar_read():

@@ -20,7 +20,7 @@ from torchlens.report import backward_status
 
 
 def _ops(trace: Any, func_name: str) -> list[Any]:
-    return [op for op in trace.layer_list if getattr(op, "func_name", None) == func_name]
+    return [op for op in trace._layer_list if getattr(op, "func_name", None) == func_name]
 
 
 def _macs(trace: Any, func_name: str) -> int:

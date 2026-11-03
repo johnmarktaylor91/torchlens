@@ -281,6 +281,20 @@ STRUCTURAL_POSITION_LEDGER: tuple[StructuralPositionExemption, ...] = (
         ),
     ),
     StructuralPositionExemption(
+        func_name="resize_as_",
+        positions=frozenset({1}),
+        contract=_C2,
+        proof_kind="value_irrelevance_proved",
+        justification=(
+            "Tensor.resize_as_(the_template) is self.resize_(the_template.size()): arg 1 "
+            "is consumed for its SHAPE only, never its elements"
+        ),
+        refuses=(
+            "arg 0, the receiver, whose element prefix is the output's values, including "
+            "when the same parent also fills arg 1 (b.resize_as_(b))"
+        ),
+    ),
+    StructuralPositionExemption(
         func_name="type_as",
         positions=frozenset({1}),
         contract=_C2,
@@ -578,7 +592,8 @@ CUSTOM_CHECK_LEDGER: tuple[CustomCheckExemption, ...] = (
         justification=(
             "exempts a __setitem__ destination only for a structural mask/index slot or "
             "a PROVEN total overwrite of the destination, and the uninitialized-origin "
-            "walk deliberately does not chain through prior in-place writes"
+            "walk deliberately does not chain through prior in-place writes; a bool "
+            "mask is structural at any index-tuple slot (x[:, mask] = v), not only the first"
         ),
         refuses=(
             "a partial overwrite, a destination holding real written data from an "
@@ -876,6 +891,70 @@ CUSTOM_CHECK_LEDGER: tuple[CustomCheckExemption, ...] = (
             "parent outside args 0/3/4"
         ),
     ),
+    CustomCheckExemption(
+        func_name="gru",
+        check="check_packed_rnn_batch_sizes_exempt",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "exempts ONLY the arg-1 batch_sizes slot of the packed-sequence overload "
+            "(2-D data, int64 1-D batch_sizes, a params list at arg 3): the packed "
+            "layout's metadata, whose every other value is invalid for the data, as "
+            "lstm's packed overload is excused"
+        ),
+        refuses=(
+            "the arg-0 packed data, the hidden state and the weights, the padded "
+            "overload, and a parent that also sits at another slot or a kwarg"
+        ),
+    ),
+    CustomCheckExemption(
+        func_name="rnn_tanh",
+        check="check_packed_rnn_batch_sizes_exempt",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "exempts ONLY the arg-1 batch_sizes slot of the packed-sequence overload "
+            "(2-D data, int64 1-D batch_sizes, a params list at arg 3): the packed "
+            "layout's metadata, whose every other value is invalid for the data, as "
+            "lstm's packed overload is excused"
+        ),
+        refuses=(
+            "the arg-0 packed data, the hidden state and the weights, the padded "
+            "overload, and a parent that also sits at another slot or a kwarg"
+        ),
+    ),
+    CustomCheckExemption(
+        func_name="rnn_relu",
+        check="check_packed_rnn_batch_sizes_exempt",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "exempts ONLY the arg-1 batch_sizes slot of the packed-sequence overload "
+            "(2-D data, int64 1-D batch_sizes, a params list at arg 3): the packed "
+            "layout's metadata, whose every other value is invalid for the data, as "
+            "lstm's packed overload is excused"
+        ),
+        refuses=(
+            "the arg-0 packed data, the hidden state and the weights, the padded "
+            "overload, and a parent that also sits at another slot or a kwarg"
+        ),
+    ),
+    CustomCheckExemption(
+        func_name="expand",
+        check="check_expand_pinned_size_exempt",
+        contract=_C2,
+        proof_kind="domain_forced",
+        justification=(
+            "exempts a size argument at a NON-singleton input dim only when its saved "
+            "value equals the input's extent there, the one value expand accepts at "
+            "that dim (a tensor-held size, as m18155's arange(n).expand(b, n))"
+        ),
+        refuses=(
+            "a size at a singleton or new leading dim, where any value is valid and "
+            "the size sets the output shape; a size that differs from the extent; "
+            "the arg-0 input; and a parent at more than one slot"
+        ),
+    ),
 )
 
 #: Kwarg spellings that may match a structural POSITION. Every alias widens the
@@ -889,6 +968,7 @@ STRUCTURAL_KWARG_ALIAS_LEDGER: dict[str, dict[int, frozenset[str]]] = {
     "reshapeas": {1: frozenset({"other"})},
     "view_as": {1: frozenset({"other"})},
     "viewas": {1: frozenset({"other"})},
+    "resize_as_": {1: frozenset({"the_template"})},
     # torchvision coordinate args (b1p2 D2 narrowing): keyword spellings of
     # the SAME audited positions above, nothing wider.
     "nms": {0: frozenset({"boxes"})},

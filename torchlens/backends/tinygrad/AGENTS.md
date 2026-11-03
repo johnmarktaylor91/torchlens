@@ -1,16 +1,16 @@
 # backends/tinygrad/ - Implementation Guide
 
-tinygrad preview backend: UOp-snapshot capture of an eager forward. Tier-1
-standalone spec (no `capture_backend`); the `BackendSpec` in
-`../default_specs.py` is the only capability truth. This is the smallest
+tinygrad preview backend: UOp-snapshot capture of an eager forward. It fills the backend protocol (`maturity="preview"`, no `capture_backend`); its
+`BackendSpec` in `../default_specs.py` and its protocol shell in
+`../_protocols/tinygrad.py` are the capability truth (contract: `../AGENTS.md`). This is the smallest
 preview: `backend.py` plus registry-backed `capabilities.py` only.
 
 ## backend.py
 - `TinygradBackend.capture_trace()` is the standalone entry: it runs the
   callable under `_observe_tensor_ops` (Tensor-API observation building
   `TinygradUOpCapture` records from pre-realization UOp lineage) and
-  `_reject_mid_capture_execution` (typed refusal of mid-capture realization
-  that would truncate lazy UOp lineage).
+  `_reject_mid_capture_execution` (in `_execution_guard.py`; typed refusal of
+  mid-capture realization that would truncate lazy UOp lineage).
 - `GradOptions` (re-exported from `__init__.py`) drives derived gradients
   including intermediates (`TinygradIntermediateCandidate`,
   `intermediate_derived_grads=True`).
@@ -34,7 +34,7 @@ preview: `backend.py` plus registry-backed `capabilities.py` only.
   `payload_policy="array_payloads"`.
 
 ## Local Invariants
-- `intervene=` / `halt=` are NOT supported on tinygrad (unlike the tf/mlx/
+- `intervene=` / `stop_after=` are NOT supported on tinygrad (unlike the tf/mlx/
   paddle previews); unsupported trace options refuse typed through the
   `.._options` TINYGRAD policies, never silently no-op.
 - Capture correctness depends on unrealized UOp lineage: anything that forces

@@ -11,7 +11,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes.trace import Trace
-from torchlens.options import CaptureOptions
 
 
 class _BatchNormOnly(nn.Module):
@@ -131,7 +130,7 @@ def _log_model(model: nn.Module) -> Trace:
     return tl.trace(
         model,
         torch.randn(2, 4),
-        capture=CaptureOptions(layers_to_save="none"),
+        save="none",
     )
 
 
@@ -154,12 +153,11 @@ def _render_dot(log: Trace, tmp_path: Path, show_buffer_layers: str | bool) -> s
     """
 
     return log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / f"buffer_visibility_{show_buffer_layers}"),
         show_buffers=show_buffer_layers,
-        vis_node_placement="dot",
-    )
+        layout="dot",
+    ).dot
 
 
 def _render_collapsed_module(
@@ -185,12 +183,11 @@ def _render_collapsed_module(
     """
 
     return log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / f"collapsed_{node_placement}"),
         collapse_fn=_collapse_batchnorm,
-        vis_node_placement=node_placement,
-    )
+        layout=node_placement,
+    ).dot
 
 
 def _collapse_batchnorm(module: object) -> bool:
@@ -291,7 +288,7 @@ def _child_ops_for_buffer(log: Trace, address: str) -> list[str]:
         Child layer labels for the matching buffer.
     """
 
-    for node in log.layer_dict_main_keys.values():
+    for node in log._layer_dict_main_keys.values():
         if node.is_buffer and node.address == address:
             return [child.replace(":", "pass") for child in node.children]
     raise AssertionError(f"Buffer {address!r} was not found in the log.")
@@ -364,26 +361,18 @@ def test_visible_buffer_uses_cylinder_shape(tmp_path: Path) -> None:
     assert "#888888" not in causal_mask_lines[0]
 
 
-def test_legacy_true_refuses_typed(tmp_path: Path) -> None:
-    """The removed legacy ``True`` buffer-visibility value refuses typed."""
+@pytest.mark.parametrize(
+    "legacy_value",
+    [True, False],
+    ids=["legacy_true_refuses_typed", "legacy_false_refuses_typed"],
+)
+def test_legacy_bool_refuses_typed(tmp_path: Path, legacy_value: bool) -> None:
+    """The removed legacy ``True`` and ``False`` buffer-visibility values refuse typed."""
 
     log = _log_model(_BatchNormWithArchitecturalBuffer())
     try:
         with pytest.raises(tl.errors.InvalidArgumentError) as exc_info:
-            _render_dot(log, tmp_path, True)
-    finally:
-        log.cleanup()
-
-    assert exc_info.value.fields["code"] == "buffer_visibility_invalid"
-
-
-def test_legacy_false_refuses_typed(tmp_path: Path) -> None:
-    """The removed legacy ``False`` buffer-visibility value refuses typed."""
-
-    log = _log_model(_BatchNormWithArchitecturalBuffer())
-    try:
-        with pytest.raises(tl.errors.InvalidArgumentError) as exc_info:
-            _render_dot(log, tmp_path, False)
+            _render_dot(log, tmp_path, legacy_value)
     finally:
         log.cleanup()
 
@@ -403,7 +392,7 @@ def test_collapsed_batchnorm_labels_ops_and_buffers(
 
     model = _BatchNormOnly()
     model.train(training)
-    log = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(layers_to_save="none"))
+    log = tl.trace(model, torch.randn(2, 4), save="none")
     try:
         dot_source = _render_collapsed_module(log, tmp_path)
     finally:
@@ -416,15 +405,14 @@ def test_collapsed_batchnorm_labels_ops_and_buffers(
 def test_collapsed_pure_op_module_omits_buffer_clause(tmp_path: Path) -> None:
     """Collapsed modules without buffers render only their operation count."""
 
-    log = tl.trace(_PureOpModel(), torch.randn(2, 4), capture=CaptureOptions(layers_to_save="none"))
+    log = tl.trace(_PureOpModel(), torch.randn(2, 4), save="none")
     try:
         dot_source = log.draw(
-            vis_save_only=True,
             file_format="svg",
             path=str(tmp_path / "pure_ops"),
             collapse_fn=partial(_collapse_module_at_address, address="block"),
-            vis_node_placement="dot",
-        )
+            layout="dot",
+        ).dot
     finally:
         log.cleanup()
 

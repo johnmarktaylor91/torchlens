@@ -43,7 +43,7 @@ def test_bool_comparison_spurious_edge_now_fails() -> None:
     )
 
     trace, _ground_truth = _capture(_FarThresholdGate(), torch.randn(3, 4))
-    gt_op = [op for op in trace.layer_list if op.func_name == "__gt__"][0]
+    gt_op = [op for op in trace._layer_list if op.func_name == "__gt__"][0]
     saved = gt_op.out.detach().clone()
     object.__setattr__(gt_op, "func", lambda *args, **kwargs: saved.clone())
     parent_label = gt_op.parents[0]
@@ -65,7 +65,7 @@ def test_far_threshold_comparison_keeps_evidence_backed_exemption() -> None:
     )
 
     trace, _ground_truth = _capture(_FarThresholdGate(), torch.randn(3, 4))
-    gt_op = [op for op in trace.layer_list if op.func_name == "__gt__"][0]
+    gt_op = [op for op in trace._layer_list if op.func_name == "__gt__"][0]
     parent_label = gt_op.parents[0]
 
     result = _check_whether_func_on_saved_parents_yields_saved_tensor(
@@ -90,7 +90,7 @@ def test_isnan_edge_validates_via_nan_probe() -> None:
             return torch.isnan(x).float()
 
     trace, _ground_truth = _capture(_NanGate(), torch.randn(3, 4))
-    isnan_op = [op for op in trace.layer_list if op.func_name == "isnan"][0]
+    isnan_op = [op for op in trace._layer_list if op.func_name == "isnan"][0]
     parent_label = isnan_op.parents[0]
 
     result = _check_whether_func_on_saved_parents_yields_saved_tensor(
@@ -162,7 +162,7 @@ def test_bool_predicate_spurious_edge_now_fails(func_name: str) -> None:
     )
 
     trace, _ground_truth = _capture(_PredicateZoo(func_name), torch.randn(3, 4))
-    target = [op for op in trace.layer_list if op.func_name == func_name][0]
+    target = [op for op in trace._layer_list if op.func_name == func_name][0]
     saved = target.out.detach().clone()
     object.__setattr__(target, "func", lambda *args, **kwargs: saved.clone())
     parent_label = target.parents[0]
@@ -184,7 +184,7 @@ def test_bool_predicate_honest_edge_stays_green(func_name: str) -> None:
     )
 
     trace, _ground_truth = _capture(_PredicateZoo(func_name), torch.randn(3, 4))
-    target = [op for op in trace.layer_list if op.func_name == func_name][0]
+    target = [op for op in trace._layer_list if op.func_name == func_name][0]
     parent_label = target.parents[0]
 
     result = _check_whether_func_on_saved_parents_yields_saved_tensor(
@@ -241,7 +241,7 @@ def test_bool_predicate_probe_never_mutates_retained_saved_args() -> None:
     from torchlens.validation.exemptions import _bool_predicate_influence_probe
 
     trace, _ground_truth = _capture(_InplaceMaskGate(), torch.randn(3, 4))
-    target = [op for op in trace.layer_list if op.func_name == "logical_and_"][0]
+    target = [op for op in trace._layer_list if op.func_name == "logical_and_"][0]
     saved_args = list(target.saved_args or ())
     assert saved_args and isinstance(saved_args[0], torch.Tensor)
     snapshots = [
@@ -271,7 +271,7 @@ def test_bool_predicate_probe_catch_is_typed() -> None:
     from torchlens.validation.exemptions import _bool_predicate_influence_probe
 
     trace, _ground_truth = _capture(_PredicateZoo("isnan"), torch.randn(3, 4))
-    target = [op for op in trace.layer_list if op.func_name == "isnan"][0]
+    target = [op for op in trace._layer_list if op.func_name == "isnan"][0]
     parent_label = target.parents[0]
 
     object.__setattr__(

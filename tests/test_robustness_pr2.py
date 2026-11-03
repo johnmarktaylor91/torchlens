@@ -36,7 +36,6 @@ from torchlens._robustness import (
 )
 from torchlens._utils.tensor_utils import safe_copy
 from torchlens.backends.torch.wrappers import unwrap_torch
-from torchlens.options import CaptureOptions
 
 
 class _Tiny(nn.Module):
@@ -62,7 +61,7 @@ def test_meta_tensor_input_raises_with_clear_message() -> None:
     meta_x = torch.zeros(2, 4, device="meta")
 
     with pytest.raises(UnsupportedTensorVariantError, match="meta tensor"):
-        tl.trace(model, meta_x, capture=CaptureOptions(layers_to_save="none"))
+        tl.trace(model, meta_x, save="none")
 
 
 @pytest.fixture(params=["cold", "wrapped"], ids=["cold", "wrapped"])
@@ -95,7 +94,7 @@ def test_meta_tensor_parameter_rejected_in_explicit_wrapper_state(
     assert all(parameter.is_meta for parameter in meta_model.parameters())
 
     with pytest.raises(UnsupportedTensorVariantError, match="meta tensor"):
-        tl.trace(meta_model, torch.randn(2, 4), capture=CaptureOptions(layers_to_save="none"))
+        tl.trace(meta_model, torch.randn(2, 4), save="none")
 
 
 def test_wrapped_factories_honor_meta_context_with_explicit_device_none() -> None:
@@ -154,7 +153,7 @@ def test_sparse_tensor_input_raises() -> None:
     sparse_x = torch.sparse_coo_tensor(indices, values, (4, 4))
 
     with pytest.raises(UnsupportedTensorVariantError, match="sparse"):
-        tl.trace(model, sparse_x, capture=CaptureOptions(layers_to_save="none"))
+        tl.trace(model, sparse_x, save="none")
 
 
 def test_sparse_csr_tensor_input_raises() -> None:
@@ -166,7 +165,7 @@ def test_sparse_csr_tensor_input_raises() -> None:
     sparse_csr = torch.sparse_csr_tensor(crow, col, vals, size=(2, 4))
 
     with pytest.raises(UnsupportedTensorVariantError, match="sparse"):
-        tl.trace(model, sparse_csr, capture=CaptureOptions(layers_to_save="none"))
+        tl.trace(model, sparse_csr, save="none")
 
 
 def test_sparse_detector_helper() -> None:
@@ -270,7 +269,7 @@ def test_quantized_model_emits_warning_but_still_logs() -> None:
         deterministic = torch.are_deterministic_algorithms_enabled()
         torch.use_deterministic_algorithms(False)
         try:
-            log = tl.trace(model, x, capture=CaptureOptions(layers_to_save="all"))
+            log = tl.trace(model, x, save="all")
         finally:
             torch.use_deterministic_algorithms(deterministic)
 
@@ -354,8 +353,8 @@ def test_standard_model_still_logs_cleanly() -> None:
     """Nothing in PR 2 should regress the golden path."""
     model = _Tiny()
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, capture=CaptureOptions(layers_to_save="all"))
-    assert len(log.layer_logs) > 0
+    log = tl.trace(model, x, save="all")
+    assert len(log._layer_logs) > 0
 
 
 def test_check_model_and_input_variants_clean_model_is_noop() -> None:
@@ -381,6 +380,52 @@ def test_shared_tensor_tree_walker_dedupes_and_handles_cycles() -> None:
 # ---------------------------------------------------------------------------
 # Structured refusal fields + bounded-scan honesty (fixwave-2 B8-31 / R16-8)
 # ---------------------------------------------------------------------------
+
+
+class _SparseBuffer(nn.Module):
+    """A sparse COO adjacency buffer multiplied into dense features (stress row F1)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("adjacency", torch.eye(3).to_sparse())
+        self.linear = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.sparse.mm(self.adjacency, self.linear(x))
+
+
+@pytest.mark.smoke
+def test_sparse_buffer_refuses_typed_at_entry_naming_the_slot() -> None:
+    """A registered sparse buffer refuses with the variant code before session prep.
+
+    Before this check the buffer-write tracker read the buffer's storage at prep and
+    torch's bare ``NotImplementedError`` ("Cannot access storage of SparseTensorImpl")
+    escaped ``tl.trace`` untyped (wave-3 stress F1).
+    """
+
+    model = _SparseBuffer()
+    with pytest.raises(UnsupportedTensorVariantError) as exc_info:
+        tl.trace(model, [torch.randn(3, 4)])
+
+    fields = exc_info.value.fields
+    assert fields["code"] == "unsupported_tensor_variant"
+    offense = fields["offenses"][0]
+    assert offense["path"] == "model.adjacency"
+    assert offense["name"].startswith("sparse tensor (torch.sparse_coo)")
+    assert "to_dense()" in offense["reason"]
+    assert "model.adjacency" in str(exc_info.value)
+
+
+def test_sparse_parameter_refuses_typed_too() -> None:
+    """The check covers parameters as well as buffers (same loop, same code)."""
+
+    model = _Tiny()
+    model.a.weight = nn.Parameter(model.a.weight.detach().to_sparse())
+    with pytest.raises(UnsupportedTensorVariantError) as exc_info:
+        check_model_and_input_variants(model, torch.randn(2, 4), {})
+    offenses = exc_info.value.fields["offenses"]
+    assert offenses[0]["path"] == "model.a.weight"
+    assert offenses[0]["name"].startswith("sparse tensor (torch.sparse_coo)")
 
 
 def test_variant_refusal_carries_structured_offense_fields() -> None:
@@ -490,6 +535,7 @@ def test_bounded_scan_within_limits_is_silent_and_complete() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
 def test_cuda_channels_last_safe_copy() -> None:
     """channels_last preservation also works on CUDA tensors."""
@@ -499,13 +545,14 @@ def test_cuda_channels_last_safe_copy() -> None:
     assert copied.device.type == "cuda"
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
 def test_cuda_forward_pass_still_logs() -> None:
     """Regression: standard CUDA model logging is unaffected."""
     model = _Tiny().cuda()
     x = torch.randn(2, 4, device="cuda")
-    log = tl.trace(model, x, capture=CaptureOptions(layers_to_save="all"))
-    assert len(log.layer_logs) > 0
+    log = tl.trace(model, x, save="all")
+    assert len(log._layer_logs) > 0
 
 
 def test_offense_path_names_the_input_tree_location() -> None:

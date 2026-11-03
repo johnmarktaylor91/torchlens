@@ -64,14 +64,14 @@ WITNESSES: dict[str, tuple[dict[str, Any], dict[str, Any], Callable[[Any], Any]]
         {"structure_only": True},
         _observable_payload_retention,
     ),
-    "CaptureOptions.intervention_ready": (
+    "CaptureOptions.replayable": (
         {},
-        {"intervention_ready": True},
+        {"replayable": True},
         _observable_edges_available,
     ),
-    "CaptureOptions.track_nonfinite": (
+    "CaptureOptions.on_nonfinite": (
         {},
-        {"track_nonfinite": True},
+        {"on_nonfinite": "track"},
         _observable_nonfinite_basis,
     ),
 }

@@ -26,7 +26,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import torchlens as tl
+
+from ..backends.registry import get_backend_spec
 from ._adapters import RosterModel
+from ._rosters.jax import roster as _jax_roster
+from ._rosters.mlx import roster as _mlx_roster
+from ._rosters.paddle import roster as _paddle_roster
+from ._rosters.tf import roster as _tf_roster
+from ._rosters.tinygrad import runner_rows
 
 __tl_layer__ = "L9"
 
@@ -102,131 +110,21 @@ def framework_unavailable_reason(framework: PreviewFramework) -> str | None:
 
 
 def _roster_jax() -> tuple[RosterModel, ...]:
-    """Function root plus an equinox MLP for the jax pack."""
+    """The JAX packet's roster (``torchlens.conformance._rosters.jax``)."""
 
-    def build_fn() -> tuple[Any, Any]:
-        """Build the function root and its example input."""
-
-        import jax.numpy as jnp
-
-        # The jax preview contract is fn(params, *inputs): weights travel as
-        # explicit pytree leaves, never as closed-over constants.
-        params = {"w": jnp.asarray(_WEIGHTS, dtype=jnp.float32)}
-
-        def matmul_relu(params: Any, x: Any) -> Any:
-            """Matmul then relu, the function root's whole computation."""
-
-            return jnp.maximum(jnp.matmul(x, params["w"]), 0.0)
-
-        return matmul_relu, (params, jnp.asarray(_INPUT, dtype=jnp.float32))
-
-    def build_module() -> tuple[Any, Any]:
-        """Build the module root and its example input."""
-
-        import equinox as eqx
-        import jax
-        import jax.numpy as jnp
-
-        class ConformanceMlp(eqx.Module):
-            """Two-layer equinox MLP."""
-
-            fc1: eqx.nn.Linear
-            fc2: eqx.nn.Linear
-
-            def __init__(self) -> None:
-                key1, key2 = jax.random.split(jax.random.PRNGKey(0))
-                self.fc1 = eqx.nn.Linear(4, 3, key=key1)
-                self.fc2 = eqx.nn.Linear(3, 2, key=key2)
-
-            def __call__(self, x: Any) -> Any:
-                return self.fc2(jax.nn.relu(self.fc1(x)))
-
-        return ConformanceMlp(), jnp.asarray(_INPUT[0], dtype=jnp.float32)
-
-    return _rows(
-        build_fn,
-        build_module,
-        fn_ops=("input", "input", "dot_general", "max"),
-        module_ops=("input", "dot_general", "add", "max", "dot_general", "add"),
-    )
+    return _jax_roster()
 
 
 def _roster_tf() -> tuple[RosterModel, ...]:
-    """Function root plus a tf.Module for the tf pack."""
+    """The TensorFlow packet's roster (``torchlens.conformance._rosters.tf``)."""
 
-    def build_fn() -> tuple[Any, Any]:
-        """Build the function root and its example input."""
-
-        import tensorflow as tf
-
-        weights = tf.constant(_WEIGHTS, dtype=tf.float32)
-
-        def matmul_relu(x: Any) -> Any:
-            """Matmul then relu, the function root's whole computation."""
-
-            return tf.nn.relu(tf.matmul(x, weights))
-
-        return matmul_relu, tf.constant(_INPUT, dtype=tf.float32)
-
-    def build_module() -> tuple[Any, Any]:
-        """Build the module root and its example input."""
-
-        import tensorflow as tf
-
-        class ConformanceMlp(tf.Module):
-            """Two-layer tf.Module MLP with fixed weights."""
-
-            def __init__(self) -> None:
-                super().__init__()
-                self.w1 = tf.constant(_WEIGHTS, dtype=tf.float32)
-                self.w2 = tf.constant([[1.0, -1.0], [0.5, 0.5], [-0.25, 2.0]], dtype=tf.float32)
-
-            def __call__(self, x: Any) -> Any:
-                return tf.matmul(tf.nn.relu(tf.matmul(x, self.w1)), self.w2)
-
-        return ConformanceMlp(), tf.constant(_INPUT, dtype=tf.float32)
-
-    return _rows(
-        build_fn,
-        build_module,
-        fn_ops=("input", "MatMul", "Relu"),
-        module_ops=("input", "MatMul", "Relu", "MatMul"),
-    )
+    return _tf_roster()
 
 
 def _roster_mlx() -> tuple[RosterModel, ...]:
-    """Function root plus an mlx.nn MLP for the mlx pack."""
+    """The MLX packet's roster (``torchlens.conformance._rosters.mlx``)."""
 
-    def build_fn() -> tuple[Any, Any]:
-        """Build the function root and its example input."""
-
-        import mlx.core as mx
-
-        weights = mx.array(_WEIGHTS)
-
-        def matmul_relu(x: Any) -> Any:
-            """Matmul then relu, the function root's whole computation."""
-
-            return mx.maximum(mx.matmul(x, weights), 0.0)
-
-        return matmul_relu, mx.array(_INPUT)
-
-    def build_module() -> tuple[Any, Any]:
-        """Build the module root and its example input."""
-
-        import mlx.core as mx
-        import mlx.nn as mlx_nn
-
-        mx.random.seed(0)
-        model = mlx_nn.Sequential(mlx_nn.Linear(4, 3), mlx_nn.ReLU(), mlx_nn.Linear(3, 2))
-        return model, mx.array(_INPUT)
-
-    return _rows(
-        build_fn,
-        build_module,
-        fn_ops=("input", "matmul", "maximum"),
-        module_ops=("input", "linear", "relu", "linear"),
-    )
+    return _mlx_roster()
 
 
 def _roster_tinygrad() -> tuple[RosterModel, ...]:
@@ -278,7 +176,9 @@ def _roster_tinygrad() -> tuple[RosterModel, ...]:
     # Without tinygrad no case runs; the CPU lists keep that scorecard's denominator.
     inventories = _TINYGRAD_INVENTORIES.get(_tinygrad_default_device() or "CPU")
     fn_ops, module_ops = inventories if inventories is not None else (None, None)
-    return _rows(build_fn, build_module, fn_ops=fn_ops, module_ops=module_ops)
+    # The backend's own roster (``_rosters/tinygrad.py``) follows the two probe rows.
+
+    return _rows(build_fn, build_module, fn_ops=fn_ops, module_ops=module_ops) + runner_rows()
 
 
 def _tinygrad_default_device() -> str | None:
@@ -440,39 +340,9 @@ _TINYGRAD_INVENTORIES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
 
 
 def _roster_paddle() -> tuple[RosterModel, ...]:
-    """Function root plus a paddle.nn MLP for the paddle pack."""
+    """The Paddle packet's roster (``torchlens.conformance._rosters.paddle``)."""
 
-    def build_fn() -> tuple[Any, Any]:
-        """Build the function root and its example input."""
-
-        import paddle
-
-        weights = paddle.to_tensor(_WEIGHTS, dtype="float32")
-
-        def matmul_relu(x: Any) -> Any:
-            """Matmul then relu, the function root's whole computation."""
-
-            return paddle.nn.functional.relu(paddle.matmul(x, weights))
-
-        return matmul_relu, paddle.to_tensor(_INPUT, dtype="float32")
-
-    def build_module() -> tuple[Any, Any]:
-        """Build the module root and its example input."""
-
-        import paddle
-
-        paddle.seed(0)
-        model = paddle.nn.Sequential(
-            paddle.nn.Linear(4, 3), paddle.nn.ReLU(), paddle.nn.Linear(3, 2)
-        )
-        return model, paddle.to_tensor(_INPUT, dtype="float32")
-
-    return _rows(
-        build_fn,
-        build_module,
-        fn_ops=("input", "matmul", "functional.relu"),
-        module_ops=("input", "functional.linear", "functional.relu", "functional.linear"),
-    )
+    return _paddle_roster()
 
 
 def _rows(
@@ -554,23 +424,45 @@ class PreviewBackendAdapter:
 
         return {"capture": True, "durable_save": True, "validation_replay": False}
 
+    def protocol(self) -> Any:
+        """The backend's registered ``BackendProtocol`` object (``BackendSpec.protocol()``)."""
+
+        factory = get_backend_spec(self.name).protocol
+        return factory() if factory is not None else None
+
     def trace(self, model: Any, example_input: Any) -> Any:
         """Capture one forward pass through the public preview door."""
 
-        import torchlens as tl
+        return self.trace_with(model, example_input)
 
-        return tl.trace(model, example_input, backend=self.name)
+    def trace_with(self, model: Any, example_input: Any, **options: Any) -> Any:
+        """Capture through the public entry with explicit trace options (refusal cells)."""
+
+        return tl.trace(model, example_input, backend=self.name, **options)
 
     def reference_output(self, model: Any, example_input: Any) -> Any:
         """Run the model directly (the parity oracle's independent arm).
 
         A tuple input is positional arguments, the convention ``tl.trace``
-        applies to the same input.
+        applies to the same input. The protocol's ``reference_output`` is the
+        same call; the adapter keeps the tuple convention explicit.
         """
 
         if isinstance(example_input, tuple):
             return model(*example_input)
         return model(example_input)
+
+    def rng_state(self) -> Any:
+        """The framework's RNG state as a host array (``c1_rng_consumed_once``), else ``None``."""
+
+        probe = _RNG_STATE_PROBES.get(self.name)
+        return probe() if probe is not None else None
+
+    def side_effect_snapshot(self) -> Any:
+        """Framework state a refusal must leave untouched (the RNG state when probeable)."""
+
+        state = self.rng_state()
+        return None if state is None else state.tobytes()
 
     def as_array(self, value: Any) -> Any:
         """Convert one framework value to a NumPy array for the runner's comparison."""
@@ -588,9 +480,38 @@ class PreviewBackendAdapter:
     def load(self, path: Path) -> Any:
         """Reload one persisted artifact."""
 
-        import torchlens as tl
-
         return tl.load(str(path))
+
+
+def _mlx_rng_state() -> Any:
+    """MLX's global PRNG key as a host array."""
+
+    import mlx.core as mx
+    import numpy as np
+
+    key = mx.random.state[0]
+    mx.eval(key)
+    return np.array(key)
+
+
+def _tinygrad_rng_state() -> Any:
+    """tinygrad's seed and per-device RNG counters as one host array."""
+
+    import numpy as np
+    from tinygrad import Tensor
+
+    values = [int(getattr(Tensor, "_seed", 0))]
+    counters = getattr(Tensor, "_device_rng_counters", {}) or {}
+    for device in sorted(counters):
+        values.extend(int(v) for v in np.asarray(counters[device].numpy()).reshape(-1).tolist())
+    return np.asarray(values, dtype=np.int64)
+
+
+#: Backend -> zero-arg probe of the framework RNG state (lazy backends; SPEC 3.4).
+_RNG_STATE_PROBES: dict[str, Callable[[], Any]] = {
+    "mlx": _mlx_rng_state,
+    "tinygrad": _tinygrad_rng_state,
+}
 
 
 def _adapter_factory(backend: str) -> Callable[[str | None], Any]:

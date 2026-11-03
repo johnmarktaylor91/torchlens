@@ -15,7 +15,7 @@ def test_trace_streaming_on_iterable_inputs() -> None:
     traces = utils.trace_streaming(
         model,
         [torch.ones(1, 2), torch.zeros(1, 2)],
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
     assert len(traces) == 2
 
@@ -34,7 +34,7 @@ def test_multi_output_module_smoke() -> None:
     log = tl.trace(
         MultiOut(),
         torch.ones(1, 2),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
-    container_paths = [layer.container_path for layer in log.layer_list if layer.is_output]
+    container_paths = [layer.container_path for layer in log._layer_list if layer.is_output]
     assert container_paths

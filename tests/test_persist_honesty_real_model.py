@@ -43,7 +43,7 @@ def test_streamed_gpt2_capture_loads_complete(tmp_path, gpt2_and_inputs):
     assert trace.outcome.status is CaptureStatus.COMPLETE
     loaded = tl.load(path)
     assert loaded.outcome.status is CaptureStatus.COMPLETE
-    assert loaded.layer_list
+    assert loaded._layer_list
 
 
 def test_gpt2_executable_level_respects_explicit_opt_out(tmp_path, gpt2_and_inputs):
@@ -78,5 +78,5 @@ def test_bert_structure_only_save_round_trips(tmp_path):
     trace.save(path)
     assert list((path / "blobs").iterdir()) == []
     loaded = tl.load(path)
-    assert loaded.structure_only is True
-    assert loaded.layer_list
+    assert loaded.options.structure_only is True
+    assert loaded._layer_list

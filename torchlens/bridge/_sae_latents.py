@@ -270,8 +270,10 @@ class _SAEFamily:
     def _home_labels(self, record: Any) -> frozenset[str] | InvalidArgumentError | None:
         """Return the op labels of this family's site on the record's trace (cached)."""
 
+        from .._data_classes.trace import Trace
+
         trace = getattr(record, "trace", None) or getattr(record, "source_trace", None)
-        if trace is None or not hasattr(trace, "_resolve_sites"):
+        if not isinstance(trace, Trace):
             return None
         cached = self._homes.get(id(trace))
         if cached is not None and cached[0]() is trace:
@@ -296,7 +298,9 @@ class _SAEFamily:
             try:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", MultiMatchWarning)
-                    matched = trace._resolve_sites(self.site, max_fanout=len(trace.layer_list) or 1)
+                    matched = trace._resolve_sites(
+                        self.site, max_fanout=len(trace._layer_list) or 1
+                    )
             except (SiteResolutionError, InvalidArgumentError, KeyError, ValueError) as exc:
                 return InvalidArgumentError(
                     f"the SAE registered as {self.name!r} sits at {self.site!r}, which matches "
@@ -323,7 +327,7 @@ class _SAEFamily:
             )
         passes = sum(
             1
-            for record in trace.layer_list
+            for record in trace._layer_list
             if getattr(record, "layer_label", None) == getattr(op, "layer_label", None)
         )
         if passes > 1:
@@ -543,7 +547,7 @@ def logged_splice_trace(
     model.add_module(child, reconstruction)
     handle = module.register_forward_hook(_hook)
     try:
-        logged = tl.trace(model, inputs, capture=tl.options.CaptureOptions(intervention_ready=True))
+        logged = tl.trace(model, inputs, capture=tl.options.CaptureOptions(replayable=True))
     finally:
         handle.remove()
         del model._modules[child]

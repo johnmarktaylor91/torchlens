@@ -34,7 +34,6 @@ from torchlens._visualization._edit_marks import (
 from torchlens._visualization.node_spec import intervention_sites_for_log, render_lines_to_html
 from torchlens._visualization.themes import THEME_PRESETS
 from torchlens.errors import TorchLensWarning
-from torchlens.intervention.selectors import grad_fn_label
 from torchlens.intervention.types import Edit, FireRecord
 from torchlens.options import VisualizationOptions
 
@@ -55,11 +54,10 @@ def _traced(intervene: Any = None) -> tl.Trace:
 def test_edit_text_rule() -> None:
     """Name alone without arguments; short literals written in; stand-ins otherwise."""
 
-    def named_fn(grad: torch.Tensor, *, ctx: Any) -> torch.Tensor:
-        """Return the gradient unchanged."""
+    def named_fn() -> torch.Tensor:
+        """Return a fixed replacement tensor."""
 
-        del ctx
-        return grad
+        return torch.zeros(1)
 
     assert short_edit_text(tl.zero_ablate()) == "zero_ablate"
     assert short_edit_text(tl.scale(0.5)) == "scale(0.5)"
@@ -68,9 +66,9 @@ def test_edit_text_rule() -> None:
     assert short_edit_text(tl.steer(torch.ones(3))) == "steer(v)"
     # A label argument is written in (built directly: swap_with refuses a bare label at run time).
     assert short_edit_text(Edit("swap_with", args=("relu_2_1",))) == "swap_with(relu_2_1)"
-    assert short_edit_text(tl.hook_grad(named_fn)) == "hook_grad(named_fn)"
-    assert short_edit_text(tl.hook_grad(lambda g, *, ctx: g)) == "hook_grad(fn)"
-    assert short_edit_text(tl.zero_grad()) == "zero_grad"
+    assert short_edit_text(tl.replace_with(named_fn)) == "replace_with(named_fn)"
+    assert short_edit_text(tl.replace_with(lambda: torch.zeros(1))) == "replace_with(fn)"
+    assert short_edit_text(tl.clip_norm(0.5)) == "clip_norm(0.5)"
 
 
 def test_node_rows_cap_at_three_then_more() -> None:
@@ -103,10 +101,10 @@ def _fired_site(label: str, *edits: Any) -> SimpleNamespace:
     """Return a stand-in site whose fire records name ``edits``."""
 
     records = [
-        FireRecord(target_label=label, helper=edit, timestamp=float(index))
+        FireRecord(target_label=label, edit=edit, timestamp=float(index))
         for index, edit in enumerate(edits)
     ]
-    return SimpleNamespace(label=label, layer_label=label, interventions=records)
+    return SimpleNamespace(label=label, layer_label=label, edits=records)
 
 
 def test_header_edit_line_forms() -> None:
@@ -130,7 +128,7 @@ def test_header_edit_line_forms() -> None:
         _fired_site("a_1_1", tl.zero_ablate()),
         _fired_site("b_1_1", tl.scale(0.5)),
         _fired_site("c_1_1", tl.add_noise(0.1)),
-        _fired_site("d_1_1", tl.zero_grad()),
+        _fired_site("d_1_1", tl.clip_norm(1.0)),
     ]
     assert header_edit_line(trace, four, PURPLE) == "4 edits (marked)"
 
@@ -154,7 +152,7 @@ def test_edited_node_dot(tmp_path: Path) -> None:
 
     trace = _traced()
     try:
-        dot = trace.draw(vis_save_only=True, file_format="dot", path=str(tmp_path / "toy"))
+        dot = trace.draw(file_format="dot", path=str(tmp_path / "toy")).dot
     finally:
         trace.cleanup()
     relu_line = next(line for line in dot.splitlines() if "tl_edited" in line)
@@ -172,11 +170,10 @@ def test_dark_skin_uses_its_tint(tmp_path: Path) -> None:
     trace = _traced()
     try:
         dot = trace.draw(
-            vis_save_only=True,
             file_format="dot",
             path=str(tmp_path / "dark"),
             theme="dark",
-        )
+        ).dot
     finally:
         trace.cleanup()
     assert dot.count(DARK_PURPLE) >= 3
@@ -232,22 +229,20 @@ def test_highlight_svg_lays_underlays_where_f2_says() -> None:
 
 @pytest.mark.parametrize("placement", ["dot", "rank"])
 def test_highlighter_in_svg_on_both_engines(tmp_path: Path, placement: str) -> None:
-    """``vis_show_cone=True`` lays the highlighter into the SVG on dot and the rank layout."""
+    """``show_cone=True`` lays the highlighter into the SVG on dot and the rank layout."""
 
     trace = _traced()
     try:
         trace.draw(
-            vis_save_only=True,
             file_format="svg",
             path=str(tmp_path / f"cone_{placement}"),
-            vis_show_cone=True,
-            vis_node_placement=placement,
+            show_cone=True,
+            layout=placement,
         )
         trace.draw(
-            vis_save_only=True,
             file_format="svg",
             path=str(tmp_path / f"plain_{placement}"),
-            vis_node_placement=placement,
+            layout=placement,
         )
     finally:
         trace.cleanup()
@@ -265,10 +260,9 @@ def test_highlighter_dark_opacity(tmp_path: Path) -> None:
     trace = _traced()
     try:
         trace.draw(
-            vis_save_only=True,
             file_format="svg",
             path=str(tmp_path / "dark"),
-            vis_show_cone=True,
+            show_cone=True,
             theme="dark",
         )
     finally:
@@ -285,10 +279,9 @@ def test_highlighter_pdf_and_png_from_processed_svg(tmp_path: Path) -> None:
     try:
         for fileformat in ("pdf", "png"):
             trace.draw(
-                vis_save_only=True,
                 file_format=fileformat,
                 path=str(tmp_path / "cone"),
-                vis_show_cone=True,
+                show_cone=True,
             )
     finally:
         trace.cleanup()
@@ -311,10 +304,9 @@ def test_highlighter_warns_when_the_format_cannot_carry_it(tmp_path: Path) -> No
     try:
         with pytest.warns(TorchLensWarning) as record:
             trace.draw(
-                vis_save_only=True,
                 file_format="jpg",
                 path=str(tmp_path / "cone"),
-                vis_show_cone=True,
+                show_cone=True,
             )
     finally:
         trace.cleanup()
@@ -329,11 +321,10 @@ def test_as_node_hook_is_purple(tmp_path: Path) -> None:
     trace = _traced()
     try:
         dot = trace.draw(
-            vis_save_only=True,
             file_format="dot",
             path=str(tmp_path / "as_node"),
-            vis_intervention_mode="as_node",
-        )
+            intervention_mode="as_node",
+        ).dot
     finally:
         trace.cleanup()
     hook_line = next(
@@ -364,9 +355,9 @@ class _SharedLinearTwice(nn.Module):
 def test_backward_edit_marks_its_own_pass(tmp_path: Path) -> None:
     """A backward edit staged on pass 2 of a two-pass layer names pass 2, and only it.
 
-    A GradFn site resolves to the one pass it differentiates (``GradFn.op`` is
-    the multi-pass Layer); the staged edit row must key by that same pass, or
-    the ringed node would read ``edit`` instead of the edit's name.
+    A gradient site ``tl.grad("<layer>:2")`` resolves to the one pass it names;
+    the staged edit row must key by that same pass, or the ringed node would
+    read ``edit`` instead of the edit's name.
     """
 
     def named_backward(grad: torch.Tensor, *, ctx: Any) -> torch.Tensor:
@@ -379,34 +370,28 @@ def test_backward_edit_marks_its_own_pass(tmp_path: Path) -> None:
         capture=tl.options.CaptureOptions(backward_ready=True),
     )
     try:
-        linear = next(layer for layer in trace.layer_logs.values() if layer.layer_type == "linear")
+        linear = next(layer for layer in trace._layer_logs.values() if layer.layer_type == "linear")
         assert linear.num_passes == 2
         second = trace[f"{linear.layer_label}:2"]
-        # GradFn records exist once a backward pass has run.
-        trace[trace.output_layers[0]].out.sum().backward()
-        grad_fn = next(
-            gf for gf in trace.autograd.grad_fns if gf.grad_fn_object_id == second.grad_fn_object_id
-        )
         trace.attach_hooks(
-            grad_fn_label(grad_fn.label),
-            tl.hook_grad(named_backward),
+            tl.grad(second.label),
+            named_backward,
             confirm_mutation=True,
         )
         sites = intervention_sites_for_log(trace)
         assert [site.label for site in sites] == [second.label]
         marks = edit_marks_by_site(trace, sites)
-        assert [mark.short for mark in marks[second.label]] == ["hook_grad(named_backward)"]
+        assert [mark.short for mark in marks[second.label]] == ["hook(named_backward)"]
         dot = trace.draw(
-            vis_save_only=True,
             file_format="dot",
-            vis_mode="unrolled",
+            rolled=False,
             path=str(tmp_path / "shared"),
-        )
+        ).dot
     finally:
         trace.cleanup()
     edited = [line for line in dot.splitlines() if "tl_edited" in line]
     assert len(edited) == 1
-    assert "hook_grad(named_backward)" in edited[0]
+    assert "hook(named_backward)" in edited[0]
 
 
 def test_unrolled_forward_edit_marks_only_its_pass(tmp_path: Path) -> None:
@@ -420,26 +405,24 @@ def test_unrolled_forward_edit_marks_only_its_pass(tmp_path: Path) -> None:
     trace = tl.trace(
         _SharedLinearTwice(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         fork = trace.fork("edited")
-        layers = {layer.layer_type: layer.layer_label for layer in fork.layer_logs.values()}
+        layers = {layer.layer_type: layer.layer_label for layer in fork._layer_logs.values()}
         linear, relu = layers["linear"], layers["relu"]
         fork.do(tl.label(f"{linear}:2"), tl.zero_ablate())
         dot = fork.draw(
-            vis_save_only=True,
             file_format="dot",
-            vis_mode="unrolled",
-            vis_show_cone=True,
+            rolled=False,
+            show_cone=True,
             path=str(tmp_path / "shared_fwd"),
-        )
+        ).dot
         rolled = fork.draw(
-            vis_save_only=True,
             file_format="dot",
-            vis_mode="rolled",
+            rolled=True,
             path=str(tmp_path / "shared_fwd_rolled"),
-        )
+        ).dot
     finally:
         trace.cleanup()
     # Rolled, the one node stands for both passes; the header keeps the pass.

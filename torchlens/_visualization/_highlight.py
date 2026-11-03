@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 HIGHLIGHT_VALUES: tuple[str, ...] = get_args(DrawHighlightLiteral)
 
 #: ``Trace.draw`` parameters that never forward to the lens door.
-_NOT_FORWARDED = frozenset({"self", "highlight"})
+_NOT_FORWARDED = frozenset({"self", "trace", "highlight"})
 
 
 def check_highlight(highlight: object) -> str:

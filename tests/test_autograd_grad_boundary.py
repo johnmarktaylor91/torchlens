@@ -26,9 +26,22 @@ from torch import nn
 
 import torchlens as tl
 import torchlens.validation.core as validation_core
+from torchlens._state import pause_logging
 from torchlens.validation import last_validation_failure
 
 _GLOBAL_OFFSET = torch.randn(3)
+
+
+def _unseen(t: torch.Tensor) -> torch.Tensor:
+    """Copy ``t`` with logging paused: a tensor the capture never sees.
+
+    A pre-forward closure or global tensor is recorded as a ``constant`` source
+    op, so a genuine provenance gap is planted with a tensor first built
+    mid-forward while logging is paused.
+    """
+
+    with pause_logging():
+        return t.clone()
 
 
 def _validate(model: nn.Module, *inputs: torch.Tensor) -> bool:
@@ -126,7 +139,7 @@ class _TwoCallsDifferentArity(nn.Module):
 
 
 class _GradWithGlobal(nn.Module):
-    """A recorded grad in a model that also reads an unrecorded module-global tensor."""
+    """A recorded grad in a model that also reads a tensor the capture never saw."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -135,7 +148,7 @@ class _GradWithGlobal(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         loss = (x * self.w).pow(2).sum()
         (g,) = torch.autograd.grad(loss, [self.w], create_graph=True)
-        return (self.w - g) * x + _GLOBAL_OFFSET
+        return (self.w - g) * x + _unseen(_GLOBAL_OFFSET)
 
 
 def test_autograd_grad_in_forward_is_a_recorded_boundary_op() -> None:
@@ -194,9 +207,11 @@ def test_nested_and_dependent_input_grads_replay_faithfully(
 ) -> None:
     """A grad inside another grad's subgraph, and an input that depends on another input.
 
-    The end-to-end validation of these captures stops earlier, on a backward-graph
-    metadata invariant for higher-order grad_fn handles that fails on the base too,
-    so the replay and perturbation checks are pinned on the validator's own capture.
+    The replay and perturbation checks are pinned on the validator's own capture, and
+    the end-to-end verdict must be True: a second-order grad inside forward used to fail
+    the backward-graph metadata invariants (a forward op applied to the first gradient
+    was inferred into order 2 while the nodes its differentiation created kept order 2
+    instead of 3), and the recorded failure was never asserted here.
     """
 
     results: list[tuple[str, Any]] = []
@@ -217,7 +232,9 @@ def test_nested_and_dependent_input_grads_replay_faithfully(
 
     torch.manual_seed(0)
     with _tampered_validation(check):
-        _validate(model_factory(), torch.randn(*shape))
+        verdict = _validate(model_factory(), torch.randn(*shape))
+    assert verdict is True, last_validation_failure()
+    assert last_validation_failure() is None
     assert results
     assert {label: r.decision for label, r in results} == {
         label: "validated" for label, _ in results
@@ -292,3 +309,74 @@ def test_unrecorded_tensor_beside_a_recorded_grad_still_fails_source_provenance(
     assert failure is not None and failure.check_name == "source_provenance"
     assert list(failure.extra.get("reasons", [])) == ["unattributed_tensor_args"]
     assert failure.op_label is not None and failure.op_label.startswith("add")
+
+
+class _GradOfInputsLinearInEach(nn.Module):
+    """Energy linear in each of two forward inputs, differentiated against both.
+
+    Mirrors an energy/force/dipole head: ``force = W^T ef`` does not read ``cart``
+    and ``dipole = lin(cart)`` does not read ``ef``, so each gradient's own input
+    can influence it only through the derivative, never through its value.
+    """
+
+    def __init__(self, zero_head: bool = False) -> None:
+        super().__init__()
+        self.lin = nn.Linear(3, 3)
+        if zero_head:
+            nn.init.zeros_(self.lin.weight)
+
+    def forward(self, cart: torch.Tensor, ef: torch.Tensor) -> tuple[torch.Tensor, ...]:
+        cart.requires_grad = True
+        ef.requires_grad = True
+        energy = (self.lin(cart) * ef).sum()
+        force, dipole = torch.autograd.grad(energy, (cart, ef), create_graph=True)
+        return energy, dipole, -force
+
+
+def _perturbation_decisions(model: nn.Module, *inputs: torch.Tensor) -> dict[str, Any]:
+    """Return each autograd.grad op's perturbation decision per parent edge."""
+
+    results: dict[str, Any] = {}
+
+    def check(trace: Any) -> None:
+        for op in _grad_ops(trace):
+            for parent in op.parents:
+                results[f"{op.label}<-{parent}"] = (
+                    validation_core._check_whether_func_on_saved_parents_yields_saved_tensor(
+                        trace, op.label, perturb=True, layers_to_perturb=[parent]
+                    )
+                )
+
+    with _tampered_validation(check):
+        _validate(model, *inputs)
+    return results
+
+
+def test_grad_against_an_input_it_does_not_read_still_sees_that_input() -> None:
+    """Perturbing an ``inputs`` slot reaches a gradient linear in that input."""
+
+    torch.manual_seed(0)
+    decisions = _perturbation_decisions(
+        _GradOfInputsLinearInEach(), torch.randn(2, 3), torch.randn(2, 3)
+    )
+    assert {edge for edge in decisions if "<-input" in edge}
+    assert {edge: r.decision for edge, r in decisions.items()} == dict.fromkeys(
+        decisions, "validated"
+    )
+    torch.manual_seed(0)
+    assert _validate(_GradOfInputsLinearInEach(), torch.randn(2, 3), torch.randn(2, 3)) is True
+
+
+def test_identically_zero_grad_still_fails_its_input_perturbation() -> None:
+    """A zero weight leaves every gradient zero; the input edge still fails, recorded."""
+
+    torch.manual_seed(0)
+    model = _GradOfInputsLinearInEach(zero_head=True)
+    decisions = _perturbation_decisions(model, torch.randn(2, 3), torch.randn(2, 3))
+    failed = {edge: r.reason for edge, r in decisions.items() if r.failed}
+    assert failed and set(failed.values()) == {"perturbation_insensitive"}
+    torch.manual_seed(0)
+    assert _validate(model, torch.randn(2, 3), torch.randn(2, 3)) is False
+    failure = last_validation_failure()
+    assert failure is not None and failure.check_name == "perturbation"
+    assert failure.op_label is not None and failure.op_label.startswith("autogradgrad")

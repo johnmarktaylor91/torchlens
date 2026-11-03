@@ -15,12 +15,12 @@ from .._debug_report import Report, rows_of
 from .._errors import _actionable_message, _ActionableErrorMixin
 from .._input_coerce import _coerce_input_args
 from .._utils import _torch_compat
-from .._utils._dynamo_explain_shapes import (
+from .._utils.arg_handling import normalize_input_args
+from ..errors._base import CompatibilityError
+from ._dynamo_explain_shapes import (
     _DynamoExplainOutputError,
     normalize_dynamo_explain_output,
 )
-from .._utils.arg_handling import normalize_input_args
-from ..errors._base import CompatibilityError
 
 
 class GraphBreaksUnavailableError(_ActionableErrorMixin, CompatibilityError, RuntimeError):
@@ -337,7 +337,7 @@ def _correlate_break(trace: Any, record: Any) -> GraphBreak:
         )
     source_file = os.path.abspath(record.source_file)
     distances: list[tuple[int, int, str]] = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         label = str(getattr(op, "label", getattr(op, "layer_label", "<unknown>")))
         same_file_lines = [line for filename, line in _op_locations(op) if filename == source_file]
         if same_file_lines:
@@ -374,7 +374,7 @@ def graph_breaks(model: nn.Module, inputs: Any, **trace_kwargs: Any) -> GraphBre
     neither the probe nor the eager correlation trace mutates the caller's
     model. Both runs observe identical state, so a stateful branching model
     takes the same path in the probe and the correlation trace. The Dynamo
-    result is normalized through ``torchlens._utils._dynamo_explain_shapes`` without
+    result is normalized through ``torchlens.debug._dynamo_explain_shapes`` without
     torch-version parsing. Correlation uses recorded :class:`FuncCallLocation`
     file/line evidence; empty matches state why no correlation was possible.
 
@@ -423,7 +423,7 @@ def graph_breaks(model: nn.Module, inputs: Any, **trace_kwargs: Any) -> GraphBre
         except _DynamoExplainOutputError as exc:
             raise GraphBreaksNormalizationError(str(exc)) from exc
 
-        from .. import trace as capture_trace
+        from .._user_funcs import trace as capture_trace
 
         eager_trace = capture_trace(model, inputs, **trace_kwargs)
         return GraphBreakReport(

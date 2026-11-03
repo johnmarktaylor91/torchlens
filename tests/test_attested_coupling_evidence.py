@@ -70,7 +70,7 @@ def _fire(step, site="relu_1_2", replaced=True):
         site=site,
         helper="zero_ablate",
         timing="post",
-        direction="forward",
+        signal="forward",
         replaced=replaced,
     )
 
@@ -310,8 +310,7 @@ def test_do_quarantines_inherited_episode_evidence():
     log = _episode_trace(
         model,
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(replayable=True, save_mode="reference"),
     )
     fork = log.fork()
     assert fork.annotations["episode"].get("rows") is not None  # inherited

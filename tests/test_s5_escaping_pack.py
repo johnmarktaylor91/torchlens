@@ -74,11 +74,10 @@ def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
 
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 def _assert_member_escaped(dot: str, injected: str) -> None:
@@ -191,7 +190,7 @@ def test_e1_corpus_via_func_config_values(tmp_path: Path) -> None:
         f"s5_e1_key_{i}": _sentineled(i, member)
         for i, member in enumerate(TRANSFORMABLE_CORPUS + ESCAPE_INVARIANT_CORPUS)
     }
-    target = next(layer for layer in log.layer_list if layer.layer_type == "linear")
+    target = next(layer for layer in log._layer_list if layer.type == "linear")
     target.func_config = {**(target.func_config or {}), **injected}
 
     dot = _render_dot(log, tmp_path)

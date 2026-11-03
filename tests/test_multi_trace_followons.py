@@ -127,8 +127,8 @@ def _bundle() -> tl.Bundle:
 
     torch.manual_seed(20)
     x = torch.randn(2, 3)
-    first = tl.trace(_ModuleModel(), x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    second = tl.trace(_ModuleModel(), x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    first = tl.trace(_ModuleModel(), x, capture=tl.options.CaptureOptions(replayable=True))
+    second = tl.trace(_ModuleModel(), x, capture=tl.options.CaptureOptions(replayable=True))
     return tl.Bundle({"first": first, "second": second})
 
 
@@ -146,11 +146,9 @@ def test_compare_topology_rejects_reordered_graphs() -> None:
     """Reordered unique-fingerprint graphs are not reported identical."""
 
     x = torch.randn(2, 3)
-    first = tl.trace(
-        _ReorderedReluSigmoid(), x, capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    first = tl.trace(_ReorderedReluSigmoid(), x, capture=tl.options.CaptureOptions(replayable=True))
     second = tl.trace(
-        _ReorderedSigmoidRelu(), x, capture=tl.options.CaptureOptions(intervention_ready=True)
+        _ReorderedSigmoidRelu(), x, capture=tl.options.CaptureOptions(replayable=True)
     )
 
     diff = compare_topology(first, second)
@@ -169,12 +167,12 @@ def test_supergraph_topological_order_respects_edges_after_reordered_bundle() ->
             "first": tl.trace(
                 _ReorderedReluSigmoid(),
                 x,
-                capture=tl.options.CaptureOptions(intervention_ready=True),
+                capture=tl.options.CaptureOptions(replayable=True),
             ),
             "second": tl.trace(
                 _ReorderedSigmoidRelu(),
                 x,
-                capture=tl.options.CaptureOptions(intervention_ready=True),
+                capture=tl.options.CaptureOptions(replayable=True),
             ),
         }
     )
@@ -204,8 +202,8 @@ def test_super_buffer_views_use_public_live_values_and_param_reads_refuse() -> N
     x = torch.randn(2, 3)
     model_a = _BufferParamModel(scale=1.0, weight=1.0)
     model_b = _BufferParamModel(scale=2.0, weight=3.0)
-    trace_a = tl.trace(model_a, x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    trace_b = tl.trace(model_b, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace_a = tl.trace(model_a, x, capture=tl.options.CaptureOptions(replayable=True))
+    trace_b = tl.trace(model_b, x, capture=tl.options.CaptureOptions(replayable=True))
     bundle = tl.Bundle({"a": trace_a, "b": trace_b})
 
     buffer_out = bundle.buffers["scale"].out
@@ -224,14 +222,12 @@ def test_show_bundle_graph_rolled_and_backward_modes(tmp_path: Path) -> None:
         bundle,
         path=str(tmp_path / "rolled_bundle"),
         vis_mode="rolled",
-        vis_save_only=True,
         file_format="svg",
     )
     backward_source = _visualization.show_bundle_graph(
         bundle,
         path=str(tmp_path / "backward_bundle"),
-        direction="backward",
-        vis_save_only=True,
+        signal="backward",
         file_format="svg",
     )
 
@@ -249,8 +245,7 @@ def test_bundle_backward_regression_path(tmp_path: Path) -> None:
     source = _visualization.show_bundle_graph(
         bundle,
         path=str(tmp_path / "backward_bundle_regression"),
-        direction="backward",
-        vis_save_only=True,
+        signal="backward",
         file_format="svg",
     )
 
@@ -267,8 +262,7 @@ def test_bundle_backward_no_unified_supergraph(tmp_path: Path) -> None:
     source = _visualization.show_bundle_graph(
         bundle,
         path=str(tmp_path / "backward_bundle_no_supergraph"),
-        direction="backward",
-        vis_save_only=True,
+        signal="backward",
         file_format="svg",
     )
 
@@ -288,7 +282,6 @@ def test_bundle_graph_style_primitives_and_chrome_trace_diff(tmp_path: Path) -> 
         path=str(tmp_path / "styled_bundle"),
         vis_node_overrides={first_node: {"fillcolor": "#DDEAF7"}},
         vis_edge_overrides={first_edge: {"color": "#0072B2"}},
-        vis_save_only=True,
         file_format="svg",
     )
 

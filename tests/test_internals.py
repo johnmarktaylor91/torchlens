@@ -36,6 +36,7 @@ from torchlens._utils.tensor_utils import (
     safe_to,
 )
 from torchlens.backends.torch._tl import get_tensor_label, set_tensor_label
+from torchlens.errors import TraceCaptureError
 
 
 class TestFieldOrderSync:
@@ -88,7 +89,7 @@ class TestFieldOrderSync:
     def test_trace_field_order_covers_init(self):
         """Every public Trace init attr is declared, and user-facing ones are ordered.
 
-        A public NAME does not imply a user-facing FIELD. ``FIELD_POLICY`` is the
+        A public NAME does not imply a user-facing FIELD. ``_FIELD_POLICY`` is the
         source of truth (``MODEL_LOG_FIELD_ORDER`` is generated from it -- see
         ``test_record_field_policy.py::test_record_field_policy_is_field_order_source``),
         and a session-time knob may be public-named yet deliberately non-user-facing:
@@ -106,10 +107,10 @@ class TestFieldOrderSync:
         init_attrs = self._init_assigned_attrs(Trace)
         public_attrs = {a for a in init_attrs if not a.startswith("_")}
 
-        undeclared = public_attrs - set(Trace.FIELD_POLICY)
-        assert not undeclared, f"Trace public fields absent from FIELD_POLICY: {undeclared}"
+        undeclared = public_attrs - set(Trace._FIELD_POLICY)
+        assert not undeclared, f"Trace public fields absent from _FIELD_POLICY: {undeclared}"
 
-        user_facing = {a for a in public_attrs if Trace.FIELD_POLICY[a].user_facing}
+        user_facing = {a for a in public_attrs if Trace._FIELD_POLICY[a].user_facing}
         missing = user_facing - set(MODEL_LOG_FIELD_ORDER)
         assert not missing, f"Trace user-facing fields missing from FIELD_ORDER: {missing}"
         non_user_facing = public_attrs - user_facing
@@ -144,9 +145,9 @@ class TestFieldOrderSync:
         # the L9 markers are KEEP-but-unordered per the v8 bump ruling (the
         # portable_only_fields ledger in test_field_order_contract.py).
         for name in session_knobs:
-            assert Trace.FIELD_POLICY[name].portable_policy is FieldPolicy.DROP, name
+            assert Trace._FIELD_POLICY[name].portable_policy is FieldPolicy.DROP, name
         for name in portable_unordered:
-            assert Trace.FIELD_POLICY[name].portable_policy is FieldPolicy.KEEP, name
+            assert Trace._FIELD_POLICY[name].portable_policy is FieldPolicy.KEEP, name
 
     def test_module_call_log_field_order_covers_init(self):
         from torchlens._data_classes.module import ModuleCall
@@ -477,15 +478,17 @@ class TestModuleExceptionCleanup:
         """Model that raises should propagate exception."""
         model = _FailingForwardModel()
         x = torch.randn(2, 10)
-        with pytest.raises(RuntimeError, match="Intentional test error"):
+        with pytest.raises(TraceCaptureError, match="Intentional test error") as _tce_info:
             trace_fn(model, x)
+        assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
     def test_failing_model_cleanup(self):
         """After a failed forward pass, subsequent calls should work."""
         model = _FailingForwardModel()
         x = torch.randn(2, 10)
-        with pytest.raises(RuntimeError):
+        with pytest.raises(TraceCaptureError) as _tce_info2:
             trace_fn(model, x)
+        assert isinstance(_tce_info2.value.__cause__, RuntimeError)
         good_model = _SimpleLinear()
         log = trace_fn(good_model, torch.randn(2, 10))
         assert log is not None
@@ -628,7 +631,7 @@ class TestCleanupReleasesReferences:
         # Force each Param's live reference to rehydrate (iteration triggers
         # rehydrate-on-iter after a normal capture) so we have a genuine
         # non-None reference to prove cleanup() releases.
-        param_logs = list(log.param_logs)
+        param_logs = list(log._param_logs)
         assert param_logs, "expected at least one captured Param"
         for param_log in param_logs:
             assert param_log._param_ref is not None
@@ -643,7 +646,7 @@ class TestCleanupReleasesReferences:
         # Op -> Trace circular reference via source_trace), and internal
         # containers not in MODEL_LOG_FIELD_ORDER must be gone.
         assert not hasattr(first_entry, "out")
-        assert not hasattr(log, "layer_logs")
+        assert not hasattr(log, "_layer_logs")
 
 
 # ---------------------------------------------------------------------------
@@ -745,7 +748,7 @@ class TestDisplayLargeTensor:
         """
         model = nn.Linear(100, 2000)
         x = torch.randn(50, 100)
-        log = trace_fn(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+        log = trace_fn(model, x, save="all")
 
         clone_call_sizes: list[int] = []
         orig_clone = torch.Tensor.clone
@@ -777,7 +780,7 @@ class TestDisplayUsesLoggedShape:
         """shape should reflect capture-time shape."""
         model = _SimpleLinear()
         x = torch.randn(2, 10)
-        log = trace_fn(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+        log = trace_fn(model, x, save="all")
         for label in log.layer_labels:
             entry = log[label]
             if entry.out is not None:

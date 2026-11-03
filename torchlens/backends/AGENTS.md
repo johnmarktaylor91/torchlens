@@ -1,44 +1,72 @@
 # Backend Author Contract
 
-TorchLens has two backend integration tiers.
+Every backend, torch included, fills one contract: `BackendProtocol`
+(`_backend_protocol.py`, exported as `tl.backends.BackendProtocol`). It is the
+contract for all six backends (torch, tf, jax, mlx, paddle, tinygrad); the
+conformance suite and the shared rules talk only to it.
 
-## Tier 1: Registered Backend Spec
+## The backend protocol (the contract for all six)
 
-Every public backend must register a `BackendSpec` in `registry.py`/`default_specs.py`.
-This is the contract for `tl.trace(..., backend=...)`, validation dispatch,
-serialization policy, and public capability reporting.
+Register a `BackendSpec` in `registry.py`/`default_specs.py` with:
 
-A standalone backend must provide:
+- `protocol=`: a lazy factory returning the backend's protocol object. The
+  objects live in the import-light package `_protocols/` (one module per
+  backend, importing no backend package, so registration can validate them at
+  import time). Registration checks the object against
+  `BACKEND_PROTOCOL_MEMBERS`.
+- `maturity=`: `"preview"` or `"stable"`. Only a recorded maintainer decision
+  flips it; `tests/test_backend_maturity.py` pins that a `stable` backend's
+  shipped scorecard meets every graduation item.
+- `capabilities=`: `BackendCapabilities`, the only source of capability truth.
+  A `False` flag owes a typed refusal with the code from
+  `refusal_code_for_capability(flag)`; the suite's `c1_refusal_<flag>` cells
+  prove it.
+- `can_handle(model, input_args, input_kwargs)`: it must reject inputs holding
+  native tensor leaves from any other backend family.
+- `capture_trace`, `validate_entry` and `validate_trace` (the public dispatch
+  surface, kept beside the protocol until the capture-pipeline rebuild folds
+  them into it), and `SerializationPolicy` when payloads differ from torch.
 
-- `can_handle(model, input_args, input_kwargs)` for auto-resolution.
-  It must reject inputs containing native tensor leaves from any other backend
-  family, even when the model or another input leaf matches this backend.
-- `capture_trace(*args, **kwargs)` for its public trace entry.
-- `validate_entry(...)` and `validate_trace(...)`, or typed unsupported dispatchers.
-- `BackendCapabilities` in the registry. This is the only source of capability truth.
-- `SerializationPolicy` when payloads or manifests differ from torch defaults.
+Protocol obligations that every backend shares:
 
-Use `BackendUnsupportedError` for unsupported public surfaces. Do not silently accept
-options that the registry does not declare.
+- Refuse with `BackendUnsupportedError` and a `code=` from `REFUSAL_CODES`
+  before any framework call with side effects. Never accept an option the
+  registry does not declare. A new code goes in through FORKS or a Lead ruling,
+  never ad hoc.
+- `validate` returns a `ValidationStatus` whose decisions name a reason from
+  `VALIDATION_REASONS` and whose failure names the first offending op.
+- Constants follow `_constants.py` (called from `_finalize.py`): closure
+  constants become parentless `constant` ops with payloads, literal producers
+  keep zero parents and a payload, an unreadable constant refuses
+  `constant_unrealizable`.
+- `materialization="lazy"` backends realize once: one framework evaluation
+  over every recorded value after the forward, payloads read only after it.
+- `framework` is the backend's `FrameworkRequirement`; its range must equal the
+  pyproject extra and its `pinned` the per-change CI install
+  (`tests/test_backend_framework_pins.py`).
+- The backend's shipped `scorecard.json` is regenerated with
+  `python -m torchlens.conformance.scorecard --backend <name> --write` on the
+  pinned version, never hand-edited; its docs page `docs/backends/<name>.md`
+  keeps a tutorial and a can and cannot table equal to the record's capability
+  summary (`tests/test_backend_docs_lockstep.py`).
 
-## Tier 2: Shared CaptureBackend Protocol
+## The orchestration adapter (torch-internal)
 
-`CaptureBackend` (defined in `backends/_protocol.py`) is the lower-level adapter used by
-the shared eager orchestrator in `_capture/trace.py`. A backend should expose `BackendSpec.capture_backend` only when it
-implements the full protocol: input normalization, source logging, RNG hooks, inference
-context, output extraction, intervention hooks, cleanup hooks, and producer-policy hooks.
-
-Registration validates the protocol attributes when `capture_backend` is supplied. If a
-backend is static, callback-based, or otherwise owns its full capture loop, leave
-`capture_backend=None` and keep the standalone `capture_trace` entry honest.
-
-Torch currently implements both tiers. Preview engines may implement only Tier 1 until
-they can satisfy the shared orchestration protocol without torch assumptions.
+`CaptureBackend` (`_protocol.py`) is the lower-level adapter the shared eager
+orchestrator in `_capture/trace.py` drives: input normalization, source logging,
+RNG hooks, inference context, output extraction, intervention hooks, cleanup
+hooks and producer-policy hooks. It is torch's internal capture seam, not the
+backend contract. Torch fills the backend protocol through an adapter over its
+public entries (`_protocols/torch.py`) and also supplies `capture_backend`.
+Registration validates the adapter's attributes when `capture_backend` is
+supplied. A static, callback-based or self-looping backend leaves
+`capture_backend=None` and keeps its standalone `capture_trace` honest.
 
 ## Preview backends
 
-Five technical-preview backends live beside `torch/`, each Tier-1 standalone
-(`capture_backend=None`) with per-directory implementation guides:
+Five preview backends (`maturity="preview"`) live beside `torch/`, each filling
+the backend protocol with `capture_backend=None`, with per-directory
+implementation guides:
 
 - `tf/` - eager op-callback live capture plus a static FuncGraph path
   (`tf/AGENTS.md`).
@@ -46,7 +74,7 @@ Five technical-preview backends live beside `torch/`, each Tier-1 standalone
   (`jax/AGENTS.md`).
 - `mlx/` - eager wrapper capture with live per-op replay validation
   (`mlx/AGENTS.md`).
-- `paddle/` - eager dygraph wrapper capture with live intervene=/halt=
+- `paddle/` - eager dygraph wrapper capture with live intervene=/stop_after=
   (`paddle/AGENTS.md`).
 - `tinygrad/` - UOp-snapshot capture of an eager forward (`tinygrad/AGENTS.md`).
 

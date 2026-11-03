@@ -59,7 +59,7 @@ def test_trace_str_is_bounded_with_folds(deep_trace) -> None:
     lines = text.splitlines()
     assert len(lines) < 80, f"bounded execution log regressed to {len(lines)} lines"
     assert any("buffer rows folded" in line for line in lines)
-    assert any("more layers (see .layer_list)" in line for line in lines)
+    assert any("more layers (see .ops)" in line for line in lines)
 
 
 @pytest.mark.smoke
@@ -69,7 +69,7 @@ def test_trace_str_honesty_header_on_not_checked() -> None:
     trace = tl.trace(
         nn.Identity(),
         torch.randn(2, 2),
-        capture=tl.options.CaptureOptions(layers_to_save=None),
+        save=None,
     )
     text = str(trace)
     assert trace.nonfinite_verdict == "not_checked"
@@ -113,7 +113,7 @@ def test_partial_trace_badge_first() -> None:
 
     with pytest.raises(Exception) as exc_info:
         tl.trace(_Boom(), torch.randn(2, 2))
-    partial = tl._partial.from_failed_capture(exc_info.value)
+    partial = exc_info.value.partial_trace
     line = repr(partial)
     assert line.startswith("PartialTrace [partial]")
     card = str(partial)
@@ -148,9 +148,9 @@ def test_edge_record_repr_designed() -> None:
     trace = tl.trace(
         _Viewy(),
         torch.randn(2, 2),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
-    records = [e for op in trace.layer_list for e in (getattr(op, "edge_uses", ()) or ())]
+    records = [e for op in trace._layer_list for e in (getattr(op, "edge_uses", ()) or ())]
     assert records
     texts = [repr(e) for e in records]
     assert all(text.startswith("edge ") and " -> " in text for text in texts)

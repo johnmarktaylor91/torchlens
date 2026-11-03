@@ -100,13 +100,13 @@ def _zero_hook(out: torch.Tensor, *, ctx: tl.HookContext) -> torch.Tensor:
 def _linear_op(log: tl.Trace) -> tl.Op:
     """Return the first linear op in a trace."""
 
-    return next(op for op in log.layer_list if op.layer_type == "linear")
+    return next(op for op in log._layer_list if op.type == "linear")
 
 
 def _relu_op(log: tl.Trace) -> tl.Op:
     """Return the first relu op in a trace."""
 
-    return next(op for op in log.layer_list if op.layer_type == "relu")
+    return next(op for op in log._layer_list if op.type == "relu")
 
 
 def _save_only_mul(ctx: RecordContext) -> bool:
@@ -153,37 +153,34 @@ def test_live_intervention_retention_contract(entrypoint: str) -> None:
         )
         assert torch.equal(_linear_op(log).out, captured[0])
         assert torch.equal(_linear_op(log).out, _linear_op(rerun).out)
-        assert _linear_op(log).intervention_replaced
+        assert _linear_op(log).is_edited
     elif entrypoint == "capture_options_hooks":
         model = _ReluReturnModel()
         log = tl.trace(
             model,
             torch.randn(2, 3),
             capture=CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 hooks={tl.func("relu"): _zero_hook},
             ),
         )
-        relu_layer = next(layer for layer in log.layer_list if layer.func_name == "relu")
+        relu_layer = next(layer for layer in log._layer_list if layer.func_name == "relu")
         assert log.state is TraceState.LIVE_CAPTURED
         assert stashed(log, "latest") is not None
         assert relu_layer.out is not None
         assert torch.equal(stashed(log, "latest"), relu_layer.out)
         assert torch.count_nonzero(relu_layer.out) == 0
-        assert len(relu_layer.interventions) == 1
-        assert relu_layer.interventions[0].timing == "post"
-        assert relu_layer.interventions[0].direction == "forward"
+        assert len(relu_layer.edits) == 1
+        assert relu_layer.edits[0].timing == "post"
+        assert relu_layer.edits[0].signal == "forward"
     else:
-        output, recording = cast(
-            tuple[torch.Tensor, Recording],
-            tl.record(
-                LinearRelu(),
-                torch.ones(1, 4),
-                save=tl.func("linear"),
-                intervene=tl.when(tl.func("linear"), tl.zero_ablate()),
-                return_output=True,
-            ),
+        recording = tl.record(
+            LinearRelu(),
+            torch.ones(1, 4),
+            save=tl.func("linear"),
+            intervene=tl.when(tl.func("linear"), tl.zero_ablate()),
         )
+        output = cast(torch.Tensor, recording.output)
         assert torch.equal(output, torch.zeros_like(output))
         assert len(recording.records) == 1
         payload = recording.records[0].ram_payload
@@ -204,7 +201,7 @@ def test_intervene_and_save_compose_with_downstream_saved_child() -> None:
     linear = _linear_op(log)
     relu = _relu_op(log)
     assert torch.equal(relu.out, torch.relu(linear.out))
-    assert linear.intervention_replaced
+    assert linear.is_edited
 
 
 def test_intervene_only_mutates_forward_output_without_saving_site() -> None:
@@ -214,16 +211,15 @@ def test_intervene_only_mutates_forward_output_without_saving_site() -> None:
         LinearRelu(),
         torch.ones(1, 4),
         intervene=tl.when(tl.func("linear"), tl.zero_ablate()),
-        capture=tl.options.CaptureOptions(
-            layers_to_save="none", output_transform=lambda output: output
-        ),
+        capture=tl.options.CaptureOptions(output_transform=lambda output: output),
+        save="none",
     )
-    output = log.raw_output
+    output = log.transformed_output
 
     assert isinstance(output, torch.Tensor)
     assert torch.equal(output, torch.zeros_like(output))
     assert not _linear_op(log).has_saved_activation
-    assert _linear_op(log).intervention_replaced
+    assert _linear_op(log).is_edited
 
 
 def test_conditional_intervention_uses_live_index_lookback() -> None:
@@ -240,8 +236,8 @@ def test_conditional_intervention_uses_live_index_lookback() -> None:
     linear = _linear_op(log)
     relu = _relu_op(log)
     assert torch.equal(relu.out, torch.relu(linear.out) * 0.5)
-    assert relu.intervention_replaced
-    assert not linear.intervention_replaced
+    assert relu.is_edited
+    assert not linear.is_edited
 
 
 def test_recording_to_trace_refuses_missing_child_version_replay_data() -> None:
@@ -253,7 +249,7 @@ def test_recording_to_trace_refuses_missing_child_version_replay_data() -> None:
     trace = recording.to_trace()
 
     assert not trace._replay_arg_version_data_complete
-    assert all(not op.out_versions_by_child for op in trace.layer_list)
+    assert all(not op.out_versions_by_child for op in trace._layer_list)
     with pytest.raises(ValueError, match="child-version snapshots"):
         trace.validate_forward_pass([model(x).detach().clone()], validate_metadata=False)
 
@@ -267,7 +263,8 @@ def test_save_new_outs_rebuilds_child_versions_and_validates_alias_mutation() ->
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
 
     log.save_new_outs(model, new_x, layers_to_save="all")
@@ -286,7 +283,8 @@ def test_selective_fast_save_rebuilds_versions_without_unsaved_out_postprocess()
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=["mul"], save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save=["mul"],
     )
 
     assert log._replay_arg_version_data_complete
@@ -307,10 +305,11 @@ def test_selective_fast_save_without_arg_values_marks_replay_versions_incomplete
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=["mul"], save_args=False),
+        capture=tl.options.CaptureOptions(save_args=False),
+        save=["mul"],
     )
 
     assert not log._replay_arg_version_data_complete
-    assert all(not op.out_versions_by_child for op in log.layer_list)
+    assert all(not op.out_versions_by_child for op in log._layer_list)
     with pytest.raises(ValueError, match="child-version snapshots"):
         log.validate_forward_pass([model(x).detach().clone()], validate_metadata=False)

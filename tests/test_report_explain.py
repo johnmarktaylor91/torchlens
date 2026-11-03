@@ -10,6 +10,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes import FuncCallLocation
+from torchlens.errors import TraceCaptureError
 
 
 class TinyReportModel(nn.Module):
@@ -123,9 +124,10 @@ def test_explain_json_form_is_removed() -> None:
 def test_explain_and_audit_diagnose_real_partial_failure() -> None:
     """Partial reports name recorded last-op and captured exception evidence."""
 
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(TraceCaptureError) as exc_info:
         tl.trace(FailingShapeModel(), torch.randn(2, 4))
-    partial = tl._partial.from_failed_capture(exc_info.value)
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
+    partial = exc_info.value.partial_trace
     last = partial.raw_layers[-1]
     last_label = str(getattr(last, "_label_raw"))
 
@@ -137,13 +139,13 @@ def test_explain_and_audit_diagnose_real_partial_failure() -> None:
     assert last_label in text
     assert "RuntimeError" in text
     assert "mat1 and mat2 shapes cannot be multiplied" in text
-    assert str(exc_info.value) in text
+    assert str(exc_info.value.__cause__) in text
     assert "Failing boundary: forward at" in text
     assert audit == partial.audit()
     failure = next(
         finding for finding in audit.findings if finding.check == "partial_capture_exception"
     )
-    assert failure.message == f"RuntimeError: {exc_info.value}"
+    assert failure.message == f"RuntimeError: {exc_info.value.__cause__}"
     assert failure.ops == (last_label,)
     assert all("may" not in finding.message.lower() for finding in audit.findings)
 
@@ -174,7 +176,7 @@ def test_operational_status_line_reports_real_streamed_ops_not_a_fake_constant(
     )
     streamed_line = _operational_status_line(streamed_log)
     assert "streamed_ops=0" not in streamed_line
-    num_layers = len(streamed_log.layer_list)
+    num_layers = len(streamed_log._layer_list)
     assert f"streamed_ops={num_layers}" in streamed_line
 
     streamed_text = streamed_log.explain(audience="practitioner")
@@ -262,8 +264,8 @@ def test_explain_surfaces_unverified_capture() -> None:
     """A ceilinged capture (capture_verified=False) stays visible everywhere."""
 
     log = _captured_log()
-    log.capture_verified = False
-    log.capture_verification_reason = "dynamo_region_not_logged"
+    log._provenance_verified = False
+    log._provenance_verification_reason = "dynamo_region_not_logged"
 
     capture = log.to_agent_json()["capture"]
     assert capture["capture_verified"] is False
@@ -278,9 +280,9 @@ def test_profile_surfaces_unverified_capture() -> None:
     """Profile output discloses verification state per the honesty contract."""
 
     log = _captured_log()
-    log.capture_verified = False
-    log.capture_verification_reason = "mode_rescue_rerun"
-    log.rescue_rerun = True
+    log._provenance_verified = False
+    log._provenance_verification_reason = "mode_rescue_rerun"
+    log._rescue_rerun = True
 
     profile = tl.report.profile(log)
     assert profile.is_capture_verified is False
@@ -304,8 +306,8 @@ def test_summary_surfaces_unverified_capture() -> None:
     clean_text = log.summary()
     assert "UNVERIFIED" not in clean_text
 
-    log.capture_verified = False
-    log.capture_verification_reason = "dynamo_region_not_logged"
+    log._provenance_verified = False
+    log._provenance_verification_reason = "dynamo_region_not_logged"
     text = log.summary()
     assert "UNVERIFIED" in text
     assert "dynamo_region_not_logged" in text
@@ -361,9 +363,10 @@ def test_explain_max_tokens_large_budget_returns_full_report() -> None:
 def test_explain_max_tokens_never_drops_partial_failure_evidence() -> None:
     """Partial-capture reports keep every failure fact under any budget."""
 
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(TraceCaptureError) as exc_info:
         tl.trace(FailingShapeModel(), torch.randn(2, 4))
-    partial = tl._partial.from_failed_capture(exc_info.value)
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
+    partial = exc_info.value.partial_trace
 
     text = partial.explain(max_tokens=1)
     assert "This is a partial capture" in text

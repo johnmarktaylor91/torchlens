@@ -93,7 +93,8 @@ def test_record_installs_no_grad_hooks_by_default() -> None:
     """A plain record leaves the output without gradient hooks."""
 
     model, x = _model_and_input()
-    out, recording = tl.record(model, x, save=_keep_relu, return_output=True)
+    recording = tl.record(model, x, save=_keep_relu)
+    out = recording.output
     assert out.grad_fn is not None
     assert not _has_grad_hooks(out)
     assert recording.outcome.inference_only is False
@@ -117,7 +118,8 @@ def test_record_opt_in_restores_grad_hooks_and_backward(opt_in: dict[str, object
         routed = {"recording": tl.options.RecordingOptions(**opt_in)}
     else:
         routed = {"capture": tl.options.CaptureOptions(**opt_in)}
-    out, recording = tl.record(model, x, save=_keep_relu, return_output=True, **routed)
+    recording = tl.record(model, x, save=_keep_relu, **routed)
+    out = recording.output
     assert _has_grad_hooks(out)
     recording.backward(out.sum(), save_grads=True)
     assert recording.grad_records
@@ -128,13 +130,13 @@ def test_record_save_grads_off_values_do_not_opt_in(value: object) -> None:
     """``save_grads=None`` and ``save_grads=False`` request no backward."""
 
     model, x = _model_and_input()
-    out, _ = tl.record(
+    _ = tl.record(
         model,
         x,
         save=_keep_relu,
-        return_output=True,
         capture=tl.options.CaptureOptions(save_grads=value),
     )
+    out = _.output
     assert not _has_grad_hooks(out)
 
 
@@ -143,7 +145,8 @@ def test_record_log_backward_without_opt_in_refuses_naming_it() -> None:
     """A backward on a record without the opt-in refuses instead of recording nothing."""
 
     model, x = _model_and_input()
-    out, recording = tl.record(model, x, save=_keep_relu, return_output=True)
+    recording = tl.record(model, x, save=_keep_relu)
+    out = recording.output
     with pytest.raises(RecorderStateError) as exc_info:
         recording.backward(out.sum(), save_grads=True)
     assert exc_info.value.fields["code"] == "recording_backward_not_requested"
@@ -170,9 +173,10 @@ def test_record_under_no_grad_implies_inference_only(grad_off: type) -> None:
 
     model, x = _model_and_input()
     with grad_off():
-        out, recording = tl.record(model, x, save=_keep_relu, return_output=True)
+        recording = tl.record(model, x, save=_keep_relu)
+        out = recording.output
     assert recording.outcome.inference_only is True
-    assert recording._recording_state.runtime_trace.inference_only is True
+    assert recording._recording_state.runtime_trace.options.inference_only is True
     with pytest.raises(RecorderStateError) as exc_info:
         recording.backward(out.sum())
     assert exc_info.value.fields["code"] == "recording_backward_inference_only"
@@ -216,7 +220,7 @@ def test_trace_under_no_grad_implies_inference_only(grad_off: type) -> None:
     with grad_off():
         trace = tl.trace(model, x)
     try:
-        assert trace.inference_only is True
+        assert trace.options.inference_only is True
         assert trace.outcome.inference_only is True
     finally:
         trace.cleanup()
@@ -243,7 +247,7 @@ def test_trace_with_grad_enabled_is_not_inference_only() -> None:
     model, x = _model_and_input()
     trace = tl.trace(model, x)
     try:
-        assert trace.inference_only is False
+        assert trace.options.inference_only is False
     finally:
         trace.cleanup()
 
@@ -254,9 +258,9 @@ def test_trace_with_grad_enabled_is_not_inference_only() -> None:
         {"inference_only": False},
         {"backward_ready": True},
         {"save_grads": True},
-        {"intervention_ready": True},
+        {"replayable": True},
     ],
-    ids=["explicit_false", "backward_ready", "save_grads", "intervention_ready"],
+    ids=["explicit_false", "backward_ready", "save_grads", "replayable"],
 )
 def test_trace_under_no_grad_explicit_options_keep_inference_only_off(
     capture: dict[str, object],
@@ -267,7 +271,7 @@ def test_trace_under_no_grad_explicit_options_keep_inference_only_off(
     with torch.no_grad():
         trace = tl.trace(model, x, capture=tl.options.CaptureOptions(**capture))
     try:
-        assert trace.inference_only is False
+        assert trace.options.inference_only is False
     finally:
         trace.cleanup()
 
@@ -277,15 +281,16 @@ def test_trace_under_no_grad_keeps_saved_values() -> None:
 
     model, x = _model_and_input()
     with torch.no_grad():
-        implied = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+        implied = tl.trace(model, x, save="all")
         plain = tl.trace(
             model,
             x,
-            capture=tl.options.CaptureOptions(layers_to_save="all", inference_only=False),
+            capture=tl.options.CaptureOptions(inference_only=False),
+            save="all",
         )
     try:
-        assert implied.inference_only is True
-        assert plain.inference_only is False
+        assert implied.options.inference_only is True
+        assert plain.options.inference_only is False
         for label in plain.layer_labels:
             if plain[label].has_saved_activation:
                 assert torch.equal(implied[label].out, plain[label].out)
@@ -341,13 +346,13 @@ def test_trace_under_no_grad_with_enable_grad_inside_keeps_backward() -> None:
     with torch.no_grad():
         trace = tl.trace(model, x)
     try:
-        assert trace.inference_only is False
+        assert trace.options.inference_only is False
         assert trace.outcome.inference_only is False
         loss = trace[trace.output_layers[0]].out.sum()
         assert loss.grad_fn is not None
         trace.log_backward(loss, save_grads=True)
         assert model.lin.weight.grad is not None
-        assert any(layer.grads for layer in trace.layer_list)
+        assert any(layer.grads for layer in trace._layer_list)
     finally:
         trace.cleanup()
 
@@ -359,7 +364,7 @@ def test_trace_explicit_inference_only_with_enable_grad_inside_stays_on() -> Non
     with torch.no_grad():
         trace = tl.trace(model, x, capture=tl.options.CaptureOptions(inference_only=True))
     try:
-        assert trace.inference_only is True
+        assert trace.options.inference_only is True
         assert trace.outcome.inference_only is True
         loss = model(x).sum()
         with pytest.raises(ConfigurationError, match="autograd graph was discarded"):
@@ -373,7 +378,8 @@ def test_record_under_no_grad_with_enable_grad_inside_is_not_inference_only() ->
 
     model, x = _grad_inside_model_and_input()
     with torch.no_grad():
-        out, recording = tl.record(model, x, save=_keep_relu, return_output=True)
+        recording = tl.record(model, x, save=_keep_relu)
+        out = recording.output
     assert out.grad_fn is not None
     assert recording.outcome.inference_only is False
     with pytest.raises(RecorderStateError) as exc_info:
@@ -385,13 +391,13 @@ def test_record_default_grad_false_does_not_opt_in() -> None:
     """``default_grad=False`` requests no backward: no hooks, and log_backward refuses."""
 
     model, x = _model_and_input()
-    out, recording = tl.record(
+    recording = tl.record(
         model,
         x,
         save=_keep_relu,
-        return_output=True,
         recording=tl.options.RecordingOptions(default_grad=False),
     )
+    out = recording.output
     assert not _has_grad_hooks(out)
     with pytest.raises(RecorderStateError) as exc_info:
         recording.backward(out.sum(), save_grads=True)

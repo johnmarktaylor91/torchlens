@@ -30,46 +30,7 @@ import pytest
 
 pytestmark = pytest.mark.heavy
 
-_CHILD = """
-import sys
-if sys.flags.optimize < 1:
-    print("NOT_OPTIMIZED")
-    sys.exit(2)
-import warnings
-warnings.filterwarnings("ignore")
-import torch
-import torch.nn as nn
-import torchlens as tl
-from torchlens.options import CaptureOptions
-from torchlens.validation.core import (
-    _check_whether_func_on_saved_parents_yields_saved_tensor,
-)
-
-torch.manual_seed(0)
-model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
-x = torch.randn(2, 4)
-print("FORWARD_VERDICT", tl.validate(model, x, scope="forward", seed=0))
-print("BACKWARD_VERDICT", tl.validate(model, x, scope="backward", seed=0))
-
-
-class Gate(nn.Module):
-    def forward(self, z):
-        return (z > 1.0e30).float()
-
-
-trace = tl.trace(
-    Gate(),
-    torch.randn(3, 4),
-    capture=CaptureOptions(layers_to_save="all", save_args=True, seed=0),
-)
-op = [o for o in trace.layer_list if o.func_name == "__gt__"][0]
-saved = op.out.detach().clone()
-object.__setattr__(op, "func", lambda *a, **k: saved.clone())
-result = _check_whether_func_on_saved_parents_yields_saved_tensor(
-    trace, op.label, perturb=True, layers_to_perturb=[op.parents[0]]
-)
-print("SPURIOUS_DECISION", result.decision, result.reason)
-"""
+_CHILD = '\nimport sys\nif sys.flags.optimize < 1:\n    print("NOT_OPTIMIZED")\n    sys.exit(2)\nimport warnings\nwarnings.filterwarnings("ignore")\nimport torch\nimport torch.nn as nn\nimport torchlens as tl\nfrom torchlens.options import CaptureOptions\nfrom torchlens.validation.core import (\n    _check_whether_func_on_saved_parents_yields_saved_tensor,\n)\n\ntorch.manual_seed(0)\nmodel = nn.Sequential(nn.Linear(4, 4), nn.ReLU())\nx = torch.randn(2, 4)\nprint("FORWARD_VERDICT", tl.validate(model, x, scope="forward", seed=0))\nprint("BACKWARD_VERDICT", tl.validate(model, x, scope="backward", seed=0))\n\n\nclass Gate(nn.Module):\n    def forward(self, z):\n        return (z > 1.0e30).float()\n\n\ntrace = tl.trace(\n    Gate(),\n    torch.randn(3, 4),\n    capture=CaptureOptions(save_args=True, seed=0), save="all",\n)\nop = [o for o in trace._layer_list if o.func_name == "__gt__"][0]\nsaved = op.out.detach().clone()\nobject.__setattr__(op, "func", lambda *a, **k: saved.clone())\nresult = _check_whether_func_on_saved_parents_yields_saved_tensor(\n    trace, op.label, perturb=True, layers_to_perturb=[op.parents[0]]\n)\nprint("SPURIOUS_DECISION", result.decision, result.reason)\n'
 
 
 def test_optimized_mode_verdicts_are_identical_and_tripwires_still_fire() -> None:

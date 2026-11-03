@@ -423,7 +423,7 @@ def test_xarray_export_names_mismatched_presentation_layer() -> None:
     pytest.importorskip("xarray")
 
     fake_log = SimpleNamespace(
-        layer_list=[
+        _layer_list=[
             SimpleNamespace(layer_label="first", out=torch.randn(2, 3)),
             SimpleNamespace(layer_label="bad_layer", out=torch.randn(1, 3)),
         ]
@@ -554,8 +554,8 @@ def test_emit_nvtx_capture_option_does_not_change_capture(
         capture=tl.options.CaptureOptions(emit_nvtx=True),
     )
 
-    assert log.emit_nvtx is True
-    assert len(log.layer_list) > 0
+    assert log.options.emit_nvtx is True
+    assert len(log._layer_list) > 0
 
 
 def test_tabular_exports_round_trip(export_log: Any, tmp_path: Path) -> None:

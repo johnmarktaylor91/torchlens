@@ -2,10 +2,13 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import torch
+
+if TYPE_CHECKING:
+    from .trace import Trace
 
 
 @dataclass(frozen=True)
@@ -26,7 +29,7 @@ class ModelProfile:
     has_output_labels:
         Whether a label space is available from ``output_id2label``.
     num_stimuli:
-        Inferred leading batch/stimulus count from ``raw_input``.
+        Inferred leading batch/stimulus count from ``input``.
     has_raw_images:
         Whether raw input appears to contain image objects.
     keystone_applicable:
@@ -153,3 +156,35 @@ def _infer_input_modality(raw_input: Any, preprocessing_source: str | None) -> s
     if isinstance(raw_input, (torch.Tensor, np.ndarray)):
         return "tensor"
     return "unknown"
+
+
+def model_profile(trace: "Trace") -> ModelProfile:
+    """Body of ``Trace.model_profile``; the record keeps the thin spelling and docstring."""
+
+    input_preprocessor = trace._provenance_input_preprocessor
+    output_postprocessor = trace._provenance_output_postprocessor
+    input_source = input_preprocessor.source if input_preprocessor is not None else None
+    output_source = output_postprocessor.source if output_postprocessor is not None else None
+    has_output_labels = bool(trace.output_id2label)
+    output_label_count = (
+        len(trace.output_id2label)
+        if trace.output_id2label is not None
+        else trace.output_num_classes
+    )
+    has_raw_images = _raw_input_contains_images(trace.input)
+    input_modality = _infer_input_modality(trace.input, input_source)
+    return ModelProfile(
+        input_modality=input_modality,
+        input_preprocessing_source=input_source,
+        output_postprocessing_source=output_source,
+        output_label_count=output_label_count,
+        has_output_labels=has_output_labels,
+        num_stimuli=_raw_input_num_stimuli(trace.input),
+        has_raw_images=has_raw_images,
+        keystone_applicable=bool(
+            input_modality == "image"
+            and has_raw_images
+            and has_output_labels
+            and output_label_count is not None
+        ),
+    )

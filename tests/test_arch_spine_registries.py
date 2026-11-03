@@ -52,7 +52,7 @@ class TestExportTargetDoor:
 
         def _write_labels(log, path):
             target = tmp_path / path
-            target.write_text("\n".join(str(layer.layer_label) for layer in log.layer_list))
+            target.write_text("\n".join(str(layer.layer_label) for layer in log._layer_list))
             return target
 
         ex.register_target(
@@ -117,7 +117,7 @@ class TestRendererDoor:
         from torchlens._errors import InvalidArgumentError
 
         with pytest.raises(InvalidArgumentError) as excinfo:
-            traced.draw(vis_renderer="nonexistent", vis_save_only=True, path="/tmp/x")
+            traced.draw(renderer="nonexistent", path="/tmp/x")
         assert excinfo.value.fields["code"] == "visualization_renderer_invalid"
         assert "graphviz" in str(excinfo.value)
 

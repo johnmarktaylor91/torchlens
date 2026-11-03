@@ -38,11 +38,11 @@ STRATEGIES = [
 
 def _capture(model: nn.Module, x: torch.Tensor) -> Any:
     torch.manual_seed(0)
-    return tl.trace(model, x, capture=CaptureOptions(layers_to_save="all", save_args=True, seed=0))
+    return tl.trace(model, x, capture=CaptureOptions(save_args=True, seed=0), save="all")
 
 
 def _bn_op(trace: Any) -> Any:
-    return next(op for op in trace.layer_list if op.func_name == "batch_norm")
+    return next(op for op in trace._layer_list if op.func_name == "batch_norm")
 
 
 def _edge(trace: Any, op: Any, slot: int) -> Any:

@@ -43,7 +43,9 @@ from pathlib import Path
 from typing import Any
 
 from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
+from .._partial import PartialTrace
 from .._utils.display import atomic_write_text
 from ..errors._base import TorchLensWarning
 from ._common import _static_graph_data
@@ -120,7 +122,7 @@ class _ArrayPlan:
 def _is_partial(log: Any) -> bool:
     """Whether the subject is a failed-capture PartialTrace."""
 
-    return getattr(log, "layer_logs", None) is None and hasattr(log, "raw_layers")
+    return isinstance(log, PartialTrace)
 
 
 def _intervention_sites(log: Any) -> list[tuple[str, str]]:
@@ -144,7 +146,7 @@ def _intervention_hop(log: Any, label: str) -> tuple[tuple[str, ...], tuple[str,
     try:
         op = log[label]
         intervened = bool(
-            getattr(op, "intervention_replaced", False) or getattr(op, "edge_substitutions", None)
+            getattr(op, "is_edited", False) or getattr(op, "edge_substitutions", None)
         )
         if not intervened:
             return None
@@ -331,7 +333,7 @@ def _graph_section(log: Any, graph: str, vis_call_depth: int | None) -> tuple[st
             '<div id="tl-graph-wrap" class="tl-report-graph">'
             f'<div id="tl-graph-inner">{svg}</div></div>'
             f'<div class="tl-report-stats">graph: real layout, collapse={collapse!r}'
-            + (f", vis_call_depth={vis_call_depth}" if vis_call_depth is not None else "")
+            + (f", depth={vis_call_depth}" if vis_call_depth is not None else "")
             + "</div>"
         )
         return html, facts
@@ -340,7 +342,7 @@ def _graph_section(log: Any, graph: str, vis_call_depth: int | None) -> tuple[st
         TorchLensWarning(
             "the report could not embed the real graph layout and fell back to "
             "the labeled schematic canvas. "
-            "Remedy: install Graphviz, or reduce the graph with vis_call_depth/"
+            "Remedy: install Graphviz, or reduce the graph with depth/"
             "module focus and re-export",
             code="report_graph_fallback",
         ),
@@ -379,12 +381,11 @@ def _draw_svg(log: Any, collapse: str, vis_call_depth: int | None) -> str | None
             outpath = os.path.join(tmp, "graph")
             kwargs: dict[str, Any] = {
                 "collapse": collapse,
-                "vis_save_only": True,
                 "path": outpath,
                 "file_format": "svg",
             }
             if vis_call_depth is not None:
-                kwargs["vis_call_depth"] = vis_call_depth
+                kwargs["depth"] = vis_call_depth
             log.draw(**kwargs)
             svg_text = Path(f"{outpath}.svg").read_text(encoding="utf-8")
     except Exception:  # noqa: BLE001 - the ladder decides what happens next
@@ -493,7 +494,7 @@ def _banner(log: Any, plan: _ArrayPlan) -> str:
     """Sticky identity + outcome banner; embed disclosure is mandatory."""
 
     kind = "PartialTrace (FAILED CAPTURE)" if _is_partial(log) else "Trace"
-    title = str(getattr(log, "trace_label", None) or getattr(log, "model_label", None) or kind)
+    title = str(getattr(log, "name", None) or getattr(log, "model_name", None) or kind)
     status = getattr(getattr(getattr(log, "outcome", None), "status", None), "name", "UNKNOWN")
     if plan.stripped:
         embed_note = "share_safe: every embedded value stripped"
@@ -638,7 +639,7 @@ def write_report(
         f"<pre>{escape(_scrub(_safe_json(manifest)))}</pre></details></section>"
     )
 
-    title = escape(_scrub(str(getattr(log, "model_label", None) or "TorchLens report")))
+    title = escape(_scrub(str(getattr(log, "model_name", None) or "TorchLens report")))
     document = (
         "<!DOCTYPE html><html><head><meta charset='utf-8'>"
         + _CSP_META
@@ -691,15 +692,15 @@ def _manifest(log: Any, plan: _ArrayPlan, ledger: dict[str, Any]) -> dict[str, A
         # getattr spelling: the layer lint's torch-privates text scan would
         # otherwise match the dunder attribute access as a private touch.
         "torch_version": getattr(torch, "__version__", "unknown"),
-        "model": _scrub(str(getattr(log, "model_label", "unknown"))),
-        "backend": str(getattr(log, "backend", "unknown")),
+        "model": _scrub(str(getattr(log, "model_name", "unknown"))),
+        "backend": str(log._provenance_backend if is_live_trace(log) else "unknown"),
         "outcome": getattr(
             getattr(getattr(log, "outcome", None), "status", None), "name", "UNKNOWN"
         ),
         "counts": {
-            "ops": getattr(log, "num_ops", None),
-            "saved_ops": getattr(log, "num_saved_ops", None),
-            "modules": getattr(log, "num_modules", None),
+            "ops": None if _is_partial(log) else log._num_ops,
+            "saved_ops": len(log.saved_ops) if hasattr(log, "saved_ops") else None,
+            "modules": len(log.modules) if hasattr(log, "modules") else None,
         },
         "arrays": {
             "mode": plan.mode,

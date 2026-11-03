@@ -87,7 +87,7 @@ def _real_retained_bytes(trace) -> int:
 
     seen: set[tuple[int, int]] = set()
     total = 0
-    for op in trace.layer_list:  # every row (sumfam F1: trace.ops is the counted view)
+    for op in trace._layer_list:  # every row (sumfam F1: trace.ops is the counted view)
         payload = op.out
         if not isinstance(payload, torch.Tensor):
             continue
@@ -128,7 +128,7 @@ def test_sp1_wide_output_linear_quantities() -> None:
         assert int(op.bytes_read) == (batch * d_in + n_params) * fp32
         assert int(op.bytes_written) == batch * d_out * fp32
         assert int(op.activation_memory) == batch * d_out * fp32
-        assert int(trace.saved_activation_memory) == _real_retained_bytes(trace)
+        assert int(trace.cost.saved_activation_memory) == _real_retained_bytes(trace)
         rss_growth_mib = _current_rss_mib() - rss_before
     finally:
         trace.cleanup()

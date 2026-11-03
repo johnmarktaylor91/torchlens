@@ -21,6 +21,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens import at_step
+from torchlens.errors import TraceCaptureError
 from torchlens.errors.episode import EpisodeCaptureError
 from torchlens.options import EpisodeOptions
 
@@ -499,7 +500,10 @@ def test_failed_forward_coupled_episode_attaches_partial_evidence():
             return current
 
     runner = CrashRunner(model)
-    with pytest.raises(RuntimeError, match="mid-episode crash"), pytest.warns(Warning):
+    with (
+        pytest.raises(TraceCaptureError, match="mid-episode crash") as _tce_info,
+        pytest.warns(Warning),
+    ):
         tl.trace(
             runner,
             _ids(),
@@ -507,6 +511,7 @@ def test_failed_forward_coupled_episode_attaches_partial_evidence():
             intervene=tl.when(tl.func("tanh"), tl.scale(0.5)),
             capture=tl.options.CaptureOptions(seed=SEED),
         )
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
 
 def test_the_old_refusal_site_is_retired():

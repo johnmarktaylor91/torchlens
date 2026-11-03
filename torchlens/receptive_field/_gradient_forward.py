@@ -11,6 +11,7 @@ import torch
 
 from torchlens.backends.registry import BackendUnsupportedError
 
+from .._record_type import record_type
 from ..backends.registry import get_backend_spec
 from ._engine_forward import solve_projective
 from ._errors import ReceptiveFieldUnavailableError
@@ -34,7 +35,7 @@ if TYPE_CHECKING:
 
 _RECAPTURE_RECIPE = (
     "tl.trace(model, x.requires_grad_(True), "
-    'capture=tl.options.CaptureOptions(backward_ready=True), save_mode="reference")'
+    'capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))'
 )
 
 
@@ -69,7 +70,7 @@ def _no_projective_vjp_reason(source: Op, targets: Sequence[Op], trace: Trace) -
     marker_targets = [
         target
         for target in targets
-        if getattr(target, "layer_type", None) == "output"
+        if record_type(target, None) == "output"
         and set(getattr(target, "parents", ()) or ()) == {source.layer_label}
     ]
     if marker_targets and len(marker_targets) == len(targets):
@@ -87,7 +88,7 @@ def _no_projective_vjp_reason(source: Op, targets: Sequence[Op], trace: Trace) -
         "but autograd returned no VJP, so the saved tensor identity is not the one in the "
         "captured graph."
     )
-    if str(getattr(trace, "save_mode", "")) != "reference":
+    if str(trace._options_save_mode) != "reference":
         return reason + ' Recapture with save_mode="reference".'
     return (
         reason + ' This trace already used save_mode="reference", so the cause is not the '
@@ -171,12 +172,12 @@ def _projective_recapture_recipe(source: Op, targets: Sequence[Op]) -> str:
         Selector-based recapture guidance.
     """
 
-    labels = (source.layer_label_short, *(target.layer_label_short for target in targets))
+    labels = (source.short_layer_label, *(target.short_layer_label for target in targets))
     selectors = " | ".join(f"tl.label({label!r})" for label in labels)
     return (
         "tl.trace(model, x.requires_grad_(True), "
-        "capture=tl.options.CaptureOptions(backward_ready=True), "
-        f'save_mode="reference", save={selectors})'
+        'capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"), '
+        f"save={selectors})"
     )
 
 
@@ -380,12 +381,12 @@ def projective_gradient_for_unit(
     if atol < 0 or rtol < 0:
         raise ValueError("atol and rtol must be non-negative.")
     trace: Trace = source.source_trace
-    spec = get_backend_spec(str(getattr(trace, "backend", "torch")))
+    spec = get_backend_spec(str(trace._provenance_backend))
     if not spec.capabilities.backward_capture:
         raise BackendUnsupportedError(
             f"Backend {spec.name!r} does not support projective gradient probes."
         )
-    if not getattr(trace, "backward_ready", False):
+    if not trace._options_backward_ready:
         raise ReceptiveFieldUnavailableError(
             "Projective gradient fields require backward_ready=True and saved payloads. "
             f"Recapture with {_RECAPTURE_RECIPE}."

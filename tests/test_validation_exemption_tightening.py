@@ -69,7 +69,8 @@ def _capture(model: nn.Module, x: torch.Tensor, seed: int = 0):
     return tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", save_args=True, seed=seed),
+        capture=CaptureOptions(save_args=True, seed=seed),
+        save="all",
     )
 
 
@@ -84,7 +85,7 @@ def _quiet_validate(model: nn.Module, x: torch.Tensor) -> bool:
 def _op_with_func_name(trace: Any, func_name: str) -> Any:
     """Return the first op in ``trace`` whose ``func_name`` matches."""
 
-    return next(op for op in trace.layer_list if op.func_name == func_name)
+    return next(op for op in trace._layer_list if op.func_name == func_name)
 
 
 def _freeze_op_replay(op: Any) -> None:
@@ -699,7 +700,7 @@ def _zipped_op_for_index(trace: Any, func_names: tuple[str, ...], index: int) ->
 
     return next(
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if op.func_name in func_names and op.multi_output_index == index
     )
 

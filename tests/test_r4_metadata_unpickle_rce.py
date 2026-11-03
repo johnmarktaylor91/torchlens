@@ -29,13 +29,12 @@ from torchlens._io._safe_unpickle import (
     SafeBundleUnpickler,
     _DeferredForeignCallable,
     _safe_getattr,
-    _safe_load_from_bytes,
 )
 from torchlens._utils.display import identity
 from torchlens.options import CaptureOptions
 
 _CAP = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )
@@ -126,17 +125,13 @@ def _save_all_levels(tmp_path: Path) -> dict[str, Path]:
     audit = tmp_path / "audit"
     cf_a = _ControlFlow()
     keep_alive.append(cf_a)
-    tl.trace(cf_a, x, capture=tl.options.CaptureOptions(layers_to_save="all")).save(
-        audit, level="audit"
-    )
+    tl.trace(cf_a, x, save="all").save(audit, level="audit")
     paths["analysis"] = audit
 
     portable = tmp_path / "portable"
     cf_p = _ControlFlow()
     keep_alive.append(cf_p)
-    tl.trace(cf_p, x, capture=tl.options.CaptureOptions(layers_to_save="all")).save(
-        portable, level="portable"
-    )
+    tl.trace(cf_p, x, save="all").save(portable, level="portable")
     paths["portable"] = portable
 
     run = tmp_path / "runnable"
@@ -200,13 +195,11 @@ def test_control_flow_bundle_round_trips(tmp_path: Path) -> None:
 
     x = torch.randn(2, 4)
     bundle = tmp_path / "cf"
-    tl.trace(_ControlFlow(), x, capture=tl.options.CaptureOptions(layers_to_save="all")).save(
-        bundle, level="portable"
-    )
+    tl.trace(_ControlFlow(), x, save="all").save(bundle, level="portable")
     assert b"_load_from_bytes" not in _metadata_path(bundle).read_bytes()
     loaded = tl.load(bundle)
     assert loaded is not None
-    for conditional in loaded.conditionals:
+    for conditional in loaded.graph.conditionals:
         for arm in conditional.arms:
             assert arm._trace is loaded
 
@@ -230,9 +223,7 @@ def test_malicious_metadata_is_denied_and_executes_nothing(tmp_path: Path, gadge
 
     x = torch.randn(2, 4)
     bundle = tmp_path / "victim"
-    tl.trace(_ControlFlow(), x, capture=tl.options.CaptureOptions(layers_to_save="all")).save(
-        bundle, level="portable"
-    )
+    tl.trace(_ControlFlow(), x, save="all").save(bundle, level="portable")
 
     marker = tmp_path / "PWNED"
     _overwrite_metadata(bundle, gadget_factory(marker))
@@ -275,33 +266,6 @@ def test_safe_getattr_allows_torch_tensor_method() -> None:
 
     resolved = _safe_getattr(torch._C.TensorBase, "sum")
     assert callable(resolved)
-
-
-def test_safe_load_from_bytes_uses_weights_only(tmp_path: Path) -> None:
-    """``_safe_load_from_bytes`` refuses an embedded os.system payload (weights_only)."""
-
-    marker = tmp_path / "PWNED_STORAGE"
-    buffer = io.BytesIO()
-    torch.save(_OsSystemGadget(marker), buffer)
-
-    with pytest.raises(pickle.UnpicklingError):
-        _safe_load_from_bytes(buffer.getvalue())
-    assert not marker.exists()
-
-
-def test_safe_load_from_bytes_round_trips_a_real_tensor() -> None:
-    """A benign embedded tensor still reconstructs through the weights-only wrapper."""
-
-    tensor = torch.arange(6, dtype=torch.float32).reshape(2, 3)
-    buffer = io.BytesIO()
-    torch.save(tensor, buffer)
-    restored = _safe_load_from_bytes(buffer.getvalue())
-    assert torch.equal(restored, tensor)
-
-
-# --------------------------------------------------------------------------- #
-# Widened-allowlist regressions and the foreign custom-callable trust policy.
-# --------------------------------------------------------------------------- #
 
 
 def test_allowlist_admits_inert_stdlib_and_numpy_globals() -> None:

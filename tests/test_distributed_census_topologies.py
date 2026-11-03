@@ -931,10 +931,10 @@ class TestGroupCRefusalParity:
 
         from torchlens._constants import MODEL_LOG_FIELD_ORDER
 
-        assert "distributed_scope" in MODEL_LOG_FIELD_ORDER
+        assert "_provenance_distributed_scope" in MODEL_LOG_FIELD_ORDER
         log = tl.trace(_dense_model(), _dense_input())
         # A plain capture NEVER carries the marker (over-labeling guard).
-        assert log.distributed_scope is None
+        assert log.provenance.distributed_scope is None
 
 
 # ===========================================================================

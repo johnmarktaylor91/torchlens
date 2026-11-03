@@ -9,6 +9,7 @@ from torch import nn
 import torchlens as tl
 import torchlens._capture.projections as fastlog_state
 import torchlens._state as torchlens_state
+from torchlens.errors import TraceCaptureError
 from torchlens.recording.exceptions import PredicateError
 from torchlens.recording.options import RecordingOptions
 
@@ -75,13 +76,13 @@ def _options() -> RecordingOptions:
 def test_root_only_model_emits_root_events() -> None:
     """Root-only models still get synthetic root enter and exit events."""
 
-    output, recording = tl.record(
+    recording = tl.record(
         RootOnly(),
         torch.ones(1),
         save=_options().keep_op,
-        return_output=True,
         recording=tl.options.RecordingOptions(default_module=True, include_source_events=True),
     )
+    output = recording.output
     kinds = [record.ctx.kind for record in recording]
 
     assert torch.equal(output, torch.tensor([2.0]))
@@ -112,19 +113,19 @@ def test_shared_module_called_twice_has_balanced_events() -> None:
         "module_enter",
         "module_exit",
     ]
-    assert [ctx.module_pass_index for ctx in child_events] == [1, 1, 2, 2]
+    assert [ctx.module_pass_number for ctx in child_events] == [1, 1, 2, 2]
 
 
 def test_identity_passthrough_has_module_events() -> None:
     """Identity modules are represented even when their tensor ops through."""
 
-    output, recording = tl.record(
+    recording = tl.record(
         IdentityModel(),
         torch.ones(1),
         save=_options().keep_op,
-        return_output=True,
         recording=tl.options.RecordingOptions(default_module=True, include_source_events=True),
     )
+    output = recording.output
     labels = [record.ctx.address for record in recording]
 
     assert torch.equal(output, torch.ones(1))
@@ -134,13 +135,14 @@ def test_identity_passthrough_has_module_events() -> None:
 def test_forward_exception_cleans_logging_state() -> None:
     """Forward exceptions leave global logging and recording state inactive."""
 
-    with pytest.raises(RuntimeError, match="forward failed"):
+    with pytest.raises(TraceCaptureError, match="forward failed") as _tce_info:
         tl.record(
             RaisingModel(),
             torch.ones(1),
             save=_options().keep_op,
             recording=tl.options.RecordingOptions(default_module=True, include_source_events=True),
         )
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
     assert torchlens_state._logging_enabled is False
     assert torchlens_state._active_trace is None

@@ -35,6 +35,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import _capture_state_helpers
 from torchlens._utils import _torch_compat
+from torchlens.errors import TraceCaptureError
 
 pytestmark = [pytest.mark.heavy]
 
@@ -137,10 +138,10 @@ def test_compiled_attribute_interior_is_logged_with_full_verified_semantics() ->
             f"compiled-attribute interior op '{interior}' must be logged under the stance"
         )
     assert trace._raw_dynamo_region_detected is False
-    assert trace.capture_verification_reason != "dynamo_region_not_logged"
+    assert trace.provenance.verification_reason != "dynamo_region_not_logged"
 
     control = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(2, 4))
-    assert trace.capture_verified == control.capture_verified
+    assert trace.provenance.verified == control.provenance.verified
 
     with torch.no_grad():
         expected = torch.relu(torch.sin(model.fc(x))) + 1
@@ -239,7 +240,7 @@ def test_compiled_free_function_interior_is_logged_without_any_warning() -> None
     dynamo_warnings = [w for w in caught if "Dynamo" in str(w.message)]
     assert not dynamo_warnings, f"expected no Dynamo warning, saw: {dynamo_warnings}"
     assert trace._raw_dynamo_region_detected is False
-    assert trace.capture_verification_reason != "dynamo_region_not_logged"
+    assert trace.provenance.verification_reason != "dynamo_region_not_logged"
 
 
 def test_nested_compiled_modules_run_original_python() -> None:
@@ -305,7 +306,7 @@ def test_nested_compiled_modules_run_original_python() -> None:
     assert any("sin" in label for label in labels)
     assert any("mul" in label for label in labels)
     assert trace._raw_dynamo_region_detected is False
-    assert trace.capture_verification_reason != "dynamo_region_not_logged"
+    assert trace.provenance.verification_reason != "dynamo_region_not_logged"
     assert model._orig_mod.inner is compiled_child, (
         "the compiled child slot must be restored after capture"
     )
@@ -411,8 +412,9 @@ def test_failed_capture_restores_force_eager_stance() -> None:
             raise RuntimeError("injected stance-scope failure")
 
     x = torch.randn(2, 4)
-    with pytest.raises(RuntimeError, match="injected stance-scope failure"):
+    with pytest.raises(TraceCaptureError, match="injected stance-scope failure") as _tce_info:
         tl.trace(_CompiledThenRaise(), x)
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
     assert compile_events == [], "the stance must compile zero graphs"
 
     compiled_free(x)
@@ -529,6 +531,6 @@ def test_no_stance_tamper_fallback_is_unchanged(monkeypatch: pytest.MonkeyPatch)
 
     assert not any("relu" in label for label in trace.layer_labels)
     assert trace._raw_dynamo_region_detected is True
-    assert trace.capture_verified is False
-    assert trace.capture_verification_reason == "dynamo_region_not_logged"
+    assert trace.provenance.verified is False
+    assert trace.provenance.verification_reason == "dynamo_region_not_logged"
     assert model.compiled_act is compiled_callable

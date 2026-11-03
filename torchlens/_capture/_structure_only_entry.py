@@ -26,7 +26,7 @@ class _StructureOnlyEntryFacts:
     lookback_payload_policy: str
     raise_on_nan_value: bool
     track_nonfinite_value: bool
-    intervention_ready: bool
+    replayable: bool
     should_save_grads: bool
 
 
@@ -87,9 +87,9 @@ def _refuse_structure_only_conflicts(facts: _StructureOnlyEntryFacts) -> None:
             remedy=conflict_remedy,
             arguments=("structure_only", "on_nonfinite"),
         )
-    if facts.intervention_ready:
+    if facts.replayable:
         raise StructureOnlyOptionConflictError(
-            "structure_only=True cannot combine with intervention_ready=True: "
+            "structure_only=True cannot combine with replayable=True: "
             "runnable eligibility disables the plain escape belt and runnable "
             "save is refused wholesale under the structure-only contract, so "
             "the combination must be unreachable rather than quietly belt-less. "
@@ -98,16 +98,16 @@ def _refuse_structure_only_conflicts(facts: _StructureOnlyEntryFacts) -> None:
             "(state slots declared at capture, values bound at run time)",
             code="structure_only_option_conflict",
             remedy=(
-                "capture the real model with intervention_ready=True (without "
+                "capture the real model with replayable=True (without "
                 "structure_only) for a runnable artifact today, or drop "
-                "intervention_ready to keep the structure-only capture"
+                "replayable to keep the structure-only capture"
             ),
-            arguments=("structure_only", "intervention_ready"),
+            arguments=("structure_only", "replayable"),
         )
     if halt is not None:
         from .._ir.selector_eval import first_selector_kind_outside
         from .._postprocess._selective_save import _STATIC_SELECTOR_KINDS
-        from ..intervention.selectors import BaseSelector as _BaseSelector
+        from .._selection.selectors import BaseSelector as _BaseSelector
 
         halt_value_suspect: str | None
         if not isinstance(halt, _BaseSelector):
@@ -160,18 +160,18 @@ def _refuse_structure_only_payload_selections(
             "activations are never recorded under the structure-only contract",
             "save",
         )
-    if capture_options.is_field_explicit("layers_to_save") and facts.layers_to_save not in (
+    if capture_options._layers_to_save_explicit and facts.layers_to_save not in (
         "none",
         None,
         [],
     ):
         _refuse_values(
-            "structure_only=True cannot honor an explicit layers_to_save "
+            "structure_only=True cannot honor an explicit save= "
             "payload selection; activations are never recorded under the "
             "structure-only contract",
-            "layers_to_save",
+            "save",
         )
-    if capture_options.is_field_explicit("save_grads") and facts.should_save_grads:
+    if capture_options._is_field_explicit("save_grads") and facts.should_save_grads:
         _refuse_values(
             "structure_only=True cannot honor save_grads: gradient payloads "
             "are values and backward capture is refused under the "
@@ -192,35 +192,33 @@ def _refuse_structure_only_option_payloads(
 ) -> None:
     """Payload-recording OPTION values refuse typed."""
 
-    if capture_options.is_field_explicit("save_args") and capture_options.save_args:
+    if capture_options._is_field_explicit("save_args") and capture_options.save_args:
         _refuse_values(
             "structure_only=True cannot record non-tensor argument VALUES as "
             "payloads via save_args",
             "save_args",
         )
-    if capture_options.is_field_explicit("layer_visualizers") and capture_options.layer_visualizers:
+    if (
+        capture_options._is_field_explicit("layer_visualizers")
+        and capture_options.layer_visualizers
+    ):
         _refuse_values(
             "structure_only=True cannot run payload-consuming layer "
             "visualizers; they require tensor values",
             "layer_visualizers",
         )
-    if capture_options.is_field_explicit("save_raw_input") and capture_options.save_raw_input:
+    if capture_options._is_field_explicit("save_raw_input") and capture_options.save_raw_input:
         _refuse_values(
             "structure_only=True cannot retain the raw input payload",
             "save_raw_input",
         )
     if (
-        capture_options.is_field_explicit("save_transformed_output")
+        capture_options._is_field_explicit("save_transformed_output")
         and capture_options.save_transformed_output
     ):
         _refuse_values(
             "structure_only=True cannot retain the raw output payload",
             "save_transformed_output",
-        )
-    if capture_options.is_field_explicit("output_style") and capture_options.output_style:
-        _refuse_values(
-            "structure_only=True cannot decode output VALUES via output_style",
-            "output_style",
         )
     if facts.lookback_payload_policy != "metadata_only":
         _refuse_values(

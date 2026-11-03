@@ -187,13 +187,11 @@ def test_h7_forward_correspondence_node_name_scoped_to_multipass():
 def test_h3_rolled_node_label_time_no_crash(tmp_path):
     log = _recurrent_trace()
     graph = log.draw(
-        vis_mode="rolled",
-        vis_save_only=True,
+        rolled=True,
         path=str(tmp_path / "rolled"),
         node_label_fields=["label", "memory", "time", "flops", "pass"],
-        return_graph=True,
-    )
-    assert "linear_1_1" in graph.source  # rendered without leaking the tripwire
+    ).dot
+    assert "linear_1_1" in graph  # rendered without leaking the tripwire
 
 
 def test_f5_unrolled_pass_field_shows_real_pass_numbers(tmp_path):
@@ -201,14 +199,12 @@ def test_f5_unrolled_pass_field_shows_real_pass_numbers(tmp_path):
 
     log = _recurrent_trace()
     graph = log.draw(
-        vis_mode="unrolled",
-        vis_save_only=True,
+        rolled=False,
         path=str(tmp_path / "unrolled"),
         node_label_fields=["label", "pass"],
-        return_graph=True,
-    )
+    ).dot
     # The 'pass' rows must include 1, 2 and 3 -- not just 1 for every pass.
-    present = set(re.findall(r">([123])<", graph.source))
+    present = set(re.findall(r">([123])<", graph))
     assert {"1", "2", "3"} <= present
 
 
@@ -217,19 +213,17 @@ def test_f2_unrolled_titles_are_resolvable(tmp_path):
 
     log = _recurrent_trace()
     graph = log.draw(
-        vis_mode="unrolled",
-        vis_save_only=True,
+        rolled=False,
         path=str(tmp_path / "titles"),
-        return_graph=True,
-    )
-    titles = set(re.findall(r"<B>([a-z]+_[0-9_]+:[0-9]+)</B>", graph.source))
+    ).dot
+    titles = set(re.findall(r"<B>([a-z]+_[0-9_]+:[0-9]+)</B>", graph))
     assert titles, "expected pass-qualified unrolled titles"
     for title in titles:
         # Every displayed title must resolve back to a real trace layer.
         assert log[title] is not None
     # The fabricated position-renumbered forms must be gone.
-    assert "linear_1_3:2" not in graph.source
-    assert "linear_1_5:3" not in graph.source
+    assert "linear_1_3:2" not in graph
+    assert "linear_1_5:3" not in graph
 
 
 # --------------------------------------------------------------------------- #
@@ -259,13 +253,11 @@ def test_h4_layer_show_recurrent_raises_select_pass():
 def test_h6_rolled_overlays_do_not_crash(tmp_path, overlay):
     log = _recurrent_trace()
     graph = log.draw(
-        vis_mode="rolled",
+        rolled=True,
         node_overlay=overlay,
-        vis_save_only=True,
         path=str(tmp_path / f"ov_{overlay}"),
-        return_graph=True,
-    )
-    assert graph.source  # rendered without leaking the multi-pass tripwire
+    ).dot
+    assert graph  # rendered without leaking the multi-pass tripwire
 
 
 def test_h6_rolled_per_pass_overlays_are_na():
@@ -311,17 +303,16 @@ def test_h5_preview_fastlog_recurrent_per_pass(tmp_path):
     # No crash on a recurrent model.
     preview_fastlog(
         log,
-        predicate=lambda ctx: getattr(ctx, "pass_index", None) == 1,
-        vis_save_only=True,
+        predicate=lambda ctx: getattr(ctx, "pass_number", None) == 1,
         path=str(tmp_path / "preview"),
     )
     # Decisions are keyed per pass (no overwrite) with correct per-pass context.
     preview = _build_preview_nodes(log, lambda ctx: ctx.event_index == 3)
     relu_keys = sorted(k for k in preview if "relu" in k and ":" in k)
     assert relu_keys == ["relu_1_1:1", "relu_1_1:2", "relu_1_1:3"]
-    assert [preview[k].ctx.pass_index for k in relu_keys] == [0, 1, 2]
+    assert [preview[k].ctx.pass_number for k in relu_keys] == [0, 1, 2]
     # The event_index==3 predicate keeps ONLY the second recurrent call.
-    ops = list(log.layer_logs["relu_1_1"].ops.values())
+    ops = list(log._layer_logs["relu_1_1"].ops.values())
     callback = _make_node_spec_fn(
         preview,
         color_kept="green",
@@ -342,20 +333,20 @@ def test_h5_preview_fastlog_recurrent_per_pass(tmp_path):
 
 @pytest.mark.smoke
 def test_h9_intervention_colors_only_intervened_pass():
+    from torchlens._selection import resolver
     from torchlens._visualization.node_spec import (
         NodeSpec,
         intervention_site_and_cone_labels,
         make_intervention_node_spec_fn,
     )
-    from torchlens.intervention import resolver
 
     log = tl.trace(RecurrentReLU(), torch.tensor([-1.0, 2.0]))
-    ops = list(log.layer_logs["relu_1_1"].ops.values())
+    ops = list(log._layer_logs["relu_1_1"].ops.values())
     fake = SimpleNamespace(
         _intervention_spec=SimpleNamespace(
             targets=("pass2",), target_value_specs=(), hook_specs=()
         ),
-        layer_list=ops,
+        _layer_list=ops,
     )
     # node_spec reads the private resolver at call time; patch it by name.
     original = resolver._resolve_sites
@@ -370,7 +361,7 @@ def test_h9_intervention_colors_only_intervened_pass():
         assert colors[0] is None and colors[2] is None
         # A rolled aggregate Layer node still colors (any pass is a site) and never
         # leaks the multi-pass tripwire.
-        aggregate = log.layer_logs["relu_1_1"]
+        aggregate = log._layer_logs["relu_1_1"]
         assert callback(aggregate, NodeSpec(lines=["relu_1_1"])).color is not None
         # Public helper contract is UNCHANGED: aggregate layer_labels only.
         site_labels, _ = intervention_site_and_cone_labels(fake, show_cone=False)

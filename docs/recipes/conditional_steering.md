@@ -54,9 +54,9 @@ def prompts(n, triggered, seed):
     return ids
 
 
-capture = tl.options.CaptureOptions(layers_to_save="all")
-pos = tl.trace(model, prompts(8, True, 1), capture=capture)
-neg = tl.trace(model, prompts(8, False, 2), capture=capture)
+capture = tl.options.CaptureOptions()
+pos = tl.trace(model, prompts(8, True, 1), capture=capture, save="all")
+neg = tl.trace(model, prompts(8, False, 2), capture=capture, save="all")
 condition = fit_direction(pos, neg, CONDITION_SITE, method="pca")
 
 
@@ -66,7 +66,7 @@ def score(activation):
 
 
 def calibration_scores(ids):
-    trace = tl.trace(model, ids, capture=capture)
+    trace = tl.trace(model, ids, capture=capture, save="all")
     out = trace[CONDITION_SITE].out
     return [score(out[i : i + 1]) for i in range(ids.shape[0])]
 
@@ -81,7 +81,7 @@ RESULT = min(on_scores) > threshold > max(off_scores)
 
 Two rules in one spec. The first reads the condition at `CONDITION_SITE`, keeps
 the score, and leaves the activation untouched. It puts its decision in
-`ctx.run_ctx`, a dictionary that every hook of one bound call shares and that
+`ctx.run_state`, a dictionary that every hook of one bound call shares and that
 starts empty for the next call, so no decision leaks from one prompt into the
 next. The second rule adds the behaviour direction at `STEER_SITE` only when
 that decision passed; otherwise it returns the activation object unchanged.
@@ -101,12 +101,12 @@ scores = []
 def read_condition(activation, *, ctx):
     value = score(activation)
     scores.append(value)
-    ctx.run_ctx["condition_passed"] = value > threshold
+    ctx.run_state["condition_passed"] = value > threshold
     return activation
 
 
 def gated_steer(activation, *, ctx):
-    if not ctx.run_ctx.get("condition_passed", False):
+    if not ctx.run_state.get("condition_passed", False):
         return activation
     return activation + MAGNITUDE * behaviour
 

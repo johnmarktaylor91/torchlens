@@ -109,7 +109,7 @@ def test_disk_backed_reports_do_not_materialize_payloads(
         save=tl.func("relu"),
         storage=tl.to_disk(str(tmp_path / "run.tlspec")),
     )
-    assert any(getattr(op, "out_ref", None) is not None for op in trace.layer_list)
+    assert any(getattr(op, "out_ref", None) is not None for op in trace._layer_list)
 
     def fail_materialization(
         self: LazyActivationRef,
@@ -204,7 +204,7 @@ def test_answer_hedges_when_nothing_is_saved() -> None:
     trace = tl.trace(
         _plain_model(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
     assert unexamined_payload_count(trace, kind="saved") > 0
     assert "could not be examined" in trace.first_nonfinite(link_format="text")
@@ -249,7 +249,7 @@ def test_activation_footprint_fields_are_populated() -> None:
     """Both footprint fields carry real byte counts, sparse or not."""
 
     full = tl.trace(_plain_model(), torch.randn(2, 4))
-    assert int(full.total_activation_memory) > 0
+    assert int(full.cost.total_activation_memory) > 0
     # A1 identity partition: total EXCLUDES output pseudo-rows (the producer
     # owns the bytes). D-17 byte model: saved counts PHYSICAL retained
     # storage once per storage. HONESTY 13-R1: the output pseudo-row now
@@ -258,19 +258,17 @@ def test_activation_footprint_fields_are_populated() -> None:
     # are already inside total. Still an exact pin: any drift in either
     # accounting, or a returning redundant copy, trips it.
     output_rows = [
-        layer
-        for layer in full.layer_list
-        if layer.layer_type == "output" and layer.has_saved_activation
+        layer for layer in full._layer_list if layer.type == "output" and layer.has_saved_activation
     ]
     assert output_rows and all(int(layer.activation_memory) > 0 for layer in output_rows)
     for layer in output_rows:
         parent = full[layer.parents[0]]
         assert layer.out.untyped_storage().data_ptr() == parent.out.untyped_storage().data_ptr()
-    assert int(full.saved_activation_memory) == int(full.total_activation_memory)
+    assert int(full.cost.saved_activation_memory) == int(full.cost.total_activation_memory)
 
     sparse = tl.trace(_plain_model(), torch.randn(2, 4), save=tl.func("relu"))
-    assert int(sparse.total_activation_memory) > 0
-    assert 0 < int(sparse.saved_activation_memory) < int(sparse.total_activation_memory)
+    assert int(sparse.cost.total_activation_memory) > 0
+    assert 0 < int(sparse.cost.saved_activation_memory) < int(sparse.cost.total_activation_memory)
 
 
 @pytest.mark.parametrize("guessed", ["activation_memory", "memory", "total_memory", "footprint"])
@@ -352,4 +350,4 @@ def test_recurrence_detection_off_matches_its_documented_tradeoff() -> None:
 
     assert unrolled.graph.is_recurrent is True
     assert unrolled.graph.max_ops_per_layer == rolled.graph.max_ops_per_layer
-    assert int(unrolled.total_activation_memory) == int(rolled.total_activation_memory)
+    assert int(unrolled.cost.total_activation_memory) == int(rolled.cost.total_activation_memory)

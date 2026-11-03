@@ -336,21 +336,19 @@ def test_empty_bundle_reads_refuse_typed_or_return_empty() -> None:
     empty = tl.Bundle()
     assert empty.ops.shared == [] and empty.ops.divergent == []
     with pytest.raises(BaselineUndeterminedError):
-        empty.delta_map("relative_l2")
+        empty._delta_map("relative_l2")
 
 
-def test_show_diff_gates_only_the_rendered_pair(tmp_path: Path, model: _TinyLM) -> None:
+def test_draw_diff_gates_only_the_rendered_pair(tmp_path: Path, model: _TinyLM) -> None:
     clean = _trace(model, [1, 2, 3])
     bundle = Bundle(
         {"clean": clean, "patched": clean.fork("patched"), "router": _trace(_Other(), [4, 5])},
         baseline="clean",
     )
-    dot = bundle.show_diff(
-        left="clean", right="patched", path=str(tmp_path / "d"), vis_save_only=True
-    )
+    dot = bundle.draw(graph="diff", members=("clean", "patched"), path=str(tmp_path / "d"))
     assert "clean vs patched" in dot
     with pytest.raises(BundleComparisonError):
-        bundle.delta_map("relative_l2")
+        bundle._delta_map("relative_l2")
 
 
 def test_binding_descriptor_is_closed() -> None:
@@ -392,11 +390,12 @@ def test_walk_methods_resolve_on_an_instance(model: _TinyLM) -> None:
     assert callable(bundle.upstream) and callable(bundle.downstream)
 
 
-def test_dir_lists_the_helper_table_methods(model: _TinyLM) -> None:
+def test_dir_lists_the_real_methods(model: _TinyLM) -> None:
     names = dir(_harness(model))
-    table = ("upstream", "downstream", "delta_map", "norm_delta", "output_delta", "compare")
-    for name in (*table, "show_diff", "aligned_pairs", "store_comparison", "relate"):
+    for name in ("upstream", "downstream", "compare", "draw", "store_comparison", "relate"):
         assert name in names, name
+    for name in ("delta_map", "norm_delta", "output_delta", "show_diff", "aligned_pairs"):
+        assert name not in names, name
 
 
 def test_at_on_a_member_subset_skips_a_foreign_member(model: _TinyLM) -> None:
@@ -421,9 +420,9 @@ def test_at_on_a_member_subset_skips_a_foreign_member(model: _TinyLM) -> None:
 @pytest.mark.parametrize(
     "read",
     [
-        lambda b: b.delta_map("relative_l2"),
-        lambda b: b.norm_delta(),
-        lambda b: b.output_delta("draft"),
+        lambda b: b._delta_map("relative_l2"),
+        lambda b: b._norm_delta(),
+        lambda b: b._output_delta("draft"),
         lambda b: b.compare("draft", "critique", metric="relative_l2"),
         lambda b: b.store_comparison("relative_l2"),
     ],
@@ -441,10 +440,10 @@ def test_delta_family_refuses_unrelated_prompts(model: _TinyLM, read) -> None:
 def test_delta_family_refuses_fed_by_members_on_topology(model: _TinyLM) -> None:
     ids = [1, 2, 3, 4]
     bundle = Bundle({"draft": _trace(model, ids), "critique": _trace(model, ids)}, baseline="draft")
-    assert bundle.delta_map("relative_l2"), "same model, same input: comparable"
+    assert bundle._delta_map("relative_l2"), "same model, same input: comparable"
     bundle.relate("fed_by", "critique", "draft")
     with pytest.raises(BundleComparisonError) as excinfo:
-        bundle.delta_map("relative_l2")
+        bundle._delta_map("relative_l2")
     assert _code(excinfo) == "bundle_gate_ordering_topology"
 
 
@@ -483,12 +482,12 @@ def test_empty_bundle_constructs_and_round_trips(tmp_path: Path, model: _TinyLM)
     assert empty.names == ["first"]
 
 
-def test_v10_bundle_with_spans_round_trips(tmp_path: Path, model: _TinyLM) -> None:
+def test_v11_bundle_with_spans_round_trips(tmp_path: Path, model: _TinyLM) -> None:
     bundle = _bound_harness(model)
     bundle.relate("fed_by", "critique", "draft", token_spans=[_SPAN], label="critique")
     bundle.save(tmp_path / "harness.tlspec")
     manifest = json.loads((tmp_path / "harness.tlspec" / "manifest.json").read_text())
-    assert manifest["tlspec_version"] == 10
+    assert manifest["tlspec_version"] == 11
     loaded = tl.load(tmp_path / "harness.tlspec")
     assert loaded.relations == bundle.relations
     assert loaded.relations[0].params["basis"] == "verified", "re-verified at load"

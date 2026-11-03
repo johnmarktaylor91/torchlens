@@ -11,103 +11,41 @@ tests/AGENTS.md "Markers"):
    are fine and pass this check, because ``get_closest_marker`` sees the resolved
    per-item marks).
 
-2. **Duration budget** (runtime tripwire). The conftest hook accounts for fixture
-   setup, call, and teardown time, then checks both each item and each resolved
-   parametrized family (smoke AND unmarked) against the documented 5s partition
-   boundary. The charged measure is ``min(wall, cpu)`` — load-robust and
-   threading-robust; see the budget-constant comment block in conftest.py.
+2. **Duration budget** (repository check). ``scripts/tier_durations.py check``
+   judges the slowest measured test of every bounded file in
+   ``tests/tiers/durations.csv`` against its tier budget; the tests here pin the
+   file-tier resolution that check relies on (``tests/test_tier_durations.py``
+   covers the script itself).
 
 3. **State-isolation census** (static). Every warn-once module global must appear
    in the root autouse reset inventory, and every module-scoped fixture that
    creates a Trace must yield so it can release that Trace at module teardown.
 
-Both checks read their data from the surrounding session, so they enforce on every
-smoke/full-tier run and pass vacuously when this file is run alone.
+The collection-level census reads the surrounding session, so it enforces on every
+smoke/full-tier run and passes vacuously when this file is run alone; the partition
+itself is also refused at collection by ``tests/_tiers_plugin.py``.
 """
 
 from __future__ import annotations
 
 import ast
 import functools
+import re
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from _source_corpus import package_ast, package_files, package_source
+from _tiers_plugin import (
+    SMOKE_INCOMPATIBLE_MARKERS,
+    fail_on_off_list_smoke_items,
+    fail_on_tier_violations,
+    item_combo_violations,
+    smoke_only_session,
+    tier_combo_violations,
+)
 
-#: Markers that may never combine with ``smoke`` on one resolved item.
-#: ``heavy``/``slow``: additive markers keep the item in `-m smoke` despite the
-#: heavier tier. ``rare`` (R41-2) is a duration-budget EXEMPTION channel, so a
-#: smoke+rare item would sit in the commit gate with zero duration enforcement
-#: (and `-m smoke` overrides the default `-m 'not rare'`, so smoke+rare items
-#: DO run in the commit gate). ``serial`` is no longer budget-exempt (b2 R41
-#: round 5) but stays smoke-incompatible: its load-sensitivity claim
-#: contradicts running inside the parallel commit gate. ``big_memory``
-#: (FJ-weekly-green) names a slow-tier real-model test excluded from the
-#: GitHub Weekly runner for memory, not duration -- a smoke test is never
-#: memory-heavy enough to need that exclusion.
-_SMOKE_INCOMPATIBLE_MARKERS = ("heavy", "slow", "serial", "rare", "big_memory")
-
-
-def _tier_combo_violations(
-    marker_names: set[str], callspec_marker_names: set[str], nodeid: str
-) -> list[str]:
-    """Return tier-combination violations for one resolved item's markers.
-
-    Pure helper so the combination policy is unit-testable (red-capable)
-    without planting real mis-marked tests.
-
-    Policy:
-    - ``smoke`` may not combine with any of ``_SMOKE_INCOMPATIBLE_MARKERS``.
-    - ``heavy`` + ``slow`` is a partition contradiction (a test cannot be both
-      5-20s and >20s) UNLESS ``slow`` arrived as a per-parametrize-cell
-      refinement of a heavy family (``pytest.param(..., marks=slow)``), the
-      sanctioned shape for "this one cell measures beyond heavy's ceiling"
-      (R41-3). Budget enforcement already resolves the combo as slow-wins.
-    - ``big_memory`` without ``slow`` is a scheduling contradiction: the
-      Weekly GitHub job only ever excludes ``big_memory`` FROM its
-      ``slow and not rare`` selection, so a ``big_memory`` test that is not
-      ``slow`` would never be excluded from anywhere and would still risk
-      exhausting the GitHub runner in whichever tier it actually runs in.
-
-    Parameters
-    ----------
-    marker_names:
-        All marker names on the resolved item.
-    callspec_marker_names:
-        Marker names contributed by the item's parametrize callspec.
-    nodeid:
-        Item node id used in violation strings.
-
-    Returns
-    -------
-    list[str]
-        Human-readable violation strings (empty when compliant).
-    """
-
-    violations = []
-    if "smoke" in marker_names:
-        for incompatible in _SMOKE_INCOMPATIBLE_MARKERS:
-            if incompatible in marker_names:
-                violations.append(f"{nodeid} [smoke + {incompatible}]")
-    if (
-        "heavy" in marker_names
-        and "slow" in marker_names
-        and "slow" not in callspec_marker_names
-        and "heavy" not in callspec_marker_names
-    ):
-        violations.append(f"{nodeid} [heavy + slow, not a per-cell refinement]")
-    if "big_memory" in marker_names and "slow" not in marker_names:
-        violations.append(f"{nodeid} [big_memory without slow]")
-    return violations
-
-
-def _item_combo_violations(item: pytest.Item) -> list[str]:
-    """Apply the tier-combination policy to one collected pytest item."""
-
-    marker_names = {marker.name for marker in item.iter_markers()}
-    callspec = getattr(item, "callspec", None)
-    callspec_marker_names = {marker.name for marker in getattr(callspec, "marks", [])}
-    return _tier_combo_violations(marker_names, callspec_marker_names, item.nodeid)
+from scripts.tier_durations import file_tier, on_smoke_file_list, source_may_hold_smoke_items
 
 
 @pytest.mark.smoke
@@ -116,7 +54,7 @@ def test_no_smoke_test_carries_a_heavier_tier_marker(request: pytest.FixtureRequ
 
     conflicted = []
     for item in request.session.items:
-        conflicted.extend(_item_combo_violations(item))
+        conflicted.extend(item_combo_violations(item))
     assert not conflicted, (
         "Tests carry contradictory tier-marker combinations (markers are "
         "additive; exemption markers disarm duration budgets). Fix each "
@@ -151,155 +89,28 @@ def test_tier_combo_policy_is_red_capable(
 ) -> None:
     """The combination policy flags each banned shape and passes each sanctioned one."""
 
-    violations = _tier_combo_violations(markers, callspec_markers, "planted::node")
+    violations = tier_combo_violations(markers, callspec_markers, "planted::node")
     assert len(violations) == len(expected_fragments)
     for fragment in expected_fragments:
         assert any(fragment in violation for violation in violations), (fragment, violations)
 
 
 @pytest.mark.smoke
-def test_bounded_tier_tests_stay_within_duration_budget(
-    request: pytest.FixtureRequest,
-) -> None:
-    """Every bounded-tier test must finish within its tier's duration budget.
+def test_tier_violations_among_selected_items_fail_the_session_at_collection() -> None:
+    """``_tiers_plugin`` refuses a session whose selected items include a violation."""
 
-    The budget is TWO-directional (R41): ``smoke`` AND unmarked tests are held
-    to the 5s partition boundary, ``heavy`` to its 20s ceiling (all
-    load-scaled); ``slow``/``rare`` are exempt by contract, and ``serial``
-    resolves its tier budget normally (b2 R41 round 5: the former blanket
-    exemption made one decorator a universal budget dodge). The
-    CHARGED time is ``min(wall, cpu)`` so neither orchestrator load (wall
-    inflation) nor torch intra-op threading (cpu inflation) can false-fail a
-    genuinely in-budget test (round-4 load-flake fix). Budget values live in
-    ``tests/conftest.py`` and ride along on each recorded offender -- a bare
-    ``conftest`` import here would be ambiguous during full-suite collection
-    (nested conftests share the module name).
+    class _Item:
+        def __init__(self, nodeid: str, *names: str) -> None:
+            self.nodeid = nodeid
+            self._marks = [SimpleNamespace(name=name) for name in names]
 
-    This test also asserts its own LAST-position ordering: the offender
-    ledger only covers tests that already ran, so a reordering regression
-    (e.g. a plugin shuffling after the conftest reorder) must go red here
-    rather than silently truncating coverage.
-    """
+        def iter_markers(self, name: str | None = None) -> list[SimpleNamespace]:
+            return [m for m in self._marks if name is None or m.name == name]
 
-    items = request.session.items
-    own_index = next(
-        index for index, item in enumerate(items) if item.nodeid == request.node.nodeid
-    )
-    stragglers = [
-        item.nodeid for item in items[own_index + 1 :] if "test_marker_lint" not in item.nodeid
-    ]
-    assert not stragglers, (
-        "the duration-budget lint no longer runs last -- its offender ledger "
-        f"would miss these later tests: {stragglers[:5]}"
-    )
-
-    guidance = {
-        "smoke": "re-tier to `heavy` (5-20s) or `slow` (>20s), or make it faster",
-        "unmarked": "unmarked tests run in the mid backstop: add `heavy`/`slow` "
-        "consciously, or make it faster",
-        "heavy": "re-tier to `slow` (>20s) or make it faster",
-    }
-    offenders = getattr(request.session, "_tl_duration_budget_offenders", [])
-    lines = [
-        f"{nodeid} [{tier}]: wall {wall:.1f}s / cpu {cpu:.1f}s "
-        f"(budget {budget:.0f}s on min(wall, cpu)) -- {guidance[tier]}"
-        for nodeid, tier, wall, cpu, budget in offenders
-    ]
-    assert not offenders, (
-        "Tests exceeded their tier duration budget this session:\n  " + "\n  ".join(lines)
-    )
-
-
-@pytest.mark.smoke
-def test_smoke_parametrized_families_stay_within_duration_budget(
-    request: pytest.FixtureRequest,
-) -> None:
-    """Resolved 5s-tier parameter families must stay within the aggregate budget.
-
-    Covers smoke AND unmarked families (R41-4: untiered families previously
-    had no aggregate bound). A family of N parameters legitimately costs ~N
-    single-test durations (the selector matrix is 278 cells), so each family's
-    budget scales with its resolved cell count: load_factor * max(2x the
-    per-test budget, the per-cell allowance x n_cells), charged on
-    min(wall, cpu). Genuine per-cell ballooning still trips.
-    """
-
-    family_stats = getattr(request.session, "_tl_smoke_family_stats", {})
-    family_budgets = getattr(request.session, "_tl_smoke_family_budgets", {})
-    offenders = [
-        (family, total, count, family_budgets.get(family, 0.0))
-        for family, (total, count) in family_stats.items()
-        if total > family_budgets.get(family, float("inf"))
-    ]
-    lines = [
-        f"{family}: {total:.1f}s over {count} cells (budget {budget:.0f}s)"
-        for family, total, count, budget in offenders
-    ]
-    assert not offenders, (
-        "Smoke parametrized families exceeded their aggregate cell-scaled "
-        "budget. Split or re-tier the family:\n  " + "\n  ".join(lines)
-    )
-
-
-@pytest.mark.smoke
-def test_smoke_module_imports_stay_within_duration_budget(
-    request: pytest.FixtureRequest,
-) -> None:
-    """Smoke-bearing modules must import and collect within the 5s boundary.
-
-    Charged on ``min(wall, cpu)`` like the per-test budgets, so parallel
-    orchestrator load cannot false-fail module imports either.
-    """
-
-    budget = 5.0
-    durations = getattr(request.session, "_tl_module_collection_durations", {})
-    smoke_paths = {
-        str(item.path)
-        for item in request.session.items
-        if item.get_closest_marker("smoke") is not None
-    }
-    offenders = [
-        (path, durations[path])
-        for path in sorted(smoke_paths)
-        if path in durations and min(durations[path]) > budget
-    ]
-    lines = [
-        f"{path}: wall {wall:.1f}s / cpu {cpu:.1f}s (budget {budget:.0f}s on min)"
-        for path, (wall, cpu) in offenders
-    ]
-    assert not offenders, (
-        "Smoke-bearing modules exceeded the import/collection budget. Move expensive setup "
-        "behind fixtures or re-tier the module:\n  " + "\n  ".join(lines)
-    )
-
-
-@pytest.mark.smoke
-def test_every_collected_module_imports_within_the_heavy_boundary(
-    request: pytest.FixtureRequest,
-) -> None:
-    """No collected module may burn more than the 20s heavy boundary importing.
-
-    r7 R41 (b2): the import/collection budget was smoke-only — a 60s import
-    in a heavy/slow/unmarked module escaped entirely, even though import cost
-    is paid by EVERY selection that collects the file (including smoke runs,
-    which collect the whole tree before deselecting). Non-smoke modules get
-    the heavy partition boundary rather than smoke's 5s; charged on
-    ``min(wall, cpu)`` like everything else.
-    """
-
-    budget = 20.0
-    durations = getattr(request.session, "_tl_module_collection_durations", {})
-    offenders = [
-        (path, values) for path, values in sorted(durations.items()) if min(values) > budget
-    ]
-    lines = [
-        f"{path}: wall {wall:.1f}s / cpu {cpu:.1f}s (budget {budget:.0f}s on min)"
-        for path, (wall, cpu) in offenders
-    ]
-    assert not offenders, (
-        "Modules exceeded the whole-tree import/collection boundary (import "
-        "cost is paid by every selection that collects the file):\n  " + "\n  ".join(lines)
-    )
+    fail_on_tier_violations([])
+    fail_on_tier_violations([_Item("planted::fine", "smoke"), _Item("planted::heavy", "heavy")])
+    with pytest.raises(pytest.UsageError, match=r"planted::node \[smoke \+ heavy\]"):
+        fail_on_tier_violations([_Item("planted::node", "smoke", "heavy")])
 
 
 def warm_scan_caches() -> None:
@@ -378,8 +189,7 @@ def _parsed_package_trees(package_root: Path) -> tuple[tuple[str, str, ast.Modul
     (~520 modules) independently, so the second one to run paid the full cost
     again. That made ``test_capability_dependent_caches_are_cleared`` measure
     6.57 s on a QUIET box against the 5 s smoke boundary -- 94% of its budget
-    with nothing else running, i.e. a session-failing tripwire under any
-    parallel load. Sharing one cached parse fixes the cost at its source
+    with nothing else running, i.e. over budget under any parallel load. Sharing one cached parse fixes the cost at its source
     instead of re-tiering an honest test or widening a budget.
 
     Parameters
@@ -456,7 +266,7 @@ def test_warn_once_sentinel_census_matches_autouse_reset(
     # silently (grind p5, B2P3-16 / sol R76-2). A test that trips one of these
     # degrades every later test in the session, so the reset is REQUIRED.
     sticky_latches = {
-        ("torchlens._utils.rng", "_cuda_rng_unusable"),
+        ("torchlens._utils.rng.streams", "_cuda_rng_unusable"),
         # Last-degradation record for lazy auto-arm (fix/distributed-r4): not
         # "warned"-shaped, but a test that degrades arming would otherwise
         # leak its reason into every later auto_arm_degradation() read.
@@ -465,7 +275,7 @@ def test_warn_once_sentinel_census_matches_autouse_reset(
     expected = discovered | runtime_only | sticky_latches
     assert configured == expected, (
         "Warn-once sentinel reset inventory drifted. Add/remove entries in "
-        "tests/conftest.py::_WARN_ONCE_SENTINELS. "
+        "tests/_state_isolation.py::_WARN_ONCE_SENTINELS. "
         f"Missing resets: {sorted(expected - configured)}; "
         f"stale resets: {sorted(configured - expected)}"
     )
@@ -578,8 +388,21 @@ def test_module_scoped_trace_fixtures_have_teardown() -> None:
 def test_root_conftest_does_not_inject_repo_into_sys_path() -> None:
     """The suite must not hide an unusable editable install via path mutation."""
 
-    conftest_path = Path(__file__).with_name("conftest.py")
-    tree = ast.parse(conftest_path.read_text(encoding="utf-8"), filename=str(conftest_path))
+    tests_dir = Path(__file__).parent
+    plugin_names = ("conftest.py", "_tiers_plugin.py", "_collection_warmup.py")
+    plugin_names += ("_state_isolation.py", "_leak_guards.py", "_input_fixtures.py")
+    violations: list[str] = []
+    for name in plugin_names:
+        path = tests_dir / name
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        violations.extend(f"{name}:{line}" for line in _sys_path_mutations(tree))
+    assert not violations, (
+        "root pytest plugins mutate sys.path and can mask a broken installed distribution; "
+        f"offending lines: {violations}"
+    )
+
+
+def _sys_path_mutations(tree: ast.Module) -> list[int]:
     violations: list[int] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
@@ -593,10 +416,7 @@ def test_root_conftest_does_not_inject_repo_into_sys_path() -> None:
         )
         if is_sys_path and node.func.attr in {"append", "extend", "insert"}:
             violations.append(node.lineno)
-    assert not violations, (
-        "tests/conftest.py mutates sys.path and can mask a broken installed distribution; "
-        f"offending lines: {violations}"
-    )
+    return violations
 
 
 def test_root_tests_do_not_import_ambiguous_conftest_module() -> None:
@@ -1174,14 +994,14 @@ def test_capability_dependent_caches_are_cleared() -> None:
     (grind p5 §3.9, the class one layer down). This census flags every
     module-level cached function that references ``_torch_compat`` / a
     ``HAS_*`` flag -- directly or through another flagged cache -- and
-    requires it in ``tests/conftest.py::_CAPABILITY_DEPENDENT_CACHES`` so the
+    requires it in ``tests/_state_isolation.py::_CAPABILITY_DEPENDENT_CACHES`` so the
     autouse probe-restore clears it. Deliberately process-frozen caches
     (torch-version-fixed inventories) do not reference probes and stay out.
     """
 
     import re
 
-    from tests.conftest import _CAPABILITY_DEPENDENT_CACHES
+    from _state_isolation import _CAPABILITY_DEPENDENT_CACHES
 
     package_root = Path(__file__).resolve().parents[1] / "torchlens"
     cached = _lru_cached_functions(package_root)
@@ -1203,7 +1023,7 @@ def test_capability_dependent_caches_are_cleared() -> None:
     declared = set(_CAPABILITY_DEPENDENT_CACHES)
     assert dependent <= declared, (
         "lru_cached functions derive from a capability probe but are missing from "
-        "tests/conftest.py::_CAPABILITY_DEPENDENT_CACHES (the probe restore cannot "
+        "tests/_state_isolation.py::_CAPABILITY_DEPENDENT_CACHES (the probe restore cannot "
         f"clear them): {sorted(dependent - declared)}"
     )
     assert declared <= set(cached), (
@@ -1218,7 +1038,7 @@ def test_capability_dependent_cache_clear_actually_clears() -> None:
 
     import importlib
 
-    from tests.conftest import _CAPABILITY_DEPENDENT_CACHES, _clear_capability_dependent_caches
+    from _state_isolation import _CAPABILITY_DEPENDENT_CACHES, _clear_capability_dependent_caches
 
     primed = []
     for module_name, attr in _CAPABILITY_DEPENDENT_CACHES:
@@ -1269,49 +1089,33 @@ def test_usage_stats_gate_arms_on_documented_backstop_spellings() -> None:
 
 
 @pytest.mark.smoke
-def test_serial_marker_is_not_a_budget_exemption() -> None:
-    """A serial item resolves its tier budget; only slow/rare stay exempt.
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        pytest.param("pytestmark = pytest.mark.serial\n", "unmarked", id="serial-alone"),
+        pytest.param("@pytest.mark.serial\n@pytest.mark.heavy\n", "heavy", id="serial-heavy"),
+        pytest.param("@pytest.mark.serial\n@pytest.mark.slow\n", "slow", id="serial-slow"),
+        pytest.param("@pytest.mark.rare\n@pytest.mark.smoke\n", "rare", id="rare-wins"),
+        pytest.param("pytest.param(1, marks=pytest.mark.slow)\n", "slow", id="cell-slow"),
+        pytest.param("@pytest.mark.smoke_cells('test_x[a]')\n", "smoke", id="smoke-cells"),
+        pytest.param("@pytest.mark.compo\n@pytest.mark.real_model\n", "unmarked", id="selection"),
+        pytest.param("def test_x(): ...\n", "unmarked", id="bare"),
+    ],
+)
+def test_file_tier_resolution_ignores_serial_and_selection_markers(
+    tmp_path: Path, source: str, expected: str
+) -> None:
+    """A file's duration tier is its loosest tier mark; serial/compo/real_model are not tiers.
 
-    ``serial`` formerly returned ``None`` before tier resolution, so any
-    unmarked test dodged the 5s partition boundary by adding one decorator,
-    and heavy+serial items enforced their 20s intent at nothing (b2 R41
-    round 5).
+    ``serial`` is a scheduling marker and ``compo``/``real_model`` are selectors,
+    so none of them may loosen the budget ``scripts/tier_durations.py check``
+    applies; ``slow``/``rare`` are the only unbounded tiers.
     """
 
-    from tests.conftest import (
-        HEAVY_DURATION_BUDGET_SECONDS,
-        SMOKE_DURATION_BUDGET_SECONDS,
-        _duration_budget_tier,
-    )
-
-    class _FakeItem:
-        def __init__(self, markers: set[str]) -> None:
-            self._markers = markers
-
-        def get_closest_marker(self, name: str):
-            return object() if name in self._markers else None
-
-    assert _duration_budget_tier(_FakeItem({"serial"})) == (
-        "unmarked",
-        SMOKE_DURATION_BUDGET_SECONDS,
-    )
-    assert _duration_budget_tier(_FakeItem({"serial", "heavy"})) == (
-        "heavy",
-        HEAVY_DURATION_BUDGET_SECONDS,
-    )
-    assert _duration_budget_tier(_FakeItem({"serial", "slow"})) is None
-    assert _duration_budget_tier(_FakeItem({"rare"})) is None
-
-
-# ---------------------------------------------------------------------------
-# Marker ALGEBRA lockstep (workstream P03, compo memo row 0.1 / conflict rule
-# 16). The algebra -- every marker's one role, incl. the ORTHOGONAL selection
-# markers `compo` and `real_model` -- is declared ONCE in
-# tests/composition_expectations/marker_algebra.py. This lint holds pyproject
-# and the algebra in lockstep BOTH directions and pins the orthogonality
-# contract: selection markers never join tier resolution, never exempt a
-# budget, and never conflict with any tier.
-# ---------------------------------------------------------------------------
+    path = tmp_path / "test_planted.py"
+    path.write_text(source, encoding="utf-8")
+    assert file_tier(path) == expected
+    assert file_tier(tmp_path / "test_gone.py") == "missing"
 
 
 def _pyproject_declared_markers() -> dict[str, str]:
@@ -1393,151 +1197,37 @@ def test_selection_markers_are_orthogonal_to_every_tier() -> None:
 
     assert {"compo", "real_model"} == SELECTION_MARKERS
     assert {"smoke", "heavy", "slow"} == TIER_MARKERS
-    assert not SELECTION_MARKERS & set(_SMOKE_INCOMPATIBLE_MARKERS)
+    assert not SELECTION_MARKERS & set(SMOKE_INCOMPATIBLE_MARKERS)
     for selection in SELECTION_MARKERS:
         for tier in TIER_MARKERS:
-            assert _tier_combo_violations({selection, tier}, set(), "planted::node") == []
+            assert tier_combo_violations({selection, tier}, set(), "planted::node") == []
         # Selection markers also compose with each other and alone.
-        assert _tier_combo_violations(SELECTION_MARKERS | {"smoke"}, set(), "planted::node") == []
+        assert tier_combo_violations(SELECTION_MARKERS | {"smoke"}, set(), "planted::node") == []
 
 
 @pytest.mark.smoke
-def test_selection_markers_do_not_alter_tier_resolution() -> None:
-    """Tier/budget resolution is blind to selection markers (never an exemption).
+def test_smoke_file_list_never_hides_a_smoke_test(request: pytest.FixtureRequest) -> None:
+    """Every smoke item lives in a file ``scripts/tier_durations.py files --tier smoke`` lists.
 
-    A `compo`-marked test resolves exactly as its tier markers dictate: alone
-    it is `unmarked` (5s budget), with `heavy` it is heavy (20s), and only the
-    contract-exempt tiers (`slow`/`rare`) return None -- adding a selection
-    marker can never disarm the duration budget the way the pre-fix `serial`
-    marker could.
+    Every smoke run (the commit gate ``scripts/smoke_ci_parity.py`` and CI's
+    smoke steps) collects only the test files whose source spells
+    ``mark.smoke`` / ``mark.smoke_cells``. A smoke mark applied any other way
+    (an alias imported from a helper, a hook adding it) would silently drop out
+    of them. ``tests/_tiers_plugin.py`` fails every session that collects such
+    an item (deselected ones included); this re-checks the selected items after
+    every collection hook has run.
     """
-
-    from tests.composition_expectations.marker_algebra import SELECTION_MARKERS
-    from tests.conftest import (
-        HEAVY_DURATION_BUDGET_SECONDS,
-        SMOKE_DURATION_BUDGET_SECONDS,
-        _duration_budget_tier,
-    )
-
-    class _FakeItem:
-        def __init__(self, markers: set[str]) -> None:
-            self._markers = markers
-
-        def get_closest_marker(self, name: str):
-            return object() if name in self._markers else None
-
-    for selection in SELECTION_MARKERS:
-        assert _duration_budget_tier(_FakeItem({selection})) == (
-            "unmarked",
-            SMOKE_DURATION_BUDGET_SECONDS,
-        )
-        assert _duration_budget_tier(_FakeItem({selection, "smoke"})) == (
-            "smoke",
-            SMOKE_DURATION_BUDGET_SECONDS,
-        )
-        assert _duration_budget_tier(_FakeItem({selection, "heavy"})) == (
-            "heavy",
-            HEAVY_DURATION_BUDGET_SECONDS,
-        )
-        assert _duration_budget_tier(_FakeItem({selection, "slow"})) is None
-
-
-@pytest.mark.smoke
-def test_sessionfinish_budget_tripwire_flips_exit_status(
-    request: pytest.FixtureRequest,
-) -> None:
-    """r7 R41 (sol b2 HIGH): the budget tripwire is always-on, not collectable.
-
-    Enforcement used to live only in this file's assertion tests, so any
-    targeted run that did not collect ``test_marker_lint.py`` exited green
-    over budget. The conftest ``pytest_sessionfinish`` path must flip a green
-    session to failing whenever the offender ledger (or a family aggregate)
-    is non-empty -- and must leave already-failing or clean sessions alone.
-
-    The enforcement helper is resolved from the LIVE registered conftest
-    plugin (a bare ``conftest`` import is ambiguous during full-suite
-    collection; ``tests`` is not a package), which also pins that the hook
-    really is loaded in every tests/-scoped session.
-    """
-
-    from types import SimpleNamespace
-
-    conftest_plugin = next(
-        (
-            plugin
-            for plugin in request.config.pluginmanager.get_plugins()
-            if hasattr(plugin, "_enforce_duration_budget_at_sessionfinish")
-        ),
-        None,
-    )
-    assert conftest_plugin is not None, (
-        "tests/conftest.py no longer registers the sessionfinish duration-"
-        "budget enforcement helper -- the always-on tripwire is gone"
-    )
-    _enforce_duration_budget_at_sessionfinish = (
-        conftest_plugin._enforce_duration_budget_at_sessionfinish
-    )
-
-    def _fake_session(**attrs: object) -> SimpleNamespace:
-        plugin_manager = SimpleNamespace(get_plugin=lambda name: None)
-        return SimpleNamespace(
-            config=SimpleNamespace(pluginmanager=plugin_manager),
-            exitstatus=0,
-            **attrs,
-        )
-
-    # Per-item offender on a green session -> forced failure.
-    session = _fake_session(
-        _tl_duration_budget_offenders=[("tests/x.py::test_slow", "smoke", 9.0, 8.0, 7.0)]
-    )
-    _enforce_duration_budget_at_sessionfinish(session, 0)  # type: ignore[arg-type]
-    assert session.exitstatus == 1
-
-    # Family aggregate offender alone -> forced failure.
-    session = _fake_session(
-        _tl_smoke_family_stats={"tests/x.py::fam": (30.0, 4)},
-        _tl_smoke_family_budgets={"tests/x.py::fam": 12.0},
-    )
-    _enforce_duration_budget_at_sessionfinish(session, 0)  # type: ignore[arg-type]
-    assert session.exitstatus == 1
-
-    # Clean session stays green; failing session is left alone (the
-    # marker-lint assertion or an ordinary failure already owns the status).
-    session = _fake_session()
-    _enforce_duration_budget_at_sessionfinish(session, 0)  # type: ignore[arg-type]
-    assert session.exitstatus == 0
-    session = _fake_session(
-        _tl_duration_budget_offenders=[("tests/x.py::test_slow", "smoke", 9.0, 8.0, 7.0)]
-    )
-    _enforce_duration_budget_at_sessionfinish(session, 1)  # type: ignore[arg-type]
-    assert session.exitstatus == 0
-
-
-@pytest.mark.smoke
-def test_smoke_prefilter_never_hides_a_smoke_test(request: pytest.FixtureRequest) -> None:
-    """Every smoke item lives in a file the ``-m smoke`` collection pre-filter keeps.
-
-    The pre-filter (``tests/conftest.py::pytest_ignore_collect``) skips test
-    modules whose source never spells ``mark.smoke`` / ``mark.smoke_cells``. A
-    smoke mark applied any other way (an alias imported from a helper, a hook
-    adding it) would silently drop out of the commit gate. Every session the
-    pre-filter did NOT narrow (the backstops, full runs, targeted runs) checks
-    each collected smoke item here; inside a pre-filtered smoke session the check
-    holds by construction.
-    """
-
-    from tests.conftest import source_may_hold_smoke_items
 
     hidden = sorted(
         {
             str(item.path)
             for item in request.session.items
             if item.get_closest_marker("smoke") is not None
-            and not source_may_hold_smoke_items(Path(item.path))
+            and not on_smoke_file_list(Path(item.path))
         }
     )
     assert not hidden, (
-        "Smoke items live in files the -m smoke collection pre-filter would skip "
+        "Smoke items live in files the smoke file list would skip "
         "(their source never spells `mark.smoke` or `mark.smoke_cells`). Spell the "
         "mark through `pytest.mark.smoke` in the test file itself:\n  " + "\n  ".join(hidden)
     )
@@ -1545,36 +1235,27 @@ def test_smoke_prefilter_never_hides_a_smoke_test(request: pytest.FixtureRequest
 
 @pytest.mark.smoke
 @pytest.mark.parametrize(
-    ("markexpr", "disabled", "expected"),
+    ("markexpr", "expected"),
     [
-        pytest.param("smoke", False, True, id="smoke"),
-        pytest.param("  smoke ", False, True, id="smoke-padded"),
-        pytest.param("smoke and not slow", False, True, id="smoke-and"),
-        pytest.param("smoke or real_model", False, False, id="smoke-or"),
-        pytest.param("not smoke", False, False, id="not-smoke"),
-        pytest.param("smokey", False, False, id="prefix-word"),
-        pytest.param("not rare", False, False, id="default-addopts"),
-        pytest.param("", False, False, id="empty"),
-        pytest.param("smoke", True, False, id="env-opt-out"),
+        pytest.param("smoke", True, id="smoke"),
+        pytest.param("  smoke ", True, id="smoke-padded"),
+        pytest.param("smoke and not slow", True, id="smoke-and"),
+        pytest.param("smoke or real_model", False, id="smoke-or"),
+        pytest.param("not smoke", False, id="not-smoke"),
+        pytest.param("smokey", False, id="prefix-word"),
+        pytest.param("not rare", False, id="default-addopts"),
+        pytest.param("", False, id="empty"),
     ],
 )
-def test_smoke_prefilter_triggers_only_on_smoke_only_expressions(
-    monkeypatch: pytest.MonkeyPatch, markexpr: str, disabled: bool, expected: bool
+def test_smoke_only_session_recognizes_only_smoke_requiring_expressions(
+    markexpr: str, expected: bool
 ) -> None:
-    """The pre-filter arms only when the mark expression requires ``smoke``."""
+    """The smoke-only predicate holds only when the mark expression requires ``smoke``."""
 
-    from tests.conftest import smoke_prefilter_active
+    from types import SimpleNamespace
 
-    class _FakeConfig:
-        def getoption(self, name: str, default: object = None) -> object:
-            assert name == "markexpr"
-            return markexpr
-
-    if disabled:
-        monkeypatch.setenv("TORCHLENS_SMOKE_PREFILTER", "0")
-    else:
-        monkeypatch.delenv("TORCHLENS_SMOKE_PREFILTER", raising=False)
-    assert smoke_prefilter_active(_FakeConfig()) is expected  # type: ignore[arg-type]
+    config = SimpleNamespace(option=SimpleNamespace(markexpr=markexpr))
+    assert smoke_only_session(config) is expected  # type: ignore[arg-type]
 
 
 @pytest.mark.smoke
@@ -1589,10 +1270,8 @@ def test_smoke_prefilter_triggers_only_on_smoke_only_expressions(
         pytest.param("@pytest.mark.smoker\ndef test_x(): ...\n", False, id="longer-name"),
     ],
 )
-def test_smoke_prefilter_token_detection(tmp_path: Path, source: str, expected: bool) -> None:
-    """The pre-filter's source token matches every smoke-mark spelling and nothing else."""
-
-    from tests.conftest import source_may_hold_smoke_items
+def test_smoke_file_token_detection(tmp_path: Path, source: str, expected: bool) -> None:
+    """The smoke file list's source token matches every smoke-mark spelling and nothing else."""
 
     path = tmp_path / "test_planted.py"
     path.write_text(source, encoding="utf-8")
@@ -1611,14 +1290,22 @@ def test_smoke_prefilter_token_detection(tmp_path: Path, source: str, expected: 
 def test_smoke_cells_marks_exactly_the_named_items(item_name: str, expected: bool) -> None:
     """``smoke_cells`` applies ``smoke`` to exactly the items it names."""
 
-    from tests.conftest import pytest_itemcollected
+    from _tiers_plugin import pytest_itemcollected
 
     class _FakeItem:
         def __init__(self, name: str) -> None:
             self.name = name
+            self.nodeid = f"tests/test_planted.py::{name}"
+            self.path = Path(__file__)  # on the smoke file list
+            self.config = SimpleNamespace(stash=pytest.Stash())
             self.added: list[str] = []
 
-        def iter_markers(self, name: str) -> list[pytest.Mark]:
+        def get_closest_marker(self, name: str) -> pytest.Mark | None:
+            return pytest.mark.smoke.mark if name in self.added else None
+
+        def iter_markers(self, name: str | None = None) -> list[pytest.Mark]:
+            if name is None:
+                return []
             assert name == "smoke_cells"
             return [pytest.mark.smoke_cells("test_cell[2]", "test_other[a]").mark]
 
@@ -1630,18 +1317,81 @@ def test_smoke_cells_marks_exactly_the_named_items(item_name: str, expected: boo
     assert item.added == (["smoke"] if expected else [])
 
 
+def test_item_collection_records_smoke_items_off_the_file_list(tmp_path: Path) -> None:
+    """A smoke item from a file the smoke file list skips is recorded, then fails the session."""
+
+    from _tiers_plugin import _OFF_LIST_SMOKE_ITEMS, pytest_itemcollected
+
+    outside = tmp_path / "test_outside.py"
+    outside.write_text("@pytest.mark.smoke\ndef test_x(): ...\n")
+    config = SimpleNamespace(stash=pytest.Stash())
+
+    def _item(path: Path, nodeid: str, smoke: bool) -> SimpleNamespace:
+        return SimpleNamespace(
+            name=nodeid.rsplit("::", 1)[-1],
+            nodeid=nodeid,
+            path=path,
+            config=config,
+            iter_markers=lambda name=None: [],
+            get_closest_marker=lambda name: pytest.mark.smoke.mark if smoke else None,
+        )
+
+    items = [
+        _item(outside, "elsewhere/test_outside.py::test_x", smoke=True),
+        _item(outside, "elsewhere/test_outside.py::test_y", smoke=False),
+        _item(Path(__file__), "tests/test_marker_lint.py::test_z", smoke=True),
+    ]
+    for item in items:
+        pytest_itemcollected(item)  # type: ignore[arg-type]
+    recorded = config.stash[_OFF_LIST_SMOKE_ITEMS]
+    assert recorded == ["elsewhere/test_outside.py::test_x"]
+    with pytest.raises(pytest.UsageError, match="outside the smoke file list"):
+        fail_on_off_list_smoke_items(recorded)
+    fail_on_off_list_smoke_items([])
+
+
+def test_smoke_session_skips_test_modules_off_the_file_list(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Under ``-m smoke`` only listed test modules under ``tests/`` are collected."""
+
+    from _tiers_plugin import pytest_ignore_collect
+
+    monkeypatch.delenv("TORCHLENS_SMOKE_PREFILTER", raising=False)
+    tests_dir = Path(__file__).resolve().parent
+    off_list = next(
+        path for path in sorted(tests_dir.glob("test_*.py")) if not on_smoke_file_list(path)
+    )
+    outside = tmp_path / "test_outside.py"
+    outside.write_text("def test_x(): ...\n")
+
+    def _ignored(path: Path, markexpr: str) -> bool | None:
+        config = SimpleNamespace(option=SimpleNamespace(markexpr=markexpr))
+        return pytest_ignore_collect(path, config)  # type: ignore[arg-type]
+
+    for markexpr in ("smoke", "smoke and not slow"):
+        assert _ignored(off_list, markexpr) is True
+        assert _ignored(Path(__file__), markexpr) is None
+        assert _ignored(outside, markexpr) is None
+        assert _ignored(tests_dir / "conftest.py", markexpr) is None
+    for markexpr in ("", "not rare", "not smoke", "heavy or smoke"):
+        assert _ignored(off_list, markexpr) is None
+    monkeypatch.setenv("TORCHLENS_SMOKE_PREFILTER", "0")
+    assert _ignored(off_list, "smoke") is None
+
+
 @pytest.mark.smoke
 def test_smoke_tier_stays_under_its_size_ceiling(request: pytest.FixtureRequest) -> None:
-    """A pre-filtered smoke session selects at most ``SMOKE_TIER_SIZE_CEILING`` items.
+    """A smoke-only session selects at most ``SMOKE_TIER_SIZE_CEILING`` items.
 
     Passes vacuously outside a smoke-only session (targeted and backstop runs
     select something else); the weekly floor-drift test re-checks the live
     whole-tree selection.
     """
 
-    from tests.conftest import SMOKE_TIER_SIZE_CEILING, smoke_prefilter_active
+    from tests.conftest import SMOKE_TIER_SIZE_CEILING
 
-    if not smoke_prefilter_active(request.config):
+    if not smoke_only_session(request.config):
         return
     selected = sum(
         1 for item in request.session.items if item.get_closest_marker("smoke") is not None
@@ -1651,4 +1401,73 @@ def test_smoke_tier_stays_under_its_size_ceiling(request: pytest.FixtureRequest)
         f"{SMOKE_TIER_SIZE_CEILING} (tests/conftest.py). Keep new tests unmarked unless "
         "they cover a critical path nothing in smoke reaches, or demote a smoke test "
         "they make redundant."
+    )
+
+
+_CUDA_SKIPIF_RE = re.compile(r"skipif\(\s*not torch\.cuda\.is_available\(\)")
+_CUDA_ALIAS_RE = re.compile(
+    r"^(\w+)\s*=\s*pytest\.mark\.skipif\(\s*not torch\.cuda\.is_available\(\)"
+)
+
+
+def _decorator_block_has_cuda_mark(lines: list[str], index: int) -> bool:
+    """Return whether the decorator block holding ``lines[index]`` carries ``cuda``."""
+
+    start = index
+    while start > 0 and lines[start - 1].lstrip().startswith("@"):
+        start -= 1
+    end = index
+    while end < len(lines) and not lines[end].lstrip().startswith(("def ", "async def ", "class ")):
+        end += 1
+    return any(line.strip() == "@pytest.mark.cuda" for line in lines[start:end])
+
+
+def _unmarked_cuda_skip_sites(text: str) -> list[int]:
+    """Return 1-based lines of CUDA-only skips whose test lacks the ``cuda`` marker.
+
+    A ``skipif(not torch.cuda.is_available(), ...)`` decorator, or each use of
+    a module alias for one, must sit in a decorator block that also carries
+    ``@pytest.mark.cuda`` so the GPU leg's ``-m cuda`` selection reaches it.
+    """
+
+    lines = text.split("\n")
+    aliases = {m.group(1) for line in lines if (m := _CUDA_ALIAS_RE.match(line.strip()))}
+    offenders = []
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        is_site = stripped.startswith("@pytest.mark.skipif(") and _CUDA_SKIPIF_RE.search(
+            " ".join(lines[index : index + 3])
+        )
+        if (is_site or stripped.lstrip("@") in aliases and stripped.startswith("@")) and not (
+            _decorator_block_has_cuda_mark(lines, index)
+        ):
+            offenders.append(index + 1)
+    return offenders
+
+
+def test_cuda_only_skips_carry_the_cuda_marker() -> None:
+    """Every CUDA-only skip site also carries ``@pytest.mark.cuda`` (GPU leg selection)."""
+
+    tests_dir = Path(__file__).resolve().parent
+    offenders = [
+        f"{path.relative_to(tests_dir.parent)}:{line}"
+        for path in sorted(tests_dir.rglob("*.py"))
+        for line in _unmarked_cuda_skip_sites(path.read_text(encoding="utf-8"))
+    ]
+    assert not offenders, "add @pytest.mark.cuda beside these CUDA-only skips:\n  " + "\n  ".join(
+        offenders
+    )
+
+
+def test_cuda_marker_scanner_is_red_capable() -> None:
+    """A planted unmarked CUDA skip (direct or via an alias) is reported."""
+
+    skip = '@pytest.mark.skipif(not torch.cuda.is_available(), reason="x")'
+    assert _unmarked_cuda_skip_sites(f"{skip}\ndef test_a():\n    pass") == [1]
+    assert _unmarked_cuda_skip_sites(f"@pytest.mark.cuda\n{skip}\ndef test_a():\n    pass") == []
+    alias = 'GPU = pytest.mark.skipif(not torch.cuda.is_available(), reason="x")'
+    assert _unmarked_cuda_skip_sites(f"{alias}\n@GPU\ndef test_b():\n    pass") == [2]
+    assert (
+        _unmarked_cuda_skip_sites(f"{alias}\n@GPU\n@pytest.mark.cuda\ndef test_b():\n    pass")
+        == []
     )

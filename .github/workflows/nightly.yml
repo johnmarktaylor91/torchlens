@@ -126,6 +126,25 @@ jobs:
             # nothing (grind r5, b10 R85-1). The classifier<->matrix lockstep
             # test in tests/test_ci_packaging_gates.py now requires a real
             # row per advertised interpreter, so dropping this row goes red.
+          # The one gating row above the pinned torch: the torch 2.14-and-later
+          # capability flags (HAS_GENERATOR_PHILOX_STATE,
+          # HAS_CHECKPOINT_INTERNAL_HOOK_CLASS) are true only from 2.14, so
+          # without this row only the non-gating latest canary ran them. Smoke
+          # scope, not enforcing (the byte goldens enforce on pr.yml's pinned
+          # row only). The mypy, checks, packaging and audit jobs keep pinning
+          # the newest-admitted torch, not this one. torch 2.15 ships no
+          # CPython 3.10 wheels, and no torchvision release pairs with it yet
+          # (0.29.x requires torch 2.14), so the row installs no torchvision:
+          # torchvision-only tests skip and the R0 sweep, which needs it, is
+          # not claimed. Pin the paired torchvision and transformers here
+          # once torchvision publishes one.
+          - track: forward
+            python: "3.11"
+            torch: "2.15.0+cpu"
+            torchvision: ""
+            transformers: ""
+            numpy: numpy
+            scope: smoke
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -158,6 +177,9 @@ jobs:
           # need numpy 2 without declaring it (see the file's header).
           constraint_args=()
           if [ -n "${CONSTRAINTS}" ]; then constraint_args=(-c "${CONSTRAINTS}"); fi
+          # A row with no torchvision pin installs none (see the forward row).
+          vision_args=()
+          if [ -n "${TORCHVISION_VERSION}" ]; then vision_args=("torchvision==${TORCHVISION_VERSION}"); fi
           # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
           # The viz extra (matplotlib, torchshow, lovely-tensors) is installed
           # because tviz is shipped surface with smoke-marked render tests.
@@ -167,7 +189,7 @@ jobs:
             --index-strategy unsafe-best-match \
             -e ".[dev,tabular,viz]" \
             "torch==${TORCH_VERSION}" \
-            "torchvision==${TORCHVISION_VERSION}" \
+            "${vision_args[@]}" \
             "${NUMPY_SPEC}" \
             "pydot==4.0.1" \
             "graphviz==0.21"
@@ -198,11 +220,18 @@ jobs:
           python - <<'PY'
           import os
 
+          import importlib.util
+
           import torch
+
+          assert torch.__version__ == os.environ["TORCH_VERSION"]
+          if not os.environ["TORCHVISION_VERSION"]:
+              assert importlib.util.find_spec("torchvision") is None
+              print(torch.__version__, "no torchvision")
+              raise SystemExit(0)
           import torchvision
           from torchvision.ops import nms
 
-          assert torch.__version__ == os.environ["TORCH_VERSION"]
           assert torchvision.__version__ == os.environ["TORCHVISION_VERSION"]
           boxes = torch.tensor([[0.0, 0.0, 1.0, 1.0]])
           scores = torch.tensor([1.0])
@@ -214,9 +243,7 @@ jobs:
         if: matrix.scope == 'smoke'
         env:
           # One torch thread per xdist worker: intra-op threads on top of
-          # four workers oversubscribe the runner and inflate the duration
-          # tripwire's measurements (lane L15). The tripwire aggregates
-          # across workers, so it stays armed under -n.
+          # four workers oversubscribe the runner.
           OMP_NUM_THREADS: "1"
         run: |
           pytest tests/ -m smoke -n 4 --tb=short -q \
@@ -227,28 +254,17 @@ jobs:
           # single-process collection costs ~95 s.
           mapfile -t serial_files < <(grep -rlE --include="test_*.py" "mark\.serial" tests)
           pytest "${serial_files[@]}" -m "serial and not slow and not rare and not heavy" --tb=short -q
-          pytest tests/test_torch_compat.py --tb=short -q
+          # The compat file's smoke tests ran in the selection above.
+          pytest tests/test_torch_compat.py -m "not smoke" --tb=short -q
 
       - name: Declare the executed-test floor (smoke suite)
         if: matrix.scope == 'smoke'
-        # Executed-floor attestation on EVERY smoke row (previously only the
-        # nightly preview-backend legs had one): a row where collection drift,
-        # a conftest guard, or mass importorskip/oracle skipping hollows out
-        # the suite must go red, not green. The smoke tier selects ~1,420
-        # tests (re-trued 2026-10-02 to 710 from 1,421 collected, when the tier
-        # was cut from ~9,900 to a coverage-chosen subset; 2026-09-01 it was
-        # 4609 from 9218, AUD-CODE 0.3:
-        # the 2,830 literal sat at 30.7% of the live tier; before that,
-        # 2026-08-26, megaplan D13: the 2,500 floor had lagged
-        # the tier again, tolerating a silent 56% hollow-out against a comment
-        # intending ~50% -- the same drift class as r7 R41's "~3900"/1900
-        # pair); the floor is roughly half so normal churn and per-torch-
-        # version skips never trip it, the 15% skip-fraction bound scales
-        # with the selection, and tests/test_gate_infra_floor_drift.py now
-        # RE-DERIVES the floor from the live selection count so this class
-        # of drift goes red instead of waiting for the next audit.
+        # Same attestation as pr.yml's smoke row: `tier:smoke` is half the
+        # smoke count recorded in tests/tiers/collection.json, with the 15%
+        # skip-fraction bound (tests/test_gate_infra_floor_drift.py keeps the
+        # artifact's count in step with the live selection).
         run: |
-          echo "smoke.junit.xml 710 0.15" >> "${{ runner.temp }}/junit/legs.floor"
+          echo "smoke.junit.xml tier:smoke 0.15" >> "${{ runner.temp }}/junit/legs.floor"
 
       - name: R0 real-model gate (blocking; PASSED-count attested)
         if: matrix.transformers != ''
@@ -280,8 +296,13 @@ jobs:
   tier:
     name: Not-slow tier (shard ${{ matrix.shard }} of 8)
     # The tier test-tiers.json declares as pre_merge: 'not rare and not slow'
-    # in 8 single-process pytest-split shards with one seed, so serial and
-    # heavy tests run here safely, on the pinned environment.
+    # in 8 single-process shards with one seed, so serial and heavy tests run
+    # here safely, on the pinned environment. `--tier-shard INDEX/COUNT`
+    # (tests/_tiers_plugin.py) keeps whole test files, balanced by the tracked
+    # per-file durations in tests/tiers/durations.csv exactly as
+    # `python scripts/tier_durations.py shards --count 8` prints them;
+    # regenerate that file with `tier_durations.py regenerate` from a tier
+    # run's junit.
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -318,7 +339,6 @@ jobs:
             --extra-index-url https://pypi.org/simple \
             --index-strategy unsafe-best-match \
             -e ".[dev,test,tabular,viz]" \
-            -r requirements-test-tiers.txt \
             "torch==2.13.0+cpu" \
             "torchvision==0.28.0+cpu" \
             "transformers==5.18.0"
@@ -328,15 +348,17 @@ jobs:
       - name: Run the shard
         env:
           OMP_NUM_THREADS: "1"
+          SHARD: ${{ matrix.shard }}
         run: |
           pytest tests/ -o addopts= -m "not rare and not slow" \
-            --splits 8 --group "${{ matrix.shard }}" --splitting-algorithm least_duration \
+            --tier-shard "$(( SHARD - 1 ))/8" \
             -p randomly --randomly-seed=20261003 --tb=short \
-            --junitxml="${{ runner.temp }}/junit/tier-${{ matrix.shard }}.xml"
+            --junitxml="${{ runner.temp }}/junit/tier-${SHARD}.xml"
 
       - name: Declare the executed-test floor
-        # About half the shard's selection (24,810 tests over 8 shards,
-        # measured 2026-10-30), the same margin the smoke floor keeps.
+        # Under the smallest shard's measured selection (2,314 of the 24,819
+        # tests in tests/tiers/durations.csv; the shards average about 3,000),
+        # about the half margin the smoke floor keeps.
         run: echo "tier-${{ matrix.shard }}.xml 1500" >> "${{ runner.temp }}/junit/legs.floor"
 
       - name: Fresh-seed generative property sweep
@@ -434,18 +456,18 @@ jobs:
           # `serial` tests run without xdist (see tests.yml smoke step).
           mapfile -t serial_files < <(grep -rlE --include="test_*.py" "mark\.serial" tests)
           pytest "${serial_files[@]}" -m "serial and not slow and not rare and not heavy" --tb=short -q
-          pytest tests/test_torch_compat.py --tb=short -q
+          # The compat file's smoke tests ran in the selection above.
+          pytest tests/test_torch_compat.py -m "not smoke" --tb=short -q
 
       - name: Declare the executed-test floor (canary suite)
         # Same executed-floor attestation as every tests.yml smoke row: an
         # unattended leg where a new torch mass-skips or hollows collection
-        # must go red, not green (grind r3, R82). Floor is roughly half the
-        # ~1,420-test smoke selection (re-trued 2026-10-02 when the tier was cut
-        # to a coverage-chosen subset); the
+        # must go red, not green (grind r3, R82). The floor is half the smoke
+        # count recorded in tests/tiers/collection.json (`tier:smoke`); the
         # canary runs an UNADMITTED torch, so no skip-fraction bound — extra
         # per-version skips are exactly what it exists to surface loudly.
         run: |
-          echo "canary-smoke.junit.xml 710" >> "${{ runner.temp }}/junit/legs.floor"
+          echo "canary-smoke.junit.xml tier:smoke" >> "${{ runner.temp }}/junit/legs.floor"
 
       - name: R0 real-model sweep on latest transformers (PASSED-count attested)
         # Testing MEMO A6: the 14-family config-built sweep runs against the
@@ -628,10 +650,8 @@ jobs:
           uv pip check
 
       - name: Run the smoke tier under coverage with a floor
-        # No deselects: the duration-budget machinery itself skips recording
-        # under coverage instrumentation (tests/conftest.py, r7 R41/R72 --
-        # the old single --deselect here named a test that had been RENAMED,
-        # so it silently excluded nothing while claiming the carve-out).
+        # No deselects: duration budgets are a repository check over
+        # tests/tiers/durations.csv, so coverage tracing cannot trip them.
         # pytest-cov combines the xdist workers' data before the floors run.
         env:
           OMP_NUM_THREADS: "1"
@@ -738,13 +758,19 @@ jobs:
           # importorskip/marker-drift regression fails the leg while normal
           # test-count churn does not. A floor of 1 would let a 49-of-50 skip
           # stay green.
+          #
+          # Each `install` is the framework's declared supported range or its
+          # pin (FrameworkRequirement in torchlens/backends/_protocols/), so
+          # nightly tracks the newest release inside the range while the
+          # per-change pr.yml backend-protocol legs test the pin;
+          # tests/test_backend_framework_pins.py holds both to the shells.
           - backend: tf
-            install: tensorflow-cpu
+            install: '"tensorflow-cpu>=2.16"'
             marker: tf_backend
             import_check: "import tensorflow, keras"
             executed_floor: 18
           - backend: jax
-            install: '"jax[cpu]" equinox flax'
+            install: '"jax[cpu]>=0.4.30" equinox flax'
             marker: backend_jax
             import_check: "import jax, jax.numpy, equinox, flax"
             executed_floor: 60
@@ -825,6 +851,44 @@ jobs:
         # must not stay green; each leg carries its own executed-test floor.
         run: |
           echo "preview-${{ matrix.backend }}.junit.xml ${{ matrix.executed_floor }}" >> "${{ runner.temp }}/junit/legs.floor"
+
+      - name: Restore the ${{ matrix.backend }} ecosystem weights cache
+        # Pretrained checkpoints for the ecosystem roster rows
+        # (torchlens/conformance/_rosters/<backend>.py, group `ecosystem`),
+        # keyed on the roster file so a changed row refetches its weights.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/.keras
+            ~/.cache/paddle
+            ~/.cache/tinygrad
+          key: conformance-weights-${{ matrix.backend }}-${{ hashFiles(format('torchlens/conformance/_rosters/{0}.py', matrix.backend)) }}-v1
+
+      - name: Run the ${{ matrix.backend }} ecosystem roster
+        # The networked conformance run: with TORCHLENS_CONFORMANCE_ECOSYSTEM=1
+        # the ecosystem rows fetch (or reuse cached) weights and run every C1
+        # and C2 cell; the computed scorecard record is kept as the nightly
+        # ecosystem evidence (graduation criterion G3). No --check here: this
+        # leg installs the newest framework in range, not the pin.
+        env:
+          TORCHLENS_CONFORMANCE_ECOSYSTEM: "1"
+          MLX_DISABLE_COMPILE: "1"
+          DEV: ${{ matrix.dev || '' }}
+          BACKEND: ${{ matrix.backend }}
+        run: |
+          mkdir -p "${{ runner.temp }}/ecosystem"
+          python -m torchlens.conformance.scorecard --backend "$BACKEND" \
+            > "${{ runner.temp }}/ecosystem/scorecard-$BACKEND.json"
+
+      - name: Upload the ${{ matrix.backend }} ecosystem scorecard
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ecosystem-scorecard-${{ matrix.backend }}
+          path: ${{ runner.temp }}/ecosystem/
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Upload junit and executed-test floors
         if: ${{ !cancelled() }}

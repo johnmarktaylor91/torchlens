@@ -12,7 +12,6 @@ import torch
 import torchlens as tl
 from torchlens.intervention import runtime as intervention_runtime
 from torchlens.intervention.errors import (
-    HelperMountError,
     HookSignatureError,
     HookSiteCoverageError,
     HookValueError,
@@ -112,15 +111,15 @@ def test_phase3_helpers_import_and_return_specs() -> None:
         tl.project_out(torch.ones(3), dim=-1),
         tl.intervention.helpers.swap_with(torch.ones(2, 3)),
         tl.splice_module(torch.nn.Identity()),
-        tl.hook_grad(_good_hook),
-        tl.zero_grad(),
-        tl.scale_grad(0.5),
+        tl.clip_norm(1.0),
     ]
 
     assert all(isinstance(spec, Edit) for spec in helper_specs)
     assert helper_specs[0].name == "zero_ablate"
-    assert helper_specs[-1].kind == "backward"
-    assert dict(helper_specs[-1].metadata)["live_rerun_only"] is True
+    # The site decides the pass: neutral edits carry no signal, activation readers say forward.
+    assert helper_specs[-1].name == "clip_norm"
+    assert helper_specs[-1].signal is None
+    assert helper_specs[-2].signal == "forward"
 
 
 @pytest.mark.smoke
@@ -183,11 +182,13 @@ def test_normalizer_accepts_supported_shapes_in_order() -> None:
     assert pair_entries[0].site_target == tl.label("x")
 
 
-def test_helper_direction_override_contradiction_raises() -> None:
-    """Backward-only helpers cannot be mounted as forward hooks."""
+def test_activation_only_edit_on_gradient_site_raises() -> None:
+    """An edit that reads recorded activations cannot mount on a gradient site."""
 
-    with pytest.raises(HelperMountError, match="intrinsically 'backward'"):
-        normalize_hook_plan(tl.func("relu"), tl.zero_grad(), direction="forward")
+    with pytest.raises(Exception) as excinfo:
+        normalize_hook_plan(tl.grad(tl.func("relu")), tl.splice_module(torch.nn.Identity()))
+    fields = getattr(excinfo.value, "fields", None) or {}
+    assert fields.get("code", getattr(excinfo.value, "code", None)) == "edit_signal_mismatch"
 
 
 def test_sites_callable_predicate_is_preserved_with_ops_filter() -> None:
@@ -212,9 +213,7 @@ def test_sites_callable_predicate_is_preserved_with_ops_filter() -> None:
 
             return torch.relu(x)
 
-    log = tl.trace(
-        _Relu(), torch.randn(1, 3), capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    log = tl.trace(_Relu(), torch.randn(1, 3), capture=tl.options.CaptureOptions(replayable=True))
 
     selected = log.find_sites(sites(lambda ctx: False, ops=["relu"]).entries[0].selector)
 
@@ -238,13 +237,13 @@ def test_normalizer_rejects_missing_site_and_bad_signature() -> None:
 
 @pytest.mark.smoke
 def test_execute_hook_rejects_none_type_shape_dtype_and_device() -> None:
-    """Hook execution validates return values by default."""
+    """Hook execution validates return values by default; None leaves the value unchanged."""
 
     out = torch.ones(2, 3)
     context = _context()
 
     def none_hook(out: torch.Tensor, *, ctx: HookContext) -> None:
-        """Return None, which Phase 3 rejects."""
+        """Return None, which keeps the incoming value (fn -> Tensor | None)."""
 
         return None
 
@@ -268,8 +267,7 @@ def test_execute_hook_rejects_none_type_shape_dtype_and_device() -> None:
 
         return torch.empty(out.shape, dtype=out.dtype, device="meta")
 
-    with pytest.raises(HookValueError, match="None"):
-        _execute_hook(none_hook, out, context)
+    assert torch.equal(_execute_hook(none_hook, out, context), out)
     with pytest.raises(HookValueError, match="list"):
         _execute_hook(list_hook, out, context)
     with pytest.raises(HookValueError, match="shape"):
@@ -310,7 +308,7 @@ def test_seeded_noise_is_deterministic_and_unseeded_records_note() -> None:
 
     assert torch.equal(seeded_a(out, ctx=context), seeded_b(out, ctx=context))
     _ = unseeded(out, ctx=context)
-    assert any("noise used unseeded" in note for note in context.run_ctx["ledger_notes"])
+    assert any("noise used unseeded" in note for note in context.run_state["ledger_notes"])
 
 
 def test_splice_module_dtype_error_is_specific() -> None:
@@ -423,7 +421,7 @@ def test_splice_module_input_splices_multi_input_module_end_to_end() -> None:
         _Model().eval(),
         (a, b),
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.in_module("block"): tl.splice_module(_SubtractReplacement())},
         ),
     )
@@ -462,7 +460,7 @@ def test_splice_module_input_splices_module_scope_once_end_to_end() -> None:
         _Model().eval(),
         x,
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.in_module("block"): tl.splice_module(_HundredModule())},
         ),
     )
@@ -511,18 +509,18 @@ def test_module_scoped_splice_records_replacement_parent_and_fire_record(tmp_pat
         _Model(),
         x,
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={tl.module("block"): tl.splice_module(_DoubleReplacement())},
         ),
     )
-    sigmoid = next(layer for layer in log.layer_list if layer.func_name == "sigmoid")
+    sigmoid = next(layer for layer in log._layer_list if layer.func_name == "sigmoid")
     replacement = log[sigmoid.parents[0]]
 
     assert torch.equal(replacement.out, x * 2)
     assert torch.equal(sigmoid.out, torch.sigmoid(replacement.out))
-    assert replacement.intervention_replaced is True
-    assert replacement.interventions[-1].replaced is True
-    assert replacement.interventions[-1].helper_name == "splice_module"
+    assert replacement.is_edited is True
+    assert replacement.edits[-1].replaced is True
+    assert replacement.edits[-1].edit_name == "splice_module"
     assert check_metadata_invariants(log) is True
     for module_call_label, module_call in log.module_calls.items():
         assert module_call.call_parent != module_call_label
@@ -531,8 +529,7 @@ def test_module_scoped_splice_records_replacement_parent_and_fire_record(tmp_pat
         collapse="none",
         path=str(tmp_path / "module_splice"),
         file_format="svg",
-        vis_save_only=True,
-    )
+    ).dot
     assert rendered is not None
 
 
@@ -566,7 +563,7 @@ def test_splice_module_input_rejects_module_scoped_op_granularity() -> None:
             _Model().eval(),
             torch.ones(1, 3),
             capture=tl.options.CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 hooks={
                     tl.in_module("block") & tl.func("relu"): tl.splice_module(
                         _IdentityReplacement()
@@ -637,7 +634,7 @@ def test_splice_module_input_preserves_common_op_arg_orders() -> None:
         _Ops().eval(),
         (a, b),
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             hooks={
                 tl.func("add"): tl.splice_module(_AddReplacement()),
                 tl.func("where"): tl.splice_module(_WhereReplacement()),

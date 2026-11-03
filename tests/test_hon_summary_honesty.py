@@ -40,13 +40,13 @@ def test_unverified_capture_drops_feedforward_and_bounds_its_counts() -> None:
     """U35.1: "structure unverified" replaces the feedforward claim; counts are bounds."""
 
     trace = tl.trace(_Tiny(), torch.randn(2, 4))
-    trace.capture_verified = False
-    trace.capture_verification_reason = "escape_rescue_unrecovered"
+    trace._provenance_verified = False
+    trace._provenance_verification_reason = "escape_rescue_unrecovered"
     text = _summary(trace)
     assert "purely feedforward" not in text
     assert "structure unverified" in text
     assert f"at least {len(trace)} total tensors" in text
-    assert f"at least {trace.num_layers_with_params} parameter operations" in text
+    assert f"at least {trace._num_layers_with_params} parameter operations" in text
     assert f"at least {trace.num_params} params total" in text
     assert "lower bound" in text
     assert "Capture verified: NO (escape_rescue_unrecovered)" in text
@@ -60,24 +60,24 @@ def test_verified_and_unrecorded_captures_print_unchanged() -> None:
     assert "purely feedforward, no recurrence" in baseline
     assert "at least" not in baseline and "lower bound" not in baseline
     assert (
-        f"Parameters: {trace.num_layers_with_params} parameter operations "
+        f"Parameters: {trace._num_layers_with_params} parameter operations "
         f"({trace.num_params} params total;"
     ) in baseline
-    trace.capture_verified = True
+    trace._provenance_verified = True
     assert _summary(trace).split("\n")[3:] == baseline.split("\n")[3:]
 
 
 def test_not_checked_footer_names_track_nonfinite_and_the_default_stays_false() -> None:
-    """forks.7: the default is False and the NOT-CHECKED line teaches the option."""
+    """forks.7: the default is off and the NOT-CHECKED line teaches the option."""
 
-    assert tl.options.CaptureOptions().track_nonfinite is False
+    assert tl.options.CaptureOptions().on_nonfinite == "ignore"
     trace = tl.trace(_Tiny(), torch.randn(2, 4), save=tl.func("relu"))
     assert trace.track_nonfinite is False
     assert trace.nonfinite_verdict == "not_checked"
     health = [line for line in _summary(trace).split("\n") if "Health:" in line]
     assert health == [
         "\tHealth: NOT-CHECKED (payloads unexamined; capture with "
-        "CaptureOptions(track_nonfinite=True) to check every op)"
+        "CaptureOptions(on_nonfinite='track') to check every op)"
     ]
 
 

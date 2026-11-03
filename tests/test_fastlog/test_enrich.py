@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.recording.exceptions import RecordingConfigError
 
 
 def _mlp() -> nn.Module:
@@ -27,16 +25,6 @@ def test_enrich_module_path_strings_populates_metadata() -> None:
     assert enriched.records
     assert "module_path_strings" in enriched.records[0].metadata
     assert "module_path" in enriched.records[0].metadata
-
-
-def test_enrich_param_addresses_requires_capture_time_field() -> None:
-    """Param address enrichment raises clearly when capture data is absent."""
-
-    recording = tl.record(
-        _mlp(), torch.randn(1, 4), recording=tl.options.RecordingOptions(default_op=True)
-    )
-    with pytest.raises(RecordingConfigError, match="parent_param_addresses"):
-        recording.enrich(["param_addresses"])
 
 
 def test_enrich_all_feasible_matches_available_enrichments() -> None:

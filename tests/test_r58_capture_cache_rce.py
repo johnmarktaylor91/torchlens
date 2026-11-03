@@ -83,17 +83,13 @@ def test_authenticated_cache_still_hits(cache_root: Path) -> None:
     the assertion pins the self-authenticating record rather than the pair.
     """
 
-    from torchlens._user_funcs import _CAPTURE_CACHE_MAGIC
+    from torchlens._capture.prepare.cache import _CAPTURE_CACHE_MAGIC
 
     model, inputs = _tiny_model(), torch.rand(2, 4)
-    first = tl.trace(
-        model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", cache=True)
-    )
-    assert first.capture_cache_hit is False
-    second = tl.trace(
-        model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", cache=True)
-    )
-    assert second.capture_cache_hit is True
+    first = tl.trace(model, inputs, capture=tl.options.CaptureOptions(cache=True), save="all")
+    assert first.provenance.cache_hit is False
+    second = tl.trace(model, inputs, capture=tl.options.CaptureOptions(cache=True), save="all")
+    assert second.provenance.cache_hit is True
     entry = _cache_entry(cache_root)
     assert entry.read_bytes().startswith(_CAPTURE_CACHE_MAGIC)
     assert not entry.with_name(entry.name + ".hmac").exists()
@@ -105,7 +101,8 @@ def test_cache_secret_is_private(cache_root: Path) -> None:
     tl.trace(
         _tiny_model(),
         torch.rand(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", cache=True),
+        capture=tl.options.CaptureOptions(cache=True),
+        save="all",
     )
     secret = cache_root / ".capture_cache_secret"
     assert secret.is_file()
@@ -125,17 +122,17 @@ def test_planted_code_exec_pickle_is_never_unpickled(cache_root: Path, tmp_path:
     """
 
     model, inputs = _tiny_model(), torch.rand(2, 4)
-    tl.trace(model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", cache=True))
+    tl.trace(model, inputs, capture=tl.options.CaptureOptions(cache=True), save="all")
     marker = tmp_path / _PWN_MARKER_NAME
     _cache_entry(cache_root).write_bytes(pickle.dumps(_CodeExecPayload(marker)))
 
     with pytest.warns(UserWarning, match="Ignoring TorchLens capture cache entry"):
         refreshed = tl.trace(
-            model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", cache=True)
+            model, inputs, capture=tl.options.CaptureOptions(cache=True), save="all"
         )
 
     assert not marker.exists(), "the planted __reduce__ gadget executed"
-    assert refreshed.capture_cache_hit is False
+    assert refreshed.provenance.cache_hit is False
     assert isinstance(refreshed, tl.Trace)
 
 
@@ -149,23 +146,23 @@ def test_headerless_entry_is_a_miss_not_a_load(cache_root: Path, tmp_path: Path)
     """
 
     model, inputs = _tiny_model(), torch.rand(2, 4)
-    tl.trace(model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", cache=True))
+    tl.trace(model, inputs, capture=tl.options.CaptureOptions(cache=True), save="all")
     entry = _cache_entry(cache_root)
     marker = tmp_path / _PWN_MARKER_NAME
     entry.write_bytes(pickle.dumps(_CodeExecPayload(marker)))
 
     with pytest.warns(UserWarning, match="not a single-record authenticated"):
         refreshed = tl.trace(
-            model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", cache=True)
+            model, inputs, capture=tl.options.CaptureOptions(cache=True), save="all"
         )
 
     assert not marker.exists()
-    assert refreshed.capture_cache_hit is False
+    assert refreshed.provenance.cache_hit is False
     # The rewrite re-commits an authenticated record, so the next run hits.
     assert (
         tl.trace(
-            model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", cache=True)
-        ).capture_cache_hit
+            model, inputs, capture=tl.options.CaptureOptions(cache=True), save="all"
+        ).provenance.cache_hit
         is True
     )
 
@@ -176,10 +173,10 @@ def test_tag_from_a_foreign_secret_does_not_authenticate(cache_root: Path, tmp_p
     import hashlib
     import hmac
 
-    from torchlens._user_funcs import _CAPTURE_CACHE_MAGIC
+    from torchlens._capture.prepare.cache import _CAPTURE_CACHE_MAGIC
 
     model, inputs = _tiny_model(), torch.rand(2, 4)
-    tl.trace(model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", cache=True))
+    tl.trace(model, inputs, capture=tl.options.CaptureOptions(cache=True), save="all")
     entry = _cache_entry(cache_root)
     marker = tmp_path / _PWN_MARKER_NAME
     payload = pickle.dumps(_CodeExecPayload(marker))
@@ -190,7 +187,7 @@ def test_tag_from_a_foreign_secret_does_not_authenticate(cache_root: Path, tmp_p
     entry.write_bytes(_CAPTURE_CACHE_MAGIC + forged_tag.encode("ascii") + b"\n" + payload)
 
     with pytest.warns(UserWarning, match="does not match its bytes"):
-        tl.trace(model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", cache=True))
+        tl.trace(model, inputs, capture=tl.options.CaptureOptions(cache=True), save="all")
 
     assert not marker.exists()
 
@@ -199,7 +196,7 @@ def test_symlinked_entry_is_never_followed(cache_root: Path, tmp_path: Path) -> 
     """A symlinked entry redirecting out of the cache is refused, not read."""
 
     model, inputs = _tiny_model(), torch.rand(2, 4)
-    tl.trace(model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", cache=True))
+    tl.trace(model, inputs, capture=tl.options.CaptureOptions(cache=True), save="all")
     entry = _cache_entry(cache_root)
     marker = tmp_path / _PWN_MARKER_NAME
     elsewhere = tmp_path / "elsewhere.pkl"
@@ -208,7 +205,7 @@ def test_symlinked_entry_is_never_followed(cache_root: Path, tmp_path: Path) -> 
     entry.symlink_to(elsewhere)
 
     with pytest.warns(UserWarning, match="symlink"):
-        tl.trace(model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", cache=True))
+        tl.trace(model, inputs, capture=tl.options.CaptureOptions(cache=True), save="all")
 
     assert not marker.exists()
 
@@ -231,7 +228,8 @@ def test_cache_dirs_are_created_private() -> None:
     tl.trace(
         _tiny_model(),
         torch.rand(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", cache=True),
+        capture=tl.options.CaptureOptions(cache=True),
+        save="all",
     )
     for directory in (cache_dir, cache_dir / "capture"):
         assert stat.S_IMODE(directory.stat().st_mode) & 0o022 == 0, directory
@@ -247,9 +245,9 @@ def test_world_writable_cache_dir_is_tightened_not_trusted(cache_root: Path) -> 
     """
 
     model, inputs = _tiny_model(), torch.rand(2, 4)
-    tl.trace(model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", cache=True))
+    tl.trace(model, inputs, capture=tl.options.CaptureOptions(cache=True), save="all")
     cache_root.chmod(0o777)
-    tl.trace(model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", cache=True))
+    tl.trace(model, inputs, capture=tl.options.CaptureOptions(cache=True), save="all")
     assert stat.S_IMODE(cache_root.stat().st_mode) & 0o022 == 0
 
 
@@ -258,7 +256,7 @@ def test_group_readable_secret_refuses_typed(cache_root: Path) -> None:
     """A secret other users can read cannot key a meaningful tag, so it refuses."""
 
     model, inputs = _tiny_model(), torch.rand(2, 4)
-    tl.trace(model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", cache=True))
+    tl.trace(model, inputs, capture=tl.options.CaptureOptions(cache=True), save="all")
     secret = cache_root / ".capture_cache_secret"
     secret.chmod(0o644)
     try:
@@ -266,7 +264,8 @@ def test_group_readable_secret_refuses_typed(cache_root: Path) -> None:
             tl.trace(
                 model,
                 torch.rand(2, 4),
-                capture=tl.options.CaptureOptions(layers_to_save="all", cache=True),
+                capture=tl.options.CaptureOptions(cache=True),
+                save="all",
             )
     finally:
         secret.chmod(0o600)
@@ -339,7 +338,7 @@ def test_authenticated_bytes_are_the_bytes_unpickled(cache_root: Path, tmp_path:
     import sys
 
     model, inputs = _tiny_model(), torch.rand(2, 4)
-    tl.trace(model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", cache=True))
+    tl.trace(model, inputs, capture=tl.options.CaptureOptions(cache=True), save="all")
     entry = _cache_entry(cache_root)
     marker = tmp_path / _PWN_MARKER_NAME
     evil = pickle.dumps(_CodeExecPayload(marker))
@@ -347,9 +346,7 @@ def test_authenticated_bytes_are_the_bytes_unpickled(cache_root: Path, tmp_path:
     hook = _OpenCountingSwapHook(entry, evil)
     sys.addaudithook(hook)
 
-    refreshed = tl.trace(
-        model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", cache=True)
-    )
+    refreshed = tl.trace(model, inputs, capture=tl.options.CaptureOptions(cache=True), save="all")
 
     assert not marker.exists(), (
         "the entry was authenticated on one read and unpickled from another: the "
@@ -362,7 +359,7 @@ def test_authenticated_bytes_are_the_bytes_unpickled(cache_root: Path, tmp_path:
     )
     assert not hook.swapped, "the between-reads swap was reachable"
     # The benign bytes authenticated and loaded, so this is an ordinary hit.
-    assert refreshed.capture_cache_hit is True
+    assert refreshed.provenance.cache_hit is True
     assert isinstance(refreshed, tl.Trace)
 
 
@@ -380,7 +377,7 @@ def test_no_bare_pickle_read_in_the_package() -> None:
         # The authenticated capture-cache reader: verifies an HMAC tag over the exact
         # bytes BEFORE unpickling, and refuses a non-private cache directory. See this
         # module's docstring for why the SafeBundleUnpickler allowlist cannot apply.
-        "_user_funcs.py",
+        "_capture/prepare/cache.py",
     }
     package_root = Path(tl.__file__).resolve().parent
     offenders: list[str] = []

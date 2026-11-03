@@ -15,7 +15,7 @@ pass, step, and site. The fix is one stateless mechanism:
 - ``seed=`` is a REQUIRED int or the literal ``"auto"``; ``None`` never
   reaches a hook (D4).
 - ``"auto"`` canonicalizes ONCE per capture into
-  ``base_seed = H(trace.random_seed, rule_identity, population_identity)``
+  ``base_seed = H(trace._options_seed, rule_identity, population_identity)``
   (D5 with the DIS-4 adjudication: the identity component is PERSISTED helper
   identity, never a transient construction ordinal) -- never the ambient
   global RNG, and recorded.
@@ -51,12 +51,10 @@ pass, step, and site. The fix is one stateless mechanism:
   across sites via one plan identity). The shipped ``noise`` /
   ``scramble_elements`` keep their frozen ``per_rule`` behavior forever.
 
-Every firing routes its audit through C03's ONE FireRecord builder: realized
-draws land as ``ledger_notes`` (lifted into ``FireRecord.determinism_note`` by
-``build_fire_record``) plus a structured session-side record served by
-:func:`sampling_records`. No new persisted field is introduced (the C07 field
-census is frozen; a structured ``sampling`` FireRecord field would need its
-own adjudicated the field-intent ledger row first).
+Every firing routes its audit through C03's ONE FireRecord builder: each realized
+draw lands as a typed :class:`~torchlens.intervention.types.SamplingRecord` that
+``build_fire_record`` lifts into the persisted ``FireRecord.sampling``, and as a
+``ledger_notes`` line lifted into ``determinism_note``. No draw is session-only.
 
 Axis law (D24/D25): axes are NEVER inferred from rank. The ladder is explicit
 ``axis=`` > facet/recipe-declared semantic role > registered model/site
@@ -85,14 +83,13 @@ from .._errors import InvalidArgumentError
 from ..errors._base import TorchLensWarning
 from .hooks import HookContext
 from .population import OneDatum, PerRowDatums, Population
-from .types import Edit
+from .types import Edit, SamplingRecord
 
 __all__ = [
     "SamplingPlan",
     "permute_batch",
     "resample_rows_from",
     "sample_from",
-    "sampling_records",
     "set_direction_mean",
 ]
 
@@ -225,7 +222,7 @@ def _require_seed(seed: Any, verb: str) -> int | str:
             "edits, so unacknowledged stochasticity never reaches a hook",
             code="sampling_seed_required",
             remedy="pass an explicit integer seed, or seed='auto' to derive one "
-            "from the capture's recorded trace.random_seed",
+            "from the capture's recorded trace.options.seed",
             argument="seed",
         )
     return seed
@@ -242,17 +239,17 @@ def _base_seed(
     """Resolve the base seed for one firing (D5, DIS-4 spelling).
 
     An explicit int is its own base. ``"auto"`` derives from the capture's
-    recorded ``trace.random_seed`` (threaded through ``run_ctx`` by the
+    recorded ``trace.options.seed`` (threaded through ``run_ctx`` by the
     live/replay doors), the helper's persisted identity, and the population
     identity -- never the ambient RNG, never a transient construction ordinal.
     """
 
     if isinstance(seed, int):
         return seed
-    trace_seed = ctx.run_ctx.get("trace_random_seed")
+    trace_seed = ctx.run_state.get("trace_random_seed")
     if trace_seed is None:
         raise InvalidArgumentError(
-            f"{verb} seed='auto' needs the capture's recorded trace.random_seed, "
+            f"{verb} seed='auto' needs the capture's recorded trace.options.seed, "
             "and this door's run context does not carry one",
             code="sampling_trace_seed_unavailable",
             remedy="pass an explicit integer seed=, or run the edit on a door "
@@ -282,8 +279,8 @@ def _firing_coordinate(ctx: HookContext, share_draw: str) -> tuple[Any, ...]:
     if share_draw == "per_rule":
         return ()
     layer_log = ctx.op or {}
-    pass_index = layer_log.get("pass_index")
-    generation_step = ctx.run_ctx.get("generation_step")
+    pass_index = layer_log.get("pass_number")
+    generation_step = ctx.run_state.get("generation_step")
     if share_draw == "per_group":
         return (pass_index, generation_step)
     site = layer_log.get("site_key") or layer_log.get("label") or layer_log.get("layer_label")
@@ -316,21 +313,39 @@ def _derived_seed(  # noqa: PLR0913 -- the D6 formula's seven NAMED components A
 def _leaf_path(ctx: HookContext) -> tuple[int, ...]:
     """Read the composed-leaf path threaded by ``tl.compose`` (D6/D20)."""
 
-    path = ctx.ctx.get("compose_leaf_path", ())
+    path = ctx.state.get("compose_leaf_path", ())
     return tuple(path) if isinstance(path, (tuple, list)) else ()
 
 
 def _record_sampling(ctx: HookContext, verb: str, record: dict[str, Any]) -> None:
-    """Land one realized-draw record on the session and the note stream.
+    """Land one realized draw on the pending FireRecord and the note stream.
 
-    The structured dict rides ``run_ctx["sampling_records"]`` (session-time;
-    served by :func:`sampling_records`); the compact rendering is enqueued as
-    a ``ledger_notes`` entry so C03's ONE FireRecord builder lifts it into the
-    persisted ``FireRecord.determinism_note`` -- no parallel audit path.
+    The typed :class:`SamplingRecord` waits in ``run_state["sampling_draws"]`` until the
+    ONE FireRecord builder pops it into ``FireRecord.sampling``; its compact rendering is
+    a ``ledger_notes`` entry the same builder lifts into ``determinism_note``.
     """
 
-    ctx.run_ctx.setdefault("sampling_records", []).append(dict(record))
     draw = record.get("donor_ids", record.get("permutation"))
+    coordinate = record.get("logical_firing_coordinate")
+    ctx.run_state.setdefault("sampling_draws", []).append(
+        SamplingRecord(
+            verb=verb,
+            base_seed=record.get("base_seed"),
+            derived_seed=record.get("derived_seed"),
+            share_draw=record.get("share_draw"),
+            logical_firing_coordinate=(
+                tuple(coordinate) if isinstance(coordinate, (list, tuple)) else coordinate
+            ),
+            eligible_count=record.get("eligible_count"),
+            population_count=record.get("population_count"),
+            population_identity=record.get("population_identity"),
+            donor_group_id=record.get("donor_group_id"),
+            draw_indices=(
+                tuple(int(index) for index in draw) if isinstance(draw, (list, tuple)) else ()
+            ),
+            realized_draw_digest=record.get("realized_draw_digest"),
+        )
+    )
     draw_repr = repr(list(draw)[:16]) if isinstance(draw, (list, tuple)) else repr(draw)
     note = (
         f"sampling[{verb}] base_seed={record.get('base_seed')} "
@@ -340,8 +355,8 @@ def _record_sampling(ctx: HookContext, verb: str, record: dict[str, Any]) -> Non
         f"draw={draw_repr} draw_digest={record.get('realized_draw_digest')} "
         f"population={record.get('population_identity')}"
     )
-    ctx.run_ctx.setdefault("ledger_notes", []).append(note)
-    state_history = ctx.run_ctx.get("state_history")
+    ctx.run_state.setdefault("ledger_notes", []).append(note)
+    state_history = ctx.run_state.get("state_history")
     if isinstance(state_history, list):
         state_history.append(note)
 
@@ -350,21 +365,6 @@ def _draw_digest(indices: Sequence[int]) -> str:
     """Hash the realized index vector (cheap; never the tensor payload)."""
 
     return hashlib.sha256(",".join(str(i) for i in indices).encode()).hexdigest()[:16]
-
-
-def sampling_records(trace: Any) -> tuple[dict[str, Any], ...]:
-    """Return the session-time realized-draw records of a trace's last run.
-
-    Session-only by design: the persisted carriers are the FireRecord's
-    ``determinism_note`` (via the ONE builder's note lift) and the helper's
-    KEEP-persisted identity kwargs; the structured per-draw record family is
-    a declared C07-amendment follow-up, never smuggled through free kwargs.
-    """
-
-    run_ctx = getattr(trace, "last_run", None)
-    if not isinstance(run_ctx, dict):
-        return ()
-    return tuple(run_ctx.get("sampling_records", ()))
 
 
 # ----------------------------------------------------------------------
@@ -815,7 +815,7 @@ def plan_patch_helper(plan: SamplingPlan) -> Edit:
                     "realized_draw_digest": _draw_digest([member_index]),
                     "replacement_mode": "whole_event",
                     "donor_grad": "detached",
-                    "recomputation": bool(ctx.run_ctx.get("recomputation", False)),
+                    "recomputation": bool(ctx.run_state.get("recomputation", False)),
                 },
             )
             # External donors are detached snapshots by design (D37): target
@@ -829,7 +829,7 @@ def plan_patch_helper(plan: SamplingPlan) -> Edit:
         kwargs={"plan": "sampling_plan", **plan.identity_kwargs()},
         factory=factory,
         portability="opaque_audit",
-        batch_independent=True,
+        is_batch_independent=True,
         metadata={"stochastic": True, "seeded": True},
     )
     # Session-only handle for the D8 batch normalizer (object-identity
@@ -1000,7 +1000,7 @@ def permute_batch(*, seed: int | str, axis: int | None = None) -> Edit:
                 "realized_draw_digest": _draw_digest(indices),
                 "replacement_mode": "row_exchange",
                 "donor_grad": "graph_connected_permuted",
-                "recomputation": bool(ctx.run_ctx.get("recomputation", False)),
+                "recomputation": bool(ctx.run_state.get("recomputation", False)),
                 "axis": fire_axis,
                 "axis_proof": "explicit",
             }
@@ -1019,8 +1019,8 @@ def permute_batch(*, seed: int | str, axis: int | None = None) -> Edit:
         "permute_batch",
         kwargs={"seed": validated_seed, "axis": explicit_axis},
         factory=factory,
-        batch_independent=False,
-        compatible_with_append=False,
+        is_batch_independent=False,
+        is_compatible_with_append=False,
         metadata={
             "stochastic": True,
             "seeded": True,
@@ -1183,7 +1183,7 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
                     "realized_draw_digest": _draw_digest(donor_ids),
                     "replacement_mode": "per_row",
                     "donor_grad": "detached",
-                    "recomputation": bool(ctx.run_ctx.get("recomputation", False)),
+                    "recomputation": bool(ctx.run_state.get("recomputation", False)),
                     "axis": fire_axis,
                     "axis_proof": "explicit",
                 },
@@ -1205,8 +1205,8 @@ def resample_rows_from(  # noqa: PLR0913 -- spec'd public signature (edits memo 
         },
         factory=factory,
         portability="opaque_audit",
-        batch_independent=False,
-        compatible_with_append=False,
+        is_batch_independent=False,
+        is_compatible_with_append=False,
         metadata={
             "stochastic": True,
             "seeded": True,
@@ -1349,7 +1349,7 @@ def set_direction_mean(
                     "realized_draw_digest": None,
                     "replacement_mode": "direction_mean",
                     "donor_grad": "orthogonal_component_only",
-                    "recomputation": bool(ctx.run_ctx.get("recomputation", False)),
+                    "recomputation": bool(ctx.run_state.get("recomputation", False)),
                     "mean_coefficient": site_coef,
                 },
             )
@@ -1374,6 +1374,6 @@ def set_direction_mean(
         },
         factory=factory,
         portability="opaque_audit",
-        batch_independent=True,
+        is_batch_independent=True,
         metadata={"stochastic": False},
     )

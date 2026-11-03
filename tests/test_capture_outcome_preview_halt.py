@@ -36,7 +36,7 @@ def _halted_trace() -> tl.Trace:
     """Return a real halted trace carrying the structural halt fields."""
 
     trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=halt_on_relu)
-    assert trace.halted is True
+    assert trace.is_stopped is True
     return trace
 
 
@@ -54,8 +54,8 @@ def test_preview_stamp_settles_halted_when_trace_is_halted() -> None:
     # An attested stamp, not a structural derivation.
     assert outcome.is_derived is False
     assert outcome.is_partial is True
-    assert outcome.reason == trace.halt_reason
-    assert outcome.boundary_label == trace.halt_frontier
+    assert outcome.reason == trace.stop_reason
+    assert outcome.boundary_label == trace.graph.stop_frontier
     assert outcome.frontier_labels == tuple(trace.output_layers)
     assert outcome.num_committed_ops is not None
     # The stamp is the trace's settled outcome, in both homes.
@@ -67,7 +67,7 @@ def test_preview_stamp_still_settles_complete_when_not_halted() -> None:
     """Backends with no halt path keep the byte-identical COMPLETE arm."""
 
     trace = tl.trace(ThreeStageModel(), torch.ones(1, 3))
-    assert bool(getattr(trace, "halted", False)) is False
+    assert bool(getattr(trace, "is_stopped", False)) is False
     outcome = stamp_backend_finalized(trace)
     assert outcome.status is CaptureStatus.COMPLETE
     assert outcome.is_derived is False
@@ -90,7 +90,7 @@ def test_preview_halted_stamp_is_coherent_and_survives_save_load(tmp_path) -> No
     path = tmp_path / "preview_halted.tlspec"
     trace.save(str(path))
     loaded = tl.load(str(path))
-    assert loaded.halted is True
+    assert loaded.is_stopped is True
     assert loaded.outcome is not None
     assert loaded.outcome.status is CaptureStatus.STOPPED
     # N1: a non-degraded halted artifact re-saves.
@@ -109,14 +109,14 @@ def test_halt_capable_preview_backend_falls_through_to_the_single_stamp(backend:
     """The halt arm sets the structural fields BEFORE the one stamp.
 
     The fix is chokepoint-side, so what must not regress on the backend side
-    is exactly this: (1) the halt arm writes ``trace.halted`` (the fact the
+    is exactly this: (1) the halt arm writes ``trace.is_stopped`` (the fact the
     stamp reads), and (2) there is exactly ONE stamp call, reached by
     fall-through, with no separate early COMPLETE stamp on the halt arm.
     """
 
     source = (TORCHLENS_DIR / "backends" / backend / "backend.py").read_text(encoding="utf-8")
     assert "except StopSignal" in source, backend
-    assert re.search(r"trace\.halted\s*=\s*True", source), backend
+    assert re.search(r"trace\.is_stopped\s*=\s*True", source), backend
     stamp_lines = [
         index
         for index, line in enumerate(source.splitlines())
@@ -126,7 +126,7 @@ def test_halt_capable_preview_backend_falls_through_to_the_single_stamp(backend:
     halt_line = next(
         index
         for index, line in enumerate(source.splitlines())
-        if re.search(r"trace\.halted\s*=\s*True", line)
+        if re.search(r"trace\.is_stopped\s*=\s*True", line)
     )
     assert halt_line < stamp_lines[0], backend
 
@@ -141,7 +141,7 @@ def test_preview_stamp_reads_the_structural_halt_fields() -> None:
     source = (TORCHLENS_DIR / "_capture" / "outcome.py").read_text(encoding="utf-8")
     body = source.split("def stamp_backend_finalized(", 1)[1]
     body = body.split("\ndef ", 1)[0]
-    assert 'getattr(trace, "halted"' in body
+    assert 'getattr(trace, "is_stopped"' in body
     assert "CaptureStatus.STOPPED" in body
 
 
@@ -169,7 +169,7 @@ def test_mlx_halted_capture_settles_halted() -> None:
         backend="mlx",
         stop_after=tl.func("relu"),
     )
-    assert trace.halted is True
+    assert trace.is_stopped is True
     assert trace.outcome is not None
     assert trace.outcome.status is CaptureStatus.STOPPED
 
@@ -193,7 +193,7 @@ def test_paddle_halted_capture_settles_halted() -> None:
         backend="paddle",
         stop_after=tl.func("relu"),
     )
-    assert trace.halted is True
+    assert trace.is_stopped is True
     assert trace.outcome is not None
     assert trace.outcome.status is CaptureStatus.STOPPED
 
@@ -217,7 +217,7 @@ def test_preview_stamp_refuses_swallowed_halt_and_settles_failed() -> None:
     from torchlens.errors import StopSignalSwallowedError
 
     trace = tl.trace(ThreeStageModel(), torch.ones(1, 3))
-    assert bool(getattr(trace, "halted", False)) is False
+    assert bool(getattr(trace, "is_stopped", False)) is False
     trace.__dict__["_stop_requested"] = StopRequest(
         kind="halt",
         reason="relu_1_2",
@@ -240,8 +240,8 @@ def test_preview_stamp_consumes_latch_on_the_normal_halted_arm() -> None:
     trace = _halted_trace()
     trace.__dict__["_stop_requested"] = StopRequest(
         kind="halt",
-        reason=trace.halt_reason,
-        boundary_label=trace.halt_frontier,
+        reason=trace.stop_reason,
+        boundary_label=trace.graph.stop_frontier,
     )
     outcome = stamp_backend_finalized(trace)
     assert outcome.status is CaptureStatus.STOPPED

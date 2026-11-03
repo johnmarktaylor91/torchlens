@@ -11,8 +11,9 @@ from torchlens.backends.registry import BackendUnsupportedError
 
 from .._capture_state_helpers import unwrap_compiled_model
 from .._deprecations import MISSING
-from .._errors import ArgumentTypeError, KeywordConflictError
+from .._errors import ArgumentTypeError
 from .._input_coerce import _coerce_input_args
+from .._output_slot import returned as output_returned
 from .._robustness import check_model_and_input_variants
 from ..backends.registry import (
     TORCH_BACKEND_NAME,
@@ -100,10 +101,10 @@ def _unfold_record_options(
                 argument="capture",
             )
     for name in _RECORDING_DOOR_FIELDS:
-        explicit = recording is not None and recording.is_field_explicit(name)
+        explicit = isinstance(recording, RecordingOptions) and recording._is_field_explicit(name)  # noqa: SLF001
         flat[name] = getattr(recording, name) if explicit else MISSING
     for name in _CAPTURE_DOOR_FIELDS:
-        explicit = capture is not None and capture.is_field_explicit(name)
+        explicit = isinstance(capture, CaptureOptions) and capture._is_field_explicit(name)  # noqa: SLF001
         flat[name] = getattr(capture, name) if explicit else MISSING
     flat["backward_ready"] = bool(capture.backward_ready) if capture is not None else False
     # The door's former flat defaults, resolved here so the generation path
@@ -112,6 +113,42 @@ def _unfold_record_options(
         if flat[name] is MISSING:
             flat[name] = default
     return flat
+
+
+def _require_torch_fastlog_backend(backend: Any) -> None:
+    """Refuse unless the resolved backend binds the torch one-shot Recorder as fastlog."""
+
+    # The capability table gates this surface for EVERY resolution, including
+    # the default torch path: flipping torch's fastlog flag False must refuse
+    # instead of silently running the Recorder anyway.
+    backend_spec = get_backend_spec(str(backend) if backend is not None else "torch")
+    if not backend_spec.capabilities.fastlog:
+        from ..backends._backend_protocol import refusal_code_for_capability
+
+        if str(backend_spec.name) == TORCH_BACKEND_NAME:
+            raise BackendUnsupportedError(
+                "tl.record() refuses: the resolved 'torch' backend declares "
+                "capabilities.fastlog=False, and the registered capability "
+                "table is the load-bearing gate for this surface.",
+                code=refusal_code_for_capability("fastlog"),
+                backend=TORCH_BACKEND_NAME,
+            )
+        raise BackendUnsupportedError(
+            "tl.record() is torch-only in backend v1. Use tl.trace(..., backend='jax') "
+            "for the JAX full-save preview.",
+            code=refusal_code_for_capability("fastlog"),
+            backend=str(backend_spec.name),
+        )
+    # The flag alone never opens the gate: the spec must bind the fastlog
+    # implementing surface, and this entry only runs the torch Recorder —
+    # a foreign implementation cannot be silently substituted with it.
+    fastlog_implementation = require_capability_implementation(backend_spec, "fastlog")
+    if fastlog_implementation is not Recorder:
+        raise BackendUnsupportedError(
+            f"tl.record() cannot dispatch backend {backend_spec.name!r}: its "
+            "registered fastlog implementation is not the torch one-shot "
+            "Recorder, and backend v1 record() has no non-torch dispatch path."
+        )
 
 
 def record(
@@ -128,8 +165,7 @@ def record(
     narrate: Any | None = None,
     backend: BackendName | None = None,
     generate_kwargs: Mapping[str, Any] | None = None,
-    return_output: bool = False,
-) -> Recording | GenerationRecording | tuple[Any, Recording | GenerationRecording]:
+) -> Recording | GenerationRecording:
     """Record one model forward pass with capture predicates.
 
     ``record(save=...)`` is the one predicate spelling and matches
@@ -159,9 +195,10 @@ def record(
         ``on_predicate_error``, ``on_forward_error``, ``default_grad`` and
         ``postprocess`` (meanings below).
     on_forward_error:
-        Controls failed-forward handling. ``"raise"`` preserves the historical
-        behavior, ``"attach_partial"`` attaches ``exc.partial_recording`` and
-        re-raises, and ``"return_partial"`` returns a failed partial Recording.
+        Controls failed-forward handling: ``"raise"`` raises the capture's
+        ``TraceCaptureError``, ``"attach_partial"`` also attaches the failed partial
+        Recording to it as ``partial_recording``, ``"return_partial"`` returns it,
+        and its ``output`` refuses with ``output_forward_failed``.
         With ``return_output=True``, the returned output is ``None`` because no
         valid model output exists on failure.
     intervene:
@@ -207,43 +244,18 @@ def record(
         position of every forward, the token sequences, the settings that
         decide the tokens). Beam search, more than one return sequence, batched
         prompts, assisted decoding, encoder-decoder models, ``use_cache=False``,
-        ``intervene=``, ``halt=`` and partial forward-error modes refuse with
+        ``intervene=``, ``stop_after=`` and partial forward-error modes refuse with
         code ``record_generation_unsupported``.
-    return_output:
-        Whether to return ``(model_output, recording)``; with
-        ``generate_kwargs`` the output is ``generate()``'s own return value.
 
     Returns
     -------
-    Recording | tuple[Any, Recording]
-        Fastlog recording, optionally with the model output.
+    Recording | GenerationRecording
+        The recording (a ``GenerationRecording`` with ``generate_kwargs``). Its
+        ``output`` is the model's return value (``generate()``'s own return value
+        with ``generate_kwargs``), held in memory only.
     """
 
-    # The capability table gates this surface for EVERY resolution, including
-    # the default torch path: flipping torch's fastlog flag False must refuse
-    # instead of silently running the Recorder anyway.
-    backend_spec = get_backend_spec(str(backend) if backend is not None else "torch")
-    if not backend_spec.capabilities.fastlog:
-        if str(backend_spec.name) == TORCH_BACKEND_NAME:
-            raise BackendUnsupportedError(
-                "tl.record() refuses: the resolved 'torch' backend declares "
-                "capabilities.fastlog=False, and the registered capability "
-                "table is the load-bearing gate for this surface."
-            )
-        raise BackendUnsupportedError(
-            "tl.record() is torch-only in backend v1. Use tl.trace(..., backend='jax') "
-            "for the JAX full-save preview."
-        )
-    # The flag alone never opens the gate: the spec must bind the fastlog
-    # implementing surface, and this entry only runs the torch Recorder —
-    # a foreign implementation cannot be silently substituted with it.
-    fastlog_implementation = require_capability_implementation(backend_spec, "fastlog")
-    if fastlog_implementation is not Recorder:
-        raise BackendUnsupportedError(
-            f"tl.record() cannot dispatch backend {backend_spec.name!r}: its "
-            "registered fastlog implementation is not the torch one-shot "
-            "Recorder, and backend v1 record() has no non-torch dispatch path."
-        )
+    _require_torch_fastlog_backend(backend)
     model = unwrap_compiled_model(model)
     flat = _unfold_record_options(capture, recording)
     default_op = flat["default_op"]
@@ -256,7 +268,6 @@ def record(
     max_predicate_failures = flat["max_predicate_failures"]
     on_predicate_error = flat["on_predicate_error"]
     on_forward_error = flat["on_forward_error"]
-    streaming = None
     seed = flat["seed"]
     activation_transform = flat["activation_transform"]
     save_raw_activations = flat["save_raw_activations"]
@@ -267,12 +278,6 @@ def record(
     backward_ready = flat["backward_ready"]
     detach_saved_activations = flat["detach_saved_activations"]
     postprocess = flat["postprocess"]
-    if storage is not None and streaming is not None:
-        raise KeywordConflictError(
-            "Do not pass both `storage` and `streaming`",
-            code="storage_argument_conflict",
-            remedy="prefer storage=, or remove one of the two arguments",
-        )
     validate_postprocess(postprocess)
     input_args = _coerce_input_args(model, input_args)
     # Fail fast on tensor variants the logging pipeline cannot handle (meta tensors have no
@@ -300,7 +305,6 @@ def record(
                 "on_predicate_error": on_predicate_error,
                 "on_forward_error": on_forward_error,
                 "storage": storage,
-                "streaming": streaming,
                 "seed": seed,
                 "activation_transform": activation_transform,
                 "save_raw_activations": save_raw_activations,
@@ -313,10 +317,8 @@ def record(
                 "detach_saved_activations": detach_saved_activations,
             },
         )
-        generation = enrich_generation(generation, postprocess)
-        if return_output:
-            return output, generation
-        return generation
+        object.__setattr__(generation.recording, "_output", output_returned(output))
+        return enrich_generation(generation, postprocess)
     with Recorder(
         model,
         save=save,
@@ -332,7 +334,6 @@ def record(
         on_predicate_error=on_predicate_error,
         on_forward_error=on_forward_error,
         storage=storage,
-        streaming=streaming,
         seed=seed,
         activation_transform=activation_transform,
         save_raw_activations=save_raw_activations,
@@ -344,10 +345,8 @@ def record(
         narrate=narrate,
         detach_saved_activations=detach_saved_activations,
     ) as recorder:
-        output = recorder(input_args, input_kwargs)
+        recorder(input_args, input_kwargs)
     result = recorder.recording
     if postprocess != "none":
         result = result.enrich(postprocess)
-    if return_output:
-        return output, result
     return result

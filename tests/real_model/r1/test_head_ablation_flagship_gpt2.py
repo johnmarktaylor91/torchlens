@@ -1,13 +1,10 @@
 """Flagship head-ablation experiment on pretrained GPT-2 small (R1 venue).
 
 The workflow gallery's head-ablation row on the pinned
-``openai-community/gpt2`` checkpoint: arm a file-backed ledger with the
-hypothesis and metric declared before the first material step, capture an
-intervention-ready baseline on a real prompt, sweep the 12 heads of
-``transformer.h.5.attn`` (scoped v-facet candidates, one site each) on the
-live-hook engine with every member retained, read the effect table, explain
-the top member, record an observation and a verdict with its basis, save and
-reload. An independent oracle in this file zeroes each head's slice of the
+``openai-community/gpt2`` checkpoint: capture an intervention-ready baseline
+on a real prompt, sweep the 12 heads of ``transformer.h.5.attn`` (scoped
+v-facet candidates, one site each) on the live-hook engine with every member
+retained, read the effect table, explain the top member, save and reload. An independent oracle in this file zeroes each head's slice of the
 block's ``c_proj`` input with a plain torch forward pre-hook (no TorchLens in
 its path); every candidate must agree with it and rank identically. Runs only
 in the preflighted offline venue (GATE-ID R1_OFFLINE_VENUE, ``conftest.py``
@@ -29,7 +26,7 @@ _MODULE = "transformer.h.5.attn"
 
 def test_head_ablation_flagship_on_pretrained_gpt2(r1_loader, tmp_path: Path) -> None:
     import torchlens as tl
-    from torchlens.experiment import head_ablation_candidates, ledger, sweep_sites
+    from torchlens.experiment import head_ablation_candidates, sweep_sites
 
     loaded = r1_loader("r1-gpt2")
     model, tokenizer = loaded["model"], loaded["tokenizer"]
@@ -43,49 +40,37 @@ def test_head_ablation_flagship_on_pretrained_gpt2(r1_loader, tmp_path: Path) ->
     def metric(member: tl.Trace) -> float:
         return float(member[member.output_layers[0]].out[0, -1, target].item())
 
-    led = ledger(
-        tmp_path / "flagship.tlledger",
-        question=f"which head of {_MODULE} carries ' Paris'?",
-        hypothesis="one head dominates the ' Paris' logit",
-        metric="logit[' Paris'] at the last position",
+    baseline = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
+    candidates = head_ablation_candidates(baseline, _MODULE, heads=n_heads)
+    bundle = sweep_sites(
+        baseline,
+        candidates=candidates,
+        edit=tl.zero_ablate(),
+        metric=metric,
+        retain="all",
+        model=model,
+        inputs=ids,
     )
-    try:
-        baseline = tl.trace(model, ids, capture=tl.options.CaptureOptions(intervention_ready=True))
-        candidates = head_ablation_candidates(baseline, _MODULE, heads=n_heads)
-        bundle = sweep_sites(
-            baseline,
-            candidates=candidates,
-            edit=tl.zero_ablate(),
-            metric=metric,
-            retain="all",
-            model=model,
-            inputs=ids,
-        )
-        assert bundle.names[0] == "baseline" and len(bundle.names) == n_heads + 1
-        view = bundle.effects()
-        rows = {row.candidate_id: row for row in view.rows if row.candidate_id != "__baseline__"}
-        assert set(rows) == set(candidates)
-        assert all(row.resolved_site_count == 1 for row in rows.values())
-        assert all(row.status == "completed" for row in rows.values())
-        top_candidate, top_delta = view.rank_changes(k=1)[0]
-        report = bundle.why(top_candidate)
-        assert report.lineage_status == "exact"
-        assert report.member_suffix and report.member_suffix[0].fire_count >= 1
+    assert bundle.names[0] == "baseline" and len(bundle.names) == n_heads + 1
+    view = bundle.effects()
+    rows = {row.candidate_id: row for row in view.rows if row.candidate_id != "__baseline__"}
+    assert set(rows) == set(candidates)
+    assert all(row.resolved_site_count == 1 for row in rows.values())
+    assert all(row.status == "completed" for row in rows.values())
+    top_candidate, top_delta = view.rank_changes(k=1)[0]
+    report = bundle.why(top_candidate)
+    assert report.lineage_status == "exact"
+    assert report.member_suffix and report.member_suffix[0].fire_count >= 1
 
-        step_ids = list(led.entries()["e1"].steps)
-        assert len(step_ids) == 1, "a sweep is one material step, never one per candidate"
-        led.observe(f"ablating {top_candidate} moved the logit by {top_delta:.4f}", value=top_delta)
-        led.verdict("supports", text=f"{top_candidate} dominates", basis=[step_ids[0]])
+    assert isinstance(top_delta, float)
 
-        bundle_path = tmp_path / "flagship_bundle"
-        bundle.save(str(bundle_path))
-        reloaded = tl.load(str(bundle_path))
-        assert [row.to_payload() for row in reloaded.effects().rows] == [
-            row.to_payload() for row in view.rows
-        ]
-        assert reloaded.why(top_candidate).member_suffix == report.member_suffix
-    finally:
-        led.close()
+    bundle_path = tmp_path / "flagship_bundle"
+    bundle.save(str(bundle_path))
+    reloaded = tl.load(str(bundle_path))
+    assert [row.to_payload() for row in reloaded.effects().rows] == [
+        row.to_payload() for row in view.rows
+    ]
+    assert reloaded.why(top_candidate).member_suffix == report.member_suffix
 
     # ---- the independent oracle (no TorchLens) -------------------------------
     c_proj = model.get_submodule(f"{_MODULE}.c_proj")

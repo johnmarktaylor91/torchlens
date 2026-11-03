@@ -387,8 +387,8 @@ def _run_key(
 def _cache_root(cache_dir: str | Path | None) -> Path:
     """Create (private to this user) and return the aggregate cache directory."""
 
+    from .._capture.prepare.cache import _harden_capture_cache_dir
     from .._capture_state_helpers import _capture_cache_dir
-    from .._user_funcs import _harden_capture_cache_dir
 
     base = _capture_cache_dir(cache_dir)
     created = not base.exists()

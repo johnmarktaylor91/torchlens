@@ -23,7 +23,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens._selection_subspace import BasisProvenance
+from torchlens._selection.subspace import BasisProvenance
 from torchlens.intervention import Direction, _directions, fit_direction
 
 _HIDDEN = 8
@@ -59,11 +59,11 @@ def _ids(rows: int, seed: int) -> torch.Tensor:
 def _trace(model: nn.Module, ids: torch.Tensor, mask: torch.Tensor | None = None) -> Any:
     """Trace with every layer saved, passing the mask as an input when given."""
 
-    capture = tl.options.CaptureOptions(layers_to_save="all")
+    capture = tl.options.CaptureOptions()
     if mask is None:
-        return tl.trace(model, ids, capture=capture)
+        return tl.trace(model, ids, capture=capture, save="all")
     kwargs = {"input_ids": ids, "attention_mask": mask}
-    return tl.trace(model, (), input_kwargs=kwargs, capture=capture)
+    return tl.trace(model, (), input_kwargs=kwargs, capture=capture, save="all")
 
 
 def _hooked_rows(
@@ -356,7 +356,7 @@ def test_reader_refusals(stack: dict[str, Any]) -> None:
     unsaved = tl.trace(
         stack["model"],
         stack["pos_ids"],
-        capture=tl.options.CaptureOptions(layers_to_save=["head"]),
+        save=["head"],
     )
     try:
         assert _code(lambda: fit_direction(unsaved, stack["neg"], _SITE)) == (

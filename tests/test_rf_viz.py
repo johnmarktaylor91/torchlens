@@ -213,12 +213,11 @@ def test_node_spec_draws_ancestor_cone_with_tooltips(tmp_path: Any) -> None:
             return context.window(kernel=(3, 3), stride=(1, 1), padding=(0, 0), dilation=(1, 1))
 
         trace = tl.trace(nn.Conv2d(1, 1, 3), torch.ones(1, 1, 8, 8))
-        target = next(op for op in trace.layer_list if op.func_name == "conv2d")
+        target = next(op for op in trace._layer_list if op.func_name == "conv2d")
         output_path = tmp_path / "rf_cone.svg"
         trace.draw(
             node_spec_fn=node_spec(target),
             file_format="svg",
-            vis_save_only=True,
             path=str(output_path),
         )
         svg = output_path.read_text(encoding="utf-8")

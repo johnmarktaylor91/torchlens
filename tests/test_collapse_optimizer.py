@@ -489,7 +489,7 @@ def _add_unambiguous_accessor_fallback_collision(trace: tl.Trace) -> str:
         The colliding relationship label.
     """
 
-    input_op = next(op for op in trace.layer_list if op.is_input)
+    input_op = next(op for op in trace._layer_list if op.is_input)
     collision_op = next(op for op in trace.ops if not op.is_input and not op.is_output)
     collision_op._label_raw = input_op.layer_label
     return str(input_op.layer_label)
@@ -1010,7 +1010,7 @@ def test_float_collapse_level_validation_and_endpoints() -> None:
         with pytest.raises(ValueError, match=r"\[0\.0, 1\.0\]"):
             trace.collapse_plan(mode=-0.1)
         with pytest.raises(ValueError, match=r"\[0\.0, 1\.0\]"):
-            trace.draw(collapse=1.1, vis_save_only=True)
+            trace.draw(collapse=1.1)
 
         assert trace.collapse_plan(mode=0.0) == none_plan
         assert trace.collapse_plan(mode=1.0) == max_result.plan
@@ -1519,9 +1519,8 @@ def test_max_salience_floor_fold_representative_uses_single_instance_stats(
         source = str(
             trace.draw(
                 path=str(tmp_path / "max_floor_rep_stats"),
-                vis_save_only=True,
                 file_format="svg",
-                vis_node_placement="dot",
+                layout="dot",
                 collapse="max",
             )
         )
@@ -1717,10 +1716,9 @@ def test_collapse_optimizer_ops_ceiling_declines_disclosed(
     with pytest.warns(UserWarning, match="skipping smart collapse"):
         dot = fresh.draw(
             collapse="max",
-            vis_save_only=True,
             file_format="dot",
             order_siblings=False,
-        )
+        ).dot
     assert dot  # uncollapsed render still ships
 
     with warnings_module.catch_warnings():
@@ -1747,7 +1745,7 @@ def test_collapse_ceiling_warning_category_and_attribution(
     R19 (hunt-6): the decline advisory was a bare ``UserWarning`` with
     ``stacklevel=2``, which (a) could not be filtered/promoted via the
     ``TorchLensWarning`` taxonomy and (b) blamed an internal torchlens frame
-    (``_trace_stats.py``) instead of the user's ``draw()`` call site.
+    (the ``Trace`` summary method) instead of the user's ``draw()`` call site.
     """
 
     import warnings as warnings_module
@@ -1763,7 +1761,6 @@ def test_collapse_ceiling_warning_category_and_attribution(
         warnings_module.simplefilter("always")
         fresh.draw(
             collapse="max",
-            vis_save_only=True,
             file_format="dot",
             order_siblings=False,
         )

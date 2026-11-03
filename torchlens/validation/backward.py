@@ -6,12 +6,13 @@ import random
 import warnings
 from collections import OrderedDict
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, cast
 
 import torch
 from torch import nn
 
 from .._capture_state_helpers import unwrap_compiled_model
+from .._errors import CaptureNotActiveError, InvalidArgumentError
 from .._input_coerce import _coerce_input_args
 from .._input_walk import INPUT_TREE_MAX_DEPTH, raise_input_tree_depth_refusal
 from .._robustness import check_model_and_input_variants
@@ -19,14 +20,30 @@ from .._utils.arg_handling import normalize_input_args
 from .._utils.display import warn_parallel
 from .._utils.rng import set_random_seed
 from .._utils.tensor_utils import param_grad_tolerances_for_dtype
-from ..errors import TorchLensWarning
+from ..errors import TorchLensWarning as TorchLensWarning
 from ..intervention.errors import AppendStateValidationWarning
 from ..options import CaptureOptions
+from ._backward_state import (
+    _is_appended_trace as _is_appended_trace,
+    _leaf_parameter_flags as _leaf_parameter_flags,
+    _parameter_grad_failure_fields as _parameter_grad_failure_fields,
+    _refuse_non_leaf_parameters as _refuse_non_leaf_parameters,
+    _restore_leaf_parameters as _restore_leaf_parameters,
+    _restore_training_mode as _restore_training_mode,
+    _stock_param_grad_degeneracy as _stock_param_grad_degeneracy,
+    _warn_if_no_module_output_evidence as _warn_if_no_module_output_evidence,
+)
 from ._live_model_state import (
     held_parameter_grads,
     load_state_dict_restore,
     reattach_parameter_grads,
     restore_state_dict_if_changed,
+)
+from .diagnostics import (
+    CHECK_BACKWARD,
+    ValidationFailure,
+    record_validation_failure,
+    reset_validation_failure,
 )
 
 if TYPE_CHECKING:
@@ -72,7 +89,6 @@ def _sum_tensors(
         return value.sum()
     if not isinstance(value, (dict, list, tuple)):
         raise ValueError("validate_backward_pass requires the model to return at least one tensor.")
-    from .._errors import InvalidArgumentError
     from .._ir.container_registry import OUTPUT_TREE_MAX_DEPTH
 
     if _depth >= OUTPUT_TREE_MAX_DEPTH:
@@ -178,61 +194,6 @@ def _clone_inputs_with_grad(
     return copied
 
 
-def _stock_param_grad_degeneracy(
-    expected_param_grads: dict[str, torch.Tensor],
-) -> str | None:
-    """Classify a stock parameter-gradient census with zero detection power.
-
-    Parameters
-    ----------
-    expected_param_grads:
-        Non-empty stock autograd gradients keyed by parameter name.
-
-    Returns
-    -------
-    str | None
-        ``"all-nonfinite"`` when EVERY element of EVERY gradient is NaN/Inf
-        (vacuous under ``equal_nan=True``), ``"all-zero"`` when every element
-        is exactly zero (zero-filled buffers are indistinguishable from a
-        correct capture), ``"mixed-nonfinite-zero"`` when every element is
-        NaN/Inf or exactly zero but neither class alone covers the census,
-        ``"element-free"`` when no gradient carries any element, and ``None``
-        for a census with real comparison power. The rule is exactly the one
-        the ``equal_nan=True`` comparison implies: a FINITE NONZERO element
-        anywhere restores detection power and returns ``None``; every element
-        that is NaN/Inf (vacuous) or zero (indistinguishable from a
-        zero-filled buffer) contributes none.
-    """
-
-    saw_element = False
-    saw_finite = False
-    saw_nonzero = False
-    for grad in expected_param_grads.values():
-        if grad.numel() == 0:
-            continue
-        saw_element = True
-        finite = torch.isfinite(grad)
-        # The decisive per-element predicate: only an element that is BOTH
-        # finite AND nonzero gives the comparison detection power. Tracking
-        # the two properties as independent whole-census totals (the previous
-        # shape) was defeated by a MIXED census -- one all-NaN grad killed the
-        # all-zero arm, one all-zero grad killed the all-nonfinite arm, and a
-        # census with zero finite-nonzero elements passed as "real power".
-        if bool((finite & grad.ne(0)).any()):
-            return None
-        if bool(finite.any()):
-            saw_finite = True
-        if bool(grad.ne(0).any()):
-            saw_nonzero = True
-    if not saw_element:
-        return "element-free"
-    if not saw_finite:
-        return "all-nonfinite"
-    if not saw_nonzero:
-        return "all-zero"
-    return "mixed-nonfinite-zero"
-
-
 def _param_grads(model: nn.Module) -> dict[str, torch.Tensor]:
     """Collect detached parameter grads by name.
 
@@ -255,90 +216,6 @@ def _param_grads(model: nn.Module) -> dict[str, torch.Tensor]:
     }
 
 
-def _leaf_parameter_flags(model: nn.Module) -> tuple[tuple[nn.Parameter, bool], ...]:
-    """Record each leaf Parameter with its ``requires_grad`` before a validation pass.
-
-    Parameters
-    ----------
-    model:
-        Model about to run the stock and candidate passes.
-
-    Returns
-    -------
-    tuple[tuple[nn.Parameter, bool], ...]
-        Every Parameter that is an autograd leaf now, with its current flag.
-    """
-
-    return tuple(
-        (parameter, parameter.requires_grad)
-        for parameter in model.parameters()
-        if parameter.is_leaf
-    )
-
-
-def _restore_leaf_parameters(leaf_flags: tuple[tuple[nn.Parameter, bool], ...]) -> None:
-    """Make Parameters that a pass turned into non-leaves leaves again, in place.
-
-    A forward that mutates a frozen Parameter in place with a grad-requiring
-    operand turns it into a non-leaf whose ``grad_fn`` chains into that pass's
-    graph, exactly as eager does. ``load_state_dict`` restores its VALUE but not
-    that history, so the next pass on the same object would differentiate
-    through the stale graph too (a second eager forward on that object does the
-    same) and its gradients could not equal a fresh model's. Validation's state
-    contract is the pre-call model, so the history is cut (``detach_`` keeps the
-    object and its storage) and the recorded flag is put back. (A Parameter that
-    is already a non-leaf before validation is refused up front, so it never
-    reaches here.)
-
-    Parameters
-    ----------
-    leaf_flags:
-        Output of :func:`_leaf_parameter_flags` taken before the passes.
-    """
-
-    for parameter, requires_grad in leaf_flags:
-        if parameter.is_leaf:
-            continue
-        parameter.detach_()
-        parameter.requires_grad_(requires_grad)
-
-
-def _refuse_non_leaf_parameters(model: nn.Module) -> bool:
-    """Warn and report True when a Parameter is already a non-leaf before validation.
-
-    Parameters
-    ----------
-    model:
-        Model about to be validated.
-
-    Returns
-    -------
-    bool
-        True when validation must return False: some Parameter carries the
-        autograd history of an earlier forward, so no stock pass on this object
-        describes the model the caller holds.
-    """
-
-    non_leaf_names = [name for name, parameter in model.named_parameters() if not parameter.is_leaf]
-    if not non_leaf_names:
-        return False
-    warnings.warn(
-        TorchLensWarning(
-            "validate_backward_pass cannot compare gradients: Parameter(s) "
-            f"{non_leaf_names[:3]} are not autograd leaves before validation (an "
-            "earlier forward mutated them in place with a grad-requiring operand, "
-            "as eager allows). Their gradient history chains into that earlier "
-            "pass, so stock and captured gradients would not describe the same "
-            "model; returning False. Remedy: validate a fresh copy of the model "
-            "instead",
-            code="backward_validation_non_leaf_parameter",
-            non_leaf_parameters=list(non_leaf_names),
-        ),
-        stacklevel=3,
-    )
-    return True
-
-
 def _clone_state_dict_with_metadata(model: nn.Module) -> OrderedDict[str, torch.Tensor]:
     """Clone a module ``state_dict`` while preserving PyTorch metadata.
 
@@ -353,7 +230,7 @@ def _clone_state_dict_with_metadata(model: nn.Module) -> OrderedDict[str, torch.
         Detached tensor clones with PyTorch ``state_dict`` metadata preserved.
     """
 
-    from .._user_funcs import _clone_state_dict_with_metadata as clone_state_dict
+    from .._capture_state_helpers import _clone_state_dict_with_metadata as clone_state_dict
 
     return clone_state_dict(model)
 
@@ -374,7 +251,7 @@ def _move_tensors_to_device(obj: Any, device: torch.device | str) -> Any:
         Object with all tensors moved to ``device``.
     """
 
-    from .._user_funcs import _move_tensors_to_device as move_tensors
+    from .._capture_state_helpers import _move_tensors_to_device as move_tensors
 
     return move_tensors(obj, device)
 
@@ -410,20 +287,6 @@ def _prepare_inputs_for_backward(
     )
 
 
-def _restore_training_mode(model: nn.Module, training: bool) -> None:
-    """Restore a module's train/eval flag.
-
-    Parameters
-    ----------
-    model:
-        Model whose mode should be restored.
-    training:
-        Original ``model.training`` value.
-    """
-
-    model.train(training)
-
-
 def _reconstruct_candidate_output_for_loss(trace: Any) -> Any:
     """Rebuild the candidate model output passed to a loss function.
 
@@ -456,21 +319,77 @@ def _reconstruct_candidate_output_for_loss(trace: Any) -> Any:
         return output_layers
 
 
-def _is_appended_trace(value: Any) -> bool:
-    """Return whether a value is an appended Trace-like object.
+def _record_backward_failure(
+    trace: Any,
+    *,
+    reason: str,
+    message: str,
+    op_label: str | None = None,
+    **fields: Any,
+) -> None:
+    """Record why ``validate_backward_pass`` is about to return False.
 
-    Parameters
-    ----------
-    value:
-        Object passed to the backward validator.
-
-    Returns
-    -------
-    bool
-        True only for objects carrying the appended Trace state marker.
+    One structured ``ValidationFailure`` under ``CHECK_BACKWARD`` with the
+    refusal or mismatch class in ``extra["reason"]``, so a False backward verdict
+    is never bare: ``last_validation_failure()`` names it like a forward one.
     """
 
-    return bool(getattr(value, "is_appended", False))
+    record_validation_failure(
+        trace,
+        ValidationFailure(
+            check_name=CHECK_BACKWARD,
+            op_label=op_label,
+            message=message,
+            extra={"reason": reason},
+            **fields,
+        ),
+    )
+
+
+def _record_module_output_grad_failure(trace: Any, layer_report: LayerGradReport) -> None:
+    """Record a failed module-output gradient report as the backward failure."""
+
+    gap_buckets = (
+        "mismatched",
+        "skipped_no_grad",
+        "unresolved_output_label",
+        "uncaptured_module_output",
+        "missing_module_call",
+    )
+    first_gap = next(
+        (
+            (label, bucket)
+            for label, bucket in layer_report.coverage.items()
+            if bucket in gap_buckets
+        ),
+        None,
+    )
+    if first_gap is None and not layer_report.covered_count:
+        _record_backward_failure(
+            trace,
+            reason="no_module_output_evidence",
+            message="nothing was compared: no module output carried a gradient on both "
+            f"sides ({layer_report.compared_no_grad_count} output(s) had none in stock or "
+            f"capture; the other {len(layer_report.coverage) - layer_report.compared_no_grad_count}"
+            " module call(s) are proven exclusions)",
+        )
+        return
+    label, bucket = first_gap if first_gap is not None else (None, "unexpected")
+    _record_backward_failure(
+        trace,
+        reason="module_output_grads",
+        op_label=label,
+        message=f"module-output gradient check failed: {bucket}"
+        + (f" at {label}" if label is not None else "")
+        + f" ({layer_report.mismatched_count} mismatched, "
+        f"{layer_report.skipped_no_grad_count} without a captured gradient, "
+        f"{layer_report.uncaptured_module_output_count} uncaptured module outputs, "
+        f"{layer_report.missing_module_call_count} missing module calls, "
+        f"{layer_report.unresolved_output_label_count} unresolved labels, "
+        f"{layer_report.unexpected_count} unexpected)",
+        max_abs_diff=layer_report.max_abs_diffs.get(label) if label is not None else None,
+        max_rel_diff=layer_report.max_rel_diffs.get(label) if label is not None else None,
+    )
 
 
 def _warn_and_skip_appended_trace_validation(trace: Any) -> bool:
@@ -498,45 +417,123 @@ def _warn_and_skip_appended_trace_validation(trace: Any) -> bool:
     return False
 
 
-def _warn_if_no_module_output_evidence(layer_report: LayerGradReport) -> None:
-    """Disclose a module-output check that failed only for lack of evidence.
+class _BackwardModelState(NamedTuple):
+    """Model state taken before the stock and candidate passes and restored after them."""
 
-    The root module call is excluded by design (its output gradient is the
-    loss gradient itself), so a model whose forward calls no child module has
-    zero eligible module outputs. The exact acceptance rule then fails closed
-    on ``covered_count > 0`` with no gap or mismatch recorded; without this
-    warning that unverifiable verdict reads as a capture failure.
+    state_dict: OrderedDict[str, torch.Tensor]
+    leaf_flags: tuple[tuple[nn.Parameter, bool], ...]
+    held_grads: tuple[tuple[nn.Parameter, Any], ...]
+    original_training: bool
 
-    Parameters
-    ----------
-    layer_report:
-        Failed module-output gradient report.
+
+def _snapshot_backward_model_state(model: nn.Module) -> _BackwardModelState:
+    """Snapshot model values, parameter leaf flags, held gradients and training mode."""
+    state_dict = _clone_state_dict_with_metadata(model)
+    leaf_flags = _leaf_parameter_flags(model)
+    # The passes reset .grad; the caller's accumulated grads are reattached by
+    # reference at the end, never written into.
+    held_grads = held_parameter_grads(model)
+    return _BackwardModelState(state_dict, leaf_flags, held_grads, model.training)
+
+
+def _restore_backward_model_state(model: nn.Module, state: _BackwardModelState) -> None:
+    """Restore only what a pass changed: values, leaf flags and training mode."""
+    # An unconditional in-place restore moves every tensor's version counter
+    # and breaks a graph the caller holds across validation.
+    restore_state_dict_if_changed(model, state.state_dict, load_state_dict_restore)
+    _restore_leaf_parameters(state.leaf_flags)
+    _restore_training_mode(model, state.original_training)
+
+
+def _run_stock_backward(
+    model: nn.Module,
+    stock_call: tuple[Any, dict[str, Any]],
+    loss_fn: Callable[[Any], torch.Tensor],
+    seed: int,
+    layer_grad_snapshot: OrderedDict[str, torch.Tensor] | None,
+) -> tuple[Any, Any, Any]:
+    """Compute pristine stock gradients and optional module-output evidence.
+
+    ``layer_grad_snapshot`` is the state-dict snapshot the module-output evidence
+    pass restores from; ``None`` runs a plain stock backward without that evidence.
     """
+    from ._pristine import pristine_torch_oracle
 
-    failure_counts = (
-        layer_report.mismatched_count,
-        layer_report.skipped_no_grad_count,
-        layer_report.unresolved_output_label_count,
-        layer_report.uncaptured_module_output_count,
-        layer_report.missing_module_call_count,
-        layer_report.unexpected_count,
+    stock_inputs, stock_kwargs = stock_call
+    stock_module_grads = None
+    stock_identity_addresses = None
+    stock_reached_keys = None
+    # R75-1 sibling site: the "stock autograd" reference pass must run on
+    # PRISTINE torch. In a wrapped process it used to run through the
+    # installed pass-through wrapper shells -- the same closures the
+    # candidate capture observes through -- so a wrapper-layer numeric
+    # distortion corrupted stock and captured gradients IDENTICALLY and
+    # the comparison passed vacuously. Refuse (fail-closed) if the
+    # wrappers cannot be removed because a capture is active.
+    with pristine_torch_oracle():
+        if layer_grad_snapshot is not None:
+            from ._stock_layer_grads import _stock_layer_grads
+
+            (
+                stock_module_grads,
+                stock_identity_addresses,
+                stock_reached_keys,
+            ) = _stock_layer_grads(
+                model,
+                stock_call,
+                loss_fn=loss_fn,
+                seed=seed,
+                state_dict_snapshot=layer_grad_snapshot,
+            )
+        else:
+            stock_loss = loss_fn(model(*stock_inputs, **stock_kwargs))
+            stock_loss.backward()
+    return stock_module_grads, stock_identity_addresses, stock_reached_keys
+
+
+def _capture_backward_candidate(
+    model: nn.Module,
+    inputs: tuple[Any, dict[str, Any]],
+    model_device: torch.device | None,
+    seed: int,
+    trace_fn: Callable[..., Any],
+) -> Any:
+    """Capture the candidate forward pass on the restored model."""
+    input_args, input_kwargs = inputs
+    set_random_seed(seed)
+    logged_inputs, logged_kwargs = _prepare_inputs_for_backward(
+        input_args, input_kwargs, model_device
     )
-    if layer_report.covered_count or any(failure_counts):
-        return
-    warnings.warn(
-        TorchLensWarning(
-            "validate_backward_pass found no module-output gradient to compare: "
-            f"all {len(layer_report.coverage)} module call(s) are proven exclusions "
-            "(the root module call always is), so the module-output gradient check "
-            "has zero detection power and the backward capture is unverifiable "
-            "rather than passed; returning False. A model whose forward calls no "
-            "child module has no such evidence. Remedy: pass "
-            "validate_layer_grads=False to check parameter gradients alone",
-            code="backward_validation_no_module_output_evidence",
-            excluded_module_calls=len(layer_report.coverage),
+    model.zero_grad(set_to_none=True)
+    trace = trace_fn(
+        model,
+        logged_inputs,
+        input_kwargs=logged_kwargs,
+        capture=CaptureOptions(
+            save_grads="all",
+            seed=seed,
         ),
-        stacklevel=3,
+        save="all",
     )
+    return trace
+
+
+def _unexplained_backward_gaps(trace: Any) -> list[Any]:
+    """Collect backward coverage gaps without a proven framework exclusion."""
+    # Fail closed on coverage gaps: a node the walk could not observe is a
+    # typed journal fact, and only a PROVEN framework-contract exclusion
+    # may preserve a complete-coverage claim. No reason class has been
+    # proven yet, so every recorded gap sinks the verdict rather than
+    # hiding inside a tolerance.
+    from .._ir.events import BackwardCoverageGap
+
+    proven_framework_exclusions: frozenset[str] = frozenset()
+    return [
+        event
+        for event in getattr(trace, "backward_events", ())
+        if isinstance(event, BackwardCoverageGap)
+        and event.reason not in proven_framework_exclusions
+    ]
 
 
 def validate_backward_pass(
@@ -610,7 +607,13 @@ def validate_backward_pass(
     from .._user_funcs import _reject_opaque_wrappers, _unwrap_data_parallel, trace as trace_fn
     from .invariants import check_metadata_invariants
 
+    reset_validation_failure(None)
     if _is_appended_trace(model):
+        _record_backward_failure(
+            None,
+            reason="appended_trace",
+            message="validate_backward_pass skipped: the model is an appended Trace",
+        )
         return _warn_and_skip_appended_trace_validation(model)
 
     warn_parallel()
@@ -628,50 +631,30 @@ def validate_backward_pass(
     input_args = normalize_input_args(input_args, model)
     model_device = next((parameter.device for parameter in model.parameters()), None)
     if _refuse_non_leaf_parameters(model):
+        _record_backward_failure(
+            None,
+            reason="non_leaf_parameter",
+            message="validate_backward_pass refused: a Parameter is not an autograd leaf "
+            "before validation",
+        )
         return False
-    state_dict = _clone_state_dict_with_metadata(model)
-    leaf_flags = _leaf_parameter_flags(model)
-    # The passes reset .grad; the caller's accumulated grads are reattached by
-    # reference at the end, never written into.
-    held_grads = held_parameter_grads(model)
-    original_training = model.training
+    model_state = _snapshot_backward_model_state(model)
     trace = None
-    stock_module_grads = None
-    stock_identity_addresses = None
-
     try:
         set_random_seed(seed)
         stock_inputs, stock_kwargs = _prepare_inputs_for_backward(
             input_args, input_kwargs, model_device
         )
         model.zero_grad(set_to_none=True)
-        # R75-1 sibling site: the "stock autograd" reference pass must run on
-        # PRISTINE torch. In a wrapped process it used to run through the
-        # installed pass-through wrapper shells -- the same closures the
-        # candidate capture observes through -- so a wrapper-layer numeric
-        # distortion corrupted stock and captured gradients IDENTICALLY and
-        # the comparison passed vacuously. Refuse (fail-closed) if the
-        # wrappers cannot be removed because a capture is active.
-        from .._errors import CaptureNotActiveError
-        from ._pristine import pristine_torch_oracle
-
         try:
-            with pristine_torch_oracle():
-                if validate_layer_grads:
-                    from ._stock_layer_grads import _stock_layer_grads
-
-                    stock_module_grads, stock_identity_addresses = _stock_layer_grads(
-                        model,
-                        stock_inputs,
-                        stock_kwargs,
-                        loss_fn=loss_fn,
-                        seed=seed,
-                        state_dict_snapshot=state_dict,
-                    )
-                else:
-                    stock_loss = loss_fn(model(*stock_inputs, **stock_kwargs))
-                    stock_loss.backward()
-        except CaptureNotActiveError:
+            stock_module_grads, stock_identity_addresses, stock_reached_keys = _run_stock_backward(
+                model,
+                (stock_inputs, stock_kwargs),
+                loss_fn,
+                seed,
+                model_state.state_dict if validate_layer_grads else None,
+            )
+        except CaptureNotActiveError as pristine_error:
             warnings.warn(
                 "validate_backward_pass could not compute pristine-torch stock "
                 "gradients (a capture is active in this process, or the unwrap "
@@ -681,49 +664,25 @@ def validate_backward_pass(
                 RuntimeWarning,
                 stacklevel=2,
             )
+            _record_backward_failure(
+                None,
+                reason="pristine_oracle_unavailable",
+                message=f"pristine-torch stock gradients unavailable: {pristine_error}",
+            )
             return False
         expected_param_grads = _param_grads(model)
 
-        # Restore only what the stock pass changed: an unconditional in-place
-        # restore moves every tensor's version counter and breaks a graph the
-        # caller holds across validation.
-        restore_state_dict_if_changed(model, state_dict, load_state_dict_restore)
-        _restore_leaf_parameters(leaf_flags)
-        _restore_training_mode(model, original_training)
-        set_random_seed(seed)
-        logged_inputs, logged_kwargs = _prepare_inputs_for_backward(
-            input_args, input_kwargs, model_device
-        )
-        model.zero_grad(set_to_none=True)
-        trace = trace_fn(
-            model,
-            logged_inputs,
-            input_kwargs=logged_kwargs,
-            capture=CaptureOptions(
-                layers_to_save="all",
-                save_grads="all",
-                seed=seed,
-            ),
+        # Restore only what the stock pass changed before the candidate runs.
+        _restore_backward_model_state(model, model_state)
+        trace = _capture_backward_candidate(
+            model, (input_args, input_kwargs), model_device, seed, trace_fn
         )
         logged_output = _reconstruct_candidate_output_for_loss(trace)
         logged_loss = loss_fn(logged_output)
         trace.log_backward(logged_loss)
         if validate_metadata:
             check_metadata_invariants(trace)
-        # Fail closed on coverage gaps: a node the walk could not observe is a
-        # typed journal fact, and only a PROVEN framework-contract exclusion
-        # may preserve a complete-coverage claim. No reason class has been
-        # proven yet, so every recorded gap sinks the verdict rather than
-        # hiding inside a tolerance.
-        from .._ir.events import BackwardCoverageGap
-
-        proven_framework_exclusions: frozenset[str] = frozenset()
-        unexplained_gaps = [
-            event
-            for event in getattr(trace, "backward_events", ())
-            if isinstance(event, BackwardCoverageGap)
-            and event.reason not in proven_framework_exclusions
-        ]
+        unexplained_gaps = _unexplained_backward_gaps(trace)
         if unexplained_gaps:
             warnings.warn(
                 "validate_backward_pass observed "
@@ -733,6 +692,13 @@ def validate_backward_pass(
                 "verified, failing closed.",
                 RuntimeWarning,
                 stacklevel=2,
+            )
+            _record_backward_failure(
+                trace,
+                reason="backward_coverage_gap",
+                op_label=unexplained_gaps[0].class_qualname,
+                message=f"{len(unexplained_gaps)} backward coverage gap(s); first: "
+                f"{unexplained_gaps[0].reason}",
             )
             return False
         observed_param_grads = _param_grads(model)
@@ -746,6 +712,7 @@ def validate_backward_pass(
                 trace,
                 stock_module_grads,
                 stock_identity_addresses,
+                stock_reached_keys=stock_reached_keys,
                 # None flows through: the comparator derives the tolerance per
                 # gradient dtype (R13: the fp32 constants applied to fp64
                 # masked corruption ~4.5e11 fp64 ULPs above round-off).
@@ -754,6 +721,7 @@ def validate_backward_pass(
             )
             if not bool(layer_report):
                 _warn_if_no_module_output_evidence(layer_report)
+                _record_module_output_grad_failure(trace, layer_report)
                 return False
         # An empty stock parameter-gradient census is UNVERIFIABLE, and that verdict
         # cannot depend on ``validate_layer_grads``. This block used to be duplicated
@@ -772,6 +740,11 @@ def validate_backward_pass(
                 "stock autograd produced zero parameter gradients.",
                 RuntimeWarning,
                 stacklevel=2,
+            )
+            _record_backward_failure(
+                trace,
+                reason="no_parameter_gradients",
+                message="stock autograd produced zero parameter gradients",
             )
             return False
         # Degenerate-evidence guard: an all-nonfinite census makes every
@@ -795,8 +768,22 @@ def validate_backward_pass(
                 RuntimeWarning,
                 stacklevel=2,
             )
+            _record_backward_failure(
+                trace,
+                reason="degenerate_parameter_gradients",
+                message=f"stock parameter-gradient census is degenerate ({degeneracy})",
+            )
             return False
         if expected_param_grads.keys() != observed_param_grads.keys():
+            missing = sorted(expected_param_grads.keys() - observed_param_grads.keys())
+            unexpected = sorted(observed_param_grads.keys() - expected_param_grads.keys())
+            _record_backward_failure(
+                trace,
+                reason="parameter_census_mismatch",
+                op_label=missing[0] if missing else (unexpected[0] if unexpected else None),
+                message=f"captured parameter gradients differ from stock: missing {missing!r}, "
+                f"unexpected {unexpected!r}",
+            )
             return False
         # equal_nan follows tensor_nanequal's doctrine: an identical NaN
         # pattern in candidate and stock grads is agreement, not a mismatch
@@ -817,13 +804,18 @@ def validate_backward_pass(
                 equal_nan=True,
             ):
                 params_passed = False
+                _record_backward_failure(
+                    trace,
+                    reason="parameter_grad_mismatch",
+                    op_label=name,
+                    message=f"captured gradient of parameter {name!r} differs from stock autograd",
+                    **_parameter_grad_failure_fields(observed_param_grads[name], expected_grad),
+                )
                 break
         return params_passed
     finally:
-        restore_state_dict_if_changed(model, state_dict, load_state_dict_restore)
-        _restore_leaf_parameters(leaf_flags)
-        _restore_training_mode(model, original_training)
+        _restore_backward_model_state(model, model_state)
         model.zero_grad(set_to_none=True)
-        reattach_parameter_grads(held_grads)
+        reattach_parameter_grads(model_state.held_grads)
         if trace is not None:
             trace.cleanup()

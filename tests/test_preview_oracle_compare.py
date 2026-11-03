@@ -84,7 +84,7 @@ def test_blas_layout_band_rejects_beyond_64_ulp() -> None:
 
     import torch
 
-    from torchlens._runnable_path_faithfulness import _within_layout_reduction_tolerance
+    from torchlens._runnable.path_faithfulness import _within_layout_reduction_tolerance
 
     eps = torch.finfo(torch.float32).eps
     archived = torch.full((64,), 1.0, dtype=torch.float32)

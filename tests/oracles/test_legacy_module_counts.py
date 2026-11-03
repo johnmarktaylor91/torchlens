@@ -27,6 +27,7 @@ from tests.oracles.test_legacy_graph_counts import (
     LoopedBatchNorm,
     Mixed,
 )
+from torchlens.errors import TraceCaptureError
 
 
 class Block(nn.Module):
@@ -134,8 +135,8 @@ def nest_trace():
 def test_module_call_tree_counts(nest_trace) -> None:
     _model, trace = nest_trace
     for call in trace.module_calls:
-        assert call.num_descendant_calls == NEST_DESCENDANTS[call.call_label], call.call_label
-        assert call.max_descendant_depth == NEST_DEPTH.get(call.call_label, 0), call.call_label
+        assert call.num_descendant_calls == NEST_DESCENDANTS[call.label], call.label
+        assert call.max_descendant_depth == NEST_DEPTH.get(call.label, 0), call.label
     for module in trace.modules:
         calls = [label for label in NEST_DESCENDANTS if label.rsplit(":", 1)[0] == module.address]
         assert module.num_calls == NEST_MODULE_CALLS[module.address], module.address
@@ -150,7 +151,7 @@ def test_module_call_tree_counts(nest_trace) -> None:
 
 def test_param_call_counts(nest_trace) -> None:
     _model, trace = nest_trace
-    assert {param.address: param.num_calls for param in trace.param_logs} == NEST_PARAM_CALLS
+    assert {param.address: param.num_calls for param in trace.params} == NEST_PARAM_CALLS
 
 
 def test_recursive_param_counts(nest_trace) -> None:
@@ -181,8 +182,8 @@ def test_params_by_path_recount(nest_trace) -> None:
         assert tied.params.numel_by_path == by_path
         assert tied.summary().totals.params_per_path_total == by_path
         assert tied.num_params == 40  # unique elements: the shared tensors once
-        assert int(tied.total_param_memory) == 20 * 8 + 20 * 4  # float64 + float32, once
-        tied_param = tied.param_logs["tied.weight"]
+        assert int(tied.cost.total_param_memory) == 20 * 8 + 20 * 4  # float64 + float32, once
+        tied_param = tied.params["tied.weight"]
         assert sorted(tied_param.all_addresses) == ["tied.weight", "tied2.weight"]
     finally:
         tied.cleanup()
@@ -194,7 +195,7 @@ def test_layer_and_op_counts_on_the_root_call() -> None:
     trace = tl.trace(model, (torch.randn(2, 4), torch.randn(2, 4)))
     try:
         root = trace.module_calls["self:1"]
-        assert root.num_ops == G_OPS  # 13: the Linear ran twice
+        assert len(root.ops) == G_OPS  # 13: the Linear ran twice
         assert root.num_layers == G_LAYERS  # 12: its two passes share one Layer
         assert len(trace.layers) == G_LAYERS
         assert len(trace.modules["self"].layer_labels) == G_LAYERS
@@ -261,7 +262,7 @@ COND_BRANCH_DEPTH = {"add_1_4": 1, "mean_1_5": 1, "gt_2_6": 1, "mul_2_7": 2}
 def test_conditional_counts() -> None:
     trace = tl.trace(Cond(), torch.ones(2, 3))
     try:
-        assert len(trace.conditionals) == 2
+        assert len(trace.graph.conditionals) == 2
         for op in trace.ops:
             assert op.conditional_depth == COND_DEPTH.get(op.layer_label, 0), op.label
             expected = COND_BRANCH_DEPTH.get(op.layer_label, 0)
@@ -297,7 +298,8 @@ def test_root_forward_arguments_do_not_outlive_the_capture() -> None:
         assert root.num_forward_pos_args == 2  # the count survives the release
     finally:
         trace.cleanup()
-    with pytest.raises(RuntimeError) as failure:
+    with pytest.raises(TraceCaptureError) as failure:
         tl.trace(Boom(), torch.randn(2, 4))
-    partial = getattr(failure.value, "partial_log", None)
+    assert isinstance(failure.value.__cause__, RuntimeError)
+    partial = getattr(failure.value, "partial_trace", None)
     assert _root_args_held(partial) is None

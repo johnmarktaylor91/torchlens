@@ -18,7 +18,7 @@ from .._literals import (
     VisRendererLiteral,
 )
 
-ShowContainersLiteral = Literal[False, "labels", "cluster", "collapsed", "auto", "nodes"]
+ShowContainersLiteral = Literal[False, "labels", "collapsed", "nodes"]
 
 
 @dataclass(frozen=True)
@@ -130,8 +130,6 @@ class ResolvedRenderRequest:
     show_saved_for_backward: bool = False
     font_size: int | None = None
     dpi: int | None = None
-    for_paper: bool = False
-    return_graph: bool = False
     order_siblings: bool = True
     container_max_inline: int = 12
     show_input_transform_summary: bool = False

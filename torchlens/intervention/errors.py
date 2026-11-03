@@ -2,39 +2,29 @@
 
 from typing import Literal
 
-from .._errors import KeywordConflictError
-from .._selection import SelectionError
+from .._errors import KeywordConflictError, SelectionError
+from .._selection.errors import (
+    AmbiguousSiteError as AmbiguousSiteError,
+    BindingPreflightError as BindingPreflightError,
+    InterventionWarning as InterventionWarning,
+    LiveModeLabelError as LiveModeLabelError,
+    MultiMatchWarning as MultiMatchWarning,
+    SelectorCapabilityError as SelectorCapabilityError,
+    SelectorCompositionError as SelectorCompositionError,
+    SiteResolutionError as SiteResolutionError,
+    UnclassifiedSelectorError as UnclassifiedSelectorError,
+    _message_from_fields,
+)
 from ..errors._base import (
     CaptureError,
     CompatibilityError,
     ConfigurationError,
     InterventionError,
-    TorchLensWarning,
     ValidationError,
 )
 
 Severity = Literal["recoverable", "informational", "fatal"]
 """Public severity tag values for the intervention error catalog."""
-
-
-def _message_from_fields(class_name: str, fields: dict[str, object]) -> str:
-    """Format named constructor payloads into a stable fallback message.
-
-    Parameters
-    ----------
-    class_name:
-        Name of the error or warning class being constructed.
-    fields:
-        Named payload values supplied by the caller.
-
-    Returns
-    -------
-    str
-        Stable message containing every cited variable.
-    """
-
-    rendered = ", ".join(f"{key}={value!r}" for key, value in fields.items())
-    return f"{class_name}: {rendered}."
 
 
 class TorchLensInterventionError(InterventionError, RuntimeError):
@@ -70,39 +60,6 @@ class TorchLensInterventionError(InterventionError, RuntimeError):
             super().__init__()
 
 
-class InterventionWarning(TorchLensWarning):
-    """Base class for TorchLens intervention warnings."""
-
-    severity: Severity = "informational"
-
-    def __init__(self, *args: object, **fields: object) -> None:
-        """Initialize an intervention warning with message text or named fields.
-
-        Parameters
-        ----------
-        *args:
-            Existing positional message arguments.
-        **fields:
-            Named payload fields for catalog warnings with variable context.
-        """
-
-        if args and fields:
-            raise KeywordConflictError(
-                "Use either positional message args or named warning fields, not both",
-                code="error_constructor_args_conflict",
-                remedy="pass a message OR named fields when constructing this warning",
-            )
-        self.fields = dict(fields)
-        if fields:
-            super().__init__(_message_from_fields(type(self).__name__, self.fields))
-        elif len(args) > 1:
-            super().__init__(", ".join(str(arg) for arg in args))
-        elif args:
-            super().__init__(str(args[0]))
-        else:
-            super().__init__()
-
-
 class InterventionReadyConflictError(ConfigurationError, ValueError):
     """Raised when intervention-ready capture is requested with unsupported options."""
 
@@ -121,10 +78,6 @@ class DirectWriteIgnoredWarning(InterventionWarning):
 
 class InterventionAuditWarning(InterventionWarning):
     """Warning for non-canonical intervention state in audit contexts."""
-
-
-class MultiMatchWarning(InterventionWarning):
-    """Informational warning for selector queries that resolve multiple sites."""
 
 
 class PendingValueEditsWarning(InterventionWarning):
@@ -290,16 +243,6 @@ class SpecMutationError(ConfigurationError, ValueError):
     """Raised when an intervention spec mutator cannot apply a requested change."""
 
 
-class BindingPreflightError(ConfigurationError, ValueError):
-    """Raised when ``spec.bind(model)`` refuses before constructing a binding.
-
-    Bind-time refusals fire before ANY forward runs (surgery memo 3.3 item
-    8): unresolved static anchors, rule classes the capture-free lane cannot
-    execute, and invalid spec/model operands. Branch on
-    ``exc.fields["code"]``, never message text.
-    """
-
-
 class BindingRuntimeError(InterventionError, RuntimeError):
     """Raised by a bound intervention executor at or after call time.
 
@@ -319,32 +262,6 @@ class RegionError(ConfigurationError, ValueError):
     user assertions; every refusal here names the derived violation. Branch
     on ``exc.fields["code"]``, never message text.
     """
-
-
-class SiteResolutionError(ConfigurationError, ValueError):
-    """Raised when future selector resolution cannot identify requested sites."""
-
-
-class SelectorCompositionError(SiteResolutionError):
-    """Raised when selectors from incompatible graph directions are composed."""
-
-
-class SelectorCapabilityError(SiteResolutionError):
-    """Raised when a selector kind cannot be evaluated in a lifecycle.
-
-    The one typed refusal for unsupported ``(kind, lifecycle)`` pairs: for
-    example ``tl.followed_by(...)`` in post-hoc ``find_sites`` (no retroactive
-    window exists on a finished trace) or ``tl.model_input(...)`` as a live hook
-    application site.
-    """
-
-
-class UnclassifiedSelectorError(SiteResolutionError):
-    """Raised when a selector is missing an explicit direction taxonomy bucket."""
-
-
-class AmbiguousSiteError(SiteResolutionError):
-    """Raised when a site query resolves too many sites for the surface."""
 
 
 class RecursiveTracingError(CaptureError, RuntimeError):
@@ -385,10 +302,6 @@ class HookSiteCoverageError(SiteResolutionError):
 
 class HelperMountError(HookSiteCoverageError):
     """Raised when a helper is mounted on an incompatible selector universe."""
-
-
-class LiveModeLabelError(SiteResolutionError):
-    """Raised when live capture cannot resolve a finalized-label selector."""
 
 
 class BundleMemberError(ConfigurationError, ValueError):

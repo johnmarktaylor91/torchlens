@@ -63,13 +63,19 @@ def _rows(report: ConformanceReport, case_id: str) -> list[Any]:
 # ---------------------------------------------------------------------------
 
 
+def _failed_ids(report: ConformanceReport) -> set[str]:
+    """Case ids of the failed rows."""
+
+    return {row.case_id for row in report.results if row.outcome == "failed"}
+
+
 def test_torch_reference_passes_the_full_ladder(tmp_path: Path) -> None:
     """The reference backend passes C0-C2 on the hermetic roster."""
 
     report = run_conformance(
         "torch", tiers=("C0", "C1", "C2"), roster=_tiny_roster(), workdir=tmp_path
     )
-    assert report.funnel["failed"] == 0
+    assert _failed_ids(report) == set()
     assert report.funnel["skipped"] == 0
     assert report.earned_tier == "C2"
     assert report.is_claim_eligible is False  # toys earn nothing
@@ -84,7 +90,7 @@ def test_wellbehaved_fake_passes_before_plants_are_trusted(tmp_path: Path) -> No
     report = run_conformance(
         "fake", tiers=("C0", "C1", "C2"), roster=_tiny_roster(), workdir=tmp_path
     )
-    assert report.funnel["failed"] == 0
+    assert _failed_ids(report) == set()
     assert report.earned_tier == "C2"
     assert report.is_claim_eligible is False  # the fake provider never claims
     with pytest.raises(ConfigurationError):
@@ -106,13 +112,16 @@ _PLANT_INTENDED_CELL = {
 
 
 def test_plant_table_covers_the_closed_set() -> None:
-    """The intended-cell table and FAKE_PLANTS are the same closed set."""
+    """This table plus the protocol-era table (``_protocol_cases``) is the closed set."""
 
-    assert set(_PLANT_INTENDED_CELL) == set(FAKE_PLANTS)
+    from torchlens.conformance._protocol_cases import PLANT_INTENDED_CELL
+
+    assert set(_PLANT_INTENDED_CELL).isdisjoint(PLANT_INTENDED_CELL)
+    assert set(_PLANT_INTENDED_CELL) | set(PLANT_INTENDED_CELL) == set(FAKE_PLANTS)
 
 
 @pytest.mark.smoke_cells("test_every_plant_turns_its_intended_cell_red[capability_undispatched]")
-@pytest.mark.parametrize("plant", FAKE_PLANTS)
+@pytest.mark.parametrize("plant", sorted(_PLANT_INTENDED_CELL))
 def test_every_plant_turns_its_intended_cell_red(plant: str, tmp_path: Path) -> None:
     """Each planted defect fails the exact cell it targets, nothing vacuous."""
 

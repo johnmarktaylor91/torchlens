@@ -4,7 +4,7 @@ A forward-modifying (value-override) intervention makes the captured forward div
 from the recorded sparse DAG (which stores only the original op recipe). A runnable
 replay could only recompute the un-intervened value, so since deephunt F1 the producer
 refuses ``level="runnable"`` at SAVE time with the named
-``user_intervention_not_replayable`` diagnostic (historically the save succeeded and
+``user_intervention_unsupported`` diagnostic (historically the save succeeded and
 the run ceilinged UNVERIFIABLE + NOT_APPLICABLE with no findable cause).
 Observe-only/backward interventions and plain captures are unchanged and still VERIFY.
 """
@@ -46,11 +46,11 @@ def _capture(model: nn.Module, value: torch.Tensor, **kwargs: object) -> tl.Trac
         model,
         value,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
-            layers_to_save="all",
         ),
+        save="all",
         **kwargs,
     )
 
@@ -77,7 +77,7 @@ def test_forward_override_intervention_refuses_runnable_save(tmp_path: Path) -> 
     path = tmp_path / "ablated.tlspec"
     with pytest.raises(RunnablePreflightError) as excinfo:
         trace.save(path, level="runnable", include_weights=True)
-    assert "user_intervention_not_replayable" in str(excinfo.value.fields.get("diagnostics"))
+    assert "user_intervention_unsupported" in str(excinfo.value.fields.get("diagnostics"))
 
 
 def test_forward_override_with_activations_also_refuses(tmp_path: Path) -> None:
@@ -104,7 +104,7 @@ def test_forward_override_with_activations_also_refuses(tmp_path: Path) -> None:
             include_weights=True,
             include_activations=True,
         )
-    assert "user_intervention_not_replayable" in str(excinfo.value.fields.get("diagnostics"))
+    assert "user_intervention_unsupported" in str(excinfo.value.fields.get("diagnostics"))
     assert not path.exists()
 
 
@@ -131,7 +131,7 @@ def test_backward_grad_intervention_still_verifies(tmp_path: Path) -> None:
     trace = _capture(
         _AblationModel().eval(),
         value,
-        intervene=tl.when(tl.func("relu"), tl.scale_grad(2.0)),
+        intervene=tl.when(tl.grad(tl.func("relu")), tl.scale(2.0)),
     )
     path = tmp_path / "grad.tlspec"
     trace.save(path, level="runnable", include_weights=True, include_activations=True)

@@ -166,12 +166,12 @@ def test_aux_loss_replay(two_layer_mlp: TwoLayerMlp) -> None:
 def test_aux_loss_fastlog(two_layer_mlp: TwoLayerMlp) -> None:
     """Pattern A: fastlog backward_ready supports an auxiliary out loss."""
 
-    output, recording = tl.record(
+    recording = tl.record(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
-        return_output=True,
         capture=tl.options.CaptureOptions(backward_ready=True),
     )
+    output = recording.output
     hidden = _first_payload_by_layer_type(recording, "relu")
 
     two_layer_mlp.zero_grad(set_to_none=True)
@@ -226,12 +226,12 @@ def test_probe_frozen_backbone_replay(tiny_resnet_with_probe: TinyResnetWithProb
 def test_probe_frozen_backbone_fastlog(tiny_resnet_with_probe: TinyResnetWithProbe) -> None:
     """Pattern B: fastlog capture trains only the probe on a frozen backbone."""
 
-    output, recording = tl.record(
+    recording = tl.record(
         tiny_resnet_with_probe,
         torch.randn(3, 4, requires_grad=True),
-        return_output=True,
         capture=tl.options.CaptureOptions(backward_ready=True),
     )
+    output = recording.output
     assert any(record.ram_payload is not None for record in recording)
 
     tiny_resnet_with_probe.zero_grad(set_to_none=True)
@@ -263,12 +263,12 @@ def test_multi_tap_loss_slow(multi_tap_model: MultiTapModel) -> None:
 def test_multi_tap_loss_fastlog(multi_tap_model: MultiTapModel) -> None:
     """Pattern C: fastlog supports losses from multiple saved taps."""
 
-    outputs, recording = tl.record(
+    recording = tl.record(
         multi_tap_model,
         torch.randn(3, 4, requires_grad=True),
-        return_output=True,
         capture=tl.options.CaptureOptions(backward_ready=True),
     )
+    outputs = recording.output
     hidden = _first_payload_by_layer_type(recording, "relu")
 
     multi_tap_model.zero_grad(set_to_none=True)
@@ -300,12 +300,12 @@ def test_distillation_slow(teacher_student_pair: TeacherStudentPair) -> None:
 def test_distillation_fastlog(teacher_student_pair: TeacherStudentPair) -> None:
     """Pattern D: fastlog supports frozen-teacher distillation."""
 
-    (teacher, student), recording = tl.record(
+    recording = tl.record(
         teacher_student_pair,
         torch.randn(3, 4, requires_grad=True),
-        return_output=True,
         capture=tl.options.CaptureOptions(backward_ready=True),
     )
+    (teacher, student) = recording.output
     assert any(record.ram_payload is not None for record in recording)
 
     teacher_student_pair.zero_grad(set_to_none=True)
@@ -397,7 +397,7 @@ def test_save_new_outs_train_mode_inherits() -> None:
 
     saved = trace[trace.output_layers[0]].out
     assert saved.grad_fn is not None
-    assert trace.backward_ready is True
+    assert trace.options.backward_ready is True
     trace.cleanup()
 
 
@@ -421,8 +421,8 @@ def test_save_new_outs_train_mode_overrides() -> None:
 
     saved = trace[trace.output_layers[0]].out
     assert saved.grad_fn is not None
-    assert trace.detach_saved_activations is True
-    assert trace.backward_ready is False
+    assert trace.options.detach_saved_activations is True
+    assert trace.options.backward_ready is False
     assert [layer.detach_saved_activations for layer in trace] == original_layer_flags
     trace.cleanup()
 
@@ -514,7 +514,7 @@ def test_save_new_outs_train_mode_restored_on_graph_mismatch() -> None:
     else:
         raise AssertionError("Expected fast-pass graph mismatch")
 
-    assert trace.detach_saved_activations is True
-    assert trace.backward_ready is False
+    assert trace.options.detach_saved_activations is True
+    assert trace.options.backward_ready is False
     assert [layer.detach_saved_activations for layer in trace] == original_layer_flags
     trace.cleanup()

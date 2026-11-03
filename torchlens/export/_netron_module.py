@@ -18,6 +18,7 @@ import contextlib
 from dataclasses import dataclass, field
 from typing import Any, NamedTuple
 
+from .._record_type import record_type
 from ._netron_fields import _strip_single_pass, build_leaf_attrs, node_doc, port_names
 from ._netron_records import (
     NETRON_MODULE_DOMAIN,
@@ -309,7 +310,7 @@ def _place_entries(
         inputs = _visible_inputs(entry, classified, projection)
         node = NetronNode(
             name=node_id,
-            op_type=str(getattr(entry, "layer_type", None) or getattr(entry, "func_name", "")),
+            op_type=str(record_type(entry, None) or getattr(entry, "func_name", "")),
             domain=NETRON_OP_DOMAIN,
             inputs=inputs,
             outputs=[node_id],

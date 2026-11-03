@@ -70,11 +70,11 @@ class OrphanAccessor(Accessor[Op]):
             if key
             in {
                 orphan.layer_label,
-                orphan.layer_label_short,
+                orphan.short_layer_label,
                 orphan.label,
-                orphan.label_short,
+                orphan.short_label,
                 orphan.layer_label,
-                orphan.layer_label_short,
+                orphan.short_layer_label,
                 orphan._label_raw,
             }
         ]
@@ -88,11 +88,11 @@ class OrphanAccessor(Accessor[Op]):
                 label is not None and key.lower() in str(label).lower()
                 for label in (
                     orphan.layer_label,
-                    orphan.layer_label_short,
+                    orphan.short_layer_label,
                     orphan.label,
-                    orphan.label_short,
+                    orphan.short_label,
                     orphan.layer_label,
-                    orphan.layer_label_short,
+                    orphan.short_layer_label,
                     orphan._label_raw,
                 )
             )
@@ -127,7 +127,7 @@ def _boundary_listing_passes(
         if isinstance(entry, Op):
             yield [entry]
             continue
-        passes = sorted(entry.ops.values(), key=lambda op: op.pass_index)
+        passes = sorted(entry.ops.values(), key=lambda op: op.pass_number)
         if listings[label] == len(passes):
             yield [passes[taken[label]]]
             taken[label] += 1
@@ -233,7 +233,7 @@ def _refuse_colliding_label(key: Any, claimants: Sequence[Op] | None) -> None:
 
 
 def _is_counted_op(op: Op) -> bool:
-    """Whether an op row counts toward ``Trace.num_ops``.
+    """Whether an op row counts toward the counted op total.
 
     The count excludes the input, output and buffer rows, the definition in
     ``backends/_finalize.py``; those rows are aliases of a tensor, not ops.
@@ -250,13 +250,13 @@ class TraceOpAccessor(Accessor[Op]):
     """Trace-level accessor for type-strict Op lookups.
 
     The trace's own accessor (``Trace.ops``, built with ``counted_view=True``)
-    counts and iterates the ops ``Trace.num_ops`` counts: ``len``,
+    counts and iterates the ops the counted op total counts: ``len``,
     iteration, integer indexing, ``keys``/``values``/``items`` and
     ``to_pandas`` skip the input, output and buffer rows, so
-    ``len(trace.ops) == trace.num_ops``. Label lookup still resolves EVERY
+    ``len(trace.ops)`` is that total. Label lookup still resolves EVERY
     row: ``trace.ops["input_1"]`` returns the input row and ``"input_1" in
     trace.ops`` is true although the label is not in ``keys()``. The
-    alias-inclusive row sequence is ``trace.layer_list``. A derived accessor
+    alias-inclusive row sequence is ``trace._layer_list``. A derived accessor
     over a chosen row list (``input_ops``, ``output_ops``, ``saved_ops``, ...)
     keeps the default ``counted_view=False`` and lists exactly its rows.
     """
@@ -279,7 +279,7 @@ class TraceOpAccessor(Accessor[Op]):
         layer_num_calls:
             Mapping from parent Layer label to number of Op passes.
         counted_view:
-            Count and iterate only the ops ``Trace.num_ops`` counts (the
+            Count and iterate only the ops the counted op total counts (the
             ``Trace.ops`` view); ``False`` lists every row given.
         """
 
@@ -342,7 +342,7 @@ class TraceOpAccessor(Accessor[Op]):
         return iter(self._counted_ops())
 
     def __len__(self) -> int:
-        """Return the counted op total (equals ``Trace.num_ops``)."""
+        """Return the counted op total (equals the counted op total)."""
 
         return len(self._counted_ops())
 
@@ -421,7 +421,7 @@ class TraceOpAccessor(Accessor[Op]):
         direct = self._resolve_pass_qualified(key)
         if direct is not None:
             return [direct]
-        return [op for op in self._list if key in {op.layer_label, op.layer_label_short}]
+        return [op for op in self._list if key in {op.layer_label, op.short_layer_label}]
 
     def _ensure_alias_indexes(self) -> _AliasIndexes | None:
         """Build the alias reverse indexes once, or report them unavailable.
@@ -471,7 +471,7 @@ class TraceOpAccessor(Accessor[Op]):
                 for alias in self._final_aliases(op):
                     _claim_alias(final_index, collisions, alias, op)
                 raw_index.setdefault(op.raw_label, op)
-                for alias in {op.layer_label, op.layer_label_short}:
+                for alias in {op.layer_label, op.short_layer_label}:
                     layer_alias_index.setdefault(alias, []).append(op)
         except Exception:
             self._alias_index_unavailable = True
@@ -482,7 +482,7 @@ class TraceOpAccessor(Accessor[Op]):
     def _final_aliases(self, op: Op) -> list[Any]:
         """Return the final-tier aliases of one Op (see ``_ensure_alias_indexes``)."""
 
-        aliases = [op.label, op.label_short]
+        aliases = [op.label, op.short_label]
         label_raw = op._label_raw
         # Only a SUFFIXED raw label is final-tier: ``x_raw`` cannot be a final
         # label. An unsuffixed ``_label_raw`` has the raw-spelling shape and is
@@ -490,7 +490,7 @@ class TraceOpAccessor(Accessor[Op]):
         if _is_suffixed_raw_label(label_raw):
             aliases.append(label_raw)
         if self._layer_num_calls.get(op.layer_label, 0) == 1:
-            aliases.extend((op.layer_label, op.layer_label_short))
+            aliases.extend((op.layer_label, op.short_layer_label))
         return aliases
 
     def _resolve_substring_by_scan(self, key: str) -> Op | None:
@@ -506,7 +506,7 @@ class TraceOpAccessor(Accessor[Op]):
         for op in self._list:
             if key == op.raw_label:
                 return op
-        parent_matches = [op for op in self._list if key in {op.layer_label, op.layer_label_short}]
+        parent_matches = [op for op in self._list if key in {op.layer_label, op.short_layer_label}]
         return self._resolve_parent_matches(parent_matches)
 
     @staticmethod
@@ -544,7 +544,7 @@ class TraceOpAccessor(Accessor[Op]):
         """Return ``self[key]``, memoized per lookup key.
 
         Callers that resolve the same stored child/parent label once per graph edge
-        (the ``_trace_stats`` edge counters) would otherwise repeat one full
+        (the ``_trace_views`` edge counters) would otherwise repeat one full
         ``__getitem__`` per edge. Failed lookups are never memoized, so a missing or
         ambiguous key raises exactly as ``self[key]`` does on every call.
         """
@@ -596,9 +596,9 @@ class TraceGradFnCallAccessor(Accessor[Any]):
         """Resolve unique bare GradFn label to its only GradFnCall."""
 
         if self._label_index is None:
-            # Grouping by label in list order reproduces the per-lookup filter
+            # Grouping by the parent GradFn label in list order reproduces the per-lookup filter
             # exactly; lifetime is this accessor instance's immutable ``_list``.
-            self._label_index = _group_by_attr(self._list, "label")
+            self._label_index = _group_by_attr(self._list, "grad_fn_label")
         parent_matches = self._label_index.get(key, ())
         if len(parent_matches) == 1:
             return parent_matches[0]

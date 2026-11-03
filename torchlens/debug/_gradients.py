@@ -34,6 +34,8 @@ import torch
 if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
 
+from torchlens._errors import InvalidArgumentError, KeywordConflictError
+
 from .._debug_report import Report, table_report, trace_subject
 from ._common import _op_label, _require_pandas, _tensor_unavailable_reason
 
@@ -129,7 +131,6 @@ def _validate_grad_scale(grad_scale: float | None) -> float | None:
 
     if grad_scale is None:
         return None
-    from torchlens._errors import InvalidArgumentError
 
     scale_value = float(grad_scale)
     if not (0.0 < scale_value < float("inf")):
@@ -162,8 +163,6 @@ def _validate_options(
         ``grad_scale_conflict``): one scalar for the selected pass and
         per-backward stamps are two spellings of the same fact.
     """
-
-    from torchlens._errors import InvalidArgumentError, KeywordConflictError
 
     if basis not in _BASES:
         raise InvalidArgumentError(

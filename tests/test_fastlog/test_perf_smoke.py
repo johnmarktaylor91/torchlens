@@ -54,18 +54,17 @@ def test_col_offset_and_qualname_called_only_on_filtered_frames(monkeypatch) -> 
 
     trace = tl.trace(TenLayerMlp(), torch.randn(1, 8))
 
-    assert len(trace.layer_list) >= 20
+    assert len(trace._layer_list) >= 20
     assert 0 < col_offset_calls < 200
     assert 0 < qualname_calls < 200
 
 
 def test_trace_profile_populates_phase_timings() -> None:
-    """trace(profile=True) records always-on phase timing buckets."""
+    """A plain trace records the always-on phase timing buckets."""
 
     trace = tl.trace(TenLayerMlp(), torch.randn(1, 8))
 
     timings = trace._phase_timings
-    assert trace.profile_enabled is True
     assert timings["dispatch:forward_model"]["count"] == 1
     assert timings["ctx_build:model_prepare"]["total_s"] >= 0.0
     assert timings["clone_save:activation_fields"]["count"] > 0

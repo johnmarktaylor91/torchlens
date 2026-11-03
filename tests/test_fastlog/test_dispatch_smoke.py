@@ -16,7 +16,7 @@ from torchlens.backends.torch.model_prep import (
     _prepare_model_session,
 )
 from torchlens.backends.torch.sources import log_source_tensor
-from torchlens.recording.options import RecordingOptions
+from torchlens.recording.options import _RecordingConfig
 from torchlens.recording.types import CaptureSpec, Recording
 
 
@@ -38,7 +38,7 @@ class TinyMlp(nn.Module):
 def _empty_recording(history_size: int) -> Recording:
     """Build an empty in-memory Recording for dispatcher tests."""
 
-    return Recording(
+    return Recording._build(
         records=[],
         by_pass={},
         by_label={},
@@ -49,7 +49,6 @@ def _empty_recording(history_size: int) -> Recording:
         end_times=[],
         predicate_failures=[],
         num_predicate_failure_overflows=0,
-        keep_op_repr=None,
         history_size=history_size,
     )
 
@@ -57,13 +56,13 @@ def _empty_recording(history_size: int) -> Recording:
 def _run_dispatcher_smoke(
     model: nn.Module,
     x: torch.Tensor,
-    options: RecordingOptions,
+    options: _RecordingConfig,
 ) -> Recording:
     """Run a minimal predicate pass through existing dispatchers."""
 
     trace = Trace("TinyMlp")
-    trace.capture_mode = "predicate"
-    trace.capture_start_time = time.time()
+    trace._options_mode = "predicate"
+    trace._provenance_start_time = time.time()
     state = RecordingState(options=options, recording=_empty_recording(options.history_size))
     _ensure_model_prepared(model)
     _prepare_model_session(trace, model)
@@ -91,7 +90,7 @@ def test_predicate_dispatchers_fire_and_store_ram_payloads() -> None:
     recording = _run_dispatcher_smoke(
         TinyMlp(),
         torch.ones(1, 3),
-        RecordingOptions(
+        _RecordingConfig(
             keep_op=keep_op,
             default_op=False,
             default_module=True,

@@ -133,6 +133,16 @@ class GenerationRecording:
     not_recorded: tuple[str, ...] = NOT_RECORDED
 
     @property
+    def output(self) -> Any:
+        """Return what ``generate()`` returned, exactly (``recording.output``).
+
+        Held in memory only; a recording loaded from disk refuses with
+        ``output_not_stored``.
+        """
+
+        return self.recording.output
+
+    @property
     def n_steps(self) -> int:
         """Return the number of recorded forwards (prefill included)."""
 
@@ -420,7 +430,7 @@ def _steps(recording: Recording, windows: list[tuple[int, range]]) -> tuple[Gene
 
     ops_by_pass: dict[int, int] = {}
     for row in recording.raw_metadata():
-        pass_index = int(row["pass_index"])
+        pass_index = int(row["pass_number"])
         ops_by_pass[pass_index] = ops_by_pass.get(pass_index, 0) + 1
     steps = []
     for step, (pass_index, window) in enumerate(windows):

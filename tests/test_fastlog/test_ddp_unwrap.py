@@ -91,7 +91,9 @@ def test_ddp_wrapped_model_records_unwrapped_module(process_group: None) -> None
 
     ddp_model = torch.nn.parallel.DistributedDataParallel(DdpModel())
 
-    recording = _record_under_group(ddp_model, torch.ones(1, 2), default_op=True)
+    recording = _record_under_group(
+        ddp_model, torch.ones(1, 2), recording=tl.options.RecordingOptions(default_op=True)
+    )
 
     assert len(recording) > 0
 
@@ -105,8 +107,8 @@ def test_ddp_bundle_path_gets_rank_prefix(process_group: None, tmp_path: Path) -
     recording = _record_under_group(
         ddp_model,
         torch.ones(1, 2),
-        default_op=True,
-        streaming=tl.options.StorageOptions(path=requested, retain_in_memory=False),
+        recording=tl.options.RecordingOptions(default_op=True),
+        storage=tl.options.StorageOptions(path=requested, retain_in_memory=False),
     )
 
     assert recording.path == tmp_path / "rank_00" / "bundle.tlfast"

@@ -29,7 +29,7 @@ from torchlens.mechinterp._errors import MechInterpError
 pytest.importorskip("transformers")
 pytestmark = pytest.mark.heavy
 
-_CAPTURE = tl.options.CaptureOptions(layers_to_save="all", intervention_ready=True)
+_CAPTURE = tl.options.CaptureOptions(replayable=True)
 _ATOL = 1e-10
 
 
@@ -53,8 +53,8 @@ def tiny():
     model = _tiny_gpt2()
     clean_ids = torch.tensor([[3, 7, 1, 9, 4], [2, 6, 1, 8, 5]])
     corrupt_ids = torch.tensor([[5, 7, 2, 9, 8], [4, 6, 3, 8, 1]])
-    clean = tl.trace(model, clean_ids, capture=_CAPTURE)
-    corrupt = tl.trace(model, corrupt_ids, capture=_CAPTURE)
+    clean = tl.trace(model, clean_ids, capture=_CAPTURE, save="all")
+    corrupt = tl.trace(model, corrupt_ids, capture=_CAPTURE, save="all")
     try:
         yield (
             model,
@@ -208,8 +208,8 @@ def _fixture_spec(model: Fixture, graph) -> tuple[PatchSpec, dict[str, str]]:
 )
 def test_nonlinear_fixture_matches_plain_hooks(plan) -> None:
     model = Fixture().eval()
-    clean = tl.trace(model, CLEAN, capture=_CAPTURE)
-    corrupt_trace = tl.trace(model, CORRUPT, capture=_CAPTURE)
+    clean = tl.trace(model, CLEAN, capture=_CAPTURE, save="all")
+    corrupt_trace = tl.trace(model, CORRUPT, capture=_CAPTURE, save="all")
     try:
         graph, corrupt = mi.component_graph(clean), mi.component_graph(corrupt_trace)
         spec, names = _fixture_spec(model, graph)

@@ -69,7 +69,7 @@ repair stale bindings. Coverage is now:
   fused norm mutators are journaled unconditionally, so eval-mode BN/IN/GN captures carry
   `buffer_value_changed == False` records and stay rescuable; an unknown change status refuses
   fail-closed. The refusal covers EVERY trigger, including an output-attribution failure — there
-  the re-run is refused, the failure propagates with its `exc.partial_log`, and the skip is
+  the re-run is refused, the failure propagates with its `exc.partial_trace`, and the skip is
   disclosed on the partial's trace (`rescue_rerun`). On rescued (eval-mode) captures, a custom
   in-forward PYTHON-attribute counter (not a registered buffer) still mutates twice: a declared
   residual of the double forward, visible via `trace.rescue_rerun["forward_runs"] == 2`.
@@ -93,7 +93,7 @@ repair stale bindings. Coverage is now:
 ## Shadow detector semantics
 
 `escape_detector="shadow"` observes raw callable execution using exact object/code identity. It
-reports a `TorchLensCaptureGapWarning` with the callable, registered export sites, source callsite,
+reports a `tl.errors.CaptureGapWarning` with the callable, registered export sites, source callsite,
 storage hint, short stack, and remediation. Reports also appear in `trace.escape_diagnostics`, and
 a diagnostic now also TRIGGERS the rescue re-run (the report from the primary run is preserved in
 `trace.rescue_rerun["primary_escape_diagnostics"]`).

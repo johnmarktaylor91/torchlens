@@ -40,7 +40,7 @@ from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
     seed=0,

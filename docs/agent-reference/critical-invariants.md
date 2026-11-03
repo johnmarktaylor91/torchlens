@@ -25,11 +25,11 @@
 8. `_tracing_finished` is set once at finalization and mirrored onto every retained op
    (`backends/_finalize.py`); nothing resets it per pass.
 9. Portable `.tlspec` public schema is manifest-only; executable callables are not portable.
-9a. Rehydration floor: artifacts stamped `tlspec_version` < 6 refuse to load with the typed
-    `tl.errors.ArtifactTooOldError`; legacy field-alias resurrection ladders are
-    deleted. The first tlspec-6 writer was released torchlens 2.31.0, so 2.31.0 / 2.32.4
-    artifacts load (the floor is the stamp, never a release name). Legacy 2.16 intervention
-    specs remain loadable (floor covers Trace rehydration only). Save dry-runs `metadata.pkl`
+9a. Rehydration floor: this release reads only its own format. An artifact stamped
+    `tlspec_version` < 11 was saved by torchlens 2.x and refuses to load with the one typed
+    `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`); no alias list,
+    retired-key pop or legacy spelling adapter remains on any record class. Legacy 2.16
+    intervention specs remain loadable (the floor covers Trace rehydration only). Save dry-runs `metadata.pkl`
     through the loader's default-deny unpickler and refuses unportable values typed
     (`annotation_value_unportable` / `metadata_value_unportable`); load anchors manifest facts
     to the pickled state (`bundle_manifest_metadata_mismatch`) and validates graph structure,
@@ -39,7 +39,7 @@
     `seq`/`prev_event_digest` hash-chain slots); `"sidecar"` persists plainly with
     envelope-shape load validation; `"health_facts"`/`"capture_advisories"` are reserved
     annotation families; entry-dark declared slots `Op.injection_provenance` (F01 writes),
-    `Trace.source_snapshots` (F30), `Trace.structure_evidence` (F33) validate fail-closed.
+    `Trace.source.snapshots` (F30), `Trace.graph.structure_evidence` (F33) validate fail-closed.
     Contract of record `torchlens/schemas/writer_contract_v10.json`; the field-intent
     census is maintained privately.
 9c. The C07X amendment rides the same v9 window (TLSPEC_VERSION stays 9): bundle relation
@@ -56,15 +56,21 @@
     source disclosure, tail-aligned `step_axis`, minted `capture_digest`; generic
     `step_output`; `cache_len` DELETED for the channel-keyed
     `entry_state_digest`/`exit_state_digest` carried-state witness slots; v1/foreign
-    versions quarantine), and entry-dark slots `Trace.root_entry_point` (written unconditionally),
+    versions quarantine), and entry-dark slots `Trace.provenance.root_entry_point` (written unconditionally),
     `Op.episode_step`, `Op.tl_authored_root` with fail-closed validation.
-9d. tlspec v10 (batch-2 coordinated schema write; current): one bump for every new saved
+9d. tlspec v10 (batch-2 coordinated schema write): one bump for every new saved
     field of the window, each admitted by the v10 field registry
     (`tests/test_schema_v10_contract_and_goldens.py::V10_FIELD_ADMISSIONS`) before its writer
     lands, so no further bump follows; the writer contract states the floor release as
-    `2.31.0` (v9 froze the false "2.33"); `reserved_vocabularies.step_scores` reserves the
+    `3.0.0`, the first tlspec-11 writer (v9 and v10 keep their frozen texts);
+    `reserved_vocabularies.step_scores` reserves the
     generation step-score names, credited to inseq. Contract of record
     `torchlens/schemas/writer_contract_v10.json`; the v9 contract stays frozen beside it.
+9e. tlspec v11 (persisted-field rename write; current): stored keys follow the decided public
+    names (for example `Op.is_edited`, `Trace.is_replayable`, `Trace.name`), with no alias and
+    no old-key reader, so a v10 file refuses rather than loading under new names. Contract of
+    record `torchlens/schemas/writer_contract_v11.json`; the v10 contract stays frozen beside it
+    (`tests/test_schema_v10_contract_and_goldens.py::V10_CONTRACT_SHA256`).
 10. `backward_ready=True` rejects contradictory detaching/disk-save settings and preserves user
     `requires_grad` choices.
 10a. `inference_only=True` wraps forward capture in `torch.no_grad()` for forward-only analysis
@@ -98,7 +104,7 @@
     `backends/torch/_script_boundary.py`, same core): its dispatches are owned by the audited
     `jit_script:boundary` token and replay calls the function again; a call that writes into a
     tensor argument in place is never collapsed and stays a census gap.
-14. Public backend-neutral state (`Trace.backend`, `module_identity_mode`, `param_source`,
+14. Public backend-neutral state (`Trace.provenance.backend`, `module_identity_mode`, `param_source`,
     `dtype_ref`, `device_ref`, `backend_address`, `resolver_status`) must stay in docs,
     glossary, FIELD_ORDER, and serialization compatibility gates together.
 15. TensorFlow `backend="tf"` / `backend="tensorflow"` targets Keras 3 on TF>=2.16 with
@@ -132,7 +138,7 @@
     family, whose eligibility metadata includes physical `InputAttestationFingerprint` records.
     `Trace.archived_activations` is inspection/attestation-only and never seeds execution.
     Original-input, capture-equivalent real-state runs must byte-attest saved raw slots before
-    exposure; mismatch raises `numeric_attestation_failed` with rollback, while changed-input
+    exposure; mismatch raises `replay_value_mismatch` with rollback, while changed-input
     (logical OR physical), random/non-equivalent-state, and nondeterministic-capture-context runs
     report `not_applicable`. `attested` implies `verified` and unpoisoned, always.
 17c. Runnable descriptors are `sparse_recorded_taken_path_v2` (call recipe
@@ -190,7 +196,7 @@
     `docs/reference/runnable_tlspec_contract.md`.
 19a. r37 honesty boundaries: zero-tensor-leaf model outputs and namedtuple/mapping/registered
     containers carrying extra per-instance state refuse at runnable save
-    (`missing_output_container_contract`; one per-kind capability table --
+    (`output_container_contract_missing`; one per-kind capability table --
     `CONTAINER_KIND_CAPABILITIES` -- governs capture proof, save refusal, and forged-flag-proof
     load recompute; `tl.types.register_container` gains an explicit `state_complete=` declaration).
     Host nondeterminism outside the two replayable global engines (RNG instances incl.

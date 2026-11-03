@@ -19,7 +19,7 @@ from torchlens import load
 from torchlens._data_classes.trace import Trace
 from torchlens._io import ArtifactError
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
-from torchlens._io.manifest import sha256_of_file
+from torchlens._utils.hashing import sha256_file
 
 
 class _CorruptionModel(nn.Module):
@@ -68,7 +68,7 @@ def _save_bundle(tmp_path: Path, path_name: str = "bundle.tl") -> Path:
     torch.manual_seed(0)
     model = _CorruptionModel()
     inputs = torch.randn(2, 4)
-    trace = tl.trace(model, inputs, capture=tl.options.CaptureOptions(layers_to_save="all", seed=0))
+    trace = tl.trace(model, inputs, capture=tl.options.CaptureOptions(seed=0), save="all")
     bundle_path = tmp_path / path_name
     trace.save(bundle_path)
     return bundle_path
@@ -141,7 +141,7 @@ def _first_saved_layer(trace: Trace) -> Any:
         First saved layer-pass entry.
     """
 
-    return next(layer for layer in trace.layer_list if layer.has_saved_activation)
+    return next(layer for layer in trace._layer_list if layer.has_saved_activation)
 
 
 def test_truncated_safetensors_blob_raises_with_blob_path(tmp_path: Path) -> None:
@@ -153,7 +153,7 @@ def test_truncated_safetensors_blob_raises_with_blob_path(tmp_path: Path) -> Non
     blob_path = bundle_path / tensor_entry["relative_path"]
     original_bytes = blob_path.read_bytes()
     blob_path.write_bytes(original_bytes[: len(original_bytes) // 2])
-    tensor_entry["sha256"] = sha256_of_file(blob_path)
+    tensor_entry["sha256"] = sha256_file(blob_path)
     _write_manifest(bundle_path, manifest)
 
     lazy_log = load(bundle_path, lazy=True)

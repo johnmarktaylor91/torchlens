@@ -102,7 +102,7 @@ OP_LABELS = {
     "tl_trace": "TL Trace, every-op capture",
     "tl_trace_profile": "TL Trace, phase profile",
     "trace_no_save": "TL Trace, metadata only (no saved outs)",
-    "tl_trace_intervention_ready": "TL Trace, intervention_ready=True",
+    "tl_trace_intervention_ready": "TL Trace, replayable=True",
     "tl_rerun": "Trace.run(model, x)",
     "rerun_metadata_only": "Trace.run(model, x), metadata-only save scope",
     "rerun_no_save": "Trace.run(model, x), metadata-only save scope (legacy alias)",
@@ -732,7 +732,7 @@ def _wrapper_only_headline(rows: list[dict[str, Any]]) -> str:
     if trace_ratio is None or full_ratio is None:
         return (
             "Headline insight: the no-save rows separate TorchLens wrapper and metadata "
-            "overhead from tensor data the user chose to capture. `layers_to_save=[]` is "
+            "overhead from tensor data the user chose to capture. `save=[]` is "
             "the verified metadata-only Trace path, and `fastlog_zero` retains no op or "
             "module records."
         )
@@ -980,7 +980,7 @@ def _write_report(payload: dict[str, Any], path: Path = RESULT_MD) -> None:
             "- Sub-ms operations can legitimately show 0.0 MB USS delta because allocators reuse pages.",
             "- TorchLens Trace captures every tensor-producing torch operation; peer hook rows capture module boundaries only.",
             "- HF GPT-2 and HookedTransformer GPT-2 are separate model implementations and should not be compared row-by-row.",
-            "- No-save Trace rows use `layers_to_save=[]`, which records metadata for every op but saves no activation tensors.",
+            "- No-save Trace rows use `save=[]`, which records metadata for every op but saves no activation tensors.",
             "",
             "## Rerun Tolerance",
             "",

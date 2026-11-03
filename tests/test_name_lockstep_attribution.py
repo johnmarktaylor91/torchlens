@@ -379,3 +379,165 @@ def test_a_moved_member_pairs_on_its_spelling_and_keeps_retired_owners_as_residu
     assert [(f.change, f.location) for f in findings if f.problem == "stale"] == [
         ("moved", "examples/demo.py:2")
     ]
+
+
+def test_a_mixin_member_folded_onto_its_public_owner_is_a_move(tmp_path: Path) -> None:
+    """``TraceStatsMixin.compute_ops`` reached as ``Trace.compute_ops`` folds onto ``Trace``: one name."""
+
+    old = _row(
+        "member:tl._data_classes._trace_stats:TraceStatsMixin.compute_ops",
+        "member",
+        "compute_ops",
+        "TraceStatsMixin.compute_ops",
+        "f-old",
+        owner_names=["Trace"],
+    )
+    new = _row(
+        "member:tl._data_classes.trace:Trace.compute_ops",
+        "member",
+        "compute_ops",
+        "Trace.compute_ops",
+        "f-new",
+        owner_names=["Trace"],
+    )
+    surface_diff = diff_inventories(_inventory(TRACE, old), _inventory(TRACE, new))
+    assert [(m.basis, m.old_id, m.new_id) for m in surface_diff.moved] == [
+        ("moved", old["id"], new["id"])
+    ]
+    assert surface_diff.new == () and surface_diff.removed == ()
+
+
+def test_a_folded_leaf_shared_by_two_public_owners_does_not_pair(tmp_path: Path) -> None:
+    """Two owners spelling the same leaf at base keep a fold from guessing which one moved."""
+
+    old_a = _row(
+        "member:tl.a:AMixin.size", "member", "size", "AMixin.size", "f-a", owner_names=["Trace"]
+    )
+    old_b = _row(
+        "member:tl.b:BMixin.size", "member", "size", "BMixin.size", "f-b", owner_names=["Trace"]
+    )
+    new = _row(
+        "member:tl.trace:Trace.size", "member", "size", "Trace.size", "f-n", owner_names=["Trace"]
+    )
+    surface_diff = diff_inventories(_inventory(TRACE, old_a, old_b), _inventory(TRACE, new))
+    assert surface_diff.moved == ()
+    assert {row["id"] for row in surface_diff.removed} == {old_a["id"], old_b["id"]}
+    assert [row["id"] for row in surface_diff.new] == [new["id"]]
+
+
+# --- string literals and other callables' keywords in code -----------------------------
+
+TRANSFORM_PARAM = _row(
+    "param:transform",
+    "param",
+    "transform",
+    "transform=",
+    "f-transform",
+    uses=["tl.preprocessing.Resolution"],
+)
+
+
+def test_a_foreign_callables_keyword_is_not_the_gone_keyword(tmp_path: Path) -> None:
+    """``fig.text(..., transform=...)`` is matplotlib's keyword, not ``Resolution``'s."""
+
+    base, head = _inventory(TRACE, TRANSFORM_PARAM), _inventory(TRACE)
+    corpus = _corpus(
+        tmp_path,
+        glossary="Nothing.\n",
+        example="""
+        import matplotlib.pyplot as plt
+        fig = plt.figure()
+        fig.text(
+            0.5,
+            0.5,
+            "caption",
+            transform=fig.transFigure,
+        )
+        """,
+    )
+    findings = check.check_lockstep(diff_inventories(base, head), corpus, head)
+    assert _stale_locations(findings) == set()
+
+
+def test_the_gone_keyword_passed_to_its_own_callable_still_reports(tmp_path: Path) -> None:
+    """``Resolution(transform=...)`` on one line, split, or in the glossary still reports."""
+
+    base, head = _inventory(TRACE, TRANSFORM_PARAM), _inventory(TRACE)
+    corpus = _corpus(
+        tmp_path,
+        glossary="Pass `transform=` to the resolution.\n",
+        example="""
+        res = tl.preprocessing.Resolution(transform=fn)
+        res = Resolution(
+            transform=fn,
+        )
+        """,
+    )
+    findings = check.check_lockstep(diff_inventories(base, head), corpus, head)
+    assert _stale_locations(findings) == {
+        "docs/reference/glossary.md:1",
+        "examples/demo.py:1",
+        "examples/demo.py:3",
+    }
+
+
+def test_a_leaf_inside_a_string_literal_is_not_residue_but_code_is(tmp_path: Path) -> None:
+    """A label ``"example.transform"`` is text; ``res.transform`` is the gone member."""
+
+    old = _member("tl.preprocessing._records", "Resolution", "transform", "f-rt")
+    new = _member("tl.preprocessing._records", "Resolution", "input_transform", "f-rt")
+    base, head = _inventory(TRACE, old), _inventory(TRACE, new)
+    corpus = _corpus(
+        tmp_path,
+        glossary="`Resolution.input_transform` is the callable.\n",
+        example='''
+        record = Record(source="example.transform")
+        """Docstring naming res.transform is text too."""
+        fn = res.transform
+        ''',
+    )
+    findings = check.check_lockstep(diff_inventories(base, head), corpus, head)
+    assert _stale_locations(findings) == {"examples/demo.py:3"}
+
+
+def test_notebook_code_strings_are_text_but_code_and_markdown_still_report(
+    tmp_path: Path,
+) -> None:
+    """In a notebook a key ``'n_heads'`` or f-string text is skipped; a call or prose is not."""
+
+    old = _row("param:n_heads", "param", "n_heads", "n_heads=", "f-h", uses=["FacetSpec.heads"])
+    new = _row(
+        "param:num_heads", "param", "num_heads", "num_heads=", "f-h", uses=["FacetSpec.heads"]
+    )
+    base, head = _inventory(TRACE, old), _inventory(TRACE, new)
+    notebook = textwrap.dedent(
+        """
+        {
+         "cells": [
+          {
+           "cell_type": "code",
+           "metadata": {},
+           "source": [
+            "print(f\\"n_heads = {fv.get('n_heads')}\\")\\n",
+            "spec = spec.heads(n_heads=4)\\n"
+           ]
+          },
+          {
+           "cell_type": "markdown",
+           "metadata": {},
+           "source": [
+            "Pass `n_heads=4` to split the heads.\\n"
+           ]
+          }
+         ]
+        }
+        """
+    ).lstrip("\n")
+    (tmp_path / "notebooks/audit").mkdir(parents=True)
+    (tmp_path / "notebooks/audit/a.ipynb").write_text(notebook, encoding="utf-8")
+    corpus = _corpus(tmp_path, glossary="`num_heads=` splits the heads.\n", example="x = 1\n")
+    findings = check.check_lockstep(diff_inventories(base, head), corpus, head)
+    assert _stale_locations(findings) == {
+        "notebooks/audit/a.ipynb:8",
+        "notebooks/audit/a.ipynb:15",
+    }

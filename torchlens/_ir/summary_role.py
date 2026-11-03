@@ -34,6 +34,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from .._data_classes._trace_missing_attrs import is_live_trace
+
 __tl_layer__ = "L2"
 
 #: Attribute name carrying the declared transform role. Duck-typed on
@@ -178,17 +180,27 @@ def ensure_summary_output_owns_storage(output: Any, live: Any) -> Any:
     live_storage = getattr(live, "untyped_storage", None)
     if output_storage is None or live_storage is None:
         return output
-    try:
-        aliases = output_storage().data_ptr() == live_storage().data_ptr()
-    except (AttributeError, NotImplementedError, RuntimeError):
-        aliases = True
-    if not aliases:
-        return output
-    # The defensive copy is a TorchLens-internal tensor op running while
-    # capture logging is live; pause so the clone is never itself captured.
-    from .._state import pause_logging
+    # The whole check is TorchLens-internal work running while capture logging
+    # is live. ``untyped_storage()`` is a wrapped torch call: unpaused, its
+    # wrapper preamble registers the reducer output as a first-seen tensor,
+    # which applies the summary transform again and re-enters this function
+    # (a first-in-process ``save="stats"`` capture recursed to the interpreter
+    # limit). Pause so neither the storage reads nor the clone are captured,
+    # and mark the pointer reads internal so a witness-armed capture never
+    # records them as user raw-pointer escapes.
+    from .._utils.tensor_utils import _paused_internal_reads
 
-    with pause_logging():
+    with _paused_internal_reads():
+        try:
+            aliases = output_storage().data_ptr() == live_storage().data_ptr()
+        except RecursionError:
+            # Never "aliasing unprovable": a recursion here means capture
+            # re-entered itself, a defect that must surface, not a clone.
+            raise
+        except (AttributeError, NotImplementedError, RuntimeError):
+            aliases = True
+        if not aliases:
+            return output
         return output.clone()
 
 
@@ -216,8 +228,10 @@ def retained_activation_bytes(trace_like: Any, op_like: Any) -> int:
         Retained bytes for this op under the capture's retention decision.
     """
 
-    transform = getattr(trace_like, "activation_transform", None)
-    store_raw = transform is None or getattr(trace_like, "save_raw_activations", True)
+    transform = trace_like._options_activation_transform if is_live_trace(trace_like) else None
+    store_raw = transform is None or (
+        trace_like._options_save_raw_activations if is_live_trace(trace_like) else True
+    )
     if store_raw:
         return int(getattr(op_like, "activation_memory", 0) or 0)
     return int(getattr(op_like, "transformed_activation_memory", 0) or 0)

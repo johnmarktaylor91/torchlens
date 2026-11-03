@@ -1,4 +1,4 @@
-"""Paddle and MLX traces stamp ``Trace.root_entry_point`` and reload.
+"""Paddle and MLX traces stamp ``Trace.provenance.root_entry_point`` and reload.
 
 From tlspec 10 the loader refuses an artifact whose root entry-point identity
 fact is absent (``_forgery_identity_facts._ROOT_ENTRY_POINT_REQUIRED_FROM_TLSPEC``).
@@ -30,7 +30,7 @@ def _roundtrip(trace: Any, tmp_path: Path) -> Any:
     loaded = tl.load(str(path))
     assert loaded is not trace
     assert list(loaded.layer_labels) == list(trace.layer_labels)
-    assert loaded.root_entry_point == trace.root_entry_point
+    assert loaded.provenance.root_entry_point == trace.provenance.root_entry_point
     return loaded
 
 
@@ -52,7 +52,7 @@ def test_paddle_function_root_stamps_and_reloads(tmp_path: Path) -> None:
         return paddle.nn.functional.relu(paddle.matmul(x, x.T))
 
     trace = tl.trace(paddle_relu_root, paddle.ones([2, 3], dtype="float32"), backend="paddle")
-    assert trace.root_entry_point == f"function_call:{paddle_relu_root.__qualname__}"
+    assert trace.provenance.root_entry_point == f"function_call:{paddle_relu_root.__qualname__}"
     _roundtrip(trace, tmp_path)
 
 
@@ -64,7 +64,7 @@ def test_paddle_module_root_stamps_and_reloads(tmp_path: Path) -> None:
     paddle.seed(0)
     model = paddle.nn.Sequential(paddle.nn.Linear(3, 4), paddle.nn.ReLU())
     trace = tl.trace(model, paddle.ones([2, 3], dtype="float32"), backend="paddle")
-    assert trace.root_entry_point == _module_call(model)
+    assert trace.provenance.root_entry_point == _module_call(model)
     _roundtrip(trace, tmp_path)
 
 
@@ -80,7 +80,7 @@ def test_mlx_function_root_stamps_and_reloads(tmp_path: Path) -> None:
         return mx.maximum(mx.matmul(x, x.T), 0.0)
 
     trace = tl.trace(mlx_relu_root, mx.ones((2, 3)), backend="mlx")
-    assert trace.root_entry_point == f"function_call:{mlx_relu_root.__qualname__}"
+    assert trace.provenance.root_entry_point == f"function_call:{mlx_relu_root.__qualname__}"
     _roundtrip(trace, tmp_path)
 
 
@@ -95,5 +95,5 @@ def test_mlx_module_root_stamps_and_reloads(tmp_path: Path) -> None:
     import mlx.core as mx
 
     trace = tl.trace(model, mx.ones((2, 3)), backend="mlx")
-    assert trace.root_entry_point == _module_call(model)
+    assert trace.provenance.root_entry_point == _module_call(model)
     _roundtrip(trace, tmp_path)

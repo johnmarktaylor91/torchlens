@@ -4,8 +4,8 @@ The scatter contract lives here: a whole-site mask returns the edit's
 behavior unchanged (recipe disclosure stamped); element masks wrap the hook
 factory with the EDIT-THEN-SCATTER step on a fresh tensor (stored capture
 truth is never written through). Consumers: the ACT selection do-plan
-(``torchlens._selection.build_selection_do_plan``) and the edge/param
-substitution doors. Moved out of ``torchlens/_selection.py`` under the R43
+(``torchlens._selection.do_plan.build_selection_do_plan``) and the edge/param
+substitution doors. Moved out of ``torchlens/_selection/selection.py`` under the R43
 file-size ratchet; semantics unchanged.
 """
 
@@ -18,7 +18,7 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
-from .._selection import Site, _apply_invalid, _Mask
+from .._selection.selection import Site, _apply_invalid, _Mask
 from .types import Edit
 
 __all__ = ["_derive_masked_edit", "_masked_factory", "_validate_edited"]
@@ -59,7 +59,7 @@ def _row_equivariance_facts(
     dense = entry._mask._dense_ro()
     if not isinstance(axis, int) or not -dense.ndim <= axis < dense.ndim:
         raise InvalidArgumentError(
-            f"row-coherent edit {edit.helper_name!r} declares batch axis "
+            f"row-coherent edit {edit.name!r} declares batch axis "
             f"{axis!r}, which is out of range for site {site_label!r}'s mask "
             f"of rank {dense.ndim} (shape {tuple(dense.shape)!r})",
             code="sampling_geometry_mismatch",
@@ -77,7 +77,7 @@ def _row_equivariance_facts(
     ).hexdigest()[:16]
     if not rows_equal:
         raise InvalidArgumentError(
-            f"row-coherent edit {edit.helper_name!r} at {site_label!r} received "
+            f"row-coherent edit {edit.name!r} at {site_label!r} received "
             "a partial mask whose selected elements DIFFER across batch rows: a "
             "whole-row exchange under a per-row mask would silently mix donor "
             "and subject values row by row. The v1 legality check is "
@@ -208,12 +208,12 @@ def _derive_masked_edit(edit: Any, entry: Site, digest: str, site_label: str) ->
         if edit.factory is None:
             raise _apply_invalid(
                 "not_maskable",
-                f"edit {edit.helper_name!r} has no runtime factory to mask.",
+                f"edit {edit.name!r} has no runtime factory to mask.",
                 site=site_label,
             )
         if dict(edit.metadata).get("row_coherent"):
             disclosure = disclosure + _row_equivariance_facts(edit, entry, site_label)
-        if edit.helper_name == SUBSPACE_EDIT_NAME and edit.portability == "builtin":
+        if edit.name == SUBSPACE_EDIT_NAME and edit.portability == "builtin":
             # A projected builtin verb stores its mask, so it stays portable.
             return dataclasses.replace(
                 masked_subspace_edit(edit, entry._mask, site_label),

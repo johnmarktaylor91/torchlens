@@ -306,20 +306,20 @@ def _edit_trace(model: nn.Module, selector: Any) -> torch.Tensor:
 def _edit_record(model: nn.Module, selector: Any) -> torch.Tensor:
     """Run the edit through ``tl.record`` with an opaque callable ``save=``."""
 
-    output, _recording = tl.record(
+    _recording = tl.record(
         model,
         _X,
         save=lambda ctx: True,
         intervene=tl.when(selector, tl.add(_DELTA)),
-        return_output=True,
     )
+    output = _recording.output
     return output
 
 
 def _intervention_ready(model: nn.Module) -> Any:
     """Capture an intervention-ready trace of the model."""
 
-    return tl.trace(model, _X, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(model, _X, capture=tl.options.CaptureOptions(replayable=True))
 
 
 def _edit_fork_do(model: nn.Module, selector: Any) -> torch.Tensor:
@@ -363,7 +363,7 @@ def _trace_save(model: nn.Module, selector: Any) -> Any:
 def _record_save(model: nn.Module, selector: Any) -> Any:
     """Select retained records with ``tl.record(save=)``."""
 
-    return tl.record(model, _X, save=selector, return_output=True)
+    return tl.record(model, _X, save=selector)
 
 
 def _trace_halt(model: nn.Module, selector: Any) -> Any:
@@ -375,7 +375,7 @@ def _trace_halt(model: nn.Module, selector: Any) -> Any:
 def _record_halt(model: nn.Module, selector: Any) -> Any:
     """Halt the recording with ``tl.record(halt=)``."""
 
-    return tl.record(model, _X, save=lambda ctx: True, stop_after=selector, return_output=True)
+    return tl.record(model, _X, save=lambda ctx: True, stop_after=selector)
 
 
 #: Every door that reads a module selector. The first five carry an edit; the

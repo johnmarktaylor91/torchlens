@@ -56,7 +56,7 @@ def _trace() -> tl.Trace:
     return tl.trace(
         _tiny().eval(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
 
 
@@ -311,7 +311,7 @@ def test_runnable_dead_model_fallback_refuses_non_tensor_state_typed() -> None:
             capture_state={"weight": torch.zeros(2), "running_junk": "not-a-tensor"},
             embedded_state=None,
         ),
-        param_logs=(),
+        _param_logs=(),
     )
     with pytest.raises(ArtifactError, match="non-tensor persistent-buffer"):
         runnable_mod._add_persistent_buffer_slot_drafts(stub_trace, {})
@@ -451,14 +451,14 @@ def test_unverified_capture_disclosure_survives_save_and_load(tmp_path: Path) ->
     """
 
     trace = _trace()
-    trace.capture_verified = False
-    trace.capture_verification_reason = "escape_rescue_unrecovered"
+    trace._provenance_verified = False
+    trace._provenance_verification_reason = "escape_rescue_unrecovered"
     spec = tmp_path / "unverified.tlspec"
     trace.save(str(spec))
     loaded = tl.load(str(spec))
-    assert loaded.capture_verified is False
-    assert loaded.capture_verification_reason == "escape_rescue_unrecovered"
+    assert loaded.provenance.verified is False
+    assert loaded.provenance.verification_reason == "escape_rescue_unrecovered"
 
     clean = _save(tmp_path, "clean.tlspec")
     loaded_clean = tl.load(str(clean))
-    assert loaded_clean.capture_verified is None
+    assert loaded_clean.provenance.verified is None

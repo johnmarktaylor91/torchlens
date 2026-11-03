@@ -2,6 +2,7 @@
 
 # ruff: noqa: F403, F405
 
+from .._record_type import record_type
 from ._buffer_visibility import (
     _buffer_name_segment,
     _is_buffer_visible,
@@ -75,9 +76,9 @@ def _get_node_by_label(trace: "Trace", label: str, vis_mode: str) -> GraphNode:
     """Return a render node by label for the active visualization mode."""
 
     if vis_mode == "unrolled":
-        return trace.layer_dict_main_keys.get(label, trace.layer_dict_all_keys[label])
+        return trace._layer_dict_main_keys.get(label, trace._layer_dict_all_keys[label])
     if vis_mode == "rolled":
-        return trace.layer_logs[label]
+        return trace._layer_logs[label]
     raise ValueError(f"vis_mode must be 'unrolled' or 'rolled', not {vis_mode}")
 
 
@@ -1661,9 +1662,8 @@ def _should_mark_arguments_on_edge(
         rolled_maps: Optional per-draw memo of the rolled-edge map properties.
     """
     # Commutative ops: argument order doesn't matter, skip labels.
-    if child_node.layer_type in COMMUTE_FUNCS:
+    if record_type(child_node) in COMMUTE_FUNCS:
         return False
-
     return _visible_parent_count(self, child_node, show_buffer_layers, rolled_maps) > 1
 
 
@@ -1735,8 +1735,8 @@ def _visible_parent_count_rolled(
             num_parents_shown -= sum(
                 [
                     int(
-                        self.layer_logs[parent].is_buffer
-                        and not _is_buffer_visible(self.layer_logs[parent], show_buffer_layers)
+                        self._layer_logs[parent].is_buffer
+                        and not _is_buffer_visible(self._layer_logs[parent], show_buffer_layers)
                     )
                     for parent in pass_parents
                 ]

@@ -6,7 +6,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from typing import Any
 
-from .selectors import BaseSelector, func, label_contains, module, where
+from .._selection.selectors import BaseSelector, func, label_contains, module, where
 
 
 def _as_tuple(value: Any | Iterable[Any] | None) -> tuple[Any, ...]:

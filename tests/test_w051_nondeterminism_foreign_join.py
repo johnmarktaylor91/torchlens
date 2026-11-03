@@ -29,6 +29,7 @@ import datetime
 import os
 import queue
 import random
+import sys
 import tempfile
 import threading
 import time
@@ -42,8 +43,11 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._utils import _rng_channels
-from torchlens._utils.rng import HOST_NONDETERMINISM_REGISTRY, host_nondeterminism_monitor
+from torchlens._utils.rng import (
+    HOST_NONDETERMINISM_REGISTRY,
+    channels as _rng_channels,
+    host_nondeterminism_monitor,
+)
 
 
 class _LinearNoBias(nn.Module):
@@ -410,11 +414,14 @@ def test_torchlens_initiated_waits_are_not_joins() -> None:
     with monitor as result:
         # Simulate a TorchLens-owned initiator by resolving the wait from a frame whose
         # globals are a registered torchlens module's globals: exercise the classifier
-        # directly with the rng module's own frame identity.
+        # directly with the rng package's own frame identity. The module object comes
+        # from ``sys.modules``: an import statement inside the window would run the
+        # ``sys.meta_path`` finders (pytest's assertion rewriter), whose frames seed the
+        # frame-reachable inventory and reach other test modules' planted holders.
         session = monitor._owner_sync_session
         condition = threading.Condition()
         fake_frame = type("F", (), {})()
-        fake_frame.f_globals = __import__("torchlens._utils.rng", fromlist=["x"]).__dict__
+        fake_frame.f_globals = sys.modules["torchlens._utils.rng"].__dict__
         fake_frame.f_code = test_torchlens_initiated_waits_are_not_joins.__code__
         fake_frame.f_back = None
         _rng_channels.classify_owner_wait(
@@ -436,7 +443,7 @@ def test_prepool_feed_in_capture_is_not_verified(
 
     x = torch.randn(2, 4)
     model = _FeedIn(lambda: warm_pool.submit(time.time).result()).eval()
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     seam = trace._runnable
     assert seam.rng_monitor_uncertain
     assert "foreign_thread_read_joined:time.time" in seam.rng_monitor_uncertain_detail
@@ -477,9 +484,7 @@ def test_lazy_pool_captures_never_verify_across_repeats() -> None:
     x = torch.randn(2, 4)
     try:
         for index in range(3):
-            seam = tl.trace(
-                model, x, capture=tl.options.CaptureOptions(intervention_ready=True)
-            )._runnable
+            seam = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))._runnable
             assert seam.host_rng_unreplayable or seam.rng_monitor_uncertain, index
     finally:
         for pool in pools:
@@ -505,7 +510,7 @@ def test_unjoined_flusher_capture_replays_verified(tmp_path: Path) -> None:
     try:
         x = torch.randn(2, 4)
         trace = tl.trace(
-            _LinearNoBias().eval(), x, capture=tl.options.CaptureOptions(intervention_ready=True)
+            _LinearNoBias().eval(), x, capture=tl.options.CaptureOptions(replayable=True)
         )
         seam = trace._runnable
         assert not seam.host_rng_unreplayable

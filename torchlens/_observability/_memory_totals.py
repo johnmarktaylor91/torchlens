@@ -27,14 +27,14 @@ def total_transformed_activation_memory(trace: Trace) -> Bytes:
     Read-time derivation over per-op ``transformed_activation_memory``
     (never persisted; works on legacy artifacts). Output pseudo-rows
     alias their producer's tensor and contribute nothing, mirroring
-    ``Trace.total_activation_memory``'s identity partition.
+    ``Trace.cost.total_activation_memory``'s identity partition.
     """
 
     return Bytes(
         sum(
             int(entry.transformed_activation_memory or 0)
-            for entry in trace.layer_list
-            if entry.layer_type != "output"
+            for entry in trace._layer_list
+            if entry.type != "output"
             and getattr(entry, "transformed_activation_memory", None) is not None
         )
     )
@@ -52,8 +52,8 @@ def total_transformed_gradient_memory(trace: Trace) -> Bytes:
     return Bytes(
         sum(
             int(entry.transformed_gradient_memory or 0)
-            for entry in trace.layer_list
-            if entry.layer_type != "output"
+            for entry in trace._layer_list
+            if entry.type != "output"
             and getattr(entry, "transformed_gradient_memory", None) is not None
         )
     )

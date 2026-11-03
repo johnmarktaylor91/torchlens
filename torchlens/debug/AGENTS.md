@@ -35,6 +35,9 @@ here but exported from `tl.report`.
   existing trace.
 - Results are `FindNanReport` / `BisectNanReport`; unsaved ancestors become an
   explicit `uncertainty_zone`, never a silent guess.
+- `find_nan` and `_rerun.isolated_capture` force one field on the caller's
+  `capture=` through `_capture_override._with_capture_fields`, which keeps the
+  caller's explicit-field record.
 
 ## _precision.py
 - `bisect_precision(model, input_args, input_kwargs=None, *, reference_dtype=fp64,
@@ -60,6 +63,8 @@ here but exported from `tl.report`.
   `GraphBreak` records correlated back to trace op locations.
 - Snapshots and restores model state around its probe run; typed failures are
   `GraphBreaksUnavailableError` / `GraphBreaksNormalizationError`.
+- `_dynamo_explain_shapes.py` normalizes the version-dependent shapes of
+  `torch._dynamo.explain` results (pure, no torch access).
 
 ## _audit.py
 - `audit_trace(trace)` returns a `HealthReport` of `AuditFinding`s; accepts a

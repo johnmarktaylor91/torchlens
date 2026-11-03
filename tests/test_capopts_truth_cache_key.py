@@ -1,7 +1,7 @@
 """A06 capture-options truth: the cache key covers EVERY semantic option.
 
 WALKTHROUGH list-A row 26 (first clause): ``cache=True`` could serve captures
-that never armed ``raise_on_nan`` / ``track_nonfinite`` / ``save_budget`` --
+that never armed ``on_nonfinite`` (then ``raise_on_nan`` / ``track_nonfinite``) / ``save_budget`` --
 the key was a hand-enumerated include-list, so semantic knobs added after it
 silently fell outside it (fail-open on safety options). The key is now
 INVERTED (M(oracles) item 6): every ``CaptureOptions`` field enters the key
@@ -27,8 +27,8 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-import torchlens._user_funcs as user_funcs
-from torchlens._user_funcs import (
+import torchlens._capture.prepare.cache as prepare_cache
+from torchlens._capture.prepare.cache import (
     CAPTURE_CACHE_KEY_CURATED,
     CAPTURE_CACHE_KEY_NEUTRAL,
 )
@@ -88,7 +88,7 @@ def test_cache_key_curated_fields_have_hand_built_entries() -> None:
     leaves the key. This receipt scans the assembly source for the literal.
     """
 
-    source = inspect.getsource(user_funcs)
+    source = inspect.getsource(prepare_cache._curated_cache_config)
     missing = [name for name in sorted(CAPTURE_CACHE_KEY_CURATED) if f'"{name}"' not in source]
     assert not missing, (
         f"curated fields with no hand-built cache-config entry: {missing}; "
@@ -109,17 +109,20 @@ def test_warm_cache_identical_config_hits(tmp_path: Path) -> None:
     x = torch.randn(2, 4)
     cold = _trace(model, x, str(tmp_path))
     warm = _trace(model, x, str(tmp_path))
-    assert cold.capture_cache_hit is False
-    assert warm.capture_cache_hit is True
+    assert cold.provenance.cache_hit is False
+    assert warm.provenance.cache_hit is True
 
 
 @pytest.mark.parametrize(
     "field_name,flip_value",
     [
-        ("raise_on_nan", True),
-        ("track_nonfinite", True),
+        ("on_nonfinite", "raise"),
+        ("on_nonfinite", "track"),
         ("save_budget", 10**9),
         ("measure_python_peak_memory", True),
+        ("save_raw_grads", False),
+        ("reconstruction_ready", True),
+        ("on_nonfinite", "warn"),
     ],
 )
 def test_warm_cache_semantic_flip_recaptures(
@@ -131,7 +134,7 @@ def test_warm_cache_semantic_flip_recaptures(
     x = torch.randn(2, 4)
     _trace(model, x, str(tmp_path))
     flipped = _trace(model, x, str(tmp_path), **{field_name: flip_value})
-    assert flipped.capture_cache_hit is False, (
+    assert flipped.provenance.cache_hit is False, (
         f"warm cache served a capture that never armed {field_name}={flip_value!r}"
     )
 
@@ -143,7 +146,7 @@ def test_warm_cache_neutral_flip_still_hits(tmp_path: Path) -> None:
     x = torch.randn(2, 4)
     _trace(model, x, str(tmp_path))
     warm = _trace(model, x, str(tmp_path), verbose=True)
-    assert warm.capture_cache_hit is True
+    assert warm.provenance.cache_hit is True
 
 
 def test_warm_cache_restamps_batch_render(tmp_path: Path) -> None:
@@ -153,7 +156,7 @@ def test_warm_cache_restamps_batch_render(tmp_path: Path) -> None:
     x = torch.randn(2, 4)
     _trace(model, x, str(tmp_path))
     warm = _trace(model, x, str(tmp_path), batch_render="grid")
-    assert warm.capture_cache_hit is True
+    assert warm.provenance.cache_hit is True
     assert warm.batch_render == "grid"
 
 
@@ -167,9 +170,9 @@ def test_failed_capture_never_seeds_the_cache(tmp_path: Path) -> None:
         model.fc.weight.fill_(float("nan"))
     x = torch.randn(2, 4)
     with pytest.raises(CaptureError):
-        _trace(model, x, str(tmp_path), raise_on_nan=True)
+        _trace(model, x, str(tmp_path), on_nonfinite="raise")
     with pytest.raises(CaptureError):
-        _trace(model, x, str(tmp_path), raise_on_nan=True)
+        _trace(model, x, str(tmp_path), on_nonfinite="raise")
 
 
 # ---------------------------------------------------------------------------
@@ -181,16 +184,20 @@ def test_failed_capture_never_seeds_the_cache(tmp_path: Path) -> None:
 def test_plant_neutralized_semantic_field_reopens_wrong_serve(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Removing raise_on_nan from the key reproduces the defect; the sweep is load-bearing."""
+    """Declaring a swept knob neutral reproduces the defect; the sweep is load-bearing.
+
+    ``on_nonfinite`` (the former ``raise_on_nan``) is hand-curated into the key now, so
+    the plant uses ``measure_python_peak_memory``, a field only the sweep keys.
+    """
 
     planted = dict(CAPTURE_CACHE_KEY_NEUTRAL)
-    planted["raise_on_nan"] = "PLANT: pretend this safety knob is session-neutral"
-    monkeypatch.setattr(user_funcs, "CAPTURE_CACHE_KEY_NEUTRAL", planted)
+    planted["measure_python_peak_memory"] = "PLANT: pretend this knob is session-neutral"
+    monkeypatch.setattr(prepare_cache, "CAPTURE_CACHE_KEY_NEUTRAL", planted)
     model = SmallNet()
     x = torch.randn(2, 4)
     _trace(model, x, str(tmp_path))
-    wrongly_served = _trace(model, x, str(tmp_path), raise_on_nan=True)
-    assert wrongly_served.capture_cache_hit is True, (
+    wrongly_served = _trace(model, x, str(tmp_path), measure_python_peak_memory=True)
+    assert wrongly_served.provenance.cache_hit is True, (
         "the plant did not reproduce the historical wrong-serve; the sweep is "
         "no longer the mechanism keying semantic options -- update this control"
     )
@@ -205,7 +212,7 @@ def test_plant_neutralized_semantic_field_reopens_wrong_serve(
 
 @pytest.mark.real_model
 def test_warm_cache_semantic_flip_recaptures_distilgpt2(tmp_path: Path) -> None:
-    """R0: distilgpt2 warm cache never serves a raise_on_nan=False capture."""
+    """R0: distilgpt2 warm cache never serves an on_nonfinite="ignore" capture."""
 
     pytest.importorskip("transformers")
     from tests.real_model.r0.families import build_distilgpt2
@@ -215,7 +222,7 @@ def test_warm_cache_semantic_flip_recaptures_distilgpt2(tmp_path: Path) -> None:
     input_ids = torch.randint(0, 512, (1, 8), generator=generator)
     cold = _trace(model, input_ids, str(tmp_path))
     warm = _trace(model, input_ids, str(tmp_path))
-    flipped = _trace(model, input_ids, str(tmp_path), raise_on_nan=True)
-    assert cold.capture_cache_hit is False
-    assert warm.capture_cache_hit is True
-    assert flipped.capture_cache_hit is False
+    flipped = _trace(model, input_ids, str(tmp_path), on_nonfinite="raise")
+    assert cold.provenance.cache_hit is False
+    assert warm.provenance.cache_hit is True
+    assert flipped.provenance.cache_hit is False

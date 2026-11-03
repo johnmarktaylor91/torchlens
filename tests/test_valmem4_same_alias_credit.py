@@ -31,7 +31,7 @@ import torchlens as tl
 import torchlens._user_funcs as user_funcs
 from torchlens import _user_public_impls, _validation_argument_references as arg_references
 from torchlens._save_budget import SaveBudget, SaveBudgetExceededError
-from torchlens.backends.torch import _ops_retention
+from torchlens.backends.torch import _ops_arguments, _ops_retention
 from torchlens.options import CaptureOptions
 from torchlens.validation.diagnostics import get_validation_diagnostics, get_validation_failure
 
@@ -166,7 +166,7 @@ def test_clone_path_rerun_and_live_model_guards_charge_parameters(output_device:
         token = arg_references._SESSION.set(session)
         try:
             with arg_references.parameter_argument_references(model, model_is_copy, output_device):
-                assert _ops_retention._uncharged_parameter_aliases((model.weight,)) == set()
+                assert _ops_arguments._uncharged_parameter_aliases((model.weight,)) == set()
                 with pytest.raises(SaveBudgetExceededError):
                     _admit_under_the_active_guard(model)
         finally:
@@ -176,7 +176,7 @@ def test_clone_path_rerun_and_live_model_guards_charge_parameters(output_device:
 def test_outside_validation_parameters_are_charged() -> None:
     model = nn.Linear(16, 16)
     assert arg_references.active_argument_references() is None
-    assert _ops_retention._uncharged_parameter_aliases((model.weight,)) == set()
+    assert _ops_arguments._uncharged_parameter_aliases((model.weight,)) == set()
     with pytest.raises(SaveBudgetExceededError):
         _admit_under_the_active_guard(model)
 
@@ -210,10 +210,10 @@ def test_a_cloned_parameter_is_still_charged_on_same() -> None:
 def test_a_user_trace_still_charges_parameter_copies() -> None:
     torch.manual_seed(0)
     model, x = nn.Linear(256, 256), torch.randn(2, 256)
-    capture = CaptureOptions(layers_to_save="all", save_args=True, save_budget=_BELOW_WEIGHTS)
+    capture = CaptureOptions(save_args=True, save_budget=_BELOW_WEIGHTS)
     with warnings.catch_warnings(), pytest.raises(SaveBudgetExceededError):
         warnings.simplefilter("ignore")
-        tl.trace(model, x, capture=capture)
+        tl.trace(model, x, capture=capture, save="all")
 
 
 # ---------------------------------------------------------------------------
@@ -222,12 +222,12 @@ def test_a_user_trace_still_charges_parameter_copies() -> None:
 
 
 def _corrupt_relu_input(trace: Any) -> None:
-    relu = next(op for op in trace.layer_list if op.func_name == "relu")
+    relu = next(op for op in trace._layer_list if op.func_name == "relu")
     relu.saved_args[0].add_(1.0)
 
 
 def _corrupt_saved_weight(trace: Any) -> None:
-    linear = next(op for op in trace.layer_list if op.func_name == "linear")
+    linear = next(op for op in trace._layer_list if op.func_name == "linear")
     with torch.no_grad():
         linear.saved_args[1].add_(1.0)
 

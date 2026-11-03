@@ -64,7 +64,7 @@ class EpisodeErrorCode(str, Enum):
     #: episode-dependent claims across it (step-series reads, whole-episode
     #: replay, the blessing fold, escalation) refuse. Also the settlement
     #: refusal under the FORK-4 ``on_feed_break="refuse"`` arm (partial
-    #: evidence on ``exc.partial_log``).
+    #: evidence on ``exc.partial_trace``).
     EPISODE_FEED_BREAK_EXOGENOUS = "episode_feed_break_exogenous"
 
     #: ``feed="closed"`` was declared and an UNDECLARED crossing was
@@ -183,8 +183,7 @@ class EpisodeJoinError(EpisodeCaptureError, ValidationError, RuntimeError):
     ``episode_join_unmeasured``, or ``episode_join_declared_crossing``;
     ``fields["break_step"]`` names the broken join's step where one exists.
     Strict-arm instances raised mid-capture carry the settled partial
-    product on ``exc.partial_log`` (recover with
-    ``tl._partial.from_failed_capture(exc)``).
+    product on ``exc.partial_trace``.
     """
 
 

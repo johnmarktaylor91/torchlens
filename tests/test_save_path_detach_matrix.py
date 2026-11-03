@@ -8,7 +8,7 @@ and both settings of the knob. ``False`` (the default) returns graph-connected
 payloads whose backward reaches the parameters upstream of the site; ``True``
 returns detached payloads. The model reuses one ``ReLU`` per residual block and
 adds the shortcut in place, the two shapes that used to refuse the fast path
-(``conditional_arm_divergence`` and ``run_capability_unavailable``).
+(``conditional_arm_mismatch`` and ``run_capability_unavailable``).
 
 Repeated optimiser steps through the fast run's truncated output must equal the
 same steps on a hand-truncated eager model, and the ``tl.extract`` and
@@ -144,7 +144,7 @@ def _inputs(seed: int) -> torch.Tensor:
 
 
 _SAVES: dict[str, Callable[[], Any]] = {
-    "save_all": lambda: None,
+    "save_all": lambda: "all",
     "module": lambda: tl.module("layer1") | tl.module(_SITE),
     "in_module": lambda: tl.in_module("layer1") | tl.in_module(_SITE),
 }

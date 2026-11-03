@@ -20,7 +20,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-import torchlens._user_funcs as user_funcs
+import torchlens._capture.prepare.recursive_options as prepare_recursive_options
 from torchlens._save_budget import SaveBudgetExceededError
 from torchlens.options import CaptureOptions
 
@@ -36,24 +36,64 @@ class SmallNet(nn.Module):
         return torch.relu(self.fc(x))
 
 
-def _recursive_capture_options_keywords() -> set[str]:
-    """Extract the keyword names of the chunk path's CaptureOptions rebuild."""
+_FIELD_GROUPS = ("_copied_capture_fields", "_routed_capture_fields")
 
-    tree = ast.parse(inspect.getsource(user_funcs))
-    for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.Assign)
-            and len(node.targets) == 1
-            and isinstance(node.targets[0], ast.Name)
-            and node.targets[0].id == "recursive_capture_options"
-            and isinstance(node.value, ast.Call)
-        ):
-            return {kw.arg for kw in node.value.keywords if kw.arg is not None}
-    raise AssertionError(
-        "the chunk path's recursive_capture_options = CaptureOptions(...) "
-        "assignment was not found in torchlens._user_funcs; if the chunk path "
-        "was restructured, re-point this oracle at the new rebuild site"
+
+def _literal_dict_keys(function: ast.FunctionDef) -> list[str]:
+    """Return the string keys of the ``return {...}`` literal in ``function``, in order."""
+
+    for statement in ast.walk(function):
+        if isinstance(statement, ast.Return) and isinstance(statement.value, ast.Dict):
+            keys = statement.value.keys
+            assert all(
+                isinstance(key, ast.Constant) and isinstance(key.value, str) for key in keys
+            ), f"{function.name} must name every field as a literal string key (no ** entries)"
+            return [key.value for key in keys if isinstance(key, ast.Constant)]
+    raise AssertionError(f"{function.name} has no `return {{...}}` literal")
+
+
+def _recursive_capture_options_keywords() -> set[str]:
+    """Extract the field names of the chunk path's CaptureOptions rebuild.
+
+    The rebuild in ``_recursive_capture_options`` is exactly
+    ``CaptureOptions(**_copied_capture_fields(...), **_routed_capture_fields(...))``;
+    each group returns a dict literal naming its fields. A field named in both
+    groups, or any other argument in the rebuild call, fails here.
+    """
+
+    tree = ast.parse(inspect.getsource(prepare_recursive_options))
+    functions = {node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)}
+    rebuild_calls = [
+        node
+        for node in ast.walk(functions["_recursive_capture_options"])
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "CaptureOptions"
+    ]
+    assert len(rebuild_calls) == 1, (
+        "the chunk path's CaptureOptions(...) rebuild was not found (once) in "
+        "torchlens._capture.prepare.recursive_options._recursive_capture_options; if the chunk "
+        "path was restructured, re-point this oracle at the new rebuild site"
     )
+    (rebuild,) = rebuild_calls
+    splatted = [
+        keyword.value.func.id
+        for keyword in rebuild.keywords
+        if keyword.arg is None
+        and isinstance(keyword.value, ast.Call)
+        and isinstance(keyword.value.func, ast.Name)
+    ]
+    assert not rebuild.args and len(rebuild.keywords) == len(_FIELD_GROUPS), (
+        "the rebuild call must hold exactly the two field-group splats and nothing else"
+    )
+    assert tuple(splatted) == _FIELD_GROUPS, (
+        f"the rebuild call splats {splatted}, expected exactly {list(_FIELD_GROUPS)}"
+    )
+    groups = [_literal_dict_keys(functions[name]) for name in _FIELD_GROUPS]
+    named = [field for group in groups for field in group]
+    repeated = sorted({field for field in named if named.count(field) > 1})
+    assert not repeated, f"fields named more than once across the field groups: {repeated}"
+    return set(named)
 
 
 def test_chunk_path_rebuild_covers_every_capture_option_field() -> None:
@@ -73,7 +113,7 @@ def test_chunk_path_rebuild_covers_every_capture_option_field() -> None:
     assert not dropped, (
         f"CaptureOptions fields silently dropped by the chunked rebuild: "
         f"{sorted(dropped)}; route each through recursive_capture_options in "
-        "torchlens/_user_funcs.py (forward the resolved value, or reset it "
+        "torchlens/_capture/prepare/chunked.py (forward the resolved value, or reset it "
         "explicitly with a comment saying why)"
     )
     unknown = rebuilt - field_names
@@ -103,7 +143,7 @@ def test_chunked_capture_carries_peak_memory_knob() -> None:
             measure_python_peak_memory=True, measure_host_peak_memory=True, chunk_size=4
         ),
     )
-    peak = log.forward_peak_memory
+    peak = log.cost.forward_peak_memory
     assert peak is not None and peak > 0, (
         "measure_python_peak_memory=True on a chunked capture reported no "
         "tracemalloc peak; the knob was dropped by the recursive rebuild"
@@ -120,7 +160,7 @@ def test_chunked_capture_carries_host_peak_memory_knob() -> None:
         torch.randn(8, 4),
         capture=CaptureOptions(measure_host_peak_memory=True, chunk_size=4),
     )
-    assert log.forward_peak_memory_reason != CPU_PEAK_NOT_REQUESTED_REASON, (
+    assert log.cost.forward_peak_memory_reason != CPU_PEAK_NOT_REQUESTED_REASON, (
         "measure_host_peak_memory=True on a chunked capture read as not requested; "
         "the knob was dropped by the recursive rebuild"
     )

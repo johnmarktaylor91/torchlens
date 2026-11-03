@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import fields, replace
+from dataclasses import replace
 from typing import Literal, cast
 
 from ..recording.exceptions import RecordingConfigError
 from ..recording.types import ActivationRecord, Recording
 
-EnrichmentStep = Literal["module_path_strings", "param_addresses"]
+EnrichmentStep = Literal["module_path_strings"]
 _ALL_FEASIBLE: tuple[EnrichmentStep, ...] = ("module_path_strings",)
-_ALL_STEPS: set[str] = {"module_path_strings", "param_addresses"}
+_ALL_STEPS: set[str] = {"module_path_strings"}
 
 
 def _copy_record_with_metadata(
@@ -26,7 +26,7 @@ def _copy_record_with_metadata(
 def _replace_recording_records(recording: Recording, records: list[ActivationRecord]) -> Recording:
     """Return a recording copy with a new records list and count."""
 
-    return replace(recording, records=records)
+    return recording._replace(records=records)
 
 
 def add_module_path_strings(recording: Recording) -> Recording:
@@ -60,45 +60,6 @@ def add_module_path_strings(recording: Recording) -> Recording:
     return _replace_recording_records(recording, records)
 
 
-def _out_record_has_param_addresses() -> bool:
-    """Return whether capture-time param-address data exists on ActivationRecord."""
-
-    return any(field.name == "parent_param_addresses" for field in fields(ActivationRecord))
-
-
-def add_param_addresses(recording: Recording) -> Recording:
-    """Attach captured parent parameter addresses to record metadata.
-
-    Parameters
-    ----------
-    recording:
-        Source fastlog recording.
-
-    Returns
-    -------
-    Recording
-        New recording with ``metadata["parent_param_addresses"]`` populated.
-
-    Raises
-    ------
-    RecordingConfigError
-        If this build did not capture ``ActivationRecord.parent_param_addresses``.
-    """
-
-    if not _out_record_has_param_addresses():
-        raise RecordingConfigError(
-            "param_addresses enrichment requires capture-time "
-            "ActivationRecord.parent_param_addresses data, which is not available"
-        )
-    records = []
-    for record in recording.records:
-        addresses = getattr(record, "parent_param_addresses")
-        records.append(
-            _copy_record_with_metadata(record, {"parent_param_addresses": tuple(addresses or ())})
-        )
-    return _replace_recording_records(recording, records)
-
-
 def _normalize_steps(steps: list[str] | str) -> tuple[EnrichmentStep, ...]:
     """Normalize public enrichment step input."""
 
@@ -111,8 +72,7 @@ def _normalize_steps(steps: list[str] | str) -> tuple[EnrichmentStep, ...]:
     unknown = sorted(set(requested) - _ALL_STEPS)
     if unknown:
         raise RecordingConfigError(
-            "Recording.enrich steps must be 'module_path_strings', "
-            "'param_addresses', or 'all-feasible'"
+            "Recording.enrich steps must be 'module_path_strings' or 'all-feasible'"
         )
     return tuple(cast("EnrichmentStep", step) for step in requested)
 
@@ -124,6 +84,4 @@ def enrich_recording(recording: Recording, steps: list[str] | str) -> Recording:
     for step in _normalize_steps(steps):
         if step == "module_path_strings":
             enriched = add_module_path_strings(enriched)
-        elif step == "param_addresses":
-            enriched = add_param_addresses(enriched)
     return enriched

@@ -43,7 +43,7 @@ def test_stop_after_module_address_halts_inclusively() -> None:
     """A module-address string halts at that module's exit, keeping its ops."""
 
     log = tl.trace(ThreeStep(), torch.randn(2, 4), stop_after="fc1")
-    assert log.halted is True
+    assert log.is_stopped is True
     assert log.outcome.status.name == "STOPPED"
     labels = _labels(log)
     assert any(label.startswith("linear_1") for label in labels), labels
@@ -56,7 +56,7 @@ def test_stop_after_selector_halts_inclusively_with_payload() -> None:
     """A live selector site is captured (payload included) before halting."""
 
     log = tl.trace(ThreeStep(), torch.randn(2, 4), stop_after=tl.func("relu"))
-    assert log.halted is True
+    assert log.is_stopped is True
     relu_ops = [op for op in log if op.layer_label.startswith("relu")]
     assert len(relu_ops) == 1
     assert relu_ops[0].out is not None
@@ -71,7 +71,7 @@ def test_stop_after_callable_halts() -> None:
         torch.randn(2, 4),
         stop_after=lambda ctx: ctx.func_name == "relu",
     )
-    assert log.halted is True
+    assert log.is_stopped is True
     assert not any(label.startswith("linear_2") for label in _labels(log))
 
 
@@ -106,7 +106,7 @@ def test_stop_after_callable_never_fired_warns_with_ledger() -> None:
             torch.randn(2, 4),
             stop_after=lambda ctx: False,
         )
-    assert log.halted is False
+    assert log.is_stopped is False
     codes = [
         getattr(entry.message, "fields", {}).get("code")
         for entry in caught
@@ -145,7 +145,7 @@ def test_stop_after_ambient_context_manager_reaches_trace_and_pluck() -> None:
 
     with tl.experimental.stop_after("fc1"):
         log = tl.trace(ThreeStep(), torch.randn(2, 4))
-    assert log.halted is True
+    assert log.is_stopped is True
     assert not any(label.startswith("relu") for label in _labels(log))
 
     with tl.experimental.stop_after("fc1"):
@@ -160,7 +160,7 @@ def test_stop_after_ambient_never_fired_warns_never_refuses() -> None:
         warnings.simplefilter("always")
         with tl.experimental.stop_after("nonexistent.module"):
             log = tl.trace(ThreeStep(), torch.randn(2, 4))
-    assert log.halted is False
+    assert log.is_stopped is False
     codes = [
         getattr(entry.message, "fields", {}).get("code")
         for entry in caught
@@ -175,7 +175,7 @@ def test_stop_after_explicit_wins_over_ambient() -> None:
 
     with tl.experimental.stop_after("nonexistent.module"):
         log = tl.trace(ThreeStep(), torch.randn(2, 4), stop_after="fc1")
-    assert log.halted is True
+    assert log.is_stopped is True
 
 
 @pytest.mark.smoke
@@ -190,7 +190,7 @@ def test_stop_after_gpt2_block_frontier() -> None:
     generator = torch.Generator().manual_seed(20260826)
     input_ids = torch.randint(0, 512, (1, 8), generator=generator)
     log = tl.trace(model, input_ids, stop_after="transformer.h.0")
-    assert log.halted is True
+    assert log.is_stopped is True
     module_addresses = {
         module_address for op in log for module_address in (getattr(op, "modules", ()) or ())
     }

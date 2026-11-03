@@ -38,7 +38,7 @@ def compact_op_metadata(trace: Trace) -> None:
 
     if trace in _COMPACTED_TRACES:
         return
-    ops = trace.__dict__.get("layer_list")
+    ops = trace.__dict__.get("_layer_list")
     if not ops:
         return
     _COMPACTED_TRACES.add(trace)

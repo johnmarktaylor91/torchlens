@@ -137,16 +137,16 @@ def _fill_buffers(model: nn.Module, value: float) -> nn.Module:
     return model
 
 
-_SAVE_ALL = tl.options.CaptureOptions(layers_to_save="all")
+_SAVE_ALL = tl.options.CaptureOptions()
 
 
 def _graph_hash(model: nn.Module, x: torch.Tensor) -> str:
     """Capture ``model`` once, saving every activation, and return its graph shape hash."""
 
-    trace = tl.trace(model, x, capture=_SAVE_ALL)
+    trace = tl.trace(model, x, capture=_SAVE_ALL, save="all")
     try:
-        assert trace.graph_shape_hash is not None
-        return trace.graph_shape_hash
+        assert trace.provenance.fingerprint is not None
+        return trace.provenance.fingerprint
     finally:
         trace.cleanup()
 
@@ -179,9 +179,11 @@ def test_rewritten_buffer_validates_with_no_retrace_warning(name: str) -> None:
 def test_nan_reached_by_a_rewritten_buffer_keeps_its_identity_edge() -> None:
     """A buffer version that holds NaN still replays as ``identity`` of its producer."""
 
-    trace = tl.trace(_fill_buffers(_Reassign(), float("nan")), torch.rand(4), capture=_SAVE_ALL)
+    trace = tl.trace(
+        _fill_buffers(_Reassign(), float("nan")), torch.rand(4), capture=_SAVE_ALL, save="all"
+    )
     try:
-        versions = [op for op in trace.layer_list if op.is_buffer and op.buffer_source]
+        versions = [op for op in trace._layer_list if op.is_buffer and op.buffer_source]
         assert versions, "the reassignment must log a buffer version node"
         for op in versions:
             assert torch.isnan(op.out).all()
@@ -194,9 +196,11 @@ def test_nan_reached_by_a_rewritten_buffer_keeps_its_identity_edge() -> None:
 def test_equal_valued_storage_swap_keeps_its_own_version_node() -> None:
     """A recorded write never merges into the read before it, even when values agree."""
 
-    trace = tl.trace(_fill_buffers(_DataSwapToZeros(), 0.0), torch.rand(4), capture=_SAVE_ALL)
+    trace = tl.trace(
+        _fill_buffers(_DataSwapToZeros(), 0.0), torch.rand(4), capture=_SAVE_ALL, save="all"
+    )
     try:
-        buffer_ops = [op for op in trace.layer_list if op.is_buffer]
+        buffer_ops = [op for op in trace._layer_list if op.is_buffer]
         kinds = [op.buffer_write_kind for op in buffer_ops]
         assert kinds == [None, "data_reassign"]
     finally:

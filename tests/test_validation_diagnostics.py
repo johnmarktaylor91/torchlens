@@ -18,7 +18,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 
-from torchlens._user_funcs import _run_model_and_save_specified_outs
+from torchlens._capture.run_entry import _run_model_and_save_specified_outs
 from torchlens.report import ValidationFailure
 from torchlens.validation import get_validation_failure
 from torchlens.validation.core import validate_saved_outs
@@ -59,8 +59,8 @@ def _patch_op_func_to_diverge(trace: Any, func_name: str, delta: float = 1.0) ->
     Returns the patched op's layer label.
     """
 
-    for layer in trace.layer_list:
-        op = layer.ops[1] if hasattr(layer.ops, "_list") else layer
+    for layer in trace._layer_list:
+        op = layer.ops[1] if hasattr(getattr(layer, "ops", None), "_list") else layer
         if getattr(op, "func_name", None) == func_name:
             original = op.func
 

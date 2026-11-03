@@ -103,7 +103,7 @@ def params_caption_detail(trace: Trace) -> str:
 
     if trace.num_params == 0:
         return "0 params"
-    memory = trace.total_param_memory
+    memory = trace._cost_total_param_memory
     if trace.num_params_frozen == 0:
         return f"{trace.num_params} params ({memory}, all trainable)"
     if trace.num_params_trainable == 0:
@@ -170,7 +170,7 @@ def graph_caption_body(trace: Trace, count_line: str, request: ResolvedRenderReq
     from ._render_utils import strip_path_directories
 
     caption_body = (
-        f"<B>{html_escape(trace.model_class_name)}</B>"
+        f"<B>{html_escape(trace._source_class_name)}</B>"
         f"<br align='left'/>{html_escape(count_line)}"
         f"<br align='left'/>{params_caption_detail(trace)}<br align='left'/>"
     )
@@ -224,7 +224,7 @@ def _header_edit_line(trace: Trace, request: ResolvedRenderRequest) -> str | Non
     sites = intervention_sites_for_log(trace)
     if not sites:
         return None
-    theme = resolve_theme(request.theme, for_paper=request.for_paper)
+    theme = resolve_theme(request.theme)
     color = str((request.graph_overrides or {}).get("intervention_site_color", edit_ink(theme)))
     return header_edit_line(trace, sites, color, vis_mode=request.vis_mode)
 

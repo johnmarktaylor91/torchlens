@@ -111,7 +111,17 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "port-equivalence leg (F16): the slice-then-convert adapter comparison",
     ),
     "PIL": (TEST_EXTRA, "pillow (also a core torchlens dependency)"),
-    "brainscore_core": (OPTIONAL_PREVIEW, "neuro extra (brain-score dist)"),
+    "build": (
+        OPTIONAL_PREVIEW,
+        "dev extra; the pr.yml packaging-install job installs build beside its "
+        "runner and executes tests/packaging_install/ (skips in a test-only env)",
+    ),
+    "yaml": (TEST_EXTRA, "PyYAML, declared in the [test] extra (workflow YAML parses)"),
+    "_pytest.nodeid": (
+        TEST_EXTRA,
+        "pytest 9.2+ structured node ids (tests/test_xdist_groups.py); the pin allows"
+        " pytest 8, but CI resolves 9.2+, and the restamp plugin is not needed on 8",
+    ),
     "brainscore_core.metrics": (
         OPTIONAL_PREVIEW,
         "brainscore extra; the real Score object whose raw and ceiling attrs "
@@ -156,6 +166,7 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "research-model dependency for real-world coverage, deliberately undeclared",
     ),
     "equinox": (OPTIONAL_PREVIEW, "jax extra"),
+    "flax": (OPTIONAL_PREVIEW, "jax extra"),
     "scipy": (
         OPTIONAL_PREVIEW,
         "extraction-export extra (MAT exporter); requested in "
@@ -188,7 +199,6 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
     "jax.lax": (OPTIONAL_PREVIEW, "jax extra"),
     "jax.numpy": (OPTIONAL_PREVIEW, "jax extra"),
     "jax.random": (OPTIONAL_PREVIEW, "jax extra"),
-    "jupyter_client": (OPTIONAL_PREVIEW, "notebook extra"),
     "jsonschema": (
         UNAVAILABLE_OK,
         "dev-tooling dependency (pre-commit config validation); the agent schema "
@@ -240,6 +250,7 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "path-filtered export job requested via the packaging-request ledger "
         "(F14 2026-08-28)",
     ),
+    "numpy": (TEST_EXTRA, "core torchlens dependency; a skip means install breakage"),
     "pandas": (OPTIONAL_PREVIEW, "tabular extra"),
     "pandas.api.types": (OPTIONAL_PREVIEW, "tabular extra"),
     "peft": (
@@ -364,11 +375,18 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
 DYNAMIC_IMPORTORSKIP_SITES = frozenset(
     {
         "test_backend_registry.py",  # importorskips the registry's own dependency map
+        "test_subfolder_imports.py",  # importorskips each subfolder's declared optional deps
     }
 )
 
 # Every unconditional skip in tests/ (scanner key -> dated justification).
 UNCONDITIONAL_SKIP_LEDGER: dict[str, str] = {
+    "test_backend_scorecard_packaging.py::_wheel_build_command": (
+        "[2026-11-01] reached only when neither ``build`` nor ``pip`` is importable "
+        "(feature check, never a version parse): with no wheel builder the packaging "
+        "test has nothing to drive; every CI leg installs pip, so the skip is a guard, "
+        "not a dead test."
+    ),
     "real_model/test_track_compile_recompile_burst.py::_recompile_limit": (
         "[2026-10-12] reached only when the loop above finds neither Dynamo "
         "recompile-limit name (feature check, never a version parse): with no "
@@ -1098,7 +1116,6 @@ DEVICE_GATED_SKIPIF_LEDGER: dict[str, str] = {
     "test_tlspec_runnable_r65_torch_rng.py::test_cuda_default_get_offset_is_ceiled": _CUDA_DARK,
     "test_tlspec_runnable_r65_torch_rng.py::test_r67_cuda_default_get_offset_ceilings_every_run": _CUDA_DARK,
     "test_tlspec_runnable_r67_storage_metadata.py::test_r67_pinned_state_read_refuses_via_observation": _CUDA_DARK,
-    "test_transport_idiom.py::test_cross_device_channels_last_single_host_copy": _CUDA_DARK,
 }
 
 

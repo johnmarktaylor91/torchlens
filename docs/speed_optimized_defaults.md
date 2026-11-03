@@ -17,7 +17,7 @@ log = tl.trace(
     model,
     x,
     save=tl.func("linear"),
-    save_source_context=False,
+    capture=tl.options.CaptureOptions(save_source_context=False),
 )
 ```
 
@@ -29,7 +29,7 @@ Use these defaults when speed matters:
 | Saved layers | `save=tl.func(...)` / `save=tl.in_module(...)` | Saves activation payloads only where needed in the primary single-pass path. |
 | Windowed selection | `lookback=K` with `tl.followed_by(...)` / `tl.preceded_by(...)` | Enables local graph-context predicates without post-hoc filtering. |
 | Lookback payloads | Default `lookback_payload_policy="metadata_only"` | Avoids pinning recent tensors unless retroactive payload saving is required. |
-| Source context | `save_source_context=False` | Keeps file/line identity but avoids source-text loading. |
+| Source context | `CaptureOptions(save_source_context=False)` | Keeps file/line identity but avoids source-text loading. |
 | Validation | Run separately | Validation replays the model and should be a gate, not the hot path. |
 | Streaming | `storage=tl.to_disk(path)` | Moves predicate-selected payload storage to disk while preserving the manifest. |
 
@@ -63,20 +63,20 @@ functions small and deterministic because they run in the logging hot path.
 Fastlog forward exceptions default to the historical `on_forward_error="raise"` behavior.
 Use `on_forward_error="attach_partial"` to attach `exc.partial_recording` and re-raise the
 original exception, or `on_forward_error="return_partial"` to return a failed partial
-`Recording`. With `return_output=True`, return-partial mode returns `(None, partial)` because
-there is no valid model output; manual `Recorder(...)` returns `None` and exposes the partial
+`Recording`, whose `output` refuses with `output_forward_failed` because there is no valid model
+output; manual `Recorder(...)` returns `None` and exposes the partial
 on `recorder.recording`. Failed partials set `status="partial_error"`, `failed=True`,
 `error_repr`, `error_traceback`, `num_committed_ops`, `last_successful_op_label`, and best-effort
 `last_event_*` fields. user-op failures exclude the failing call; TL-side capture failures may
 include a skipped/partial current-call event. Failed partials reject `Recording.to_trace()` and
 `Recording.backward()`.
 
-Full `tl.trace(...)` failures expose a separate honest partial as `exc.partial_log`; retrieve it
-with `tl._partial.from_failed_capture(exc)`.
+Full `tl.trace(...)` failures raise `tl.errors.TraceCaptureError` (chained `from` the forward's
+exception) with a separate honest partial on `exc.partial_trace`.
 
 ## Final-Label Saves
 
-`capture=CaptureOptions(layers_to_save=[...])` is still supported when selection depends on final labels that are only known
+`save=[...]` is still supported when selection depends on final labels that are only known
 after postprocessing. That path runs the legacy two-pass strategy. For recurrent layers,
 `layers_to_save=["attn"]` saves all passes, while `layers_to_save=["attn:2"]` saves only pass 2
 using TorchLens's 1-based pass-label syntax.

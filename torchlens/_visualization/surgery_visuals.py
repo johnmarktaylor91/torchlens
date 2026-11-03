@@ -278,8 +278,8 @@ def _fire_marks(trace: Any) -> list[SurgeryMark]:
     marks: list[SurgeryMark] = []
     for label in getattr(trace, "op_labels", ()) or ():
         op = trace.ops[label]
-        for record in getattr(op, "interventions", None) or ():
-            helper = getattr(record, "helper_name", None) or "user_hook"
+        for record in getattr(op, "edits", None) or ():
+            helper = getattr(record, "edit_name", None) or "user_hook"
             engine = getattr(record, "engine", None) or "unknown"
             verb = "spliced" if helper == "splice_module" else "edited"
             marks.append(
@@ -647,9 +647,9 @@ def draw_interventions(trace: Trace, user_kwargs: Mapping[str, Any]) -> Any:
     from .lenses._resolve import draw_with_lens
 
     result = draw_with_lens(trace, "surgery", **user_kwargs)
-    # Nothing was written when the draw returned the graph object or drew
-    # nothing (view="none"); a census then would sit beside a stale figure.
-    if result is not None and not user_kwargs.get("return_graph", False):
+    # Nothing was written when the draw wrote no file; a census then would
+    # sit beside a stale figure.
+    if getattr(result, "path", None) is not None:
         outpath = user_kwargs.get("path")
         if outpath is None:
             # A bare draw chose a collision-safe name: the census

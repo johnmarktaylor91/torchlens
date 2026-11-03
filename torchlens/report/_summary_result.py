@@ -91,16 +91,16 @@ def collect_summary_facts(
     except Exception:  # noqa: BLE001 - fact gathering degrades to unknown, never breaks summary()
         buffer_count = None
     passes_max = 1
-    for op in getattr(trace, "layer_list", ()) or ():
+    for op in trace._layer_list or ():
         passes_max = max(passes_max, int(getattr(op, "num_passes", 1) or 1))
     return SummaryFacts(
-        model_class_name=getattr(trace, "model_class_name", None),
+        model_class_name=trace._source_class_name,
         input_shapes=input_shapes,
         input_dtypes=input_dtypes,
-        backend=getattr(trace, "backend", None),
+        backend=trace._provenance_backend,
         outcome_status=getattr(getattr(outcome, "status", None), "value", None),
-        capture_verified=getattr(trace, "capture_verified", None),
-        structure_only=bool(getattr(trace, "structure_only", False)),
+        capture_verified=trace._provenance_verified,
+        structure_only=bool(trace._options_structure_only),
         health_verdict=health.verdict,
         health_hint=nonfinite_option_hint(trace, health.verdict),
         params_total=core.params.total,
@@ -141,9 +141,9 @@ def _apply_filter(
 ) -> tuple[tuple[ViewRow, ...], str | None]:
     """Presentation-only filtering with the mandatory coverage disclosure."""
 
-    if config.filter is None:
+    if config.where is None:
         return view.rows, None
-    predicate = config.filter
+    predicate = config.where
     if isinstance(predicate, str):
         pattern = re.compile(predicate)
 
@@ -161,10 +161,10 @@ def _apply_filter(
 
     else:
         raise InvalidArgumentError(
-            f"filter= accepts a regex string or a callable over rows; got "
+            f"where= accepts a regex string or a callable over rows; got "
             f"{type(predicate).__name__}.",
             code="summary_option_invalid",
-            remedy="pass a regex string, e.g. filter='conv', or a callable row -> bool",
+            remedy="pass a regex string, e.g. where='conv', or a callable row -> bool",
         )
     visible = tuple(row for row in view.rows if match(row))
     params_total = facts.params_total or 0

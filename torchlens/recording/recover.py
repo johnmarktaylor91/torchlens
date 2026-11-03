@@ -408,17 +408,17 @@ def _load_verified_blob_tensor(blob_path: Path, expected_sha256: str) -> Any:
     """Verify one fastlog blob's digest, then materialize it.
 
     The digest is computed by a CHUNKED streaming hash over the on-disk bytes
-    (``sha256_of_file``), never ``read_bytes()``: the prior code read the ENTIRE
+    (``sha256_file``), never ``read_bytes()``: the prior code read the ENTIRE
     attacker-controlled blob into memory BEFORE the digest check, so a hostile
     bundle whose blob does not even match its claimed hash still forced a full
     allocation (KNOWN HIGH, never closed -- ee29700f bounded only the JSON reads).
     A hash mismatch is now rejected in constant memory, and the tensor is
     materialized through the mmap-backed safetensors file loader (matching the
-    main bundle path's ``sha256_of_file`` + ``load_file`` discipline).
+    main bundle path's ``sha256_file`` + ``load_file`` discipline).
     """
 
     from .._io.lazy import _file_identity
-    from .._io.manifest import sha256_of_file
+    from .._utils.hashing import sha256_file
 
     # R59 TOCTOU (lazy.py discipline): the digest and the mmap-backed load are
     # two opens of the same path, so bracket the hash with the file identity and
@@ -426,7 +426,7 @@ def _load_verified_blob_tensor(blob_path: Path, expected_sha256: str) -> Any:
     # rather than admitting bytes that were never hashed.
     try:
         pre_hash_identity = _file_identity(blob_path.stat())
-        observed_sha256 = sha256_of_file(blob_path)
+        observed_sha256 = sha256_file(blob_path)
     except OSError as exc:
         raise ArtifactError(f"Failed to read fastlog blob at {blob_path}.") from exc
     if observed_sha256 != expected_sha256:
@@ -527,7 +527,9 @@ def _recording_from_records(
     status: Literal["complete", "halted", "partial_error", "recovered"] = (
         "recovered" if recovered else "halted" if halted else "complete"
     )
-    return Recording(
+    from .types import RecordingSettings
+
+    return Recording._build(
         records=records,
         by_pass={},
         by_label={},
@@ -540,20 +542,36 @@ def _recording_from_records(
         predicate_failures=[],
         num_predicate_failure_overflows=int(metadata.get("predicate_failure_overflow_count", 0)),
         is_stopped=halted,
-        stop_reason=metadata.get("halt_reason"),
+        stop_reason=metadata.get("stop_reason"),
         stops_by_pass={
             int(pass_index): str(reason)
             for pass_index, reason in dict(metadata.get("halts_by_pass", {})).items()
         },
-        keep_op_repr=metadata.get("keep_op_repr"),
         history_size=int(metadata.get("history_size", 0)),
-        _activation_transform_repr=metadata.get("_activation_transform_repr"),
+        _options=RecordingSettings._from_values(_persisted_settings(metadata)),
         is_recovered=recovered,
         status=status,
         recovery_warnings=recovery_warnings,
         is_failed=abort_reason is not None,
         error_repr=(None if abort_reason is None else f"recovered aborted bundle: {abort_reason}"),
     )
+
+
+def _persisted_settings(metadata: dict[str, Any]) -> dict[str, Any]:
+    """Return the bundle's stored ``Recording.options`` values (plain values only).
+
+    Metadata is untrusted bytes: only bool/int/float/str values are adopted,
+    so a crafted bundle cannot plant an object or callable in the record.
+    """
+
+    stored = metadata.get("settings")
+    if not isinstance(stored, dict):
+        return {}
+    return {
+        str(name): value
+        for name, value in stored.items()
+        if isinstance(value, (bool, int, float, str))
+    }
 
 
 def _read_metadata(path: Path) -> dict[str, Any]:

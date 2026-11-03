@@ -5,7 +5,7 @@ small local PyTorch model unless noted otherwise.
 
 1. `01_first_five_minutes.py` - minimal capture, discovery, fork, zero-ablation, and replay.
 2. `02_exact_site_after_discovery.py` - discover labels with `find_sites`, then target an exact site.
-3. `03_out_patching_paired_prompt.py` - clean-versus-corrupted out patching.
+3. `03_activation_patching_paired_prompt.py` - clean-versus-corrupted activation patching.
 4. `04_sticky_hooks_multiple_engines.py` - reuse sticky hooks with replay and rerun.
 5. `05_set_vs_attach_hooks.py` - static `set` replacements versus sticky hook recipes.
 6. `06_chunked_batching.py` - append compatible chunks for memory-constrained evaluation.
@@ -19,3 +19,4 @@ small local PyTorch model unless noted otherwise.
 14. `14_per_position_steering.py` - steer with a per-position direction tensor.
 15. `15_publishing_for_reproducibility.py` - save a portable `.tlspec/` and load it back.
 17. `17_raw_forward_hook_replacement.py` - replace a module output with raw PyTorch `register_forward_hook`.
+18. `18_complement_under_reach.py` - select every site with `tl.all_sites()`, subtract a region, and grow a neighborhood from what remains.

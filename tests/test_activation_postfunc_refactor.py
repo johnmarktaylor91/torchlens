@@ -222,7 +222,8 @@ def test_streaming_preserves_transformed_out(tmp_path: Path) -> None:
     trace = tl.trace(
         _TinyModel(),
         torch.randn(2, 4),
-        capture=CaptureOptions(layers_to_save="all", activation_transform=torch.mean),
+        capture=CaptureOptions(activation_transform=torch.mean),
+        save="all",
         storage=StorageOptions(path=bundle_path),
     )
     layer = _first_transformed_layer(trace)

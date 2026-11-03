@@ -32,7 +32,7 @@ class _Tiny(nn.Module):
 
 
 def _baseline(x: torch.Tensor, model: nn.Module) -> tl.Trace:
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
 def _output_metric(member: tl.Trace) -> float:
@@ -252,7 +252,7 @@ def test_effect_table_survives_save_load_and_unarmed_ledger(tmp_path) -> None:
     assert excinfo.value.fields["code"] == "effects_selection_unavailable"
 
 
-def test_measure_members_reports_unmeasured_and_orders_by_the_chain() -> None:
+def test_map_reports_released_candidates_as_unmeasured() -> None:
     torch.manual_seed(0)
     model = _Tiny().eval()
     x = torch.randn(2, 3)
@@ -266,27 +266,26 @@ def test_measure_members_reports_unmeasured_and_orders_by_the_chain() -> None:
         model=model,
         inputs=x,
     )
-    report = bundle.measure_members(metric=lambda member: len(member.op_labels))
-    assert set(report["values"]) == set(bundle.names)
-    assert len(report["unmeasured"]) == 1  # the released candidate, named
-    chained = bundle.measure_members(metric=_output_metric, order="chain")
-    assert chained["order"] == "chain"
-    assert chained["values"] == bundle.measure_members(metric=_output_metric)["values"]
-    (operation,) = bundle.history
+    report = bundle.map(lambda member: len(member.op_labels))
     (retained,) = [name for name in bundle.names if name != "baseline"]
-    assert chained["chain"] == [
-        {
-            "seq": operation.seq,
-            "operation_id": operation.operation_id,
-            "kind": "site_sweep",
-            "member": retained,
-            "value": chained["values"][retained],
-        }
+    (released,) = [
+        row.candidate_id
+        for row in bundle.effects().rows
+        if row.candidate_id != "__baseline__" and row.member_name != retained
     ]
-    assert chained["unchained"] == ["baseline"]
-    with pytest.raises(BundleExperimentError) as excinfo:
-        bundle.measure_members(metric=_output_metric, order="time")
-    assert excinfo.value.fields["code"] == "measure_members_order_unavailable"
+    # Live members are measured; the released candidate is keyed by its
+    # candidate id and reads "unmeasured", never re-scored, never dropped.
+    assert {name: report[name] for name in bundle.names} == {
+        name: len(bundle[name].op_labels) for name in bundle.names
+    }
+    assert report[released] == "unmeasured"
+    assert set(report) == set(bundle.names) | {released}
+    # The two-argument idiom keeps the same shape.
+    named = bundle.map(lambda member, name: name)
+    assert named[retained] == retained and named[released] == "unmeasured"
+    # Bundle.map is the one per-member read: measure_members is removed
+    # (JMT 1 Nov 2026, walk names.11, per surface.8).
+    assert not hasattr(bundle, "measure_members")
 
 
 @pytest.mark.smoke

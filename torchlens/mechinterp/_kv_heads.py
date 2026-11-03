@@ -29,19 +29,18 @@ from typing import Any
 
 import torch
 
-from .._semantic.patching import (
-    _baseline_traces,
-    _CounterfactualStateGuard,
-    _metric_scalar,
-    _modules_with_facet,
-    _run_patch,
-    _teardown,
-    _warn_if_campaign_all_identical,
-)
-from ..intervention.selectors import (
+from .._selection.selectors import (
     func as func_selector,
     in_module as in_module_selector,
     where as where_selector,
+)
+from .._semantic._state_guard import _CounterfactualStateGuard, _teardown
+from .._semantic.patching import (
+    _baseline_traces,
+    _metric_scalar,
+    _modules_with_facet,
+    _run_patch,
+    _warn_if_campaign_all_identical,
 )
 from ._errors import refuse
 from ._grids import PatchGrid, _baseline_metrics, _disclose_cost_and_enforce_budget
@@ -340,7 +339,7 @@ def _locate_expansion(  # noqa: PLR0913 -- the module's identity plus its head c
     op = candidates[0]
     twins = [
         row
-        for row in corrupted_log.layer_list
+        for row in corrupted_log._layer_list
         if str(row.label) == str(op.label)
         and str(row.raw_label) == str(op.raw_label)
         and row.site_key == op.site_key
@@ -399,7 +398,7 @@ def _op_index(log: Any) -> dict[str, list[Any]]:
     """Map every final and layer label to its op records (several for multi-pass layers)."""
 
     index: dict[str, list[Any]] = {}
-    for op in log.layer_list:
+    for op in log._layer_list:
         for key in {str(op.label), str(op.layer_label)}:
             index.setdefault(key, []).append(op)
     return index

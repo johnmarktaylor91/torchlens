@@ -33,6 +33,7 @@ from torchlens import _state
 from torchlens._capture.outcome import FailureOrigin, classify_failure_origin
 from torchlens._utils import _torch_compat
 from torchlens.backends.torch import _protocol_redispatch
+from torchlens.errors import TraceCaptureError
 
 
 def _ensure_wrapped() -> None:
@@ -187,11 +188,11 @@ def test_post_wrap_table_capture_matches_original_keyed_table(post_wrap_bag: typ
     x = torch.randn(3)
     post_trace = tl.trace(_bag_stacking_model(post_wrap_bag), x)
     pre_trace = tl.trace(_bag_stacking_model(pre_wrap_bag), x)
-    post_types = [op.layer_type for op in post_trace.layer_list]
+    post_types = [op.type for op in post_trace._layer_list]
     assert "stack" in post_types
-    assert post_types == [op.layer_type for op in pre_trace.layer_list]
+    assert post_types == [op.type for op in pre_trace._layer_list]
     expected = (torch.stack([x, x + 1]) * 2).sum()
-    assert torch.allclose(post_trace.layer_list[-1].out, expected)
+    assert torch.allclose(post_trace._layer_list[-1].out, expected)
     assert tl.validate(_bag_stacking_model(pre_wrap_bag), x, scope="forward")
     # Validation's pristine ground truth runs on unwrapped torch: the unwrap
     # aliased the library's wrapper-keyed table onto the originals first.
@@ -331,7 +332,11 @@ def test_overloaded_args_follow_torch_protocol_order() -> None:
 def _capture_failure(
     forward: Callable[[torch.Tensor], Any], expected: type[BaseException] = TypeError
 ) -> BaseException:
-    """Return the ``expected`` exception a capture of ``forward`` raises."""
+    """Return the ``expected`` forward exception a capture of ``forward`` chains.
+
+    The door raises ``TraceCaptureError`` from it; the wrapper's ``origin``
+    agrees with the classification of the original.
+    """
 
     class Model(nn.Module):
         """Runs ``forward``."""
@@ -339,9 +344,12 @@ def _capture_failure(
         def forward(self, x: torch.Tensor) -> Any:
             return forward(x)
 
-    with pytest.raises(expected) as info:
+    with pytest.raises(TraceCaptureError) as info:
         tl.trace(Model(), torch.ones(2))
-    return info.value
+    cause = info.value.__cause__
+    assert isinstance(cause, expected)
+    assert info.value.origin is classify_failure_origin(cause)
+    return cause
 
 
 def test_unrelated_type_error_in_capture_keeps_torch_traceback_and_user_origin() -> None:

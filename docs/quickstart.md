@@ -10,11 +10,13 @@ and you own every surface.
 import torch, torchvision.models as models, torchlens as tl
 
 model = models.resnet18(weights="IMAGENET1K_V1").eval()
+x = torch.rand(1, 3, 224, 224)  # stands in for your real, preprocessed batch
 
 log = tl.trace(model, x)                             # rung 1: your real input (best)
 log = tl.trace(model, input_shape=(1, 3, 224, 224))   # rung 2: your shape, random values; disclosed
 log = tl.trace(model)                                # rung 3: inferred shape + random values; disclosed, or a teach
 log = tl.trace(lm, "The quick brown fox")            # HF models: a string IS a real input
+# (`lm` here is any Hugging Face language model you have loaded.)
 ```
 
 The rungs are exclusive by law: a real input XOR `input_shape=` XOR nothing.
@@ -88,38 +90,36 @@ Two guardrails follow from the record:
   forward pass over random data. Filter the warning by its code to
   acknowledge it.
 
-## The one-call render facade
+## The one-call picture: `tl.draw`
 
 ```python
-from torchlens._user_funcs import render   # tl.render lands with the surface sweep
+from torchlens._quickstart import draw   # tl.draw rides the root-surface regeneration
 
-result = render(model, x)                            # your real input
-result = render(model, input_shape=(1, 3, 224, 224))  # declared shape
-result = render(model)                               # inferred
+result = draw(model, x)                            # your real input
+result = draw(model, input_shape=(1, 3, 224, 224))  # declared shape
+result = draw(model)                               # inferred
 ```
 
-`render` runs ONE metadata-only capture pinned to eval + no-grad -- training
+`tl.draw` runs ONE metadata-only capture pinned to eval + no-grad -- training
 flags, RNG state, and normalization buffers are restored afterwards and the
 restoration is verified with a state-dict hash (`result.receipt`) -- then
 renders through the existing renderer with `collapse="auto"` as its default.
 This facade is the only place auto-collapse is a default: `Trace.draw()`
 keeps `collapse="none"`.
 
-The result is detached (`Drawing`): it owns the DOT source, the
+The result is a detached `tl.viz.Drawing`: it owns the DOT source, the
 rendered bytes or written path, the input provenance, and `save(path)`
-re-renders without retaining the capture. In notebooks it displays inline
-and writes nothing; in a plain script a bare call writes a collision-safe
-`<ModelClass>-graph.pdf` and prints the path (never a shared filename, never
-a silent overwrite). No surface ever auto-opens a viewer; pass `view=True`
-to opt in. Pass `return_trace=True` to keep the underlying trace (on the
-inferred rung this is the exact verified capture); cleanup then transfers to
-`result.close()` or a `with` block.
+re-renders without retaining the capture (`save(path, editable=True)` writes
+the DOT source instead). In notebooks it displays inline and writes nothing;
+in a plain script a bare call writes a collision-safe `<ModelClass>-graph.pdf`
+and prints the path (never a shared filename, never a silent overwrite). No
+surface ever auto-opens a viewer; pass `open_viewer=True` to opt in. To keep
+the trace, call `tl.trace(model, x)` and draw it yourself.
 
-Curated dials: `theme=`, `collapse=`, `module=`, `depth=`, `file=`,
-`format=`, `view=`, `return_trace=`. Everything else passes through to
-`Trace.draw`, and a collision with a curated dial refuses typed
-(`render_kwarg_collision`) -- for full renderer control, drop to
-`tl.trace(...).draw(...)`.
+Curated dials: `theme=`, `collapse=`, `module=`, `depth=`, `path=`,
+`file_format=`, `open_viewer=`, the spellings `Trace.draw` itself uses.
+Everything else passes through to `Trace.draw`; for full renderer control,
+drop to `tl.trace(...).draw(...)`.
 
 ## Lazy modules
 
@@ -140,6 +140,13 @@ with torch.no_grad():
 
 Un-materialized lazy BUFFERS (`nn.LazyBatchNorm2d` before any forward)
 refuse at entry with the same teach (`lazy_uninitialized`).
+
+A lazy module the forward itself builds (`self.lazy = nn.LazyLinear(4)`
+inside `forward`) is registered when the forward first consumes its
+materialized parameters, and the trace discloses the creation as a
+`parameter_created_in_forward` row in
+`trace.annotations["capture_advisories"]`; see
+[Limitations](reference/limitations.md).
 
 ## Execution policy per surface
 

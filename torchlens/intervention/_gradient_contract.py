@@ -116,7 +116,7 @@ def _check(out: Any, result: Any, ctx: Any, verb: str) -> None:
             _detached_remedy(verb),
             code="edit_detached_from_graph",
         )
-    if bool(getattr(ctx, "run_ctx", {}).get("differentiable", False)):
+    if bool(getattr(ctx, "run_state", {}).get("differentiable", False)):
         _disclose_replay_frontier(where)
 
 
@@ -185,8 +185,8 @@ def keep_grad(edit: Any) -> Any:
     Raises
     ------
     InvalidArgumentError
-        ``keep_grad_edit_invalid`` for a backward-direction edit (it edits
-        gradients, not a forward value) or an object that is not an edit.
+        ``keep_grad_edit_invalid`` for an edit with no runtime hook or an
+        object that is not an edit.
     """
 
     if isinstance(edit, Edit) and dict(edit.metadata).get("keep_grad"):
@@ -194,9 +194,9 @@ def keep_grad(edit: Any) -> Any:
     if getattr(edit, "_torchlens_keep_grad", False):
         return edit
     if isinstance(edit, Edit):
-        if edit.kind != "forward" or edit.direction == "backward" or edit.factory is None:
+        if edit.factory is None:
             raise InvalidArgumentError(
-                f"keep_grad() got {edit.helper_name!r}, which is not a forward edit with a "
+                f"keep_grad() got {edit.name!r}, which is not a forward edit with a "
                 "runtime hook; the check applies to the values a forward edit writes",
                 code="keep_grad_edit_invalid",
                 remedy=f"wrap a forward edit, e.g. tl.intervention.keep_grad(tl.scale(2.0)) "
@@ -205,7 +205,7 @@ def keep_grad(edit: Any) -> Any:
             )
         return dataclasses.replace(
             edit,
-            factory=_checked_factory(edit.factory, edit.helper_name),
+            factory=_checked_factory(edit.factory, edit.name),
             portability="opaque_audit",
             metadata=tuple(edit.metadata) + (("keep_grad", True),),
         )

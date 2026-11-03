@@ -21,8 +21,9 @@ Core capture path:
 - `sources.py` — log source tensors; `tensor_tracking.py` — provenance, family links,
   equivalence classes; `module_stack.py` — module-call stack;
   `prehook_provenance.py` — reversible forward-pre-hook input provenance;
-  `buffer_writes.py` — registered-buffer write capture; `backward.py` — backward
-  execution and autograd graph metadata.
+  `buffer_writes.py` — registered-buffer write capture; `_held_tensor_scan.py` — the
+  bounded scan that stamps plain tensors a module holds outside `register_buffer`;
+  `backward.py` — backward execution and autograd graph metadata.
 - `_backward_roots.py` — autograd-entry roots: flattening an entry's root argument and
   which roots of a multi-root backward each capture walks (every root whose graph
   reaches it, and only those).

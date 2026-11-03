@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .selectors import BaseSelector, FacetSelector, WhereSelector, in_module, module
+from .._selection.selectors import BaseSelector, FacetSelector, WhereSelector, in_module, module
 
 
 def _is_op_event(ctx: Any) -> bool:

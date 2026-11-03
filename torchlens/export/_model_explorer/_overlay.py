@@ -17,6 +17,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
+from ..._data_classes._trace_missing_attrs import is_live_trace
 from ..._errors import InvalidArgumentError
 from ..._visualization.overlays import builtin_overlay_value, normalize_overlay_name
 from ...errors._base import TorchLensError
@@ -140,7 +141,9 @@ def _resolve_source(
             remedy="export with privacy_profile='local', or drop this provider",
             argument="overlays",
         )
-    if getattr(log, "structure_only", False) and canonical in _VALUE_DERIVED:
+    if (
+        log._options_structure_only if is_live_trace(log) else False
+    ) and canonical in _VALUE_DERIVED:
         raise ModelExplorerExportError(
             f"Overlay provider {canonical!r} needs activation/gradient values, and a "
             "structure-only capture retained none",
