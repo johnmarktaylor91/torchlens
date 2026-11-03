@@ -297,3 +297,16 @@ def test_explain_max_tokens_refusals_teach_the_fix() -> None:
         log.explain(max_tokens=0)
     with pytest.raises(ValueError, match="positive integer"):
         log.explain(max_tokens=True)
+
+
+def test_explain_json_form_is_removed() -> None:
+    """defaults.7: explain is prose only; the machine projection is to_agent_json."""
+
+    import inspect
+
+    log = _captured_log()
+    assert "format" not in inspect.signature(tl.Trace.explain).parameters
+    assert "to_agent_json()" in (tl.Trace.explain.__doc__ or "")
+    with pytest.raises(TypeError, match="format"):
+        log.explain(format="json")  # type: ignore[call-arg]
+    assert log.to_agent_json()["capture"]["capture_status"] == "complete"

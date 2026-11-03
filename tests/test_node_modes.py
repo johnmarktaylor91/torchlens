@@ -210,3 +210,23 @@ def test_invalid_mode_raises() -> None:
             rolled=False,
             node_style="bogus",  # type: ignore[arg-type]
         )
+
+
+def test_domain_node_style_presets_refuse(tmp_path: Path) -> None:
+    """The former 'vision'/'attention' presets refuse typed (shims removed).
+
+    The style functions themselves stay available through
+    ``torchlens.experimental.node_styles`` via ``node_spec_fn``.
+    """
+
+    model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
+    log = tl.trace(model, torch.randn(1, 4))
+
+    with pytest.raises(ValueError, match="node_style"):
+        log.draw(
+            node_style="vision",  # type: ignore[arg-type]
+            file_format="dot",
+            path=str(tmp_path / "graph"),
+        )
+    assert callable(node_styles.vision_node_mode)
+    assert callable(node_styles.attention_node_mode)
