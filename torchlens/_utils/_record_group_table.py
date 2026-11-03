@@ -372,6 +372,8 @@ OP_GROUP_VIEWS: dict[str, type] = {}
 OP_STORAGE_ATTRS: Mapping[str, str] = _storage_map("Op")
 #: Former Layer member name -> attribute that now holds it.
 LAYER_STORAGE_ATTRS: Mapping[str, str] = _storage_map("Layer")
+#: Former Op member names a Layer does not store itself (read through its pass).
+_OP_ONLY_STORAGE = frozenset(OP_STORAGE_ATTRS) - frozenset(LAYER_STORAGE_ATTRS)
 #: Former Op member name -> typed-refusal remedy.
 OP_MOVED_MEMBERS: Mapping[str, str] = _removed_map("Op")
 #: Former Layer member name -> typed-refusal remedy.
@@ -486,6 +488,9 @@ def record_member(obj: Any, name: str, default: Any = _NO_DEFAULT) -> Any:
         # An Op-only member reads through the layer's group, which delegates to its pass.
         path = _SPELLING_PATHS["Op"].get(name)
     try:
+        if path is None and kind == "Layer" and name in _OP_ONLY_STORAGE:
+            # A removed Op member reads from the layer's single pass, as the flat read did.
+            return obj._single_pass_or_error(name)
         if path is None:
             # A renamed or removed member keeps its value under its storage
             # attribute; internal readers still need it.
