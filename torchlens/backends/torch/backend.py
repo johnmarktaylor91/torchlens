@@ -310,7 +310,7 @@ class TorchBackend:
           2. ``normalize_input_args``: resolve the tuple-vs-single-arg ambiguity
              by inspecting the model's forward() signature.
           3. ``safe_copy_args/kwargs``: clone tensors so in-place device moves
-             (in ``fetch_label_move_input_tensors``) don't mutate the caller's data.
+             (in ``_fetch_label_move_input_tensors``) don't mutate the caller's data.
           4. Detect model device from first param or buffer (for auto-moving
              inputs). A model with neither pins no device: ``model_device`` is
              ``None`` and inputs are never moved.
@@ -365,7 +365,7 @@ class TorchBackend:
 
         return input_args, input_kwargs, input_arg_names, model_device
 
-    def fetch_label_move_input_tensors(
+    def _fetch_label_move_input_tensors(
         self,
         session: object,
         input_args: list[Any],
@@ -792,10 +792,6 @@ class TorchBackend:
     def safe_copy(self, session: object, value: object, policy: CapturePolicy) -> object:
         """Copy a torch value with logging paused."""
         return safe_copy(value, detach_tensor=not policy.save_grad, save_mode=policy.save_mode)
-
-    def copy_replacement_metadata(self, session: object, src: object, dst: object) -> None:
-        """Copy TorchLens replacement metadata between tensors."""
-        _tl.copy_replacement_meta(src, dst)
 
     def emit_function_outputs(
         self,

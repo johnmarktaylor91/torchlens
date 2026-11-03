@@ -69,7 +69,7 @@ class CaptureBackend(Protocol):
         """Normalize inputs, copy caller-owned values, and detect the model device."""
         ...
 
-    def fetch_label_move_input_tensors(
+    def _fetch_label_move_input_tensors(
         self,
         session: object,
         input_args: list[Any],
@@ -251,10 +251,6 @@ class CaptureBackend(Protocol):
 
     def safe_copy(self, session: object, value: object, policy: CapturePolicy) -> object:
         """Materialize a backend-safe payload copy under the given policy."""
-        ...
-
-    def copy_replacement_metadata(self, session: object, src: object, dst: object) -> None:
-        """Copy backend metadata from an intervention source to replacement."""
         ...
 
     def emit_function_outputs(

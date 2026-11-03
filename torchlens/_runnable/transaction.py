@@ -1155,7 +1155,7 @@ def _restore_declared_state_or_mark(trace: Any, fork: Any, snapshot: Any) -> Non
 def _live_runtime_input_leaves(input_args: Any, input_kwargs: Any) -> list[torch.Tensor] | None:
     """Flatten runtime live-refresh inputs to ordered tensor leaves, or ``None``.
 
-    Mirrors the capture-side flatten (``backend.fetch_label_move_input_tensors``:
+    Mirrors the capture-side flatten (``backend._fetch_label_move_input_tensors``:
     ``get_vars_of_type_from_obj`` per positional arg, then per kwarg value, at
     cycle-safe finite input walk) so leaf ORDER pairs 1:1 with the capture's recorded
     ``input_layers`` ordering. Returns ``None`` on any traversal failure -- the
