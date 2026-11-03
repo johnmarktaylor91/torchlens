@@ -1013,7 +1013,9 @@ def _fix_buffer_layers(self: Trace) -> None:
     for layer_label in self.buffer_layers:
         layer = self[layer_label]
         address = layer.buffer_address
-        layer._graph_buffer_pass = buffer_counter[address]
+        # An Op row: buffer_pass stays flat on Op (A.13 moves it only on Layer);
+        # set by name so the record-groups codemod cannot respell it.
+        layer._internal_set("buffer_pass", buffer_counter[address])
         self._buffer_num_calls[address] = buffer_counter[address]
         buffer_counter[address] += 1
 
