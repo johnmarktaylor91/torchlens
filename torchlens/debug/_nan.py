@@ -9,6 +9,7 @@ import torch
 
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._debug_report import FoundReport, Report, at_source
+from .._io.payload_codec import get_payload_codec
 from ..errors import CaptureError
 
 if TYPE_CHECKING:
@@ -16,7 +17,14 @@ if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
 
 from ._capture_override import _with_capture_fields
-from ._common import _module_address, _nonfinite_kind, _ordered_ops, _source_line
+from ._common import (
+    _module_address,
+    _nonfinite_kind,
+    _nonfinite_kind_of,
+    _ordered_ops,
+    _runs_on_torch,
+    _source_line,
+)
 
 
 @dataclass(frozen=True)
@@ -399,12 +407,12 @@ def find_nan(model: Any, inputs: Any, **trace_kwargs: Any) -> FindNanReport:
     Parameters
     ----------
     model:
-        PyTorch model to execute.
+        Model to execute, on any capture backend.
     inputs:
         Positional model input accepted by :func:`torchlens.trace`.
     **trace_kwargs:
-        Additional :func:`torchlens.trace` keyword arguments. The capture runs
-        with ``on_nonfinite="raise"`` whatever the caller's ``capture=`` says.
+        Additional :func:`torchlens.trace` keyword arguments. Torch runs with
+        ``on_nonfinite="raise"``; other backends scan a full capture's outputs.
 
     Returns
     -------
@@ -425,6 +433,8 @@ def find_nan(model: Any, inputs: Any, **trace_kwargs: Any) -> FindNanReport:
     from .._user_funcs import trace
     from ..options import CaptureOptions
 
+    if not _runs_on_torch(model, inputs, trace_kwargs):  # no live stop: scan a full capture
+        return find_nan_in_trace(trace(model, inputs, **trace_kwargs))
     capture = trace_kwargs.pop("capture", None)
     if capture is not None:
         trace_kwargs["capture"] = _with_capture_fields(capture, on_nonfinite="raise")
@@ -442,9 +452,7 @@ def find_nan(model: Any, inputs: Any, **trace_kwargs: Any) -> FindNanReport:
             partial_trace is not None
             and partial_trace.__dict__.get("_nonfinite_prefix_finalized", False)
         )
-        # The resolver contract (observe item 1): fields carry the FINAL
-        # public label (or None + status), plus the raw identity under the
-        # explicitly raw-named key. No spelling is ever derived by stripping.
+        # Fields carry the FINAL label (or None + status) and the raw-named identity.
         raw_layer_field = fields.get("layer")
         label: str | None = raw_layer_field if isinstance(raw_layer_field, str) else None
         label_status = str(
@@ -531,6 +539,7 @@ def find_nan_in_trace(trace: Trace) -> FindNanReport:
     """
 
     any_unsaved = False
+    codec = get_payload_codec(str(trace._provenance_backend))
     for op in _ordered_ops(trace):
         if bool(getattr(op, "is_input", False)):
             continue
@@ -542,14 +551,11 @@ def find_nan_in_trace(trace: Trace) -> FindNanReport:
         except ValueError:
             any_unsaved = True
             continue
-        if isinstance(out, torch.Tensor):
-            kind = _nonfinite_kind(out)
-            if kind != "none":
-                uncertainty_zone = _unsaved_ancestors(trace, op)
-                scope = "first among saved tensors" if any_unsaved else "first non-finite tensor"
-                return _result_from_op(
-                    op, kind=kind, scope=scope, uncertainty_zone=uncertainty_zone
-                )
+        kind = _nonfinite_kind_of(out, codec)
+        if kind != "none":
+            uncertainty_zone = _unsaved_ancestors(trace, op)
+            scope = "first among saved tensors" if any_unsaved else "first non-finite tensor"
+            return _result_from_op(op, kind=kind, scope=scope, uncertainty_zone=uncertainty_zone)
     return _no_finding_result(
         scope="saved tensors",
         uncertainty_zone=tuple(
@@ -601,9 +607,7 @@ def bisect_nan(trace: Trace) -> BisectNanReport:
         except ValueError:
             unsaved_compute_ops += 1
             continue
-        if not isinstance(out, torch.Tensor):
-            continue
-        kind = _nonfinite_kind(out)
+        kind = _nonfinite_kind_of(out, get_payload_codec(str(trace._provenance_backend)))
         if kind != "none":
             label = _op_label(op)
             source_line = _source_line(op)

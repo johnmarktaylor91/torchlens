@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 import torch
 
 from .._data_classes.func_call_location import display_frame
 from .._utils._multipass_access import is_multipass_layer
+from ..backends.registry import TORCH_BACKEND_NAME, resolve_backend_spec
 
 if TYPE_CHECKING:
     from torchlens._data_classes.op import Op
@@ -309,6 +311,83 @@ def _nonfinite_kind(tensor: torch.Tensor) -> str:
         return "none"
     has_nan = bool(torch.isnan(tensor).any().item())
     has_inf = bool(torch.isinf(tensor).any().item())
+    return _kind_from_flags(has_nan, has_inf)
+
+
+def _nonfinite_kind_of(value: Any, codec: Any) -> str:
+    """Classify non-finite values in a saved output from any capture backend.
+
+    Torch tensors use :func:`_nonfinite_kind`; arrays from the other backends are
+    copied to host NumPy through the trace backend's payload codec.
+
+    Parameters
+    ----------
+    value:
+        Saved op output.
+    codec:
+        ``get_payload_codec(trace._provenance_backend)`` for the producing backend.
+
+    Returns
+    -------
+    str
+        ``"nan"``, ``"inf"``, ``"nan+inf"``, or ``"none"`` (also for values the
+        backend codec cannot convert, such as non-array outputs).
+    """
+
+    if isinstance(value, torch.Tensor):
+        return _nonfinite_kind(value)
+    try:
+        array = codec.to_numpy(value).array
+    except (TypeError, ValueError):
+        return "none"
+    if array.dtype.kind not in "fc":
+        return "none"
+    return _kind_from_flags(bool(np.isnan(array).any()), bool(np.isinf(array).any()))
+
+
+def _runs_on_torch(model: Any, inputs: Any, trace_kwargs: dict[str, Any]) -> bool:
+    """Report whether a :func:`torchlens.trace` call would capture on the torch backend.
+
+    Only PyTorch eager capture honours ``on_nonfinite="raise"``; the other backends
+    ignore it, so NaN finders scan a full capture's saved outputs there instead.
+
+    Parameters
+    ----------
+    model:
+        Model to execute.
+    inputs:
+        Positional model input.
+    trace_kwargs:
+        Caller's :func:`torchlens.trace` keyword arguments.
+
+    Returns
+    -------
+    bool
+        ``True`` when the call resolves to the torch backend.
+    """
+
+    spec = resolve_backend_spec(
+        trace_kwargs.get("backend"), model, inputs, trace_kwargs.get("input_kwargs")
+    )
+    return spec.name == TORCH_BACKEND_NAME
+
+
+def _kind_from_flags(has_nan: bool, has_inf: bool) -> str:
+    """Name the non-finite kind from NaN and Inf presence flags.
+
+    Parameters
+    ----------
+    has_nan:
+        Whether any NaN is present.
+    has_inf:
+        Whether any Inf is present.
+
+    Returns
+    -------
+    str
+        ``"nan"``, ``"inf"``, ``"nan+inf"``, or ``"none"``.
+    """
+
     if has_nan and has_inf:
         return "nan+inf"
     if has_nan:

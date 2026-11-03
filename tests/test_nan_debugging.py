@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
+import numpy as np
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.debug._common import _nonfinite_kind_of
 from torchlens.errors import CaptureError, TraceCaptureError
 from torchlens.types import PartialTrace
 
@@ -129,3 +133,33 @@ def test_first_nonfinite_rescans_after_saved_activation_changes() -> None:
     replaced_answer = trace.first_nonfinite()
     assert "First non-finite" in replaced_answer
     assert str(replaced.layer_label) in replaced_answer
+
+
+class _HostArrayCodec:
+    """Stand-in payload codec for a preview backend whose arrays are host NumPy arrays."""
+
+    def to_numpy(self, value: object) -> SimpleNamespace:
+        if not isinstance(value, np.ndarray):
+            raise TypeError(f"cannot encode {type(value).__name__}")
+        return SimpleNamespace(array=value)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (np.array([1.0, np.nan]), "nan"),
+        (np.array([np.inf, 2.0], dtype=np.float32), "inf"),
+        (np.array([np.nan, -np.inf]), "nan+inf"),
+        (np.array([1.0, 2.0]), "none"),
+        (np.array([1, 2]), "none"),
+        ("not an array", "none"),
+        (torch.tensor([float("nan")]), "nan"),
+    ],
+    ids=["nan", "inf", "nan+inf", "finite", "integer", "non-array", "torch"],
+)
+def test_nonfinite_kind_of_reads_preview_arrays_through_the_codec(
+    value: object, expected: str
+) -> None:
+    """Preview outputs are classified through the backend codec, not skipped as non-torch."""
+
+    assert _nonfinite_kind_of(value, _HostArrayCodec()) == expected
