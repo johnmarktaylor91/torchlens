@@ -471,7 +471,9 @@ def test_layer_siblings_tolerate_orphan_relation_labels():
     orphan_sibling = next(k for k in orphan_labels if mh.graph.orphans[k].siblings)
 
     mainline = next(
-        mh[label] for label in mh.layer_labels if not mh[label].is_input and mh[label].parents
+        mh.layers[label]
+        for label in mh.layer_labels
+        if not mh.layers[label].is_input and mh.layers[label].parents
     )
     parent_op = list(mh.layers[mainline.parents[0]].ops.values())[0]
     # Direct assignment is the supported mutation spelling on Op records; the
@@ -489,7 +491,7 @@ def test_layer_siblings_tolerate_orphan_relation_labels():
     # fix's own output (`parent_layer.children` succeeded while
     # `parent_layer.get_children()` raised "not found"). They now resolve
     # orphan labels through the same fallback.
-    parent_layer = mh[mainline.parents[0]]
+    parent_layer = mh.layers[mainline.parents[0]]
     layer_children = parent_layer.get_children()
     assert orphan_sibling in {getattr(c, "layer_label", None) for c in layer_children} or any(
         getattr(c, "label", None) == orphan_sibling for c in layer_children

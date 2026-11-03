@@ -141,7 +141,7 @@ def test_boundary_label_ops_expands_an_under_listed_layer() -> None:
 
     trace, (a, b) = _loop_trace()
 
-    ops = boundary_label_ops(["input_1"], trace.__getitem__)
+    ops = boundary_label_ops(["input_1"], trace.layers.__getitem__)
     assert [op.pass_number for op in ops] == [1, 2]
     assert torch.equal(ops[0].out, a) and torch.equal(ops[1].out, b)
 

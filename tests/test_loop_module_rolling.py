@@ -567,7 +567,7 @@ def test_reused_single_op_module_stays_a_loop() -> None:
     trace = _trace(ReusedReluLoop())
     relu_layers = [label for label in trace.layer_labels if label.startswith("relu")]
     assert len(relu_layers) == 1
-    assert trace[relu_layers[0]].num_passes == 4
+    assert trace.layers[relu_layers[0]].num_passes == 4
 
 
 def _trace(model: nn.Module) -> tl.Trace:

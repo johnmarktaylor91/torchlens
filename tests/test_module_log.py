@@ -493,7 +493,7 @@ class TestModuleAccessorSummary:
         assert multi_pass_labels, "fixture must contain a multi-pass layer to exercise this gap"
 
         # 1) Layer.to_pandas() directly.
-        multi_pass_layer = log[multi_pass_labels[0]]
+        multi_pass_layer = log.layers[multi_pass_labels[0]]
         layer_df = multi_pass_layer.to_pandas()
         assert len(layer_df) == 1
         assert layer_df.iloc[0]["transformed_out"] is None

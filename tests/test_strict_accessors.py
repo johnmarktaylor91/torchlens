@@ -157,8 +157,9 @@ def test_all_pass_token_selects_every_pass() -> None:
     assert "linear_1_1:all" not in trace.ops
     with pytest.raises(KeyError, match="resolve_all"):
         trace.ops["linear_1_1:all"]
-    with pytest.raises(KeyError):
+    with pytest.raises(InvalidArgumentError) as info:
         trace["no_such_layer:all"]
+    assert info.value.fields["code"] == "op_lookup_not_found"
 
 
 def test_ops_accessor_bare_multi_pass_label_is_ambiguous() -> None:
