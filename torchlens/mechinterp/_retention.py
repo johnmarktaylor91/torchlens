@@ -167,7 +167,7 @@ def _site(trace: Any, label: str, analysis: str) -> PlanSite:
 def _spine_sites(trace: Any, analysis: str) -> list[PlanSite]:
     """Sites for the residual family: spine states + writers + norm + logits."""
 
-    from ._anchors import resolve_lm_head
+    from ._anchors import resolve_lm_head  # deferred: cycle mechinterp
 
     anchor = resolve_lm_head(trace)
     walk = walk_spine(trace, anchor.target_op, structure_only=True)
@@ -194,7 +194,7 @@ def _attention_subtrees(trace: Any) -> list[str]:
     first forward.
     """
 
-    from ._heads import _facet_keys_or_none
+    from ._heads import _facet_keys_or_none  # deferred: cycle mechinterp
 
     addresses = []
     for module in trace.modules:

@@ -234,7 +234,7 @@ def _rng_consuming_ops(trace: Trace) -> tuple[tuple[str, ...], str]:
                 consumers.append(_op_label(ops[index]))
         if consumers:
             return tuple(dict.fromkeys(consumers)), "pre_op_rng_snapshots"
-    from ._precision import _STOCHASTIC_FUNC_NAMES
+    from ._precision import _STOCHASTIC_FUNC_NAMES  # deferred: cycle debug
 
     named = tuple(
         _op_label(op)
@@ -268,7 +268,7 @@ def _compare_runs(
 ) -> tuple[list[dict[str, Any]], int, list[str]]:
     """Walk two runs in execution order; return (divergences, unchecked, nonfinite)."""
 
-    from ._nan import _nonfinite_kind
+    from ._nan import _nonfinite_kind  # deferred: cycle debug
 
     reference_ops = {_op_label(op): op for op in _compute_ops(reference)}
     candidate_ops = {_op_label(op): op for op in _compute_ops(candidate)}
@@ -500,7 +500,7 @@ def check_determinism(
         If ``runs < 2`` (code ``determinism_runs_invalid``).
     """
 
-    from ._rerun import isolated_capture
+    from ._rerun import isolated_capture  # deferred: cycle debug
 
     if runs < 2:
         raise InvalidArgumentError(

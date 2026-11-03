@@ -285,7 +285,7 @@ def export_extraction(
             remedy="pass 'npy', 'hdf5', or 'mat'",
             value=repr(format),
         )
-    from .reader import open_extraction
+    from .reader import open_extraction  # deferred: cycle _extraction
 
     # Complete-only by construction: open_extraction refuses non-complete
     # artifacts typed unless explicitly opened in_progress (which this
@@ -403,7 +403,7 @@ def _export_npy(job: _ExportJob) -> list[dict[str, Any]]:
             del dense_target
             members.extend(_member_rows(temp, key, [f"{stem}.npy"], "dense", ledger))
         if ragged_parts:
-            from .reader import _merge_ragged
+            from .reader import _merge_ragged  # deferred: cycle _extraction
 
             merged = _merge_ragged(ragged_parts)
             values, conversion = _widen_for_export(key, merged.values, widen_unsupported)
@@ -505,7 +505,7 @@ def _export_hdf5(job: _ExportJob) -> list[dict[str, Any]]:
                 dataset[cursor : cursor + array.shape[0]] = array
                 cursor += array.shape[0]
             if ragged_parts:
-                from .reader import _merge_ragged
+                from .reader import _merge_ragged  # deferred: cycle _extraction
 
                 merged = _merge_ragged(ragged_parts)
                 values, conversion = _widen_for_export(key, merged.values, widen_unsupported)

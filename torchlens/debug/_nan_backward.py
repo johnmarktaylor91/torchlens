@@ -265,7 +265,7 @@ def _forward_join(trace: Trace, node: Any) -> tuple[str | None, str | None, str 
         except Exception:  # noqa: BLE001 - the join is best-effort disclosure.
             op = None
         if op is not None:
-            from ._common import _source_line
+            from ._common import _source_line  # deferred: cycle debug
 
             source_line = _source_line(op)
     return (
@@ -530,7 +530,7 @@ def bisect_nan_backward(
         ``grad_scale_invalid``).
     """
 
-    from ._gradients import _validate_grad_scale
+    from ._gradients import _validate_grad_scale  # deferred: cycle debug
 
     grad_scale = _validate_grad_scale(grad_scale)
     selected, bwd = _select_backward_pass(trace, bwd)

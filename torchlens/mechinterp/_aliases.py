@@ -160,7 +160,7 @@ def _parse_query(name: Any, prefer: str | None = None) -> _Query:
 def _facet_home_modules(trace: Any, facet: str, scope: str | None = None) -> list[Any]:
     """Return modules exposing ``facet`` in executed order, filtered by row scope."""
 
-    from ._heads import _facet_keys_or_none
+    from ._heads import _facet_keys_or_none  # deferred: cycle mechinterp
 
     required = {facet} | set(_SCOPE_KEYS.get(scope or "", frozenset()))
     homes = []
@@ -258,7 +258,7 @@ def _condition_absence(module: Any, row: dict[str, Any] | None) -> str | None:
 
     if not row:
         return None
-    from ._heads import _facet_keys_or_none
+    from ._heads import _facet_keys_or_none  # deferred: cycle mechinterp
 
     keys = _facet_keys_or_none(module) or set()
     only_if = row.get("only_if_facet")

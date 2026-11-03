@@ -55,7 +55,7 @@ __all__ = ["patch_edges", "receiver_selection"]
 def _input_edge_record(trace: Any, receiver: Any) -> Any:
     """Return the op edge that carries the receiver's pre-norm input into its norm."""
 
-    from ._residual import _innermost_module
+    from ._residual import _innermost_module  # deferred: cycle mechinterp
 
     matches = [
         record
@@ -216,7 +216,7 @@ def patch_edges(trace: Any, edges: Iterable[Any], *, corrupted_graph: Any) -> An
         receiver is patched); the input trace is not modified.
     """
 
-    from ._edges import component_graph
+    from ._edges import component_graph  # deferred: cycle mechinterp
 
     stages = _stages(list(edges))
     result = None

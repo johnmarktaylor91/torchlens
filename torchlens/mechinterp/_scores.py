@@ -233,7 +233,7 @@ def head_scores(
         )
     modules = _attention_modules(trace)
     if layers is not None:
-        from ._heads import _select_layers
+        from ._heads import _select_layers  # deferred: cycle mechinterp
 
         modules = _select_layers(modules, layers)
     if not modules:

@@ -305,6 +305,7 @@ def _coerce_applied(applied: Any) -> tuple[DeclaredPreprocessing | None, str]:
         token for the report.
     """
 
+    # deferred: cycle preprocessing
     from ._authorities import _adapt_explicit_mapping, _probe_compose, declared_from_compose
 
     if applied is None:
@@ -461,7 +462,7 @@ def compare(
         uncomparable/unauthoritative audit.
     """
 
-    from ._authorities import resolve as _resolve
+    from ._authorities import resolve as _resolve  # deferred: cycle preprocessing
 
     resolution = authority if isinstance(authority, Resolution) else _resolve(authority)
     authority_status = status_of(resolution.preprocessing)

@@ -229,7 +229,7 @@ def inspect_prompt(  # noqa: PLR0913 -- the memo-normative section-8 signature
 
     contribution_rows = None
     if contributions and answer_ids:
-        from ._dla import direct_logit_contributions
+        from ._dla import direct_logit_contributions  # deferred: cycle mechinterp
 
         dla = direct_logit_contributions(
             trace, answer=answer_ids[0], vs=int(vs) if vs is not None else None, positions=pos

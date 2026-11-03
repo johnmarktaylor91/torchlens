@@ -159,7 +159,7 @@ class ComponentEdge:
         :func:`patch_edges` builds the matching value.
         """
 
-        from ._edge_patch import receiver_selection
+        from ._edge_patch import receiver_selection  # deferred: cycle mechinterp
 
         return receiver_selection(self.receiver._trace, self.receiver)
 

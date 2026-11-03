@@ -52,7 +52,7 @@ class BisectNanReport(FoundReport):
     def first_bad_thing(self) -> Any:
         """Project this result into the shared first-bad-thing vocabulary."""
 
-        from ._first_bad import FirstBadThing
+        from ._first_bad import FirstBadThing  # deferred: cycle debug
 
         return FirstBadThing(
             found=self.found,
@@ -129,7 +129,7 @@ class FindNanReport(FoundReport):
     def first_bad_thing(self) -> Any:
         """Project this result into the shared first-bad-thing vocabulary."""
 
-        from ._first_bad import FirstBadThing
+        from ._first_bad import FirstBadThing  # deferred: cycle debug
 
         return FirstBadThing(
             found=self.found,

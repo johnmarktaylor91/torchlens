@@ -63,7 +63,7 @@ class EffectsView:
             ``grid_result_shape_mismatch`` when rows and axes disagree.
         """
 
-        from ._grid import grid_from_effects
+        from ._grid import grid_from_effects  # deferred: cycle experiment
 
         return grid_from_effects(self)
 

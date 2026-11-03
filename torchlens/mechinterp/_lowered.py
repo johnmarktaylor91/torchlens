@@ -88,7 +88,7 @@ class PatchedRun:
     def logits(self) -> torch.Tensor:
         """Return the patched run's output logits."""
 
-        from ._anchors import resolve_lm_head
+        from ._anchors import resolve_lm_head  # deferred: cycle mechinterp
 
         return resolve_lm_head(self._patched_trace).facets()["logits"].value
 
@@ -204,7 +204,7 @@ def patch_head(  # noqa: PLR0913 -- the memo-normative D11 signature
             trace_kwargs=dict(trace_kwargs or {}),
             guard=guard,
         )
-        from ._heads import _attention_modules, _select_layers
+        from ._heads import _attention_modules, _select_layers  # deferred: cycle mechinterp
 
         module = _select_layers(_attention_modules(corrupted_log), layer)[0]
         address = str(module.address)

@@ -352,7 +352,7 @@ def audit_trace(trace: Trace | PartialTrace) -> HealthReport:
     # precision hazards over saved activations). It was previously neither run
     # nor listed as skipped -- the docstring's completeness claim was a lie.
     # Deferred import: _dtype_range imports this module.
-    from ._dtype_range import dtype_range
+    from ._dtype_range import dtype_range  # deferred: cycle debug
 
     dtype_result = dtype_range(trace)
     checks_run.append("dtype_range_audit")
@@ -402,7 +402,7 @@ def audit_trace(trace: Trace | PartialTrace) -> HealthReport:
             # captured backward with saved gradient payloads is unambiguous
             # (observe item 10). Its birth headline supersedes the carrier
             # observations the flow audit reports for the same pass.
-            from ._nan_backward import bisect_nan_backward
+            from ._nan_backward import bisect_nan_backward  # deferred: cycle debug
 
             backward_bisect = bisect_nan_backward(trace)
             checks_run.append("bisect_nan_backward")

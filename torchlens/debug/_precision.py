@@ -169,7 +169,7 @@ def bisect_precision(
         First divergence plus the full per-op comparison table.
     """
 
-    from ._rerun import isolated_capture
+    from ._rerun import isolated_capture  # deferred: cycle debug
 
     _refuse_unsupported_reference_device(model, reference_dtype)
     capture = CaptureOptions(layers_to_save="all")

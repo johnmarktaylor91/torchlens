@@ -69,7 +69,7 @@ def attach_authority(model: ModelT, authority: Any) -> ModelT:
         opaque callable that declares nothing.
     """
 
-    from ._authorities import _probe_torchvision_weights, resolve
+    from ._authorities import _probe_torchvision_weights, resolve  # deferred: cycle preprocessing
 
     resolution = resolve(authority)
     if resolution.preprocessing.source == "unknown":
@@ -103,7 +103,7 @@ def discover_attached(model: Any) -> Resolution | None:
         The attached authority re-stamped as model metadata, or ``None``.
     """
 
-    from ._authorities import _as_model_metadata, resolve
+    from ._authorities import _as_model_metadata, resolve  # deferred: cycle preprocessing
 
     authority = getattr(model, "__dict__", {}).get(_ATTACHED_ATTR)
     if authority is None:
@@ -136,7 +136,7 @@ def discover_open_clip(model: Any) -> Resolution | None:
         from open_clip.transform import PreprocessCfg, image_transform_v2
     except ImportError:
         return None
-    from ._authorities import _adapt_compose, _as_model_metadata
+    from ._authorities import _adapt_compose, _as_model_metadata  # deferred: cycle preprocessing
 
     transform = image_transform_v2(PreprocessCfg(**dict(config)), is_train=False)
     resolution = _as_model_metadata(_adapt_compose(transform))
@@ -159,7 +159,7 @@ def probe_torchvision_preset(authority: Any) -> bool:
 def adapt_torchvision_preset(authority: Any) -> Resolution:
     """Normalize a torchvision preset object (``weights.transforms()``)."""
 
-    from ._authorities import _declared_from_torchvision_preset, _record
+    from ._authorities import _declared_from_torchvision_preset, _record  # deferred: cycle
 
     declared = _declared_from_torchvision_preset(authority)
     return _record(
@@ -192,7 +192,7 @@ def record_for_transform(transform: Any) -> ResolvedPreprocessing | None:
         The recognized authority's own record, unchanged, or ``None``.
     """
 
-    from ._authorities import _REGISTERED_ADAPTERS, _probe_hf_processor
+    from ._authorities import _REGISTERED_ADAPTERS, _probe_hf_processor  # deferred: cycle
 
     for adapter in _REGISTERED_ADAPTERS:
         if adapter.probe(transform):
@@ -200,7 +200,7 @@ def record_for_transform(transform: Any) -> ResolvedPreprocessing | None:
     if probe_torchvision_preset(transform):
         return adapt_torchvision_preset(transform).preprocessing
     if _probe_hf_processor(transform):
-        from ._authorities import _adapt_hf_processor
+        from ._authorities import _adapt_hf_processor  # deferred: cycle preprocessing
 
         return _adapt_hf_processor(transform).preprocessing
     return None

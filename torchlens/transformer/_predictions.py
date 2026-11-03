@@ -402,7 +402,7 @@ def render_prediction_table(
 
     import math as _math
 
-    from ._mpl import paged_paths
+    from ._mpl import paged_paths  # deferred: cycle transformer
 
     n_pages = _math.ceil(len(table.positions) / POSITIONS_PER_PAGE)
     targets = paged_paths(path, n_pages)

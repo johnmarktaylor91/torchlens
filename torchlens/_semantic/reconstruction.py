@@ -478,7 +478,7 @@ def _allclose_sdpa(
         Whether values match within the reconstruction error budget.
     """
 
-    from .tolerances import within_reconstruction_tolerance
+    from .tolerances import within_reconstruction_tolerance  # deferred: cycle _semantic
 
     return within_reconstruction_tolerance(
         reconstructed, target, magnitude=magnitude, reduction_length=reduction_length
@@ -499,7 +499,7 @@ def _output_projection(module: Any) -> Any | None:
         Child module record when present.
     """
 
-    from .recipes._helpers import child_module
+    from .recipes._helpers import child_module  # deferred: cycle _semantic
 
     for name in ("o_proj", "c_proj", "out_proj", "dense", "out_lin", "o"):
         child = child_module(module, name)

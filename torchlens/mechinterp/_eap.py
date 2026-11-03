@@ -218,7 +218,7 @@ def _reads(trace: Any, graph: ComponentGraph) -> dict[str, _Read]:
 def _output_cotangent(trace: Any, metric: Callable[..., Any]) -> Any:
     """Return ``(logits label, dM/dlogits, per-example M)`` for one evaluation point."""
 
-    from ._anchors import resolve_lm_head
+    from ._anchors import resolve_lm_head  # deferred: cycle mechinterp
 
     head = resolve_lm_head(trace).head
     outputs = list(getattr(head, "output_ops", ()) or ())

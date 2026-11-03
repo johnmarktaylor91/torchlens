@@ -157,7 +157,7 @@ def stack_facet(trace: Any, name: str) -> ComponentStack:
     claim (``identity_receipt`` says ``gathered_reads``) and no target.
     """
 
-    from ._heads import _facet_keys_or_none
+    from ._heads import _facet_keys_or_none  # deferred: cycle mechinterp
 
     rows = []
     for module in trace.modules:

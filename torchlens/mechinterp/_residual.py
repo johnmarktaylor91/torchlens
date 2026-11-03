@@ -94,7 +94,7 @@ def _resolve_target_op(trace: Any, target: Any) -> Any:
     """
 
     if target is None or target == "final":
-        from ._anchors import resolve_lm_head
+        from ._anchors import resolve_lm_head  # deferred: cycle mechinterp
 
         return resolve_lm_head(trace).target_op
     if isinstance(target, str):

@@ -163,7 +163,7 @@ def flops_vs_dispatch(
 
     from torch.utils.flop_counter import FlopCounterMode
 
-    from ..report._compute_truth import compute_aggregation
+    from ..report._compute_truth import compute_aggregation  # deferred: cycle report
 
     rng_state = torch.get_rng_state()
     training_flags = {name: module.training for name, module in model.named_modules()}

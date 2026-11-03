@@ -1043,7 +1043,7 @@ class ExtractionReader:
             Iterator of batch dicts.
         """
 
-        from .views import shuffled_batches
+        from .views import shuffled_batches  # deferred: cycle _extraction
 
         return shuffled_batches(
             self,
@@ -1070,7 +1070,7 @@ class ExtractionReader:
             The flattened feature matrix.
         """
 
-        from .views import feature_matrix
+        from .views import feature_matrix  # deferred: cycle _extraction
 
         return feature_matrix(self, key, max_bytes=max_bytes)
 
@@ -1088,7 +1088,7 @@ class ExtractionReader:
             A map-style dataset.
         """
 
-        from .views import as_torch_dataset
+        from .views import as_torch_dataset  # deferred: cycle _extraction
 
         return as_torch_dataset(self, keys)
 
@@ -1207,7 +1207,7 @@ def _raise_mixed_layout(problem: str, **fields: Any) -> None:
         ``extraction_manifest_invalid``, always.
     """
 
-    from torchlens._extraction.resume import DatasetExtractionResumeError
+    from torchlens._extraction.resume import DatasetExtractionResumeError  # deferred: cycle
 
     raise DatasetExtractionResumeError(
         problem,
@@ -1338,9 +1338,9 @@ def open_extraction(
             remedy="pass verify='structural' or verify='first_access'",
             value=repr(verify),
         )
-    from torchlens._extraction.resume import DatasetExtractionResumeError
+    from torchlens._extraction.resume import DatasetExtractionResumeError  # deferred: cycle
 
-    from ..dataset_extraction import (
+    from ..dataset_extraction import (  # deferred: cycle dataset_extraction
         MANIFEST_FILENAME,
         _load_manifest,
     )

@@ -304,7 +304,7 @@ class GqaInfo:
     def group_header(self, group: int) -> str:
         """Return the rendered sharing line for one zero-based KV group."""
 
-        from ._wording import KV_GROUP_WORDING
+        from ._wording import KV_GROUP_WORDING  # deferred: cycle transformer
 
         members = self.query_heads(group)
         return KV_GROUP_WORDING.format(
