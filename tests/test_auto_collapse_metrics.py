@@ -2208,7 +2208,7 @@ def test_auto_collapse_run_fold_representative_uses_single_instance_stats(
         assert f"{fold.num_params} params (all trainable)" not in rep_line
         # The header counts drawn nodes; collapsed module boxes make its noun "nodes".
         assert re.search(r"\d[\d,]* nodes \(", source)
-        assert f"{trace.num_params} params" in source
+        assert f"{trace.num_params:,} params" in source
     finally:
         trace.cleanup()
 
@@ -2296,7 +2296,7 @@ def test_auto_collapse_parallel_fold_representative_uses_single_instance_stats(
         assert f"{fold.num_params} params (all trainable)" not in rep_line
         # The header counts drawn nodes; collapsed module boxes make its noun "nodes".
         assert re.search(r"\d[\d,]* nodes \(", source)
-        assert f"{trace.num_params} params" in source
+        assert f"{trace.num_params:,} params" in source
     finally:
         trace.cleanup()
 
