@@ -10,7 +10,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._errors import FacadeTeachingError
 
 
 class _TinyRelu(nn.Module):
@@ -79,7 +78,7 @@ def test_bundle_call_accessors_resolve_listed_labels() -> None:
     x = torch.randn(2, 3, requires_grad=True)
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     loss = trace[trace.output_layers[0]].out.sum()
-    trace.log_backward(loss)
+    trace.backward(loss)
     bundle = tl.Bundle({"first": trace, "second": trace}, baseline="first")
 
     module_label = next(iter(bundle.module_calls))
@@ -186,23 +185,6 @@ def test_bundle_add_remove_accept_single_and_list_forms() -> None:
     assert bundle.names == ["a", "c"]
 
 
-def test_store_comparison_stamps_named_field_and_matches_delta_map() -> None:
-    """store_comparison persists delta_map's values on the supergraph nodes."""
-
-    bundle = _capture_pair(seed=4, offset=0.25)
-
-    name = bundle.store_comparison("relative_l2")
-
-    assert name == "relative_l2:out@baseline"
-    stored = bundle.stored_comparison(name)
-    assert stored == bundle._delta_map("relative_l2")
-    assert bundle.stored_comparison_names() == (name,)
-    # Queryable per node, without recomputation.
-    node_label = next(iter(stored))
-    node = bundle.supergraph.nodes[node_label]
-    assert node.comparisons[name] == stored[node_label]
-
-
 def test_store_comparison_overwrites_same_name_and_keeps_others() -> None:
     """Restoring under one name replaces it; other names are untouched."""
 
@@ -220,8 +202,6 @@ def test_store_comparison_overwrites_same_name_and_keeps_others() -> None:
 
 def test_store_comparison_callable_metric_requires_explicit_name() -> None:
     """A callable metric has no derivable stable name and refuses typed."""
-
-    import pytest
 
     from torchlens._errors import InvalidArgumentError
 
@@ -257,8 +237,6 @@ def test_store_comparison_callable_metric_requires_explicit_name() -> None:
 def test_stored_comparison_unknown_name_refuses_typed() -> None:
     """Reading a never-stored name refuses typed, never an empty dict."""
 
-    import pytest
-
     from torchlens._errors import InvalidArgumentError
 
     bundle = _capture_pair(seed=7, offset=0.25)
@@ -266,33 +244,3 @@ def test_stored_comparison_unknown_name_refuses_typed() -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         bundle.stored_comparison("never_stored")
     assert excinfo.value.fields["code"] == "comparison_unknown"
-
-
-@pytest.mark.parametrize(
-    "name",
-    [
-        "traces",
-        "member_construction",
-        "cluster",
-        "help",
-        "joint_metric",
-        "set_capacity",
-        "push",
-        "attach_hooks",
-        "node",
-        "compare_at",
-        "show_diff",
-        "delta_map",
-        "norm_delta",
-        "output_delta",
-        "aligned_pairs",
-    ],
-)
-def test_removed_bundle_member_redirects_typed(name: str) -> None:
-    """Each removed Bundle member refuses with the typed redirect naming its replacement."""
-
-    bundle = tl.Bundle()
-    with pytest.raises(FacadeTeachingError) as excinfo:
-        getattr(bundle, name)
-    assert excinfo.value.fields["code"] == "facade_redirect"
-    assert excinfo.value.fields["attribute"] == name

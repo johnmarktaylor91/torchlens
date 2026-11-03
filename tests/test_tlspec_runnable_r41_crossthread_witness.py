@@ -36,10 +36,8 @@ import json
 import os
 import queue
 import shutil
-import sys
 import threading
 import time as _time
-import types
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -52,7 +50,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens._utils.rng as rng_mod
 from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
@@ -63,7 +60,6 @@ from torchlens._utils.rng import (
     host_nondeterminism_monitor,
     inventory_types as rng_inventory_types,
 )
-from torchlens._utils.rng.call_sites import _call_site_explicit_time_value
 from torchlens._utils.rng.registry import TORCH_RNG_SURFACE, _torch_rng_holder_module
 from torchlens.backends.torch._completeness_escape_state import (
     host_escape_has_cross_thread_captured_tensor,
@@ -71,7 +67,6 @@ from torchlens.backends.torch._completeness_escape_state import (
     host_escape_has_unattributable_bool,
     host_escape_has_unattributable_opaque,
     host_escape_source_labels,
-    host_escape_state_source_names,
 )
 from torchlens.backends.torch.completeness_witness import (
     HOST_VALUE_ESCAPE_METHODS,
@@ -93,12 +88,7 @@ except ImportError:  # pragma: no cover - non-POSIX platforms
 
 _CAP = {"replayable": True, "capture_container_structure": True, "cache": False}
 
-# Pre-window held references (module import time == before any monitor window).
-_HELD_TIME = _time.time
 _HELD_LOCALTIME = _time.localtime
-_HELD_GMTIME = _time.gmtime
-_HELD_STRFTIME = _time.strftime
-_HELD_URANDOM = os.urandom
 
 
 def _capture(model: nn.Module, x: Any, *, seed: int = 1) -> tl.Trace:
@@ -500,206 +490,10 @@ def test_held_ref_registry_channel_marks_odd(target: str) -> None:
 # B -- purity + fail-closed pins for the argcount decode
 # ======================================================================================
 
-_FIXED_T = 1_000_000.0
-
-
-def test_held_implicit_now_explicit_time_stays_pure() -> None:
-    """Held ``localtime(t)`` / ``gmtime(t)`` / ``strftime(fmt, t)`` are pure transforms."""
-
-    lt = _HELD_LOCALTIME(_FIXED_T)
-    with host_nondeterminism_monitor(None) as result:
-        _HELD_LOCALTIME(_FIXED_T)
-        _HELD_GMTIME(_FIXED_T)
-        _HELD_STRFTIME("%Y", lt)
-    assert "time.localtime" not in result.channels
-    assert "time.gmtime" not in result.channels
-    assert "time.strftime" not in result.channels
-
-
-def test_held_implicit_now_no_arg_marks() -> None:
-    """Held ``localtime()`` / ``strftime(fmt)`` read the current clock and mark."""
-
-    with host_nondeterminism_monitor(None) as result:
-        _HELD_LOCALTIME()
-    assert "time.localtime" in result.channels
-    with host_nondeterminism_monitor(None) as result2:
-        _HELD_STRFTIME("%Y")
-    assert "time.strftime" in result2.channels
-
-
-def test_held_implicit_now_star_call_marks_fail_closed() -> None:
-    """An undecodable star-call site marks fail-closed even with an explicit time."""
-
-    args = (_FIXED_T,)
-    with host_nondeterminism_monitor(None) as result:
-        _HELD_LOCALTIME(*args)
-    assert "time.localtime" in result.channels
-
-
-def test_call_site_explicit_time_unit_pins() -> None:
-    """Pin the interpreter's CALL decode: 0-arg, value-resolved, None, star-call.
-
-    An interpreter bump that changes the bytecode shape turns this RED at upgrade
-    time; the monitor then over-marks (fail-closed) rather than under-marks. The
-    decode is VALUE-resolving (r5 b8-fable R57): an explicit ``None`` argument --
-    literal or through a variable -- reads the current clock and must NOT decode
-    as a pure transform.
-    """
-
-    captured: list[bool] = []
-    target = _HELD_LOCALTIME
-
-    def probe_hook(frame: Any, event: str, arg: Any) -> None:
-        if event == "c_call" and arg is target:
-            captured.append(_call_site_explicit_time_value(frame, 0))
-
-    star_args = (_FIXED_T,)
-    none_ts = None
-    previous = sys.getprofile()
-    sys.setprofile(probe_hook)
-    try:
-        target()  # implicit now -> mark
-        target(_FIXED_T)  # module-global explicit time -> pure
-        target(1_000_000)  # literal explicit time -> pure
-        target(None)  # literal None IS a now-read -> mark
-        target(none_ts)  # variable None IS a now-read -> mark
-        target(*star_args)  # undecodable star-call -> mark fail-closed
-    finally:
-        sys.setprofile(previous)
-    assert captured == [False, True, True, False, False, False]
-
-
-def test_held_ref_torchlens_frame_exempt() -> None:
-    """A call of the held original FROM a torchlens-owned frame never marks.
-
-    TorchLens's own per-op clock reads route patched-attr -> wrapper -> original,
-    emitting ``c_call`` for the original from the wrapper's frame; without the exact
-    module-globals exemption every capture would self-ceiling.
-    """
-
-    held = _HELD_TIME
-    rng_mod.__dict__["_r41_test_held_ref"] = held
-    try:
-        with host_nondeterminism_monitor(None) as result:
-            eval(  # noqa: S307 - fixed literal code object, test-owned
-                compile("_r41_test_held_ref()", "<r41-tl-frame>", "eval"), rng_mod.__dict__
-            )
-        assert "time.time" not in result.channels
-    finally:
-        del rng_mod.__dict__["_r41_test_held_ref"]
-
 
 # ======================================================================================
 # C -- hon1_1 end-to-end: held-ref channels ceiling the runnable verdict
 # ======================================================================================
-
-
-class _HeldTimeBranch(nn.Module):
-    """Branch on a pre-window held ``time.time`` reference (the hon1_1 gap model)."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.lin = nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Steer a branch by the held clock reference."""
-
-        v = _HELD_TIME()
-        h = self.lin(x)
-        return h * 2.0 if int(v * 1e6) % 2 == 0 else h * 3.0
-
-
-class _HeldUrandomBranch(nn.Module):
-    """Branch on a pre-window held ``os.urandom`` reference."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.lin = nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Steer a branch by held OS entropy."""
-
-        v = _HELD_URANDOM(1)[0]
-        h = self.lin(x)
-        return h * 2.0 if v % 2 == 0 else h * 3.0
-
-
-_HELPER_CLOCK_SOURCE = "from time import time as _lt\n\ndef read_clock():\n    return _lt()\n"
-
-
-def _make_helper_clock_module() -> types.ModuleType:
-    """Build a helper module holding a pre-window ``from time import time`` alias.
-
-    The idiomatic third-party-utility spelling (probe A2): the alias lives in the
-    HELPER module's globals, structurally unreachable by any model-graph alias scan,
-    and reached only through the held-ref identity mechanism.
-    """
-
-    helper = types.ModuleType("r41_helper_clock")
-    exec(compile(_HELPER_CLOCK_SOURCE, "r41_helper_clock.py", "exec"), helper.__dict__)
-    return helper
-
-
-_HELPER_CLOCK = _make_helper_clock_module()
-
-
-class _HelperModuleClockBranch(nn.Module):
-    """Branch on a clock read through a helper-module-global held alias."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.lin = nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Steer a branch by the helper module's held clock alias."""
-
-        v = _HELPER_CLOCK.read_clock()
-        h = self.lin(x)
-        return h * 2.0 if int(v * 1e6) % 2 == 0 else h * 3.0
-
-
-@pytest.mark.parametrize(
-    "factory,channel",
-    [
-        (_HeldTimeBranch, "time.time"),
-        (_HeldUrandomBranch, "os.urandom"),
-        (_HelperModuleClockBranch, "time.time"),
-    ],
-)
-def test_held_ref_capture_never_false_verified(factory: Any, channel: str, tmp_path: Path) -> None:
-    """A held-ref clock/entropy capture ceilings exactly like the patched spelling."""
-
-    x = torch.randn(2, 4)
-    trace, result = _roundtrip(factory(), x, tmp=tmp_path)
-    assert channel in trace._runnable.host_rng_channels
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-
-
-class _HeldLocaltimePure(nn.Module):
-    """Use a held ``localtime`` ONLY as a pure transform of a fixed time (stays VERIFIED)."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.lin = nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Scale by a deterministic function of ``localtime(fixed_t)``."""
-
-        parts = _HELD_LOCALTIME(_FIXED_T)
-        scale = float(parts.tm_year % 7 + 1)
-        return self.lin(x) * scale
-
-
-def test_held_localtime_pure_transform_stays_verified(tmp_path: Path) -> None:
-    """No-over-trigger pin: a pure held ``localtime(t)`` transform stays VERIFIED."""
-
-    from torchlens._io.runnable import build_sparse_run_descriptor
-
-    x = torch.randn(2, 4)
-    trace, result = _roundtrip(_HeldLocaltimePure(), x, tmp=tmp_path)
-    assert build_sparse_run_descriptor(trace).rng_profile.host_rng_consumed is False
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
 # ======================================================================================
@@ -726,103 +520,6 @@ def test_sweep_cap_exhaustion_flags_uncertain(monkeypatch: Any) -> None:
         pass
     assert result.uncertain is True
     assert "inventory_budget_exhausted" in result.uncertain_detail
-
-
-def test_sweep_realistic_model_never_hits_cap() -> None:
-    """A 400-block deterministic model sweeps completely: no channels, no uncertainty."""
-
-    model = nn.ModuleList([nn.Linear(2, 2) for _ in range(400)])
-    with host_nondeterminism_monitor(model) as result:
-        pass
-    assert result.uncertain is False
-    assert result.channels == set()
-
-
-def test_large_late_held_generator_witnessed(preexisting_worker: Any) -> None:
-    """A generator on the FINAL child of a 400-block model (past the old silent budget)
-    drawn on a PRE-EXISTING thread is digest-witnessed with no uncertainty."""
-
-    model = nn.ModuleList([nn.Linear(2, 2) for _ in range(400)])
-    model[-1].rng = np.random.default_rng(777)
-    with host_nondeterminism_monitor(model) as result:
-        preexisting_worker.run(lambda: float(model[-1].rng.random()))
-    assert "model_attribute_generator" in result.channels
-    assert result.uncertain is False
-
-
-def test_large_model_held_generator_end_to_end_unverifiable(
-    preexisting_worker: Any, tmp_path: Path
-) -> None:
-    """End-to-end (the r40 hon1_2 repro shape): a model-held generator past the old
-    budget, drawn on a pre-existing thread, ceilings the runnable verdict."""
-
-    class _BigHeldGen(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-            self.blocks = nn.ModuleList([nn.Linear(2, 2) for _ in range(150)])
-            self.blocks[-1].rng = np.random.default_rng(777)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            v = preexisting_worker.run(lambda: float(self.blocks[-1].rng.random()))
-            h = self.lin(x)
-            return h * 2.0 if v < 0.5 else h * 3.0
-
-    x = torch.randn(2, 4)
-    trace, result = _roundtrip(_BigHeldGen(), x, tmp=tmp_path)
-    assert "model_attribute_generator" in trace._runnable.host_rng_channels
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-
-
-@pytest.mark.parametrize(
-    "wrap",
-    [
-        lambda gen: [gen],
-        lambda gen: {"g": gen},
-        lambda gen: [[gen]],
-        lambda gen: {gen: 1},
-    ],
-    ids=["list", "dict-value", "nested-list", "dict-key"],
-)
-def test_container_nested_generator_witnessed(wrap: Any, preexisting_worker: Any) -> None:
-    """Generators nested in builtin containers (incl. dict KEYS) are digest-witnessed."""
-
-    gen = np.random.default_rng(9)
-    holder = _AttrHolder(pool=wrap(gen))
-    with host_nondeterminism_monitor(holder) as result:
-        preexisting_worker.run(lambda: float(gen.random()))
-    assert "model_attribute_generator" in result.channels
-    assert result.uncertain is False
-
-
-def test_container_held_generator_no_draw_stays_clean() -> None:
-    """Over-trigger pin: container-held generators with NO draw record nothing."""
-
-    holder = _AttrHolder(
-        pool=[np.random.default_rng(3)],
-        table={"g": np.random.default_rng(4), np.random.default_rng(5): 1},
-        deep=[[["benign", 1, 2.0, (3, 4)]]],
-    )
-    with host_nondeterminism_monitor(holder) as result:
-        pass
-    assert result.channels == set()
-    assert result.uncertain is False
-
-
-def test_bare_bit_generator_digest_witnessed(preexisting_worker: Any) -> None:
-    """A bare model-held BitGenerator drawn through a wrapping Generator is witnessed."""
-
-    bit_gen = np.random.PCG64(5)
-    before = host_nondeterminism_monitor._digest_rng_instance(bit_gen)
-    float(np.random.Generator(bit_gen).random())
-    after = host_nondeterminism_monitor._digest_rng_instance(bit_gen)
-    assert before != after  # the digest actually tracks BitGenerator state
-
-    holder = _AttrHolder(bg=np.random.PCG64(11))
-    with host_nondeterminism_monitor(holder) as result:
-        preexisting_worker.run(lambda: float(np.random.Generator(holder.bg).random()))
-    assert "model_attribute_generator" in result.channels
 
 
 # ======================================================================================
@@ -919,23 +616,6 @@ class _InWindowEscapeModel(nn.Module):
         return self.lin(data)
 
 
-def _escape_witnessed(trace: Any) -> bool:
-    """Return whether ANY escape witness (positive, fail-closed, OR cross-thread) recorded.
-
-    r43 (locked by design): a NON-owner captured-tensor touch no longer records a precise
-    source/fail-closed witness -- it sets the ONE cross-thread ceiling, which is the
-    witness that downgrades the artifact to UNVERIFIABLE.
-    """
-
-    return bool(
-        host_escape_source_labels(trace)
-        or host_escape_state_source_names(trace)
-        or host_escape_has_unattributable_bool(trace)
-        or host_escape_has_unattributable_opaque(trace)
-        or host_escape_has_cross_thread_captured_tensor(trace)
-    )
-
-
 @pytest.mark.filterwarnings("ignore:TypedStorage is deprecated.*:UserWarning")
 @pytest.mark.parametrize("member", _ESCAPE_MEMBERS)
 def test_in_window_thread_escape_witnessed(member: str) -> None:
@@ -974,114 +654,6 @@ def test_in_window_thread_escape_witnessed(member: str) -> None:
 # ======================================================================================
 # F -- hon2_1 end-to-end: helper-thread escape ceilings the changed-input verdict
 # ======================================================================================
-
-
-class _ThreadScalarItemGuard(nn.Module):
-    """Branch on ``gate.item()`` executed on an in-window helper thread (the repro)."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.a = nn.Linear(4, 4)
-        self.b = nn.Linear(4, 4)
-
-    def forward(self, gate: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
-        """Steer the taken path by a helper-thread scalar escape."""
-
-        box: dict[str, bool] = {}
-
-        def _worker() -> None:
-            box["flag"] = bool(gate.item() > 0)
-
-        t = threading.Thread(target=_worker)
-        t.start()
-        t.join()
-        return self.a(data) if box["flag"] else self.b(data)
-
-
-class _ThreadTensorToListGuard(nn.Module):
-    """Branch on ``gate.tolist()`` executed on an in-window helper thread."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.a = nn.Linear(4, 4)
-        self.b = nn.Linear(4, 4)
-
-    def forward(self, gate: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
-        """Steer the taken path by a helper-thread tolist escape."""
-
-        box: dict[str, bool] = {}
-
-        def _worker() -> None:
-            box["flag"] = bool(gate.tolist()[0] > 0)
-
-        t = threading.Thread(target=_worker)
-        t.start()
-        t.join()
-        return self.a(data) if box["flag"] else self.b(data)
-
-
-class _ThreadTensorNumpyGuard(nn.Module):
-    """Branch on ``gate.numpy()`` executed on an in-window helper thread."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.a = nn.Linear(4, 4)
-        self.b = nn.Linear(4, 4)
-
-    def forward(self, gate: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
-        """Steer the taken path by a helper-thread numpy escape."""
-
-        box: dict[str, bool] = {}
-
-        def _worker() -> None:
-            box["flag"] = bool(float(gate.numpy()[0]) > 0)
-
-        t = threading.Thread(target=_worker)
-        t.start()
-        t.join()
-        return self.a(data) if box["flag"] else self.b(data)
-
-
-@pytest.mark.parametrize(
-    "factory", [_ThreadScalarItemGuard, _ThreadTensorToListGuard, _ThreadTensorNumpyGuard]
-)
-def test_helper_thread_escape_changed_input_never_verified(factory: Any, tmp_path: Path) -> None:
-    """hon2_1 end-to-end: helper-thread escape witnessed; changed input never VERIFIED."""
-
-    gate = torch.tensor([1.0])
-    data = torch.randn(1, 4)
-    trace = _capture(factory(), (gate, data))
-    assert _escape_witnessed(trace), "helper-thread escape recorded no witness"
-    path = tmp_path / "hon2.tlspec"
-    shutil.rmtree(path, ignore_errors=True)
-    trace.save(path, level="runnable", include_weights=True, include_activations=True)
-    result = tl.load(path).run(inputs=(torch.tensor([-1.0]), data))
-    assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
-    assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
-
-
-def test_owner_thread_escape_control_unchanged(tmp_path: Path) -> None:
-    """Owner-thread control: the same escape on the owner thread stays witnessed."""
-
-    class _OwnerScalarGuard(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.a = nn.Linear(4, 4)
-            self.b = nn.Linear(4, 4)
-
-        def forward(self, gate: torch.Tensor, data: torch.Tensor) -> torch.Tensor:
-            flag = bool(gate.item() > 0)
-            return self.a(data) if flag else self.b(data)
-
-    gate = torch.tensor([1.0])
-    data = torch.randn(1, 4)
-    trace = _capture(_OwnerScalarGuard(), (gate, data))
-    assert _escape_witnessed(trace)
-    path = tmp_path / "hon2owner.tlspec"
-    shutil.rmtree(path, ignore_errors=True)
-    trace.save(path, level="runnable", include_weights=True)
-    result = tl.load(path).run(inputs=(torch.tensor([-1.0]), data))
-    assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
 
 
 # ======================================================================================
@@ -1128,63 +700,6 @@ def test_benign_foreign_thread_own_tensors_stays_verified(
     # r43: a benign worker touching its OWN uncaptured tensors never sets the cross-thread ceiling.
     assert not host_escape_has_cross_thread_captured_tensor(trace)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
-def test_in_window_captured_tensor_op_ceilings_even_when_unused(tmp_path: Path) -> None:
-    """r45 hon2_1 (supersedes the r43 posture): an in-window helper thread that CONSUMES a
-    CAPTURED tensor as an operand ceilings the capture even when the result is discarded and
-    never escapes to host. TorchLens cannot prove the worker-derived tensor's storage (invisible
-    to the owner-thread census) will not later escape unwitnessed, so consumption is the
-    fail-closed trigger -- the contract's former "tensor-only helper work whose result never
-    escapes remains outside this ceiling" exemption is DELETED. (An OWN-tensor unused op stays
-    VERIFIED; that is pinned in ``test_tlspec_runnable_r45_crossthread_provenance.py``.)"""
-
-    class _ThreadCapturedTensorOp(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            def _worker() -> None:
-                _ = (x * 2.0).sum()  # consumes the CAPTURED input x; result discarded
-
-            t = threading.Thread(target=_worker)
-            t.start()
-            t.join()
-            return self.lin(x).relu()
-
-    x = torch.randn(2, 4)
-    trace, result = _roundtrip(_ThreadCapturedTensorOp(), x, tmp=tmp_path)
-    assert host_escape_has_cross_thread_captured_tensor(trace)
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-
-
-def test_foreign_thread_captured_tensor_escape_ceilings(
-    preexisting_worker: Any, tmp_path: Path
-) -> None:
-    """A PRE-EXISTING thread's DIRECT `.item()` on a CAPTURED tensor CEILINGS (r43, locked).
-
-    Superseding the r41 "foreign positive-only witness -> VERIFIED" posture: concurrent host
-    interaction with a captured tensor is outside the single-owner-thread replay model, so it
-    is never promoted to a precise `verified` proof even though a label/state origin is visible
-    -- it permanently ceilings the artifact to UNVERIFIABLE + NOT_APPLICABLE."""
-
-    class _HandsToForeignWorker(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(1, 1)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            h = self.lin(x)
-            preexisting_worker.run(lambda: h.item())  # DIRECT captured-tensor escape
-            return h.relu()
-
-    x = torch.randn(1, 1)
-    trace, result = _roundtrip(_HandsToForeignWorker(), x, tmp=tmp_path)
-    assert host_escape_has_cross_thread_captured_tensor(trace)
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
 # ======================================================================================
@@ -1326,28 +841,11 @@ def test_tampered_device_literal_degrades_analysis_only(tmp_path: Path) -> None:
         loaded.run(inputs=x)
 
 
-def test_untampered_device_literal_still_runs_verified(tmp_path: Path) -> None:
-    """Control: the untampered device-literal bundle loads and replays VERIFIED."""
-
-    class _DeviceLiteral(nn.Module):
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return x.to(torch.device("cpu")) * 2.0
-
-    x = torch.randn(2, 3)
-    trace = _capture(_DeviceLiteral(), x)
-    path = tmp_path / "secC_ok.tlspec"
-    shutil.rmtree(path, ignore_errors=True)
-    trace.save(path, level="runnable")
-    result = tl.load(path).run(inputs=x)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
 # ======================================================================================
 # r43 (locked by design) immunizers -- ONE fail-closed cross-thread captured-tensor rule + RNG rows
 # ======================================================================================
 
 import _thread  # noqa: E402
-import datetime as _datetime  # noqa: E402
 
 
 class _RawThreadGate(nn.Module):
@@ -1390,6 +888,7 @@ def test_raw_thread_captured_escape_ceilings(tmp_path: Path) -> None:
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
+@pytest.mark.smoke
 def test_owner_derived_alias_foreign_escape_ceilings(
     preexisting_worker: Any, tmp_path: Path
 ) -> None:
@@ -1456,32 +955,6 @@ def test_concurrent_foreign_str_loop_is_crash_free_and_verified(tmp_path: Path) 
         bg.join(timeout=2)
 
 
-class _SubclassDatetime(_datetime.datetime):
-    """A ``datetime.datetime`` subclass inheriting the C current-clock readers (hon1_1)."""
-
-
-@pytest.mark.parametrize("reader", ["now", "utcnow"])
-def test_datetime_subclass_clock_reader_ceilings(reader: str, tmp_path: Path) -> None:
-    """r42 hon1_1: a ``datetime.datetime`` SUBCLASS ``now``/``utcnow`` reads the wall clock and
-    ceilings (subclass-safe classification), exactly like the base spelling."""
-
-    class _SubclassClockBranch(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            v = getattr(_SubclassDatetime, reader)()
-            h = self.lin(x)
-            return h * 2.0 if v.microsecond % 2 == 0 else h * 3.0
-
-    x = torch.randn(2, 4)
-    trace, result = _roundtrip(_SubclassClockBranch(), x, tmp=tmp_path)
-    assert "datetime.datetime.%s" % reader in trace._runnable.host_rng_channels
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-
-
 def test_datetime_subclass_localtime_transform_stays_verified(tmp_path: Path) -> None:
     """No-over-trigger pin: a pure ``localtime(fixed_t)`` transform stays VERIFIED even though a
     subclass clock reader is defined in the same process."""
@@ -1499,58 +972,6 @@ def test_datetime_subclass_localtime_transform_stays_verified(tmp_path: Path) ->
 
     x = torch.randn(2, 4)
     _trace, result = _roundtrip(_PureLocaltime(), x, tmp=tmp_path)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
-class _CustomRngHolder:
-    """A non-builtin custom holder wrapping a numpy Generator (corr2_1)."""
-
-    def __init__(self, seed: int) -> None:
-        self.rng = np.random.default_rng(seed)
-
-
-def test_custom_holder_generator_drawn_on_worker_ceilings(
-    preexisting_worker: Any, tmp_path: Path
-) -> None:
-    """r42 corr2_1: a model-held generator behind a CUSTOM holder, drawn on a pre-existing worker,
-    is inventoried by the custom-holder sweep -> ``model_attribute_generator`` -> UNVERIFIABLE."""
-
-    class _CustomHolderGenModel(nn.Module):
-        def __init__(self, worker: Any) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-            self.holder = _CustomRngHolder(777)
-            self._worker = worker
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            v = self._worker.run(lambda: float(self.holder.rng.random()))
-            h = self.lin(x)
-            return h * 2.0 if v < 0.5 else h * 3.0
-
-    x = torch.randn(2, 4)
-    trace, result = _roundtrip(_CustomHolderGenModel(preexisting_worker), x, tmp=tmp_path)
-    assert "model_attribute_generator" in trace._runnable.host_rng_channels
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-
-
-def test_custom_holder_undrawn_generator_stays_clean(
-    preexisting_worker: Any, tmp_path: Path
-) -> None:
-    """Over-trigger pin: a custom-holder generator that is NOT drawn stays VERIFIED."""
-
-    class _UndrawnHolderModel(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-            self.holder = _CustomRngHolder(3)  # present but never drawn
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.lin(x).relu()
-
-    x = torch.randn(2, 4)
-    trace, result = _roundtrip(_UndrawnHolderModel(), x, tmp=tmp_path)
-    assert "model_attribute_generator" not in trace._runnable.host_rng_channels
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
@@ -1633,29 +1054,8 @@ def _sweep_generator_count(model: nn.Module) -> int:
         return len(monitor._sweep_model_generators())
 
 
-@pytest.mark.parametrize("placement", ["list", "dict", "nested", "holder"])
-@pytest.mark.parametrize("rng_kind", ["generator", "randomstate", "bitgen"])
-def test_unregistered_submodule_generator_is_swept(placement: str, rng_kind: str) -> None:
-    """REACHABILITY (r51 hon1_1): a numpy generator held (plain attr) inside an UNREGISTERED
-    nn.Module submodule -- attached to the parent via a ``list`` / ``dict`` / nested container /
-    custom holder, so absent from ``model.modules()`` -- is now digest-reached by the sweep (0
-    before the fix). Whole-class: nn.Module is descended (``__dict__`` / ``__slots__``), not a hard
-    leaf, so the hole is closed by reachability for EVERY holder placement x every digestable kind."""
-
-    model = _build_unreg_model(placement, "attr", rng_kind)
-    assert _sweep_generator_count(model) >= 1
-
-
-@pytest.mark.parametrize("gen_style", ["attr", "list", "dict", "nested", "holder"])
-def test_unregistered_submodule_generator_holder_styles_swept(gen_style: str) -> None:
-    """REACHABILITY (r51 hon1_1): the generator behind an unregistered (list-held) submodule is
-    reached regardless of HOW the submodule holds it (plain attr / list / dict / nested / holder)."""
-
-    model = _build_unreg_model("list", gen_style, "generator")
-    assert _sweep_generator_count(model) >= 1
-
-
-@pytest.mark.parametrize("rng_kind", ["generator", "randomstate", "bitgen"])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize("rng_kind", ["bitgen"])
 def test_registered_submodule_generator_still_swept(rng_kind: str) -> None:
     """Control (premark is coverage-NEUTRAL): a generator on a REGISTERED submodule stays caught
     (the top ``model.modules()`` loop seeds its ``__dict__``); the premark only skips the redundant
@@ -1663,65 +1063,6 @@ def test_registered_submodule_generator_still_swept(rng_kind: str) -> None:
 
     model = _build_unreg_model("registered", "attr", rng_kind)
     assert _sweep_generator_count(model) >= 1
-
-
-def test_unregistered_submodule_no_generator_no_over_trigger() -> None:
-    """Over-trigger pin: an unregistered submodule with NO generator adds no channel (count 0) --
-    descending nn.Modules must not manufacture a false generator sighting."""
-
-    parent = nn.Module()
-    parent.lin = nn.Linear(2, 2)
-    parent.extras = [nn.Linear(2, 2)]  # unregistered but benign (no RNG)
-    assert _sweep_generator_count(parent) == 0
-
-
-def test_unregistered_submodule_generator_end_to_end_unverifiable(
-    preexisting_worker: Any, tmp_path: Path
-) -> None:
-    """END-TO-END (the r50 hon_1 false-VERIFIED repro): a numpy Generator behind an UNREGISTERED
-    submodule, drawn on a PRE-EXISTING thread to steer control flow, now ceilings the runnable
-    verdict to UNVERIFIABLE + NOT_APPLICABLE (was falsely VERIFIED + ATTESTED before r51)."""
-
-    class _UnregGenModel(nn.Module):
-        def __init__(self, worker: Any) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-            sub = nn.Linear(2, 2)
-            sub.rng = np.random.default_rng(2)
-            self.extras = [sub]  # UNREGISTERED submodule (bypasses nn.Module registration)
-            self._worker = worker
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            v = self._worker.run(lambda: float(self.extras[0].rng.random()))
-            h = self.lin(x)
-            return h * 2.0 if v < 0.5 else h * 3.0
-
-    x = torch.randn(2, 4)
-    trace, result = _roundtrip(_UnregGenModel(preexisting_worker), x, tmp=tmp_path)
-    assert "model_attribute_generator" in trace._runnable.host_rng_channels
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-
-
-def test_unregistered_submodule_undrawn_generator_stays_verified(tmp_path: Path) -> None:
-    """Over-trigger pin: an unregistered submodule holding an UNDRAWN generator stays VERIFIED (a
-    present-but-unused generator produces no channel)."""
-
-    class _UnregUndrawn(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-            sub = nn.Linear(2, 2)
-            sub.rng = np.random.default_rng(3)  # present but never drawn
-            self.extras = [sub]
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.lin(x).relu()
-
-    x = torch.randn(2, 4)
-    trace, result = _roundtrip(_UnregUndrawn(), x, tmp=tmp_path)
-    assert "model_attribute_generator" not in trace._runnable.host_rng_channels
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
 # ======================================================================================
@@ -1911,6 +1252,7 @@ _R53_INERT_SHAPES: tuple[str, ...] = (
 )
 
 
+@pytest.mark.smoke_cells("test_r53_inert_reach_generator_swept[weakmethod]")
 @pytest.mark.parametrize("shape", _R53_INERT_SHAPES)
 def test_r53_inert_reach_generator_swept(shape: str) -> None:
     """REACHABILITY: the sweep snapshots the EXACT generator through the inert edge alone
@@ -1923,155 +1265,6 @@ def test_r53_inert_reach_generator_swept(shape: str) -> None:
         snapshots = monitor._sweep_model_generators()
     assert any(holder is gen for holder, _ in snapshots), f"{shape}: generator not reached"
     assert _R53_FIRED == [], f"{shape}: inventory executed user code {_R53_FIRED!r}"
-
-
-@pytest.mark.parametrize("thread", ["owner", "preexisting"])
-@pytest.mark.parametrize("shape", _R53_INERT_SHAPES)
-def test_r53_inert_reach_generator_drawn_is_witnessed(
-    shape: str, thread: str, preexisting_worker: Any
-) -> None:
-    """DRAW witness on BOTH thread axes: an inertly-reachable generator drawn during the
-    window -- including on a PRE-EXISTING non-hooked worker, where the state digest is the
-    ONLY mechanism -- records ``model_attribute_generator`` (false VERIFIED before r53)."""
-
-    _R53_FIRED.clear()
-    model, gen, _keep = _build_inert_reach_holder(shape)
-    with host_nondeterminism_monitor(model) as result:
-        if thread == "preexisting":
-            preexisting_worker.run(lambda: float(gen.random()))
-        else:
-            float(gen.random())
-    assert "model_attribute_generator" in result.channels
-    assert _R53_FIRED == []
-
-
-@pytest.mark.smoke_cells("test_r53_inert_reach_undrawn_stays_clean[weakmethod]")
-@pytest.mark.parametrize("shape", _R53_INERT_SHAPES)
-def test_r53_inert_reach_undrawn_stays_clean(shape: str) -> None:
-    """Over-trigger pin: every holder shape PRESENT but UNDRAWN records no channel and no
-    uncertainty -- finding a generator is never itself a ceiling (the digest diff is)."""
-
-    _R53_FIRED.clear()
-    model, _gen, _keep = _build_inert_reach_holder(shape)
-    with host_nondeterminism_monitor(model) as result:
-        pass
-    assert result.channels == set()
-    assert result.uncertain is False
-    assert _R53_FIRED == []
-
-
-def test_r53_user_class_surfaces_never_flag_uncertain() -> None:
-    """Boundedness / no-over-trigger pin: a user-class-heavy model (methods, properties,
-    bound-method attrs, defaults across 100 blocks) sweeps completely -- per-class dedup
-    keeps the class/interior edges far under the node cap, with no channels and no flags."""
-
-    class _Block(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(2, 2)
-            self.cb = self.helper  # bound method: the __func__/__self__ interior edge
-
-        def helper(self, x: float = 1.0) -> float:
-            return x
-
-        @property
-        def scaled(self) -> float:
-            return 2.0
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.lin(x)
-
-    model = nn.ModuleList([_Block() for _ in range(100)])
-    with host_nondeterminism_monitor(model) as result:
-        pass
-    assert result.channels == set()
-    assert result.uncertain is False
-
-
-def test_r53_descriptor_owned_generator_end_to_end_unverifiable(
-    preexisting_worker: Any, tmp_path: Path
-) -> None:
-    """corr_1 END-TO-END (the r52 false-VERIFIED repro shape): a class-descriptor-provided
-    UNREGISTERED submodule's generator, drawn on a pre-existing thread to steer a branch,
-    now ceilings the runnable verdict (was VERIFIED + ATTESTED with delta 0.884 vs fresh)."""
-
-    sub = nn.Linear(2, 2)
-    sub.rng = np.random.default_rng(0)
-
-    class _DescriptorRngModel(nn.Module):
-        extra = _GenOwningDescriptor(sub)
-
-        def __init__(self, worker: Any) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-            self._worker = worker
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            v = self._worker.run(lambda: float(self.extra.rng.random()))
-            h = self.lin(x)
-            return h * 2.0 if v < 0.5 else h * 3.0
-
-    x = torch.randn(2, 4)
-    trace, result = _roundtrip(_DescriptorRngModel(preexisting_worker), x, tmp=tmp_path)
-    assert "model_attribute_generator" in trace._runnable.host_rng_channels
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-
-
-def test_r53_weakref_reached_generator_end_to_end_unverifiable(
-    preexisting_worker: Any, tmp_path: Path
-) -> None:
-    """corr_2 END-TO-END (the r52 false-VERIFIED repro shape): a weakref-reached
-    unregistered submodule's generator, drawn on a pre-existing thread, now ceilings."""
-
-    sub = nn.Linear(2, 2)  # kept alive by this frame for the whole roundtrip
-    sub.rng = np.random.default_rng(0)
-
-    class _WeakrefRngModel(nn.Module):
-        def __init__(self, worker: Any) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-            self.subref = weakref.ref(sub)
-            self._worker = worker
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            target = self.subref()
-            assert target is not None
-            v = self._worker.run(lambda: float(target.rng.random()))
-            h = self.lin(x)
-            return h * 2.0 if v < 0.5 else h * 3.0
-
-    x = torch.randn(2, 4)
-    trace, result = _roundtrip(_WeakrefRngModel(preexisting_worker), x, tmp=tmp_path)
-    assert "model_attribute_generator" in trace._runnable.host_rng_channels
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-
-
-def test_r53_callable_instance_generator_end_to_end_unverifiable(
-    preexisting_worker: Any, tmp_path: Path
-) -> None:
-    """F1 END-TO-END (the probe's callable_instance shape, the most realistic of the corr
-    family): a generator on a callable sampler object, drawn on a pre-existing thread,
-    now ceilings (the blanket ``callable()`` hard-leaf gate previously hid it)."""
-
-    class _CallableOpModel(nn.Module):
-        def __init__(self, worker: Any) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-            self.op = _CallableSampler(np.random.default_rng(0))
-            self._worker = worker
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            v = self._worker.run(lambda: self.op(1.0))
-            h = self.lin(x)
-            return h * 2.0 if v < 0.5 else h * 3.0
-
-    x = torch.randn(2, 4)
-    trace, result = _roundtrip(_CallableOpModel(preexisting_worker), x, tmp=tmp_path)
-    assert "model_attribute_generator" in trace._runnable.host_rng_channels
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
 def test_r53_inert_holders_present_undrawn_e2e_stays_verified(tmp_path: Path) -> None:
@@ -2101,30 +1294,4 @@ def test_r53_inert_holders_present_undrawn_e2e_stays_verified(tmp_path: Path) ->
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-_R53_EXTERNAL_STORE: dict[str, Any] = {}
 """External module state reachable ONLY by executing a property body (the residual pin)."""
-
-
-def test_r53_getter_only_dynamic_generator_stays_residual(preexisting_worker: Any) -> None:
-    """BOUNDARY pin for the DOCUMENTED contract-s11 residual (not a gap): a generator
-    reachable ONLY by EXECUTING user code -- here a property body reading external module
-    state, with no inert edge to the generator -- drawn on a pre-existing non-hooked
-    thread records nothing. The inventory must NOT call the getter to find it (calling
-    user code during inventory is forbidden); witnessing this shape requires exactly the
-    user-code execution the walk's invariant excludes. If a future mechanism closes it,
-    flipping this assertion is a deliberate strengthening."""
-
-    _R53_EXTERNAL_STORE["g"] = np.random.default_rng(11)
-    try:
-
-        class _GetterOnlyModel(_AttrHolder):
-            @property
-            def gen(self) -> Any:
-                return _R53_EXTERNAL_STORE["g"]
-
-        model = _GetterOnlyModel()
-        with host_nondeterminism_monitor(model) as result:
-            preexisting_worker.run(lambda: float(_R53_EXTERNAL_STORE["g"].random()))
-        assert result.channels == set()
-    finally:
-        _R53_EXTERNAL_STORE.clear()

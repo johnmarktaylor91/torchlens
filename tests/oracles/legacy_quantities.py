@@ -1,4 +1,4 @@
-"""Legacy quantity census (Table A quantities; launch bar U40.2).
+"""Legacy quantity census (Table A quantities).
 
 The launch bar asks for zero red on the legacy QUANTITY rows: one row per
 named public number, with the doors that serve the same number collapsed

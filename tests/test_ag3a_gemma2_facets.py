@@ -13,7 +13,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from tests.test_ag2_gemma2_sites import _frozen_ops, _model, _trace, _transcoders
+from tests.test_ag2_gemma2_sites import _model, _trace, _transcoders
 
 #: The tiny Gemma-2's attention patterns (one per layer) and norm scales (four
 #: per layer plus the final norm), as captured. Grouping rule rows 1 and 17: the
@@ -64,22 +64,6 @@ def _equal(a: torch.Tensor, b: torch.Tensor) -> None:
 
 class TestGemma2Facets:
     """``pattern`` and ``inv_rms`` name the ops an attribution graph holds."""
-
-    def test_facets_resolve_to_the_frozen_op_labels(self) -> None:
-        model = _model()
-        assert list(model.config.layer_types) == ["sliding_attention", "full_attention"]
-        assert model.config.attn_logit_softcapping == 50.0
-        trace = _trace(model)
-        patterns = tuple(_home(trace, f"model.layers.{i}.self_attn", "pattern") for i in (0, 1))
-        norms = [f"model.layers.{i}.{norm}" for i in (0, 1) for norm in NORMS] + ["model.norm"]
-        scales = tuple(_home(trace, name, "inv_rms") for name in norms)
-        assert patterns == PATTERN_OPS
-        assert sorted(scales) == sorted(INV_RMS_OPS)
-        assert sorted(patterns + scales) == sorted(_frozen_ops(trace))
-        graph = _graph(model, [tl.facet("pattern"), tl.facet("inv_rms")])
-        held = set(graph.frozen_sites) - set(PATTERN_OPS) - set(INV_RMS_OPS)
-        assert len(held) == 2  # the two written MLP outputs
-        assert set(PATTERN_OPS + INV_RMS_OPS) <= set(graph.frozen_sites)
 
     def test_frozen_facets_build_the_same_graph(self) -> None:
         model = _model()

@@ -100,7 +100,7 @@ tests; `tests/AGENTS.md` has the full area table.
 | Replay | `Trace.run`, `torchlens._runnable` | `_runnable/`, `captured_run.py` | `test_runnable_*.py`, `test_run_*.py` |
 | Validation | `tl.validate`, `torchlens.validation.validate_forward_pass` | `validation/` | `test_validation*.py`, `test_backward*.py`, `validation_goldens/` |
 | Backward capture | `CaptureOptions(backward_ready=True)`, `trace.draw_backward` | `backends/torch/backward.py`, `validation/backward.py` | `test_backward*.py` |
-| Intervention | `tl.run`, `tl.when`, `Trace.fork`, `fork.do`, `tl.sweep` | `intervention/`, `_trace_state.py` | `test_intervention*.py`, `test_sites.py` |
+| Intervention | `tl.run`, `tl.when`, `Trace.fork`, `fork.do`, `tl.sweep` | `intervention/`, `_trace_state.py` | `test_intervention*.py` |
 | Bundles and experiments | `tl.Bundle`, `torchlens.experiment` | `bundle/`, `intervention/` (Bundle), `experiment/` | `test_bundle_*.py` |
 | Selection algebra | `tl.Selection`, `tl.units`, `tl.params`, `tl.top_k` | `_selection.py`, `_selection_values.py`, `_selection_graph.py`, `_selection_subspace.py`, `_selection_compare.py` | `test_selection*.py` |
 | Attribution | `tl.attribution` | `attribution/`, `attribution/graph/`, `attribution/onebackward/` | `test_attribution*.py` |
@@ -123,7 +123,7 @@ tests; `tests/AGENTS.md` has the full area table.
 | Agent surface | `trace.to_agent_json`, `tl.report.explain`, `tl.bridge.mcp` | `agent/`, `report/`, `bridge/` | `test_agent*.py`, `agent_surface_goldens/` |
 | External tool bridges | `tl.bridge.<tool>`, `tl.callbacks` | `bridge/`, `bridge/lit/`, `callbacks/` | `test_bridges_*.py` |
 | Environment and model report | `tl.report.doctor()` | `report/_doctor.py`, `report/_environment.py`, `compat/_report.py` | `test_doctor*.py`, `test_compat*.py` |
-| Episode capture | `tl.options.EpisodeSpec` | `_episode_spec.py`, `capture/`, `bundle/` | `test_episode*.py` |
+| Episode capture | `tl.options.EpisodeOptions` | `_episode_spec.py`, `capture/`, `bundle/` | `test_episode*.py` |
 | Kernel telemetry | `torchlens._kernel_telemetry` | `_kernel_telemetry.py` | `test_kernel_telemetry*.py` |
 
 ## Known tangles

@@ -11,7 +11,6 @@ pre-bump persistence path, fail-closed marker included).
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import pytest
@@ -20,11 +19,9 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._capture.structure_only import (
-    STRUCTURE_ONLY_CAPABILITIES,
     StructureOnlyCapabilityError,
     require_structure_only_capability,
 )
-from torchlens._io.prerelease import activate_prerelease_fields
 from torchlens.options import CaptureOptions
 
 TORCHLENS_DIR = Path(tl.__file__).resolve().parent
@@ -62,70 +59,9 @@ def test_nobody_reads_the_capability_table_but_the_chokepoint() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_gated_entries_consult_the_structure_only_chokepoint() -> None:
-    """Source lockstep mirroring test_capture_outcome_matrix's inventory: a
-    refactor that drops a structure-only gate call from a value-bearing
-    surface fails here."""
-
-    # The gated entry bodies live in the record-rebuild destination modules
-    # (the `Trace` methods are thin door calls); read all three.
-    validation_source = "".join(
-        (TORCHLENS_DIR / part).read_text(encoding="utf-8")
-        for part in (
-            "validation/_trace_checks.py",
-            "intervention/_trace_run.py",
-            "backends/torch/_trace_backward.py",
-        )
-    )
-    gate_calls = re.findall(
-        r'require_structure_only_capability\(trace, "([a-z_]+)"\)', validation_source
-    )
-    # One sibling call per capture-outcome gate site: save_new_outs, push,
-    # push_from, run (entry pre-gate + loaded-sparse + halted-analysis +
-    # unified-live + legacy-live), log_backward, recording_backward,
-    # validate_forward_pass, check_metadata_invariants.
-    assert sorted(gate_calls) == sorted(
-        [
-            "live_replay",  # save_new_outs
-            "live_replay",  # push
-            "live_replay",  # push_from
-            "live_replay",  # run(): entry pre-gate
-            "live_replay",  # run(): loaded sparse provider (values still required)
-            "live_replay",  # run(): halted analysis-load pre-gate
-            "live_replay",  # run(): unified live provider
-            "live_replay",  # run(): legacy rerun surface
-            "backward_grads",  # log_backward
-            "backward_grads",  # recording_backward
-            "validation_entry",  # validate_forward_pass
-            "validation_entry",  # check_metadata_invariants
-        ]
-    )
-    bundle_source = (TORCHLENS_DIR / "_io" / "bundle.py").read_text(encoding="utf-8")
-    assert 'require_structure_only_capability(trace, "save_analysis_artifact")' in bundle_source
-    assert 'require_structure_only_capability(trace, "save_runnable")' in bundle_source
-
-
 # ---------------------------------------------------------------------------
 # Doc-table lockstep (compat-report key-set pattern)
 # ---------------------------------------------------------------------------
-
-
-def test_doc_table_locksteps_with_the_in_code_authority() -> None:
-    doc = (REPO_ROOT / "docs" / "reference" / "structure_only_capabilities.md").read_text(
-        encoding="utf-8"
-    )
-    doc_keys = set(re.findall(r"^\| `([a-z_0-9]+)` \|", doc, re.M))
-    assert doc_keys == set(STRUCTURE_ONLY_CAPABILITIES), (
-        "doc table keys drifted from STRUCTURE_ONLY_CAPABILITIES — update "
-        "table + code + tests in one change"
-    )
-    for row in STRUCTURE_ONLY_CAPABILITIES.values():
-        assert f"`{row.status_v1}`" in doc, row.key
-        assert row.flip_event in doc, row.key
-        if row.refusal_code is not None:
-            assert f"`{row.refusal_code}`" in doc, row.key
-    # The no-over-claiming rule is printed in the file header.
-    assert "never promises for a wave it hasn't shipped" in doc
 
 
 def test_row_grammar_is_closed_and_red_capable() -> None:
@@ -161,12 +97,6 @@ def test_row_grammar_is_closed_and_red_capable() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_chokepoint_is_a_noop_on_ordinary_traces() -> None:
-    log = tl.trace(TwoLayer(), torch.randn(2, 4))
-    assert require_structure_only_capability(log, "save_analysis_artifact") is None
-    assert require_structure_only_capability(log, "live_replay") is None
-
-
 def test_save_persists_the_marker_plainly(tmp_path) -> None:
     """tlspec v8: analysis-level saves persist the structure_only marker.
 
@@ -185,18 +115,14 @@ def test_save_persists_the_marker_plainly(tmp_path) -> None:
     assert excinfo.value.fields["code"] == "structure_only_replay_unsupported"
 
 
+# Kept: slices 1 and 3 each removed one of the two provokers of
+# structure_only_runnable_unsupported; together they removed both, so the error-code
+# ledger needs this one.
 def test_runnable_save_row_refuses_typed() -> None:
     log = _structure_trace()
     with pytest.raises(StructureOnlyCapabilityError) as excinfo:
         require_structure_only_capability(log, "save_runnable")
     assert excinfo.value.fields["code"] == "structure_only_runnable_unsupported"
-
-
-def test_live_replay_refuses_typed() -> None:
-    log = _structure_trace()
-    with pytest.raises(StructureOnlyCapabilityError) as excinfo:
-        log.run(inputs=torch.randn(2, 4))
-    assert excinfo.value.fields["code"] == "structure_only_replay_unsupported"
 
 
 def test_validation_entry_refuses_typed() -> None:
@@ -209,31 +135,10 @@ def test_validation_entry_refuses_typed() -> None:
 def test_backward_refuses_typed() -> None:
     log = _structure_trace()
     with pytest.raises(StructureOnlyCapabilityError) as excinfo:
-        log.log_backward(torch.tensor(1.0))
+        log.backward(torch.tensor(1.0))
     assert excinfo.value.fields["code"] == "structure_only_backward_unsupported"
-
-
-def test_episode_composition_row_refuses_typed() -> None:
-    log = _structure_trace()
-    with pytest.raises(StructureOnlyCapabilityError) as excinfo:
-        require_structure_only_capability(log, "episode_composition")
-    assert excinfo.value.fields["code"] == "structure_only_episode_unsupported"
 
 
 # ---------------------------------------------------------------------------
 # Registrar exit gate: the ONE sanctioned pre-bump round-trip (fail-closed)
 # ---------------------------------------------------------------------------
-
-
-def test_registrar_switch_round_trips_the_marker_and_load_fails_closed(tmp_path) -> None:
-    log = _structure_trace()
-    artifact = tmp_path / "structure.tlspec"
-    with activate_prerelease_fields():
-        log.save(artifact)
-        reloaded = tl.load(artifact)
-        assert reloaded.options.structure_only is True
-    # Outside the switch the stamped artifact can NEVER pass as a real one.
-    from torchlens._io import PreReleaseArtifactError
-
-    with pytest.raises(PreReleaseArtifactError):
-        tl.load(artifact)

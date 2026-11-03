@@ -1,6 +1,6 @@
 {
   "schema": "mikit_translation_v1",
-  "comment": "TransformerLens name -> torchlens facet translation table (mikit D16). Keyed by (tlens pattern, tlens GENERATION): the 3.x bridge cache has a different vocabulary than the 2.x names ARENA teaches (measured: blocks.0.attn.hook_out and hook_attn_out are different keys in one cache). {L} is the executed-order layer index. The 4.x rows are TransformerBridge's canonical names (TransformerLens v4.2.0 docs, Model Structure); its legacy names are the 2.x rows. Optional keys: scope (attention/mlp modules only), role (token/position embedding), only_if_facet/unless_facet with absent_remedy (one name, different tensors by architecture). Consumed by the alias resolver, alias_report, the migration page, and the CI row asserting every row resolves.",
+  "comment": "TransformerLens name -> torchlens facet translation table (mikit D16). Keyed by (tlens pattern, tlens GENERATION): the 3.x bridge cache has a different vocabulary than the 2.x names ARENA teaches (measured: blocks.0.attn.hook_out and hook_attn_out are different keys in one cache). {L} is the executed-order layer index. The 4.x rows are TransformerBridge's canonical names (TransformerLens v4.2.0 docs, Model Structure); its legacy names are the 2.x rows. The nnterp rows are nnterp's StandardizedTransformer accessor spellings (nnterp 1.3.0), held in the same tlens key so one resolver serves both vocabularies; nnterp standardizes no per-block norm names. Optional keys: scope (attention/mlp modules only), role (token/position embedding), only_if_facet/unless_facet with absent_remedy (one name, different tensors by architecture). Consumed by the alias resolver, alias_report, the migration page, and the CI row asserting every row resolves.",
   "rows": [
     {"tlens": "hook_embed", "generation": "2.x", "facet": "lookup", "scope": "embedding", "notes": "token-embedding lookup facet; the decomposition embedding ROW is the graph-proven writer", "role": "token"},
     {"tlens": "hook_pos_embed", "generation": "2.x", "facet": "lookup", "scope": "embedding", "notes": "position-embedding lookup where the architecture has one (rotary models: absent, one embedding row)", "role": "position"},
@@ -51,6 +51,18 @@
     {"tlens": "blocks.{L}.mlp.out.hook_out", "generation": "4.x", "facet": "down_out", "scope": "mlp"},
     {"tlens": "blocks.{L}.mlp.hook_out", "generation": "4.x", "facet": "output", "scope": "mlp"},
     {"tlens": "ln_final.hook_in", "generation": "4.x", "facet": "final_norm_input", "scope": "lm_head"},
-    {"tlens": "unembed.hook_out", "generation": "4.x", "facet": "logits", "scope": "lm_head"}
+    {"tlens": "unembed.hook_out", "generation": "4.x", "facet": "logits", "scope": "lm_head"},
+    {"tlens": "token_embeddings", "generation": "nnterp", "facet": "lookup", "scope": "embedding", "role": "token", "notes": "nnterp StandardizedTransformer.token_embeddings (embed_tokens.output)"},
+    {"tlens": "embed_tokens.output", "generation": "nnterp", "facet": "lookup", "scope": "embedding", "role": "token"},
+    {"tlens": "layers_input[{L}]", "generation": "nnterp", "facet": "resid_pre", "scope": "block", "notes": "the block's residual input (first element when the layer takes a tuple)"},
+    {"tlens": "attentions_input[{L}]", "generation": "nnterp", "facet": "input", "scope": "attention", "notes": "the attention sublayer's argument (after the pre-attention norm)"},
+    {"tlens": "attention_probabilities[{L}]", "generation": "nnterp", "facet": "pattern", "scope": "attention", "notes": "nnterp enables it only with enable_attention_probs=True (eager attention); torchlens reads the captured softmax"},
+    {"tlens": "attentions_output[{L}]", "generation": "nnterp", "facet": "attn_out", "scope": "attention", "notes": "first element of the attention module output (after the output projection)"},
+    {"tlens": "mlps_input[{L}]", "generation": "nnterp", "facet": "input", "scope": "mlp", "notes": "the MLP sublayer's argument (after the pre-MLP norm)"},
+    {"tlens": "mlps_output[{L}]", "generation": "nnterp", "facet": "output", "scope": "mlp"},
+    {"tlens": "layers_output[{L}]", "generation": "nnterp", "facet": "resid_post", "scope": "block", "notes": "first element of the layer output tuple"},
+    {"tlens": "ln_final.input", "generation": "nnterp", "facet": "final_norm_input", "scope": "lm_head", "notes": "ln_final.output has no row: no facet names the final norm's output apart from the per-block norms"},
+    {"tlens": "lm_head.output", "generation": "nnterp", "facet": "logits", "scope": "lm_head"},
+    {"tlens": "logits", "generation": "nnterp", "facet": "logits", "scope": "lm_head", "notes": "nnterp StandardizedTransformer.logits (output.logits)"}
   ]
 }

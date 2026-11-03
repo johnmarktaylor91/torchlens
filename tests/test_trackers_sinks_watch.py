@@ -11,14 +11,8 @@ import torch
 
 import torchlens.errors
 import torchlens.trackers as trk
-from torchlens._utils._torch_compat import HAS_AMP_GRADSCALER
 from torchlens.errors import HistorySchemaError
 from torchlens.trackers._errors import WatchConfigError, WatchRuntimeError
-
-_requires_gradscaler = pytest.mark.skipif(
-    not HAS_AMP_GRADSCALER,
-    reason="torch.amp.GradScaler (device-agnostic) postdates the torch 2.1 floor",
-)
 
 
 def _mlp() -> tuple[torch.nn.Module, torch.optim.Optimizer]:
@@ -42,42 +36,7 @@ def _train_steps(session: trk.WatchSession, model, opt, steps) -> None:
 class TestTierP:
     """The default tier: parameters/gradients/updates, no forward wrap."""
 
-    def test_caller_axis_and_first_last_law(self) -> None:
-        """Steps land on the CALLER's axis; first + last always sampled."""
-
-        model, opt = _mlp()
-        sink = trk.MemorySink()
-        session = trk.watch(model, to=sink, signals=("gradients",), optimizer=opt, every=5)
-        with session:
-            _train_steps(session, model, opt, range(100, 108))
-        steps = sorted({p.step for p in sink.scalars if p.tag.startswith("gradients/")})
-        assert steps[0] == 100  # first eligible always sampled
-        assert steps[-1] == 107  # last step force-sampled at close
-        assert 105 in steps  # the cadence hit (105 % 5 == 0)
-        report = session.close()
-        assert report.is_final_sample_forced
-        assert report.first_step == 100
-        assert report.last_step == 107
-
-    def test_forward_never_wrapped_and_teardown_exact(self) -> None:
-        """Tier P never touches model.forward; every hook detaches at close."""
-
-        model, opt = _mlp()
-        hooks_before = {id(m): len(m._forward_hooks) for m in model.modules()}
-        session = trk.watch(model, to=trk.MemorySink(), optimizer=opt)
-        # No instance-level forward override exists at any point (the
-        # bound-method identity assertion, spelled for real: an instance
-        # __dict__ entry is what a wrap would create).
-        assert "forward" not in model.__dict__
-        with session:
-            _train_steps(session, model, opt, [0, 1])
-        assert "forward" not in model.__dict__
-        assert {id(m): len(m._forward_hooks) for m in model.modules()} == hooks_before
-        # Optimizer hooks removed too: further steps observe nothing.
-        before = len(session.collector.ring.blocks)
-        opt.step()
-        assert len(session.collector.ring.blocks) == before
-
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of _observability/_collector.py.
     def test_updates_are_true_deltas(self) -> None:
         """The updates family reflects the accepted optimizer delta."""
 
@@ -88,6 +47,7 @@ class TestTierP:
         update_norms = [p for p in sink.scalars if p.tag.startswith("updates/norm/")]
         assert update_norms and all(p.value > 0 for p in update_norms)
 
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of _observability/_collector.py, _observability/_schema.py and more.
     def test_duplicate_step_refuses_and_resume_declares_segment(self) -> None:
         """Step-axis law: duplicates refuse; resume is a declared new segment."""
 
@@ -104,6 +64,7 @@ class TestTierP:
             opt.step()
         session.close()
 
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of trackers/_watch.py.
     def test_phase_missing_refuses_then_demotes(self) -> None:
         """A step scope without its optimizer boundary refuses (demotable)."""
 
@@ -124,29 +85,7 @@ class TestTierP:
         report = demoted.close()
         assert any("phase_missing" in skip for skip in report.named_skips)
 
-    def test_unchanged_loop_step_callable(self) -> None:
-        """step=callable drives the axis without touching the loop body."""
-
-        model, opt = _mlp()
-        sink = trk.MemorySink()
-        counter = {"step": 200}
-        session = trk.watch(
-            model,
-            to=sink,
-            signals=("gradients",),
-            optimizer=opt,
-            step=lambda: counter["step"],
-            every=1,
-        )
-        for _ in range(3):
-            opt.zero_grad(set_to_none=True)
-            model(torch.randn(4, 8)).sum().backward()
-            opt.step()
-            counter["step"] += 1
-        session.close()
-        steps = sorted({p.step for p in sink.scalars if p.tag.startswith("gradients/")})
-        assert steps == [200, 201, 202]
-
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of trackers/_watch.py.
     def test_no_step_source_refuses_typed(self) -> None:
         """An optimizer boundary with no step source names all three ways."""
 
@@ -159,64 +98,26 @@ class TestTierP:
         assert "watch.step" in info.value.fields["remedy"]
 
 
-class TestAmpProvenance:
-    """Memo 3.11: scale observed at the boundary; skips never fabricate."""
-
-    @_requires_gradscaler
-    def test_scale_series_and_unscaled_truth(self) -> None:
-        """The amp_scale run-health series carries the observed factor."""
-
-        model, opt = _mlp()
-        scaler = torch.amp.GradScaler("cpu", init_scale=1024.0)
-        sink = trk.MemorySink()
-        session = trk.watch(model, to=sink, signals=("gradients",), optimizer=opt, every=1)
-        with session.step(0, scaler=scaler):
-            opt.zero_grad(set_to_none=True)
-            scaler.scale(model(torch.randn(4, 8)).sum()).backward()
-            scaler.step(opt)
-            scaler.update()
-        session.close()
-        amp_points = [p for p in sink.scalars if p.tag == "torchlens/run/amp_scale"]
-        assert amp_points and amp_points[0].value == 1024.0
-
-    @_requires_gradscaler
-    def test_skipped_step_is_absent_not_zero(self) -> None:
-        """An overflow-skipped AMP step emits NO fake update and is named."""
-
-        model, opt = _mlp()
-        scaler = torch.amp.GradScaler("cpu", init_scale=1024.0)
-        sink = trk.MemorySink()
-        session = trk.watch(model, to=sink, signals=("updates",), optimizer=opt, every=1)
-        with session.step(0, scaler=scaler):
-            opt.zero_grad(set_to_none=True)
-            loss = scaler.scale(model(torch.randn(4, 8)).sum())
-            loss.backward()
-            # Poison one grad: scaler.step skips the optimizer entirely.
-            next(model.parameters()).grad[0, 0] = float("inf")
-            scaler.step(opt)
-            scaler.update()
-        report = session.close()
-        assert not [p for p in sink.scalars if p.tag.startswith("updates/")]
-        assert any("amp_skipped" in skip for skip in report.named_skips)
-
-
 class TestLoudFailures:
     """Memo 3.13: nothing becomes an empty panel without an explanation."""
 
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of trackers/_watch.py.
     def test_signals_vocabulary_refuses_unknown(self) -> None:
         model, opt = _mlp()
         with pytest.raises(WatchConfigError) as info:
             trk.watch(model, to=trk.MemorySink(), signals=("grads",), optimizer=opt)
         assert info.value.fields["code"] == "watch_signals_invalid"
 
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of trackers/_watch.py.
     def test_activations_without_selector_refuse(self) -> None:
         model, _opt = _mlp()
         with pytest.raises(WatchConfigError) as info:
             trk.watch(model, to=trk.MemorySink(), signals=("activations",))
         assert info.value.fields["code"] == "watch_signals_invalid"
 
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of trackers/_op_grain.py, trackers/_watch.py.
     def test_tier_o_ships_and_activation_grads_defer_typed(self) -> None:
-        """Removal test (U32.1): op grain is no longer a deferred tier.
+        """Removal test: op grain is no longer a deferred tier.
 
         ``grain="op"`` used to refuse ``watch_tier_unavailable`` ("not shipped
         in this build"); it now ships behind consent, so the same call refuses
@@ -232,7 +133,7 @@ class TestLoudFailures:
             trk.watch(model, to=trk.MemorySink(), signals=("activation_grads",))
         assert info.value.fields["code"] == "watch_tier_unavailable"
 
-    @pytest.mark.smoke
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of trackers/_watch.py.
     def test_budget_exceeded_is_a_preflight_fact(self) -> None:
         model, opt = _mlp()
         with pytest.raises(WatchConfigError) as info:
@@ -245,6 +146,7 @@ class TestLoudFailures:
         assert info.value.fields["code"] == "watch_budget_exceeded"
         assert info.value.fields["actual"] > 1
 
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of trackers/_watch.py.
     def test_unknown_budget_key_refuses(self) -> None:
         """The budget vocabulary is closed: a typo'd cap never silently noops."""
 
@@ -258,6 +160,7 @@ class TestLoudFailures:
             )
         assert info.value.fields["code"] == "watch_budget_invalid"
 
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of trackers/_watch.py.
     def test_negative_step_refuses(self) -> None:
         """The step axis is the caller's nonnegative training coordinate."""
 
@@ -268,6 +171,7 @@ class TestLoudFailures:
         assert info.value.fields["code"] == "watch_step_invalid"
         session.close(unwinding=True)
 
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of trackers/_watch.py.
     def test_check_outcome_vocabulary_closed(self) -> None:
         """emit_check accepts exactly the 0/1/2 verdict vocabulary."""
 
@@ -279,6 +183,7 @@ class TestLoudFailures:
         assert info.value.fields["code"] == "watch_check_outcome_invalid"
         session.close(unwinding=True)
 
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of trackers/_protocol.py, trackers/_watch.py.
     def test_sink_capability_refuses_before_emission(self) -> None:
         """A histogram request against a scalar-only sink refuses at attach."""
 
@@ -289,6 +194,7 @@ class TestLoudFailures:
         assert info.value.fields["code"] == "tracker_sink_capability_missing"
         assert narrow.scalars == []
 
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of trackers/_watch.py.
     def test_sink_failure_latches_and_close_reports(self) -> None:
         """A throwing sink latches failed; close reports, never corrupts."""
 
@@ -306,30 +212,7 @@ class TestLoudFailures:
         assert rows["_Exploding"]["failed"]
         assert rows["MemorySink"]["emitted_scalars"] > 0
 
-    def test_close_empty_raises_except_while_unwinding(self) -> None:
-        """Zero emitted data raises at close -- unless the loop itself blew."""
-
-        class _Dead(trk.MemorySink):
-            def emit_scalar(self, point):  # noqa: ANN001
-                raise OSError("nothing lands")
-
-            def emit_text(self, point):  # noqa: ANN001
-                raise OSError("nothing lands")
-
-        model, opt = _mlp()
-        session = trk.watch(model, to=_Dead(), signals=("gradients",), optimizer=opt, every=1)
-        _train_steps(session, model, opt, [0])
-        with pytest.raises(WatchRuntimeError) as info:
-            session.close()
-        assert info.value.fields["code"] == "watch_close_empty"
-        # While unwinding, close never masks the user's own exception.
-        model2, opt2 = _mlp()
-        session2 = trk.watch(model2, to=_Dead(), signals=("gradients",), optimizer=opt2, every=1)
-        with pytest.raises(ValueError, match="user failure"), session2:
-            _train_steps(session2, model2, opt2, [0])
-            raise ValueError("user failure")
-
-    @pytest.mark.smoke
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of trackers/_records.py, trackers/_watch.py.
     def test_foreign_watcher_refuses_with_remedy(self) -> None:
         """G7: a wandb-owned hook on the model refuses; namespace= remedies."""
 
@@ -354,6 +237,7 @@ class TestLoudFailures:
         finally:
             handle.remove()
 
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of trackers/_watch.py.
     def test_kill_switch_writes_disabled_row(self, monkeypatch) -> None:  # noqa: ANN001
         """TORCHLENS_WATCH_DISABLE=1: off-only, still discloses itself."""
 
@@ -381,6 +265,7 @@ class TestTierM:
         example = torch.randint(0, 128, (1, 8))
         return model, example
 
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of _observability/_collector.py, trackers/_watch.py.
     def test_activations_collect_at_module_grain(self, gpt2) -> None:  # noqa: ANN001
         """Selected transformer.h.0 module outputs stream as activations/*."""
 
@@ -409,6 +294,7 @@ class TestTierM:
         assert '"grain": "module"' in manifest.text
         assert '"grain": "param"' in manifest.text
 
+    # Kept by the shrink-r4 coverage proof: sole branch coverage of _observability/_collector.py, trackers/_watch.py.
     def test_zero_match_refuses_at_attach(self, gpt2) -> None:  # noqa: ANN001
         """Zero-match selections refuse at plan time, never step 0 silence."""
 

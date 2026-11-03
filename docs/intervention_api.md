@@ -88,15 +88,15 @@ portable selector after discovery.
 
 ## Forward Helpers
 
-Forward helpers return `Edit` objects that can be passed to `set`,
-`attach_hooks`, `do`, live capture `hooks=...`, replay, or rerun.
+Forward helpers return `Edit` objects that can be passed to `do` (including
+the `set_only` engine), live capture `hooks=...`, replay, or rerun.
 
 | Helper | Signature | Portability |
 | --- | --- | --- |
 | `tl.zero_ablate` | `zero_ablate(*, allow_shape_change=False)` | Portable built-in; append-compatible unless shape changes are forced. |
 | `tl.mean_ablate` | `mean_ablate(source=None, *, dim, allow_shape_change=False)` | The one mean door; `dim` is required (`None` for every axis, else the axes). Portable for self and tensor sources; a population source is audit-only; the self mean couples the batch and blocks append. |
-| `scramble_elements` | `torchlens.intervention.scramble_elements(source=None, *, from_=None, seed=None, allow_shape_change=False)` (the honest rename of the removed `resample_ablate` spelling; elementwise iid scramble, NOT coherent resampling ablation -- see MIGRATIONS.md) | Built-in, stochastic; seeded runs are reproducible, append-incompatible. |
-| `tl.steer` | `steer(direction, strength=1.0, *, coef=None, dim=None, allow_shape_change=False)` | Portable when `direction` is serializable tensor data. |
+| `scramble_elements` | `torchlens.intervention.scramble_elements(source=None, *, seed=None, allow_shape_change=False)` (the honest rename of the removed `resample_ablate` spelling; elementwise iid scramble, NOT coherent resampling ablation -- see MIGRATIONS.md) | Built-in, stochastic; seeded runs are reproducible, append-incompatible. |
+| `tl.steer` | `steer(direction, strength=1.0, *, dim=None, allow_shape_change=False)` | Portable when `direction` is serializable tensor data. |
 | `tl.scale` | `scale(factor, *, allow_shape_change=False)` | Portable built-in and append-compatible. |
 | `tl.clamp` | `clamp(*, low=None, high=None, allow_shape_change=False)` | Portable built-in and append-compatible. |
 | `tl.add_noise` | `add_noise(std, *, seed=None, allow_shape_change=False)` | Built-in stochastic helper; seeded runs avoid global RNG consumption. |
@@ -129,11 +129,11 @@ There are no gradient-only helpers. The ordinary edits apply to whichever tensor
 | A callable `fn(grad, *, ctx)` | Receives the gradient; return a replacement or `None`. Audit-only when saved. |
 
 Edits that read recorded forward state (`tl.patch_from`, `tl.mean_ablate`, `tl.splice_module`,
-`tl.swap_with` with a site or trace donor) refuse on a gradient site with `edit_signal_mismatch`.
+`torchlens.intervention.helpers.swap_with` with a site or trace donor) refuse on a gradient site with `edit_signal_mismatch`.
 
 `trace.do(tl.grad(site), edit, model=model, inputs=x)` reruns the forward with the edit armed; the next
 `result.backward(loss)` applies it. `loss=lambda t: ...` (a callable of the returned trace) does both in
-one call. The audit row status is `"armed"` until a backward settles it. Without `model=` and `x=` (or
+one call. The audit row status is `"armed"` until a backward settles it. Without `model=` and `inputs=` (or
 `intervention=tl.options.InterventionOptions(engine="set_only")` to arm in place), `do` refuses
 `replay_gradient_edit_unsupported`.
 
@@ -222,9 +222,9 @@ A full `tl.trace(...)` whose forward raises raises `tl.errors.TraceCaptureError`
 
 | Method | Use |
 | --- | --- |
-| `log.set(site, value)` | Record a one-shot tensor or callable replacement and mark the recipe stale. |
-| `log.attach_hooks(site, hook)` | Add sticky helper/callable hooks to the recipe. |
-| `log.do(...)` | Apply an intervention and dispatch to `push`, `run`, or `set_only`. |
+| `log.do(site, value, intervention=tl.options.InterventionOptions(engine="set_only"))` | Record a one-shot tensor or callable replacement and mark the recipe stale, without propagating it. |
+| `log.do(site, hook)` | Add a sticky helper/callable hook to the recipe and dispatch to `push`, `run` (with `model=`/`inputs=`), or `set_only` (stage without running; pass a `tl.when(site, hook)` recipe to stage a sticky hook). |
+| `log.clear_edits(site)` | Remove the sticky hooks staged at `site` (or by handle id with `log.clear_edits(handle=...)`). Removal takes effect at once, like a torch hook handle: a rerun or backward pass in progress skips the removed hooks from the next hook site it reaches, and the site firing at that moment finishes its queued hooks first. |
 | `log.fork(name=None)` | Create an isolated branch for experiments. |
 | `log.push(replay=ReplayOptions(...))` | Propagate over the saved DAG without calling `model.forward` (the former `replay()` alias is removed). |
 | `log.run(model, x, replay=ReplayOptions(append=False))` | Re-execute the model under the active spec (the former `rerun()` alias is removed). |
@@ -286,7 +286,7 @@ ran inside whatever came next, typically the next fork).
 
 `Trace.draw(intervention_mode=...)` visualizes the planned intervention
 recipe stored on an intervention-ready trace, such as sites registered with
-`log.set(...)` or `log.do(...)`. Each edited node gets a purple ring and a
+`log.do(...)`. Each edited node gets a purple ring and a
 last row naming the edit (`Δ zero_ablate`), and the header names the edits;
 `show_cone=True` (off by default) adds a translucent purple underlay
 under the arrows and node outlines the edit changed downstream. Capture-time `intervene=...` calls record

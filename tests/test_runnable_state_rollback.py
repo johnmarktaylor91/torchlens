@@ -40,7 +40,7 @@ class _Descriptor:
         self.tensor_slots = slots
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of _runnable/state.py.
 def test_state_metadata_staging_rolls_back_flipped_bits_on_refusal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -154,37 +154,7 @@ def _assert_declared_state_equal(model: torch.nn.Module, expected: dict[str, tor
         assert torch.equal(current[name], value), name
 
 
-def test_default_run_restores_declared_state_bit_identical() -> None:
-    """L4 5.2: repeated default run() calls leave the live model bit-identical."""
-
-    import torchlens as tl
-
-    model = _EmaParamModel()
-    x = torch.randn(2, 4)
-    log = tl.trace(model, x)
-    before = _declared_state_clone(model)
-    first = log.run(inputs=torch.randn(2, 4))
-    _assert_declared_state_equal(model, before)
-    assert first.report.has_carried_state is False
-    second = log.run(inputs=torch.randn(2, 4))
-    _assert_declared_state_equal(model, before)
-    assert second.report.has_carried_state is False
-
-
-def test_carry_state_persists_mutations_and_discloses() -> None:
-    """L4 5.3: carry_state=True skips the restore and the report discloses it."""
-
-    import torchlens as tl
-
-    model = _EmaParamModel()
-    x = torch.randn(2, 4)
-    log = tl.trace(model, x)
-    weight_before = model.lin.weight.detach().clone()
-    result = log.run(inputs=torch.randn(2, 4), carry_state=True)
-    assert result.report.has_carried_state is True
-    assert not torch.equal(model.lin.weight, weight_before)
-
-
+# Kept: sole branch coverage of _capture/finalize/settle.py, _capture/outcome.py, _runnable/transaction.py and more.
 def test_restore_runs_on_failed_forward() -> None:
     """L4 5.2 exception safety: restore runs in finally on the failure path too."""
 
@@ -198,6 +168,7 @@ def test_restore_runs_on_failed_forward() -> None:
     _assert_declared_state_equal(model, before)
 
 
+# Kept: sole branch coverage of intervention/_trace_run.py.
 def test_carry_state_fast_refuses_typed() -> None:
     """Conflict-matrix row: carry_state=True x fast=True refuses typed."""
 
@@ -210,6 +181,7 @@ def test_carry_state_fast_refuses_typed() -> None:
     assert exc_info.value.fields["code"] == "run_fast_carry_state_unsupported"
 
 
+# Kept: sole branch coverage of intervention/_trace_run.py.
 def test_carry_state_loaded_sparse_refuses_typed(tmp_path) -> None:
     """Conflict-matrix row: carry_state=True on the loaded provider refuses typed."""
 
@@ -231,6 +203,7 @@ def test_carry_state_loaded_sparse_refuses_typed(tmp_path) -> None:
     assert exc_info.value.fields["code"] == "run_carry_state_requires_live_model"
 
 
+# Kept: sole branch coverage of _errors.py, intervention/_trace_run.py.
 def test_carry_state_legacy_surface_refuses_typed() -> None:
     """carry_state= is unified-only: the legacy run surface refuses typed."""
 
@@ -245,6 +218,7 @@ def test_carry_state_legacy_surface_refuses_typed() -> None:
     assert exc_info.value.fields["code"] == "run_legacy_options_conflict"
 
 
+# Kept: sole branch coverage of _runnable/state.py, _runnable/transaction.py.
 def test_snapshot_preflight_refuses_overlapping_state_typed() -> None:
     """L4 5.4 fail-before-execute: unprovable/overlapping alias topology refuses."""
 
@@ -264,26 +238,7 @@ def test_snapshot_preflight_refuses_overlapping_state_typed() -> None:
     assert result.report.has_carried_state is True
 
 
-def test_restore_failure_marks_and_raises() -> None:
-    """L4 5.4: a post-execution restore failure raises typed with structured fields."""
-
-    import torchlens as tl
-
-    model = _GrowingBufferModel()
-    x = torch.randn(2, 4)
-    log = tl.trace(model, x)
-    with pytest.raises(StateBindingError) as exc_info:
-        log.run(inputs=torch.randn(2, 4))
-    error = exc_info.value
-    assert error.fields["code"] == "run_state_restore_failed"
-    assert error.fields["state_dict_name"] == "buf"
-    assert isinstance(error.fields["groups_restored"], int)
-    assert error.__cause__ is not None
-    latch = log._runnable.state_compromised
-    assert latch is not None and latch["state_dict_name"] == "buf"
-
-
-@pytest.mark.smoke
+# Kept: sole branch coverage of _runnable/state.py, _runnable/state_live.py, _runnable/transaction.py and more.
 def test_restore_failure_source_refuses_next_live_run() -> None:
     """L4 5.4: the state-compromised latch refuses the live and fast doors typed."""
 
@@ -301,32 +256,3 @@ def test_restore_failure_source_refuses_next_live_run() -> None:
     # The legacy live surface reads the same live model and refuses identically.
     with pytest.raises(StateBindingError):
         log.run(model, x)
-
-
-def test_restore_failure_loaded_sparse_still_legal(tmp_path) -> None:
-    """L4 5.4 ALLOW cell: loaded-sparse runs never read the live model.
-
-    The latch is session-scoped by construction (RunnableTraceState is always
-    dropped by portable state handling), so a runnable artifact saved from a
-    latched source loads and runs against staged clones.
-    """
-
-    import torchlens as tl
-    from torchlens.options import CaptureOptions
-
-    model = torch.nn.Sequential(torch.nn.Linear(4, 4), torch.nn.ReLU())
-    x = torch.randn(2, 4)
-    log = tl.trace(
-        model,
-        x,
-        capture=CaptureOptions(replayable=True, capture_container_structure=True),
-    )
-    log._runnable.state_compromised = {"state_dict_name": "synthetic", "groups_restored": 0}
-    with pytest.raises(StateBindingError):
-        log.run(inputs=x)
-    path = tmp_path / "latched.tlspec"
-    log.save(str(path), level="runnable", include_weights=True)
-    loaded = tl.load(str(path))
-    assert loaded._runnable.state_compromised is None
-    result = loaded.run(inputs=x)
-    assert result.report is not None

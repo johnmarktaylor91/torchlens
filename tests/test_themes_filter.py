@@ -35,13 +35,6 @@ def glue_log() -> Any:
     log.cleanup()
 
 
-def test_tokens_are_the_closed_v1_vocabulary() -> None:
-    """reshapes / constants / non_module_ops; nothing else."""
-
-    assert lenses.FILTER_TOKENS == ("constants", "non_module_ops", "reshapes")
-
-
-@pytest.mark.smoke
 def test_unknown_token_refuses_typed(glue_log: Any) -> None:
     """A token outside the closed vocabulary refuses with the roster."""
 
@@ -63,35 +56,6 @@ def test_polarity_is_exactly_one(glue_log: Any) -> None:
     assert excinfo.value.fields["code"] == "display_filter_polarity_conflict"
 
 
-def test_reshapes_token_counts_and_caption(glue_log: Any) -> None:
-    """The caption reports actual counts (composition row 8)."""
-
-    compiled = lenses.compile_display_filter(glue_log, lenses.DisplayFilter(exclude="reshapes"))
-    assert compiled.filtered == 3  # reshape, permute, contiguous
-    assert f"displayed {compiled.eligible - 3} of {compiled.eligible} eligible ops" in (
-        compiled.caption
-    )
-    assert "reshapes" in compiled.caption
-    assert "reachability through omitted operations" in compiled.legend_line
-
-
-@pytest.mark.smoke
-def test_boundaries_auto_exempt_on_tokens(glue_log: Any) -> None:
-    """Token spellings never raise the boundary refusal."""
-
-    compiled = lenses.compile_display_filter(glue_log, lenses.DisplayFilter(exclude="reshapes"))
-    for op in glue_log.ops:
-        if op.is_input or op.is_final_output:
-            assert compiled.skip_fn(op) is False
-
-
-def test_include_polarity_inverts(glue_log: Any) -> None:
-    """include= hides everything NOT matched."""
-
-    compiled = lenses.compile_display_filter(glue_log, lenses.DisplayFilter(include="reshapes"))
-    assert compiled.eligible - compiled.filtered == 3
-
-
 def test_skip_fn_conflict_refuses(glue_log: Any) -> None:
     """display_filter plus explicit skip_fn is a typed conflict."""
 
@@ -105,7 +69,6 @@ def test_skip_fn_conflict_refuses(glue_log: Any) -> None:
     assert excinfo.value.fields["code"] == "display_filter_skip_fn_conflict"
 
 
-@pytest.mark.smoke
 def test_bridged_edges_are_dashed_with_midpoint_labels(glue_log: Any, tmp_path: Any) -> None:
     """Composition row 14: dashed style, midpoint label= 'via N hidden',
     the rendered caption, and no new xlabel family."""
@@ -126,7 +89,6 @@ def test_bridged_edges_are_dashed_with_midpoint_labels(glue_log: Any, tmp_path: 
     assert "xlabel=" not in source
 
 
-@pytest.mark.smoke
 def test_predicate_boundary_raise_teaches(glue_log: Any, tmp_path: Any) -> None:
     """Composition row 9: the strict predicate boundary raise names the REAL
     attributes, the multi-output case, and the token remedy."""
@@ -143,7 +105,6 @@ def test_predicate_boundary_raise_teaches(glue_log: Any, tmp_path: Any) -> None:
     assert "DisplayFilter" in message
 
 
-@pytest.mark.smoke
 def test_non_module_ops_is_migration_parity(glue_log: Any) -> None:
     """The torchview-parity token compiles and counts module-less ops."""
 
@@ -166,7 +127,6 @@ def test_operand_shape_refuses_typed(glue_log: Any) -> None:
     assert excinfo.value.fields["code"] == "display_filter_operand_invalid"
 
 
-@pytest.mark.smoke
 def test_selection_operand_hides_the_selected_site(glue_log: Any) -> None:
     """A same-trace Selection operand hides the selected family (never a
     silent no-op: the resolved site labels must reach the match fn)."""

@@ -166,7 +166,7 @@ def gradient_edit_replay_text(sites: str) -> tuple[str, str]:
 
     message = (
         f"Replay re-executes forward ops only and cannot edit the gradient at {sites}. "
-        "Pass model= and x= to rerun with the edit armed, then call "
+        "Pass model= and inputs= to rerun with the edit armed, then call "
         "result.backward(loss) (or pass loss=), or stage it with engine='set_only' "
         "and call trace.backward(loss) on this trace."
     )
@@ -346,7 +346,7 @@ def _reset_backward_projection(log: Trace) -> None:
     log._capture_events = CaptureEvents()
     log.__dict__.pop("_tl_backward_hooked_tensor_keys", None)
     log.__dict__.pop("_tl_grad_hook_owner_by_label", None)
-    log.__dict__.pop("_active_backward_pass_index", None)
+    log.__dict__.pop("_active_backward_pass_number", None)
     log.__dict__.pop("_implicit_backward_pass_open", None)
     getattr(log, "_warned_once", set()).discard("implicit_backward_pass")
     log.__dict__.pop("_tl_backward_triggers_disarmed", None)
@@ -1366,8 +1366,8 @@ def _preflight_group(group: Sequence[Op], *, loaded: bool = False) -> None:
                 _no_func_message(site, loaded=True),
                 code="replay_loaded_trace_has_no_callables",
                 remedy=(
-                    "Edit a trace captured in this process with "
-                    "CaptureOptions(replayable=True), or rerun the model with the edit "
+                    "Edit a trace captured in this process "
+                    "(tl.trace(model, inputs)), or rerun the model with the edit "
                     "staged: trace.run(model, inputs)"
                 ),
             )

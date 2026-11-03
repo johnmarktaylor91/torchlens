@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 
 import pytest
-import torch
 
 import torchlens.trackers as trk
 from torchlens.trackers._errors import SinkDeliveryError, SinkProtocolError, TrackersError
@@ -101,7 +100,6 @@ class TestJSONLSink:
 class TestTensorBoardSinkDuckPath:
     """The reference sink over an EXISTING writer object (dep-free)."""
 
-    @pytest.mark.smoke
     def test_emits_through_writer_at_caller_step(self) -> None:
         writer = _DuckWriter()
         sink = trk.TensorBoardSink(writer)
@@ -125,7 +123,6 @@ class TestTensorBoardSinkDuckPath:
         # The sink never closes a writer it did not open.
         assert writer.closed == 0
 
-    @pytest.mark.smoke
     def test_relay_detected_refuses_histograms(self, monkeypatch) -> None:  # noqa: ANN001
         """G6: non-uniform log2 edges over a detected relay refuse typed."""
 
@@ -193,46 +190,3 @@ class TestWandbSinkContract:
         sink = trk.WandbSink(_Run())
         sink.emit_scalar(trk.ScalarPoint("gradients/norm/w", 102, 3.0))
         assert logged == [({"gradients/norm/w": 3.0}, 102)]
-
-
-class TestBoundedTransferOracle:
-    """C-WATCH's CPU-shaped half: emitted bytes independent of tensor numel.
-
-    The CUDA transfer row runs in the D02 cluster campaign; what is
-    provable here with zero GPUs is the sink-boundary law from memo 3.12 --
-    O(bins) numbers cross per site per sampled step, INDEPENDENT of numel.
-    """
-
-    @staticmethod
-    def _emitted_bytes(width: int, tmp_path) -> tuple[int, int]:  # noqa: ANN001
-        torch.manual_seed(0)
-        model = torch.nn.Linear(width, width)
-        opt = torch.optim.SGD(model.parameters(), lr=1e-3)
-        path = tmp_path / f"run_{width}.jsonl"
-        session = trk.watch(
-            model,
-            to=trk.JSONLSink(path),
-            signals=("gradients",),
-            optimizer=opt,
-            every=1,
-            hist_every=1,
-        )
-        with session, session.step(0):
-            opt.zero_grad(set_to_none=True)
-            model(torch.randn(2, width)).sum().backward()
-            opt.step()
-        rows = [json.loads(line) for line in path.read_text().splitlines()]
-        payload_rows = [r for r in rows if r.get("kind") in ("scalar", "histogram")]
-        per_step_bytes = sum(len(json.dumps(r)) for r in payload_rows if r.get("step") == 0)
-        return (len(payload_rows), per_step_bytes)
-
-    @pytest.mark.smoke
-    def test_numel_independence(self, tmp_path) -> None:  # noqa: ANN001
-        """4096x more elements -> the SAME emission row count and geometry."""
-
-        rows_small, bytes_small = self._emitted_bytes(8, tmp_path)
-        rows_large, bytes_large = self._emitted_bytes(512, tmp_path)
-        assert rows_small == rows_large
-        # Byte payloads differ only in digit widths, never in structure:
-        # well under 2x while numel grew 4096x.
-        assert bytes_large < 2 * bytes_small

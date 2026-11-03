@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import pickle
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
@@ -12,6 +11,7 @@ import numpy as np
 import pytest
 
 import torchlens as tl
+from torchlens._io._canonical_pickle import dump_canonical_metadata
 from torchlens._io.bundle import _build_manifest, _write_payload_blob
 from torchlens._io.payload_codec import get_payload_codec
 from torchlens._io.scrub import scrub_for_save
@@ -26,7 +26,7 @@ lax = pytest.importorskip("jax.lax")
 random = pytest.importorskip("jax.random")
 
 
-pytestmark = pytest.mark.backend_jax
+pytestmark = [pytest.mark.backend_jax, pytest.mark.rare]
 
 
 def _params() -> dict[str, Any]:
@@ -283,7 +283,7 @@ def _write_jax_codec_fixture(path: Path) -> tuple[Any, np.ndarray]:
         save_level="portable",
     )
     with (path / "metadata.pkl").open("wb") as handle:
-        pickle.dump(scrubbed_state, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        dump_canonical_metadata(scrubbed_state, handle)
     _mark_fixture_manifest_materialized(path)
     return trace, np.asarray(blob_specs[0].value)
 
@@ -1104,7 +1104,7 @@ def test_jax_rejects_callback_effects() -> None:
             {"intervene": tl.when(tl.func("tanh"), tl.zero_ablate())},
             "can_intervene=False.*intervene",
         ),
-        ({"halt": tl.func("tanh")}, "can_intervene=False.*halt"),
+        ({"stop_after": tl.func("tanh")}, "can_intervene=False.*stop_after"),
         ({"save_grads": True}, "backward_capture=False.*save_grads"),
     ),
 )
@@ -1220,7 +1220,7 @@ def test_jax_public_surface_matrix(tmp_path: Path) -> None:
     with pytest.raises(TypeError, match="not a boolean"):
         bool(loaded_status)
     with pytest.raises(BackendUnsupportedError, match="backward capture.*derived_grads"):
-        trace.log_backward(cast(Any, trace[trace.output_layers[0]].out))
+        trace.backward(cast(Any, trace[trace.output_layers[0]].out))
     with pytest.raises(ValueError, match="derived_grads"):
         _ = trace.autograd.backward_passes
     with pytest.raises(ValueError, match="derived_grads"):
@@ -1257,6 +1257,7 @@ def test_jax_capability_flags_match_preview_contract() -> None:
         "jax_control_flow",
         "jax_max_control_flow_unroll",
         "module_identity_mode",
+        "facets",
     )
 
 

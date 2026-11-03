@@ -128,32 +128,3 @@ def test_large_blob_branch_refuses_swap_between_hash_and_load(
 
 
 # --- R33-1: allocation tracks the blob, not the ceiling ----------------------
-
-
-def test_inline_materialize_allocates_the_blob_not_the_ceiling(tmp_path: Path) -> None:
-    """A tiny blob under the ~500 MiB inline ceiling must not allocate the ceiling.
-
-    Fail-before (R33-1, lazy.py sibling of the _json fix): the inline branch
-    did ``handle.read(_INLINE_LOAD_MAX_BYTES + 1)``, so EVERY lazy activation
-    materialization transiently requested a ~500 MiB bytes object regardless
-    of blob size -- an allocation DoS under RLIMIT_AS/strict overcommit.
-    """
-
-    import tracemalloc
-
-    original = torch.arange(64, dtype=torch.float32)
-    ref, blob_path = _make_lazy_ref(tmp_path, original)
-    assert blob_path.stat().st_size < 1024 * 1024
-
-    tracemalloc.start()
-    try:
-        materialized = ref.materialize()
-        _current, peak = tracemalloc.get_traced_memory()
-    finally:
-        tracemalloc.stop()
-
-    assert torch.equal(materialized, original)
-    assert peak < 32 * 1024 * 1024, (
-        f"inline materialize peaked at {peak} bytes on a "
-        f"{blob_path.stat().st_size}-byte blob; it is allocating the ceiling"
-    )

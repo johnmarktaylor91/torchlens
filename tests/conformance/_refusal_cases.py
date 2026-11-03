@@ -90,7 +90,7 @@ CAPABILITY_REQUESTS: dict[str, CapabilityRequest] = {
     "fastlog": CapabilityRequest("record"),
     "can_intervene": CapabilityRequest("trace_option", "intervene", _intervene_probe),
     "rng_replay": CapabilityRequest("capture_option", "save_rng", lambda: True),
-    "has_streaming": CapabilityRequest("trace_option", "streaming", _storage_probe),
+    "has_streaming": CapabilityRequest("trace_option", "storage", _storage_probe),
     "structure_only_capture": CapabilityRequest("capture_option", "structure_only", lambda: True),
     "has_validation_replay": CapabilityRequest("validate"),
     "payload_materialization": CapabilityRequest("save"),
@@ -130,6 +130,7 @@ CAPTURE_OPTION_SPINE_FIELDS: frozenset[str] = frozenset(
         "payload_policy",
         "capture_container_structure",
         "inference_only",
+        "chunk_size",
     }
 )
 
@@ -261,6 +262,13 @@ def _issue_request(
     }
     options[str(request.option)] = value
     if request.kind == "trace_option":
+        # A companion that is a ``CaptureOptions`` field (``chunk_size`` beside
+        # ``chunk_paths``) travels inside ``capture=``, as ``tl.trace`` takes it.
+        capture_fields = {
+            name: options.pop(name) for name in list(options) if name in CAPTURE_OPTION_SPINE_FIELDS
+        }
+        if capture_fields:
+            options["capture"] = CaptureOptions(**capture_fields)
         adapter.trace_with(net, example, **options)
     elif request.kind == "capture_option":
         # Construct with only the probed fields: ``dataclasses.replace`` would pass

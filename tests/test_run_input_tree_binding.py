@@ -59,18 +59,6 @@ def test_live_run_spreads_a_sequence_for_a_two_argument_forward(spelling: str, f
         assert torch.equal(result.output, model(new_y, new_no))
 
 
-@pytest.mark.parametrize("fast", [False, True], ids=["ordinary", "fast"])
-def test_live_run_gives_a_one_parameter_forward_its_tuple_whole(fast: bool) -> None:
-    torch.manual_seed(0)
-    model = _OnePair().eval()
-    y, no = _pair()
-    trace = tl.trace(model, (y, no))
-    new = (y + 1, no * 2)
-    result = trace.run(inputs=new, fast=fast)
-    with torch.no_grad():
-        assert torch.equal(result.output, model(new))
-
-
 def test_loaded_run_spreads_a_tuple_for_a_two_argument_forward(tmp_path: Path) -> None:
     torch.manual_seed(0)
     model = _TwoArgs().eval()

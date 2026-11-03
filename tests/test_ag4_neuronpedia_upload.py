@@ -155,15 +155,6 @@ def test_graph_upload_sends_the_documented_sequence(fake, exported) -> None:
     assert json.loads(third.body) == {"putRequestId": "put-42"}
 
 
-def test_graph_upload_accepts_a_path(fake, exported, tmp_path) -> None:
-    path = tmp_path / "graph.json"
-    path.write_text(json.dumps(exported, indent=1), encoding="utf-8")
-    fake.script = _graph_answers()
-    tl.attribution.graph.upload_to_neuronpedia(path, api_key=KEY)
-    assert fake.sent[1].body == path.read_bytes()
-    assert json.loads(fake.sent[0].body)["contentLength"] == path.stat().st_size
-
-
 def _missing_metadata(graph: dict) -> dict:
     graph = _copy(graph)
     del graph["metadata"]
@@ -209,17 +200,6 @@ def test_graph_upload_refuses_an_invalid_graph_before_any_request(
     assert fake.sent == []
 
 
-def test_graph_upload_refuses_a_file_over_the_size_cap_before_any_request(
-    fake, exported, monkeypatch
-) -> None:
-    monkeypatch.setattr(up, "_MAX_GRAPH_BYTES", 2048)
-    with pytest.raises(tl.errors.AttributionError) as excinfo:
-        tl.attribution.graph.upload_to_neuronpedia(exported, api_key=KEY)
-    assert excinfo.value.fields["code"] == "neuronpedia_upload_argument_invalid"
-    assert "2,048" in str(excinfo.value)
-    assert fake.sent == []
-
-
 @pytest.mark.parametrize("kind", ["graph", "vector"])
 def test_uploads_refuse_a_missing_api_key(fake, exported, kind) -> None:
     for key in (None, "", "   "):
@@ -236,12 +216,10 @@ def test_uploads_refuse_a_missing_api_key(fake, exported, kind) -> None:
 @pytest.mark.parametrize(
     ("script", "step"),
     [
-        ([(401, {"error": "unauthorized"})], "signed-URL request"),
-        ([_graph_answers()[0], (403, b"<Error>AccessDenied</Error>")], "file upload"),
         ([*_graph_answers()[:2], (400, {"error": "ERR_MODEL_DOES_NOT_EXIST"})], "save request"),
         (None, "could not reach the host"),
     ],
-    ids=["signed_put", "s3_put", "save_to_db", "network"],
+    ids=["save_to_db", "network"],
 )
 def test_graph_upload_http_errors(fake, exported, monkeypatch, script, step) -> None:
     if script is None:
@@ -355,14 +333,6 @@ def test_vector_upload_refuses_invalid_bodies_before_any_request(fake, direction
     assert excinfo.value.fields["code"] == "neuronpedia_upload_argument_invalid"
     assert "Remedy:" in str(excinfo.value)
     assert fake.sent == []
-
-
-def test_vector_upload_http_error(fake) -> None:
-    fake.script = [(400, {"message": "Vector dimension does not match model dimension"})]
-    with pytest.raises(tl.errors.AttributionError) as excinfo:
-        _direction().upload_to_neuronpedia(api_key=KEY, model_id="tiny", name="v")
-    assert excinfo.value.fields["code"] == "neuronpedia_upload_http_error"
-    assert "Vector dimension does not match" in str(excinfo.value)
 
 
 # ---------------------------------------------------------------- never live

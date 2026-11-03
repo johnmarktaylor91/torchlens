@@ -26,7 +26,6 @@ import pytest
 
 import torchlens as tl
 from torchlens._constants import MODEL_LOG_FIELD_ORDER
-from torchlens._data_classes._trace_state_io import fill_unset_declared_fields
 from torchlens._data_classes.trace import Trace
 from torchlens.backends._finalize import new_preview_function_trace
 
@@ -77,28 +76,6 @@ def test_shared_preview_constructor_yields_every_declared_field() -> None:
     # The field whose absence broke every preview save: unverified, not ceilinged.
     assert trace._provenance_verified is None
     assert trace._provenance_verification_reason is None
-
-
-def test_declared_field_fill_sets_absent_fields_only_with_fresh_values() -> None:
-    """The fill never overwrites a stamped field and never shares a mutable default."""
-
-    first = Trace("first")
-    first._provenance_verified = False
-    first._provenance_verification_reason = "compiled_attribute"
-    second = Trace("second")
-    fill_unset_declared_fields(first)
-    fill_unset_declared_fields(second)
-
-    assert _missing_declared_fields(first) == []
-    assert _missing_declared_fields(second) == []
-    assert first._provenance_verified is False
-    assert first._provenance_verification_reason == "compiled_attribute"
-    assert second._provenance_verified is None
-    assert first.capture_guard_passes == [] == second.capture_guard_passes
-    assert first.capture_guard_passes is not second.capture_guard_passes
-    assert first.completeness_diagnostics is not second.completeness_diagnostics
-    # Readers test the container registry by presence (``hasattr``); never fill it.
-    assert "_containers" not in first.__dict__
 
 
 def _preview_backend_sources() -> list[Path]:

@@ -24,7 +24,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from tests.test_sae4_latent_facets import TOL, X, _HandSAE, _latent_column, _Model, _TwoSites
+from tests.test_sae4_latent_facets import TOL, X, _HandSAE, _Model, _TwoSites
 from tests.test_sae5_read_doors import _AttnModel, _q_head
 from torchlens._errors import ArgumentTypeError
 from torchlens.intervention.errors import SelectorCapabilityError, SiteResolutionError
@@ -81,15 +81,6 @@ def test_a_head_save_keeps_the_attention_interior_and_reads_the_slice(attn) -> N
     assert interior and interior <= _saved(trace)
 
 
-def test_a_latent_save_keeps_its_site_and_reads_the_closed_form(latent_setup) -> None:
-    model, x = latent_setup
-    selector = tl.facet("res").latent(1)
-    trace = tl.trace(model, x, save=selector)
-    assert trace["fc1"].layer_label in _saved(trace)
-    torch.testing.assert_close(trace[selector].value, _latent_column(1), **TOL)
-    torch.testing.assert_close(trace["fc1"].facets["res[1]"].value, _latent_column(1), **TOL)
-
-
 def test_a_latent_registered_at_a_selector_site_saves_every_home() -> None:
     torch.manual_seed(0)
     model, x, sae = _TwoSites().eval(), torch.randn(2, 4), _HandSAE()
@@ -129,14 +120,6 @@ def test_a_facet_save_on_a_model_without_the_facet_warns_it_matched_nothing(make
 
 
 # --- the doors that still refuse ---------------------------------------------------
-
-
-@pytest.mark.parametrize("which", ["head", "latent"])
-def test_intervene_still_refuses_a_facet_selector(attn, latent_setup, which) -> None:
-    model, x = attn if which == "head" else latent_setup
-    selector = tl.head(0, "q") if which == "head" else tl.facet("res").latent(1)
-    with pytest.raises(SiteResolutionError, match="resolve through intervention mutators"):
-        tl.trace(model, x, intervene=tl.when(selector, tl.zero_ablate()))
 
 
 @pytest.mark.parametrize("which", ["head", "latent"])

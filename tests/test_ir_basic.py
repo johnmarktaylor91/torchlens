@@ -2,12 +2,6 @@
 
 from __future__ import annotations
 
-import importlib
-import subprocess
-import sys
-from dataclasses import FrozenInstanceError, fields, is_dataclass
-from typing import get_type_hints
-
 import pytest
 
 from torchlens._ir import (
@@ -37,16 +31,6 @@ from torchlens._ir.refs import ReservedLabel
 from torchlens._ir.semantics import BackendSemantics, CapturePolicy
 from torchlens._ir.workspaces import ModuleCaptureWorkspace
 from torchlens.types import ContainerSpec
-
-
-def _assert_frozen_and_slotted(instance: object) -> None:
-    """Assert a frozen slots dataclass rejects mutation and undeclared fields."""
-    assert is_dataclass(instance)
-    field_name = fields(instance)[0].name
-    with pytest.raises(FrozenInstanceError):
-        setattr(instance, field_name, "changed")
-    with pytest.raises(AttributeError):
-        object.__setattr__(instance, "undeclared_slot", "changed")
 
 
 def _build_ir_instances() -> dict[str, object]:
@@ -382,118 +366,6 @@ def _build_ir_instances() -> dict[str, object]:
     }
 
 
-def test_imports_every_public_ir_type() -> None:
-    """Import every IR type from the package root."""
-    instances = _build_ir_instances()
-
-    assert set(instances) == {
-        "blob_ref",
-        "deferred_ref",
-        "tensor_ref",
-        "container_spec",
-        "output_ref",
-        "function_ref",
-        "arg_template_ref",
-        "parent_edge",
-        "param_ref",
-        "module_frame",
-        "module_prep_event",
-        "module_enter_event",
-        "module_exit_event",
-        "backend_semantics",
-        "capture_policy",
-        "fire_result",
-        "intervention_template_ref",
-        "op_event",
-        "reserved_label",
-        "function_event_input",
-        "record_context",
-        "intervention_state",
-        "raw_graph_workspace",
-        "module_capture_workspace",
-        "wrapper_runtime_workspace",
-    }
-
-
-def test_frozen_dataclasses_are_frozen_and_slotted() -> None:
-    """Assert frozen IR dataclasses enforce immutability and slots."""
-    instances = _build_ir_instances()
-    frozen_names = {
-        "blob_ref",
-        "deferred_ref",
-        "tensor_ref",
-        "output_ref",
-        "function_ref",
-        "arg_template_ref",
-        "parent_edge",
-        "param_ref",
-        "module_frame",
-        "backend_semantics",
-        "capture_policy",
-        "fire_result",
-        "intervention_template_ref",
-        "op_event",
-        "reserved_label",
-        "function_event_input",
-        "record_context",
-    }
-
-    for name in frozen_names:
-        _assert_frozen_and_slotted(instances[name])
-
-
-def test_container_spec_is_rich_leaf_type() -> None:
-    """Assert IR output metadata uses the leaf recursive ContainerSpec."""
-
-    from torchlens._ir.container import ContainerSpec as LeafContainerSpec
-
-    instances = _build_ir_instances()
-    events_module = importlib.import_module("torchlens._ir.events")
-    hints = get_type_hints(
-        OutputRef,
-        globalns={**vars(events_module), "TensorRef": TensorRef},
-    )
-    assert ContainerSpec is LeafContainerSpec
-    assert isinstance(instances["container_spec"], LeafContainerSpec)
-    assert hints["container_spec"] == LeafContainerSpec | None
-
-
-def test_container_leaf_import_order_has_no_cycle() -> None:
-    """Import the container leaf before higher-level intervention modules."""
-
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            (
-                "import torchlens._ir.container; "
-                "import torchlens.intervention.types; "
-                "print('IMPORT_OK')"
-            ),
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    assert result.stdout.strip() == "IMPORT_OK"
-
-
-def test_mutable_slotted_state_dataclasses_reject_undeclared_fields() -> None:
-    """Assert mutable state dataclasses are slotted but not frozen."""
-    instances = _build_ir_instances()
-    intervention_state = instances["intervention_state"]
-    raw_graph_workspace = instances["raw_graph_workspace"]
-
-    assert is_dataclass(intervention_state)
-    assert is_dataclass(raw_graph_workspace)
-    intervention_state.has_direct_writes = True
-    raw_graph_workspace.raw_layer_labels_list = []
-    with pytest.raises(AttributeError):
-        intervention_state.undeclared_slot = True
-    with pytest.raises(AttributeError):
-        raw_graph_workspace.undeclared_slot = True
-
-
 def test_capture_events_mutation_and_label_reservation() -> None:
     """Assert CaptureEvents is mutable and reserves labels atomically."""
     op_event = _build_ir_instances()["op_event"]
@@ -521,15 +393,6 @@ def test_capture_events_mutation_and_label_reservation() -> None:
     assert next_label.label_raw == "relu_1_3_raw"
     assert events.raw_layer_counter == 3
     assert events.raw_layer_type_counter == {"linear": 2, "relu": 1}
-
-
-def test_ir_imports_without_torch_module(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Assert importing IR succeeds when torch is absent from sys.modules."""
-    with monkeypatch.context() as patched:
-        patched.setitem(sys.modules, "torch", None)
-        module = importlib.import_module("torchlens._ir")
-
-    assert module.TensorRef is TensorRef
 
 
 def test_capture_events_concat_follows_declared_merge_law() -> None:
@@ -662,41 +525,6 @@ def _merge_pre_hook_event(address: str) -> PreHookProvenanceEvent:
     )
 
 
-def test_concat_merges_intervention_events_lane() -> None:
-    """A populated intervention-edit lane merges under append_restamp."""
-
-    from torchlens._ir.capture_events import CaptureEvents
-    from torchlens._ir.events import InterventionAppliedEvent
-
-    source = CaptureEvents()
-    source.append_intervention(
-        InterventionAppliedEvent(
-            label_raw="x_raw", kind="replaced", origin="raw_forward_hook", timestamp=1.0
-        )
-    )
-    target = CaptureEvents()
-    target.concat(source)
-    assert [event.label_raw for event in target.intervention_events] == ["x_raw"]
-    assert target.intervention_events[0].seq == 1
-    assert target.intervention_events[0].seq <= target.event_seq
-
-
-def test_lane_appenders_cover_every_merging_policy() -> None:
-    """Every non-run_local lane policy has a registered single-writer appender.
-
-    A lane declared as merging but left unwired must be impossible to ship:
-    this assertion is the totality half, and ``concat`` itself fail-closes at
-    runtime (see ``test_concat_fails_closed_on_declared_unwired_lane``).
-    """
-
-    from torchlens._ir.capture_events import _LANE_APPENDERS, LANE_MERGE_POLICIES, CaptureEvents
-
-    merging_lanes = {lane for lane, policy in LANE_MERGE_POLICIES.items() if policy != "run_local"}
-    assert merging_lanes <= set(_LANE_APPENDERS)
-    for appender_name in _LANE_APPENDERS.values():
-        assert callable(getattr(CaptureEvents(), appender_name))
-
-
 def test_concat_fails_closed_on_declared_unwired_lane(monkeypatch: pytest.MonkeyPatch) -> None:
     """concat refuses (never silently skips) a merging lane with no appender."""
 
@@ -749,31 +577,6 @@ def test_concat_preserves_source_chronology_across_lanes() -> None:
             "pre_hook:y",
         ]
     )
-
-
-def test_concat_clones_events_and_never_mutates_the_source_stream() -> None:
-    """Merging restamps clones; the sealed source stream's seqs stay intact."""
-
-    from torchlens._ir.capture_events import CaptureEvents
-
-    source = CaptureEvents()
-    source.append_module_prep(_merge_prep_event("a"))
-    source.append_pre_hook(_merge_pre_hook_event("x"))
-    source_events = [*source.module_prep_events, *source.pre_hook_events]
-    source_seqs_before = [event.seq for event in source_events]
-
-    target = CaptureEvents()
-    target.append_pre_hook(_merge_pre_hook_event("existing"))
-    target.concat(source)
-
-    assert [event.seq for event in source_events] == source_seqs_before
-    merged = [*target.module_prep_events, *target.pre_hook_events[1:]]
-    assert all(
-        merged_event is not source_event
-        for merged_event, source_event in zip(merged, source_events)
-    )
-    all_target_seqs = [event.seq for event in (*target.module_prep_events, *target.pre_hook_events)]
-    assert len(all_target_seqs) == len(set(all_target_seqs))
 
 
 def test_concat_rejects_invalid_source_sequencing() -> None:

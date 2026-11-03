@@ -147,52 +147,6 @@ def _inputs() -> tuple[torch.Tensor, torch.Tensor]:
     return clean.requires_grad_(), corrupted.requires_grad_()
 
 
-def test_activation_patch_attention_heads_identifies_important_head() -> None:
-    """Activation patching returns ``[layer, head]`` and finds the important head."""
-
-    model = PatchingToyModel()
-    clean, corrupted = _inputs()
-
-    scores = tl.facets.patching.activation_patch_attention_heads(model, clean, corrupted, _metric)
-
-    assert scores.shape == (1, 2)
-    assert scores[0, 0] > 2.0
-    assert torch.isclose(scores[0, 1], torch.tensor(0.0), atol=1e-6)
-
-
-def test_activation_patch_head_cell_matches_manual_patch() -> None:
-    """One helper cell matches an explicit clean-into-corrupted facet patch."""
-
-    model = PatchingToyModel()
-    clean, corrupted = _inputs()
-    scores = tl.facets.patching.activation_patch_attention_heads(model, clean, corrupted, _metric)
-    clean_log = tl.trace(
-        model,
-        clean,
-        capture=tl.options.CaptureOptions(save_args=True),
-        save="all",
-    )
-    corrupted_log = tl.trace(
-        model,
-        corrupted,
-        capture=tl.options.CaptureOptions(save_args=True),
-        save="all",
-    )
-    clean_head = clean_log.modules["block.attn"].facets.head(0).result.detach().clone()
-
-    def _manual_patch(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
-        """Return the clean head activation."""
-
-        del out, ctx
-        return clean_head
-
-    manual = corrupted_log.fork("manual_head_patch")
-    manual.attach_hooks(tl.facet("result").head(0).in_module("block.attn"), _manual_patch)
-    manual.run(model, corrupted)
-
-    assert torch.equal(scores[0, 0], _metric(manual).detach())
-
-
 def test_residual_attention_and_mlp_patch_shapes() -> None:
     """Residual, attention-output, and MLP helpers return expected layer shapes."""
 

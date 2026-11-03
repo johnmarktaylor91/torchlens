@@ -181,6 +181,14 @@ def compare_params(
         ``status``, ``shape_match``, ``dtype_match``, ``max_abs``,
         ``mean_abs``, ``allclose``, and ``reason``; ``attrs`` carries the
         summary counts.
+
+    Examples
+    --------
+    >>> # requires: pandas
+    >>> import copy
+    >>> frame = compare_params(model, copy.deepcopy(model)).to_pandas()
+    >>> frame.attrs["matched"], frame.attrs["value_diverged"]
+    (4, 0)
     """
 
     pd = _require_pandas()

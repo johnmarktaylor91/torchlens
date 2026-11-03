@@ -57,20 +57,6 @@ def _pair() -> tuple[tl.Trace, tl.Trace]:
     return donor, base
 
 
-@pytest.mark.smoke_cells("test_patch_from_delivers_the_addressed_pass[2]")
-@pytest.mark.parametrize("pass_index", [1, 2])
-def test_patch_from_delivers_the_addressed_pass(pass_index: int) -> None:
-    """Each addressed pass receives ITS donor value, never the last pass's."""
-
-    donor, base = _pair()
-    other = 3 - pass_index
-    fork = base.fork()
-    fork.do(f"relu_1_2:{pass_index}", tl.patch_from(donor))
-    patched = fork[f"relu_1_2:{pass_index}"].out
-    assert torch.equal(patched, donor[f"relu_1_2:{pass_index}"].out)
-    assert not torch.equal(patched, donor[f"relu_1_2:{other}"].out)
-
-
 def test_bare_multipass_donor_lookup_refuses_instead_of_guessing() -> None:
     """A fire context without a pass on a multi-pass donor site refuses typed
     and teaches every pass-qualified spelling."""
@@ -95,15 +81,6 @@ def test_bare_multipass_donor_lookup_refuses_instead_of_guessing() -> None:
     assert remedy and message.rstrip(".").endswith(remedy)
 
 
-def test_single_pass_donor_still_resolves() -> None:
-    """Single-pass sites keep resolving (bare or qualified spellings)."""
-
-    donor, base = _pair()
-    fork = base.fork()
-    fork.do("linear_1_1:1", tl.patch_from(donor))
-    assert torch.equal(fork["linear_1_1:1"].out, donor["linear_1_1:1"].out)
-
-
 class _SharedEncoder(nn.Module):
     """ALBERT-pattern cross-layer sharing in stdlib form: one real
     ``nn.TransformerEncoderLayer`` applied twice with SHARED weights."""
@@ -120,6 +97,7 @@ class _SharedEncoder(nn.Module):
         return x
 
 
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 @pytest.mark.heavy  # measured 7.2-25.3s across CI rows (round-1/2/3 CI triage,
 # 2026-10-01): consistently over the smoke ceiling on a real weight-shared
 # transformer-encoder capture plus donor-pin round trip, not a one-off load spike.

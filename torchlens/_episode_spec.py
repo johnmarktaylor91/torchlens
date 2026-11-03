@@ -50,7 +50,7 @@ class EpisodeOptions:
         episode=...)``) it DEFAULTS to the bound method's owner
         (``method.__self__``); on a module root it is required and ``None``
         refuses typed.
-    n_steps:
+    num_steps:
         Optional declared step count, recorded on the ledger header and
         validated against the observed call count on COMPLETE captures.
         Declarations beyond the wrapped-tier cost ceiling
@@ -60,7 +60,7 @@ class EpisodeOptions:
         superlinear and N=100 already measured 657 s / 5.4 GB peak RSS.
     step_axis:
         Axis of the step-output source along which per-step evidence lies.
-        Positions are TAIL-ALIGNED: the LAST ``n_steps`` positions along
+        Positions are TAIL-ALIGNED: the LAST ``num_steps`` positions along
         this axis are the per-step emissions (one appended position per
         step), so a root returning what real ``generate()`` returns —
         prompt+completion — keeps its prompt prefix out of the evidence
@@ -153,6 +153,12 @@ class EpisodeOptions:
         escalated product is still a valid capture of what it ran, it just
         is not an escalation of the original episode, and says so. Never a
         settlement input.
+
+    Examples
+    --------
+    >>> opts = EpisodeOptions(stepped_module=model[0], num_steps=3, step_output_kind="none")
+    >>> opts.num_steps, opts.step_output_kind
+    (3, 'none')
     """
 
     stepped_module: Any = None

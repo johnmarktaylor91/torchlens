@@ -44,7 +44,21 @@ def _restore_backend_error(
 
 
 class BackendRegistryError(ConfigurationError, ValueError):
-    """Base class for backend registry failures."""
+    """Base class for backend registry failures.
+
+    Examples
+    --------
+    >>> demo = tl.backends.BackendSpec(name="demo", can_handle=lambda m, a, k: False,
+    ...     capture_trace=lambda *a, **k: None, validate_entry=lambda *a, **k: None,
+    ...     validate_trace=lambda *a, **k: None,
+    ...     capabilities=tl.backends.BackendCapabilities(*[False] * 7))
+    >>> import dataclasses
+    >>> try:
+    ...     tl.backends.register(dataclasses.replace(demo, maturity="beta"))
+    ... except BackendRegistryError as err:
+    ...     print(err.code)
+    backend_maturity_invalid
+    """
 
     code: str = "backend_error"
     default_remedy: str = "pass an explicitly registered backend compatible with the operation"
@@ -103,42 +117,112 @@ class BackendRegistryError(ConfigurationError, ValueError):
 
 
 class UnknownBackendError(BackendRegistryError):
-    """Raised when an explicit backend name is not registered."""
+    """Raised when an explicit backend name is not registered.
+
+    Examples
+    --------
+    >>> issubclass(UnknownBackendError, tl.errors.BackendRegistryError)
+    True
+    >>> try:
+    ...     tl.backends.spec("no_such_backend")
+    ... except UnknownBackendError as err:
+    ...     print(err.code)
+    unknown_backend
+    """
 
     code = "unknown_backend"
     default_remedy = "pass one of the backend names listed by torchlens.backends"
 
 
 class BackendMismatchError(BackendRegistryError):
-    """Raised when an explicit backend cannot handle the supplied model/input."""
+    """Raised when an explicit backend cannot handle the supplied model/input.
+
+    Examples
+    --------
+    >>> demo = tl.backends.BackendSpec(name="demo", can_handle=lambda m, a, k: False,
+    ...     capture_trace=lambda *a, **k: None, validate_entry=lambda *a, **k: None,
+    ...     validate_trace=lambda *a, **k: None,
+    ...     capabilities=tl.backends.BackendCapabilities(*[False] * 7))
+    >>> tl.backends.register(demo)
+    >>> try:
+    ...     tl.backends.resolve("demo", model, (x,))
+    ... except BackendMismatchError as err:
+    ...     print(err.code)
+    backend_mismatch
+    >>> tl.backends.unregister("demo")
+    """
 
     code = "backend_mismatch"
     default_remedy = "select the backend that owns the supplied model and tensor inputs"
 
 
 class AmbiguousBackendError(BackendRegistryError):
-    """Raised when backend auto-resolution has multiple equal-priority matches."""
+    """Raised when backend auto-resolution has multiple equal-priority matches.
+
+    Examples
+    --------
+    >>> import dataclasses
+    >>> class Toy:
+    ...     pass
+    >>> first = tl.backends.BackendSpec(name="toy_a", can_handle=lambda m, a, k: isinstance(m, Toy),
+    ...     capture_trace=lambda *a, **k: None, validate_entry=lambda *a, **k: None,
+    ...     validate_trace=lambda *a, **k: None,
+    ...     capabilities=tl.backends.BackendCapabilities(*[False] * 7), priority=100)
+    >>> for spec in (first, dataclasses.replace(first, name="toy_b")):
+    ...     tl.backends.register(spec)
+    >>> try:
+    ...     tl.backends.resolve(None, Toy(), ())
+    ... except AmbiguousBackendError as err:
+    ...     print(err.code)
+    ... finally:
+    ...     tl.backends.unregister("toy_a"); tl.backends.unregister("toy_b")
+    backend_ambiguity
+    """
 
     code = "backend_ambiguity"
     default_remedy = "pass backend= explicitly to select one matching backend"
 
 
 class BackendUnsupportedError(BackendRegistryError, NotImplementedError):
-    """Raised when a backend lacks a requested capability."""
+    """Raised when a backend lacks a requested capability.
+
+    Examples
+    --------
+    >>> issubclass(BackendUnsupportedError, NotImplementedError)
+    True
+    >>> BackendUnsupportedError("streaming is not implemented").code
+    'backend_unsupported'
+    """
 
     code = "backend_unsupported"
     default_remedy = "omit the unsupported option or use a backend that implements it"
 
 
 class BackendPayloadUnsupportedError(BackendUnsupportedError):
-    """Raised when an audit-only backend payload cannot materialize."""
+    """Raised when an audit-only backend payload cannot materialize.
+
+    Examples
+    --------
+    >>> issubclass(BackendPayloadUnsupportedError, tl.errors.BackendUnsupportedError)
+    True
+    >>> BackendPayloadUnsupportedError("payload is audit-only").code
+    'backend_payload_unsupported'
+    """
 
     code = "backend_payload_unsupported"
     default_remedy = "save metadata only or use a backend with a supported payload codec"
 
 
 class BackendRuntimeCompatibilityError(BackendRegistryError):
-    """Raised when a backend runtime is incompatible with serialized metadata."""
+    """Raised when a backend runtime is incompatible with serialized metadata.
+
+    Examples
+    --------
+    >>> issubclass(BackendRuntimeCompatibilityError, tl.errors.BackendRegistryError)
+    True
+    >>> BackendRuntimeCompatibilityError("runtime too old").code
+    'backend_runtime_compatibility'
+    """
 
     code = "backend_runtime_compatibility"
     default_remedy = "install a compatible backend runtime or load the artifact for analysis only"
@@ -151,6 +235,16 @@ class BackendCapabilityConformanceError(BackendUnsupportedError):
     flag flipped to ``True`` on a spec that registers no implementing surface
     for that capability must refuse typed instead of silently admitting the
     option and dropping the behavior.
+
+    Examples
+    --------
+    >>> import dataclasses
+    >>> bare = dataclasses.replace(tl.backends.spec("torch"), capability_implementations={})
+    >>> try:
+    ...     tl.backends.require_capability_implementation(bare, "fastlog")
+    ... except BackendCapabilityConformanceError as err:
+    ...     print(err.code)
+    backend_capability_conformance
     """
 
     code = "backend_capability_conformance"

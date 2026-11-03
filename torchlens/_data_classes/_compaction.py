@@ -13,6 +13,9 @@ from __future__ import annotations
 import weakref
 from typing import TYPE_CHECKING, Any
 
+from .._quantities import Duration
+from .._trace_core.op_store import _MISSING
+
 if TYPE_CHECKING:
     from .trace import Trace
 
@@ -49,8 +52,6 @@ def compact_op_metadata(trace: Trace) -> None:
         # Core-backed ops pool in ONE column-major sweep over the row
         # cells (same ladder, same skips as the per-op walk) without
         # paying the attribute protocol per field.
-        from .op import _compact_store_rows
-
         _compact_store_rows(store, pool)
     if core is not None:
         # Whole-cell container pooling (the M14 memory slice): duplicate and
@@ -85,3 +86,54 @@ def compact_op_metadata(trace: Trace) -> None:
         if store is not None and getattr(op, "_core", None) is store:
             continue
         op._compact_metadata(pool)
+
+
+def _compact_store_rows(store: Any, pool: dict[Any, Any]) -> None:
+    """Pool repeated immutable metadata across a whole building-phase store.
+
+    Column-major equivalent of ``Op._compact_metadata`` (same class ladder,
+    same ``_UNPOOLED_SLOTS`` skips, same container-member handling) operating
+    directly on the row cells, so a core-backed trace pools without paying
+    the per-attribute descriptor protocol.
+
+    Parameters
+    ----------
+    store:
+        Building-phase ``OpRowStore`` (frozen stores are left untouched --
+        pooling always precedes the physical freeze).
+    pool:
+        Pass-local ``pool key -> canonical instance`` table shared with any
+        remaining per-op walks of the same trace.
+    """
+
+    # Imported lazily, as in ``compact_op_metadata``, so loading this module never loads ``op``.
+    from .op import _POOLED_CLASSES, _UNPOOLED_SLOTS, _pool_container_members, _pool_value
+
+    rows = store.rows_building()
+    if rows is None:
+        return
+    pooled_classes = _POOLED_CLASSES
+    pool_get = pool.get
+    for fid, name in enumerate(store.layout.names):
+        if name in _UNPOOLED_SLOTS:
+            continue
+        for row_cells in rows:
+            value = row_cells[fid]
+            if value is None or value is _MISSING:
+                continue
+            cls = value.__class__
+            if cls in pooled_classes:
+                key = (cls, value.hex()) if cls is Duration else (cls, value)
+                pooled = pool_get(key)
+                if pooled is None:
+                    pool[key] = value
+                elif pooled is not value:
+                    row_cells[fid] = pooled
+            elif cls is list or cls is set or cls is dict:
+                _pool_container_members(value, pool, 0)
+            elif cls is tuple or cls is frozenset:
+                pooled = _pool_value(value, pool)
+                if pooled is not value:
+                    row_cells[fid] = pooled
+            elif isinstance(value, dict):
+                _pool_container_members(value, pool, 0)

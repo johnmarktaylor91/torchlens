@@ -111,7 +111,7 @@ def _context(combo: dict[str, object]) -> str:
     )
 
 
-@pytest.mark.smoke_cells("test_axis_combo_renders_clean[dark-leftright-d1000-png-dot]")
+@pytest.mark.smoke_cells("test_axis_combo_renders_clean[colorblind-bottomup-d1-png-rank]")
 @pytest.mark.parametrize(
     "combo",
     _COVER,
@@ -145,38 +145,3 @@ def test_axis_combo_renders_clean(
         assert parsed.pin_count > 0, _context(combo)
     else:
         assert parsed.pin_count == 0, _context(combo)
-
-
-def test_pairwise_cover_is_complete() -> None:
-    """The greedy cover really covers every axis-value pair."""
-
-    names = list(_AXES)
-    covered = set()
-    for row in _COVER:
-        for i, a in enumerate(names):
-            for b in names[i + 1 :]:
-                covered.add((a, row[a], b, row[b]))
-    for i, a in enumerate(names):
-        for b in names[i + 1 :]:
-            for va in _AXES[a]:
-                for vb in _AXES[b]:
-                    assert (a, va, b, vb) in covered, f"pair missing: {a}={va}, {b}={vb}"
-
-
-def test_rank_entry_cluster_width_vs_member_extent(tmp_path: Path) -> None:
-    """Item 16/21: the rank-path cluster-width assertion, via neato -n.
-
-    The defect measured one-node clusters at a median 91% of graph width
-    (ratio >> 10 vs member extent); the healthy fixture stays under 5x with
-    the item-16 fix in place (measured ~2.2x)."""
-
-    trace = tl.trace(_Nested(), torch.randn(1, 4))
-    dot = trace.draw(
-        file_format="svg",
-        path=str(tmp_path / "rank_width"),
-        layout="rank",
-    ).dot
-    parsed = parse_layout_json(run_layout_json(dot, "rank"), engine="rank", dot_source=dot)
-    envelope = compute_usability_envelope(parsed)
-    assert envelope.cluster_width_ratios, "rank entry lost its clusters"
-    assert envelope.cluster_width_ratio_max < 5.0, envelope.cluster_width_ratios

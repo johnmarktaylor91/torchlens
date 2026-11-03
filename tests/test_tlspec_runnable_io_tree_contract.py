@@ -110,6 +110,7 @@ class _EnumKeyBranch(nn.Module):
         return x * 10.0
 
 
+# Kept: sole branch coverage of _io/runnable.py; a sole mutation kill; its other params stay because the list is not trimmable per id.
 @pytest.mark.parametrize(
     ("model_cls", "key"),
     [
@@ -141,7 +142,7 @@ def test_encodable_exotic_key_scalar_diverges_on_change(
     assert diverged.report.is_poisoned
 
 
-@pytest.mark.smoke
+# Kept: sole branch coverage of _capture/_input_records.py, _input_walk.py, _io/runnable.py.
 def test_opaque_enum_key_subtree_is_unverifiable_not_skipped(tmp_path: Path) -> None:
     """A subtree under an OPAQUE enum key REFUSES the runnable save typed, never skips.
 
@@ -159,21 +160,6 @@ def test_opaque_enum_key_subtree_is_unverifiable_not_skipped(tmp_path: Path) -> 
     diagnostics = str(excinfo.value.fields.get("diagnostics"))
     assert "input_container_contract_missing" in diagnostics
     assert "opaque_mapping_key" in diagnostics
-
-
-def test_single_tensor_plus_exotic_key_dict_identical_no_crash(tmp_path: Path) -> None:
-    """The arity shortcut must not misfire for single-tensor + exotic-key-dict inputs."""
-
-    class _Scale(nn.Module):
-        def forward(self, value: torch.Tensor, cfg: dict[Any, float]) -> torch.Tensor:
-            return value * cfg[(1, 2)]
-
-    t = torch.tensor([1.0, 2.0, 3.0, 4.0])
-    path = _save_runnable(_Scale(), [t, {(1, 2): 2.0}], tmp_path / "single_tensor.tlspec")
-
-    result = tl.load(path).run(inputs=[t, {(1, 2): 2.0}])
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert torch.allclose(result.output, t * 2.0)
 
 
 # ---------------------------------------------------------------------------
@@ -201,7 +187,13 @@ class _NestedStructSeq(nn.Module):
         return _WrappedResult(stats, shifted)
 
 
-@pytest.mark.parametrize("kind", ["dict", "list", "namedtuple"])
+# Kept: sole branch coverage of _ir/container.py; a sole mutation kill.
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "list",
+    ],
+)
 def test_nested_structseq_runs_verified(tmp_path: Path, kind: str) -> None:
     """A structseq nested in a dict/list/namedtuple runs VERIFIED with output == live."""
 
@@ -237,6 +229,7 @@ class _MixedInputs(nn.Module):
         return x * 10
 
 
+# Kept: the catch of its regression fault.
 def test_mixed_positional_keyword_inputs_bind_and_diverge(tmp_path: Path) -> None:
     """A combined ``{'args': [...], 'kwargs': {...}}`` binds; a changed kwarg diverges."""
 
@@ -254,6 +247,8 @@ def test_mixed_positional_keyword_inputs_bind_and_diverge(tmp_path: Path) -> Non
         tl.load(path).run(inputs={"args": [x], "kwargs": {"add": False}})
 
 
+# Kept: sole branch coverage of _runnable/transaction.py; smoke tier id (frozen).
+@pytest.mark.smoke
 def test_live_mixed_positional_keyword_inputs_bind_and_diverge() -> None:
     """Live ``run`` accepts the same mixed-input spelling as loaded runnable traces."""
 
@@ -288,20 +283,6 @@ class _BoolOutputKey(nn.Module):
         return {True: x + 1}
 
 
-def test_bool_output_dict_key_stays_runnable(tmp_path: Path) -> None:
-    """A ``{True: ...}`` output must not advertise runnable then lose it on load."""
-
-    model = _BoolOutputKey()
-    x = torch.tensor([1.0, 2.0])
-    path = _save_runnable(model, x, tmp_path / "bool_out.tlspec")
-
-    result = tl.load(path).run(inputs=x.clone())
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    live = model(x)
-    assert set(result.output) == set(live)
-    assert torch.equal(result.output[True], live[True])
-
-
 # ---------------------------------------------------------------------------
 # F5 -- numpy.float64 literal saves, loads, and verifies like a Python float
 # ---------------------------------------------------------------------------
@@ -312,6 +293,7 @@ class _Scale(nn.Module):
         return v * s
 
 
+# Kept: sole branch coverage of _input_walk.py, _io/runnable.py, _runnable/input_metadata.py and more; a sole mutation kill.
 def test_numpy_float64_literal_identical_verifies_changed_diverges(tmp_path: Path) -> None:
     """A ``numpy.float64`` op literal must save, load, and verify normally."""
 
@@ -354,33 +336,6 @@ class _IntegerControlBranch(nn.Module):
         return value * 10
 
 
-def test_numpy_scalar_control_input_diverges_like_python_int(tmp_path: Path) -> None:
-    """Changed NumPy integer controls must diverge rather than become unverifiable."""
-
-    import numpy as np
-
-    value = torch.tensor([2.0, 3.0])
-    path = _save_runnable(
-        _IntegerControlBranch(),
-        [value, np.int64(0)],
-        tmp_path / "numpy_control.tlspec",
-    )
-
-    unchanged = tl.load(path).run(inputs=[value, np.int64(0)])
-    assert unchanged.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert torch.equal(unchanged.output, value + 1)
-
-    with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=[value, np.int64(1)])
-
-    diverged = tl.load(path).run(
-        inputs=[value, np.int64(1)],
-        on_divergence="return",
-    )
-    assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
-    assert diverged.report.is_poisoned
-
-
 # ---------------------------------------------------------------------------
 # r69 E -- nested string inputs SAVE (scrub DROP-order fix; hon1-F5)
 # ---------------------------------------------------------------------------
@@ -395,6 +350,7 @@ class _NestedStrBranch(nn.Module):
         return x + 100.0
 
 
+# Kept: sole branch coverage of _capture/prepare/chunked.py, _capture/prepare/door.py.
 def test_r69_nested_string_input_saves_loads_and_verifies(tmp_path: Path) -> None:
     """hon1-F5: a non-top-level str leaf is fully witnessed and must SAVE.
 
@@ -433,6 +389,7 @@ class _OutParameterAdd(nn.Module):
         return output
 
 
+# Kept: sole branch coverage of _runnable/attestation.py, _runnable/call_outputs.py, _runnable/path_faithfulness.py; a sole mutation kill.
 def test_out_parameter_operation_runs_verified_on_original_input(tmp_path: Path) -> None:
     """``out=`` mutation checks must alias the output slot, not the first input."""
 

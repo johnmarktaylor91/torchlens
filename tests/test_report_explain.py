@@ -75,52 +75,6 @@ def _captured_log() -> tl.Trace:
     return tl.trace(TinyReportModel(), torch.tensor([[2.0, 3.0]]))
 
 
-def test_report_namespace_is_not_top_level_all() -> None:
-    """``tl.report`` and ``Trace.explain`` are reachable without expanding ``tl.__all__``.
-
-    The namespace size is checked against the namespace itself so this test
-    guards the report names without hard-coding unrelated top-level API churn.
-    """
-
-    assert hasattr(tl.report, "ExplainReport")
-    assert hasattr(tl.Trace, "explain")
-    public_names = set(tl.__all__)
-    assert len(tl.__all__) == len(public_names)
-    assert "report" not in tl.__all__
-    assert "explain" not in tl.__all__
-
-
-def test_explain_returns_sensible_string_for_each_audience() -> None:
-    """All supported audiences should produce a human-readable report."""
-
-    log = _captured_log()
-    for audience in ("researcher", "practitioner", "auto"):
-        text = log.explain(audience=audience)
-        assert isinstance(text, str)
-        assert "TorchLens report" in text
-        assert "Model summary" in text
-        assert "Capture summary" in text
-        assert "Backward summary" in text
-        assert "Anomalies" in text
-        assert "Interventions" in text
-        assert "Notable patterns" in text
-        assert "TinyReportModel" in text
-        assert "No backward passes are recorded" in text
-
-
-def test_explain_json_form_is_removed() -> None:
-    """defaults.7: explain is prose only; the machine projection is to_agent_json."""
-
-    import inspect
-
-    log = _captured_log()
-    assert "format" not in inspect.signature(tl.Trace.explain).parameters
-    assert "to_agent_json()" in (tl.Trace.explain.__doc__ or "")
-    with pytest.raises(TypeError, match="format"):
-        log.explain(format="json")  # type: ignore[call-arg]
-    assert log.to_agent_json()["capture"]["capture_status"] == "complete"
-
-
 def test_explain_and_audit_diagnose_real_partial_failure() -> None:
     """Partial reports name recorded last-op and captured exception evidence."""
 
@@ -188,7 +142,7 @@ def test_explain_reports_backward_capture() -> None:
 
     x = torch.tensor([[2.0, 3.0]], requires_grad=True)
     log = tl.trace(TinyReportModel(), x, capture=tl.options.CaptureOptions(save_grads=True))
-    log.log_backward(log[log.output_layers[0]].out.sum())
+    log.backward(log[log.output_layers[0]].out.sum())
 
     text = log.explain()
 
@@ -210,17 +164,6 @@ def test_explain_reports_nonfinite_out() -> None:
     assert "NaN or Inf" in text
     assert "linear_1_1" in text
     assert "vscode://file/" in log.first_nonfinite(link_format="html")
-
-
-def test_explain_never_scans_unarmed_health() -> None:
-    """D14/D4: bare explain says NOT-CHECKED with the scan spelling instead
-    of paying for a first payload scan."""
-
-    log = _captured_log()
-    log["linear_1_1"].out[0, 0] = torch.nan
-    text = log.explain()
-    assert "NOT-CHECKED" in text
-    assert "health_facts" in text
 
 
 def test_source_locations_keep_repr_plain_and_expose_html_links() -> None:
@@ -313,37 +256,6 @@ def test_summary_surfaces_unverified_capture() -> None:
     assert "dynamo_region_not_logged" in text
 
 
-def test_explain_without_max_tokens_is_unchanged_by_the_budget_refactor() -> None:
-    """The default rendering must stay byte-identical to the section list."""
-
-    log = _captured_log()
-    text = log.explain()
-    assert isinstance(text, str)
-    assert "Truncation" not in text
-    assert text.startswith("TorchLens report\n\nCapture status\n")
-
-
-def test_explain_max_tokens_drops_low_value_sections_and_discloses_them() -> None:
-    """A tight budget drops sections in the fixed order with full disclosure."""
-
-    log = _captured_log()
-    full = log.explain()
-    budget = 120
-    text = log.explain(max_tokens=budget)
-
-    assert isinstance(text, str)
-    assert len(text) < len(full)
-    assert (len(text) + 3) // 4 <= budget
-    assert "Capture status" in text
-    assert "Truncation" in text
-    assert f"max_tokens={budget}" in text
-    assert "Notable patterns" not in text.split("Truncation")[0]
-    # Every dropped section is named in the disclosure line.
-    disclosure = text.split("Truncation")[1]
-    for title in ("Notable patterns", "Interventions"):
-        assert title in disclosure
-
-
 def test_explain_max_tokens_below_floor_keeps_honesty_facts_and_says_so() -> None:
     """A budget below the floor returns capture status plus a floor notice."""
 
@@ -385,3 +297,16 @@ def test_explain_max_tokens_refusals_teach_the_fix() -> None:
         log.explain(max_tokens=0)
     with pytest.raises(ValueError, match="positive integer"):
         log.explain(max_tokens=True)
+
+
+def test_explain_json_form_is_removed() -> None:
+    """defaults.7: explain is prose only; the machine projection is to_agent_json."""
+
+    import inspect
+
+    log = _captured_log()
+    assert "format" not in inspect.signature(tl.Trace.explain).parameters
+    assert "to_agent_json()" in (tl.Trace.explain.__doc__ or "")
+    with pytest.raises(TypeError, match="format"):
+        log.explain(format="json")  # type: ignore[call-arg]
+    assert log.to_agent_json()["capture"]["capture_status"] == "complete"

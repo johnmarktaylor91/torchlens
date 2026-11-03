@@ -77,7 +77,7 @@ named code), `not yet proven` (False, refusal not yet pinned by a passing suite 
 | Explicit `random_seed=` | unsupported | `explicit_seed_unsupported` |
 | Trace options outside `module_identity_mode`, `grad_options` | unsupported | `trace_option_unsupported` |
 | `mx.compile` / `mx.grad` / `mx.vmap` wrappers as the traced entry | unsupported | `traced_transform_entry_unsupported` |
-| `grad_options=` together with `intervene=` or `halt=` | unsupported (capture them in separate calls) | `intervention_with_derived_grads_unsupported` |
+| `grad_options=` together with `intervene=` or `stop_after=` | unsupported (capture them in separate calls) | `intervention_with_derived_grads_unsupported` |
 | An intervention that returns a non-`mx.array` or changes shape or dtype | unsupported | `intervention_result_invalid` |
 | Ops outside the wrapped surface | flagged (`unwrapped_op_in_capture`) or refused under `unwrapped_policy("refuse")` | `unwrapped_op_in_capture` |
 | Arrays constructed inside the forward (`mx.array(...)`) | flagged as unwrapped (build constants outside the forward) | `unwrapped_op_in_capture` |

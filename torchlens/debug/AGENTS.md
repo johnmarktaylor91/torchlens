@@ -8,14 +8,20 @@ diagnostics (`param_health`, `grad_health`, `dtype_range`, `nonfinite_origin`,
 no module outside `debug/` re-exports them, so nothing below this package imports it
 back. `HealthReport` and `FlopsCrossCheck` are defined here but exported from `tl.report`.
 
-## The report object (U42.2; DOCUMENTED-UNSTABLE)
+## The report object (DOCUMENTED-UNSTABLE)
 - Every report-shaped result is a `tl.report.Report` (defined in
   `torchlens/_debug_report.py`, at the package root so `tl.report` and every
   report subclass can import it without importing this package): `report_type`, `subject`,
   `status`, `to_dict()`, `to_pandas()`, and `str()` = a bounded card (lead line,
   at most five findings, exact remainder, exits). Results with a house-voice
-  `__repr__` (`HealthReport`, `DTypeRangeReport`, `FindNanReport`, `ParamHealthReport`) keep
-  printing it (`_prints_repr = True`; the card is `report.card()`).
+  `__repr__` (`HealthReport`, `ParamHealthReport`) keep printing it
+  (`_prints_repr = True`; the card is `report.card()`). `FindNanReport` and
+  `DTypeRangeReport` keep a one-line `repr` but print the card.
+- Every finding that names an op also names the user's source line: a
+  `source_line` field or column (`"file:line"` from `_source_line(op)`, full
+  path) and ` at <file:line>` on the card line (`at_source`, path relative to
+  the working directory when the file is under it). Table cards route
+  `source_line` / `source_file:line` cells through `display_source_line`.
 - Subclasses state the lead through `_report_subject` / `_report_status` /
   `_report_findings` (optionally `_report_coverage`, `_report_severity_counts`,
   `_report_rows`). Do not add dataclass fields named `report_type`, `subject` or
@@ -71,8 +77,11 @@ back. `HealthReport` and `FlopsCrossCheck` are defined here but exported from `t
   `PartialTrace` and routes it through `_audit_partial_trace()`.
 
 ## _graph.py
-- `lineage(...)` -> `LineageReport`; `compare(...)` diffs two traces;
-  `dead_neurons(trace, dim=..., threshold=...)` scans saved activations.
+- `lineage(...)` -> `LineageReport`; `compare(...)` diffs two traces
+  (different devices compare on the CPU, different floating dtypes in the wider
+  dtype; only shape mismatches and unusable payloads are not compared, counted
+  on the card's coverage line);
+  `dead_neurons(trace, dim=..., max_activation=...)` scans saved activations.
 
 ## _dtype_range.py
 - `dtype_range(...)` -> `DTypeRangeReport`: overflow headroom, subnormal
@@ -81,7 +90,14 @@ back. `HealthReport` and `FlopsCrossCheck` are defined here but exported from `t
 ## _gradients.py
 - `grad_health(...)` builds a gradient-magnitude table (a tabular
   `Report`); its frame is an annotated empty frame with a message rather than
-  raising when grads are absent.
+  raising when grads are absent (the card prints that message: capture with
+  `CaptureOptions(save_grads=True)`, then `trace.backward(loss)`).
+- Loss scale: with no `grad_scale`/`grad_scales`, `_grad_scale_proof.unscaled_proof`
+  decides from the trace whether the backward provably ran unscaled (no op under
+  autocast, no Mul/Div/custom autograd node between the loss and the model
+  output, no `gradient=` seed). Proven: scale 1.0, provenance `proven_unscaled`.
+  Otherwise provenance stays `unknown` and magnitude verdicts read `unknown`
+  (the AMP guard). The card's coverage line names the scale used.
 
 ## _infer_input_shape.py
 - `guess_input_shape(model, **kwargs)` -> `GuessInputShapeReport`; iterative

@@ -54,7 +54,16 @@ class _ActivationLookup(Protocol[ActivationT]):
 
 
 class TraceLike:
-    """Small shared base for uncooked and cooked capture projections."""
+    """Small shared base for uncooked and cooked capture projections.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> isinstance(trace, TraceLike)
+    True
+    >>> isinstance(trace.op_events, tuple)
+    True
+    """
 
     @property
     def event_stream(self) -> CaptureEvents | None:
