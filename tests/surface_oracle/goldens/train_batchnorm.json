@@ -4848,6 +4848,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|add||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -5455,6 +5456,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|batchnorm||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -6036,6 +6038,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|buffer||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -6508,6 +6511,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|buffer||2",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -6999,6 +7003,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|buffer||3",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -7478,6 +7483,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|buffer||4",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -7974,6 +7980,7 @@
      "relu_1_3",
      "buffer_6"
     ],
+    "graph.site_key": "s1|bn|buffer||5",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -8504,6 +8511,7 @@
      "relu_1_3",
      "buffer_5"
     ],
+    "graph.site_key": "s1|bn|buffer||6",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -9000,6 +9008,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1||input||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -9507,6 +9516,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1||output||1",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -10054,6 +10064,7 @@
      "buffer_5",
      "buffer_6"
     ],
+    "graph.site_key": "s1||relu||1",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -16694,6 +16705,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|add||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -17301,6 +17313,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|batchnorm||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -17882,6 +17895,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|buffer||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -18354,6 +18368,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|buffer||2",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -18845,6 +18860,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|buffer||3",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -19324,6 +19340,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|buffer||4",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -19820,6 +19837,7 @@
      "relu_1_3",
      "buffer_6"
     ],
+    "graph.site_key": "s1|bn|buffer||5",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -20350,6 +20368,7 @@
      "relu_1_3",
      "buffer_5"
     ],
+    "graph.site_key": "s1|bn|buffer||6",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -20846,6 +20865,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1||input||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -21353,6 +21373,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1||output||1",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -21900,6 +21921,7 @@
      "buffer_5",
      "buffer_6"
     ],
+    "graph.site_key": "s1||relu||1",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -28527,6 +28549,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|add||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -29134,6 +29157,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|batchnorm||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -29715,6 +29739,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|buffer||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -30187,6 +30212,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|buffer||2",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -30678,6 +30704,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|buffer||3",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -31157,6 +31184,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|buffer||4",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -31653,6 +31681,7 @@
      "relu_1_3",
      "buffer_6"
     ],
+    "graph.site_key": "s1|bn|buffer||5",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -32183,6 +32212,7 @@
      "relu_1_3",
      "buffer_5"
     ],
+    "graph.site_key": "s1|bn|buffer||6",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -32679,6 +32709,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1||input||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -33186,6 +33217,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1||output||1",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -33733,6 +33765,7 @@
      "buffer_5",
      "buffer_6"
     ],
+    "graph.site_key": "s1||relu||1",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -40313,6 +40346,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|add||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -40920,6 +40954,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|batchnorm||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -41501,6 +41536,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|buffer||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -41973,6 +42009,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|buffer||2",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -42464,6 +42501,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|buffer||3",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -42943,6 +42981,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|buffer||4",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -43439,6 +43478,7 @@
      "relu_1_3",
      "buffer_6"
     ],
+    "graph.site_key": "s1|bn|buffer||5",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -43969,6 +44009,7 @@
      "relu_1_3",
      "buffer_5"
     ],
+    "graph.site_key": "s1|bn|buffer||6",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -44465,6 +44506,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1||input||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -44972,6 +45014,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1||output||1",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -45519,6 +45562,7 @@
      "buffer_5",
      "buffer_6"
     ],
+    "graph.site_key": "s1||relu||1",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -52141,6 +52185,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|add||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -52721,6 +52766,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|batchnorm||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -53250,6 +53296,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|buffer||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -53719,6 +53766,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|buffer||2",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -54195,6 +54243,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|buffer||3",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -54671,6 +54720,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|bn|buffer||4",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -55164,6 +55214,7 @@
      "relu_1_3",
      "buffer_6"
     ],
+    "graph.site_key": "s1|bn|buffer||5",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -55674,6 +55725,7 @@
      "relu_1_3",
      "buffer_5"
     ],
+    "graph.site_key": "s1|bn|buffer||6",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -56150,6 +56202,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1||input||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -56641,6 +56694,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1||output||1",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -57153,6 +57207,7 @@
      "buffer_5",
      "buffer_6"
     ],
+    "graph.site_key": "s1||relu||1",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,

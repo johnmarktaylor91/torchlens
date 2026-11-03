@@ -17246,6 +17246,7 @@
     "graph.siblings": [
      "transpose_1_1"
     ],
+    "graph.site_key": "s1|encoder|add||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -17813,6 +17814,7 @@
     "graph.siblings": [
      "linear_3_29"
     ],
+    "graph.site_key": "s1|encoder|add||2",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -18395,6 +18397,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|contiguous||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -18989,6 +18992,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.dropout1|dropout||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -19594,6 +19598,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.dropout|dropout||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -20215,6 +20220,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.dropout2|dropout||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -20810,6 +20816,7 @@
      "getitem_2_9",
      "getitem_3_10"
     ],
+    "graph.site_key": "s1|encoder/encoder.self_attn|getitem||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -21392,6 +21399,7 @@
      "getitem_1_8",
      "getitem_3_10"
     ],
+    "graph.site_key": "s1|encoder/encoder.self_attn|getitem||2",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -21974,6 +21982,7 @@
      "getitem_1_8",
      "getitem_2_9"
     ],
+    "graph.site_key": "s1|encoder/encoder.self_attn|getitem||3",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -22481,6 +22490,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1||input||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -23073,6 +23083,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.norm1|layernorm||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -23741,6 +23752,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.norm2|layernorm||1",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -24380,6 +24392,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|linear||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -24996,6 +25009,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|linear||2",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -25603,6 +25617,7 @@
     "graph.siblings": [
      "add_2_34"
     ],
+    "graph.site_key": "s1|encoder/encoder.linear1|linear||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -26220,6 +26235,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.linear2|linear||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -26801,6 +26817,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1||output||1",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -27377,6 +27394,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|permute||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -27952,6 +27970,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder|relu||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -28537,6 +28556,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|reshape||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -29143,6 +29163,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|scaleddotproductattention||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -29767,6 +29788,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|squeeze||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -30361,6 +30383,7 @@
     "graph.siblings": [
      "add_1_27"
     ],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -30951,6 +30974,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||2",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -31555,6 +31579,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||3",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -32149,6 +32174,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||4",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -32743,6 +32769,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||5",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -33329,6 +33356,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||6",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -33946,6 +33974,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|unflatten||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -34537,6 +34566,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|unsqueeze||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -35132,6 +35162,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -35722,6 +35753,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||2",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -36312,6 +36344,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||3",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -36909,6 +36942,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||4",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -37510,6 +37544,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||5",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -38111,6 +38146,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||6",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -38701,6 +38737,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||7",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -61234,6 +61271,7 @@
     "graph.siblings": [
      "transpose_1_1"
     ],
+    "graph.site_key": "s1|encoder|add||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -61801,6 +61839,7 @@
     "graph.siblings": [
      "linear_3_29"
     ],
+    "graph.site_key": "s1|encoder|add||2",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -62383,6 +62422,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|contiguous||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -62977,6 +63017,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.dropout1|dropout||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -63582,6 +63623,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.dropout|dropout||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -64203,6 +64245,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.dropout2|dropout||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -64798,6 +64841,7 @@
      "getitem_2_9",
      "getitem_3_10"
     ],
+    "graph.site_key": "s1|encoder/encoder.self_attn|getitem||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -65380,6 +65424,7 @@
      "getitem_1_8",
      "getitem_3_10"
     ],
+    "graph.site_key": "s1|encoder/encoder.self_attn|getitem||2",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -65962,6 +66007,7 @@
      "getitem_1_8",
      "getitem_2_9"
     ],
+    "graph.site_key": "s1|encoder/encoder.self_attn|getitem||3",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -66469,6 +66515,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1||input||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -67061,6 +67108,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.norm1|layernorm||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -67729,6 +67777,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.norm2|layernorm||1",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -68368,6 +68417,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|linear||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -68984,6 +69034,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|linear||2",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -69591,6 +69642,7 @@
     "graph.siblings": [
      "add_2_34"
     ],
+    "graph.site_key": "s1|encoder/encoder.linear1|linear||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -70208,6 +70260,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.linear2|linear||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -70789,6 +70842,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1||output||1",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -71365,6 +71419,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|permute||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -71940,6 +71995,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder|relu||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -72525,6 +72581,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|reshape||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -73131,6 +73188,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|scaleddotproductattention||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -73755,6 +73813,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|squeeze||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -74349,6 +74408,7 @@
     "graph.siblings": [
      "add_1_27"
     ],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -74939,6 +74999,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||2",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -75543,6 +75604,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||3",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -76137,6 +76199,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||4",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -76731,6 +76794,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||5",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -77317,6 +77381,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||6",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -77934,6 +77999,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|unflatten||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -78525,6 +78591,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|unsqueeze||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -79120,6 +79187,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -79710,6 +79778,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||2",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -80300,6 +80369,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||3",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -80897,6 +80967,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||4",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -81498,6 +81569,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||5",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -82099,6 +82171,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||6",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -82689,6 +82762,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||7",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -105285,6 +105359,7 @@
     "graph.siblings": [
      "transpose_1_1"
     ],
+    "graph.site_key": "s1|encoder|add||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -105852,6 +105927,7 @@
     "graph.siblings": [
      "linear_3_29"
     ],
+    "graph.site_key": "s1|encoder|add||2",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -106434,6 +106510,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|contiguous||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -107028,6 +107105,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.dropout1|dropout||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -107633,6 +107711,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.dropout|dropout||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -108254,6 +108333,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.dropout2|dropout||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -108849,6 +108929,7 @@
      "getitem_2_9",
      "getitem_3_10"
     ],
+    "graph.site_key": "s1|encoder/encoder.self_attn|getitem||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -109431,6 +109512,7 @@
      "getitem_1_8",
      "getitem_3_10"
     ],
+    "graph.site_key": "s1|encoder/encoder.self_attn|getitem||2",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -110013,6 +110095,7 @@
      "getitem_1_8",
      "getitem_2_9"
     ],
+    "graph.site_key": "s1|encoder/encoder.self_attn|getitem||3",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -110520,6 +110603,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1||input||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -111112,6 +111196,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.norm1|layernorm||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -111780,6 +111865,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.norm2|layernorm||1",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -112419,6 +112505,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|linear||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -113035,6 +113122,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|linear||2",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -113642,6 +113730,7 @@
     "graph.siblings": [
      "add_2_34"
     ],
+    "graph.site_key": "s1|encoder/encoder.linear1|linear||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -114259,6 +114348,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.linear2|linear||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -114840,6 +114930,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1||output||1",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -115416,6 +115507,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|permute||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -115991,6 +116083,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder|relu||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -116576,6 +116669,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|reshape||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -117182,6 +117276,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|scaleddotproductattention||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -117806,6 +117901,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|squeeze||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -118400,6 +118496,7 @@
     "graph.siblings": [
      "add_1_27"
     ],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -118990,6 +119087,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||2",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -119594,6 +119692,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||3",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -120188,6 +120287,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||4",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -120782,6 +120882,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||5",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -121368,6 +121469,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||6",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -121985,6 +122087,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|unflatten||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -122576,6 +122679,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|unsqueeze||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -123171,6 +123275,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -123761,6 +123866,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||2",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -124351,6 +124457,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||3",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -124948,6 +125055,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||4",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -125549,6 +125657,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||5",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -126150,6 +126259,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||6",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -126740,6 +126850,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||7",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -149279,6 +149390,7 @@
     "graph.siblings": [
      "transpose_1_1"
     ],
+    "graph.site_key": "s1|encoder|add||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -149814,6 +149926,7 @@
     "graph.siblings": [
      "linear_3_29"
     ],
+    "graph.site_key": "s1|encoder|add||2",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -150364,6 +150477,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|contiguous||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -150934,6 +151048,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.dropout1|dropout||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -151512,6 +151627,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.dropout|dropout||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -152106,6 +152222,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.dropout2|dropout||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -152678,6 +152795,7 @@
      "getitem_2_9",
      "getitem_3_10"
     ],
+    "graph.site_key": "s1|encoder/encoder.self_attn|getitem||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -153240,6 +153358,7 @@
      "getitem_1_8",
      "getitem_3_10"
     ],
+    "graph.site_key": "s1|encoder/encoder.self_attn|getitem||2",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -153802,6 +153921,7 @@
      "getitem_1_8",
      "getitem_2_9"
     ],
+    "graph.site_key": "s1|encoder/encoder.self_attn|getitem||3",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -154289,6 +154409,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1||input||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -154871,6 +154992,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.norm1|layernorm||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -155506,6 +155628,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.norm2|layernorm||1",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -156115,6 +156238,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|linear||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -156704,6 +156828,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|linear||2",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -157285,6 +157410,7 @@
     "graph.siblings": [
      "add_2_34"
     ],
+    "graph.site_key": "s1|encoder/encoder.linear1|linear||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -157875,6 +158001,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.linear2|linear||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -158421,6 +158548,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1||output||1",
     "has_children": false,
     "has_frozen_params": false,
     "has_grad": false,
@@ -158961,6 +159089,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|permute||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -159509,6 +159638,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder|relu||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -160070,6 +160200,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|reshape||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -160646,6 +160777,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|scaleddotproductattention||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -161213,6 +161345,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|squeeze||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -161781,6 +161914,7 @@
     "graph.siblings": [
      "add_1_27"
     ],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -162346,6 +162480,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||2",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -162923,6 +163058,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||3",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -163492,6 +163628,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||4",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -164061,6 +164198,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||5",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -164622,6 +164760,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|transpose||6",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -165214,6 +165353,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|unflatten||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -165781,6 +165921,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|unsqueeze||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -166350,6 +166491,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||1",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -166913,6 +167055,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||2",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -167476,6 +167619,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||3",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -168045,6 +168189,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||4",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -168617,6 +168762,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||5",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -169189,6 +169335,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||6",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,
@@ -169751,6 +169898,7 @@
      ]
     },
     "graph.siblings": [],
+    "graph.site_key": "s1|encoder/encoder.self_attn|view||7",
     "has_children": true,
     "has_frozen_params": false,
     "has_grad": false,

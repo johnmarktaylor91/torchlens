@@ -1772,3 +1772,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: ad0b5e78b1f577b423e4340b39dabd1d00df6c85 (dirty)
 recorded: 2026-11-03T08:04:43.458201+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rulings-gap-5 r3: Op.site_key moved to Op.graph.site_key (JMT 2026-11-03 RULINGS.md:13); goldens regenerated after the record_member fixes
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: fb658943d590ed98e361e882a3e351915630e12f (dirty)
+recorded: 2026-11-03T20:13:46.480130+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rulings-gap-5 r3: Op.site_key moved to Op.graph.site_key (JMT 2026-11-03 RULINGS.md:13); goldens regenerated after the record_member fixes
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: fb658943d590ed98e361e882a3e351915630e12f (dirty)
+recorded: 2026-11-03T20:13:46.504885+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rulings-gap-5 r3: Op.site_key moved to Op.graph.site_key (JMT 2026-11-03 RULINGS.md:13); goldens regenerated after the record_member fixes
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: fb658943d590ed98e361e882a3e351915630e12f (dirty)
+recorded: 2026-11-03T20:13:46.528546+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rulings-gap-5 r3: Op.site_key moved to Op.graph.site_key (JMT 2026-11-03 RULINGS.md:13); goldens regenerated after the record_member fixes
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: fb658943d590ed98e361e882a3e351915630e12f (dirty)
+recorded: 2026-11-03T20:13:46.551374+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rulings-gap-5 r3: Op.site_key moved to Op.graph.site_key (JMT 2026-11-03 RULINGS.md:13); goldens regenerated after the record_member fixes
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: fb658943d590ed98e361e882a3e351915630e12f (dirty)
+recorded: 2026-11-03T20:13:46.577521+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: rulings-gap-5 r3: Op.site_key moved to Op.graph.site_key (JMT 2026-11-03 RULINGS.md:13); goldens regenerated after the record_member fixes
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: fb658943d590ed98e361e882a3e351915630e12f (dirty)
+recorded: 2026-11-03T20:13:46.607005+00:00
