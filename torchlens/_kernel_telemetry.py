@@ -1,10 +1,12 @@
 """Detachable CUDA kernel telemetry for the gated ATen execution profile.
 
 This module is intentionally not imported by the TorchLens package or capture
-core. Importing it installs the documented-unstable ``gpu_kernels``
-descriptors, while the private profiling adapter instruments the existing ATen
-observer only for its own scope. Removing this module therefore leaves the ATen
-profile and every non-telemetry capture path untouched.
+core. The private profiling adapter instruments the existing ATen observer only
+for its own scope and stores its rows in the private kernel annotation that
+artifacts persist. No public read surface exists in this release (``Op`` and
+``AtenOp`` refuse ``gpu_kernels`` typed); ``_aten_gpu_kernels`` and
+``_op_gpu_kernels`` are the private readers. Removing this module therefore
+leaves the ATen profile and every non-telemetry capture path untouched.
 """
 
 from __future__ import annotations
@@ -324,17 +326,6 @@ def _op_gpu_kernels(op: Op) -> tuple[KernelLaunch, ...]:
     return tuple(launches)
 
 
-def _install_gpu_kernel_properties() -> None:
-    """Install the two documented-unstable descriptors exactly once."""
-
-    for owner, getter in ((AtenOp, _aten_gpu_kernels), (Op, _op_gpu_kernels)):
-        existing = vars(owner).get("gpu_kernels")
-        if existing is None:
-            owner.gpu_kernels = property(getter)  # type: ignore[union-attr]
-        elif not isinstance(existing, property) or existing.fget is not getter:
-            raise RuntimeError(f"{owner.__name__}.gpu_kernels is already owned by another lane")
-
-
 @contextmanager
 def _instrument_aten_markers() -> Iterator[dict[str, int]]:
     """Temporarily bracket redispatched ATen calls with unique profiler markers.
@@ -501,6 +492,5 @@ def _profile_trace_with_cuda_kernels(factory: Callable[[], Any]) -> Any:
 # KernelLaunch/_TelemetryPayload declare FieldPolicy.KEEP directly and the
 # private annotations section persists plainly, validated at load by
 # torchlens/_io/forgery_validation.py.
-_install_gpu_kernel_properties()
 
 __all__ = ["KernelLaunch"]

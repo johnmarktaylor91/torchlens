@@ -18,6 +18,7 @@ lane's legitimate schema-owner ClassVars).
 from __future__ import annotations
 
 import csv
+import importlib
 import types
 from pathlib import Path
 
@@ -169,26 +170,25 @@ def test_class_member_license_channels_are_alive() -> None:
     assert (
         classify_class_member(torchlens.Trace, "_FIELD_FORK_POLICY", "torchlens") == MODULE_ASSIGNED
     )
-    assert rows[("Op", "gpu_kernels")] == INSTALLED_BY_PACKAGE
+    assert ("Op", "gpu_kernels") not in rows
     assert rows[("Layer", "flops_forward")] == INSTALLED_BY_PACKAGE
     assert rows[("Flops", "bit_length")] == INHERITED_EXTERNAL
 
 
 def test_class_walk_is_import_state_independent() -> None:
-    """The class walk normalizes import state (train-bounce regression pin).
+    """The class walk does not depend on which private modules were imported.
 
-    ``torchlens._kernel_telemetry`` installs ``gpu_kernels`` on ``Op``/
-    ``AtenOp`` at import time; without normalization the walk counted
-    differently depending on which tests imported it first (green alone,
-    red in a smoke session). The walk must always see the opt-in members,
-    so the class-layer denominator is order-independent.
+    ``torchlens._kernel_telemetry`` used to install ``gpu_kernels`` on
+    ``Op``/``AtenOp`` at import time, which made the class-layer denominator
+    test-order-dependent (the T02 train-bounce failure mode). The property
+    was removed; importing the module must leave the walk unchanged.
     """
 
-    rows = frozenset(walk_class_surface(torchlens))
-    assert ("Op", "gpu_kernels") in rows and ("AtenOp", "gpu_kernels") in rows, (
-        "the class walk no longer normalizes import state; its denominator "
-        "is test-order-dependent again (the T02 train-bounce failure mode)"
-    )
+    before = frozenset(walk_class_surface(torchlens))
+    importlib.import_module("torchlens._kernel_telemetry")
+    after = frozenset(walk_class_surface(torchlens))
+    assert before == after
+    assert ("Op", "gpu_kernels") not in after and ("AtenOp", "gpu_kernels") not in after
 
 
 def test_declared_gate_is_cited_not_forked() -> None:

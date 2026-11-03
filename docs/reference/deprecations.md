@@ -156,6 +156,13 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `Trace.replay_from()` | `Trace.push_from()` | removed |
 | `Trace.rerun()` | `Trace.run()` | removed |
 
+## Record Members
+
+| Old name | New name | Status |
+| --- | --- | --- |
+| `Op.gpu_kernels` | none in this release (a kernel-recording switch is planned later; artifacts keep the kernel annotation) | removed |
+| `AtenOp.gpu_kernels` | none in this release (a kernel-recording switch is planned later; artifacts keep the kernel annotation) | removed |
+
 ## Intervention, Sweep, And Observer Aliases
 
 | Old name | New name | Status |

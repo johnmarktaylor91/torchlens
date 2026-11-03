@@ -285,8 +285,9 @@ Key entry points:
   model output. Doc of record:
   `docs/reference/attribution.md`; glossary carries the unstable index.
 - Kernel telemetry (optional CUDA/CUPTI adapter, DOCUMENTED-UNSTABLE):
-  importing `torchlens._kernel_telemetry` installs `gpu_kernels` views over
-  the ATen execution profile (recorded by `CaptureOptions(aten_ops=True)`, served by
+  `torchlens._kernel_telemetry` correlates CUDA launches to rows of
+  the ATen execution profile (no public reader: `Op.gpu_kernels` and `AtenOp.gpu_kernels`
+  are removed and refuse typed; `_aten_gpu_kernels` / `_op_gpu_kernels` are the private readers) (recorded by `CaptureOptions(aten_ops=True)`, served by
   `Trace.aten_ops` / `Op.aten_ops`, read in `_completeness_finalize._resolve_witness_requests`
   from the trace's `_options_aten_ops` session knob); rows persist as of tlspec v8 (`FieldPolicy.KEEP`)
   and counts are lower bounds wherever `mode_paused_interior` is non-empty.

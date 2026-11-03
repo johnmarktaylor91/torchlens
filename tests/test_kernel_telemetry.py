@@ -32,8 +32,6 @@ _REAL_CUDA_ROWS = (
 )
 _DOCUMENTED_UNSTABLE_TOKENS = {
     "KernelLaunch",
-    "AtenOp.gpu_kernels",
-    "Op.gpu_kernels",
     "launch_name",
     "device",
     "stream",
@@ -261,8 +259,11 @@ def test_cpu_host_records_unavailable_views_and_drop_gated_annotation(tmp_path: 
     )
     primitive_rows = trace._primitive_op_profile.primitive_ops
     assert primitive_rows
-    assert all(row.gpu_kernels[0].attribution_status == "unavailable" for row in primitive_rows)
-    assert trace.ops[0].gpu_kernels[0].attribution_status == "unavailable"
+    assert all(
+        telemetry._aten_gpu_kernels(row)[0].attribution_status == "unavailable"
+        for row in primitive_rows
+    )
+    assert telemetry._op_gpu_kernels(trace.ops[0])[0].attribution_status == "unavailable"
     assert set(_REAL_CUDA_ROWS) == {
         "one ATen call to many kernels",
         "several ATen calls to one fused launch",
@@ -279,7 +280,7 @@ def test_cpu_host_records_unavailable_views_and_drop_gated_annotation(tmp_path: 
     # tlspec v8: the telemetry annotation section persists on a plain save.
     assert "_kernel_telemetry" in loaded.annotations
     telemetry._bind_trace_telemetry(loaded)
-    assert loaded.ops[0].gpu_kernels[0].attribution_status == "unavailable"
+    assert telemetry._op_gpu_kernels(loaded.ops[0])[0].attribution_status == "unavailable"
 
 
 def test_kernel_rows_persist_and_registrations_are_retired() -> None:
@@ -362,9 +363,40 @@ def test_real_cuda_cupti_correlation_matrix() -> None:
     launches = [
         launch
         for row in trace._primitive_op_profile.primitive_ops
-        for launch in row.gpu_kernels
+        for launch in telemetry._aten_gpu_kernels(row)
         if launch.attribution_status == "attributed"
     ]
     assert launches
     assert all(launch.runtime_correlation is not None for launch in launches)
     assert all(launch.duration is not None and launch.duration >= 0 for launch in launches)
+
+
+def test_gpu_kernels_is_removed_and_refuses_typed() -> None:
+    """``Op``/``AtenOp.gpu_kernels`` left the public surface (ruled removal).
+
+    The saved kernel annotation stays in the artifact format; the public
+    property refuses with the typed redirect, and importing the telemetry
+    module no longer installs it.
+    """
+
+    from torchlens._errors import FacadeTeachingError
+
+    trace = telemetry._profile_trace_with_cuda_kernels(
+        lambda: tl.trace(
+            _CudaTelemetryModel(),
+            torch.ones(2, 2),
+            capture=tl.options.CaptureOptions(aten_ops=True),
+        )
+    )
+    aten_row = trace._primitive_op_profile.primitive_ops[0]
+    for owner, record in (("Op", trace.ops[0]), ("AtenOp", aten_row)):
+        assert "gpu_kernels" not in vars(type(record))
+        assert not hasattr(record, "gpu_kernels")
+        with pytest.raises(FacadeTeachingError) as caught:
+            _ = record.gpu_kernels
+        assert caught.value.fields["code"] == "facade_redirect"
+        assert f"{owner}.gpu_kernels was removed" in str(caught.value)
+    with pytest.raises(AttributeError) as plain:
+        _ = trace.ops[0].no_such_member
+    assert not isinstance(plain.value, FacadeTeachingError)
+    assert "_kernel_telemetry" in trace.annotations

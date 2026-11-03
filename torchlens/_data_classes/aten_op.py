@@ -8,6 +8,7 @@ from typing import Any, ClassVar
 from .._constants import PRIMITIVE_OP_FIELD_ORDER
 from .._io import TLSPEC_VERSION, FieldPolicy, read_tlspec_version
 from .._trace_core.record_rows import install_record_facade as _install_record_facade
+from ._removed_members import RemovedMemberMixin
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 
 
@@ -67,7 +68,7 @@ class _PrimitiveOpProfile:
 
 
 @dataclass(eq=False, kw_only=True)
-class AtenOp:
+class AtenOp(RemovedMemberMixin):
     """One value-free ATen dispatcher call observed during capture."""
 
     label: str

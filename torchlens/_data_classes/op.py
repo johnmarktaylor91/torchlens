@@ -103,7 +103,7 @@ from ..intervention.types import (
     EdgeUseRecord,
     FunctionRegistryKey,
 )
-from . import _doors, _labels, _op_cost, _op_relations, _op_save
+from . import _doors, _labels, _op_cost, _op_relations, _op_save, _removed_members
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
 from ._layer_accessors import OpAccessor
@@ -1174,7 +1174,7 @@ if TYPE_CHECKING:
     from .trace import Trace
 
 
-class Op(OpAtenMixin, _SelectionOperand):
+class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
     """Metadata for a single tensor operation (one pass of one layer).
 
     Constructed from a dict whose keys must exactly match

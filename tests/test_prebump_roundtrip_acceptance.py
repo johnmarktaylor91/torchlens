@@ -503,7 +503,7 @@ def test_l3_kernel_telemetry_family_roundtrip(tmp_path) -> None:
     loaded = _plain_roundtrip(trace, tmp_path, "telemetry")
     assert _persisted_eq(loaded.annotations["_kernel_telemetry"], live_payload)
     telemetry._bind_trace_telemetry(loaded)
-    assert loaded.ops[0].gpu_kernels[0].attribution_status in (
+    assert telemetry._op_gpu_kernels(loaded.ops[0])[0].attribution_status in (
         "unavailable",
         "exact",
         "ambiguous",
