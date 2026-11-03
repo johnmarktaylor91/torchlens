@@ -13,6 +13,7 @@ from .._capture_state_helpers import unwrap_compiled_model
 from .._deprecations import MISSING, MissingType
 from .._errors import KeywordConflictError
 from .._input_coerce import _coerce_input_args
+from .._literals import _ActivationPostfunc, _GradientPostfunc
 from .._robustness import check_model_and_input_variants
 from ..backends.registry import (
     TORCH_BACKEND_NAME,
@@ -22,7 +23,6 @@ from ..backends.registry import (
 )
 from ..intervention.predicates import InterventionPredicate
 from ..options import StorageOptions
-from ..types import _ActivationPostfunc, _GradientPostfunc
 from ._generation import GenerationRecording, enrich_generation, record_generation
 from ._recorder import Recorder
 from ._validation import validate_postprocess

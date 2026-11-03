@@ -25,7 +25,9 @@ from dataclasses import dataclass
 
 from ._architecture import LAYER_ORDER, layer_for_module
 
-__tl_layer__ = "L0"
+# FACADE role (Rule F): the public-surface walker imports the package root
+# to enumerate it, which no numbered layer may do.
+__tl_layer__ = "FACADE"
 
 #: Layer -> derived product role (POWER is rendered, never stored).
 _LAYER_ROLES: dict[str, str] = {

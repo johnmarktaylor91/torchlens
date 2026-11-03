@@ -40,6 +40,7 @@ from ..._input_coerce import (
     _reject_non_mapping_input_kwargs,
 )
 from ..._ir.selector_eval import looks_like_finalized_label
+from ..._literals import _ActivationPostfunc, _GradientPostfunc
 from ..._options_validation import _validate_output_device
 from ..._robustness import check_model_and_input_variants
 from ..._runnable.state_live import capture_observer_bracket
@@ -72,7 +73,6 @@ from ...options import (
     merge_streaming_options,
 )
 from ...recording.options import PredicateFn
-from ...types import _ActivationPostfunc, _GradientPostfunc
 from .._episode_coupling import CouplingSession, rule_identity_of
 from .._episode_join import armed_capture
 from .._episode_ledger import (

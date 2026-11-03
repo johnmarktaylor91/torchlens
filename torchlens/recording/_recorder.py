@@ -29,11 +29,11 @@ from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.trace import Trace
 from .._deprecations import MISSING, MissingType
 from .._errors import CaptureNotActiveError, KeywordConflictError, original_exception
+from .._literals import _ActivationPostfunc, _GradientPostfunc
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from .._utils._torch_compat import get_fsdp_wrapper_type
 from ..intervention.predicates import InterventionPredicate
 from ..options import StorageOptions
-from ..types import _ActivationPostfunc, _GradientPostfunc
 from ._halt import StopSignal
 from ._recorder_streaming import _rank_prefixed_streaming_options
 from ._validation import validate_recording_options

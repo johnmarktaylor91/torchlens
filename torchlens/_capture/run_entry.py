@@ -31,6 +31,8 @@ from .._ir import ParentEdge
 from .._ir.op_record import amend_graph_edge_insertion
 from .._literals import (
     OutputDeviceLiteral,
+    _ActivationPostfunc,
+    _GradientPostfunc,
 )
 from .._save_budget import SaveBudgetExceededError, SaveBudgetOption
 from .._utils.tensor_utils import SaveMode
@@ -41,7 +43,6 @@ from ..backends.torch.bound_root import (
 from ..intervention.predicates import InterventionPredicate
 from ..recording.exceptions import PredicateError
 from ..recording.options import HaltPredicateFn, PredicateFn
-from ..types import _ActivationPostfunc, _GradientPostfunc
 from ._run_setup import (
     _configure_predicate_options,
     _construct_trace,

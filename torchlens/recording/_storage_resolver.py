@@ -17,7 +17,7 @@ from .exceptions import InvalidStorageError, PredicateError
 from .types import CaptureSpec, RecordContext, StorageIntent
 
 if TYPE_CHECKING:
-    from ..types import _ActivationPostfunc
+    from .._literals import _ActivationPostfunc
 
 _INTEGER_DTYPES = {
     torch.int8,

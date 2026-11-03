@@ -9,9 +9,9 @@ from typing import Any, Final, Literal, get_args
 from .._deprecations import MISSING, MissingType
 from .._errors import InvalidArgumentError
 from .._ir.predicate import RetroactiveCaptureDecision
+from .._literals import _ActivationPostfunc, _GradientPostfunc
 from ..intervention.predicates import InterventionPredicate
 from ..options import StorageOptions
-from ..types import _ActivationPostfunc, _GradientPostfunc
 from .types import CaptureSpec, GradRecordContext, RecordContext
 
 CaptureDecision = bool | CaptureSpec | None

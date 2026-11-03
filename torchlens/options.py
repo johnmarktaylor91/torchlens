@@ -25,6 +25,7 @@ from ._literals import (
     CollapseLiteral,
     FoldRepeatsLiteral,
     OutputDeviceLiteral,
+    SaveBudgetOption,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
     VisModeLiteral,
@@ -50,7 +51,6 @@ from ._options_validation import (
     _validate_node_style,
     _validate_visualization_flag_fields,
 )
-from ._save_budget import SaveBudgetOption
 from ._vocab.node_spec import NodeSpec
 
 if TYPE_CHECKING:

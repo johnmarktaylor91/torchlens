@@ -41,6 +41,7 @@ from typing import Any, TypeGuard
 import torch
 
 from ._errors import InvalidArgumentError
+from ._literals import SaveBudgetOption
 from ._memory_probes import (  # noqa: F401  (``_available_host_bytes`` is read by diagnostics)
     _available_host_bytes,
     available_device_bytes,
@@ -63,8 +64,6 @@ __all__ = [
     "resolve_save_budget",
 ]
 
-SaveBudgetOption = str | int | float | None
-"""Accepted ``save_budget`` spellings: ``"auto"``, a fraction, bytes, or ``None``."""
 
 DEFAULT_SAVE_BUDGET_FRACTION = 0.5
 """Fraction of a device's *available* memory the ``"auto"`` budget allows.
