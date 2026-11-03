@@ -14,7 +14,26 @@ import copy
 from collections.abc import Callable, Mapping
 from typing import Any
 
-__all__ = ("install_cooked_inventory", "install_run_facts", "recording_projection_inventory")
+__all__ = (
+    "capture_identity_facts",
+    "install_cooked_inventory",
+    "install_run_facts",
+    "recording_projection_inventory",
+)
+
+#: Capture-identity facts an exhaustive capture stamps on its Trace at setup
+#: (``_run_setup._stamp_identity_and_sinks``); a cooked Trace carries the same
+#: ones so the rerun/append identity gate and the artifact validators read the
+#: capture's facts, never a cook-time guess.
+IDENTITY_FACT_ATTRS: tuple[str, ...] = (
+    "_provenance_model_object_id",
+    "_source_class_qualname",
+    "_provenance_param_hash_quick",
+    "_provenance_param_hash_full",
+    "_provenance_root_entry_point",
+    "_provenance_input_object_id",
+    "_provenance_input_signature_hash",
+)
 
 
 def recording_projection_inventory(
@@ -38,6 +57,12 @@ def recording_projection_inventory(
     return records, param_logs, call_site_classes
 
 
+def capture_identity_facts(trace: Any) -> dict[str, Any]:
+    """Snapshot the identity facts a capture stamped on its Trace shell (absent ones ``None``)."""
+
+    return {name: trace.__dict__.get(name) for name in IDENTITY_FACT_ATTRS}
+
+
 def install_run_facts(trace: Any, trace_facts: Mapping[str, Any]) -> None:
     """Copy the sealed run facts a cooked Trace needs before postprocessing."""
 
@@ -50,6 +75,13 @@ def install_run_facts(trace: Any, trace_facts: Mapping[str, Any]) -> None:
     trace._source_model_ref = trace_facts["source_model_ref"]
     trace._options_seed = trace_facts["random_seed"]
     trace._raw_graph_ws.layer_counter = int(trace_facts["layer_counter"])
+    for name, value in dict(trace_facts.get("identity_facts") or {}).items():
+        setattr(trace, name, value)
+    # No completeness witness ran over a predicate pass, so the cooked Trace
+    # makes no verification claim (the same ``None`` a value-free exhaustive
+    # capture carries), never the missing-attribute crash of an unset slot.
+    trace._provenance_verified = None
+    trace._provenance_verification_reason = None
 
 
 def install_cooked_inventory(
@@ -75,3 +107,40 @@ def install_cooked_inventory(
     call_site_classes = trace_facts.get("call_site_classes")
     if call_site_classes:
         trace._raw_graph_ws._call_site_classes = dict(call_site_classes)
+    _install_layers_with_params(trace)
+
+
+def _install_layers_with_params(trace: Any) -> None:
+    """Group the cooked parameterized ops the way exhaustive capture does.
+
+    Exhaustive capture appends each parameterized op's raw label to
+    ``layers_with_params`` under its parameter-group key (the equivalence
+    class before the module-stack suffix) as the op is logged
+    (``_ops_activations``). A predicate pass logs nothing there, so the cook
+    rebuilds the table from the op records already installed on
+    ``trace.capture_events`` (``param_xrefs`` checks it against
+    ``Param.used_by_layers``).
+    """
+
+    events = getattr(trace, "capture_events", None)
+    if events is None:
+        return
+    table = trace.layers_with_params
+    for event in events.amended_op_records():
+        if not event.params:
+            continue
+        key = _parameter_group_key(event)
+        if key is not None and event.label_raw not in table[key]:
+            table[key].append(event.label_raw)
+
+
+def _parameter_group_key(event: Any) -> str | None:
+    """Return an op record's equivalence class without its module-stack suffix."""
+
+    equivalence_class = event.equivalence_class
+    if equivalence_class is None or not event.modules:
+        return equivalence_class
+    suffix = "_".join(address for address, _call_index in event.modules)
+    if suffix and equivalence_class.endswith(suffix):
+        return equivalence_class[: -len(suffix)]
+    return equivalence_class

@@ -18,6 +18,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._capture._cooked_inventory import recording_projection_inventory
 
 
 class _ModuleLoop(nn.Module):
@@ -119,10 +120,12 @@ def test_cooked_recording_resolves_parameters_without_holding_them() -> None:
     linear_ops = [op for op in cooked.ops if op.func_name == "linear"]
     assert linear_ops and all(op.has_params for op in linear_ops)
     assert all(len(op._param_barcodes) == 2 for op in linear_ops)
-    # A recording never pins the model's parameters: the inventory carries
+    # A recording never pins the model's parameters: its inventory carries
     # metadata only, and cooking twice gives each Trace its own copies.
-    assert all(param._param_ref is None for param in cooked.params)
     second = tl.record(_ModuleLoop().eval(), torch.rand(2, 4), save=lambda ctx: ctx.kind == "op")
+    _records, inventory, _call_sites = recording_projection_inventory(second)
+    assert inventory and all(log._param_ref is None for log in inventory.values())
     first_cook = second.to_trace()
     second_cook = second.to_trace()
+    assert first_cook.params["cell.weight"] is not inventory["cell.weight"]
     assert first_cook.params["cell.weight"] is not second_cook.params["cell.weight"]

@@ -16,7 +16,7 @@ from .._data_classes._trace_grad_sites import gradient_rule_sites
 from .._ir.events import OpEvent
 from .._record_type import record_type
 from .._utils.tensor_utils import safe_copy
-from ._cooked_inventory import recording_projection_inventory
+from ._cooked_inventory import capture_identity_facts, recording_projection_inventory
 from ._retention import _negative_selector_windows, _selector_needs_backward_context
 from .outcome import CaptureOutcome
 from .plan import CapturePlan, EnrichmentLevel, RetentionKind, RetentionProfile
@@ -858,8 +858,7 @@ class CaptureSession:
                     None if capture_events is None else capture_events._copy_for_replay()
                 ),
                 "records": records,
-                # Parameter inventory and call-site classes the cooked Trace
-                # installs (``_cooked_inventory``).
+                # Cooked-Trace inventory (``_cooked_inventory`` installs it).
                 "param_logs": param_logs,
                 "call_site_classes": call_site_classes,
                 "output_tensors": tuple(output_tensors or ()),
@@ -876,6 +875,7 @@ class CaptureSession:
                 "forward_memory_backend": trace._provenance_forward_memory_backend,
                 "random_seed": trace._options_seed,
                 "source_model_ref": getattr(trace, "_source_model_ref", None),
+                "identity_facts": capture_identity_facts(trace),
                 "layer_counter": getattr(getattr(trace, "_raw_graph_ws", None), "layer_counter", 0),
             }
         )
