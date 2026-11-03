@@ -2173,23 +2173,6 @@ S2-gated*
   `structure_only_refuted_hypothesis`, `structure_only_discharge_precondition`,
   `structure_only_type_invalid`.
 
-**PredicateProtocol** — *unstable — no deprecation shim owed*
-: `torchlens._ir.predicate_registry.PredicateProtocol` — the frozen callable
-  signature for the capture-lifecycle `save`/`halt`/`until` predicate slots:
-  one positional concrete `RecordContext`, returning a normalized decision.
-  The S4 seam contract; normative page:
-  [predicate_runtime.md](predicate_runtime.md). The `intervene=` and grad
-  slots are outside the protocol.
-
-**coerce_predicate(value, \*, slot)** — *unstable — no deprecation shim owed*
-: The single documented coercion door for predicate consumers
-  (`torchlens._ir.predicate_registry`). Closed value domain {raw callable,
-  registered-name str}; raw callables (including `BaseSelector` instances and
-  `followed_by` composites) return BY IDENTITY, registered names return a
-  slot-aware enforcing wrapper carrying
-  `__torchlens_cache_key__ = ("registered", name, version)`. Slot vocabulary
-  `save | halt | until` is closed (S2-owned); unknown slots refuse typed.
-
 **Selector / Selection / `__selection__`** — *unstable — no
 deprecation shim owed (do/Selection spellings slate-ratified subject to D7)*
 : `tl.Selector` is the composable selection QUERY — a frozen AST over leaf
@@ -2600,16 +2583,6 @@ deprecation shim owed*
 : `tap(resolved_selection)` stores each firing site's mask on the
   `TapRecord`; `values(masked=True)` returns fresh masked copies (selected
   elements). `values()` stays exactly the shipped full-snapshot behavior.
-
-**register_predicate(name, \*, replace=False)** — *unstable — no deprecation
-shim owed*
-: Registers a plain predicate callable under a name for later
-  `coerce_predicate` acceptance; returns the function truly unchanged (no
-  attribute stamped, nothing the restricted loader consults). Duplicate user
-  names refuse `predicate_name_conflict` without `replace=True`; builtin
-  names are never replaceable; name misses at coercion refuse
-  `predicate_unregistered`. The registry is INERT until consuming surfaces
-  adopt name acceptance.
 
 **color_by (draw kwarg)** — *unstable — no deprecation shim owed; keyword-only*
 : The v1 encoding-channel value source on `Trace.draw` (L5 channel core). See
