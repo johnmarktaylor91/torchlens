@@ -742,6 +742,25 @@ def _head_facet_writable(module: Any, facet_name: str) -> bool:
     return True
 
 
+def _counting_hook(
+    hook: Callable[..., torch.Tensor], fire_ledger: dict[str, int]
+) -> Callable[..., torch.Tensor]:
+    """Wrap a patch hook so ``fire_ledger`` counts its fires and value-identical fires."""
+
+    def _tracked_hook(
+        out: torch.Tensor, *, ctx: Any, _inner: Callable[..., torch.Tensor] = hook
+    ) -> torch.Tensor:
+        """Run the patch hook while counting fires and value-identical fires."""
+
+        result = _inner(out, ctx=ctx)
+        fire_ledger["fires"] += 1
+        if _replaced_identical(result, out):
+            fire_ledger["identical"] += 1
+        return result
+
+    return _tracked_hook
+
+
 def _run_patch(
     model: nn.Module,
     corrupted_input: Any,
@@ -800,21 +819,12 @@ def _run_patch(
         _fold_fire_ledger(campaign_ledger, fire_ledger)
         return patched_log
 
-    def _tracked_hook(
-        out: torch.Tensor, *, ctx: Any, _inner: Callable[..., torch.Tensor] = hook
-    ) -> torch.Tensor:
-        """Run the patch hook while counting fires and value-identical fires."""
-
-        result = _inner(out, ctx=ctx)
-        fire_ledger["fires"] += 1
-        if _replaced_identical(result, out):
-            fire_ledger["identical"] += 1
-        return result
+    tracked_hook = _counting_hook(hook, fire_ledger)
 
     def _capture() -> Any:
         fire_ledger.update(fires=0, identical=0)
         log = corrupted_log.fork(name)
-        log.attach_hooks(selector, _tracked_hook)
+        log.attach_hooks(selector, tracked_hook)
         guard.reset()
         log.run(model, corrupted_input)
         return log
