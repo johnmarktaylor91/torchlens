@@ -482,7 +482,8 @@ def _capture_activation_blob_specs(
                 raise ArtifactError(
                     "include_activations=True requires every selected out/transformed_out "
                     f"payload to be a dense torch.Tensor; {op_label}.{field_name} is "
-                    f"{type(payload).__name__}."
+                    f"{type(payload).__name__}.",
+                    code="artifact_tensor_unsupported",
                 )
             blob_id = f"runnable_activation_{len(blob_specs):05d}"
             digest = runnable_tensor_byte_digest(payload)
@@ -508,7 +509,8 @@ def _capture_activation_blob_specs(
         if not found_payload:
             raise ArtifactError(
                 "include_activations=True found a capture-selected activation without a "
-                f"materialized out/transformed_out payload at {op_label!r}."
+                f"materialized out/transformed_out payload at {op_label!r}.",
+                code="run_capability_unavailable",
             )
 
     state = _capture_source_state(trace, option_name="include_activations")
@@ -553,7 +555,8 @@ def _capture_source_state(trace: Trace, *, option_name: str) -> Mapping[str, tor
     ):
         raise ArtifactError(
             f"{option_name}=True requires a tensor-only capture-time state snapshot. "
-            "This Trace cannot embed state as embedded_capture_state."
+            "This Trace cannot embed state as embedded_capture_state.",
+            code="run_capability_unavailable",
         )
     return cast(Mapping[str, torch.Tensor], state)
 
