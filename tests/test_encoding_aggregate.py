@@ -71,7 +71,7 @@ def nested_log() -> Any:
 
 def _draw(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
     tmp_path.mkdir(parents=True, exist_ok=True)
-    return log.draw(vis_save_only=True, file_format="svg", path=str(tmp_path / "g"), **kwargs)
+    return log.draw(file_format="svg", path=str(tmp_path / "g"), **kwargs).dot
 
 
 def _box_targets(log: tl.Trace) -> dict[str, AggregateTarget]:

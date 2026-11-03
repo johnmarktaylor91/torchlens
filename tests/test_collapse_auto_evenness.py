@@ -169,9 +169,7 @@ def test_auto_never_has_more_nodes_than_its_ladder_point(mini_trace: tl.Trace) -
 
 
 def test_auto_draw_renders_folded_run(mini_trace: tl.Trace, tmp_path: Any) -> None:
-    dot = mini_trace.draw(
-        collapse="auto", vis_save_only=True, file_format="svg", path=str(tmp_path / "g")
-    )
+    dot = mini_trace.draw(collapse="auto", file_format="svg", path=str(tmp_path / "g")).dot
     auto = collapse_optimizer.select_collapse_plan(mini_trace, RenderContext(), mode="auto")
     for descriptor in (auto.segments or {}).values():
         assert descriptor.name in dot
