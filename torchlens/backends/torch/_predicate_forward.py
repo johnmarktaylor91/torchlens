@@ -60,8 +60,7 @@ def _record_predicate_module_boundary_outputs(
     Returns
     -------
     None
-        Boundary-replaced leaves become sparse replacement ops; matching output
-        ops are added to the sparse recording once.
+        Boundary-replaced leaves become sparse replacement ops; matching outputs are added once.
     """
 
     from ..._capture.predicates import _evaluate_keep_op, _plain_module_union

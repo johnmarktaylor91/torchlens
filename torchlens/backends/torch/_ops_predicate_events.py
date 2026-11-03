@@ -108,7 +108,6 @@ def _emit_predicate_operation_events(
 
     del exec_ctx
     state = get_active_recording_state()
-    lean = state.options.lean  # lean journal: no shell event for an unkept op
     layer_type = _normalize_func_name(func_name)
     arg_tensors, _ = _extract_arg_tensors_and_params(layer_type, args, kwargs)
     parent_labels = tuple(get_label_list(arg_tensors))
@@ -207,9 +206,8 @@ def _emit_predicate_operation_events(
             if demanded is EnrichmentLevel.PAYLOAD:
                 ram_payload, transformed_ram_payload = _record_predicate_output(ctx, out, spec)
             else:
-                ram_payload = None
-                transformed_ram_payload = None
-            if not (lean and demanded is EnrichmentLevel.SHELL):
+                ram_payload = transformed_ram_payload = None
+            if not (state.options.lean and demanded is EnrichmentLevel.SHELL):  # lean: no shell
                 append_projected_event(
                     self,
                     ctx,
@@ -244,8 +242,8 @@ def _emit_predicate_operation_events(
         finally:
             if not halt_only:
                 capture_events = getattr(self, "capture_events", None)
-                index = None if capture_events is None else capture_events.op_event_by_label_raw
-                if not lean and (index is None or _label_raw not in index):
+                idx = None if capture_events is None else capture_events.op_event_by_label_raw
+                if not state.options.lean and (idx is None or _label_raw not in idx):
                     append_projected_event(
                         self,
                         ctx,
@@ -253,11 +251,10 @@ def _emit_predicate_operation_events(
                         tensor=out,
                         predicate_matched=False,
                     )
-                # Echo narrator slot (snoop D1): exactly once per committed
-                # event, after the append, outside the predicate-failure
-                # pipeline (a narrator failure warns-and-disables inside the
-                # session; only the typed stats-budget refusal propagates).
-                # Duck-typed session read: the hot path imports nothing.
+                # Echo narrator slot (snoop D1): exactly once per committed event, after the
+                # append, outside the predicate-failure pipeline (a narrator failure
+                # warns-and-disables inside the session; only the typed stats-budget refusal
+                # propagates). Duck-typed session read: the hot path imports nothing.
                 echo_session = self.__dict__.get("_echo_session")
                 if echo_session is not None:
                     committed_event = (

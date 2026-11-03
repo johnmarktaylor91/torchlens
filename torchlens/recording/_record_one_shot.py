@@ -60,13 +60,24 @@ _RECORDING_DOOR_DEFAULTS: dict[str, Any] = {
 }
 
 
-def _unfold_recording_options(recording: RecordingOptions | None) -> dict[str, Any]:
+def _unfold_recording_options(recording: RecordingOptions | None, lean: Any) -> dict[str, Any]:
     """Read the recorder knobs off ``recording=``.
 
     ``keep_op`` and ``intervene`` are the door's own ``save=`` and
     ``intervene=``; setting them on the bundle refuses instead of being a
-    silent no-op.
+    silent no-op. ``lean`` arrives as the door keyword or on ``recording=``;
+    either one asks for it (a non-``False`` door value wins and is validated
+    by the Recorder).
     """
+
+    knobs = _read_recording_options(recording)
+    if lean is not False:
+        knobs["lean"] = lean
+    return knobs
+
+
+def _read_recording_options(recording: RecordingOptions | None) -> dict[str, Any]:
+    """Return the ``RecordingOptions`` fields ``tl.record`` reads, door defaults filled in."""
 
     if recording is None:
         return dict(_RECORDING_DOOR_DEFAULTS)
@@ -125,6 +136,20 @@ def _require_torch_fastlog_backend(backend: Any) -> None:
             "registered fastlog implementation is not the torch one-shot "
             "Recorder, and backend v1 record() has no non-torch dispatch path."
         )
+
+
+def _record_generation_door(
+    model: nn.Module,
+    inputs: Any,
+    input_kwargs: dict[str, Any] | None,
+    generate_kwargs: Mapping[str, Any],
+    door: dict[str, Any],
+) -> GenerationRecording:
+    """Run ``tl.record(generate_kwargs=...)`` and attach ``generate()``'s own return value."""
+
+    output, generation = record_generation(model, inputs, input_kwargs, generate_kwargs, door)
+    object.__setattr__(generation.recording, "_output", output_returned(output))
+    return generation
 
 
 def record(
@@ -252,12 +277,8 @@ def record(
 
     _require_torch_fastlog_backend(backend)
     model = unwrap_compiled_model(model)
-    knobs = _unfold_recording_options(recording)
+    knobs = _unfold_recording_options(recording, lean)
     postprocess = knobs.pop("postprocess")
-    # ``lean`` arrives either as the door keyword or on ``recording=``; either one asks for it.
-    recording_lean = knobs.pop("lean")
-    if lean is False:
-        lean = recording_lean
     validate_postprocess(postprocess)
     inputs = _coerce_input_args(model, inputs)
     # Fail fast on tensor variants the logging pipeline cannot handle (meta tensors have no
@@ -265,36 +286,19 @@ def record(
     # record() shares trace()'s decorated hot path, so it must enforce the SAME up-front guard
     # instead of crashing deep in capture with an opaque torch error.
     check_model_and_input_variants(model, inputs, input_kwargs)
-    if generate_kwargs is not None:
-        output, generation = record_generation(
-            model,
-            inputs,
-            input_kwargs,
-            generate_kwargs,
-            {
-                **knobs,
-                "save": save,
-                "intervene": intervene,
-                "stop_after": stop_after,
-                "storage": storage,
-                "narrate": narrate,
-                "capture": capture,
-                "lean": lean,
-            },
-        )
-        object.__setattr__(generation.recording, "_output", output_returned(output))
-        return enrich_generation(generation, postprocess)
-    with Recorder(
-        model,
+    door = {
         **knobs,
-        save=save,
-        intervene=intervene,
-        stop_after=stop_after,
-        storage=storage,
-        narrate=narrate,
-        capture=capture,
-        lean=lean,
-    ) as recorder:
+        "save": save,
+        "intervene": intervene,
+        "stop_after": stop_after,
+        "storage": storage,
+        "narrate": narrate,
+        "capture": capture,
+    }
+    if generate_kwargs is not None:
+        generation = _record_generation_door(model, inputs, input_kwargs, generate_kwargs, door)
+        return enrich_generation(generation, postprocess)
+    with Recorder(model, **door) as recorder:
         recorder(inputs, input_kwargs)
     result = recorder.recording
     if postprocess != "none":

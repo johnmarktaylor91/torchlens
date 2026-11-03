@@ -65,10 +65,14 @@ class TraceLike:
     True
     """
 
+    def _check_journal_read(self, read: str) -> None:
+        """Refuse ``read`` when this projection lacks the full journal (a lean recording)."""
+
     @property
     def event_stream(self) -> CaptureEvents | None:
         """Return the raw capture event bundle when retained."""
 
+        self._check_journal_read("event_stream")
         try:
             events = object.__getattribute__(self, "capture_events")
         except AttributeError:
@@ -85,6 +89,7 @@ class TraceLike:
     def op_events(self) -> tuple[Any, ...]:
         """Return the raw operation event stream."""
 
+        self._check_journal_read("op_events")
         events = self.event_stream
         if events is None:
             return ()

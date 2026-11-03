@@ -886,7 +886,7 @@ torchlens/backends/torch/_ops_interventions.py::_apply_predicate_mode_interventi
 torchlens/backends/torch/_ops_interventions.py::_record_predicate_intervention_spec	85
 torchlens/backends/torch/_ops_predicate_events.py::_build_graph_relationship_fields	97
 torchlens/backends/torch/_ops_predicate_events.py::_build_param_fields	64
-torchlens/backends/torch/_ops_predicate_events.py::_emit_predicate_operation_events	181
+torchlens/backends/torch/_ops_predicate_events.py::_emit_predicate_operation_events	178
 torchlens/backends/torch/_ops_predicates.py::_predicate_backend_semantics	98
 torchlens/backends/torch/_ops_retention.py::_build_trace_predicate_context	80
 torchlens/backends/torch/_ops_retention.py::_copy_lookback_payload	76
@@ -896,7 +896,7 @@ torchlens/backends/torch/_ops_shared_fields.py::_get_parent_output_version_snaps
 torchlens/backends/torch/_predicate_boundary_replacements.py::log_predicate_boundary_replacements	113
 torchlens/backends/torch/_predicate_forward.py::_predicate_module_enter	62
 torchlens/backends/torch/_predicate_forward.py::_predicate_module_exit	73
-torchlens/backends/torch/_predicate_forward.py::_record_predicate_module_boundary_outputs	137
+torchlens/backends/torch/_predicate_forward.py::_record_predicate_module_boundary_outputs	136
 torchlens/backends/torch/_tl.py	1784
 torchlens/backends/torch/_transform_wrappers.py::direct_transform_decorator	98
 torchlens/backends/torch/_transform_wrappers.py::direct_transform_decorator.wrapped_direct	73
@@ -969,7 +969,7 @@ torchlens/backends/torch/prehook_provenance.py::_snapshot_state	82
 torchlens/backends/torch/rescue.py	934
 torchlens/backends/torch/rescue.py::capture_with_rescue	339
 torchlens/backends/torch/sources.py::log_source_tensor_exhaustive	264
-torchlens/backends/torch/sources.py::log_source_tensor_predicate	125
+torchlens/backends/torch/sources.py::log_source_tensor_predicate	120
 torchlens/backends/torch/structure_only_belt.py::structure_only_forward_boundary	129
 torchlens/backends/torch/tensor_tracking.py	1656
 torchlens/backends/torch/tensor_tracking.py::_add_tensor_backward_hook	83
@@ -1312,9 +1312,9 @@ torchlens/receptive_field/_viz.py::show	83
 torchlens/receptive_field/rules/interpolation.py::interpolate	63
 torchlens/receptive_field/rules/transforms.py::getitem	76
 torchlens/receptive_field/rules/transforms.py::pad	73
-torchlens/recording/_record_one_shot.py::record	146
-torchlens/recording/_recorder.py	842
-torchlens/recording/_recorder.py::Recorder.__init__	162
+torchlens/recording/_record_one_shot.py::record	142
+torchlens/recording/_recorder.py	839
+torchlens/recording/_recorder.py::Recorder.__init__	157
 torchlens/recording/_recorder.py::Recorder._run_unified_capture	151
 torchlens/recording/_recorder.py::Recorder._stamp_failed_recording	93
 torchlens/recording/_storage_resolver.py::_resolve_storage	172

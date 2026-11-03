@@ -17,6 +17,7 @@ from .._captured_run import TraceLike
 from .._errors import CaptureNotActiveError
 from .._ir import predicate as _predicate
 from .._utils.tensor_utils import SaveMode as SaveMode
+from ._lean import LEAN_OMISSIONS, is_lean, refuse_if_lean
 
 __all__ = [
     "ActivationRecord",
@@ -125,8 +126,7 @@ class DryRun:
         return timeline_html(self)
 
     def filter(
-        self,
-        other_keep_op: Callable[[RecordContext], PredicateDecision] | None = None,
+        self, other_keep_op: Callable[[RecordContext], PredicateDecision] | None = None
     ) -> DryRun:
         """Return a new trace with decisions from a new op predicate.
 
@@ -229,15 +229,6 @@ _SETTINGS_SLOTS: Final[tuple[tuple[str, str], ...]] = (
 _PERSISTED_SETTING_TYPES: Final[tuple[type, ...]] = (bool, int, float, str)
 
 
-#: What a lean recording (``tl.record(lean=True)``, PROVISIONAL SPELLING) leaves out.
-LEAN_OMISSIONS: Final[tuple[str, ...]] = (
-    "shell_records_of_unkept_ops",
-    "module_boundary_events_of_unkept_modules",
-    "event_indexes_of_unkept_events",
-    "op_counts",
-)
-
-
 @dataclass(frozen=True, slots=True, init=False)
 class RecordingSettings:
     """The settings one recording was made with; read-only.
@@ -304,8 +295,7 @@ class RecordingSettings:
     storage:
         The disk sink from ``storage=``, if any.
     lean:
-        PROVISIONAL SPELLING. Whether only the kept events were journaled
-        (``tl.record(lean=True)``); ``Recording.lean_omissions`` names the omissions.
+        PROVISIONAL SPELLING. Whether only the kept events were journaled (``lean_omissions``).
     narrate:
         The live narration settings (a ``NarrationOptions``) that printed each captured
         event as the forward ran, from the door's ``narrate=``; ``None`` when off.
@@ -687,15 +677,11 @@ class Recording(TraceLike):
         object.__setattr__(base, "_capture_events", session.capture_events)
         object.__setattr__(base, "_output_tensors", list(getattr(session, "output_tensors", [])))
         object.__setattr__(
-            base,
-            "_output_tensor_addresses",
-            list(getattr(session, "output_tensor_addresses", [])),
+            base, "_output_tensor_addresses", list(getattr(session, "output_tensor_addresses", []))
         )
         object.__setattr__(base, "_recording_state", getattr(session, "recording_state", None))
         object.__setattr__(
-            base,
-            "_captured_run_cores",
-            tuple(getattr(session, "captured_run_cores", ())),
+            base, "_captured_run_cores", tuple(getattr(session, "captured_run_cores", ()))
         )
         has_core_projection = bool(getattr(session, "captured_run_cores", ()))
         object.__setattr__(
@@ -746,53 +732,19 @@ class Recording(TraceLike):
                     self.by_address.setdefault(record.ctx.address, []).append(index)
         object.__setattr__(self, "_records_built", True)
 
-    def _is_lean(self) -> bool:
-        """Return whether the recording was made with the lean journal option."""
-
-        return bool(getattr(object.__getattribute__(self, "_options"), "lean", False))
-
-    def _refuse_if_lean(self, read: str) -> None:
-        """Raise ``recording_lean_omitted`` when ``read`` needs the events lean dropped."""
-
-        if self._is_lean():
-            raise CaptureNotActiveError(
-                f"Recording.{read} needs the journal events of every op, and this recording "
-                "was made with lean=True, which journals only the events its selection keeps "
-                f"(omitted: {', '.join(LEAN_OMISSIONS)})",
-                code="recording_lean_omitted",
-                remedy="record again without lean=True to keep every event",
-            )
-
     @property
     def lean_omissions(self) -> tuple[str, ...]:
-        """Return what a lean recording left out; ``()`` for a default recording.
+        """PROVISIONAL SPELLING. What a lean recording left out; ``()`` for a default one."""
 
-        PROVISIONAL SPELLING. The reads that need the omitted events (``event_stream``,
-        ``op_events``, ``lazy_trace``, ``raw_metadata()``, ``to_trace()``) refuse with
-        ``recording_lean_omitted``.
-        """
+        return LEAN_OMISSIONS if is_lean(self) else ()
 
-        return LEAN_OMISSIONS if self._is_lean() else ()
-
-    @property
-    def event_stream(self) -> Any:
-        """Return the raw capture event bundle; refused on a lean recording."""
-
-        self._refuse_if_lean("event_stream")
-        return TraceLike.event_stream.fget(self)  # type: ignore[attr-defined]
-
-    @property
-    def op_events(self) -> tuple[Any, ...]:
-        """Return the raw operation event stream; refused on a lean recording."""
-
-        self._refuse_if_lean("op_events")
-        return TraceLike.op_events.fget(self)  # type: ignore[attr-defined]
+    _check_journal_read = refuse_if_lean  # TraceLike event_stream/op_events refuse when lean
 
     @property
     def lazy_trace(self) -> DryRun:
         """Return a lazy trace projection over all capture events (refused when lean)."""
 
-        self._refuse_if_lean("lazy_trace")
+        refuse_if_lean(self, "lazy_trace")
         if self._recording_trace is None:
             from .._capture.projections import recording_trace_from_events
 
@@ -848,7 +800,7 @@ class Recording(TraceLike):
 
         from .exceptions import RecorderStateError
 
-        self._refuse_if_lean("raw_metadata")
+        refuse_if_lean(self, "raw_metadata")
         if self.event_stream is None:
             raise RecorderStateError(
                 "this Recording no longer holds its raw capture event stream "
@@ -1148,7 +1100,7 @@ class Recording(TraceLike):
             raw activation payload to bind as the output frontier.
         """
 
-        self._refuse_if_lean("to_trace")
+        refuse_if_lean(self, "to_trace")
         if self.is_failed:
             raise CaptureNotActiveError(
                 "Recording.to_trace() cannot materialize a failed partial Recording because "
