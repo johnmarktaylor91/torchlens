@@ -35,7 +35,7 @@ from .._output_slot import (
 )
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from .._utils._torch_compat import get_fsdp_wrapper_type
-from ..intervention.predicates import InterventionPredicate
+from ..intervention.predicates import InterventionPredicate, _warn_intervene_fired_nowhere
 from ..options import StorageOptions
 from ..types import _ActivationPostfunc, _GradientPostfunc
 from ._halt import StopSignal
@@ -71,7 +71,6 @@ def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
     """
 
     from .._selection.selectors import BaseSelector
-    from ..intervention.hooks import site_universe
 
     save_selector = state.options.keep_op
     if isinstance(save_selector, BaseSelector):
@@ -85,50 +84,7 @@ def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
                 UserWarning,
                 stacklevel=3,
             )
-    intervene_selector = getattr(state.options.intervene, "selector", None)
-    if (
-        isinstance(intervene_selector, BaseSelector)
-        and site_universe(intervene_selector) == "activation"
-        and state.intervene_selector_fire_count == 0
-    ):
-        warnings.warn(
-            f"Capture-time intervention selector {intervene_selector!r} matched zero sites; "
-            "no intervention fired.",
-            UserWarning,
-            stacklevel=3,
-        )
-    _warn_multiclause_intervene_fired_nowhere(state)
-
-
-def _warn_multiclause_intervene_fired_nowhere(state: RecordingState) -> None:
-    """Warn when a multi-clause ``intervene=`` spec fired at no site at all.
-
-    A multi-clause spec has no single ``.selector``, so the selector check
-    above never sees it; without this, a spec whose every forward rule missed
-    recorded silently.
-
-    Parameters
-    ----------
-    state:
-        Completed recording state carrying the intervene fire count.
-    """
-
-    from ..intervention.spec import Recipe
-
-    spec = state.options.intervene
-    if not isinstance(spec, Recipe) or len(spec.rules) < 2:
-        return
-    if state.intervene_selector_fire_count != 0:
-        return
-    forward_rules = [rule for rule in spec.rules if rule.signal != "backward"]
-    if not forward_rules:
-        return
-    names = ", ".join(rule.rule_id for rule in forward_rules)
-    warnings.warn(
-        f"Capture-time intervention rules [{names}] matched zero sites; no intervention fired.",
-        UserWarning,
-        stacklevel=4,
-    )
+    _warn_intervene_fired_nowhere(state.options.intervene, state.intervene_selector_fire_count)
 
 
 def _unwrap_ddp_for_fastlog(

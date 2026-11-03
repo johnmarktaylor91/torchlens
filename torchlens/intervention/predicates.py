@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import dataclasses
+import warnings
 from collections.abc import Callable
 from typing import Any, TypeAlias, cast
 
 import torch
 
 from .._errors import ArgumentTypeError
+from .._selection.selectors import BaseSelector
+from ._zero_fire import warn_multiclause_unfired
 from .types import Edit, InterventionDecision
 
 InterventionPredicateDecision: TypeAlias = InterventionDecision | Edit | Callable[..., Any] | None
@@ -145,6 +148,38 @@ def replace_with(
         is_batch_independent=True,
         is_compatible_with_append=not allow_shape_change,
     )
+
+
+def _warn_intervene_fired_nowhere(intervene: object, fire_count: int) -> None:
+    """Warn when a recording's capture-time ``intervene=`` fired at no site.
+
+    A single activation selector keeps its zero-match UserWarning; a
+    multi-clause spec, which has no single ``.selector``, warns per forward
+    rule with the coded ``trace_zero_fire`` disclosure.
+
+    Parameters
+    ----------
+    intervene:
+        The recording's ``intervene=`` option.
+    fire_count:
+        How many times the recording's intervene predicate fired.
+    """
+
+    from .hooks import site_universe
+
+    intervene_selector = getattr(intervene, "selector", None)
+    if (
+        isinstance(intervene_selector, BaseSelector)
+        and site_universe(intervene_selector) == "activation"
+        and fire_count == 0
+    ):
+        warnings.warn(
+            f"Capture-time intervention selector {intervene_selector!r} matched zero sites; "
+            "no intervention fired.",
+            UserWarning,
+            stacklevel=4,
+        )
+    warn_multiclause_unfired(intervene, fire_count)
 
 
 __all__ = [
