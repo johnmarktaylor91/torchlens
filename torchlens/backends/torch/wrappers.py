@@ -71,13 +71,16 @@ from ._completeness_cross_thread import (
 from ._completeness_dispatch import record_uncaptured_owner_callsite
 from ._completeness_escape_state import record_data_alias_mutation
 from ._completeness_origins import internal_scalar_read
+from ._foreign_data import FOREIGN_DATA_FUNC_NAME, HOST_CONSTRUCTOR_FUNC_NAMES, resolve_host_entry
 from ._function_boundary import (
     _BARCODE_TRANSPARENT_FUNCS,
-    EXPORT_FUNC_NAMES,
+    PLAIN_EXPORT_FUNC_NAMES,
     funcs_not_to_log,
     note_function_export,
     print_funcs,
+    unlogged_wrapper_name,
 )
+from ._logged_arguments import logged_args
 from ._modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
 from ._op_markers import _pop_op_markers, _push_op_markers
 from ._ops_autograd import register_call_input_container_snapshots
@@ -1139,9 +1142,8 @@ def torch_func_decorator(
     needs_device_injection = func_name in _DEVICE_CONSTRUCTOR_NAMES
     is_unlogged_func = func_name in funcs_not_to_log
     is_print_func = func_name in print_funcs
-    # Decoration-time constant: only the numpy / dlpack export spellings tell a live
-    # ``autograd.Function`` frame that its forward left torch (foreign-kernel boundary).
-    is_export_func = func_name in EXPORT_FUNC_NAMES
+    is_export_func = func_name in PLAIN_EXPORT_FUNC_NAMES
+    is_host_constructor = func_name in HOST_CONSTRUCTOR_FUNC_NAMES
     mutates_receiver = mutates_first_arg or _func_mutates_receiver(func_name)
     inplace_param_index = _positional_inplace_index(func)
     reconstructs_receiver_output = func_name in {"__setitem__", "zero_", "__delitem__"}
@@ -1327,10 +1329,10 @@ def torch_func_decorator(
         )
         trace._wrapper_runtime_ws.current_func_barcode = 0
         if is_export_func:
-            note_function_export(func_name)
+            note_function_export(func_name, args)
         if is_unlogged_func:
             if _diagnostic_edge_armed():
-                wrapper_name = f"torch_func:{func_name}:not_logged"
+                wrapper_name = unlogged_wrapper_name(func_name)
                 with expected_original_call(
                     func,
                     wrapper_name,
@@ -1609,22 +1611,20 @@ def torch_func_decorator(
             )
         else:
             capture_func, capture_func_name = canonical_capture_callable
-        # r28 reconcile: a storage-rebinding setter is RECORDED as the canonical
-        # single-argument ``detach(rhs)`` call -- the receiver's OLD value has
-        # zero dataflow into the result (the rebind replaces every value), so
-        # only the RHS argument is logged. The live receiver still gets the
-        # op's label through the same-object in-place propagation below.
-        log_args, log_kwargs = args, kwargs
-        log_arg_copies, log_kwarg_copies = arg_copies, kwarg_copies
-        if is_storage_rebinding_setter and len(args) >= 2:
-            log_args = (args[1],)
-            log_kwargs = {}
-            log_arg_copies = (arg_copies[1],) if len(arg_copies) >= 2 else log_args
-            log_kwarg_copies = {}
-        elif func_name == "__deepcopy__" and args:
-            # The memo is copy-protocol bookkeeping that ends up holding the output.
-            log_args, log_kwargs, log_kwarg_copies = (args[0],), {}, {}
-            log_arg_copies = tuple(arg_copies[:1]) or log_args
+        host_entry = (
+            resolve_host_entry(trace, func_name, (args, kwargs), out_orig, _set_transform_metadata)
+            if is_host_constructor and not arg_tensorlike
+            else None
+        )
+        if host_entry is not None:
+            capture_func, capture_func_name = host_entry.replay, FOREIGN_DATA_FUNC_NAME
+        logged = logged_args(func_name, args, arg_copies, is_storage_rebinding_setter, host_entry)
+        if logged is None:
+            log_args, log_kwargs = args, kwargs
+            log_arg_copies, log_kwarg_copies = arg_copies, kwarg_copies
+        else:
+            log_args, log_arg_copies = logged
+            log_kwargs, log_kwarg_copies = {}, {}
         out_before_hooks = out_orig
         out_orig = apply_live_hooks_to_outputs(
             trace,
