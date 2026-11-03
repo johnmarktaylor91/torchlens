@@ -236,6 +236,11 @@ class LayerAccessor(Accessor["Layer"]):
 
         Passes are 1-based: a zero or negative pass number names nothing.
         """
+        record = converted(
+            self, key, layer_for_key
+        )  # a call label or buffer version names its Layer
+        if record is not None:
+            return record
         base, _, pass_str = key.rpartition(":")
         if split_pass_token(key) is None:
             try:

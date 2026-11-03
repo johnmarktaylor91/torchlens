@@ -140,7 +140,7 @@ def _output_op_candidates(trace: Any, key: str) -> tuple[list[Any], list[str]]:
 
     A module address reaches the output ops of every call (spelled by call
     label when each call has one output), ``address:N`` the output ops of that
-    call, a buffer address one op per version. An op label is not converted:
+    call, a buffer address one op per version (``address:N`` that version). An op label is not converted:
     the ops door answers it itself or refuses, so validation keeps its tripwire.
     """
 
@@ -157,10 +157,15 @@ def _output_op_candidates(trace: Any, key: str) -> tuple[list[Any], list[str]]:
         labels = [label for labels in per_call for label in labels]
         one_each = all(len(labels) == 1 for labels in per_call)
         return [keys[label] for label in labels], [c.label for c in calls] if one_each else labels
-    buffers = trace.buffers
-    if key in getattr(buffers, "_dict", {}):
-        versions = list(buffers[key].versions)
+    buffers = getattr(trace.buffers, "_dict", {})
+    if key in buffers:
+        versions = list(trace.buffers[key].versions)
         return versions, [f"{key}:{index}" for index in range(1, len(versions) + 1)]
+    address, _, version = key.rpartition(":")
+    if address in buffers and version.isdigit():
+        versions = list(trace.buffers[address].versions)
+        if 1 <= int(version) <= len(versions):
+            return [versions[int(version) - 1]], [key]
     return [], []
 
 
