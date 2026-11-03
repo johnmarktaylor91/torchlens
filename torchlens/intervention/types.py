@@ -25,7 +25,9 @@ from .._selection.target import (
     TensorSliceSpec as TensorSliceSpec,
 )
 from .._utils._tensor_layout import CaptureLayout
+from ._edit_copy import deepcopy_edit
 from ._hook_spec_match import _hook_spec_matches
+from .errors import _refuse_placeholder_edit
 
 GraphShapeHash: TypeAlias = str
 InterventionAction: TypeAlias = Literal["replace", "add_hook", "scale", "transform"]
@@ -116,8 +118,6 @@ class Edit:
         """
 
         if self.factory is None:
-            from .errors import _refuse_placeholder_edit
-
             _refuse_placeholder_edit(self.name, self.portability)
             raise TypeError(f"Edit {self.name!r} has no hook factory")
         return self.factory()
@@ -168,8 +168,6 @@ class Edit:
         identity) instead of routing through ``__getstate__``'s
         factory-dropping pickle path.
         """
-
-        from ._edit_copy import deepcopy_edit
 
         return deepcopy_edit(self, memo)
 
