@@ -106,9 +106,13 @@ def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) ->
         else:
             layer.set(torch.zeros(2, 3), confirm_mutation=True)
     if door == "set":
+        # One staged value entry covers both passes; nothing propagates yet.
+        assert len(fork._intervention_spec.target_value_specs) == 1
+        assert fork._intervention_spec.hook_specs == []
         want = _oracle(model, x)
-    else:
-        want = _oracle(model, x, shared_edit=_double if door == "do" else _zero)
+        assert torch.allclose(fork[fork.output_layers[0]].out, want, atol=1e-6)
+        return
+    want = _oracle(model, x, shared_edit=_double if door == "do" else _zero)
     assert torch.allclose(fork[fork.output_layers[0]].out, want, atol=1e-6)
     for pass_index in (1, 2):
         assert fork[f"{shared}:{pass_index}"].edits
