@@ -10,6 +10,7 @@ not preparation). ``model_prep`` re-exports the three ``_clear_*`` walkers
 under their original names.
 """
 
+import types
 from collections import OrderedDict, deque
 from collections.abc import Callable, Iterable
 from types import ModuleType
@@ -31,6 +32,24 @@ __all__ = [
 _SCALAR_LEAF_TYPES = frozenset({str, bytes, int, float, bool})
 #: Exact plain container types whose emptiness is a sound inline skip.
 _PLAIN_CONTAINER_TYPES = frozenset({dict, OrderedDict, list, tuple, set, frozenset, deque})
+_SCALAR_SEQUENCE_TYPES = frozenset({list, tuple})
+# Exact types a module namespace holds that can never be a tensor or a
+# container: skipping them by ``type()`` avoids the ``isinstance`` (and the
+# reduce_op shim check) for the bulk of ``torch``'s ~2k names on every sweep.
+_NAMESPACE_INERT_TYPES = frozenset(
+    {
+        types.BuiltinFunctionType,
+        types.FunctionType,
+        types.ModuleType,
+        type,
+        str,
+        bytes,
+        int,
+        float,
+        bool,
+        type(None),
+    }
+)
 
 
 def _is_isinstance_hostile_deprecation_shim(value: Any) -> bool:
@@ -95,6 +114,10 @@ def _clear_module_attribute_tensor_metadata(
             continue
         if value_type in _PLAIN_CONTAINER_TYPES and not attr_val:
             continue
+        if value_type in _SCALAR_SEQUENCE_TYPES and all(
+            type(item) in _SCALAR_LEAF_TYPES for item in attr_val
+        ):
+            continue  # shape tuples such as ``kernel_size``: no stamp can hide in scalars
         _clear_session_tensor_metadata(attr_val, seen, visit=visit)
 
 
@@ -188,7 +211,8 @@ def _clear_module_namespace_tensor_metadata(
         slot_names = tuple(
             name
             for name, item in namespace.items()
-            if not _is_isinstance_hostile_deprecation_shim(item)
+            if type(item) not in _NAMESPACE_INERT_TYPES
+            and not _is_isinstance_hostile_deprecation_shim(item)
             and isinstance(
                 item,
                 (torch.Tensor, dict, list, tuple, set, frozenset, deque),
