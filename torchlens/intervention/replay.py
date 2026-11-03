@@ -144,8 +144,7 @@ def _refuse_armed_gradient_rules(trace: Trace, hooks: Any = None) -> None:
     trace:
         Trace about to be pushed.
     hooks:
-        An explicit mapping of sites to edits for the push, or ``None``
-        (``ReplayOptions`` carries no hooks; edits arrive through ``Trace.do``).
+        Mapping of sites to edits (via ``Trace.do``; ``ReplayOptions`` has no hooks), or ``None``.
 
     Raises
     ------
