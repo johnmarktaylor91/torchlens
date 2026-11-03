@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1380 modules, 629334 lines, 0 modules without a docstring.
+83 packages, 1380 modules, 629337 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 45 | 25073 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1498 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4573 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 81 | 37698 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 81 | 37699 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10551 |
@@ -73,7 +73,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experiment` | torchlens.experiment: multi-run experiments as first-class objects. | 5 | 1980 |
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 333 |
 | `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 2 | 950 |
-| `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5228 |
+| `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5230 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3005 |
 | `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 72 | 34885 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1857 |
@@ -281,7 +281,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (81 modules, 37698 lines)
+Core data structures for representing a logged forward pass. (81 modules, 37699 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -355,7 +355,7 @@ Core data structures for representing a logged forward pass. (81 modules, 37698 
 | `container` | Runtime views over captured TorchLens output containers. | 1176 |
 | `derived_grad` | Backend-neutral derived gradient records. | 151 |
 | `field_policy` | Structural field-policy tables for TorchLens record classes. | 243 |
-| `func_call_location` | FuncCallLocation: lightweight record for a single frame in a user-visible call stack. | 772 |
+| `func_call_location` | FuncCallLocation: lightweight record for a single frame in a user-visible call stack. | 773 |
 | `grad_fn` | Autograd grad_fn_handle metadata and lookup accessors. | 841 |
 | `grad_fn_call` | Per-pass runtime data for autograd grad_fn_handle nodes. | 379 |
 | `interface` | Trace query and display helpers used by ''Trace'' custom_methods. | 634 |
@@ -1529,7 +1529,7 @@ Experimental Dagua rendering bridge exports. (2 modules, 950 lines)
 
 ### `torchlens.export`
 
-Static export helpers for TorchLens logs. (14 modules, 5228 lines)
+Static export helpers for TorchLens logs. (14 modules, 5230 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1541,7 +1541,7 @@ Static export helpers for TorchLens logs. (14 modules, 5228 lines)
 | `_netron_attachment` | Netron ''netron:attachment'' sidecar writer. | 251 |
 | `_netron_diff` | Per-node diff facts for the netron baseline slot. | 211 |
 | `_netron_emit` | ModelProto JSON emission for the netron export (memo s4). | 220 |
-| `_netron_fields` | Field extraction for the netron projection (netron ..). | 241 |
+| `_netron_fields` | Field extraction for the netron projection (netron ..). | 243 |
 | `_netron_module` | Module-granularity netron projection (netron /). | 549 |
 | `_netron_records` | Netron export projection records (netron ). | 504 |
 | `_registry` | The export-target registry: ONE L7 door for every exporter ( item 17). | 125 |
