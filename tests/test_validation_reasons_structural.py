@@ -28,7 +28,10 @@ def test_structural_reasons_are_public_members() -> None:
 @pytest.mark.parametrize(
     ("failure", "reason"),
     [
+        ("unclassified_op:relu_1_raw:Erfc", "op_unclassified"),
         ("initializer_contamination:fill_2_raw:Fill", "op_unclassified"),
+        ("captured_output_missing_materialized_op:add_3_raw", "capture_inconsistent"),
+        ("materialized_op_missing_capture:mul_4_raw", "capture_inconsistent"),
     ],
 )
 def test_tf_structural_failure_names_its_reason(failure: str, reason: str) -> None:
