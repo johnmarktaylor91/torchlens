@@ -159,7 +159,6 @@ def test_gather_without_a_root_demotes_to_not_present() -> None:
     assert derivation.joins[0].consistency is BoundaryConsistency.NOT_PRESENT
 
 
-@pytest.mark.smoke
 def test_scatter_root_slices_attest_against_member_destinations() -> None:
     """Each member's received slice must equal the root's contribution slice."""
 

@@ -264,7 +264,6 @@ def _stub_xarray(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
     return captured
 
 
-@pytest.mark.smoke
 def test_xarray_flattens_scalar_vector_and_matrix_outs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -338,7 +337,6 @@ def test_xarray_exports_buffers_as_module_state_variables(
         assert variable.attrs["layer_label"] == variable.name
 
 
-@pytest.mark.smoke
 def test_xarray_rejects_mismatched_presentation_counts_and_empty_logs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -57,7 +57,6 @@ class _Tokenizer:
         return " ".join(f"tok{int(index)}" for index in token_ids)
 
 
-@pytest.mark.smoke
 def test_capture_options_have_no_decode_fields() -> None:
     """The two removed fields are unknown to ``CaptureOptions`` (no alias)."""
 
@@ -67,7 +66,6 @@ def test_capture_options_have_no_decode_fields() -> None:
         assert not hasattr(tl.options.CaptureOptions(), field)
 
 
-@pytest.mark.smoke
 def test_spellings_are_pinned_to_the_signatures() -> None:
     """The public keywords live in one module; the signatures must match it."""
 
@@ -84,7 +82,6 @@ def test_spellings_are_pinned_to_the_signatures() -> None:
     assert spellings.HEAD_AMBIGUOUS_CODE == "decode_head_ambiguous"
 
 
-@pytest.mark.smoke
 def test_forced_imagenet_style_decodes_an_unverified_1000_way_model() -> None:
     """The automatic pass declines a bare 1000-way tensor; ``style="imagenet"`` decodes it."""
 
@@ -134,7 +131,6 @@ def test_ambiguous_heads_refuse_when_none_is_named() -> None:
     assert sorted(excinfo.value.fields["available_heads"]) == ["aux", "main"]
 
 
-@pytest.mark.smoke
 def test_unknown_style_refuses_with_did_you_mean() -> None:
     trace = tl.trace(_Fixed(torch.zeros(1, 3)).eval(), torch.ones(1, 2))
 

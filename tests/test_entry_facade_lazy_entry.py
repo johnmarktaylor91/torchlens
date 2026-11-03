@@ -75,7 +75,6 @@ def test_trace_tolerates_lazy_buffer_model() -> None:
     log.cleanup()
 
 
-@pytest.mark.smoke
 def test_record_tolerates_lazy_buffer_model() -> None:
     """tl.record rides the same buffer-completion path."""
 
@@ -98,7 +97,6 @@ def test_self_prime_remedy_unlocks_capture() -> None:
     log.cleanup()
 
 
-@pytest.mark.smoke
 def test_pending_enumeration_is_id_keyed_and_falsy_when_clear() -> None:
     """pending_lazy_state keys by id() and answers falsy after materialization."""
 
@@ -170,7 +168,6 @@ def test_capture_failure_advisory_scopes_the_restoration_claim() -> None:
         assert "not rolled back" in message
 
 
-@pytest.mark.smoke
 def test_materialized_lazy_param_trace_round_trips_through_save_load(tmp_path) -> None:
     """A captured lazy-module trace saves and loads (nightly platform-canary).
 

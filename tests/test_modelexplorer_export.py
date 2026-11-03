@@ -216,7 +216,6 @@ def test_curated_attrs_order_and_omission(port_log: Any) -> None:
     assert attr_map["params"].startswith("20")
 
 
-@pytest.mark.smoke
 def test_source_attr_is_opt_in_and_public_drops_it(port_log: Any) -> None:
     """``source`` appears only with include_source=True, never public (D14)."""
 

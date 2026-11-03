@@ -70,7 +70,6 @@ def test_trace_refuses_cyclic_input_typed() -> None:
     assert excinfo.value.fields["code"] == "input_tree_cycle"
 
 
-@pytest.mark.smoke
 def test_trace_recovers_and_accepts_shared_substructure_after_refusal() -> None:
     """State recovers after a refusal, and DAG-shaped inputs still trace."""
 
@@ -351,7 +350,6 @@ class _PeerBox:
     peer: Any = None
 
 
-@pytest.mark.smoke
 def test_device_move_walker_refuses_cycles_and_depth_typed() -> None:
     """The device-move walker carries the shared cycle/depth guards.
 
@@ -383,7 +381,6 @@ def test_device_move_walker_refuses_cycles_and_depth_typed() -> None:
         tl.trace(_CycleModel(), deep)
 
 
-@pytest.mark.smoke
 def test_device_move_dataclass_rebuild_never_reruns_user_init() -> None:
     """The dataclass device-move rebuild is inert (no ``__post_init__`` re-run).
 
@@ -477,7 +474,6 @@ def test_device_move_dict_subclass_rebuild_never_reruns_ctor_and_keeps_state() -
     assert moved.ctor_runs == 1
 
 
-@pytest.mark.smoke
 def test_device_move_list_subclass_rebuild_never_reruns_ctor_and_keeps_state() -> None:
     """The list-subclass device-move rebuild is inert (no user ctor, state kept)."""
 
@@ -518,7 +514,6 @@ def test_device_move_defaultdict_moves_and_keeps_factory() -> None:
     assert moved.default_factory is list
 
 
-@pytest.mark.smoke
 def test_device_move_ordereddict_subclass_keeps_order_and_state() -> None:
     """OrderedDict subclasses rebuild through the od physical channel, in order."""
 
@@ -583,7 +578,6 @@ def test_device_move_list_subclass_lying_iter_reads_physical_storage() -> None:
     assert list.__getitem__(moved, 1).device.type == "meta"
 
 
-@pytest.mark.smoke
 def test_device_move_userdict_moves_via_instance_state_without_protocol() -> None:
     """Non-dict Mappings move through their INSTANCE STATE, dataclass-style.
 
@@ -682,7 +676,6 @@ def test_copy_arg_tree_lying_iteration_reads_physical_storage() -> None:
 # --- grind-p5 b3-opus-R12-1: the input-copy walker never runs user copy protocols ------
 
 
-@pytest.mark.smoke
 def test_safe_copy_input_tree_ignores_user_deepcopy_substitution() -> None:
     """A user ``__deepcopy__`` cannot substitute the captured program.
 

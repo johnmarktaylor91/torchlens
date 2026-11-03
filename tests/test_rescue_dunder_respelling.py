@@ -143,7 +143,6 @@ def test_canonical_name_matches_what_torch_hands_a_mode(dunder: str) -> None:
     assert _respelling_mismatch(dunder) is None
 
 
-@pytest.mark.smoke
 def test_no_admitted_dunder_respells_past_the_table() -> None:
     """Smoke guard: one loop over every admitted dunder on the running torch.
 

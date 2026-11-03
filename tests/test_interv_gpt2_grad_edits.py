@@ -421,6 +421,7 @@ def test_zero_match_forward_selector_gradient_edit_warns(tiny: _Fixture) -> None
         )
 
 
+@pytest.mark.smoke
 def test_rerun_arms_gradient_edit_and_backward_matches_oracle(tiny: _Fixture) -> None:
     """do(tl.grad(...), engine='rerun') arms the edit; the next backward matches the oracle."""
 

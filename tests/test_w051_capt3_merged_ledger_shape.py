@@ -42,7 +42,6 @@ def _assert_schema_refusal(mutate, *, detail: str) -> None:
 # --- the ``boundaries`` container (the rows that previously escaped as TypeError) ----
 
 
-@pytest.mark.smoke_cells("test_non_sequence_boundaries_refuse_typed[True]")
 @pytest.mark.parametrize("junk", [5, True, 0.5, None.__class__])
 def test_non_sequence_boundaries_refuse_typed(junk) -> None:
     """An int/bool/float/type ``boundaries`` used to die as a bare TypeError."""
@@ -66,7 +65,6 @@ def test_mapping_or_string_boundaries_refuse_typed_naming_the_container(shape) -
     _assert_schema_refusal(mutate, detail="is not a list of boundary records")
 
 
-@pytest.mark.smoke
 def test_tuple_boundaries_are_a_sequence_and_merge() -> None:
     """A tuple is a legitimate sequence container (loaders may rebuild one)."""
 
@@ -79,10 +77,6 @@ def test_tuple_boundaries_are_a_sequence_and_merge() -> None:
     assert sorted(merged.ranks) == [0, 1]
 
 
-@pytest.mark.smoke_cells(
-    "test_malformed_boundary_rows_refuse_typed[<lambda>-is not a mapping]",
-    "test_malformed_boundary_rows_refuse_typed[<lambda>-malformed correlation key]",
-)
 @pytest.mark.parametrize(
     ("mutate", "detail"),
     [
@@ -108,7 +102,6 @@ def test_malformed_boundary_rows_refuse_typed(mutate, detail) -> None:
 # --- the ``group_lifecycle_ledger`` payload ------------------------------------------
 
 
-@pytest.mark.smoke_cells("test_non_list_or_non_event_ledger_refuses_typed[str]")
 @pytest.mark.parametrize(
     "junk",
     ["junk", {"x": 1}, [["x"]], [5], 7, True],
@@ -132,7 +125,6 @@ def test_tuple_ledger_refuses_typed() -> None:
     )
 
 
-@pytest.mark.smoke_cells("test_malformed_ledger_events_refuse_typed[epoch-vocab]")
 @pytest.mark.parametrize(
     "mutate",
     [
@@ -149,13 +141,11 @@ def test_malformed_ledger_events_refuse_typed(mutate) -> None:
     _assert_schema_refusal(mutate, detail="group_lifecycle_ledger")
 
 
-@pytest.mark.smoke
 def test_missing_or_null_install_epoch_refuses_typed() -> None:
     _assert_schema_refusal(lambda r: r.pop("install_epoch"), detail="install_epoch")
     _assert_schema_refusal(lambda r: r.__setitem__("install_epoch", None), detail="install_epoch")
 
 
-@pytest.mark.smoke
 def test_absent_or_empty_journal_is_not_a_rank_capture() -> None:
     """Absence keeps its historical, distinct code: the input is simply not a rank core."""
 

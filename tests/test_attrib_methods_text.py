@@ -155,7 +155,6 @@ def test_two_liner_runs_and_disches_everything() -> None:
     assert any("num_steps='auto'" in line for line in payload.footer_lines)
 
 
-@pytest.mark.smoke
 def test_auto_ladder_certifies_on_smooth_model() -> None:
     """The dual criterion certifies a smooth model at grid pair (64, 128)."""
 
@@ -208,7 +207,6 @@ def test_v17_t1_regression_stopping_predicate() -> None:
     assert _STABILITY_TOLERANCE <= 0.01, "thresholds may tighten, never loosen"
 
 
-@pytest.mark.smoke
 def test_bare_int_warn_band() -> None:
     """D29: int < sequence_length warns; int >= sequence_length does not."""
 
@@ -230,7 +228,6 @@ def test_bare_int_warn_band() -> None:
     assert "logits[0, 2, 7]" in unambiguous.target_repr
 
 
-@pytest.mark.smoke
 def test_target_spellings() -> None:
     """Tuple, token string, contrastive pair, and callable targets resolve."""
 
@@ -259,7 +256,6 @@ def test_target_spellings() -> None:
     assert multi.value.fields["code"] == "text_target_unresolvable"
 
 
-@pytest.mark.smoke
 def test_explicit_baseline_spellings_and_refusals() -> None:
     """zeros / pad_token / ids / tensor baselines resolve; misuse refuses."""
 
@@ -305,7 +301,6 @@ def test_explicit_baseline_residual_warning() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_truncation_is_explicit_and_disclosed() -> None:
     """max_length truncation records the span and warns; never silent."""
 
@@ -343,7 +338,6 @@ def test_input_beyond_the_position_limit_refuses_and_max_length_runs() -> None:
     assert len(within.scores) == 4
 
 
-@pytest.mark.smoke
 def test_payload_escapes_hostile_tokens() -> None:
     """The fallback table escapes token text (D28 escaping rule)."""
 
