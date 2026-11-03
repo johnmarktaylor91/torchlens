@@ -12,8 +12,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from name_lockstep import spelling
-from name_lockstep.check import Corpus, is_private
+from name_lockstep import spelling, static_surface
+from name_lockstep.check import Corpus, glossary_records, is_private, record_only
 from name_lockstep.diff import SurfaceDiff
 
 SNIPPET_BEFORE = 6
@@ -24,6 +24,8 @@ _KIND_TEXT = {
     "export": "namespace export",
     "member": "member of a TorchLens object",
     "param": "keyword argument",
+    "code": 'refusal code (`exc.fields["code"]`)',
+    "receipt": "key of a result record",
 }
 
 
@@ -397,8 +399,51 @@ def _reference(row: dict[str, Any], corpus: Corpus) -> tuple[str, str]:
     return "", "none"
 
 
+def _ungradable(row: dict[str, Any]) -> bool:
+    """Return whether a row has no meaning of its own to guess.
+
+    Parameters
+    ----------
+    row
+        Head row.
+
+    Returns
+    -------
+    bool
+        True for an underscore keyword and for a protocol dunder (``__enter__``), whose
+        meaning is the language protocol, not a TorchLens choice.
+    """
+
+    return is_private(row) or (row["kind"] == "member" and str(row["name"]).startswith("_"))
+
+
+def _with_contract_meaning(row: dict[str, Any], meanings: dict[str, str]) -> dict[str, Any]:
+    """Return a code row carrying the error contract's description as its documentation.
+
+    Parameters
+    ----------
+    row
+        Head row.
+    meanings
+        Code to description, from ``docs/reference/error_refusal_contract.md``.
+
+    Returns
+    -------
+    dict[str, Any]
+        The row, with ``doc_first_line`` and ``doc_source`` filled for a documented code.
+    """
+
+    if row["kind"] != "code" or row.get("doc_first_line") or row["name"] not in meanings:
+        return row
+    source = static_surface.CONTRACT_DOC.rsplit("/", 1)[-1]
+    return {**row, "doc_first_line": meanings[row["name"]], "doc_source": source}
+
+
 def gate_items(surface_diff: SurfaceDiff, head_rows: dict[str, dict[str, Any]], corpus: Corpus):
-    """Return one legibility-check item per new or renamed name (underscore keywords excepted).
+    """Return one legibility-check item per new or renamed name.
+
+    Underscore keywords, protocol dunders and keywords only record constructors take are skipped: they have no meaning
+    to guess (a record constructor's keywords are not public).
 
     Parameters
     ----------
@@ -418,11 +463,14 @@ def gate_items(surface_diff: SurfaceDiff, head_rows: dict[str, dict[str, Any]], 
 
     rows = [(row, "new", None) for row in surface_diff.new]
     rows += [(head_rows[r.new_id], "renamed", r.old_id) for r in surface_diff.renamed]
-    rows = [entry for entry in rows if not is_private(entry[0])]
+    records = glossary_records(corpus)
+    rows = [e for e in rows if not _ungradable(e[0]) and not record_only(e[0], records)]
     items = []
     made_by = producers(head_rows)
     exports = module_exports(head_rows)
+    meanings = static_surface.contract_meanings(corpus.root)
     for row, change, old_id in rows:
+        row = _with_contract_meaning(row, meanings)
         snippets = _snippets(row, corpus, made_by, exports)
         reference, source = _reference(row, corpus)
         items.append(

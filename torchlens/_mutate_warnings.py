@@ -8,7 +8,17 @@ from __future__ import annotations
 
 
 class _MutateWarningSuppression:
-    """Session-level toggle and context manager for mutation warnings."""
+    """Session-level toggle and context manager for mutation warnings.
+
+    Examples
+    --------
+    >>> before = suppress_mutate_warnings.is_suppressed
+    >>> with suppress_mutate_warnings():
+    ...     print(suppress_mutate_warnings.is_suppressed)
+    True
+    >>> suppress_mutate_warnings.is_suppressed == before
+    True
+    """
 
     def __init__(self) -> None:
         """Initialize the suppression flag."""

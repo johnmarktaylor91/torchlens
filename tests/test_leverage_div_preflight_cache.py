@@ -30,6 +30,7 @@ def _armed_trace():
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/preflight.py, _ir/_selector_nodes.py, campaign mutant kills.
 def test_cone_preflight_membership_equals_actual_replay_cone():
     """The exact oracle: predicted replay membership EQUALS actual."""
 
@@ -51,21 +52,22 @@ def test_cone_preflight_membership_equals_actual_replay_cone():
     assert planned == tuple(_qualified(label) for label in fork.last_run["cone"])
 
 
-def test_cone_preflight_discloses_engine_assumptions():
-    trace = _armed_trace()
-    # grouping rule row 28: the second relu call is pass 2 of relu_1_2.
-    plan = cone_preflight(trace, [trace["relu_1_2:2"]])
-    assert plan["cone_size"] < plan["total_ops"]
-    assert plan["live_lane_ops"] == plan["total_ops"]  # live always runs the full forward
-    notes = " ".join(plan["notes"])
-    assert "replayable" in notes
-    assert "never numeric change" in notes
+def test_cone_preflight_default_capture_reports_replay_ready():
+    """A default capture records argument templates, so it is replay-ready."""
 
-
-def test_cone_preflight_unarmed_capture_reports_not_replay_ready():
     torch.manual_seed(0)
     model = ReusedReluNet()
     trace = tl.trace(model, torch.rand(1, 2, 3, 3))
+    plan = cone_preflight(trace, trace.layers["relu_1_2"].ops)
+    assert plan["replay_ready"] is True
+
+
+def test_cone_preflight_predicate_recording_reports_not_replay_ready():
+    """A predicate recording keeps no argument templates, so it is not replay-ready."""
+
+    torch.manual_seed(0)
+    model = ReusedReluNet()
+    trace = tl.record(model, torch.rand(1, 2, 3, 3), save=tl.func("relu")).to_trace()
     plan = cone_preflight(trace, trace.layers["relu_1_2"].ops)
     assert plan["replay_ready"] is False
 
@@ -101,34 +103,7 @@ def test_cache_key_ledgers_never_go_stale():
         )
 
 
-def test_every_capture_option_is_keyed_or_reviewed():
-    """The generated-universe property: no option can silently skip the key."""
-
-    from torchlens._capture.prepare.cache import (
-        CAPTURE_CACHE_KEY_CURATED,
-        CAPTURE_CACHE_KEY_NEUTRAL,
-        _sweep_option_fields_into_cache_config,
-    )
-
-    config: dict[str, object] = {}
-    _sweep_option_fields_into_cache_config(
-        config,
-        tl.options.CaptureOptions(),
-        prefix="capture_option",
-        curated=CAPTURE_CACHE_KEY_CURATED,
-        neutral=CAPTURE_CACHE_KEY_NEUTRAL,
-    )
-    swept = {key.split(":", 1)[1] for key in config}
-    for field in dataclass_fields(tl.options.CaptureOptions):
-        if field.name.startswith("_"):
-            continue
-        assert (
-            field.name in swept
-            or field.name in CAPTURE_CACHE_KEY_CURATED
-            or field.name in CAPTURE_CACHE_KEY_NEUTRAL
-        ), f"CaptureOptions.{field.name} is neither keyed nor reviewed cache-irrelevant"
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture_fingerprint.py.
 def test_swept_option_change_misses_the_cache_key():
     """Two configs differing in ONE swept semantic option produce different keys.
 

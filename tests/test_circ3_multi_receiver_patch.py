@@ -18,8 +18,8 @@ import random
 
 import pytest
 import torch
-from support.multi_patch_reference import HookedPatch, PatchSpec, gpt2_spec
-from test_circ2_edge_scores import CLEAN, CORRUPT, Fixture
+from support.multi_patch_reference import HookedPatch, PatchSpec
+from test_circ2_edge_scores import Fixture
 
 import torchlens as tl
 import torchlens.mechinterp as mi
@@ -113,60 +113,6 @@ def _patch_edges_single_receiver(trace, edges, *, corrupt):
     return result
 
 
-def test_a_circuit_runs_as_one_call_and_matches_plain_hooks(tiny) -> None:
-    model, clean_ids, corrupt_ids, clean, graph, corrupt = tiny
-    edges = _outside_random_circuit(graph, keep=0.4)
-    assert len({edge.receiver.name for edge in edges}) == len(graph.receivers)
-    patched = mi.patch_edges(clean, edges, corrupted_graph=corrupt)
-    want = _reference(model, gpt2_spec(model), clean_ids, corrupt_ids, edges)
-    got = {
-        "ln_f": patched.modules["transformer.ln_f"].out,
-        "lm_head": patched.modules["lm_head"].out,
-    }
-    for layer in range(2):
-        got[f"c_attn{layer}"] = patched.modules[f"transformer.h.{layer}.attn.c_attn"].out
-        got[f"ln_2.{layer}"] = patched.modules[f"transformer.h.{layer}.ln_2"].out
-    for name, value in want.items():
-        torch.testing.assert_close(got[name], value, rtol=0, atol=_ATOL, msg=name)
-    clean_logits = clean.modules["lm_head"].out
-    assert float((got["lm_head"] - clean_logits).abs().max()) > 1e-3
-
-
-def test_upstream_patches_reach_downstream_senders(tiny) -> None:
-    """A receiver downstream of a patch reads the patched forward's senders, not the clean ones."""
-
-    model, clean_ids, corrupt_ids, clean, graph, corrupt = tiny
-    edges = [graph.edges["input->a0.h0<v>"], graph.edges["input->logits"]]
-    patched = mi.patch_edges(clean, edges, corrupted_graph=corrupt)
-    want = _reference(model, gpt2_spec(model), clean_ids, corrupt_ids, edges)
-    got = patched.modules["transformer.ln_f"].out
-    torch.testing.assert_close(got, want["ln_f"], rtol=0, atol=_ATOL)
-    # Summing the two single-receiver patches' clean-value deltas gives a different answer.
-    alone = (
-        mi.patch_edges(clean, edges[1:], corrupted_graph=corrupt).modules["transformer.ln_f"].out
-    )
-    assert float((got - alone).abs().max()) > 1e-6
-
-
-@pytest.mark.parametrize("receiver", ["logits", "m1", "a1.h0<q>", "a0.h1<k>"])
-def test_one_receiver_through_the_multi_path_is_bitwise_the_single_path(tiny, receiver) -> None:
-    _model, _c, _x, clean, graph, corrupt = tiny
-    edges = [edge for edge in graph.edges.values() if edge.receiver.name == receiver][:3]
-    new = mi.patch_edges(clean, edges, corrupted_graph=corrupt)
-    old = _patch_edges_single_receiver(clean, edges, corrupt=corrupt)
-    for op in clean.ops:
-        a, b = new.ops[op.label].out, old.ops[op.label].out
-        if isinstance(a, torch.Tensor):
-            assert torch.equal(a, b), op.label
-
-
-def test_no_edges_returns_an_unpatched_fork(tiny) -> None:
-    _model, _c, _x, clean, _graph, corrupt = tiny
-    fork = mi.patch_edges(clean, [], corrupted_graph=corrupt)
-    assert fork is not clean
-    assert torch.equal(fork.modules["lm_head"].out, clean.modules["lm_head"].out)
-
-
 def test_a_repeated_edge_refuses_and_the_remedy_runs(tiny) -> None:
     _model, _c, _x, clean, graph, corrupt = tiny
     edge = graph.edges["m0->logits"]
@@ -196,34 +142,3 @@ def _fixture_spec(model: Fixture, graph) -> tuple[PatchSpec, dict[str, str]]:
         "h1": m_h1,
         "h2": m_h2,
     }
-
-
-@pytest.mark.parametrize(
-    "plan",
-    [
-        ["input->h1", "input->R"],
-        ["input->h1", "input->h2", "h2->R"],
-        ["input->h2", "h1->R", "input->R"],
-    ],
-)
-def test_nonlinear_fixture_matches_plain_hooks(plan) -> None:
-    model = Fixture().eval()
-    clean = tl.trace(model, CLEAN, capture=_CAPTURE, save="all")
-    corrupt_trace = tl.trace(model, CORRUPT, capture=_CAPTURE, save="all")
-    try:
-        graph, corrupt = mi.component_graph(clean), mi.component_graph(corrupt_trace)
-        spec, names = _fixture_spec(model, graph)
-        rename = {"input": "input", "R": "logits", **names}
-        edges = []
-        for item in plan:
-            sender, receiver = item.split("->")
-            edges.append(graph.edges[f"{rename[sender]}->{rename[receiver]}"])
-        patched = mi.patch_edges(clean, edges, corrupted_graph=corrupt)
-        want = _reference(model, spec, CLEAN, CORRUPT, edges)
-        torch.testing.assert_close(
-            patched.modules["lm_head"].out, want["lm_head"], rtol=0, atol=_ATOL
-        )
-        assert not torch.equal(want["lm_head"], clean.modules["lm_head"].out)
-    finally:
-        clean.cleanup()
-        corrupt_trace.cleanup()

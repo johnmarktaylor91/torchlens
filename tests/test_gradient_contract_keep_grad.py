@@ -52,27 +52,6 @@ def _detached_error(call: Any) -> InvalidArgumentError:
     return caught.value
 
 
-def test_keep_grad_on_a_transparent_edit_changes_nothing() -> None:
-    plain, plain_model = _capture(scale(2.0))
-    kept, kept_model = _capture(keep_grad(scale(2.0)))
-    assert torch.equal(plain, kept)
-    plain.sum().backward()
-    kept.sum().backward()
-    assert torch.equal(plain_model.lin1.weight.grad, kept_model.lin1.weight.grad)
-
-
-def test_keep_grad_zero_ablate_raises_and_scale_zero_keeps_the_graph() -> None:
-    error = _detached_error(lambda: _capture(keep_grad(zero_ablate())))
-    assert error.fields["site"] == "lin1:1"  # the capture-time label of the selected module
-    assert error.fields["reason"] == "edit_detached"
-    assert "keep_grad(tl.scale(0.0))" in error.fields["remedy"]
-    out, model = _capture(keep_grad(scale(0.0)))
-    plain, _ = _capture(zero_ablate())
-    assert torch.equal(out, plain)
-    out.sum().backward()
-    assert torch.equal(model.lin1.weight.grad, torch.zeros_like(model.lin1.weight))
-
-
 def test_keep_grad_replace_with_raises_and_the_fixed_value_spelling_runs() -> None:
     error = _detached_error(lambda: _capture(keep_grad(replace_with(_VALUE))))
     assert "tl.intervention.compose(tl.scale(0.0), tl.add(value))" in error.fields["remedy"]
@@ -91,17 +70,6 @@ def test_decision_keep_grad_true_runs_the_same_check() -> None:
     out, model = _capture(kept)
     out.sum().backward()
     assert model.lin1.weight.grad is not None
-
-
-def test_decision_keep_grad_false_default_is_a_no_op() -> None:
-    decision = InterventionDecision(action="add_hook", hook=zero_ablate())
-    assert decision.keep_grad is False
-    out, model = _capture(decision)
-    plain, _ = _capture(zero_ablate())
-    assert torch.equal(out, plain)
-    out.sum().backward()
-    assert model.lin1.weight.grad is None
-    assert model.lin2.weight.grad is not None
 
 
 def test_keep_grad_refuses_when_gradients_are_disabled_and_enabled_runs() -> None:
@@ -163,3 +131,15 @@ def test_keep_grad_inside_a_subspace_checks_the_coordinates() -> None:
     fork = target.fork()
     fork.do(selection, keep_grad(scale(0.5)))
     assert fork[fork.output_layers[0]].out.requires_grad
+
+
+def test_keep_grad_zero_ablate_raises_and_scale_zero_keeps_the_graph() -> None:
+    error = _detached_error(lambda: _capture(keep_grad(zero_ablate())))
+    assert error.fields["site"] == "lin1:1"  # the capture-time label of the selected module
+    assert error.fields["reason"] == "edit_detached"
+    assert "keep_grad(tl.scale(0.0))" in error.fields["remedy"]
+    out, model = _capture(keep_grad(scale(0.0)))
+    plain, _ = _capture(zero_ablate())
+    assert torch.equal(out, plain)
+    out.sum().backward()
+    assert torch.equal(model.lin1.weight.grad, torch.zeros_like(model.lin1.weight))

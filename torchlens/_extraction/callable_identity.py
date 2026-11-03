@@ -107,6 +107,14 @@ def register_pure_module(name: str) -> None:
     torchlens.errors.InvalidArgumentError
         ``extraction_pure_module_invalid`` when the name is empty, dotted,
         or not an importable installed module.
+
+    Examples
+    --------
+    >>> try:
+    ...     register_pure_module("numpy.linalg")
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     print(type(err).__name__)
+    InvalidArgumentError
     """
 
     import importlib

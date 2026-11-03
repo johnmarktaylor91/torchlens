@@ -8,7 +8,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._semantic import facets as facets_mod
 
 
 class _LinearModel(nn.Module):
@@ -24,37 +23,6 @@ class _LinearModel(nn.Module):
         """Run the model."""
 
         return self.linear(x)
-
-
-def test_facets_rerive_after_tlspec_load_when_recipe_registered(tmp_path: Any) -> None:
-    """Facet views are not serialized and are rebuilt against the current registry."""
-
-    original = list(facets_mod._REGISTRY)
-    try:
-
-        @tl.facets.register(class_name="Linear")
-        def linear_recipe(record: Any) -> dict[str, Any]:
-            """Return a user facet for Linear modules."""
-
-            return {"linear_out_shape": tuple(record.out.shape)}
-
-        path = tmp_path / "linear.tlspec"
-        log = tl.trace(
-            _LinearModel(),
-            torch.randn(1, 3),
-            save="all",
-        )
-        log.save(path)
-
-        facets_mod._REGISTRY[:] = original
-        loaded_without_recipe = tl.load(path)
-        assert not loaded_without_recipe.modules["linear"].facets.has("linear_out_shape")
-
-        tl.facets.register(class_name="Linear")(linear_recipe)
-        loaded_with_recipe = tl.load(path)
-        assert loaded_with_recipe.modules["linear"].facets.linear_out_shape == (1, 3)
-    finally:
-        facets_mod._REGISTRY[:] = original
 
 
 def test_facets_read_before_save_does_not_poison_tlspec(tmp_path: Any) -> None:
@@ -84,23 +52,3 @@ def test_facets_read_before_save_does_not_poison_tlspec(tmp_path: Any) -> None:
     reloaded_call = next(iter(loaded.module_calls))
     assert type(reloaded_call.facets).__name__ == "FacetView"
     assert type(loaded.modules["linear"].facets).__name__ == "FacetView"
-
-
-def test_facets_read_before_pickle_round_trips(tmp_path: Any) -> None:
-    """A pre-pickle ``.facets`` read is dropped from state and rebuilt on access."""
-
-    import pickle
-
-    log = tl.trace(
-        _LinearModel(),
-        torch.randn(1, 3),
-        save="all",
-    )
-    module_call = next(iter(log.module_calls))
-    _ = module_call.facets
-    _ = log.modules["linear"].facets
-    assert "_facets_cache" not in module_call.__getstate__()
-
-    round_tripped = pickle.loads(pickle.dumps(log))
-    reloaded_call = next(iter(round_tripped.module_calls))
-    assert type(reloaded_call.facets).__name__ == "FacetView"

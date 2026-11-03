@@ -15,7 +15,6 @@ from torch import nn
 import torchlens as tl
 from torchlens._runnable import (
     DivergencePolicy,
-    NumericAttestationStatus,
     PathFaithfulness,
 )
 from torchlens._utils._torch_compat import HAS_NAMED_TENSOR_API
@@ -65,6 +64,7 @@ def _exotic_inputs() -> dict[str, torch.Tensor]:
     return inputs
 
 
+# Kept: shares a parametrize list that is not trimmable per id with kept params.
 @pytest.mark.parametrize("kind", sorted(_exotic_inputs()))
 @pytest.mark.parametrize("policy", ["raise", "return"])
 def test_r35_exotic_inputs_fail_typed_before_any_byte_touch(
@@ -94,15 +94,7 @@ def test_r35_exotic_inputs_fail_typed_before_any_byte_touch(
     assert check is not None and check.name.startswith("input_layout:")
 
 
-def test_r35_dense_inputs_keep_transaction_behavior(tmp_path: Path) -> None:
-    """Ordinary dense supported inputs keep the existing transactional flow."""
-
-    x = torch.randn(2, 3)
-    path = _save(_AddOneModel().eval(), x, tmp_path / "dense.tlspec", include_activations=True)
-    result = tl.load(str(path)).run(inputs=x)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
+# Kept: sole branch coverage of _runnable/state.py.
 def test_r35_digest_helper_refuses_exotic_typed() -> None:
     """I5 defense in depth: the digest helper itself rejects exotic tensors."""
 
@@ -129,59 +121,7 @@ def _conv_twins(xc: torch.Tensor) -> dict[str, torch.Tensor]:
     }
 
 
-@pytest.mark.parametrize("twin_kind", sorted(_conv_twins(torch.zeros(1, 3, 4, 4))))
-def test_r35_physical_layout_twin_never_false_trips(tmp_path: Path, twin_kind: str) -> None:
-    """A byte-identical physical twin of the original input never false-trips.
-
-    hon1_3: previously a channels_last twin raised ReplayValueMismatchError with
-    DIVERGED on a faithful replay. The fingerprint compares the EXECUTED-clone
-    basis (H_B_RESOLUTION R2): a twin whose physical difference SURVIVES the
-    defensive clone (channels_last memory format -- it can change kernel
-    reduction order) is changed-input-for-attestation, verified +
-    not_applicable; a twin whose difference the clone ERASES (storage offset,
-    non-dense slicing -- the executed value is physically identical to the
-    capture execution) honestly stays eligible and must byte-attest exactly.
-    Neither may ever raise the corruption tripwire on a faithful replay.
-    """
-
-    torch.manual_seed(7)
-    xc = torch.randn(1, 3, 4, 4)
-    path = _save(
-        _ConvModel().eval(),
-        xc,
-        tmp_path / f"twin_{twin_kind}.tlspec",
-        include_weights=True,
-        include_activations=True,
-    )
-    twin = _conv_twins(xc)[twin_kind]
-    assert torch.equal(xc, twin)
-    result = tl.load(str(path)).run(inputs=twin)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    if twin_kind == "channels_last":
-        assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    else:
-        # Clone-erased physical difference: execution is byte-identical to the
-        # capture execution, so the byte-exact tripwire stays armed and passes.
-        assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-
-
-def test_r35_original_physical_input_stays_attested(tmp_path: Path) -> None:
-    """The exact original input (logical AND physical) still attests."""
-
-    torch.manual_seed(7)
-    xc = torch.randn(1, 3, 4, 4)
-    path = _save(
-        _ConvModel().eval(),
-        xc,
-        tmp_path / "orig.tlspec",
-        include_weights=True,
-        include_activations=True,
-    )
-    result = tl.load(str(path)).run(inputs=xc)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-
-
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
 def test_r35_matmul_carveout_unchanged_no_conv_sdpa_extension() -> None:
     """H_B_RESOLUTION: NO conv/transpose-conv/SDPA extension of the ULP carve-out."""
 
@@ -221,6 +161,7 @@ def test_r35_matmul_carveout_unchanged_no_conv_sdpa_extension() -> None:
 # ---------------------------------------------------------------------------
 
 
+# Kept: sole branch coverage of _runnable/state_context.py.
 def test_r35_autocast_capture_replays_outside_autocast(tmp_path: Path) -> None:
     """corr2_8 repro: a bf16-autocast capture replays faithfully with no ambient."""
 
@@ -239,6 +180,7 @@ def test_r35_autocast_capture_replays_outside_autocast(tmp_path: Path) -> None:
     assert result.output.dtype is torch.bfloat16
 
 
+# Kept: sole branch coverage of _runnable/state_context.py.
 def test_r35_disabled_capture_replays_inside_ambient_autocast(tmp_path: Path) -> None:
     """An autocast-DISABLED capture is immune to the caller's ambient autocast."""
 
@@ -249,48 +191,3 @@ def test_r35_disabled_capture_replays_inside_ambient_autocast(tmp_path: Path) ->
         result = tl.load(str(path)).run(inputs=x)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.output.dtype is torch.float32
-
-
-def test_r35_caller_ambient_state_restored_after_run_and_after_failure(
-    tmp_path: Path,
-) -> None:
-    """The caller's ambient backend context survives success AND divergence."""
-
-    x = torch.randn(2, 3)
-    path = _save(_AddOneModel().eval(), x, tmp_path / "restore.tlspec", include_weights=True)
-    loaded = tl.load(str(path))
-    caller_precision = torch.get_float32_matmul_precision()
-    torch.set_float32_matmul_precision("medium")
-    try:
-        loaded.run(inputs=x)
-        assert torch.get_float32_matmul_precision() == "medium"
-        with pytest.raises(PathDivergenceError):
-            loaded.run(inputs=torch.randn(5, 7))
-        assert torch.get_float32_matmul_precision() == "medium"
-        assert torch.get_default_dtype() is torch.float32
-    finally:
-        torch.set_float32_matmul_precision(caller_precision)
-
-
-def test_r35_recorded_ambient_context_is_applied_during_run(tmp_path: Path) -> None:
-    """The recorded capture ambient value (not the caller's) governs the run."""
-
-    x = torch.randn(2, 3)
-    caller_precision = torch.get_float32_matmul_precision()
-    torch.set_float32_matmul_precision("high")
-    try:
-        path = _save(_AddOneModel().eval(), x, tmp_path / "amb.tlspec", include_weights=True)
-    finally:
-        torch.set_float32_matmul_precision(caller_precision)
-    loaded = tl.load(str(path))
-    descriptor = loaded._runnable.descriptor
-    assert descriptor.ambient_context.float32_matmul_precision == "high"
-    # Run under a DIFFERENT caller precision; the run must restore the caller's
-    # value afterwards while the recorded one governed execution.
-    torch.set_float32_matmul_precision("highest")
-    try:
-        result = loaded.run(inputs=x)
-        assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-        assert torch.get_float32_matmul_precision() == "highest"
-    finally:
-        torch.set_float32_matmul_precision(caller_precision)

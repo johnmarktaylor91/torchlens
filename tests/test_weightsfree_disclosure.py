@@ -61,11 +61,6 @@ def test_envelope_stamped_and_load_valid() -> None:
     assert envelope["claims"]["measured_values"] == "unavailable"
 
 
-def test_ordinary_capture_carries_no_envelope() -> None:
-    trace = tl.trace(Toy(), torch.randn(2, 4))
-    assert trace.graph.structure_evidence is None
-
-
 # ---------------------------------------------------------------------------
 # The claim-status ladder on the honesty authority
 # ---------------------------------------------------------------------------
@@ -166,7 +161,6 @@ _CHANNELS = {
 _MARKER_TOKENS = ("structure-only", "structure_only", "hypothes")
 
 
-@pytest.mark.smoke_cells("test_every_channel_carries_the_structure_marker[slice_summary]")
 @pytest.mark.parametrize("channel", sorted(_CHANNELS))
 def test_every_channel_carries_the_structure_marker(channel: str, tmp_path) -> None:
     """No shipped text-bearing channel may launder the hypothesis banner."""

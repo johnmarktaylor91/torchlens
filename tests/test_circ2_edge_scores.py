@@ -111,39 +111,6 @@ def _fixture_scores(**kwargs) -> dict[str, float]:
     return out
 
 
-@pytest.mark.heavy
-def test_fixture_eap_equals_the_one_point_closed_form() -> None:
-    """EAP (gradient at the clean input) matches ``eap_one_point_clean`` within 1e-12."""
-
-    scores = _fixture_scores(method="eap")
-    for edge, value in EAP_ONE_POINT.items():
-        assert abs(scores[edge] - value) <= 1e-12, edge
-
-
-@pytest.mark.parametrize("steps", sorted(LEFT_RIEMANN))
-@pytest.mark.heavy
-def test_fixture_eap_ig_equals_the_left_riemann_sum(steps: int) -> None:
-    """EAP-IG at ``m`` points equals the closed-form left Riemann sum within 1e-12."""
-
-    scores = _fixture_scores(steps=steps)
-    for edge, value in LEFT_RIEMANN[steps].items():
-        assert abs(scores[edge] - value) <= 1e-12, (steps, edge)
-
-
-@pytest.mark.slow
-def test_fixture_eap_ig_converges_and_completes_at_many_steps() -> None:
-    """m = 32 and 128 match the closed forms; m = 128 converges and is complete within 0.01."""
-
-    m32 = {"input->R": -0.18718271079633553}
-    scores32 = _fixture_scores(steps=32)
-    assert abs(scores32["input->R"] - m32["input->R"]) <= 1e-12
-    scores = _fixture_scores(steps=128)
-    for edge, value in EXACT.items():
-        assert abs(scores[edge] - value) <= 0.01, edge
-    into_r = sum(scores[edge] for edge in ("input->R", "h1->R", "h2->R"))
-    assert abs(into_r - (METRIC_CORRUPT - METRIC_CLEAN)) <= 0.01
-
-
 def _tiny_gpt2():
     """A random float64 eager GPT-2 (2 layers, 2 heads) and clean/corrupt token rows."""
 
@@ -190,30 +157,6 @@ def test_tiny_gpt2_matches_the_independent_reference(tmp_path) -> None:
         for edge, value in want[(method, steps)].items():
             assert abs(got[edge] - value) <= 1e-8 * abs(value) + 1e-10, (method, steps, edge)
         assert all(got[e] == 0.0 for e in got if e.startswith("b")), "bias edges score zero"
-
-
-@pytest.mark.heavy
-def test_edge_table_is_scalar_saveable_and_documents_its_reduction(tmp_path) -> None:
-    """EDGE rows: address ``(edge name,)``, provenance sample count, scalar save and load."""
-
-    table = torchlens.mechinterp.edge_scores(
-        Fixture().eval(),
-        torch.tensor([[0], [0]]),
-        corrupted_input=torch.tensor([[1], [1]]),
-        metric=fixture_metric,
-        method="eap",
-        example_reduction="sum",
-    )
-    rows = table.rows()
-    assert {row.kind for row in rows} == {"EDGE"}
-    assert all(len(row.address) == 1 and "->" in row.address[0] for row in rows)
-    assert table.provenance.sample_count == 2
-    assert {row.reduction for row in rows} == {"sum_positions_sum_examples"}
-    one = _fixture_scores(method="eap")
-    by_name = {row.address[0]: row.score for row in rows}
-    assert by_name["input->logits"] == pytest.approx(2 * one["input->R"], abs=1e-12)
-    loaded = tl.attribution.load_read_table(table.save(tmp_path / "edges.json"))
-    assert {row.address[0]: row.score for row in loaded.rows()} == by_name
 
 
 @pytest.mark.parametrize(

@@ -14,7 +14,7 @@ from torchlens.errors import BackendRuntimeCompatibilityError
 mlx = pytest.importorskip("mlx")
 import mlx.core as mx  # noqa: E402
 
-pytestmark = [pytest.mark.optional, pytest.mark.backend_mlx]
+pytestmark = [pytest.mark.optional, pytest.mark.backend_mlx, pytest.mark.rare]
 
 
 @pytest.mark.parametrize(

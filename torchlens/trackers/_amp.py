@@ -68,6 +68,16 @@ def observed_grad_scale(source: Any) -> tuple[float | None, str]:
         source returns ``(None, "unavailable")``; a disabled scaler returns
         ``(1.0, "unscaled_observed")`` (scaling genuinely off is an observed
         fact, not an assumption).
+
+    Examples
+    --------
+    >>> observed_grad_scale(None)
+    (None, 'unavailable')
+    >>> class Scaler:
+    ...     def is_enabled(self): return True
+    ...     def get_scale(self): return 1024.0
+    >>> observed_grad_scale(Scaler())
+    (1024.0, 'scaled_unknown_factor')
     """
 
     if source is None:
@@ -105,6 +115,17 @@ def unscale_stage(scaler: Any, optimizer: Any) -> str:
     -------
     str
         ``"unscaled"`` | ``"scaled"`` | ``"unknown"``.
+
+    Examples
+    --------
+    >>> from types import SimpleNamespace
+    >>> optimizer = object()
+    >>> scaler = SimpleNamespace(_per_optimizer_states={})
+    >>> unscale_stage(scaler, optimizer)
+    'scaled'
+    >>> scaler._per_optimizer_states[id(optimizer)] = {"stage": SimpleNamespace(name="UNSCALED")}
+    >>> unscale_stage(scaler, optimizer)
+    'unscaled'
     """
 
     if scaler is None or optimizer is None:
@@ -134,6 +155,17 @@ def corrected_grad_block(block: CommittedBlock, scale: float) -> tuple[Committed
     The second element counts the corrected observations so the emitter can
     disclose the derivation (evidence ``unscaled_derived``) on the run-health
     series instead of presenting corrected numbers as observed ones.
+
+    Examples
+    --------
+    >>> import dataclasses; from torchlens.trackers import MemorySink, watch, corrected_grad_block
+    >>> net = nn.Linear(4, 2); opt = torch.optim.SGD(net.parameters(), lr=0.1)
+    >>> with watch(net, to=MemorySink(), optimizer=opt, every=1) as session, session.step(0):
+    ...     opt.zero_grad(); net(torch.randn(2, 4)).sum().backward(); opt.step()
+    >>> block = session.collector.ring.blocks[0]
+    >>> scaled = dataclasses.replace(block, observations=tuple(dataclasses.replace(o, grad_scale="scaled") for o in block.observations))
+    >>> corrected_grad_block(scaled, 4.0)[1] > 0
+    True
     """
 
     corrected = 0
@@ -174,6 +206,17 @@ def correct_running_stats(running_stats: RunningStatsResult, scale: float) -> Ru
     positive rescale; ``min``/``max``/``absmax``/``sum``/``sum_abs``/``mean``
     divide by ``scale``; ``sum_squares`` and ``m2`` divide by ``scale**2``.
     Exact for power-of-two scales (each division adjusts only the exponent).
+
+    Examples
+    --------
+    >>> from torchlens.trackers import MemorySink, watch, correct_running_stats
+    >>> net = nn.Linear(4, 2); opt = torch.optim.SGD(net.parameters(), lr=0.1)
+    >>> with watch(net, to=MemorySink(), optimizer=opt, every=1) as session, session.step(0):
+    ...     opt.zero_grad(); net(torch.randn(2, 4)).sum().backward(); opt.step()
+    >>> spine = next(o.spine for b in session.collector.ring.blocks for o in b.observations if o.spine is not None)
+    >>> corrected = correct_running_stats(spine, 4.0)
+    >>> corrected.num_finite == spine.num_finite and corrected.sum == spine.sum / 4.0
+    True
     """
 
     if not math.isfinite(scale) or scale <= 0.0:
@@ -215,6 +258,17 @@ def correct_histogram(sketch: HistogramResult, scale: float) -> HistogramResult:
     corrected magnitudes genuinely lie below ``2**lo_exp``); zero / NaN /
     +-inf specials are invariant. Non-power-of-two scales refuse: they have
     no exact shift and rebinning is banned (C06 D9).
+
+    Examples
+    --------
+    >>> from torchlens.trackers import MemorySink, watch, correct_histogram
+    >>> net = nn.Linear(4, 2); opt = torch.optim.SGD(net.parameters(), lr=0.1)
+    >>> with watch(net, to=MemorySink(), optimizer=opt, every=1, hist_every=1) as session, session.step(0):
+    ...     opt.zero_grad(); net(torch.randn(2, 4)).sum().backward(); opt.step()
+    >>> sketch = next(o.sketch for b in session.collector.ring.blocks for o in b.observations if o.sketch is not None)
+    >>> corrected = correct_histogram(sketch, 4.0)
+    >>> sum(corrected.pos_counts) + sum(corrected.neg_counts) <= sum(sketch.pos_counts) + sum(sketch.neg_counts)
+    True
     """
 
     if not math.isfinite(scale) or scale <= 0.0 or scale != 2.0 ** round(math.log2(scale)):

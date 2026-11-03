@@ -3,7 +3,7 @@
 This page is for people who attribute a sequence-to-sequence or language model's generation
 to its inputs with Inseq and want to know which parts TorchLens covers. The bridge below was
 tested on inseq 0.7.1 (the `torchlens[inseq]` extra pins `inseq~=0.6`). Inseq downloads model
-weights, so its call is shown as text; the TorchLens side runs on a tiny model built in the
+weights, so its calls are described in prose; the TorchLens side runs on a tiny model built in the
 fence. Checked 2026-11-03.
 
 ## The same task in both
@@ -12,16 +12,12 @@ Attribute the model's next-token prediction after "the cat sat on" to the prompt
 
 ### In Inseq
 
-Inseq loads a model with an attribution method and attributes each generated step. This block
-is not executed here; check the call against your inseq version:
-
-```text
-import inseq
-
-attr_model = inseq.load_model("gpt2", "saliency")
-out = attr_model.attribute("the cat sat on", generation_args={"max_new_tokens": 1})
-out.show()
-```
+Inseq loads a model with an attribution method and attributes each generated step. You call
+`inseq.load_model("gpt2", "saliency")` to get an attribution model, then
+`attr_model.attribute("the cat sat on", generation_args={"max_new_tokens": 1})` to attribute
+one generated token, and `.show()` on the result to display it. The model downloads from the
+Hugging Face Hub, so this is described here rather than run; check the calls against your inseq
+version.
 
 ### In TorchLens
 

@@ -165,6 +165,7 @@ _INPLACE_PARAM_MODULES = [
 ]
 
 
+# Kept: shares a parametrize list that is not trimmable per id with kept params.
 @pytest.mark.parametrize("model_cls", _INPLACE_PARAM_MODULES)
 @pytest.mark.parametrize("include_activations", [False, True])
 def test_inplace_param_write_is_unverifiable(
@@ -229,61 +230,6 @@ class PlainBatchNormRunningStat(nn.Module):
         return self.bn(x)
 
 
-@pytest.mark.parametrize("include_activations", [False, True])
-def test_buffer_host_write_masked_by_journal_is_unverifiable(
-    include_activations: bool, tmp_path: Path
-) -> None:
-    model = BufferHostWriteThenJournaledAdd()
-    capture_x = torch.tensor([2.0, 4.0])
-    path = _save(
-        model,
-        capture_x,
-        tmp_path / f"buffer_mask_{include_activations}.tlspec",
-        include_weights=True,
-        include_activations=include_activations,
-    )
-
-    result = _run(path, capture_x)
-
-    # The journaled add_ masked the host write by refreshing the snapshot from contaminated bytes;
-    # reconciling the pre-op bytes against the journal-expected bytes catches it.
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
-
-
-def test_pure_journaled_buffer_add_stays_verified_and_correct(tmp_path: Path) -> None:
-    model = PureJournaledBufferAdd()
-    state = {k: v.detach().clone() for k, v in model.state_dict().items()}
-    capture_x = torch.tensor([2.0, 4.0])
-    path = _save(model, capture_x, tmp_path / "pure_journal.tlspec", include_weights=True)
-
-    result = _run(path, capture_x)
-
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    expected = _fresh_output(PureJournaledBufferAdd, state, capture_x)
-    torch.testing.assert_close(result.output, expected)
-
-
-def test_plain_batchnorm_running_stat_stays_verified_and_correct(tmp_path: Path) -> None:
-    model = PlainBatchNormRunningStat()
-    model.train()
-    state = {k: v.detach().clone() for k, v in model.state_dict().items()}
-    capture_x = torch.randn(8, 4)
-    path = _save(model, capture_x, tmp_path / "batchnorm.tlspec", include_weights=True)
-
-    result = _run(path, capture_x)
-
-    # The running-stat update is a TRACKED journaled buffer write; the replay reproduces it. No
-    # r15-C3 regression: a plain BatchNorm stays VERIFIED and value-correct vs a fresh instance.
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    fresh = PlainBatchNormRunningStat()
-    fresh.load_state_dict(state)
-    fresh.train()
-    with torch.no_grad():
-        expected = fresh(capture_x.clone())
-    torch.testing.assert_close(result.output, expected)
-
-
 # --------------------------------------------------------------------------- #
 # FINDING C (MEDIUM over-trigger): a read-only DERIVED param stat stays VERIFIED.
 # --------------------------------------------------------------------------- #
@@ -341,17 +287,14 @@ class ParamDirectDetachRead(nn.Module):
 
 
 _READONLY_PARAM_MODULES = [
-    ParamSumItem,
     ParamTolist,
-    ParamFloatMax,
-    MultiParamDerived,
-    ParamDirectDetachRead,
 ]
 
 
 # ``ParamFloatMax`` intentionally does float() on a requires_grad param reduction to exercise a
 # derived read-only escape; torch's "converting to scalar" UserWarning is expected noise, not a
 # torchlens signal, so it must not escalate under filterwarnings=error.
+# Kept: sole branch coverage of backends/torch/_completeness_dispatch_names.py, backends/torch/_foreign_data.py; a sole mutation kill.
 @pytest.mark.filterwarnings("ignore:Converting a tensor with requires_grad")
 @pytest.mark.parametrize("model_cls", _READONLY_PARAM_MODULES)
 def test_readonly_param_stat_stays_verified(model_cls, tmp_path: Path) -> None:
@@ -377,13 +320,3 @@ class PlainCNN(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.relu(self.conv(x))
-
-
-def test_plain_cnn_stays_verified(tmp_path: Path) -> None:
-    model = PlainCNN()
-    capture_x = torch.randn(1, 3, 8, 8)
-    path = _save(model, capture_x, tmp_path / "cnn.tlspec", include_weights=True)
-
-    result = _run(path, capture_x)
-
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED

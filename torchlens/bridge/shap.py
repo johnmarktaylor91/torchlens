@@ -48,6 +48,15 @@ def explain(
         If ``background`` is not passed.
     InvalidArgumentError
         ``bridge_shap_background_missing`` when ``background`` is None.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> try:
+    ...     tl.bridge.shap.explain(trace, background=None)
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     print(type(err).__name__)
+    InvalidArgumentError
     """
 
     if background is None:

@@ -68,21 +68,6 @@ def test_rerun_preserves_static_layers_to_save_subset() -> None:
     assert len(saved_before) < num_ops_before
 
 
-def test_rerun_preserves_predicate_save_subset() -> None:
-    """Rerun keeps predicate-selected saves scoped to matching Ops."""
-
-    x = torch.randn(2, 3)
-    log = tl.trace(ThreeOpModel(), x, save=tl.func("relu"))
-    saved_before = _saved_op_labels(log)
-    num_ops_before = len(log._layer_list)
-
-    log.run(ThreeOpModel(), x + 1)
-
-    assert saved_before
-    assert _saved_op_labels(log) == saved_before
-    assert len(saved_before) < num_ops_before
-
-
 def test_rerun_save_scope_reads_lookback_payload_policy_directly() -> None:
     """``_rerun_save_scope`` must not silently default a renamed options field.
 

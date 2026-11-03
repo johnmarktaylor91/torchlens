@@ -670,14 +670,14 @@ def _validation_result(
         gradient = gradients.get(role)
         if descriptor.status in _TAINTED_STATUSES or descriptor.axes is None:
             indeterminate_roles.append(role)
-            nonfinite = nonfinite or (gradient is not None and gradient.nonfinite_count > 0)
+            nonfinite = nonfinite or (gradient is not None and gradient.num_nonfinite > 0)
             continue
         geometric_batch = geometric_batch or descriptor.batch_coupled
         box = geometric.get(role)
         if gradient is None or box is None:
             indeterminate_roles.append(role)
             continue
-        nonfinite = nonfinite or gradient.nonfinite_count > 0
+        nonfinite = nonfinite or gradient.num_nonfinite > 0
         undeclared_batch = undeclared_batch or (
             gradient.cross_batch_influence and not descriptor.batch_coupled
         )
@@ -1374,6 +1374,15 @@ def cross_validate(
     -------
     list[ReceptiveFieldValidation]
         One tri-state result per operation, unit, and explicit input selector.
+
+    Examples
+    --------
+    >>> net = nn.Conv2d(1, 1, 3, padding=1)
+    >>> armed = tl.trace(net, torch.randn(1, 1, 6, 6, requires_grad=True),
+    ...     capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))
+    >>> results = cross_validate(armed, units="center")
+    >>> (len(results) > 0, all(result.passed for result in results))
+    (True, True)
     """
 
     _refuse_poisoned_rf_verification(trace)

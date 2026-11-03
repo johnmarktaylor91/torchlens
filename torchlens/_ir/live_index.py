@@ -11,7 +11,17 @@ from .events import ModuleFrame
 
 
 class LiveIndexWindowError(KeyError):
-    """Raised when a live-index query targets an unavailable raw label."""
+    """Raised when a live-index query targets an unavailable raw label.
+
+    Examples
+    --------
+    >>> issubclass(tl.errors.LiveIndexWindowError, KeyError)
+    True
+    >>> try:
+    ...     raise tl.errors.LiveIndexWindowError("relu_9_9_raw")
+    ... except KeyError as e:
+    ...     print(type(e).__name__)
+    LiveIndexWindowError"""
 
 
 @dataclass(slots=True)

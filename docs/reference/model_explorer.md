@@ -105,6 +105,9 @@ Exports (when given a `Trace`) and calls the public pinned
 `model_explorer.visualize(...)` -- `reuse_server=`, `host=`, `port=` forward
 verbatim. Needs `pip install "torchlens[model-explorer]"` (`ai-edge-model-explorer>=0.1.33,<0.2`)
 (`model_explorer_serve_unavailable` teaches this at the point of failure).
+Every release the extra admits installs the 0.2 line of
+`ai-edge-model-explorer-adapter` (the C ABI rewrite); the export and serve path was
+checked against adapter 0.2.0 and 0.2.1 ([compat_matrix.md](compat_matrix.md)).
 
 ## Validation report vocabulary
 

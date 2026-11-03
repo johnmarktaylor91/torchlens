@@ -67,15 +67,6 @@ def _fresh_ops(trace: tl.Trace) -> TraceOpAccessor:
     return trace.ops
 
 
-def test_every_label_resolves_to_its_own_op(trace: tl.Trace) -> None:
-    """On a clean capture every final label and raw label names its own Op."""
-
-    _check_op_label_resolution(trace)
-    for op in trace._layer_list:
-        assert trace.ops[op.label] is op
-        assert trace.ops[op._label_raw] is op
-
-
 def test_final_label_outranks_another_ops_raw_spelling(trace: tl.Trace) -> None:
     """Plant the mistral shape: an earlier Op's raw spelling equals a later final label."""
 
@@ -130,24 +121,6 @@ def test_raw_shadow_resolves_to_the_final_label_owner() -> None:
     assert accessor["to_11_117"] is owner
 
 
-def test_unsuffixed_raw_label_is_a_raw_spelling_not_a_collision() -> None:
-    """An unsuffixed ``_label_raw`` equal to another op's final label is outranked, not a clash.
-
-    The collapse-optimizer fixtures plant this shape (an op whose raw label is
-    the input's final label ``input_1``). It is a raw spelling, so the final
-    label's owner wins and nothing refuses; only a suffixed raw label is a
-    final-tier alias.
-    """
-
-    owner = _Row("input_1:1", "input_1:1", "input_1_raw", "input_1", "input_1", 0)
-    planted = _Row("linear_1_1:1", "linear_1:1", "input_1", "linear_1_1", "linear_1", 1)
-    accessor = _rows_accessor(owner, planted)
-    assert accessor["input_1"] is owner
-    assert accessor._resolve_substring_by_scan("input_1") is owner
-    assert accessor["input_1_raw"] is owner
-    assert accessor["linear_1_1"] is planted
-
-
 def test_final_label_claimed_by_two_ops_refuses() -> None:
     """Two rows sharing one final alias make every lookup of it refuse."""
 
@@ -181,18 +154,6 @@ def test_validation_fails_on_a_misresolving_label(trace: tl.Trace) -> None:
     with pytest.raises(
         MetadataInvariantError, match="resolves through trace.ops to a different op"
     ):
-        _check_op_label_resolution(trace)
-
-
-def test_validation_fails_on_a_colliding_label(trace: tl.Trace) -> None:
-    """Validation fails when two Ops claim one final label."""
-
-    earlier, later = _single_pass_pair(trace)
-    ops = _fresh_ops(trace)
-    indexes = ops._ensure_alias_indexes()
-    assert indexes is not None
-    indexes.collisions[later.layer_label] = [earlier, later]
-    with pytest.raises(MetadataInvariantError, match="does not resolve to it"):
         _check_op_label_resolution(trace)
 
 

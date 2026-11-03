@@ -77,12 +77,12 @@ def normalize_echo(narrate: Any) -> NarrationOptions | None:
     if select is None or select is False:
         return None
     _validate_select(select)
-    if normalized.stats not in ("off", "reuse", "sampled", "exact"):
+    if normalized.value_stats not in ("off", "reuse", "sampled", "exact"):
         raise NarrationConfigError(
-            f"NarrationOptions.stats={normalized.stats!r} is not a rung. Remedy: use 'off', "
+            f"NarrationOptions.value_stats={normalized.value_stats!r} is not a rung. Remedy: use 'off', "
             "'reuse', 'sampled', or 'exact' (the four measured cost classes).",
             code="echo_argument_invalid",
-            remedy="use stats='off'|'reuse'|'sampled'|'exact'",
+            remedy="use value_stats='off'|'reuse'|'sampled'|'exact'",
         )
     return normalized
 

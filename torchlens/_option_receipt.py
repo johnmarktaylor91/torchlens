@@ -3,7 +3,7 @@
 Split out of ``torchlens/options.py`` (2026-08-26 P03 fix cycle). The
 ``_explicit_fields`` / ``_field_is_explicit`` readers over ``_specified_fields``,
 the frozen-group construction kit (``_resolve_option_value`` /
-``_set_frozen_fields``) and :class:`NarrationOptions` (lane F28) live here;
+``_set_frozen_fields`` / ``_build_option``) and :class:`NarrationOptions` (lane F28) live here;
 ``options.py`` imports them back (one-directional -- this module never
 imports ``options``).
 """
@@ -106,7 +106,7 @@ def _set_frozen_fields(
 
 _ECHO_FIELDS: Final[tuple[str, ...]] = (
     "sites",
-    "stats",
+    "value_stats",
     "sink",
     "tail_on_error",
     "on_error_only",
@@ -135,7 +135,7 @@ class NarrationOptions:
         (``tl.func``, ``tl.in_module``, boolean combinations, bounded
         ``followed_by``). Selectors needing finalized labels refuse typed
         BEFORE execution; the remedy is post-hoc ``.narrate()``.
-    stats:
+    value_stats:
         Value-stats rung: ``"off"`` (default; metadata only, zero value
         reads, zero device syncs), ``"reuse"`` (only facts another armed
         feature already paid for), ``"sampled"`` (bounded seeded-sample
@@ -161,13 +161,13 @@ class NarrationOptions:
 
     Examples
     --------
-    >>> opts = NarrationOptions(sites=True, stats="off", tail_on_error=20)
-    >>> opts.stats
+    >>> opts = NarrationOptions(sites=True, value_stats="off", tail_on_error=20)
+    >>> opts.value_stats
     'off'
     """
 
     sites: Any = True
-    stats: str = "off"
+    value_stats: str = "off"
     sink: Any = None
     tail_on_error: int = 20
     on_error_only: bool = False
@@ -179,7 +179,7 @@ class NarrationOptions:
     def __init__(  # noqa: PLR0913 - an option-group constructor mirrors its public fields
         self,
         sites: Any | MissingType = MISSING,
-        stats: str | MissingType = MISSING,
+        value_stats: str | MissingType = MISSING,
         sink: Any | MissingType = MISSING,
         *,
         tail_on_error: int | MissingType = MISSING,
@@ -191,7 +191,9 @@ class NarrationOptions:
         specified_fields: set[str] = set()
         values: dict[str, Any] = {
             "sites": _resolve_option_value("sites", sites, True, specified_fields),
-            "stats": _resolve_option_value("stats", stats, "off", specified_fields),
+            "value_stats": _resolve_option_value(
+                "value_stats", value_stats, "off", specified_fields
+            ),
             "sink": _resolve_option_value("sink", sink, None, specified_fields),
             "tail_on_error": _resolve_option_value(
                 "tail_on_error", tail_on_error, 20, specified_fields
@@ -226,3 +228,14 @@ class NarrationOptions:
         _set_frozen_fields(instance, _ECHO_FIELDS, values)
         object.__setattr__(instance, "_specified_fields", specified_fields)
         return instance
+
+
+def _build_option(
+    option_factory: Any, values: Mapping[str, Any], specified_fields: frozenset[str]
+) -> Any:
+    """Build an option object from resolved values through its (possibly private) builder."""
+
+    builder = getattr(option_factory, "_from_values", None)
+    if builder is None:
+        builder = option_factory.from_values
+    return builder(values, specified_fields)

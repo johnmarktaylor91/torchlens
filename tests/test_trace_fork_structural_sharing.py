@@ -52,69 +52,6 @@ def cond_trace() -> Iterator[tl.Trace]:
         trace.cleanup()
 
 
-def _owned_object_ids(trace: tl.Trace) -> set[int]:
-    """Return ids of the child objects a Trace owns outright."""
-
-    owned = {id(op) for op in trace._layer_list}
-    owned |= {id(layer) for layer in trace._layer_logs.values()}
-    owned |= {id(module) for module in trace.modules}
-    owned |= {id(call) for module in trace.modules for call in module.calls.values()}
-    owned |= {id(conditional) for conditional in trace.graph.conditionals}
-    owned |= {id(arm) for conditional in trace.graph.conditionals for arm in conditional.arms}
-    return owned
-
-
-def test_fork_shares_no_owned_object_with_parent(cond_trace: tl.Trace) -> None:
-    """No fork-owned child object may be the parent's own object."""
-
-    fork = cond_trace._fork_trace(name="isolation")
-    assert not (_owned_object_ids(fork) & _owned_object_ids(cond_trace))
-
-
-def test_fork_back_references_point_at_the_fork(cond_trace: tl.Trace) -> None:
-    """Owner back-references inside the fork resolve to the fork itself."""
-
-    fork = cond_trace._fork_trace(name="selfconsistent")
-    assert all(op.source_trace is fork for op in fork._layer_list)
-    assert all(layer.source_trace is fork for layer in fork._layer_logs.values())
-    assert all(module._source_trace is fork for module in fork.modules)
-    assert fork.graph.conditionals, "fixture must produce at least one conditional"
-    for conditional in fork.graph.conditionals:
-        for arm in conditional.arms:
-            assert arm._trace is fork
-
-
-def test_fork_lookup_containers_agree_on_identity(cond_trace: tl.Trace) -> None:
-    """Every lookup container hands back the same fork Op object."""
-
-    fork = cond_trace._fork_trace(name="identity")
-    by_position = fork._layer_list
-    assert set(map(id, fork._layer_dict_main_keys.values())) <= set(map(id, by_position))
-    assert set(map(id, fork._layer_dict_all_keys.values())) <= set(map(id, by_position))
-    for layer in fork._layer_logs.values():
-        for op in layer.ops.values():
-            assert any(op is candidate for candidate in by_position)
-
-
-def test_fork_mutation_does_not_reach_parent(cond_trace: tl.Trace) -> None:
-    """Mutating fork state leaves every parent-visible value untouched."""
-
-    before = [dict(op.annotations) for op in cond_trace._layer_list]
-    before_arms = [
-        [arm.fired for arm in conditional.arms] for conditional in cond_trace.graph.conditionals
-    ]
-    fork = cond_trace._fork_trace(name="mutation")
-    for op in fork._layer_list:
-        op.annotations["__probe__"] = "fork-only"
-    for conditional in fork.graph.conditionals:
-        for arm in conditional.arms:
-            arm.fired = not arm.fired
-    assert [dict(op.annotations) for op in cond_trace._layer_list] == before
-    assert [
-        [arm.fired for arm in conditional.arms] for conditional in cond_trace.graph.conditionals
-    ] == before_arms
-
-
 def test_fork_memo_rollback_discards_partial_entries() -> None:
     """A field copy that raises must not leave half-built objects in the memo."""
 

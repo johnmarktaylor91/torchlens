@@ -40,6 +40,16 @@ def doctor(model: nn.Module | None = None, inputs: Any = None) -> DoctorReport:
     DoctorReport
         Environment checks, the ``backend_scorecard:<name>`` rows, then model
         compatibility findings, if a model was supplied.
+
+    Examples
+    --------
+    >>> report = tl.report.doctor(model, x)
+    >>> type(report).__name__
+    'DoctorReport'
+    >>> report.torch_version == torch.__version__
+    True
+    >>> len(report.checks) > 0
+    True
     """
 
     from ..backends._scorecard_rows import backend_scorecard_rows

@@ -1,5 +1,9 @@
 """File-size cap: package files over 800 lines and functions over 60 lines.
 
+Lines of a docstring's ``Examples`` section are not counted (``_common.example_section_lines``):
+the docstring standard puts a runnable example on every public function and class, and
+the cap measures code and prose, not those examples. Every other line counts.
+
 Every offender must be listed in ``scripts/checks/file_cap_allowlist.txt``
 with its line count today; a listed file or function may shrink but never
 grow past its recorded count, and an unlisted offender fails. Entries are
@@ -24,7 +28,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _common import FAIL, OK, Outcome  # noqa: E402
+from _common import FAIL, OK, Outcome, example_section_lines  # noqa: E402
 
 FILE_CAP = 800
 FUNCTION_CAP = 60
@@ -39,7 +43,9 @@ HEADER = """\
 """
 
 
-def _functions(tree: ast.AST) -> Iterator[tuple[str, int]]:
+def _functions(tree: ast.AST, excluded: frozenset[int]) -> Iterator[tuple[str, int]]:
+    """Yield ``(qualname, counted lines)`` per function, ``excluded`` line numbers left out."""
+
     stack: list[tuple[ast.AST, str]] = [(tree, "")]
     while stack:
         node, prefix = stack.pop()
@@ -47,7 +53,9 @@ def _functions(tree: ast.AST) -> Iterator[tuple[str, int]]:
             if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 name = f"{prefix}{child.name}"
                 if not isinstance(child, ast.ClassDef):
-                    yield name, (child.end_lineno or child.lineno) - child.lineno + 1
+                    end = child.end_lineno or child.lineno
+                    skipped = sum(1 for line in excluded if child.lineno <= line <= end)
+                    yield name, end - child.lineno + 1 - skipped
                 stack.append((child, f"{name}."))
             else:
                 stack.append((child, prefix))
@@ -61,10 +69,11 @@ def measure(repo: Path) -> dict[str, int]:
         for path in sorted((repo / top).rglob("*.py")):
             rel = path.relative_to(repo).as_posix()
             text = path.read_text(encoding="utf-8")
-            lines = len(text.splitlines())
+            excluded = example_section_lines(text)
+            lines = len(text.splitlines()) - len(excluded)
             if lines > FILE_CAP:
                 found[rel] = lines
-            for name, length in _functions(ast.parse(text, filename=rel)):
+            for name, length in _functions(ast.parse(text, filename=rel), excluded):
                 key = f"{rel}::{name}"
                 if length > FUNCTION_CAP and length > found.get(key, 0):
                     found[key] = length

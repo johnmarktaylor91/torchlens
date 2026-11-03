@@ -167,7 +167,6 @@ def test_worker_silently_drops_duplicate_ids() -> None:
     assert stats["opNodes"] == 2, "vendor now keeps duplicate ids: contract change"
 
 
-@pytest.mark.smoke
 def test_semantic_validator_catches_planted_defects() -> None:
     """Every validator tripwire fires on a deliberately broken payload."""
 
@@ -212,3 +211,13 @@ def test_validator_passes_the_shipped_payload(reuse_payload: dict[str, Any]) -> 
 
     report = tl.export.validate_model_explorer_payload(reuse_payload)
     assert report.ok, report.failures
+
+
+def test_export_error_code_lives_in_fields() -> None:
+    """The refusal code reads from ``fields["code"]``, as the class docstring says."""
+
+    error = tl.errors.ModelExplorerExportError(
+        "duplicate graph id", code="model_explorer_duplicate_node_id", remedy="report it"
+    )
+    assert error.fields["code"] == "model_explorer_duplicate_node_id"
+    assert not hasattr(error, "code")

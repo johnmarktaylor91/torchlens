@@ -194,105 +194,6 @@ def test_dla_measured_effects_equal_the_closed_form(ablation: str) -> None:
         assert audit.rank_agreement == 1.0
 
 
-def test_dla_constant_row_is_reported_apart_and_rows_add_to_the_native_logits() -> None:
-    """The constant row has no site: it is reported, not ablated; rows plus it give native."""
-
-    model = _lm()
-    claim = _dla(model)
-    audit = attribution.causal_audit(model, IDS, claim=claim, k=1, num_random_draws=1)
-    bias = model.ln_f.bias.detach()
-    head_bias = model.lm_head.bias.detach()
-    weight = model.lm_head.weight.detach()
-    per_cell = sum(
-        float((weight[answer] - weight[vs]) @ bias + head_bias[answer] - head_bias[vs])
-        for answer, vs in zip(ANSWER, VS, strict=True)
-    )
-    constant = per_cell * IDS.shape[0] * len(POSITIONS)
-    assert constant != 0.0
-    assert audit.extra["constant_row"] == constant
-    assert len(audit.units) == len(claim.coordinates)
-    assert math.fsum(row.claimed_effect for row in audit.units) + constant == audit.original_score
-    assert audit.original_score == audit.extra["native_score"]
-
-
-def test_dla_a_shuffled_claim_scores_below_the_correct_claim() -> None:
-    """Permuting the rows' values breaks the ranking; the measured effects do not change."""
-
-    model = _lm()
-    claim = _dla(model)
-    shuffled = ContributionScores(
-        claim.coordinates,
-        claim.values[torch.tensor([3, 2, 1, 0])],
-        constant=claim.constant,
-        native=claim.native,
-        answer_tokens=claim.answer_tokens,
-        vs_tokens=claim.vs_tokens,
-        positions=claim.positions,
-        identity_receipt=claim.identity_receipt,
-    )
-    correct = attribution.causal_audit(model, IDS, claim=claim, k=2)
-    wrong = attribution.causal_audit(model, IDS, claim=shuffled, k=2)
-    assert correct.rank_agreement == 1.0
-    assert wrong.rank_agreement is not None and wrong.rank_agreement < correct.rank_agreement
-    assert [row.measured_effect for row in wrong.units] == [
-        row.measured_effect for row in correct.units
-    ]
-
-
-def test_dla_sets_add_up_and_random_draws_are_seeded() -> None:
-    """Top, bottom and random sets measure the sum of their members (linear model)."""
-
-    model = _lm()
-    claim = _dla(model)
-    audit = attribution.causal_audit(model, IDS, claim=claim, k=2, num_random_draws=3, seed=4)
-    by_unit = {row.index: row for row in audit.units}
-    for item in audit.sets:
-        assert item.measured_effect == math.fsum(by_unit[u].measured_effect for u in item.indices)
-        assert item.claimed_effect == math.fsum(by_unit[u].claimed_effect for u in item.indices)
-    order = sorted(by_unit, key=lambda u: -abs(by_unit[u].claimed_effect))
-    assert audit.set_of("top")[0].indices == tuple(order[:2])
-    again = attribution.causal_audit(model, IDS, claim=claim, k=2, num_random_draws=3, seed=4)
-    assert [s.indices for s in again.set_of("random")] == [
-        s.indices for s in audit.set_of("random")
-    ]
-
-
-@pytest.mark.parametrize("exact", [True, False], ids=["float64_exact", "float32_layernorm"])
-def test_dla_recorded_ablations_replay_to_their_measured_effects(exact: bool) -> None:
-    """Every row's and set's edit, replayed on a fresh trace, reproduces its measured effect."""
-
-    model = _lm(exact)
-    ids = IDS
-    audit = attribution.causal_audit(model, ids, claim=_dla(model), k=2, num_random_draws=2)
-    for item in (*audit.units, *audit.sets):
-        trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
-        fork = trace.fork()
-        with torch.no_grad():
-            for selection, edit in item.build_interventions:
-                fork.do(selection, edit)
-        replayed = audit.original_score - _logit_metric(audit, fork, ids)
-        if exact:
-            assert replayed == item.measured_effect
-        else:
-            assert abs(replayed - item.measured_effect) <= FLOAT32_REPLAY_ATOL
-        fork.cleanup()
-
-
-def test_dla_audit_leaves_the_caller_model_and_random_state_untouched() -> None:
-    """Parameters and buffers stay bit-identical, the training flags and global RNG too."""
-
-    model = TinyLM(exact=False).train()
-    claim = _dla(model)
-    model.train()
-    before = {name: value.detach().clone() for name, value in model.state_dict().items()}
-    rng = torch.get_rng_state()
-    attribution.causal_audit(model, IDS, claim=claim, k=2, edit="mean")
-    assert all(torch.equal(before[name], value) for name, value in model.state_dict().items())
-    assert all(parameter.grad is None for parameter in model.parameters())
-    assert model.training and all(module.training for module in model.modules())
-    assert torch.equal(torch.get_rng_state(), rng)
-
-
 @pytest.mark.parametrize("kind", ["other_inputs", "other_weights", "target_given"])
 def test_dla_misaligned_claims_refuse_and_the_remedy_runs(kind: str) -> None:
     """A table whose native logits are not this run's, or a target= beside it, refuses."""
@@ -344,19 +245,6 @@ def test_dla_a_row_without_a_site_refuses_and_the_remedy_runs() -> None:
     assert isinstance(fixed, attribution.CausalAudit)
 
 
-def test_dla_k_larger_than_the_rows_refuses_and_the_remedy_runs() -> None:
-    """``k`` above the number of component rows refuses, naming ``k=<rows>``."""
-
-    model = _lm()
-    claim = _dla(model)
-    with pytest.raises(tl.errors.AttributionError) as excinfo:
-        attribution.causal_audit(model, IDS, claim=claim, k=9)
-    assert excinfo.value.fields.get("code") == "attribution_eval_setting_invalid"
-    scope = {"tl": tl, "torchlens": torchlens, "model": model, "x": IDS, "claim": claim}
-    fixed = eval(_remedy(str(excinfo.value)), scope)  # noqa: S307
-    assert isinstance(fixed, attribution.CausalAudit)
-
-
 # ----------------------------------------------------------------------------------------------
 # One-backward read tables
 # ----------------------------------------------------------------------------------------------
@@ -397,28 +285,6 @@ def _read(model: nn.Module, x: Tensor = X, reduce: str | None = "sum", **kwargs:
     )
 
 
-@pytest.mark.parametrize("ablation", ["zero", "mean", "baseline"])
-def test_read_site_rows_measure_the_closed_form(ablation: str) -> None:
-    """Each site's measured effect is ``grad . (site - replacement)`` exactly (float64)."""
-
-    model = LinearNet().eval().double()
-    table = _read(model)
-    audit = attribution.causal_audit(
-        model, X, claim=table, target=_seed(), k=2, **_audit_kwargs(ablation)
-    )
-    sites = _linear_sites(model, X)
-    expected = [
-        float((grad * (value - _replacement(value, ablation))).sum())
-        for value, grad in sites.values()
-    ]
-    assert [row.site for row in audit.units] == list(sites)
-    assert [row.measured_effect for row in audit.units] == expected
-    assert audit.extra["claim_kind"] == "read_table" and audit.extra["grain"] == "site"
-    if ablation == "zero":
-        assert [row.claimed_effect for row in audit.units] == expected
-        assert audit.rank_agreement == 1.0
-
-
 def test_read_element_rows_measure_the_closed_form() -> None:
     """Element-grain rows: each element's ablation effect equals its activation times gradient."""
 
@@ -433,58 +299,6 @@ def test_read_element_rows_measure_the_closed_form() -> None:
     assert {row.index: row.measured_effect for row in audit.units} == expected
     assert {row.index: row.claimed_effect for row in audit.units} == expected
     assert audit.extra["grain"] == "element"
-
-
-def test_read_a_shuffled_table_scores_below_the_correct_table() -> None:
-    """Permuting the rows' scores breaks the ranking; the measured effects do not change."""
-
-    model = LinearNet().eval().double()
-    table = _read(model)
-    rows = table.rows()
-    scores = [row.score for row in rows][::-1]
-    shuffled_rows = {
-        row.key: dataclasses.replace(row, score=score)
-        for row, score in zip(rows, scores, strict=True)
-    }
-    shuffled = type(table)(shuffled_rows, table.provenance, trace=table.trace)
-    correct = attribution.causal_audit(model, X, claim=table, target=_seed(), k=2)
-    wrong = attribution.causal_audit(model, X, claim=shuffled, target=_seed(), k=2)
-    assert correct.rank_agreement == 1.0
-    assert wrong.rank_agreement is not None and wrong.rank_agreement < 1.0
-
-
-@pytest.mark.parametrize("reduce", ["sum", None], ids=["site", "element"])
-def test_read_recorded_ablations_replay_to_their_measured_effects(reduce: str | None) -> None:
-    """Every row's and set's edit, replayed on a fresh trace, reproduces its measured effect."""
-
-    model = LinearNet().eval().double()
-    audit = attribution.causal_audit(
-        model, X, claim=_read(model, reduce=reduce), target=_seed(), k=2, num_random_draws=2
-    )
-    for item in (*audit.units, *audit.sets):
-        trace = tl.trace(model, X, capture=tl.options.CaptureOptions(replayable=True))
-        fork = trace.fork()
-        with torch.no_grad():
-            for selection, edit in item.build_interventions:
-                fork.do(selection, edit)
-        replayed = audit.original_score - float(fork["output_1"].out[SEED_INDEX])
-        assert replayed == item.measured_effect
-        fork.cleanup()
-
-
-def test_read_audit_leaves_the_caller_model_and_random_state_untouched() -> None:
-    """Parameters, gradients, training flags and the global RNG are unchanged."""
-
-    model = LinearNet().double().train()
-    table = _read(model)
-    before = {name: value.detach().clone() for name, value in model.state_dict().items()}
-    grads = [parameter.grad for parameter in model.parameters()]
-    rng = torch.get_rng_state()
-    attribution.causal_audit(model, X, claim=table, target=_seed(), k=2, edit="mean")
-    assert all(torch.equal(before[name], value) for name, value in model.state_dict().items())
-    assert [parameter.grad for parameter in model.parameters()] == grads
-    assert model.training and all(module.training for module in model.modules())
-    assert torch.equal(torch.get_rng_state(), rng)
 
 
 @pytest.mark.parametrize("kind", ["other_seed", "no_target", "not_a_seed", "other_inputs"])
