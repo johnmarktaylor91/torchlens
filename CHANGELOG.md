@@ -434,6 +434,10 @@
 
 ### Bug Fixes
 
+- **capture**: `Tensor.to_sparse_coo`, `to_sparse_csr`, `to_sparse_csc`, `to_sparse_bsr` and
+  `to_sparse_bsc` are recorded as ops, like `to_sparse`. torch does not route them through
+  `__torch_function__`, so a sparse tensor built in forward with one of them reached its consumer
+  (`torch.sparse.mm`, `torch.sparse.sampled_addmm`) with no provenance and capture warned.
 - **capture**: call-site chains no longer include TorchLens's own frames when the package is
   imported through a relative `sys.path` entry such as `PYTHONPATH=.`; those frames had merged
   distinct call sites into false loops. The TorchLens-frame test now compares normalised file
