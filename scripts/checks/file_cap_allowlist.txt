@@ -387,7 +387,7 @@ torchlens/_postprocess/loop_grouping_adapter.py::_refine_iso_groups	93
 torchlens/_postprocess/source_provenance.py::_warn_unattributed_tensor_args	72
 torchlens/_quickstart/_ladder.py::_trace_via_ladder	65
 torchlens/_quickstart/_primitive.py::capture_concrete	82
-torchlens/_quickstart/_render.py::_render_finished_trace	74
+torchlens/_quickstart/_render.py::_render_finished_trace	73
 torchlens/_registry/kernel.py::Registry.register	88
 torchlens/_robustness.py::_iter_tensors_with_paths	88
 torchlens/_robustness.py::_maybe_admit_meta	63

@@ -6,6 +6,7 @@ method per verb that forwards to these functions.
 
 from __future__ import annotations
 
+import functools
 import weakref
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
@@ -32,6 +33,7 @@ from ._pass_animation import pass_animation_html
 from ._render_dot import draw as _render_draw
 from ._render_entrypoints import render_backward_graph, render_combined_graph
 from ._render_utils import _KNOWN_EXTS, DEFAULT_DRAW_STEM, collision_safe_outpath
+from ._svg_compose import render_detached_dot
 from ._trace_collapse import (
     collapse_plan as _collapse_plan,
     collapse_schedule as _collapse_schedule,
@@ -239,12 +241,29 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
         str(outpath),
         num_ops=num_ops,
         policy=policy,
-        _collapse_source=weakref.ref(trace),
-        _collapse_context=collapse_context,
-        _collapse_tools=(_collapse_plan, _collapse_schedule)
+        **_detached_fields(trace, collapse_context),
+    )
+
+
+def _detached_fields(trace: Trace, collapse_context: Any) -> dict[str, Any]:
+    """Return the private ``Drawing`` fields that serve it after the draw returns.
+
+    The collapse diagnostics (a forward drawing's plan and schedule, read
+    from a weak reference to the trace) and the renderer its notebook display
+    and ``save`` to another format use: the draw's own Graphviz child, bound to
+    the trace's image root.
+    """
+
+    return {
+        "_collapse_source": weakref.ref(trace),
+        "_collapse_context": collapse_context,
+        "_collapse_tools": (_collapse_plan, _collapse_schedule)
         if collapse_context is not None
         else None,
-    )
+        "_render": functools.partial(
+            render_detached_dot, image_root=getattr(trace, "_visualizer_dir", None)
+        ),
+    }
 
 
 def animate(
@@ -278,7 +297,7 @@ def animate(
 def partial_drawing(dot: str) -> Drawing:
     """Body of ``PartialTrace.draw``'s return: the failed-capture DOT as a ``Drawing``."""
 
-    return Drawing(dot=dot)
+    return Drawing(dot=dot, _render=render_detached_dot)
 
 
 def preview_fastlog(
