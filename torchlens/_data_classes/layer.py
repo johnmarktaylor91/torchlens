@@ -56,7 +56,7 @@ from .._quantities import Bytes, Duration, Flops, Macs
 from .._selection.selection import _SelectionOperand
 from .._trace_core.op_store import DetachedOpStore
 from .._trace_core.relation_views import LAYER_FROZENSET_VIEW_FIELDS, LAYER_TUPLE_VIEW_FIELDS
-from .._utils.facade import refuse_removed_member
+from .._utils.facade import refuse_removed_member, removed_set_remedy
 from . import _doors
 
 # LayerAccessor is re-exported (not used here) so every historical
@@ -100,10 +100,7 @@ _LAYER_DELEGATED_PASS_FIELDS = frozenset((*LAYER_PASS_LOG_FIELD_ORDER, "out_ref"
 #: Public Layer members removed by the do fold (remove-and-rename, no alias).
 _REMOVED_LAYER_MEMBERS: dict[str, str] = {
     "attach_hooks": "use layer.do(site_or_hooks, ...) -- do stages the hooks",
-    "set": (
-        "use layer.do(value, intervention=tl.options.InterventionOptions("
-        "engine='set_only')) -- Layer.set was replaced by the set_only engine of do"
-    ),
+    "set": removed_set_remedy("Layer", "layer", "value"),
 }
 
 # Typed container defaults for every non-Optional container field Layer stores

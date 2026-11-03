@@ -151,16 +151,36 @@ def test_removed_module_name_raises_typed_redirect() -> None:
             target = importlib.import_module(walked)
 
 
-def test_layer_set_raises_typed_redirect(owners: dict[str, Any]) -> None:
-    """``Layer.set`` was replaced by ``Layer.do`` with the ``set_only`` engine."""
+@pytest.mark.parametrize(
+    ("owner", "call"),
+    [
+        ("Trace", "trace.do(site, value, intervention="),
+        ("Layer", "layer.do(value, intervention="),
+        ("Op", "op.do(value, intervention="),
+    ],
+)
+def test_set_redirect_names_set_only_for_values_and_sticky_for_callables(
+    owners: dict[str, Any], owner: str, call: str
+) -> None:
+    """``set`` redirects to the ``set_only`` engine of ``do`` and says a callable stays sticky.
 
-    layer = next(iter(owners["Trace"].layers))
+    ``set(site, fn)`` applied the callable once; ``do(..., engine="set_only")`` stages it as a
+    sticky hook (walk ruling names.3), so the redirect names that change and the way to detach.
+    """
+
+    instance = owners[owner]
     with pytest.raises(FacadeTeachingError) as excinfo:
-        _ = layer.set
+        _ = instance.set
+    text = str(excinfo.value)
     assert excinfo.value.fields["code"] == "facade_redirect"
-    assert "set_only" in str(excinfo.value)
-    assert getattr(layer, "set", "absent") == "absent"
-    assert callable(layer.do)
+    assert f"use {call}tl.options.InterventionOptions(engine='set_only'))" in text
+    assert "to stage a value or tensor" in text
+    assert "a callable passed that way becomes a sticky hook" in text
+    assert "until trace.clear_edits(site) detaches it" in text
+    assert f"({owner}.set applied a callable once)" in text
+    assert getattr(instance, "set", "absent") == "absent"
+    assert callable(instance.do)
+    assert callable(owners["Trace"].clear_edits)
 
 
 def test_unknown_member_still_fails_plain(owners: dict[str, Any]) -> None:
