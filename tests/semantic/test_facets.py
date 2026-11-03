@@ -15,7 +15,7 @@ from torchlens._semantic import (
     facets as facets_mod,
 )
 from torchlens._semantic.recipes import BUILTIN_FACET_CAPABILITY_INVENTORY
-from torchlens.errors import MissingFacetError
+from torchlens.errors import MissingFacetError, TorchLensWarning
 from torchlens.facets import FacetFunction, FacetSpec, FacetView, MissingGrad
 from torchlens.intervention.errors import SiteResolutionError
 
@@ -905,7 +905,10 @@ def test_whole_model_head_selector_ablation_reruns_and_validates() -> None:
     clean_out = _trace_output(clean).clone()
 
     edited = clean.fork("head_all")
-    edited.do({tl.head(1): tl.zero_ablate()}, intervention=_STAGE)
+    # tl.head(i) keeps its broadcast meaning and discloses the q/k/v fan-out.
+    with pytest.warns(TorchLensWarning, match=r"tl\.head\(1\) writes 3 sites") as fanout:
+        edited.do({tl.head(1): tl.zero_ablate()}, intervention=_STAGE)
+    assert [w.message.fields["code"] for w in fanout] == ["facet_selector_fanout"]
     edited.run(model, x)
 
     assert not torch.allclose(_trace_output(edited), clean_out)

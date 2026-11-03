@@ -210,14 +210,13 @@ def test_gated_entries_consult_the_chokepoint() -> None:
         )
     )
     gate_calls = re.findall(r'require_capture_capability\(trace, "([a-z_]+)"\)', validation_source)
-    # save_new_outs, push, push_from, run (entry pre-gate + loaded-sparse +
+    # save_new_outs, the replay do() door, run (entry pre-gate + loaded-sparse +
     # analysis-load pre-gate + unified-live + legacy-live), log_backward,
     # recording_backward, validate_forward_pass, check_metadata_invariants.
     assert sorted(gate_calls) == sorted(
         [
             "live_replay",  # save_new_outs
-            "live_replay",  # push
-            "live_replay",  # push_from
+            "live_replay",  # do(): replay door (_require_live_replay)
             "live_replay",  # run(): entry pre-gate (R06: FAILED/ABORTED/UNKNOWN
             # refuse with their N-code before the husk/_runnable read can mask it)
             "loaded_sparse_run",  # run(): loaded sparse provider
