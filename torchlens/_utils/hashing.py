@@ -434,7 +434,7 @@ def compute_graph_shape_hash(
                 ),
                 "is_input": bool(getattr(layer, "is_input", False)),
                 "is_output": bool(getattr(layer, "is_output", False)),
-                "is_buffer": bool(getattr(layer, "is_buffer", False)),
+                "is_buffer": bool(record_member(layer, "is_buffer", False)),
             }
         )
         if rerun_signature:

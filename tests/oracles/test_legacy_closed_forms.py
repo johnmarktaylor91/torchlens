@@ -251,8 +251,12 @@ def test_input_and_output_hop_distances(graph_trace) -> None:
     assert set(ops) == set(GRAPH_DISTANCES)
     for label, (from_input, to_output) in GRAPH_DISTANCES.items():
         op = ops[label]
-        assert (op.min_distance_from_input, op.max_distance_from_input) == from_input, label
-        assert (op.min_distance_to_output, op.max_distance_to_output) == to_output, label
+        assert (op.graph.min_distance_from_input, op.graph.max_distance_from_input) == from_input, (
+            label
+        )
+        assert (op.graph.min_distance_to_output, op.graph.max_distance_to_output) == to_output, (
+            label
+        )
 
 
 def test_layer_op_count_and_parameter_uses(graph_trace) -> None:

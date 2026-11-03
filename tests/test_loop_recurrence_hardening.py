@@ -69,7 +69,7 @@ def _assert_structurally_coherent(traced) -> None:
             f"layer {label}: num_passes disagree with member count {n}"
         )
         for op in ops:
-            assert op.num_passes == len(op.recurrent_ops), (
+            assert op.num_passes == len(op.graph.recurrent_ops), (
                 f"op {op.label}: num_passes != len(recurrent_ops)"
             )
 
@@ -411,7 +411,7 @@ def test_fused_multi_output_modules_per_slot(kind, used_state: bool) -> None:
         if op.layer_label in fused_layers:
             slot_ops[op.layer_label].append(op)
     for label, ops in slot_ops.items():
-        equivalence_sets = {frozenset(op.equivalent_ops) for op in ops}
+        equivalence_sets = {frozenset(op.graph.equivalent_ops) for op in ops}
         assert len(equivalence_sets) == 1, f"layer {label} spans multiple equivalent_ops sets"
         by_pass = sorted(ops, key=lambda op: op.pass_number)
         raw_orders = [op.raw_index for op in by_pass]

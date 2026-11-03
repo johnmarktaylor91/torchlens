@@ -273,7 +273,7 @@ def _compute_ops(trace: Trace) -> list[Op]:
     return [
         layer
         for layer in trace._layer_list
-        if not (layer.is_input or layer.is_output or layer.is_buffer)
+        if not (layer.is_input or layer.is_output or layer.graph.is_buffer)
     ]
 
 

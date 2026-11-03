@@ -689,7 +689,7 @@ def xarray(trace: Any) -> Any:
         # Batch-2 buffer ruling (option c): a buffer is module state with no
         # presentation axis; it exports as its own variable, on save-all and
         # partial traces alike.
-        if getattr(layer, "is_buffer", False):
+        if record_member(layer, "is_buffer", False):
             buffers.append((layer, values))
             continue
         flat = _presentation_by_neuroid(values)

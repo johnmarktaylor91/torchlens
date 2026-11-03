@@ -150,7 +150,7 @@ def _edited_token(op: Any) -> str | None:
 
     if getattr(op, "is_edited", False):
         return EDITED
-    if getattr(op, "edge_substitutions", None):
+    if record_member(op, "edge_substitutions", None):
         return EDITED
     return None
 

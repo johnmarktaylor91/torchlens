@@ -297,7 +297,7 @@ def test_closure_is_identity_when_recurrence_already_grouped() -> None:
     groups = fold_site_groups(fold_rows_from_trace(log))
     ops = {label: log.ops[label] for label in log.op_labels}
     for label, group in groups.items():
-        recurrence = set(ops[label].recurrent_ops or ()) or {label}
+        recurrence = set(ops[label].graph.recurrent_ops or ()) or {label}
         assert group == frozenset(recurrence)
 
 
@@ -337,10 +337,10 @@ def test_closure_never_splits_and_stays_equivalence_uniform() -> None:
         groups = fold_site_groups(fold_rows_from_trace(log))
         for label, group in groups.items():
             # Coarsen-only: the recurrence group is always contained.
-            assert set(ops[label].recurrent_ops or ()) <= set(group) | {label}
+            assert set(ops[label].graph.recurrent_ops or ()) <= set(group) | {label}
             # Every fold group shares ONE equivalence class (invariant-safe
             # by construction).
-            assert len({ops[member].equivalence_class for member in group}) == 1
+            assert len({ops[member].graph.equivalence_class for member in group}) == 1
 
 
 @pytest.mark.smoke
@@ -371,7 +371,7 @@ def test_resnet18_fold_group_census_pin() -> None:
     beyond_recurrence = [
         group
         for group in set(groups.values())
-        if len(group) > 1 and len(ops[next(iter(group))].recurrent_ops) != len(group)
+        if len(group) > 1 and len(ops[next(iter(group))].graph.recurrent_ops) != len(group)
     ]
     assert len(beyond_recurrence) == 0
     folded = [group for group in set(groups.values()) if len(group) > 1]
@@ -379,4 +379,4 @@ def test_resnet18_fold_group_census_pin() -> None:
     for group in folded:
         assert len(group) == 2
         assert {ops[member].func_name for member in group} == {"relu_"}  # ReLU(inplace=True)
-        assert len({ops[member].equivalence_class for member in group}) == 1
+        assert len({ops[member].graph.equivalence_class for member in group}) == 1

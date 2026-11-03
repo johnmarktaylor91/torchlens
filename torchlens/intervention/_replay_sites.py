@@ -43,7 +43,7 @@ def _is_source_record(site: Op) -> bool:
         True for buffer records and input leaves.
     """
 
-    if getattr(site, "is_buffer", False):
+    if record_member(site, "is_buffer", False):
         return True
     return bool(getattr(site, "is_input", False)) and site.func is None and not site.parents
 
@@ -169,7 +169,7 @@ def _keeps_captured_draw(
 
     if not _is_unseeded_single_draw(representative, replay_group):
         return False
-    if getattr(representative, "edge_substitutions", None):
+    if record_member(representative, "edge_substitutions", None):
         return False
     if _edited_at_capture(representative):
         # The captured out already carries the capture-time edit, and the

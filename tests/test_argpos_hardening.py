@@ -381,8 +381,8 @@ def test_lu_solve_input_ancestry_survives_buffer_matrix() -> None:
     trace = tl.trace(_LuSolveBufferAmplification().eval(), torch.randn(3, 2))
     op = next(o for o in trace.ops if o.type == "lusolve")
 
-    assert op.has_input_ancestor
-    assert all(trace[label].has_input_ancestor for label in trace.output_layers)
+    assert op.graph.has_input_ancestor
+    assert all(trace[label].graph.has_input_ancestor for label in trace.output_layers)
 
 
 class _CosineSimilarity(nn.Module):
@@ -438,7 +438,7 @@ def test_cosine_similarity_kwarg_spelling_parity() -> None:
 
     assert len(positional_op.parents) == 2
     assert len(kwarg_op.parents) == 2
-    assert kwarg_op.has_input_ancestor
+    assert kwarg_op.graph.has_input_ancestor
     assert kwarg_op.call.unattributed_tensor_args == ()
 
 
@@ -599,7 +599,7 @@ def test_torch_tensor_of_tensor_records_parent() -> None:
 
     assert len(op.parents) == 1
     assert 0 in op.call.parent_arg_positions["args"]
-    assert op.has_input_ancestor
+    assert op.graph.has_input_ancestor
     assert op.call.unattributed_tensor_args == ()
 
 

@@ -420,7 +420,7 @@ def is_literal_producer_op(op: Any) -> bool:
 
     if is_closure_constant_op(op):
         return False
-    if getattr(op, "is_input", False) or getattr(op, "is_buffer", False):
+    if getattr(op, "is_input", False) or record_member(op, "is_buffer", False):
         return False
     if tuple(getattr(op, "parents", ()) or ()):
         return False
@@ -564,7 +564,7 @@ def _audit_closure_constant(
             backend=backend_name,
             op_label=label_raw,
         )
-    if getattr(op, "is_input", False) or getattr(op, "is_buffer", False):
+    if getattr(op, "is_input", False) or record_member(op, "is_buffer", False):
         raise CaptureGapError(
             f"{backend_name} backend recorded constant {label_raw} as an input or buffer leaf",
             backend=backend_name,

@@ -136,7 +136,7 @@ class CompiledDisplayFilter:
 def _is_boundary(layer: Any) -> bool:
     """Return whether a layer is an input/output boundary (auto-exempt)."""
 
-    return bool(getattr(layer, "is_input", False) or getattr(layer, "is_final_output", False))
+    return bool(getattr(layer, "is_input", False) or record_member(layer, "is_final_output", False))
 
 
 def _token_predicate(token: str) -> Callable[[Any], bool]:
@@ -147,7 +147,7 @@ def _token_predicate(token: str) -> Callable[[Any], bool]:
     if token == "constants":
         return lambda layer: (
             bool(record_member(layer, "is_internally_initialized", False))
-            and not bool(getattr(layer, "has_input_ancestor", True))
+            and not bool(record_member(layer, "has_input_ancestor", True))
         )
     if token == "non_module_ops":
         return lambda layer: not tuple(getattr(layer, "modules", ()) or ())

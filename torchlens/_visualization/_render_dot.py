@@ -1571,7 +1571,7 @@ def _orphan_island_logs(self: "Trace") -> tuple[Any, ...]:
     orphan_logs = tuple(
         op
         for op in orphan_husks
-        if bool(getattr(op, "is_orphan", False))
+        if bool(record_member(op, "is_orphan", False))
         and bool(getattr(op, "label", "") or getattr(op, "_label_raw", ""))
     )
     if not orphan_logs and orphan_husks:

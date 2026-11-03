@@ -50,7 +50,9 @@ def _stub_trace() -> Any:
     class _Stub(SimpleNamespace):
         @property
         def saved_ops(self) -> list[Any]:
-            return [op for op in self._layer_list if op.has_saved_activation and not op.is_orphan]
+            return [
+                op for op in self._layer_list if op.has_saved_activation and not op.graph.is_orphan
+            ]
 
     return _Stub(_layer_list=ops, module_calls=(), _provenance_backend="torch")
 

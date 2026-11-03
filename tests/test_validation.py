@@ -2898,7 +2898,7 @@ def test_validate_forward_pass_metadata_off_rejects_functionless_op_laundering()
         relu_op = next(op for op in trace._layer_list if op.func_name == "relu")
         relu_op.func = None
         relu_op.func_name = "input"
-        relu_op.is_internal_source = True
+        relu_op._graph_is_internal_source = True
 
         ground_truth = [model(x).detach().clone()]
         result = trace.validate_forward_pass(ground_truth, validate_metadata=False)
@@ -5319,7 +5319,7 @@ def test_funcless_placeholder_unselected_where_branch_still_fails_metadata() -> 
         placeholder.func = None
         placeholder.func_name = "plain_placeholder"
         placeholder.is_edited = False
-        placeholder.is_internal_source = False
+        placeholder._graph_is_internal_source = False
 
         # Layer 1 of the tripwire: the metadata invariant itself still rejects
         # a functionless computational op in plain capture.
@@ -5764,9 +5764,9 @@ def test_buffer_write_version_invariant_rejects_sparse_pass_set() -> None:
         write_version = next(
             layer for layer in log._layer_list if layer.buffer_write_kind is not None
         )
-        assert write_version.buffer_pass == 2
+        assert write_version.graph.buffer_pass == 2
 
-        write_version.buffer_pass = 3
+        write_version._graph_buffer_pass = 3
 
         with pytest.raises(MetadataInvariantError, match="dense as a set"):
             check_metadata_invariants(log)
@@ -5782,9 +5782,9 @@ def test_buffer_write_version_invariant_rejects_unresolved_source() -> None:
         write_version = next(
             layer for layer in log._layer_list if layer.buffer_write_kind is not None
         )
-        assert write_version.buffer_source is not None
+        assert write_version.graph.buffer_source is not None
 
-        write_version.buffer_source = "missing_raw_label"
+        write_version._graph_buffer_source = "missing_raw_label"
 
         with pytest.raises(MetadataInvariantError, match="unresolved buffer_source"):
             check_metadata_invariants(log)
@@ -5800,7 +5800,7 @@ def test_buffer_replay_validated_invariant_rejects_missing_evidence() -> None:
         write_version = next(
             layer for layer in log._layer_list if layer.buffer_write_kind is not None
         )
-        assert write_version.buffer_source is not None
+        assert write_version.graph.buffer_source is not None
         assert write_version.saved_args
 
         write_version.buffer_replay_validated = True
@@ -5821,8 +5821,8 @@ def test_buffer_integrity_preconditions_reach_real_trace() -> None:
         assert buffer.versions
         assert any(version.buffer_write_kind is None for version in buffer.versions)
         assert any(version.buffer_write_kind is not None for version in buffer.versions)
-        assert {version.buffer_pass for version in buffer.versions} == {1, 2}
-        assert any(version.buffer_source is not None for version in buffer.versions)
+        assert {version.graph.buffer_pass for version in buffer.versions} == {1, 2}
+        assert any(version.graph.buffer_source is not None for version in buffer.versions)
         assert check_metadata_invariants(log) is True
     finally:
         log.cleanup()
@@ -6839,7 +6839,7 @@ def test_corruption_graph_ordering_pass_qualified_back_edge() -> None:
 def test_corruption_loop_detection_slo_empty():
     """Empty recurrent_ops triggers loop_detection error."""
     log = _make_clean_log()
-    log._layer_list[0].recurrent_ops = []
+    log._layer_list[0]._graph_recurrent_ops = []
     with pytest.raises(MetadataInvariantError, match="loop_detection"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -6860,8 +6860,8 @@ def test_corruption_loop_detection_self_exclusion_into_seen_group() -> None:
     try:
         donor, victim = log._layer_list[0], log._layer_list[1]
         assert donor.label != victim.label
-        assert victim.label not in donor.recurrent_ops
-        victim.recurrent_ops = list(donor.recurrent_ops)
+        assert victim.label not in donor.graph.recurrent_ops
+        victim._graph_recurrent_ops = list(donor.graph.recurrent_ops)
 
         with pytest.raises(MetadataInvariantError, match="not in its own recurrent_ops"):
             check_metadata_invariants(log)
@@ -6876,7 +6876,7 @@ def test_corruption_loop_detection_slo_asymmetry():
     for lpl in log._layer_list:
         if lpl.num_passes > 1:
             # Remove one member from slo
-            lpl.recurrent_ops = [lpl.layer_label]
+            lpl._graph_recurrent_ops = [lpl.layer_label]
             break
     with pytest.raises(MetadataInvariantError, match="loop_detection"):
         check_metadata_invariants(log)
@@ -6901,11 +6901,11 @@ def test_corruption_distance_min_gt_max():
     # Find a non-input layer with distances set
     for lpl in log._layer_list:
         if (
-            lpl.min_distance_from_input is not None
-            and lpl.max_distance_from_input is not None
-            and lpl.min_distance_from_input > 0
+            lpl.graph.min_distance_from_input is not None
+            and lpl.graph.max_distance_from_input is not None
+            and lpl.graph.min_distance_from_input > 0
         ):
-            lpl.min_distance_from_input = lpl.max_distance_from_input + 1
+            lpl._graph_min_distance_from_input = lpl.graph.max_distance_from_input + 1
             break
     else:
         # A silent `return` here is a VACUOUS PASS that can green out a
@@ -6927,8 +6927,8 @@ def test_corruption_distance_input_nonzero():
         pytest.skip("mark_layer_depths is off; input-distance plant has no target")
     for label in log.input_layers:
         lpl = log._layer_dict_all_keys[label]
-        lpl.min_distance_from_input = 5
-        lpl.max_distance_from_input = 5
+        lpl._graph_min_distance_from_input = 5
+        lpl._graph_max_distance_from_input = 5
         break
     with pytest.raises(MetadataInvariantError, match="distance_invariants"):
         check_metadata_invariants(log)
@@ -6944,8 +6944,8 @@ def test_corruption_distance_ancestor_flag():
         log.cleanup()
         pytest.skip("mark_layer_depths is off; ancestor-flag plant has no target")
     for lpl in log._layer_list:
-        if lpl.has_input_ancestor and len(lpl.input_ancestors) > 0:
-            lpl.has_input_ancestor = False
+        if lpl.graph.has_input_ancestor and len(lpl.input_ancestors) > 0:
+            lpl._graph_has_input_ancestor = False
             break
     with pytest.raises(MetadataInvariantError, match="distance_invariants"):
         check_metadata_invariants(log)
@@ -7164,12 +7164,12 @@ def test_corruption_equivalence_symmetry_one_sided_group():
         torch.randn(2, 4),
         capture=tl.options.CaptureOptions(seed=42),
     )
-    groups = [op for op in log.compute_ops if op.equivalent_ops]
+    groups = [op for op in log.compute_ops if op.graph.equivalent_ops]
     assert groups, "expected an equivalence group from the repeated layer"
     victim = groups[0]
-    members = set(victim.equivalent_ops)
+    members = set(victim.graph.equivalent_ops)
     assert len(members) >= 2, "equivalence group too small to break one-sidedly"
-    victim.equivalent_ops = members - {sorted(members)[-1]}
+    victim._graph_equivalent_ops = members - {sorted(members)[-1]}
     with pytest.raises(MetadataInvariantError, match="equivalence_symmetry"):
         check_metadata_invariants(log)
     log.cleanup()
@@ -7236,15 +7236,15 @@ def _corrupt_first_computational_layer_parentless(log) -> "object":
     for lpl in log._layer_list:
         if (
             not lpl.is_input
-            and not lpl.is_buffer
+            and not lpl.graph.is_buffer
             and not lpl.is_output
-            and not lpl.is_internal_source
+            and not lpl.graph.is_internal_source
             and lpl.parents
         ):
             for p_label in lpl.parents:
                 parent = log._layer_dict_all_keys[p_label]
                 parent.children = [c for c in parent.children if c != lpl.layer_label]
-                parent.has_children = len(parent.children) > 0
+                parent._graph_has_children = len(parent.children) > 0
             lpl.parents = []
             for arg_domain in ("args", "kwargs"):
                 lpl.parent_arg_positions.get(arg_domain, {}).clear()
@@ -7372,7 +7372,7 @@ def test_corruption_functionless_sentinel_on_computational_op() -> None:
         lpl = next(
             lpl
             for lpl in log._layer_list
-            if not (lpl.is_input or lpl.is_buffer or lpl.is_output)
+            if not (lpl.is_input or lpl.graph.is_buffer or lpl.is_output)
             and callable(lpl.func)
             and lpl.func_name
         )
@@ -8061,7 +8061,7 @@ def test_plain_trace_internal_source_final_output_is_exempted() -> None:
     try:
         assert log.output_layers == ["output_1"]
         output_parent = log[log["output_1"].parents[0]]
-        assert output_parent.is_internal_source
+        assert output_parent.graph.is_internal_source
         check_metadata_invariants(log)
         assert validate_forward_pass(model, [x], input_kwargs={})
     finally:
@@ -8126,7 +8126,7 @@ def test_genuine_raw_hook_untraceable_replacement_validates() -> None:
         # A genuine functionless replacement placeholder IS present here...
         placeholders = _functionless_replacement_ops(log)
         assert placeholders, "expected a genuine intervention_replacement placeholder"
-        assert all(not getattr(op, "is_internal_source", False) for op in placeholders)
+        assert all(not record_member(op, "is_internal_source", False) for op in placeholders)
         # ...and validation must PASS (exemption scoped to genuine replacements).
         check_metadata_invariants(log)
     finally:
@@ -8191,7 +8191,7 @@ def test_genuine_raw_hook_untraceable_replacement_validates_nested_depth() -> No
     try:
         placeholders = _functionless_replacement_ops(log)
         assert placeholders, "expected a genuine intervention_replacement placeholder"
-        assert all(not getattr(op, "is_internal_source", False) for op in placeholders)
+        assert all(not record_member(op, "is_internal_source", False) for op in placeholders)
         check_metadata_invariants(log)
     finally:
         log.cleanup()
@@ -8241,7 +8241,7 @@ def test_genuine_raw_hook_untraceable_replacement_validates_depth_zero() -> None
     try:
         placeholders = _functionless_replacement_ops(log)
         assert placeholders, "expected a genuine intervention_replacement placeholder"
-        assert all(not getattr(op, "is_internal_source", False) for op in placeholders)
+        assert all(not record_member(op, "is_internal_source", False) for op in placeholders)
         # The placeholder has no owning submodule -- it must carry `module=None`,
         # not a bogus `("", index)`/`":index"` label.
         assert all(op.module is None for op in placeholders)
@@ -8304,7 +8304,7 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source_nested_depth(
     try:
         assert _functionless_replacement_ops(log) == []
         assert [op for op in log.ops if getattr(op, "is_edited", False)] == []
-        internal_sources = [op for op in log.ops if getattr(op, "is_internal_source", False)]
+        internal_sources = [op for op in log.ops if record_member(op, "is_internal_source", False)]
         assert internal_sources, "untraceable raw-ATen output must be an internal source"
         assert all(getattr(op, "func_name", None) == "none" for op in internal_sources)
         check_metadata_invariants(log)
@@ -8337,7 +8337,7 @@ def test_plain_trace_noop_hook_untraceable_exit_is_internal_source(
         assert _functionless_replacement_ops(log) == []
         assert [op for op in log.ops if getattr(op, "is_edited", False)] == []
         # The untraceable output is an honest internal source (func_name "none").
-        internal_sources = [op for op in log.ops if getattr(op, "is_internal_source", False)]
+        internal_sources = [op for op in log.ops if record_member(op, "is_internal_source", False)]
         assert internal_sources, "untraceable raw-ATen output must be an internal source"
         assert all(getattr(op, "func_name", None) == "none" for op in internal_sources)
         # Metadata invariants pass (a graph source, not a placeholder); forward
@@ -8512,7 +8512,7 @@ def _first_computational_layer(log):
     """Return the first non-boundary layer of a clean single-pass capture."""
 
     return next(
-        lpl for lpl in log._layer_list if not (lpl.is_input or lpl.is_output or lpl.is_buffer)
+        lpl for lpl in log._layer_list if not (lpl.is_input or lpl.is_output or lpl.graph.is_buffer)
     )
 
 

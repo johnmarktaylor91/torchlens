@@ -17,6 +17,7 @@ from safetensors.torch import save_file
 from .. import __version__ as TORCHLENS_VERSION
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
+from .._utils._record_group_table import record_member
 from .._utils.hashing import sha256_file
 from ..backends.registry import get_backend_spec
 from . import TLSPEC_VERSION, ArtifactError, refuse_bundle_exists
@@ -816,7 +817,7 @@ class _TlSpecWriter:
                     "layer_label": str(getattr(layer, "layer_label", "")),
                     "pass_index": _json_int_or_none(getattr(layer, "call_index", None)),
                     "op_kind": _json_str_or_none(
-                        getattr(layer, "equivalence_class", None)
+                        record_member(layer, "equivalence_class", None)
                         or getattr(layer, "func_name", None)
                     ),
                 }

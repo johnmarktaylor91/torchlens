@@ -201,7 +201,7 @@ def _validate_edge_carriers(trace: Trace) -> None:
     carriers = [
         (
             op,
-            getattr(op, "edge_substitutions", None),
+            record_member(op, "edge_substitutions", None),
             getattr(op, "edge_replacement_stamps", None),
         )
         for op in _trace_ops(trace)

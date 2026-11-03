@@ -7,6 +7,7 @@ from typing import Any
 
 from .._constants import _is_suffixed_raw_label
 from .._errors import AmbiguousOpLookupError
+from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor, attach_source_honesty
 from ._layer_accessors import _LAYER_COUNTABLE_FIELDS
 from .op import Op
@@ -242,7 +243,7 @@ def _is_counted_op(op: Op) -> bool:
     return not (
         getattr(op, "is_input", False)
         or getattr(op, "is_output", False)
-        or getattr(op, "is_buffer", False)
+        or record_member(op, "is_buffer", False)
     )
 
 

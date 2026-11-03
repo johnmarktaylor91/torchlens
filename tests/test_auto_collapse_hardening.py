@@ -1548,7 +1548,7 @@ def _boxed_surfaced_labels(trace, plan) -> set[str]:
         modules = list(getattr(op, "modules", ()) or ())
         if (
             record_member(op, "is_atomic_module", False)
-            and not getattr(op, "is_buffer", False)
+            and not record_member(op, "is_buffer", False)
             and modules
             and modules[-1].rsplit(":", 1)[0] in addresses
         ):

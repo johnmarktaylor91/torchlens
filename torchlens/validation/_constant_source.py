@@ -34,7 +34,7 @@ def is_closure_constant_source(layer: Any) -> bool:
     return (
         getattr(layer, "func_name", None) == CONSTANT_FUNC_NAME
         and getattr(layer, "type", CONSTANT_FUNC_NAME) == CONSTANT_FUNC_NAME
-        and bool(getattr(layer, "is_internal_source", False))
+        and bool(record_member(layer, "is_internal_source", False))
         and getattr(layer, "func", None) is None
         and record_member(layer, "func_call_id", None) is None
         and not tuple(getattr(layer, "parents", ()) or ())

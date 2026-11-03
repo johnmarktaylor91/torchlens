@@ -229,8 +229,8 @@ def fold_rows_from_trace(trace: Any) -> list[FoldRow]:
         FoldRow(
             label=label,
             site_key=getattr(trace.ops[label], "site_key", None),
-            equivalence_class=str(trace.ops[label].equivalence_class),
-            recurrent_labels=tuple(trace.ops[label].recurrent_ops or ()),
+            equivalence_class=str(trace.ops[label].graph.equivalence_class),
+            recurrent_labels=tuple(trace.ops[label].graph.recurrent_ops or ()),
         )
         for label in trace.op_labels
     ]

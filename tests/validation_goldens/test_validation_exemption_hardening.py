@@ -1117,16 +1117,16 @@ def test_equivalence_symmetry_catches_suffixed_in_module_group_corruption() -> N
     # The vacuousness precondition: the suffixed per-op key misses the
     # pre-suffix trace-dict keys, while membership still resolves the group.
     assert all(
-        op.equivalence_class not in trace.graph.op_equivalence_classes for op in linear_ops
+        op.graph.equivalence_class not in trace.graph.op_equivalence_classes for op in linear_ops
     ), "suffix mismatch precondition gone -- update or retire this regression test"
     expected_group = {op.label for op in linear_ops}
     assert any(group == expected_group for group in trace.graph.op_equivalence_classes.values())
 
     wrong_group = {linear_ops[0].label}
     for op in linear_ops:
-        op.equivalent_ops = set(wrong_group)
+        op._graph_equivalent_ops = set(wrong_group)
     layer = trace._layer_logs[linear_ops[0].layer_label]
-    layer.equivalent_ops = set(wrong_group)
+    layer._graph_equivalent_ops = set(wrong_group)
 
     with pytest.raises(MetadataInvariantError, match="equivalent_ops"):
         check_metadata_invariants(trace)
@@ -1335,7 +1335,7 @@ def test_func_name_none_string_cannot_launder_missing_func_call_id() -> None:
     object.__setattr__(relu_op, "func_call_id", None)
     object.__setattr__(relu_op, "func_name", "none")
     assert callable(relu_op.func)
-    assert not relu_op.is_internal_source
+    assert not relu_op.graph.is_internal_source
 
     with pytest.raises(MetadataInvariantError):
         check_func_call_id_invariant(trace)
@@ -2252,7 +2252,7 @@ def test_buffer_semantic_ownership_invariant_fires_on_wrong_module_stack() -> No
     """
 
     trace = _trace_saving_args(BufferOwnerModel(), torch.randn(3, 4))
-    buffer_op = next(layer for layer in trace._layer_list if layer.is_buffer)
+    buffer_op = next(layer for layer in trace._layer_list if layer.graph.is_buffer)
     buffer_op._internal_set("modules", ["self:1"])  # noqa: SLF001
     buffer_op._internal_set("module", "self:1")  # noqa: SLF001
 

@@ -359,7 +359,7 @@ def _seed_input(op: Op) -> _InputState:
     """
 
     shape = tuple(op.shape)
-    role = op.io_role or op.label
+    role = op.graph.io_role or op.label
     identity = _Mapped(_Affine(Fraction(1), Fraction(0)), _Affine(Fraction(1), Fraction(0)))
     return _InputState(
         input_op_label=op.label,
@@ -1636,7 +1636,7 @@ def _graph_revision(trace: Trace) -> tuple[object, ...]:
             tuple(op.parents),
             tuple(op.children),
             tuple(op.shape) if op.shape is not None else None,
-            op.io_role,
+            op.graph.io_role,
             op.func_name,
             _geometry_args_snapshot(op),
             _edge_uses_snapshot(op),

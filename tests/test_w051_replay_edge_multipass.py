@@ -102,14 +102,14 @@ def test_fire_record_and_store_land_on_the_addressed_pass(loop) -> None:
     address = (edge.child_func_call_id, edge.arg_kind, edge.arg_path)
 
     hit = fork["relu_1_2:1"]
-    assert list(hit.edge_substitutions) == [(edge.arg_kind, edge.arg_path)]
+    assert list(hit.graph.edge_substitutions) == [(edge.arg_kind, edge.arg_path)]
     assert hit.edge_replacement_stamps[(edge.arg_kind, edge.arg_path)]["verdict"] is True
     fires = [r for r in hit.edits if r.edge_address is not None]
     assert [r.edge_address for r in fires] == [address]
     assert fires[0].call_label == "relu_1_2:1"
     for other in (2, 3):
         op = fork[f"relu_1_2:{other}"]
-        assert not (op.edge_substitutions or {})
+        assert not (op.graph.edge_substitutions or {})
         assert not [r for r in op.edits if r.edge_address is not None]
 
 
@@ -122,7 +122,7 @@ def test_audit_row_describes_the_real_effect(loop) -> None:
     assert audit["kind"] == "EDGE"
     row = audit["edges"][0]
     assert row["child"] == "relu_1_2:1" and row["parent"] == "linear_1_1:1"
-    store_value = fork["relu_1_2:1"].edge_substitutions[(edge.arg_kind, edge.arg_path)]
+    store_value = fork["relu_1_2:1"].graph.edge_substitutions[(edge.arg_kind, edge.arg_path)]
     assert row["value_digest"] == tensor_content_digest(store_value["value"])
     assert bool((store_value["value"] == 0).all())
     assert fork.last_run["origins"] == ("relu_1_2:1",)

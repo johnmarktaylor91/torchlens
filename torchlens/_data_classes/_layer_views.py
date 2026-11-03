@@ -60,7 +60,7 @@ def materialize_layer_mirrors(layer_log: Layer) -> None:
         rep = _layer_rep_op(layer_log)
         if rep is not None:
             try:
-                instance_dict["equivalent_ops"] = rep.equivalent_ops
+                instance_dict["equivalent_ops"] = rep.graph.equivalent_ops
             except AttributeError:
                 pass
 
@@ -166,7 +166,7 @@ def layer_siblings(layer: Layer) -> list[str]:
     result = []
     seen = {layer.layer_label}
     for pass_log in layer.ops.values():
-        for label in pass_log.siblings:
+        for label in pass_log.graph.siblings:
             no_pass = relation_no_pass_label(layer, label)
             if no_pass is not None and no_pass not in seen:
                 seen.add(no_pass)
@@ -180,7 +180,7 @@ def layer_co_parents(layer: Layer) -> list[str]:
     result = []
     seen = {layer.layer_label}
     for pass_log in layer.ops.values():
-        for label in pass_log.co_parents:
+        for label in pass_log.graph.co_parents:
             no_pass = relation_no_pass_label(layer, label)
             if no_pass is not None and no_pass not in seen:
                 seen.add(no_pass)
@@ -253,8 +253,8 @@ def layer_edges_vary_across_ops(layer: Layer) -> bool:
 
     if layer.num_passes <= 1:
         return False
-    all_pass_lists = list(layer.child_ops_per_layer.values()) + list(
-        layer.parent_ops_per_layer.values()
+    all_pass_lists = list(layer.graph.child_ops_per_layer.values()) + list(
+        layer.graph.parent_ops_per_layer.values()
     )
     return any(len(ops) < layer.num_passes for ops in all_pass_lists)
 

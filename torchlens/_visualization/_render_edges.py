@@ -633,7 +633,7 @@ def _surfaced_own_output_ops(
                 op = trace.ops[label]
         else:
             op = trace.ops[label]
-        if getattr(op, "is_buffer", False):
+        if record_member(op, "is_buffer", False):
             continue
         if not record_member(op, "is_atomic_module", False):
             continue
@@ -982,7 +982,7 @@ def _add_edges_for_node(
         metadata_child = render_edge.metadata_child
         child_render_name = _render_node_name(child_node, vis_mode)
 
-        if child_node.is_buffer and not _is_buffer_visible(child_node, show_buffer_layers):
+        if child_node.graph.is_buffer and not _is_buffer_visible(child_node, show_buffer_layers):
             continue
         collapsed_head_name = (
             collapsed_container_nodes.get(child_render_name)
@@ -990,7 +990,7 @@ def _add_edges_for_node(
             else None
         )
 
-        if parent_node.has_input_ancestor:
+        if parent_node.graph.has_input_ancestor:
             edge_style = "solid"
         else:
             edge_style = "dashed"
@@ -1409,7 +1409,7 @@ def _add_edges_for_node(
         # inside had ``has_input_ancestor=True``, contradicting the rolled
         # render of the same trace.
         for endpoint_node in (parent_node, child_node):
-            if not endpoint_node.has_input_ancestor:
+            if not endpoint_node.graph.has_input_ancestor:
                 continue
             for containing_module in endpoint_node.modules:
                 containing_key = (
@@ -1494,7 +1494,7 @@ class _RolledEdgeMaps:
 
         found = self._child_ops.get(layer.layer_label)
         if found is None:
-            found = self._child_ops[layer.layer_label] = layer.child_ops_per_layer
+            found = self._child_ops[layer.layer_label] = layer.graph.child_ops_per_layer
         return found
 
     def parent_ops_per_layer(self, layer: "Layer") -> dict[str, list[int]]:
@@ -1502,7 +1502,7 @@ class _RolledEdgeMaps:
 
         found = self._parent_ops.get(layer.layer_label)
         if found is None:
-            found = self._parent_ops[layer.layer_label] = layer.parent_ops_per_layer
+            found = self._parent_ops[layer.layer_label] = layer.graph.parent_ops_per_layer
         return found
 
     def edges_vary_across_ops(self, layer: "Layer") -> bool:
@@ -1518,7 +1518,7 @@ class _RolledEdgeMaps:
 
         found = self._parents_per_pass.get(layer.layer_label)
         if found is None:
-            found = self._parents_per_pass[layer.layer_label] = layer.parents_per_pass
+            found = self._parents_per_pass[layer.layer_label] = layer.graph.parents_per_pass
         return found
 
 
@@ -1705,7 +1705,7 @@ def _visible_parent_count_unrolled(
         num_parents_shown -= sum(
             [
                 int(
-                    self[parent].is_buffer
+                    self[parent].graph.is_buffer
                     and not _is_buffer_visible(self[parent], show_buffer_layers)
                 )
                 for parent in child_node.parents
@@ -1736,7 +1736,7 @@ def _visible_parent_count_rolled(
             num_parents_shown -= sum(
                 [
                     int(
-                        self._layer_logs[parent].is_buffer
+                        self._layer_logs[parent].graph.is_buffer
                         and not _is_buffer_visible(self._layer_logs[parent], show_buffer_layers)
                     )
                     for parent in pass_parents

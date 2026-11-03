@@ -279,7 +279,7 @@ def _counts(trace: Any) -> CountsRecord:
         for op in ops
         if getattr(op, "is_input", False)
         or getattr(op, "is_output", False)
-        or getattr(op, "is_buffer", False)
+        or record_member(op, "is_buffer", False)
     )
     compute_ops = len(ops) - alias_rows
     site_keys = {site for op in ops if (site := getattr(op, "site_key", None)) is not None}

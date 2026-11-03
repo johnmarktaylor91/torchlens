@@ -93,6 +93,7 @@ from ._record_group_base import _LAYER_DELEGATED_PASS_FIELDS
 from ._record_groups import LayerControlFlow, LayerCost, MovedMemberField
 from ._record_groups_autograd import LayerAutograd
 from ._record_groups_call import LayerCall
+from ._record_groups_graph import LayerGraph
 from ._record_groups_module_context import LayerModuleContext
 from ._record_groups_payload import LayerPayload
 from ._record_groups_source import LayerSource
@@ -618,6 +619,12 @@ class Layer(_SelectionOperand):
         return LayerModuleContext(self)
 
     @property
+    def graph(self) -> LayerGraph:
+        """Graph position of this Layer (``layer.graph.has_parents``)."""
+
+        return LayerGraph(self)
+
+    @property
     def payload(self) -> LayerPayload:
         """Saved transformed payloads of this Layer (``layer.payload.transformed_out``)."""
 
@@ -689,16 +696,16 @@ class Layer(_SelectionOperand):
         return self.num_params_frozen > 0
 
     @property
-    def is_compute_layer(self) -> bool:
+    def _graph_is_compute(self) -> bool:
         """Whether this Layer's representative Op is a compute Op."""
 
-        return bool(self.ops and self.ops[0].is_compute_op)
+        return bool(self.ops and self.ops[0].graph.is_compute)
 
     @property
-    def is_orphan(self) -> bool:
+    def _graph_is_orphan(self) -> bool:
         """Whether any Op in this Layer is disconnected from the main graph."""
 
-        return any(op.is_orphan for op in self.ops.values())
+        return any(op.graph.is_orphan for op in self.ops.values())
 
     @property
     def fx_label(self) -> str | None:
@@ -735,7 +742,7 @@ class Layer(_SelectionOperand):
         Layer (true when its representative Op is a buffer source).
         """
 
-        return bool(self.is_buffer)
+        return bool(self.graph.is_buffer)
 
     @property
     def buffer_overwrite_index(self) -> Any:
@@ -744,7 +751,7 @@ class Layer(_SelectionOperand):
         Glossary name for the stored ``buffer_pass`` index.
         """
 
-        return self.buffer_pass
+        return self.graph.buffer_pass
 
     @property
     def source_trace(self) -> "Trace":
@@ -800,7 +807,7 @@ class Layer(_SelectionOperand):
         return self.source_trace
 
     @property
-    def equivalent_ops(self) -> Any:
+    def _graph_equivalent_ops(self) -> Any:
         """Labels of ops equivalent to this layer.
 
         On finished traces the value is the group's ONE cached immutable
@@ -822,19 +829,19 @@ class Layer(_SelectionOperand):
             rep = _layer_rep_op(self)
             if rep is None:
                 raise AttributeError("equivalent_ops")
-            value = rep.equivalent_ops
+            value = rep.graph.equivalent_ops
         return set(value) if value.__class__ is set else value
 
-    @equivalent_ops.setter
-    def equivalent_ops(self, value: Any) -> None:
+    @_graph_equivalent_ops.setter
+    def _graph_equivalent_ops(self, value: Any) -> None:
         """Shadow ``equivalent_ops`` per layer, normalizing to the immutable view type."""
 
         self.__dict__["equivalent_ops"] = _layer_normalize_relation_write(
             self, "equivalent_ops", value
         )
 
-    @equivalent_ops.deleter
-    def equivalent_ops(self) -> None:
+    @_graph_equivalent_ops.deleter
+    def _graph_equivalent_ops(self) -> None:
         """Tombstone ``equivalent_ops`` so batch removal of finished layers works."""
 
         # ``state_items`` skips the tombstone, so cleanup ``delattr``s this
@@ -866,7 +873,7 @@ class Layer(_SelectionOperand):
             # The RAW canonical container (finished: the ONE frozen group
             # view; staging: the shared staging set), matching the value the
             # dict era stored — never the property's per-read staging copy.
-            return rep.equivalent_ops
+            return rep.graph.equivalent_ops
         raise AttributeError(name)
 
     def __tl_state_items__(self) -> Iterator[tuple[str, Any]]:
@@ -1022,7 +1029,7 @@ class Layer(_SelectionOperand):
         return _doors.receptive_field()._layer_fields.layer_projective_field(self)
 
     @property
-    def site_peers(self) -> tuple["Layer", ...]:
+    def _graph_site_peers(self) -> tuple["Layer", ...]:
         """Layers sharing any of this layer's site keys (live index)."""
 
         return layer_site_peers(self)
@@ -1162,7 +1169,7 @@ class Layer(_SelectionOperand):
         return layer_parents(self)
 
     @property
-    def has_children(self) -> bool:
+    def _graph_has_children(self) -> bool:
         """Return whether any pass has child layers.
 
         Returns
@@ -1170,10 +1177,10 @@ class Layer(_SelectionOperand):
         bool
             ``True`` when at least one pass has graph children.
         """
-        return any(p.has_children for p in self.ops.values())
+        return any(p.graph.has_children for p in self.ops.values())
 
     @property
-    def has_parents(self) -> bool:
+    def _graph_has_parents(self) -> bool:
         """Return whether any pass has parent layers.
 
         Returns
@@ -1181,7 +1188,7 @@ class Layer(_SelectionOperand):
         bool
             ``True`` when at least one pass has graph parents.
         """
-        return any(p.has_parents for p in self.ops.values())
+        return any(p.graph.has_parents for p in self.ops.values())
 
     @property
     def siblings(self) -> list[str]:
@@ -1194,7 +1201,7 @@ class Layer(_SelectionOperand):
         return layer_siblings(self)
 
     @property
-    def has_siblings(self) -> bool:
+    def _graph_has_siblings(self) -> bool:
         """Return whether this layer has any sibling layers besides itself.
 
         Returns
@@ -1214,7 +1221,7 @@ class Layer(_SelectionOperand):
         return layer_co_parents(self)
 
     @property
-    def has_co_parents(self) -> bool:
+    def _graph_has_co_parents(self) -> bool:
         """Return whether this layer has any co-parent layers besides itself.
 
         Returns
@@ -1289,22 +1296,22 @@ class Layer(_SelectionOperand):
     # Used by the visualization renderer to draw pass-annotated edges.
 
     @property
-    def children_per_pass(self) -> dict[int, list[str]]:
+    def _graph_children_per_pass(self) -> dict[int, list[str]]:
         """Dict[int, List[str]]: child layer labels (no-pass) for each pass."""
         return layer_children_per_pass(self)
 
     @property
-    def parents_per_pass(self) -> dict[int, list[str]]:
+    def _graph_parents_per_pass(self) -> dict[int, list[str]]:
         """Dict[int, List[str]]: parent layer labels (no-pass) for each pass."""
         return layer_parents_per_pass(self)
 
     @property
-    def child_ops_per_layer(self) -> dict[str, list[int]]:
+    def _graph_child_ops_per_layer(self) -> dict[str, list[int]]:
         """Dict[str, List[int]]: for each child layer, which ops connect to it."""
         return layer_child_ops_per_layer(self)
 
     @property
-    def parent_ops_per_layer(self) -> dict[str, list[int]]:
+    def _graph_parent_ops_per_layer(self) -> dict[str, list[int]]:
         """Dict[str, List[int]]: for each parent layer, which ops connect from it."""
         return layer_parent_ops_per_layer(self)
 

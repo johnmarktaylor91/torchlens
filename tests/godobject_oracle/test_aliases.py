@@ -137,22 +137,22 @@ def test_group_fields_return_live_immutable_views() -> None:
     """
 
     trace = _capture_recurrent()
-    grouped = [op for op in trace.ops.values() if op.equivalent_ops]
+    grouped = [op for op in trace.ops.values() if op.graph.equivalent_ops]
     assert grouped, "recurrent capture produced no equivalence groups"
     op = grouped[0]
 
-    first_read = op.equivalent_ops
-    second_read = op.equivalent_ops
+    first_read = op.graph.equivalent_ops
+    second_read = op.graph.equivalent_ops
     assert first_read is second_read, "group view reads must be identity-stable"
     assert isinstance(first_read, frozenset)
     with pytest.raises(AttributeError):
         first_read.add("__aliases_v1_sentinel__")
 
-    recurrent = [op for op in trace.ops.values() if op.recurrent_ops]
+    recurrent = [op for op in trace.ops.values() if op.graph.recurrent_ops]
     assert recurrent, "recurrent capture produced no recurrence groups"
     rec_op = recurrent[0]
-    rec_first = rec_op.recurrent_ops
-    assert rec_first is rec_op.recurrent_ops
+    rec_first = rec_op.graph.recurrent_ops
+    assert rec_first is rec_op.graph.recurrent_ops
     assert isinstance(rec_first, tuple)
     with pytest.raises(AttributeError):
         rec_first.append("__aliases_v1_sentinel__")
@@ -270,8 +270,8 @@ def test_op_copy_selective_depth() -> None:
         assert clone.saved_args is op.call.saved_args
     if op.container_spec is not None:
         assert clone.container_spec is op.container_spec
-    if op.parent_params:
-        assert clone.parent_params is op.parent_params
+    if op.graph.parent_params:
+        assert clone.graph.parent_params is op.graph.parent_params
 
     # Relation metadata: equal content; immutable views MAY be shared across
     # records (FORK-1), so no distinct-identity requirement anymore.
@@ -357,25 +357,27 @@ def test_equivalence_group_shared_live_view() -> None:
     """
 
     trace = _capture_recurrent()
-    grouped = [op for op in trace.ops.values() if op.equivalent_ops]
+    grouped = [op for op in trace.ops.values() if op.graph.equivalent_ops]
     by_group: dict[frozenset, list] = {}
     for op in grouped:
-        by_group.setdefault(frozenset(op.equivalent_ops), []).append(op)
+        by_group.setdefault(frozenset(op.graph.equivalent_ops), []).append(op)
     multi = [members for members in by_group.values() if len(members) >= 2]
     assert multi, "no multi-member equivalence group captured"
     first, second = multi[0][0], multi[0][1]
-    assert first.equivalent_ops == second.equivalent_ops
-    assert first.equivalent_ops is second.equivalent_ops, "group members must share ONE cached view"
+    assert first.graph.equivalent_ops == second.graph.equivalent_ops
+    assert first.graph.equivalent_ops is second.graph.equivalent_ops, (
+        "group members must share ONE cached view"
+    )
     with pytest.raises(AttributeError):
-        first.equivalent_ops.add("__aliases_v1_group__")
+        first.graph.equivalent_ops.add("__aliases_v1_group__")
 
     # LIVE through the sanctioned scrub path: filtering the group once is
     # observed by every member on its next read, sharing intact.
     from torchlens._data_classes.cleanup import _scrub_per_op_equivalence_lists
 
-    group_labels = sorted(first.equivalent_ops)
+    group_labels = sorted(first.graph.equivalent_ops)
     removed = group_labels[-1]
     _scrub_per_op_equivalence_lists(multi[0], {removed})
-    assert removed not in first.equivalent_ops
-    assert removed not in second.equivalent_ops
-    assert first.equivalent_ops is second.equivalent_ops
+    assert removed not in first.graph.equivalent_ops
+    assert removed not in second.graph.equivalent_ops
+    assert first.graph.equivalent_ops is second.graph.equivalent_ops

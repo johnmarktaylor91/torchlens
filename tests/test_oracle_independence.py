@@ -90,7 +90,7 @@ def _drop_edge_symmetrically(log, child_label: str, parent_label: str) -> None:
     # A stealthy corruption conforms the derived flag too, or the cheap
     # graph_topology pair (children vs has_children) catches it before any
     # independence question arises.
-    parent.has_children = len(parent.children) > 0
+    parent._graph_has_children = len(parent.children) > 0
     for positions in (child.call.parent_arg_positions or {}).values():
         stale = [
             argloc

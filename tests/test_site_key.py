@@ -258,7 +258,9 @@ def test_build_vs_serialized_axis_parity_on_real_capture() -> None:
 
 def _site_spanning_recurrent_groups(log: tl.Trace) -> tuple[int, int]:
     ops = _ops(log)
-    groups = {frozenset(op.recurrent_ops) for op in ops.values() if len(op.recurrent_ops) > 1}
+    groups = {
+        frozenset(op.graph.recurrent_ops) for op in ops.values() if len(op.graph.recurrent_ops) > 1
+    }
     spanning = sum(
         1
         for group in groups

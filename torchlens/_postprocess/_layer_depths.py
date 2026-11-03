@@ -11,6 +11,8 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
+from .._utils._record_group_table import op_attr
+
 if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
@@ -53,17 +55,17 @@ def _flood_graph_from_input_or_output_nodes(self: Trace, mode: str) -> None:
     traversal_order: Iterable[str]
     if mode == "input":
         starting_nodes = self.input_layers[:]
-        min_field = "min_distance_from_input"
-        max_field = "max_distance_from_input"
-        marker_field = "has_input_ancestor"
+        min_field = op_attr("min_distance_from_input")
+        max_field = op_attr("max_distance_from_input")
+        marker_field = op_attr("has_input_ancestor")
         layer_logging_field = "input_ancestors"
         forward_field = "children"
         traversal_order = self._raw_graph_ws.raw_layer_labels_list
     elif mode == "output":
         starting_nodes = self.output_layers[:]
-        min_field = "min_distance_to_output"
-        max_field = "max_distance_to_output"
-        marker_field = "has_output_descendant"
+        min_field = op_attr("min_distance_to_output")
+        max_field = op_attr("max_distance_to_output")
+        marker_field = op_attr("has_output_descendant")
         layer_logging_field = "output_descendants"
         forward_field = "parents"
         traversal_order = reversed(self._raw_graph_ws.raw_layer_labels_list)

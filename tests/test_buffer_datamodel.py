@@ -95,17 +95,17 @@ def test_removed_buffer_raw_label_is_scrubbed_from_per_op_graph_fields() -> None
     _scrub_per_op_equivalence_lists([op], {"buffer_3_raw"})
 
     assert op.parents == ["add_1_raw"]
-    assert op.root_ancestors == {"input_1_raw"}
+    assert op.graph.root_ancestors == {"input_1_raw"}
     assert op.children == ["mul_1_raw"]
     assert op.output_descendants == {"output_1_raw"}
-    assert op.internal_source_parents == []
-    assert op.internal_source_ancestors == set()
+    assert op.graph.internal_source_parents == []
+    assert op.graph.internal_source_ancestors == set()
     assert op.control_flow.entry_children == []
     assert op.control_flow.then_children == []
     # NOTE: op_equivalence_classes is a Trace-level dict, never a per-op field;
     # the dead per-op scrub for it was removed by the cert round-1 data-model fix.
-    assert op.equivalent_ops == ["add_1_raw"]
-    assert op.recurrent_ops == []
+    assert op.graph.equivalent_ops == ["add_1_raw"]
+    assert op.graph.recurrent_ops == []
     assert op.call.parent_arg_positions == {"args": {1: "add_1_raw"}, "kwargs": {}}
     assert set(op.out_versions_by_child) == {"add_1_raw"}
     assert op.control_flow.elif_children == {}
@@ -336,13 +336,13 @@ def test_internal_source_parents_survive_journal_projection() -> None:
 
     add_op = trace["add_1_1"]
     output_op = trace["output_1"]
-    assert add_op.internal_source_parents == ("buffer_1",)
+    assert add_op.graph.internal_source_parents == ("buffer_1",)
     # internal_source_parents is a DIRECT-PARENT relation, so the synthetic output node
     # names ITS parent (``add_1_1``), which carries the buffer ancestry -- not the
     # ``buffer_1`` label it used to inherit verbatim from the clone source. The old
     # expectation pinned that bug in: ``buffer_1`` is not a parent of ``output_1``.
     assert output_op.parents == ("add_1_1",)
-    assert output_op.internal_source_parents == ("add_1_1",)
+    assert output_op.graph.internal_source_parents == ("add_1_1",)
 
 
 class DataSetter(nn.Module):
@@ -531,7 +531,7 @@ def test_buffer_write_models_validate_and_expose_entities(
         assert buffer.versions
         assert buffer.final_value is not None
         assert buffer.num_overwrites == overwrite_count
-    assert not any(op.is_buffer for op in trace.compute_ops)
+    assert not any(op.graph.is_buffer for op in trace.compute_ops)
 
 
 def test_batchnorm_buffer_reads_materialize_in_raw_index_order() -> None:
@@ -601,12 +601,14 @@ def _assert_buffer_op_accessors_partition_buffer_ops(trace: tl.Trace) -> None:
     """Assert derived buffer op accessors partition the flat buffer op population."""
 
     expected_read_ops = [
-        op.label for op in trace._layer_list if op.is_buffer and op.buffer_write_kind is None
+        op.label for op in trace._layer_list if op.graph.is_buffer and op.buffer_write_kind is None
     ]
     expected_write_ops = [
-        op.label for op in trace._layer_list if op.is_buffer and op.buffer_write_kind is not None
+        op.label
+        for op in trace._layer_list
+        if op.graph.is_buffer and op.buffer_write_kind is not None
     ]
-    all_buffer_ops = [op.label for op in trace._layer_list if op.is_buffer]
+    all_buffer_ops = [op.label for op in trace._layer_list if op.graph.is_buffer]
 
     assert trace.buffer_read_ops == expected_read_ops
     assert trace.buffer_write_ops == expected_write_ops
@@ -631,12 +633,13 @@ def _assert_op_level_buffer_accessors(trace: tl.Trace) -> None:
         expected_sources = [
             trace[parent_label].label
             for parent_label in op.parents
-            if trace[parent_label].is_buffer and trace[parent_label].buffer_write_kind is None
+            if trace[parent_label].graph.is_buffer and trace[parent_label].buffer_write_kind is None
         ]
         expected_sinks = [
             trace[child_label].label
             for child_label in op.children
-            if trace[child_label].is_buffer and trace[child_label].buffer_write_kind is not None
+            if trace[child_label].graph.is_buffer
+            and trace[child_label].buffer_write_kind is not None
         ]
         # OpAccessor reads are Op-valued (C02 read basis, pinned by
         # tests/test_w051_gate_layer_accessors.py): iteration yields the Ops in
@@ -644,8 +647,8 @@ def _assert_op_level_buffer_accessors(trace: tl.Trace) -> None:
         # sparse 1-based parent-index storage key. The datamodel claim under
         # test is the ordered partition itself: sources are exactly the
         # buffer-read parents, sinks exactly the buffer-write children.
-        assert [source.label for source in op.buffer_source_ops] == expected_sources
-        assert [sink.label for sink in op.buffer_sink_ops] == expected_sinks
+        assert [source.label for source in op.graph.buffer_source_ops] == expected_sources
+        assert [sink.label for sink in op.graph.buffer_sink_ops] == expected_sinks
 
 
 def test_buffer_op_accessors_partition_read_and_write_versions() -> None:
@@ -857,7 +860,7 @@ def test_merged_buffer_survivor_gains_duplicate_output_reach() -> None:
         # The survivor owns every pre-merge child (two dead ends + output path)...
         assert len(op.children) == 3
         # ...and its child-direction reach reflects the merged edges.
-        assert op.has_output_descendant is True
+        assert op.graph.has_output_descendant is True
         assert any(label.startswith("output") for label in op.output_descendants)
     finally:
         trace.cleanup()

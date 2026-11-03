@@ -35,7 +35,8 @@ def count_saved_module_calls_from_output_ops(
         saved_labels = {
             op.label
             for op in trace._layer_list
-            if getattr(op, "has_saved_activation", False) and not getattr(op, "is_orphan", False)
+            if getattr(op, "has_saved_activation", False)
+            and not record_member(op, "is_orphan", False)
         }
     else:
         saved_labels = set(saved_op_labels)
@@ -178,7 +179,7 @@ def _refresh_fast_saved_summary(self: "Trace") -> None:
         layer_entry
         for layer_entry in self._layer_list
         if getattr(layer_entry, "has_saved_activation", False)
-        and not getattr(layer_entry, "is_orphan", False)
+        and not record_member(layer_entry, "is_orphan", False)
     ]
     self._num_saved_ops = len(saved_layers)
     # F20 (brainpipe D-17): read the ONE byte model -- physically retained

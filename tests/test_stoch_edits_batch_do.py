@@ -174,7 +174,7 @@ def _fingerprint(log: tl.Trace) -> dict:
 
     ops = {}
     for op in log._layer_list:
-        store = op.edge_substitutions or {}
+        store = op.graph.edge_substitutions or {}
         ops[op.label] = (
             None if op.out is None else op.out.clone(),
             tuple(repr(record) for record in op.edits or ()),
@@ -216,8 +216,8 @@ def test_cross_kind_batch_equals_the_doors_one_at_a_time(order: tuple[str, ...])
         assert batch_op.label == seq_op.label
         assert batch_op.out.dtype == torch.float64
         assert torch.equal(batch_op.out, seq_op.out), batch_op.label
-        assert sorted(map(repr, batch_op.edge_substitutions or {})) == sorted(
-            map(repr, seq_op.edge_substitutions or {})
+        assert sorted(map(repr, batch_op.graph.edge_substitutions or {})) == sorted(
+            map(repr, seq_op.graph.edge_substitutions or {})
         )
     assert not torch.equal(batch[batch.output_layers[0]].out, log[log.output_layers[0]].out), (
         "the batch changed the output"

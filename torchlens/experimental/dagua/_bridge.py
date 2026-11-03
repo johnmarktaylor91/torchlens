@@ -404,7 +404,7 @@ def _module_line(entry: Any) -> str | None:
         Address text, or ``None`` when there is no module/buffer address.
     """
 
-    if getattr(entry, "is_buffer", False):
+    if record_member(entry, "is_buffer", False):
         addr = getattr(entry, "address", None)
         return f"@{addr}" if addr else "@buffer"
     addr = getattr(entry, "module", None)
@@ -481,7 +481,7 @@ def _base_node_type(entry: Any) -> str:
         return "input"
     if getattr(entry, "is_output", False):
         return "output"
-    if getattr(entry, "is_buffer", False):
+    if record_member(entry, "is_buffer", False):
         return "buffer"
     if record_member(entry, "is_terminal_bool", False):
         return "bool"
@@ -591,8 +591,8 @@ def _is_skip_edge(parent: Any, child: Any) -> bool:
         Whether the child is more than one input-distance step after parent.
     """
 
-    p = getattr(parent, "min_distance_from_input", None)
-    c = getattr(child, "min_distance_from_input", None)
+    p = record_member(parent, "min_distance_from_input", None)
+    c = record_member(child, "min_distance_from_input", None)
     if p is None or c is None:
         return False
     try:
@@ -617,8 +617,8 @@ def _is_recurrent_edge(parent: Any, child: Any) -> bool:
         Whether either endpoint indicates recurrence.
     """
 
-    p_group = getattr(parent, "recurrent_ops", None)
-    c_group = getattr(child, "recurrent_ops", None)
+    p_group = record_member(parent, "recurrent_ops", None)
+    c_group = record_member(child, "recurrent_ops", None)
     if p_group and c_group and p_group == c_group:
         return True
     return (
@@ -648,7 +648,7 @@ def _classify_forward_edge(parent: Any, child: Any) -> str:
         return "then"
     if child_label in (record_member(parent, "conditional_entry_children", None) or []):
         return "if"
-    if getattr(parent, "is_buffer", False):
+    if record_member(parent, "is_buffer", False):
         return "buffer"
     if _is_recurrent_edge(parent, child):
         return "recurrent"
@@ -768,7 +768,7 @@ def trace_to_dagua_graph(
     g = dagua.DaguaGraph(direction=_to_dagua_direction(direction))
     entries = _entries_for_mode(trace, vis_mode)
     if not show_buffers:
-        entries = [e for e in entries if not getattr(e, "is_buffer", False)]
+        entries = [e for e in entries if not record_member(e, "is_buffer", False)]
     entries_by_label = {getattr(e, "layer_label"): e for e in entries}
     site_labels, cone_labels = intervention_site_and_cone_labels(trace, show_cone=True)
     g.is_intervention_site = []
@@ -799,14 +799,14 @@ def trace_to_dagua_graph(
         g.container_role.append(container_attrs["container_role"])
 
         shape_override = op_shape
-        if getattr(entry, "is_buffer", False):
+        if record_member(entry, "is_buffer", False):
             shape_override = buffer_shape
         elif record_member(entry, "is_module_output", False) or record_member(
             entry, "is_atomic_module", False
         ):
             shape_override = module_shape
 
-        if not getattr(entry, "has_input_ancestor", True):
+        if not record_member(entry, "has_input_ancestor", True):
             shape_override = dagua.NodeStyle(
                 shape=shape_override.shape,
                 corner_radius=shape_override.corner_radius,
@@ -843,7 +843,7 @@ def trace_to_dagua_graph(
             )
 
             style = None
-            if not getattr(parent, "has_input_ancestor", True):
+            if not record_member(parent, "has_input_ancestor", True):
                 style = dagua.EdgeStyle(style="dashed")
             g.add_edge(parent_label, child_id, label=edge_label, type=edge_type, style=style)
             g.edge_container_role.append(_container_semantic_attrs(child)["container_role"])

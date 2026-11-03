@@ -681,7 +681,7 @@ def test_functional_call_substituted_params_are_tensor_parents() -> None:
     assert linear.module == "inner:1"
     assert len(linear.parents) == 3
     assert linear.parents[0] == "input_1"
-    assert linear.parent_params == ()
+    assert linear.graph.parent_params == ()
 
 
 def test_functional_call_substituted_buffers_are_tensor_parents() -> None:

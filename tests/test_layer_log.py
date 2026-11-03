@@ -245,7 +245,7 @@ class TestMultiPassLayerLog:
     def test_multi_pass_aggregate_graph_union(self, recurrent_log):
         """Aggregate graph properties are unions across ops."""
         for layer_log in recurrent_log._layer_logs.values():
-            if layer_log.num_passes > 1 and layer_log.has_children:
+            if layer_log.num_passes > 1 and layer_log.graph.has_children:
                 # Verify children is a union
                 all_children = set()
                 for pass_log in layer_log.ops.values():

@@ -18,6 +18,7 @@ from ._data_classes._accessor_base import Accessor
 from ._data_classes._record_groups import LayerControlFlow, LayerCost, OpControlFlow, OpCost
 from ._data_classes._record_groups_autograd import LayerAutograd, OpAutograd
 from ._data_classes._record_groups_call import LayerCall, OpCall
+from ._data_classes._record_groups_graph import LayerGraph, OpGraph
 from ._data_classes._record_groups_module_context import LayerModuleContext, OpModuleContext
 from ._data_classes._record_groups_payload import LayerPayload, OpPayload
 from ._data_classes._record_groups_source import LayerSource, OpSource
@@ -74,10 +75,12 @@ __all__ = [
     "OpAutograd",
     "OpModuleContext",
     "OpPayload",
+    "OpGraph",
     "LayerSource",
     "LayerAutograd",
     "LayerModuleContext",
     "LayerPayload",
+    "LayerGraph",
     "LayerCall",
     "NarrationEvent",
     "RunnableDiagnostic",

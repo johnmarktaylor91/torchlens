@@ -27,7 +27,9 @@ def _sequential_trace() -> Any:
 
 
 def _assert_counts_agree(trace: Any) -> None:
-    counted = [op for op in trace._layer_list if not (op.is_input or op.is_output or op.is_buffer)]
+    counted = [
+        op for op in trace._layer_list if not (op.is_input or op.is_output or op.graph.is_buffer)
+    ]
     assert len(trace.ops) == trace._num_ops == len(counted)
     assert list(trace.ops) == counted
     assert trace.ops.values() == counted
@@ -108,7 +110,7 @@ def test_counts_agree_on_a_recurrent_model_with_buffers() -> None:
             return x
 
     trace = tl.trace(_Recurrent(), torch.randn(1, 3))
-    assert any(op.is_buffer for op in trace._layer_list)
+    assert any(op.graph.is_buffer for op in trace._layer_list)
     _assert_counts_agree(trace)
 
 

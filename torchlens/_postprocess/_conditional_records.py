@@ -148,7 +148,7 @@ def _find_conditional_evaluation_entry_edge(
             continue
 
         parent_layer = self._layer_dict_all_keys[parent_label]
-        if parent_label != first_bool_label and parent_layer.has_output_descendant:
+        if parent_label != first_bool_label and parent_layer.graph.has_output_descendant:
             return (parent_label, first_bool_label)
         parent_queue.extend(parent_layer.parents)
 

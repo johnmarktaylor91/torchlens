@@ -301,7 +301,7 @@ def _shape_hash_sorted(trace: SimpleNamespace) -> str:
                 "container_cardinality": None,
                 "is_input": bool(layer.is_input),
                 "is_output": bool(layer.is_output),
-                "is_buffer": bool(layer.is_buffer),
+                "is_buffer": bool(layer.graph.is_buffer),
             }
         )
     payload = json.dumps(records, sort_keys=True, separators=(",", ":"), default=repr)

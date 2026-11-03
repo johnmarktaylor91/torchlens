@@ -281,11 +281,11 @@ def _add_output_layers(
         new_output_node.type = "output"
         new_output_node.is_output = True
         new_output_node.is_input = False
-        new_output_node.is_buffer = False
+        new_output_node._graph_is_buffer = False
         new_output_node._internal_set("edits", [])
         new_output_node._internal_set("is_edited", False)
         if i == len(paired_outputs) - 1:
-            new_output_node.is_final_output = True
+            new_output_node._graph_is_final_output = True
         self._raw_graph_ws.layer_counter += 1
         new_output_node._label_raw = f"output_{i + 1}_raw"
         new_output_node._layer_label_raw = new_output_node._label_raw
@@ -293,7 +293,7 @@ def _add_output_layers(
         output_address = "output"
         if output_address_suffix != "":
             output_address += f".{output_address_suffix}"
-        new_output_node.io_role = output_address
+        new_output_node._graph_io_role = output_address
         path_meta = output_container_path_meta(self, output_node._label_raw, output_address_suffix)
         if path_meta is not None:
             new_output_node.container_path, new_output_node.container_spec = path_meta
@@ -354,9 +354,9 @@ def _add_output_layers(
 
         # Strip any params:
 
-        new_output_node.parent_params = []
+        new_output_node._graph_parent_params = []
         new_output_node._param_barcodes = []
-        new_output_node.parent_param_ops = {}
+        new_output_node._graph_parent_param_ops = {}
         new_output_node._param_logs = []
         new_output_node.param_shapes = []
         new_output_node.num_params = 0
@@ -380,11 +380,11 @@ def _add_output_layers(
 
         # Fix ancestry information:
 
-        new_output_node.is_internal_source = False
-        new_output_node.has_output_descendant = True
+        new_output_node._graph_is_internal_source = False
+        new_output_node._graph_has_output_descendant = True
         new_output_node.output_descendants = {new_output_node._label_raw}
         new_output_node.children = []
-        new_output_node.has_children = False
+        new_output_node._graph_has_children = False
         new_output_node.parents = [output_node._label_raw]
         new_output_node._call_parent_arg_positions = {
             "args": {0: output_node._label_raw},
@@ -397,8 +397,8 @@ def _add_output_layers(
         # factory-tensor ancestry (i.e. any BatchNorm net): it named labels that are not
         # parents of the output node at all, and omitted the output node's ONE real
         # parent, which does carry that ancestry.
-        new_output_node.internal_source_parents = (
-            [output_node._label_raw] if output_node.has_internal_source_ancestor else []
+        new_output_node._graph_internal_source_parents = (
+            [output_node._label_raw] if output_node.graph.has_internal_source_ancestor else []
         )
         # root_ancestors must be re-derived the same way: the output node is NOT an
         # internal source (set above), so the armed ancestry-closure convention
@@ -407,8 +407,8 @@ def _add_output_layers(
         # which is the empty set when that parent is a parentless factory source
         # (arange/zeros/... returned straight from forward) — the one source-minting
         # convention that leaves root_ancestors empty on the exempt source row.
-        new_output_node.root_ancestors = set(output_node.input_ancestors) | set(
-            output_node.internal_source_ancestors
+        new_output_node._graph_root_ancestors = set(output_node.input_ancestors) | set(
+            output_node.graph.internal_source_ancestors
         )
         new_output_node._edge_uses = []
 
@@ -437,13 +437,13 @@ def _add_output_layers(
         # Fix layer equivalence information:
         new_output_node.pass_number = 1
         new_output_node.num_passes = 1
-        new_output_node.equivalent_ops = {new_output_node._label_raw}
-        new_output_node.recurrent_ops = []
+        new_output_node._graph_equivalent_ops = {new_output_node._label_raw}
+        new_output_node._graph_recurrent_ops = []
         equiv_type = (
             f"output_{i + 1}_{'_'.join(tuple(str(s) for s in new_output_node.shape))}_"
             f"{str(new_output_node.dtype)}"
         )
-        new_output_node.equivalence_class = equiv_type
+        new_output_node._graph_equivalence_class = equiv_type
         self._graph_op_equivalence_classes[equiv_type].add(new_output_node._label_raw)
 
         # Track child tensor variations for output nodes.
@@ -540,8 +540,8 @@ def _find_output_ancestors(self: "Trace") -> None:
         node = self[node_label]
         for child_node_label in node.children:
             child = self[child_node_label]
-            if child.has_output_descendant:
-                node.has_output_descendant = True
+            if child.graph.has_output_descendant:
+                node._graph_has_output_descendant = True
                 node.output_descendants.update(child.output_descendants)
 
 
@@ -648,7 +648,7 @@ def _remove_orphan_nodes(self: "Trace") -> None:
     _record_pruned_alias_mutation(self, orphan_nodes)
     if self._options_keep_orphans:
         for orphan_label in orphan_nodes:
-            self._raw_graph_ws.raw_layer_dict[orphan_label].is_orphan = True
+            self._raw_graph_ws.raw_layer_dict[orphan_label]._graph_is_orphan = True
         return
 
     # Record the ``func_call_id``s of the ops being INTENTIONALLY orphan-pruned
@@ -960,7 +960,7 @@ def _log_internally_terminated_tensor(
     (hunt-6 R52-2).
     """
     layer_entry = self[tensor_label]
-    layer_entry.is_internal_sink = True
+    layer_entry._graph_is_internal_sink = True
     if tensor_label not in seen_sink_labels:
         seen_sink_labels.add(tensor_label)
         self.internal_sink_ops.append(tensor_label)

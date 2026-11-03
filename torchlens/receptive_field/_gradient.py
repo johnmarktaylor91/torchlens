@@ -15,6 +15,7 @@ import torch
 from torchlens.backends.registry import BackendUnsupportedError
 
 from .. import _state
+from .._utils._record_group_table import record_member
 from .._utils._torch_compat import tensor_any_over_dims
 from ..backends.registry import get_backend_spec
 from . import _engine, _rules
@@ -348,7 +349,7 @@ def _input_ops_by_role(trace: Trace) -> dict[str, Op]:
     """
 
     return {
-        str(op.io_role or op.label): op
+        str(op.graph.io_role or op.label): op
         for op in trace._layer_list
         if bool(getattr(op, "is_input", False))
     }
@@ -406,7 +407,7 @@ def _select_inputs(
         op = inputs_by_role.get(role)
     else:
         requested = input_op
-        role = str(getattr(requested, "io_role", None) or getattr(requested, "label", ""))
+        role = str(record_member(requested, "io_role", None) or getattr(requested, "label", ""))
         requested_label = str(getattr(requested, "label", ""))
         candidate = inputs_by_role.get(role)
         if (
@@ -811,7 +812,7 @@ def gradient_for_unit(
         source_op = resolve_graph_point(trace, source)
         require_path(source_op, target, ReceptiveFieldDirection.RECEPTIVE)
         source_tensor = _saved_source_tensor(source_op, target)
-        source_key = str(source_op.io_role or source_op.label)
+        source_key = str(source_op.graph.io_role or source_op.label)
         with _builtin_rules_when_registry_empty():
             solution = _engine.solve_from(trace, source_op)
             _target_descriptors = solution.per_op.get(target.label, {})

@@ -158,7 +158,7 @@ def buffer_source_ops_by_index(op: Op) -> dict[int, Op]:
             if parent_label not in trace._layer_dict_all_keys:
                 continue
             parent = trace._layer_dict_all_keys[parent_label]
-        if parent.is_buffer and parent.buffer_write_kind is None:
+        if parent.graph.is_buffer and parent.buffer_write_kind is None:
             source_ops[parent_index] = parent
     return source_ops
 
@@ -175,7 +175,7 @@ def buffer_sink_ops_by_index(op: Op) -> dict[int, Op]:
             if child_label not in trace._layer_dict_all_keys:
                 continue
             child = trace._layer_dict_all_keys[child_label]
-        if child.is_buffer and child.buffer_write_kind is not None:
+        if child.graph.is_buffer and child.buffer_write_kind is not None:
             sink_ops[child_index] = child
     return sink_ops
 

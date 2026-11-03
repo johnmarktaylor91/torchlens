@@ -156,8 +156,8 @@ def test_save_scrub_remaps_process_local_identity_tokens(tmp_path: Path) -> None
     assert [op._param_barcodes for op in first_param_ops] == [
         op._param_barcodes for op in second_param_ops
     ]
-    assert [op.equivalence_class for op in first_param_ops] == [
-        op.equivalence_class for op in second_param_ops
+    assert [op.graph.equivalence_class for op in first_param_ops] == [
+        op.graph.equivalence_class for op in second_param_ops
     ]
     assert first.provenance.model_object_id == second.provenance.model_object_id == 1
     assert first.provenance.input_object_id == second.provenance.input_object_id == 1

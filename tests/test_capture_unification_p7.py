@@ -407,7 +407,9 @@ def _buffer_read_addresses(trace: tl.Trace) -> list[str]:
     """
 
     return sorted(
-        trace[label].address for label in trace.buffer_layers if not trace[label].is_internal_sink
+        trace[label].address
+        for label in trace.buffer_layers
+        if not trace[label].graph.is_internal_sink
     )
 
 
@@ -449,8 +451,8 @@ def test_recording_to_trace_backfills_all_special_layer_lists() -> None:
     # _fix_buffer_layers must have RUN -- proven by a real buffer_pass number.
     assert cooked.buffer_layers, "buffer_layers must be backfilled, not empty"
     for label in cooked.buffer_layers:
-        assert cooked[label].is_buffer
-        assert cooked[label].buffer_pass is not None, "Step 6 must assign buffer_pass"
+        assert cooked[label].graph.is_buffer
+        assert cooked[label].graph.buffer_pass is not None, "Step 6 must assign buffer_pass"
 
     # internal_source_ops must be populated (the torch.zeros op has no ancestor).
     assert cooked.internal_source_ops, "internal_source_ops must be backfilled"

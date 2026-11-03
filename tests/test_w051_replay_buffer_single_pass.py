@@ -17,6 +17,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._utils._record_group_table import record_member
 from torchlens.intervention.errors import BufferThreadGapWarning
 
 
@@ -50,7 +51,7 @@ def _written_buffer_op(trace: tl.Trace):
     return next(
         op
         for op in trace._layer_list
-        if getattr(op, "is_buffer", False) and getattr(op, "parents", ())
+        if record_member(op, "is_buffer", False) and getattr(op, "parents", ())
     )
 
 

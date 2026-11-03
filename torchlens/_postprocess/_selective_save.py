@@ -11,6 +11,7 @@ from typing import Any
 from .._ir.selector_eval import first_selector_kind_outside
 from .._quantities import Bytes
 from .._selection.selectors import BaseSelector
+from .._utils._record_group_table import record_member
 from ..backends.registry import BackendUnsupportedError
 from .saved_summary import refresh_pinned_autograd_memory, refresh_saved_module_call_count
 
@@ -287,7 +288,7 @@ def _refresh_saved_activation_summary(trace: Any) -> None:
     saved_ops = [
         op
         for op in trace._layer_list
-        if getattr(op, "has_saved_activation", False) and not getattr(op, "is_orphan", False)
+        if getattr(op, "has_saved_activation", False) and not record_member(op, "is_orphan", False)
     ]
     trace._num_saved_ops = len(saved_ops)
     # F20 (brainpipe D-17): read the ONE byte model -- physically retained

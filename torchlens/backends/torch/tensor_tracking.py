@@ -1215,7 +1215,7 @@ def _log_tensor_grad(
     layer_log_entry = self._layer_dict_all_keys[tensor_label]
     layers_to_update = [tensor_label]
     # Output layers are identity wrappers; propagate grad to them too.
-    if layer_log_entry.is_output_parent:
+    if layer_log_entry.graph.is_output_parent:
         for child_layer in layer_log_entry.children:
             if self._layer_dict_all_keys[child_layer].is_output:
                 layers_to_update.append(child_layer)
@@ -1375,7 +1375,7 @@ def _get_ancestors_from_parents(
 
     for parent_entry in parent_entries:
         input_ancestors.update(parent_entry.input_ancestors)
-        internal_source_ancestors.update(parent_entry.internal_source_ancestors)
+        internal_source_ancestors.update(parent_entry.graph.internal_source_ancestors)
     return input_ancestors, internal_source_ancestors
 
 

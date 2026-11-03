@@ -844,8 +844,8 @@ def test_jax_repeated_op_block_groups_into_passes() -> None:
     assert {op.layer_label for op in add_ops} == {add_ops[0].layer_label}
     assert {op.layer_label for op in mul_ops} == {mul_ops[0].layer_label}
     assert all(op.num_passes == 2 for op in (*add_ops, *mul_ops))
-    assert add_ops[0].recurrent_ops == tuple(op.label for op in add_ops)
-    assert mul_ops[0].recurrent_ops == tuple(op.label for op in mul_ops)
+    assert add_ops[0].graph.recurrent_ops == tuple(op.label for op in add_ops)
+    assert mul_ops[0].graph.recurrent_ops == tuple(op.label for op in mul_ops)
     assert trace._layer_num_calls[add_ops[0].layer_label] == 2
     assert trace._layer_num_calls[mul_ops[0].layer_label] == 2
     assert trace.validate_forward_pass([])

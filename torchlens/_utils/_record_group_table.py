@@ -21,7 +21,16 @@ from typing import Any
 
 #: Groups whose rows are applied (moved, renamed or removed).
 ACTIVE_GROUPS: frozenset[str] = frozenset(
-    {"cost", "control_flow", "call", "source", "autograd", "module_context", "payload"}
+    {
+        "cost",
+        "control_flow",
+        "call",
+        "source",
+        "autograd",
+        "module_context",
+        "payload",
+        "graph",
+    }
 )
 
 #: ``(former flat name, group | "rename" | "removed", new leaf name)``.

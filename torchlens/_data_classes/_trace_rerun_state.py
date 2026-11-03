@@ -10,7 +10,7 @@ import torch
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._quantities import Bytes
-from .._utils._record_group_table import layer_attr, op_attr
+from .._utils._record_group_table import layer_attr, op_attr, record_member
 from .._utils.fail_open import fail_open
 from ._state_adapter import state_items, state_restore
 from ._trace_accessors import (
@@ -433,7 +433,7 @@ def append_state_from(target: Trace, trace: Trace) -> None:
     # By position, not raw label: a reused module repeats its raw label across passes.
     for layer, new_layer in zip(target._layer_list, trace._layer_list, strict=True):
         if not (
-            getattr(layer, "is_buffer", False)
+            record_member(layer, "is_buffer", False)
             or is_append_buffer_side_effect_layer(target, layer, old_by_label)
         ):
             layer._append_tensor_from(new_layer, "out")
@@ -479,7 +479,7 @@ def is_append_buffer_side_effect_layer(
         if child_layer is None:
             return False
         if not (
-            getattr(child_layer, "is_buffer", False)
+            record_member(child_layer, "is_buffer", False)
             and getattr(child_layer, "buffer_write_kind", None) is not None
         ):
             return False

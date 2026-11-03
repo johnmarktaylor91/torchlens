@@ -53,19 +53,9 @@
     "call_labels": [
      "add_1_2:1"
     ],
-    "child_ops_per_layer": {
-     "\"relu_1_3\"": [
-      1
-     ]
-    },
     "children": [
      "relu_1_3"
     ],
-    "children_per_pass": {
-     "1": [
-      "relu_1_3"
-     ]
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -145,15 +135,54 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": true,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {
+     "\"relu_1_3\"": [
+      1
+     ]
+    },
+    "graph.children_per_pass": {
+     "1": [
+      "relu_1_3"
+     ]
+    },
+    "graph.equivalence_class": "add_inplace_a09dc8be148d708c",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"add_1_2:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {
+     "\"clone_1_1\"": [
+      1
+     ]
+    },
+    "graph.parents_per_pass": {
+     "1": [
+      "clone_1_1"
+     ]
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -163,7 +192,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -171,7 +199,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -235,19 +262,9 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {
-     "\"clone_1_1\"": [
-      1
-     ]
-    },
     "parents": [
      "clone_1_1"
     ],
-    "parents_per_pass": {
-     "1": [
-      "clone_1_1"
-     ]
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -269,7 +286,6 @@
     "short_label": "add_1:1",
     "short_layer_label": "add_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [
      {
@@ -356,19 +372,9 @@
     "call_labels": [
      "clone_1_1:1"
     ],
-    "child_ops_per_layer": {
-     "\"add_1_2\"": [
-      1
-     ]
-    },
     "children": [
      "add_1_2"
     ],
-    "children_per_pass": {
-     "1": [
-      "add_1_2"
-     ]
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -448,15 +454,54 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": true,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {
+     "\"add_1_2\"": [
+      1
+     ]
+    },
+    "graph.children_per_pass": {
+     "1": [
+      "add_1_2"
+     ]
+    },
+    "graph.equivalence_class": "clone_966d0e7792d95d96",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"clone_1_1:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {
+     "\"input_1\"": [
+      1
+     ]
+    },
+    "graph.parents_per_pass": {
+     "1": [
+      "input_1"
+     ]
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -466,7 +511,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -474,7 +518,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -538,19 +581,9 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {
-     "\"input_1\"": [
-      1
-     ]
-    },
     "parents": [
      "input_1"
     ],
-    "parents_per_pass": {
-     "1": [
-      "input_1"
-     ]
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -572,7 +605,6 @@
     "short_label": "clone_1:1",
     "short_layer_label": "clone_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [
      {
@@ -651,19 +683,9 @@
     "call_labels": [
      "input_1:1"
     ],
-    "child_ops_per_layer": {
-     "\"clone_1_1\"": [
-      1
-     ]
-    },
     "children": [
      "clone_1_1"
     ],
-    "children_per_pass": {
-     "1": [
-      "clone_1_1"
-     ]
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -743,15 +765,48 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": true,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {
+     "\"clone_1_1\"": [
+      1
+     ]
+    },
+    "graph.children_per_pass": {
+     "1": [
+      "clone_1_1"
+     ]
+    },
+    "graph.equivalence_class": "input_2_4_torch.float32",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"input_1:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": false,
+    "graph.has_siblings": false,
+    "graph.io_role": "input.x",
+    "graph.is_buffer": false,
+    "graph.is_compute": false,
+    "graph.is_final_output": false,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {},
+    "graph.parents_per_pass": {
+     "1": []
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": false,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -761,7 +816,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -769,7 +823,6 @@
     "is_input": true,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -834,11 +887,7 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {},
     "parents": [],
-    "parents_per_pass": {
-     "1": []
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -860,7 +909,6 @@
     "short_label": "input_1:1",
     "short_layer_label": "input_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [],
     "source.fx_call_index": 0,
@@ -943,11 +991,7 @@
     "call_labels": [
      "output_1:1"
     ],
-    "child_ops_per_layer": {},
     "children": [],
-    "children_per_pass": {
-     "1": []
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -1027,15 +1071,48 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": false,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {},
+    "graph.children_per_pass": {
+     "1": []
+    },
+    "graph.equivalence_class": "output_1_2_4_torch.float32",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"output_1:1\""
+     ]
+    },
+    "graph.has_children": false,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.io_role": "output",
+    "graph.is_buffer": false,
+    "graph.is_compute": false,
+    "graph.is_final_output": true,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {
+     "\"relu_1_3\"": [
+      1
+     ]
+    },
+    "graph.parents_per_pass": {
+     "1": [
+      "relu_1_3"
+     ]
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -1045,7 +1122,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional_body": false,
@@ -1053,7 +1129,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": true,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -1118,19 +1193,9 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {
-     "\"relu_1_3\"": [
-      1
-     ]
-    },
     "parents": [
      "relu_1_3"
     ],
-    "parents_per_pass": {
-     "1": [
-      "relu_1_3"
-     ]
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -1152,7 +1217,6 @@
     "short_label": "output_1:1",
     "short_layer_label": "output_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [],
     "source.fx_call_index": 0,
@@ -1228,19 +1292,9 @@
     "call_labels": [
      "relu_1_3:1"
     ],
-    "child_ops_per_layer": {
-     "\"output_1\"": [
-      1
-     ]
-    },
     "children": [
      "output_1"
     ],
-    "children_per_pass": {
-     "1": [
-      "output_1"
-     ]
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -1320,15 +1374,54 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": false,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {
+     "\"output_1\"": [
+      1
+     ]
+    },
+    "graph.children_per_pass": {
+     "1": [
+      "output_1"
+     ]
+    },
+    "graph.equivalence_class": "relu_inplace_966d0e7792d95d96",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"relu_1_3:1\""
+     ]
+    },
+    "graph.has_children": false,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {
+     "\"add_1_2\"": [
+      1
+     ]
+    },
+    "graph.parents_per_pass": {
+     "1": [
+      "add_1_2"
+     ]
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -1338,7 +1431,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -1346,7 +1438,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -1410,19 +1501,9 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {
-     "\"add_1_2\"": [
-      1
-     ]
-    },
     "parents": [
      "add_1_2"
     ],
-    "parents_per_pass": {
-     "1": [
-      "add_1_2"
-     ]
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -1444,7 +1525,6 @@
     "short_label": "relu_1:1",
     "short_layer_label": "relu_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [
      {
@@ -1852,10 +1932,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -1923,7 +2001,6 @@
     "children": [
      "relu_1_3"
     ],
-    "co_parents": [],
     "code_context": [
      {
       "__ref__": "FuncCallLocation",
@@ -2046,8 +2123,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": null,
+    "graph.equivalence_class": "add_inplace_a09dc8be148d708c",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"add_1_2:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": false,
+    "graph.max_distance_from_input": 2,
+    "graph.max_distance_to_output": 2,
+    "graph.min_distance_from_input": 2,
+    "graph.min_distance_to_output": 2,
+    "graph.num_inputs": 1,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "add_1_2:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": true,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -2055,11 +2178,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -2101,7 +2222,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -2245,7 +2365,6 @@
     ],
     "short_label": "add_1:1",
     "short_layer_label": "add_1",
-    "siblings": [],
     "site_key": "s1||add||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [
@@ -2338,10 +2457,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -2405,7 +2522,6 @@
     "children": [
      "add_1_2"
     ],
-    "co_parents": [],
     "code_context": [
      {
       "__ref__": "FuncCallLocation",
@@ -2526,8 +2642,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": null,
+    "graph.equivalence_class": "clone_966d0e7792d95d96",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"clone_1_1:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": false,
+    "graph.max_distance_from_input": 1,
+    "graph.max_distance_to_output": 3,
+    "graph.min_distance_from_input": 1,
+    "graph.min_distance_to_output": 3,
+    "graph.num_inputs": 1,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "clone_1_1:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": true,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -2535,11 +2697,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -2581,7 +2741,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -2723,7 +2882,6 @@
     ],
     "short_label": "clone_1:1",
     "short_layer_label": "clone_1",
-    "siblings": [],
     "site_key": "s1||clone||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [],
@@ -2809,10 +2967,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -2856,7 +3012,6 @@
     "children": [
      "clone_1_1"
     ],
-    "co_parents": [],
     "code_context": [],
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
@@ -2951,8 +3106,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": null,
+    "graph.equivalence_class": "input_2_4_torch.float32",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"input_1:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": false,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": "input.x",
+    "graph.is_buffer": false,
+    "graph.is_compute": false,
+    "graph.is_final_output": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": false,
+    "graph.max_distance_from_input": 0,
+    "graph.max_distance_to_output": 4,
+    "graph.min_distance_from_input": 0,
+    "graph.min_distance_to_output": 4,
+    "graph.num_inputs": 0,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "input_1:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": true,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -2960,11 +3161,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": false,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -2991,7 +3190,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -3130,7 +3328,6 @@
     ],
     "short_label": "input_1:1",
     "short_layer_label": "input_1",
-    "siblings": [],
     "site_key": "s1||input||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [],
@@ -3207,10 +3404,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -3278,7 +3473,6 @@
     "call.tl_authored_root": null,
     "call.unattributed_tensor_args": [],
     "children": [],
-    "co_parents": [],
     "code_context": [],
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
@@ -3388,8 +3582,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": null,
+    "graph.equivalence_class": "output_1_2_4_torch.float32",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"output_1:1\""
+     ]
+    },
+    "graph.has_children": false,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": "output",
+    "graph.is_buffer": false,
+    "graph.is_compute": false,
+    "graph.is_final_output": true,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": true,
+    "graph.max_distance_from_input": 4,
+    "graph.max_distance_to_output": 0,
+    "graph.min_distance_from_input": 4,
+    "graph.min_distance_to_output": 0,
+    "graph.num_inputs": 1,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "output_1:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": false,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -3397,11 +3637,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -3443,7 +3681,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional_body": false,
@@ -3597,7 +3834,6 @@
     ],
     "short_label": "output_1:1",
     "short_layer_label": "output_1",
-    "siblings": [],
     "site_key": "s1||output||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [],
@@ -3676,10 +3912,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -3742,7 +3976,6 @@
     "children": [
      "output_1"
     ],
-    "co_parents": [],
     "code_context": [
      {
       "__ref__": "FuncCallLocation",
@@ -3863,8 +4096,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": null,
+    "graph.equivalence_class": "relu_inplace_966d0e7792d95d96",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"relu_1_3:1\""
+     ]
+    },
+    "graph.has_children": false,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": true,
+    "graph.max_distance_from_input": 3,
+    "graph.max_distance_to_output": 1,
+    "graph.min_distance_from_input": 3,
+    "graph.min_distance_to_output": 1,
+    "graph.num_inputs": 1,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "relu_1_3:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": false,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -3872,11 +4151,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -3918,7 +4195,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -4060,7 +4336,6 @@
     ],
     "short_label": "relu_1:1",
     "short_layer_label": "relu_1",
-    "siblings": [],
     "site_key": "s1||relu||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [],
@@ -4976,19 +5251,9 @@
     "call_labels": [
      "add_1_2:1"
     ],
-    "child_ops_per_layer": {
-     "\"relu_1_3\"": [
-      1
-     ]
-    },
     "children": [
      "relu_1_3"
     ],
-    "children_per_pass": {
-     "1": [
-      "relu_1_3"
-     ]
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -5068,15 +5333,54 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": true,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {
+     "\"relu_1_3\"": [
+      1
+     ]
+    },
+    "graph.children_per_pass": {
+     "1": [
+      "relu_1_3"
+     ]
+    },
+    "graph.equivalence_class": "add_inplace_a09dc8be148d708c",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"add_1_2:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {
+     "\"clone_1_1\"": [
+      1
+     ]
+    },
+    "graph.parents_per_pass": {
+     "1": [
+      "clone_1_1"
+     ]
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -5086,7 +5390,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -5094,7 +5397,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -5158,19 +5460,9 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {
-     "\"clone_1_1\"": [
-      1
-     ]
-    },
     "parents": [
      "clone_1_1"
     ],
-    "parents_per_pass": {
-     "1": [
-      "clone_1_1"
-     ]
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -5192,7 +5484,6 @@
     "short_label": "add_1:1",
     "short_layer_label": "add_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [
      {
@@ -5279,19 +5570,9 @@
     "call_labels": [
      "clone_1_1:1"
     ],
-    "child_ops_per_layer": {
-     "\"add_1_2\"": [
-      1
-     ]
-    },
     "children": [
      "add_1_2"
     ],
-    "children_per_pass": {
-     "1": [
-      "add_1_2"
-     ]
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -5371,15 +5652,54 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": true,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {
+     "\"add_1_2\"": [
+      1
+     ]
+    },
+    "graph.children_per_pass": {
+     "1": [
+      "add_1_2"
+     ]
+    },
+    "graph.equivalence_class": "clone_966d0e7792d95d96",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"clone_1_1:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {
+     "\"input_1\"": [
+      1
+     ]
+    },
+    "graph.parents_per_pass": {
+     "1": [
+      "input_1"
+     ]
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -5389,7 +5709,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -5397,7 +5716,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -5461,19 +5779,9 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {
-     "\"input_1\"": [
-      1
-     ]
-    },
     "parents": [
      "input_1"
     ],
-    "parents_per_pass": {
-     "1": [
-      "input_1"
-     ]
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -5495,7 +5803,6 @@
     "short_label": "clone_1:1",
     "short_layer_label": "clone_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [
      {
@@ -5574,19 +5881,9 @@
     "call_labels": [
      "input_1:1"
     ],
-    "child_ops_per_layer": {
-     "\"clone_1_1\"": [
-      1
-     ]
-    },
     "children": [
      "clone_1_1"
     ],
-    "children_per_pass": {
-     "1": [
-      "clone_1_1"
-     ]
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -5666,15 +5963,48 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": true,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {
+     "\"clone_1_1\"": [
+      1
+     ]
+    },
+    "graph.children_per_pass": {
+     "1": [
+      "clone_1_1"
+     ]
+    },
+    "graph.equivalence_class": "input_2_4_torch.float32",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"input_1:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": false,
+    "graph.has_siblings": false,
+    "graph.io_role": "input.x",
+    "graph.is_buffer": false,
+    "graph.is_compute": false,
+    "graph.is_final_output": false,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {},
+    "graph.parents_per_pass": {
+     "1": []
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": false,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -5684,7 +6014,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -5692,7 +6021,6 @@
     "is_input": true,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -5757,11 +6085,7 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {},
     "parents": [],
-    "parents_per_pass": {
-     "1": []
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -5783,7 +6107,6 @@
     "short_label": "input_1:1",
     "short_layer_label": "input_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [],
     "source.fx_call_index": 0,
@@ -5866,11 +6189,7 @@
     "call_labels": [
      "output_1:1"
     ],
-    "child_ops_per_layer": {},
     "children": [],
-    "children_per_pass": {
-     "1": []
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -5950,15 +6269,48 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": false,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {},
+    "graph.children_per_pass": {
+     "1": []
+    },
+    "graph.equivalence_class": "output_1_2_4_torch.float32",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"output_1:1\""
+     ]
+    },
+    "graph.has_children": false,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.io_role": "output",
+    "graph.is_buffer": false,
+    "graph.is_compute": false,
+    "graph.is_final_output": true,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {
+     "\"relu_1_3\"": [
+      1
+     ]
+    },
+    "graph.parents_per_pass": {
+     "1": [
+      "relu_1_3"
+     ]
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -5968,7 +6320,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional_body": false,
@@ -5976,7 +6327,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": true,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -6041,19 +6391,9 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {
-     "\"relu_1_3\"": [
-      1
-     ]
-    },
     "parents": [
      "relu_1_3"
     ],
-    "parents_per_pass": {
-     "1": [
-      "relu_1_3"
-     ]
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -6075,7 +6415,6 @@
     "short_label": "output_1:1",
     "short_layer_label": "output_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [],
     "source.fx_call_index": 0,
@@ -6151,19 +6490,9 @@
     "call_labels": [
      "relu_1_3:1"
     ],
-    "child_ops_per_layer": {
-     "\"output_1\"": [
-      1
-     ]
-    },
     "children": [
      "output_1"
     ],
-    "children_per_pass": {
-     "1": [
-      "output_1"
-     ]
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -6243,15 +6572,54 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": false,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {
+     "\"output_1\"": [
+      1
+     ]
+    },
+    "graph.children_per_pass": {
+     "1": [
+      "output_1"
+     ]
+    },
+    "graph.equivalence_class": "relu_inplace_966d0e7792d95d96",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"relu_1_3:1\""
+     ]
+    },
+    "graph.has_children": false,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {
+     "\"add_1_2\"": [
+      1
+     ]
+    },
+    "graph.parents_per_pass": {
+     "1": [
+      "add_1_2"
+     ]
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -6261,7 +6629,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -6269,7 +6636,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -6333,19 +6699,9 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {
-     "\"add_1_2\"": [
-      1
-     ]
-    },
     "parents": [
      "add_1_2"
     ],
-    "parents_per_pass": {
-     "1": [
-      "add_1_2"
-     ]
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -6367,7 +6723,6 @@
     "short_label": "relu_1:1",
     "short_layer_label": "relu_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [
      {
@@ -6775,10 +7130,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -6846,7 +7199,6 @@
     "children": [
      "relu_1_3"
     ],
-    "co_parents": [],
     "code_context": [
      {
       "__ref__": "FuncCallLocation",
@@ -6969,8 +7321,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": null,
+    "graph.equivalence_class": "add_inplace_a09dc8be148d708c",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"add_1_2:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": false,
+    "graph.max_distance_from_input": 2,
+    "graph.max_distance_to_output": 2,
+    "graph.min_distance_from_input": 2,
+    "graph.min_distance_to_output": 2,
+    "graph.num_inputs": 1,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "add_1_2:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": true,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -6978,11 +7376,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -7024,7 +7420,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -7168,7 +7563,6 @@
     ],
     "short_label": "add_1:1",
     "short_layer_label": "add_1",
-    "siblings": [],
     "site_key": "s1||add||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [
@@ -7261,10 +7655,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -7328,7 +7720,6 @@
     "children": [
      "add_1_2"
     ],
-    "co_parents": [],
     "code_context": [
      {
       "__ref__": "FuncCallLocation",
@@ -7449,8 +7840,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": null,
+    "graph.equivalence_class": "clone_966d0e7792d95d96",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"clone_1_1:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": false,
+    "graph.max_distance_from_input": 1,
+    "graph.max_distance_to_output": 3,
+    "graph.min_distance_from_input": 1,
+    "graph.min_distance_to_output": 3,
+    "graph.num_inputs": 1,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "clone_1_1:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": true,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -7458,11 +7895,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -7504,7 +7939,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -7646,7 +8080,6 @@
     ],
     "short_label": "clone_1:1",
     "short_layer_label": "clone_1",
-    "siblings": [],
     "site_key": "s1||clone||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [],
@@ -7732,10 +8165,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -7779,7 +8210,6 @@
     "children": [
      "clone_1_1"
     ],
-    "co_parents": [],
     "code_context": [],
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
@@ -7874,8 +8304,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": null,
+    "graph.equivalence_class": "input_2_4_torch.float32",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"input_1:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": false,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": "input.x",
+    "graph.is_buffer": false,
+    "graph.is_compute": false,
+    "graph.is_final_output": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": false,
+    "graph.max_distance_from_input": 0,
+    "graph.max_distance_to_output": 4,
+    "graph.min_distance_from_input": 0,
+    "graph.min_distance_to_output": 4,
+    "graph.num_inputs": 0,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "input_1:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": true,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -7883,11 +8359,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": false,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -7914,7 +8388,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -8053,7 +8526,6 @@
     ],
     "short_label": "input_1:1",
     "short_layer_label": "input_1",
-    "siblings": [],
     "site_key": "s1||input||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [],
@@ -8130,10 +8602,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -8201,7 +8671,6 @@
     "call.tl_authored_root": null,
     "call.unattributed_tensor_args": [],
     "children": [],
-    "co_parents": [],
     "code_context": [],
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
@@ -8311,8 +8780,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": null,
+    "graph.equivalence_class": "output_1_2_4_torch.float32",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"output_1:1\""
+     ]
+    },
+    "graph.has_children": false,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": "output",
+    "graph.is_buffer": false,
+    "graph.is_compute": false,
+    "graph.is_final_output": true,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": true,
+    "graph.max_distance_from_input": 4,
+    "graph.max_distance_to_output": 0,
+    "graph.min_distance_from_input": 4,
+    "graph.min_distance_to_output": 0,
+    "graph.num_inputs": 1,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "output_1:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": false,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -8320,11 +8835,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -8366,7 +8879,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional_body": false,
@@ -8520,7 +9032,6 @@
     ],
     "short_label": "output_1:1",
     "short_layer_label": "output_1",
-    "siblings": [],
     "site_key": "s1||output||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [],
@@ -8599,10 +9110,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -8665,7 +9174,6 @@
     "children": [
      "output_1"
     ],
-    "co_parents": [],
     "code_context": [
      {
       "__ref__": "FuncCallLocation",
@@ -8786,8 +9294,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": null,
+    "graph.equivalence_class": "relu_inplace_966d0e7792d95d96",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"relu_1_3:1\""
+     ]
+    },
+    "graph.has_children": false,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": true,
+    "graph.max_distance_from_input": 3,
+    "graph.max_distance_to_output": 1,
+    "graph.min_distance_from_input": 3,
+    "graph.min_distance_to_output": 1,
+    "graph.num_inputs": 1,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "relu_1_3:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": false,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -8795,11 +9349,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -8841,7 +9393,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -8983,7 +9534,6 @@
     ],
     "short_label": "relu_1:1",
     "short_layer_label": "relu_1",
-    "siblings": [],
     "site_key": "s1||relu||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [],
@@ -9897,19 +10447,9 @@
     "call_labels": [
      "add_1_2:1"
     ],
-    "child_ops_per_layer": {
-     "\"relu_1_3\"": [
-      1
-     ]
-    },
     "children": [
      "relu_1_3"
     ],
-    "children_per_pass": {
-     "1": [
-      "relu_1_3"
-     ]
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -9989,15 +10529,54 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": true,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {
+     "\"relu_1_3\"": [
+      1
+     ]
+    },
+    "graph.children_per_pass": {
+     "1": [
+      "relu_1_3"
+     ]
+    },
+    "graph.equivalence_class": "add_inplace_a09dc8be148d708c",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"add_1_2:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {
+     "\"clone_1_1\"": [
+      1
+     ]
+    },
+    "graph.parents_per_pass": {
+     "1": [
+      "clone_1_1"
+     ]
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -10007,7 +10586,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -10015,7 +10593,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -10079,19 +10656,9 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {
-     "\"clone_1_1\"": [
-      1
-     ]
-    },
     "parents": [
      "clone_1_1"
     ],
-    "parents_per_pass": {
-     "1": [
-      "clone_1_1"
-     ]
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -10113,7 +10680,6 @@
     "short_label": "add_1:1",
     "short_layer_label": "add_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [
      {
@@ -10200,19 +10766,9 @@
     "call_labels": [
      "clone_1_1:1"
     ],
-    "child_ops_per_layer": {
-     "\"add_1_2\"": [
-      1
-     ]
-    },
     "children": [
      "add_1_2"
     ],
-    "children_per_pass": {
-     "1": [
-      "add_1_2"
-     ]
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -10292,15 +10848,54 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": true,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {
+     "\"add_1_2\"": [
+      1
+     ]
+    },
+    "graph.children_per_pass": {
+     "1": [
+      "add_1_2"
+     ]
+    },
+    "graph.equivalence_class": "clone_966d0e7792d95d96",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"clone_1_1:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {
+     "\"input_1\"": [
+      1
+     ]
+    },
+    "graph.parents_per_pass": {
+     "1": [
+      "input_1"
+     ]
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -10310,7 +10905,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -10318,7 +10912,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -10382,19 +10975,9 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {
-     "\"input_1\"": [
-      1
-     ]
-    },
     "parents": [
      "input_1"
     ],
-    "parents_per_pass": {
-     "1": [
-      "input_1"
-     ]
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -10416,7 +10999,6 @@
     "short_label": "clone_1:1",
     "short_layer_label": "clone_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [
      {
@@ -10495,19 +11077,9 @@
     "call_labels": [
      "input_1:1"
     ],
-    "child_ops_per_layer": {
-     "\"clone_1_1\"": [
-      1
-     ]
-    },
     "children": [
      "clone_1_1"
     ],
-    "children_per_pass": {
-     "1": [
-      "clone_1_1"
-     ]
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -10587,15 +11159,48 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": true,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {
+     "\"clone_1_1\"": [
+      1
+     ]
+    },
+    "graph.children_per_pass": {
+     "1": [
+      "clone_1_1"
+     ]
+    },
+    "graph.equivalence_class": "input_2_4_torch.float32",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"input_1:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": false,
+    "graph.has_siblings": false,
+    "graph.io_role": "input.x",
+    "graph.is_buffer": false,
+    "graph.is_compute": false,
+    "graph.is_final_output": false,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {},
+    "graph.parents_per_pass": {
+     "1": []
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": false,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -10605,7 +11210,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -10613,7 +11217,6 @@
     "is_input": true,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -10678,11 +11281,7 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {},
     "parents": [],
-    "parents_per_pass": {
-     "1": []
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -10704,7 +11303,6 @@
     "short_label": "input_1:1",
     "short_layer_label": "input_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [],
     "source.fx_call_index": 0,
@@ -10787,11 +11385,7 @@
     "call_labels": [
      "output_1:1"
     ],
-    "child_ops_per_layer": {},
     "children": [],
-    "children_per_pass": {
-     "1": []
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -10871,15 +11465,48 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": false,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {},
+    "graph.children_per_pass": {
+     "1": []
+    },
+    "graph.equivalence_class": "output_1_2_4_torch.float32",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"output_1:1\""
+     ]
+    },
+    "graph.has_children": false,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.io_role": "output",
+    "graph.is_buffer": false,
+    "graph.is_compute": false,
+    "graph.is_final_output": true,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {
+     "\"relu_1_3\"": [
+      1
+     ]
+    },
+    "graph.parents_per_pass": {
+     "1": [
+      "relu_1_3"
+     ]
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -10889,7 +11516,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional_body": false,
@@ -10897,7 +11523,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": true,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -10962,19 +11587,9 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {
-     "\"relu_1_3\"": [
-      1
-     ]
-    },
     "parents": [
      "relu_1_3"
     ],
-    "parents_per_pass": {
-     "1": [
-      "relu_1_3"
-     ]
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -10996,7 +11611,6 @@
     "short_label": "output_1:1",
     "short_layer_label": "output_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [],
     "source.fx_call_index": 0,
@@ -11072,19 +11686,9 @@
     "call_labels": [
      "relu_1_3:1"
     ],
-    "child_ops_per_layer": {
-     "\"output_1\"": [
-      1
-     ]
-    },
     "children": [
      "output_1"
     ],
-    "children_per_pass": {
-     "1": [
-      "output_1"
-     ]
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -11164,15 +11768,54 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": false,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {
+     "\"output_1\"": [
+      1
+     ]
+    },
+    "graph.children_per_pass": {
+     "1": [
+      "output_1"
+     ]
+    },
+    "graph.equivalence_class": "relu_inplace_966d0e7792d95d96",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"relu_1_3:1\""
+     ]
+    },
+    "graph.has_children": false,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {
+     "\"add_1_2\"": [
+      1
+     ]
+    },
+    "graph.parents_per_pass": {
+     "1": [
+      "add_1_2"
+     ]
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -11182,7 +11825,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -11190,7 +11832,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -11254,19 +11895,9 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {
-     "\"add_1_2\"": [
-      1
-     ]
-    },
     "parents": [
      "add_1_2"
     ],
-    "parents_per_pass": {
-     "1": [
-      "add_1_2"
-     ]
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -11288,7 +11919,6 @@
     "short_label": "relu_1:1",
     "short_layer_label": "relu_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [
      {
@@ -11696,10 +12326,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -11767,7 +12395,6 @@
     "children": [
      "relu_1_3"
     ],
-    "co_parents": [],
     "code_context": [
      {
       "__ref__": "FuncCallLocation",
@@ -11890,8 +12517,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": {},
+    "graph.equivalence_class": "add_inplace_a09dc8be148d708c",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"add_1_2:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": false,
+    "graph.max_distance_from_input": 2,
+    "graph.max_distance_to_output": 2,
+    "graph.min_distance_from_input": 2,
+    "graph.min_distance_to_output": 2,
+    "graph.num_inputs": 1,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "add_1_2:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": true,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -11899,11 +12572,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -11945,7 +12616,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -12089,7 +12759,6 @@
     ],
     "short_label": "add_1:1",
     "short_layer_label": "add_1",
-    "siblings": [],
     "site_key": "s1||add||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [
@@ -12182,10 +12851,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -12249,7 +12916,6 @@
     "children": [
      "add_1_2"
     ],
-    "co_parents": [],
     "code_context": [
      {
       "__ref__": "FuncCallLocation",
@@ -12370,8 +13036,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": {},
+    "graph.equivalence_class": "clone_966d0e7792d95d96",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"clone_1_1:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": false,
+    "graph.max_distance_from_input": 1,
+    "graph.max_distance_to_output": 3,
+    "graph.min_distance_from_input": 1,
+    "graph.min_distance_to_output": 3,
+    "graph.num_inputs": 1,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "clone_1_1:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": true,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -12379,11 +13091,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -12425,7 +13135,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -12567,7 +13276,6 @@
     ],
     "short_label": "clone_1:1",
     "short_layer_label": "clone_1",
-    "siblings": [],
     "site_key": "s1||clone||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [],
@@ -12653,10 +13361,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -12700,7 +13406,6 @@
     "children": [
      "clone_1_1"
     ],
-    "co_parents": [],
     "code_context": [],
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
@@ -12795,8 +13500,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": {},
+    "graph.equivalence_class": "input_2_4_torch.float32",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"input_1:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": false,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": "input.x",
+    "graph.is_buffer": false,
+    "graph.is_compute": false,
+    "graph.is_final_output": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": false,
+    "graph.max_distance_from_input": 0,
+    "graph.max_distance_to_output": 4,
+    "graph.min_distance_from_input": 0,
+    "graph.min_distance_to_output": 4,
+    "graph.num_inputs": 0,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "input_1:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": true,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -12804,11 +13555,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": false,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -12835,7 +13584,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -12974,7 +13722,6 @@
     ],
     "short_label": "input_1:1",
     "short_layer_label": "input_1",
-    "siblings": [],
     "site_key": "s1||input||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [],
@@ -13051,10 +13798,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -13122,7 +13867,6 @@
     "call.tl_authored_root": null,
     "call.unattributed_tensor_args": [],
     "children": [],
-    "co_parents": [],
     "code_context": [],
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
@@ -13232,8 +13976,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": {},
+    "graph.equivalence_class": "output_1_2_4_torch.float32",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"output_1:1\""
+     ]
+    },
+    "graph.has_children": false,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": "output",
+    "graph.is_buffer": false,
+    "graph.is_compute": false,
+    "graph.is_final_output": true,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": true,
+    "graph.max_distance_from_input": 4,
+    "graph.max_distance_to_output": 0,
+    "graph.min_distance_from_input": 4,
+    "graph.min_distance_to_output": 0,
+    "graph.num_inputs": 1,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "output_1:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": false,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -13241,11 +14031,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -13287,7 +14075,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional_body": false,
@@ -13441,7 +14228,6 @@
     ],
     "short_label": "output_1:1",
     "short_layer_label": "output_1",
-    "siblings": [],
     "site_key": "s1||output||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [],
@@ -13520,10 +14306,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -13586,7 +14370,6 @@
     "children": [
      "output_1"
     ],
-    "co_parents": [],
     "code_context": [
      {
       "__ref__": "FuncCallLocation",
@@ -13707,8 +14490,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": {},
+    "graph.equivalence_class": "relu_inplace_966d0e7792d95d96",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"relu_1_3:1\""
+     ]
+    },
+    "graph.has_children": false,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": true,
+    "graph.max_distance_from_input": 3,
+    "graph.max_distance_to_output": 1,
+    "graph.min_distance_from_input": 3,
+    "graph.min_distance_to_output": 1,
+    "graph.num_inputs": 1,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "relu_1_3:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": false,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -13716,11 +14545,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -13762,7 +14589,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -13904,7 +14730,6 @@
     ],
     "short_label": "relu_1:1",
     "short_layer_label": "relu_1",
-    "siblings": [],
     "site_key": "s1||relu||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [],
@@ -14814,19 +15639,9 @@
     "call_labels": [
      "add_1_2:1"
     ],
-    "child_ops_per_layer": {
-     "\"relu_1_3\"": [
-      1
-     ]
-    },
     "children": [
      "relu_1_3"
     ],
-    "children_per_pass": {
-     "1": [
-      "relu_1_3"
-     ]
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -14906,15 +15721,54 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": true,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {
+     "\"relu_1_3\"": [
+      1
+     ]
+    },
+    "graph.children_per_pass": {
+     "1": [
+      "relu_1_3"
+     ]
+    },
+    "graph.equivalence_class": "add_inplace_a09dc8be148d708c",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"add_1_2:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {
+     "\"clone_1_1\"": [
+      1
+     ]
+    },
+    "graph.parents_per_pass": {
+     "1": [
+      "clone_1_1"
+     ]
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -14924,7 +15778,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -14932,7 +15785,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -14996,19 +15848,9 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {
-     "\"clone_1_1\"": [
-      1
-     ]
-    },
     "parents": [
      "clone_1_1"
     ],
-    "parents_per_pass": {
-     "1": [
-      "clone_1_1"
-     ]
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -15030,7 +15872,6 @@
     "short_label": "add_1:1",
     "short_layer_label": "add_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [
      {
@@ -15117,19 +15958,9 @@
     "call_labels": [
      "clone_1_1:1"
     ],
-    "child_ops_per_layer": {
-     "\"add_1_2\"": [
-      1
-     ]
-    },
     "children": [
      "add_1_2"
     ],
-    "children_per_pass": {
-     "1": [
-      "add_1_2"
-     ]
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -15209,15 +16040,54 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": true,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {
+     "\"add_1_2\"": [
+      1
+     ]
+    },
+    "graph.children_per_pass": {
+     "1": [
+      "add_1_2"
+     ]
+    },
+    "graph.equivalence_class": "clone_966d0e7792d95d96",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"clone_1_1:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {
+     "\"input_1\"": [
+      1
+     ]
+    },
+    "graph.parents_per_pass": {
+     "1": [
+      "input_1"
+     ]
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -15227,7 +16097,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -15235,7 +16104,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -15299,19 +16167,9 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {
-     "\"input_1\"": [
-      1
-     ]
-    },
     "parents": [
      "input_1"
     ],
-    "parents_per_pass": {
-     "1": [
-      "input_1"
-     ]
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -15333,7 +16191,6 @@
     "short_label": "clone_1:1",
     "short_layer_label": "clone_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [
      {
@@ -15412,19 +16269,9 @@
     "call_labels": [
      "input_1:1"
     ],
-    "child_ops_per_layer": {
-     "\"clone_1_1\"": [
-      1
-     ]
-    },
     "children": [
      "clone_1_1"
     ],
-    "children_per_pass": {
-     "1": [
-      "clone_1_1"
-     ]
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -15504,15 +16351,48 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": true,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {
+     "\"clone_1_1\"": [
+      1
+     ]
+    },
+    "graph.children_per_pass": {
+     "1": [
+      "clone_1_1"
+     ]
+    },
+    "graph.equivalence_class": "input_2_4_torch.float32",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"input_1:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": false,
+    "graph.has_siblings": false,
+    "graph.io_role": "input.x",
+    "graph.is_buffer": false,
+    "graph.is_compute": false,
+    "graph.is_final_output": false,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {},
+    "graph.parents_per_pass": {
+     "1": []
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": false,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -15522,7 +16402,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -15530,7 +16409,6 @@
     "is_input": true,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -15595,11 +16473,7 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {},
     "parents": [],
-    "parents_per_pass": {
-     "1": []
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -15621,7 +16495,6 @@
     "short_label": "input_1:1",
     "short_layer_label": "input_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [],
     "source.fx_call_index": 0,
@@ -15704,11 +16577,7 @@
     "call_labels": [
      "output_1:1"
     ],
-    "child_ops_per_layer": {},
     "children": [],
-    "children_per_pass": {
-     "1": []
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -15788,15 +16657,48 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": false,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {},
+    "graph.children_per_pass": {
+     "1": []
+    },
+    "graph.equivalence_class": "output_1_2_4_torch.float32",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"output_1:1\""
+     ]
+    },
+    "graph.has_children": false,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.io_role": "output",
+    "graph.is_buffer": false,
+    "graph.is_compute": false,
+    "graph.is_final_output": true,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {
+     "\"relu_1_3\"": [
+      1
+     ]
+    },
+    "graph.parents_per_pass": {
+     "1": [
+      "relu_1_3"
+     ]
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -15806,7 +16708,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional_body": false,
@@ -15814,7 +16715,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": true,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -15879,19 +16779,9 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {
-     "\"relu_1_3\"": [
-      1
-     ]
-    },
     "parents": [
      "relu_1_3"
     ],
-    "parents_per_pass": {
-     "1": [
-      "relu_1_3"
-     ]
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -15913,7 +16803,6 @@
     "short_label": "output_1:1",
     "short_layer_label": "output_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [],
     "source.fx_call_index": 0,
@@ -15989,19 +16878,9 @@
     "call_labels": [
      "relu_1_3:1"
     ],
-    "child_ops_per_layer": {
-     "\"output_1\"": [
-      1
-     ]
-    },
     "children": [
      "output_1"
     ],
-    "children_per_pass": {
-     "1": [
-      "output_1"
-     ]
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -16081,15 +16960,54 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": false,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {
+     "\"output_1\"": [
+      1
+     ]
+    },
+    "graph.children_per_pass": {
+     "1": [
+      "output_1"
+     ]
+    },
+    "graph.equivalence_class": "relu_inplace_966d0e7792d95d96",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"relu_1_3:1\""
+     ]
+    },
+    "graph.has_children": false,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {
+     "\"add_1_2\"": [
+      1
+     ]
+    },
+    "graph.parents_per_pass": {
+     "1": [
+      "add_1_2"
+     ]
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -16099,7 +17017,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -16107,7 +17024,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -16171,19 +17087,9 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {
-     "\"add_1_2\"": [
-      1
-     ]
-    },
     "parents": [
      "add_1_2"
     ],
-    "parents_per_pass": {
-     "1": [
-      "add_1_2"
-     ]
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -16205,7 +17111,6 @@
     "short_label": "relu_1:1",
     "short_layer_label": "relu_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [
      {
@@ -16613,10 +17518,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -16684,7 +17587,6 @@
     "children": [
      "relu_1_3"
     ],
-    "co_parents": [],
     "code_context": [
      {
       "__ref__": "FuncCallLocation",
@@ -16807,8 +17709,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": null,
+    "graph.equivalence_class": "add_inplace_a09dc8be148d708c",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"add_1_2:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": false,
+    "graph.max_distance_from_input": 2,
+    "graph.max_distance_to_output": 2,
+    "graph.min_distance_from_input": 2,
+    "graph.min_distance_to_output": 2,
+    "graph.num_inputs": 1,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "add_1_2:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": true,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -16816,11 +17764,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -16862,7 +17808,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -17006,7 +17951,6 @@
     ],
     "short_label": "add_1:1",
     "short_layer_label": "add_1",
-    "siblings": [],
     "site_key": "s1||add||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [
@@ -17099,10 +18043,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -17166,7 +18108,6 @@
     "children": [
      "add_1_2"
     ],
-    "co_parents": [],
     "code_context": [
      {
       "__ref__": "FuncCallLocation",
@@ -17287,8 +18228,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": null,
+    "graph.equivalence_class": "clone_966d0e7792d95d96",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"clone_1_1:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": false,
+    "graph.max_distance_from_input": 1,
+    "graph.max_distance_to_output": 3,
+    "graph.min_distance_from_input": 1,
+    "graph.min_distance_to_output": 3,
+    "graph.num_inputs": 1,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "clone_1_1:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": true,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -17296,11 +18283,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -17342,7 +18327,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -17484,7 +18468,6 @@
     ],
     "short_label": "clone_1:1",
     "short_layer_label": "clone_1",
-    "siblings": [],
     "site_key": "s1||clone||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [],
@@ -17570,10 +18553,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -17617,7 +18598,6 @@
     "children": [
      "clone_1_1"
     ],
-    "co_parents": [],
     "code_context": [],
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
@@ -17712,8 +18692,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": null,
+    "graph.equivalence_class": "input_2_4_torch.float32",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"input_1:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": false,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": "input.x",
+    "graph.is_buffer": false,
+    "graph.is_compute": false,
+    "graph.is_final_output": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": false,
+    "graph.max_distance_from_input": 0,
+    "graph.max_distance_to_output": 4,
+    "graph.min_distance_from_input": 0,
+    "graph.min_distance_to_output": 4,
+    "graph.num_inputs": 0,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "input_1:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": true,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -17721,11 +18747,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": false,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -17752,7 +18776,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -17891,7 +18914,6 @@
     ],
     "short_label": "input_1:1",
     "short_layer_label": "input_1",
-    "siblings": [],
     "site_key": "s1||input||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [],
@@ -17968,10 +18990,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -18039,7 +19059,6 @@
     "call.tl_authored_root": null,
     "call.unattributed_tensor_args": [],
     "children": [],
-    "co_parents": [],
     "code_context": [],
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
@@ -18149,8 +19168,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": null,
+    "graph.equivalence_class": "output_1_2_4_torch.float32",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"output_1:1\""
+     ]
+    },
+    "graph.has_children": false,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": "output",
+    "graph.is_buffer": false,
+    "graph.is_compute": false,
+    "graph.is_final_output": true,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": true,
+    "graph.max_distance_from_input": 4,
+    "graph.max_distance_to_output": 0,
+    "graph.min_distance_from_input": 4,
+    "graph.min_distance_to_output": 0,
+    "graph.num_inputs": 1,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "output_1:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": false,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -18158,11 +19223,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -18204,7 +19267,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional_body": false,
@@ -18358,7 +19420,6 @@
     ],
     "short_label": "output_1:1",
     "short_layer_label": "output_1",
-    "siblings": [],
     "site_key": "s1||output||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [],
@@ -18437,10 +19498,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -18503,7 +19562,6 @@
     "children": [
      "output_1"
     ],
-    "co_parents": [],
     "code_context": [
      {
       "__ref__": "FuncCallLocation",
@@ -18624,8 +19682,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<torchlens._data_classes.layer.OpAccessor>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": null,
+    "graph.equivalence_class": "relu_inplace_966d0e7792d95d96",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"relu_1_3:1\""
+     ]
+    },
+    "graph.has_children": false,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": true,
+    "graph.max_distance_from_input": 3,
+    "graph.max_distance_to_output": 1,
+    "graph.min_distance_from_input": 3,
+    "graph.min_distance_to_output": 1,
+    "graph.num_inputs": 1,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "relu_1_3:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": false,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -18633,11 +19737,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -18679,7 +19781,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -18821,7 +19922,6 @@
     ],
     "short_label": "relu_1:1",
     "short_layer_label": "relu_1",
-    "siblings": [],
     "site_key": "s1||relu||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [],
@@ -19754,19 +20854,9 @@
     "call_labels": [
      "add_1_2:1"
     ],
-    "child_ops_per_layer": {
-     "\"relu_1_3\"": [
-      1
-     ]
-    },
     "children": [
      "relu_1_3"
     ],
-    "children_per_pass": {
-     "1": [
-      "relu_1_3"
-     ]
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -19846,15 +20936,54 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": true,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {
+     "\"relu_1_3\"": [
+      1
+     ]
+    },
+    "graph.children_per_pass": {
+     "1": [
+      "relu_1_3"
+     ]
+    },
+    "graph.equivalence_class": "add_inplace_a09dc8be148d708c",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"add_1_2:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {
+     "\"clone_1_1\"": [
+      1
+     ]
+    },
+    "graph.parents_per_pass": {
+     "1": [
+      "clone_1_1"
+     ]
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -19864,7 +20993,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -19872,7 +21000,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -19936,19 +21063,9 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {
-     "\"clone_1_1\"": [
-      1
-     ]
-    },
     "parents": [
      "clone_1_1"
     ],
-    "parents_per_pass": {
-     "1": [
-      "clone_1_1"
-     ]
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -19970,7 +21087,6 @@
     "short_label": "add_1:1",
     "short_layer_label": "add_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [
      {
@@ -20057,19 +21173,9 @@
     "call_labels": [
      "clone_1_1:1"
     ],
-    "child_ops_per_layer": {
-     "\"add_1_2\"": [
-      1
-     ]
-    },
     "children": [
      "add_1_2"
     ],
-    "children_per_pass": {
-     "1": [
-      "add_1_2"
-     ]
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -20149,15 +21255,54 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": true,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {
+     "\"add_1_2\"": [
+      1
+     ]
+    },
+    "graph.children_per_pass": {
+     "1": [
+      "add_1_2"
+     ]
+    },
+    "graph.equivalence_class": "clone_966d0e7792d95d96",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"clone_1_1:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {
+     "\"input_1\"": [
+      1
+     ]
+    },
+    "graph.parents_per_pass": {
+     "1": [
+      "input_1"
+     ]
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -20167,7 +21312,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -20175,7 +21319,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -20239,19 +21382,9 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {
-     "\"input_1\"": [
-      1
-     ]
-    },
     "parents": [
      "input_1"
     ],
-    "parents_per_pass": {
-     "1": [
-      "input_1"
-     ]
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -20273,7 +21406,6 @@
     "short_label": "clone_1:1",
     "short_layer_label": "clone_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [
      {
@@ -20352,19 +21484,9 @@
     "call_labels": [
      "input_1:1"
     ],
-    "child_ops_per_layer": {
-     "\"clone_1_1\"": [
-      1
-     ]
-    },
     "children": [
      "clone_1_1"
     ],
-    "children_per_pass": {
-     "1": [
-      "clone_1_1"
-     ]
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -20444,15 +21566,48 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": true,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {
+     "\"clone_1_1\"": [
+      1
+     ]
+    },
+    "graph.children_per_pass": {
+     "1": [
+      "clone_1_1"
+     ]
+    },
+    "graph.equivalence_class": "input_2_4_torch.float32",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"input_1:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": false,
+    "graph.has_siblings": false,
+    "graph.io_role": "input.x",
+    "graph.is_buffer": false,
+    "graph.is_compute": false,
+    "graph.is_final_output": false,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {},
+    "graph.parents_per_pass": {
+     "1": []
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": false,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -20462,7 +21617,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -20470,7 +21624,6 @@
     "is_input": true,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -20535,11 +21688,7 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {},
     "parents": [],
-    "parents_per_pass": {
-     "1": []
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -20561,7 +21710,6 @@
     "short_label": "input_1:1",
     "short_layer_label": "input_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [],
     "source.fx_call_index": 0,
@@ -20633,11 +21781,7 @@
     "call_labels": [
      "output_1:1"
     ],
-    "child_ops_per_layer": {},
     "children": [],
-    "children_per_pass": {
-     "1": []
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -20717,15 +21861,48 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": false,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {},
+    "graph.children_per_pass": {
+     "1": []
+    },
+    "graph.equivalence_class": "output_1_2_4_torch.float32",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"output_1:1\""
+     ]
+    },
+    "graph.has_children": false,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.io_role": "output",
+    "graph.is_buffer": false,
+    "graph.is_compute": false,
+    "graph.is_final_output": true,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {
+     "\"relu_1_3\"": [
+      1
+     ]
+    },
+    "graph.parents_per_pass": {
+     "1": [
+      "relu_1_3"
+     ]
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -20735,7 +21912,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional_body": false,
@@ -20743,7 +21919,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": true,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -20808,19 +21983,9 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {
-     "\"relu_1_3\"": [
-      1
-     ]
-    },
     "parents": [
      "relu_1_3"
     ],
-    "parents_per_pass": {
-     "1": [
-      "relu_1_3"
-     ]
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -20842,7 +22007,6 @@
     "short_label": "output_1:1",
     "short_layer_label": "output_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [],
     "source.fx_call_index": 0,
@@ -20918,19 +22082,9 @@
     "call_labels": [
      "relu_1_3:1"
     ],
-    "child_ops_per_layer": {
-     "\"output_1\"": [
-      1
-     ]
-    },
     "children": [
      "output_1"
     ],
-    "children_per_pass": {
-     "1": [
-      "output_1"
-     ]
-    },
     "co_parents": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
@@ -21010,15 +22164,54 @@
     "grad_fn_class_qualname": null,
     "grad_fn_handle": null,
     "grad_fn_object_id": "<measured>",
-    "has_children": false,
-    "has_co_parents": false,
+    "graph": "<torchlens._data_classes._record_groups_graph.LayerGraph>",
+    "graph.buffer_pass": null,
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.child_ops_per_layer": {
+     "\"output_1\"": [
+      1
+     ]
+    },
+    "graph.children_per_pass": {
+     "1": [
+      "output_1"
+     ]
+    },
+    "graph.equivalence_class": "relu_inplace_966d0e7792d95d96",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"relu_1_3:1\""
+     ]
+    },
+    "graph.has_children": false,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_sink": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.parent_ops_per_layer": {
+     "\"add_1_2\"": [
+      1
+     ]
+    },
+    "graph.parents_per_pass": {
+     "1": [
+      "add_1_2"
+     ]
+    },
+    "graph.site_peers": [],
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -21028,7 +22221,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -21036,7 +22228,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
     "is_terminal_bool": false,
@@ -21100,19 +22291,9 @@
     "param_names": [],
     "param_shapes": [],
     "params": "<torchlens._data_classes.param.ParamAccessor>",
-    "parent_ops_per_layer": {
-     "\"add_1_2\"": [
-      1
-     ]
-    },
     "parents": [
      "add_1_2"
     ],
-    "parents_per_pass": {
-     "1": [
-      "add_1_2"
-     ]
-    },
     "pass_index": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.LayerPayload>",
     "payload.transformed_grad": null,
@@ -21134,7 +22315,6 @@
     "short_label": "relu_1:1",
     "short_layer_label": "relu_1",
     "siblings": [],
-    "site_peers": [],
     "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
     "source.frames": [
      {
@@ -21542,10 +22722,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<raises AttributeError>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<raises AttributeError>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -21613,7 +22791,6 @@
     "children": [
      "relu_1_3"
     ],
-    "co_parents": [],
     "code_context": [
      {
       "__ref__": "FuncCallLocation",
@@ -21736,8 +22913,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<raises AttributeError>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<raises AttributeError>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": {},
+    "graph.equivalence_class": "add_inplace_a09dc8be148d708c",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"add_1_2:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": false,
+    "graph.max_distance_from_input": 2,
+    "graph.max_distance_to_output": 2,
+    "graph.min_distance_from_input": 2,
+    "graph.min_distance_to_output": 2,
+    "graph.num_inputs": 1,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "add_1_2:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": true,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -21745,11 +22968,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -21776,7 +22997,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -21917,7 +23137,6 @@
     ],
     "short_label": "add_1:1",
     "short_layer_label": "add_1",
-    "siblings": [],
     "site_key": "s1||add||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [],
@@ -22008,10 +23227,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<raises AttributeError>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<raises AttributeError>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -22075,7 +23292,6 @@
     "children": [
      "add_1_2"
     ],
-    "co_parents": [],
     "code_context": [
      {
       "__ref__": "FuncCallLocation",
@@ -22196,8 +23412,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<raises AttributeError>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<raises AttributeError>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": {},
+    "graph.equivalence_class": "clone_966d0e7792d95d96",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"clone_1_1:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": false,
+    "graph.max_distance_from_input": 1,
+    "graph.max_distance_to_output": 3,
+    "graph.min_distance_from_input": 1,
+    "graph.min_distance_to_output": 3,
+    "graph.num_inputs": 1,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "clone_1_1:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": true,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -22205,11 +23467,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -22236,7 +23496,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -22375,7 +23634,6 @@
     ],
     "short_label": "clone_1:1",
     "short_layer_label": "clone_1",
-    "siblings": [],
     "site_key": "s1||clone||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [],
@@ -22461,10 +23719,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<raises AttributeError>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<raises AttributeError>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -22508,7 +23764,6 @@
     "children": [
      "clone_1_1"
     ],
-    "co_parents": [],
     "code_context": [],
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
@@ -22603,8 +23858,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<raises AttributeError>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<raises AttributeError>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": {},
+    "graph.equivalence_class": "input_2_4_torch.float32",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"input_1:1\""
+     ]
+    },
+    "graph.has_children": true,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": false,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": "input.x",
+    "graph.is_buffer": false,
+    "graph.is_compute": false,
+    "graph.is_final_output": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": false,
+    "graph.max_distance_from_input": 0,
+    "graph.max_distance_to_output": 4,
+    "graph.min_distance_from_input": 0,
+    "graph.min_distance_to_output": 4,
+    "graph.num_inputs": 0,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "input_1:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": true,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -22612,11 +23913,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": false,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -22643,7 +23942,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": false,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -22779,7 +24077,6 @@
     ],
     "short_label": "input_1:1",
     "short_layer_label": "input_1",
-    "siblings": [],
     "site_key": "s1||input||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [],
@@ -22856,10 +24153,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<raises AttributeError>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<raises AttributeError>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -22916,7 +24211,6 @@
     "call.tl_authored_root": null,
     "call.unattributed_tensor_args": [],
     "children": [],
-    "co_parents": [],
     "code_context": [],
     "conditional_arm_children": {},
     "conditional_branch_depth": 0,
@@ -23026,8 +24320,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<raises AttributeError>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<raises AttributeError>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": {},
+    "graph.equivalence_class": "output_1_2_4_torch.float32",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"output_1:1\""
+     ]
+    },
+    "graph.has_children": false,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": "output",
+    "graph.is_buffer": false,
+    "graph.is_compute": false,
+    "graph.is_final_output": true,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": true,
+    "graph.max_distance_from_input": 4,
+    "graph.max_distance_to_output": 0,
+    "graph.min_distance_from_input": 4,
+    "graph.min_distance_to_output": 0,
+    "graph.num_inputs": 1,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "output_1:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": false,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -23035,11 +24375,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -23066,7 +24404,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": false,
     "is_edited": false,
     "is_final_output": true,
     "is_in_conditional_body": false,
@@ -23206,7 +24543,6 @@
     ],
     "short_label": "output_1:1",
     "short_layer_label": "output_1",
-    "siblings": [],
     "site_key": "s1||output||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [],
@@ -23285,10 +24621,8 @@
     "bool_value": null,
     "buffer_pass": null,
     "buffer_replay_validated": null,
-    "buffer_sink_ops": "<raises AttributeError>",
     "buffer_source": null,
     "buffer_source_func_name": null,
-    "buffer_source_ops": "<raises AttributeError>",
     "buffer_value_changed": null,
     "buffer_write_kind": null,
     "bytes_delta_at_call": null,
@@ -23351,7 +24685,6 @@
     "children": [
      "output_1"
     ],
-    "co_parents": [],
     "code_context": [
      {
       "__ref__": "FuncCallLocation",
@@ -23472,8 +24805,54 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
+    "graph": "<torchlens._data_classes._record_groups_graph.OpGraph>",
+    "graph.buffer_sink_ops": "<raises AttributeError>",
+    "graph.buffer_source": null,
+    "graph.buffer_source_func_name": null,
+    "graph.buffer_source_ops": "<raises AttributeError>",
+    "graph.co_parents": [],
+    "graph.edge_substitutions": {},
+    "graph.equivalence_class": "relu_inplace_966d0e7792d95d96",
+    "graph.equivalent_ops": {
+     "__set__": [
+      "\"relu_1_3:1\""
+     ]
+    },
+    "graph.has_children": false,
+    "graph.has_co_parents": false,
+    "graph.has_input_ancestor": true,
+    "graph.has_internal_source_ancestor": false,
+    "graph.has_output_descendant": true,
+    "graph.has_parents": true,
+    "graph.has_siblings": false,
+    "graph.internal_source_ancestors": {
+     "__set__": []
+    },
+    "graph.internal_source_parents": [],
+    "graph.io_role": null,
+    "graph.is_buffer": false,
+    "graph.is_compute": true,
+    "graph.is_final_output": false,
+    "graph.is_internal_source": false,
+    "graph.is_orphan": false,
+    "graph.is_output_parent": true,
+    "graph.max_distance_from_input": 3,
+    "graph.max_distance_to_output": 1,
+    "graph.min_distance_from_input": 3,
+    "graph.min_distance_to_output": 1,
+    "graph.num_inputs": 1,
+    "graph.parent_param_ops": {},
+    "graph.parent_params": [],
+    "graph.recurrent_ops": [
+     "relu_1_3:1"
+    ],
+    "graph.root_ancestors": {
+     "__set__": [
+      "\"input_1\""
+     ]
+    },
+    "graph.siblings": [],
     "has_children": false,
-    "has_co_parents": false,
     "has_frozen_params": false,
     "has_grad": false,
     "has_input_ancestor": true,
@@ -23481,11 +24860,9 @@
     "has_out_variations": false,
     "has_output_descendant": true,
     "has_params": false,
-    "has_parents": true,
     "has_saved_activation": true,
     "has_saved_args": false,
     "has_saved_grad": false,
-    "has_siblings": false,
     "has_trainable_params": false,
     "in_conditionals": [],
     "in_multi_output": false,
@@ -23512,7 +24889,6 @@
     "is_atomic_module": false,
     "is_buffer": false,
     "is_buffer_source": false,
-    "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
     "is_in_conditional_body": false,
@@ -23651,7 +25027,6 @@
     ],
     "short_label": "relu_1:1",
     "short_layer_label": "relu_1",
-    "siblings": [],
     "site_key": "s1||relu||1",
     "source": "<torchlens._data_classes._record_groups_source.OpSource>",
     "source.arg_expressions": [],

@@ -245,7 +245,7 @@ def test_hook_edit_on_initial_buffer_read_applies_and_records(registered: bool) 
         save="all",
     )
     site = log._layer_dict_all_keys["buffer_1:1"]
-    assert site.is_buffer and not tuple(site.parents or ())
+    assert site.graph.is_buffer and not tuple(site.parents or ())
     original = site.out.detach().clone()
 
     fork = log.fork()

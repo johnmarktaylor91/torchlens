@@ -30,6 +30,7 @@ from .._errors import AmbiguousOpLookupError, InvalidArgumentError
 from .._selection.errors import AmbiguousSiteError
 from .._selection.selectors import BaseSelector
 from .._selection.target import FrozenTargetSpec, TargetSpec
+from .._utils._record_group_table import record_member
 from ._lookup_keys import _give_user_feedback_about_lookup_key
 from .op import Op
 
@@ -461,7 +462,7 @@ def _bounded_layer_roster(self: "Trace") -> list[str]:
     roster: list[str] = []
     num_buffer_rows = 0
     for layer_ind, layer_entry in enumerate(self._layer_list):
-        if getattr(layer_entry, "is_buffer", False):
+        if record_member(layer_entry, "is_buffer", False):
             num_buffer_rows += 1
             continue
         layer_barcode = layer_entry.layer_label

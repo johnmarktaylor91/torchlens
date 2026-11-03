@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 from PIL import Image, ImageDraw
 
+from .._utils._record_group_table import record_member
 from .._vocab.node_spec import NodeSpec, NodeSpecFn
 from ..viz import node_plots
 from ._errors import (
@@ -232,7 +233,7 @@ def _select_descriptor(view: ReceptiveFieldView, selected: Any | None) -> Recept
                 "Select one reachable input; available IO roles: " + ", ".join(per_input)
             )
         return next(iter(per_input.values()))
-    role = selected if isinstance(selected, str) else getattr(selected, "io_role", None)
+    role = selected if isinstance(selected, str) else record_member(selected, "io_role", None)
     if role not in per_input:
         raise ReceptiveFieldError(f"Input {role!r} is not reachable from this target.")
     return per_input[cast(str, role)]
@@ -492,7 +493,7 @@ def _descriptor_for_op(
                 "Select one reachable input; available IO roles: " + ", ".join(descriptors)
             )
         return next(iter(descriptors.values()))
-    role = selected if isinstance(selected, str) else getattr(selected, "io_role", None)
+    role = selected if isinstance(selected, str) else record_member(selected, "io_role", None)
     if role not in descriptors:
         raise ReceptiveFieldError(f"Input {role!r} is not reachable from this target.")
     return descriptors[cast(str, role)]

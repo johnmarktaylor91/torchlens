@@ -108,8 +108,8 @@ def _check_site_key_uniqueness(ops: list, name: str) -> None:
     equivalence_counts: dict[object, int] = {}
     for op in ops:
         if not tuple(record_member(op, "module_call_stack", ()) or ()):
-            equivalence_counts[getattr(op, "equivalence_class", None)] = (
-                equivalence_counts.get(getattr(op, "equivalence_class", None), 0) + 1
+            equivalence_counts[record_member(op, "equivalence_class", None)] = (
+                equivalence_counts.get(record_member(op, "equivalence_class", None), 0) + 1
             )
 
     seen: dict[tuple[str, object], str] = {}
@@ -118,7 +118,7 @@ def _check_site_key_uniqueness(ops: list, name: str) -> None:
         if stack:
             call_instance: object = stack[-1]
         else:
-            equivalence_class = getattr(op, "equivalence_class", None)
+            equivalence_class = record_member(op, "equivalence_class", None)
             if equivalence_counts.get(equivalence_class, 0) > 1:
                 # A genuine multi-occurrence group (recurring passes of one
                 # site): differentiate siblings by their unique raw label so

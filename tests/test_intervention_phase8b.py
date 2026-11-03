@@ -190,7 +190,7 @@ def test_fork_mutation_does_not_warn_or_mutate_parent_interventions() -> None:
     assert fork.name == "test"
     assert fork_relu_pass.out is relu_pass.out
     assert fork_relu_pass.edits is not relu_pass.edits
-    assert fork_relu_pass.equivalent_ops is not relu_pass.equivalent_ops
+    assert fork_relu_pass.graph.equivalent_ops is not relu_pass.graph.equivalent_ops
 
     with warnings.catch_warnings(record=True) as warnings_record:
         warnings.simplefilter("always")

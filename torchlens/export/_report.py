@@ -147,7 +147,7 @@ def _intervention_hop(log: Any, label: str) -> tuple[tuple[str, ...], tuple[str,
     try:
         op = log[label]
         intervened = bool(
-            getattr(op, "is_edited", False) or getattr(op, "edge_substitutions", None)
+            getattr(op, "is_edited", False) or record_member(op, "edge_substitutions", None)
         )
         if not intervened:
             return None

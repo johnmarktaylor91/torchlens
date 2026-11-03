@@ -524,10 +524,10 @@ class RefreshProjector:
         from .._runnable import is_mode_sensitive_qualname
 
         claims: list[tuple[str, bool]] = []
-        qualname = getattr(sink_layer, "buffer_source_func_name", None)
+        qualname = record_member(sink_layer, "buffer_source_func_name", None)
         if not is_mode_sensitive_qualname(qualname):
             return claims
-        source_label = getattr(sink_layer, "buffer_source", None)
+        source_label = record_member(sink_layer, "buffer_source", None)
         if not source_label or source_label not in trace._layer_dict_all_keys:
             return claims
         source = trace._layer_dict_all_keys[source_label]
@@ -578,14 +578,15 @@ class RefreshProjector:
             for layer in target_sinks
             if layer.buffer_value_changed is True
             and layer.buffer_write_kind == "inplace"
-            and (getattr(layer, "buffer_source_func_name", None) or "").rsplit(".", 1)[-1] == "add_"
+            and (record_member(layer, "buffer_source_func_name", None) or "").rsplit(".", 1)[-1]
+            == "add_"
             and self._sink_module_call(layer) in norm_calls
         }
 
     def _sink_module_call(self, sink_layer: Any) -> str | None:
         """Return the innermost module call of a buffer sink's producing op."""
 
-        source_label = getattr(sink_layer, "buffer_source", None)
+        source_label = record_member(sink_layer, "buffer_source", None)
         layers = self.target._layer_dict_all_keys
         if not source_label or source_label not in layers:
             return None

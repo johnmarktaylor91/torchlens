@@ -76,7 +76,7 @@ def classify_row(op: object) -> str:
 
     if getattr(op, "is_input", False) or getattr(op, "is_output", False):
         return "not_applicable"
-    if getattr(op, "is_buffer", False):
+    if record_member(op, "is_buffer", False):
         return "not_applicable"
     flops = record_member(op, "flops_forward", None)
     if flops is None:
@@ -317,7 +317,7 @@ def compute_aggregation(trace: Trace) -> ComputeAggregation:
     _join = _joined_result_or_none(trace)
     for index, op in enumerate(trace._layer_list):
         row_class = classify_row(op)
-        if getattr(op, "is_buffer", False):
+        if record_member(op, "is_buffer", False):
             kind = "buffer"
         elif getattr(op, "is_input", False) or getattr(op, "is_output", False):
             kind = "boundary"

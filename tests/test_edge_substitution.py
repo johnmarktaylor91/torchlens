@@ -216,8 +216,8 @@ def test_edge_substitution_storage_fork_honesty(capture):
 
     # tier (ii): consumer view lives in the occurrence-granular store
     store_key = ("positional", (0,))
-    assert store_key in child.edge_substitutions
-    assert bool((child.edge_substitutions[store_key]["value"] == 0).all())
+    assert store_key in child.graph.edge_substitutions
+    assert bool((child.graph.edge_substitutions[store_key]["value"] == 0).all())
     assert child.edge_replacement_stamps[store_key]["verdict"] is True
 
     # tier (iii) capture-surface parity pin: no post-edit value reaches a
@@ -385,11 +385,11 @@ def test_edge_carriers_persist_on_plain_v8_round_trip(capture, tmp_path):
     fork.save(path, level="portable")
     loaded = tl.load(path)
     child = loaded["conv2d_2_3"].ops[0]
-    assert child.edge_substitutions and child.edge_replacement_stamps
+    assert child.graph.edge_substitutions and child.edge_replacement_stamps
     live_child = fork["conv2d_2_3"].ops[0]
-    for key, entry in child.edge_substitutions.items():
+    for key, entry in child.graph.edge_substitutions.items():
         assert isinstance(entry["value"], torch.Tensor)
-        assert torch.equal(entry["value"], live_child.edge_substitutions[key]["value"])
+        assert torch.equal(entry["value"], live_child.graph.edge_substitutions[key]["value"])
 
 
 def test_forced_bundle_without_edge_corroboration_fails_validation(
@@ -430,7 +430,7 @@ def test_forced_bundle_without_edge_corroboration_fails_validation(
         fork.save(path, level="executable_with_callables")
     loaded = tl.load(path)
     loaded_child = loaded["conv2d_2_3"].ops[0]
-    assert not loaded_child.edge_substitutions
+    assert not loaded_child.graph.edge_substitutions
     assert not loaded_child.edge_replacement_stamps
 
     # Trace func callables are DROP at this schema level. Reattach only the

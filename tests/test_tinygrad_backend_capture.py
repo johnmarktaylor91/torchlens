@@ -544,7 +544,7 @@ def test_tinygrad_multi_output_marks_outputs() -> None:
     # by the pass-qualified op.label (torch parity too), so look each output
     # up through the full lookup cascade (trace[label]) rather than
     # layer_dict_main_keys directly.
-    assert all(trace[label].is_output_parent for label in trace.output_layers)
+    assert all(trace[label].graph.is_output_parent for label in trace.output_layers)
     assert trace.validate_forward_pass(list(_multi_output(x))) is True
 
 

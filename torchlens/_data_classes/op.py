@@ -128,6 +128,7 @@ from ._op_transforms import (  # noqa: F401  (re-exported for backends.torch imp
 from ._record_groups import OpControlFlow, OpCost
 from ._record_groups_autograd import OpAutograd
 from ._record_groups_call import OpCall
+from ._record_groups_graph import OpGraph
 from ._record_groups_module_context import OpModuleContext
 from ._record_groups_payload import OpPayload
 from ._record_groups_source import OpSource
@@ -1992,6 +1993,12 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         return OpModuleContext(self)
 
     @property
+    def graph(self) -> OpGraph:
+        """Graph position of this Op (``op.graph.has_parents``)."""
+
+        return OpGraph(self)
+
+    @property
     def payload(self) -> OpPayload:
         """Saved transformed payloads and lazy materialization (``op.payload.transformed_out``)."""
 
@@ -2058,10 +2065,10 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         return self.num_params_frozen > 0
 
     @property
-    def is_compute_op(self) -> bool:
+    def _graph_is_compute(self) -> bool:
         """Whether this Op executed a torch function rather than a boundary sentinel."""
 
-        return not (self.is_input or self.is_output or self.is_buffer)
+        return not (self.is_input or self.is_output or self.graph.is_buffer)
 
     @property
     def fx_label(self) -> str | None:
@@ -2255,7 +2262,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         return cast("str | None", self._module_context_atomic_module_call)
 
     @property
-    def has_parents(self) -> bool:
+    def _graph_has_parents(self) -> bool:
         """Whether this layer has any parent layers."""
         return len(self.parents) > 0
 
@@ -2278,32 +2285,32 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         return _labels.own_label_spellings(self)
 
     @property
-    def siblings(self) -> list[str]:
+    def _graph_siblings(self) -> list[str]:
         """Layers sharing at least one parent (excluding output layers and this op)."""
 
         return _op_relations.siblings(self)
 
     @property
-    def has_siblings(self) -> bool:
+    def _graph_has_siblings(self) -> bool:
         """Whether this layer shares parents with other layers."""
-        return len(self.siblings) > 0
+        return len(self.graph.siblings) > 0
 
     @property
-    def co_parents(self) -> list[str]:
+    def _graph_co_parents(self) -> list[str]:
         """Layers sharing at least one child (excluding output layers and this op)."""
 
         return _op_relations.co_parents(self)
 
     @property
-    def has_co_parents(self) -> bool:
+    def _graph_has_co_parents(self) -> bool:
         """Whether this layer shares children with other layers."""
-        return len(self.co_parents) > 0
+        return len(self.graph.co_parents) > 0
 
     @property
     def _control_flow_is_in_conditional_body(self) -> bool:
         """Whether this op is in a conditional arm body."""
 
-        if self.has_output_descendant and not self.control_flow.entry_children:
+        if self.graph.has_output_descendant and not self.control_flow.entry_children:
             return False
         return bool(self._slot("_is_in_conditional_body", False)) or any(
             role.role == "body" for role in self.control_flow.in_conditionals or []
@@ -2340,23 +2347,23 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         """Ignore cleanup deletion for derived input Op access."""
 
     @property
-    def buffer_source_ops(self) -> "OpAccessor":
+    def _graph_buffer_source_ops(self) -> "OpAccessor":
         """Accessor over buffer source Ops that feed this Op."""
 
         return OpAccessor(_op_relations.buffer_source_ops_by_index(self))
 
-    @buffer_source_ops.deleter
-    def buffer_source_ops(self) -> None:
+    @_graph_buffer_source_ops.deleter
+    def _graph_buffer_source_ops(self) -> None:
         """Ignore cleanup deletion for derived buffer source Op access."""
 
     @property
-    def buffer_sink_ops(self) -> "OpAccessor":
+    def _graph_buffer_sink_ops(self) -> "OpAccessor":
         """Accessor over buffer sink Ops directly consuming this Op."""
 
         return OpAccessor(_op_relations.buffer_sink_ops_by_index(self))
 
-    @buffer_sink_ops.deleter
-    def buffer_sink_ops(self) -> None:
+    @_graph_buffer_sink_ops.deleter
+    def _graph_buffer_sink_ops(self) -> None:
         """Ignore cleanup deletion for derived buffer sink Op access."""
 
     @property
@@ -2446,7 +2453,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         Glossary name for the stored ``is_buffer`` flag.
         """
 
-        return bool(self.is_buffer)
+        return bool(self.graph.is_buffer)
 
     @property
     def has_saved_grad(self) -> bool:
@@ -2805,13 +2812,13 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             Alias of ``is_internal_source`` for tabular compatibility.
         """
 
-        return bool(self.is_internal_source)
+        return bool(self.graph.is_internal_source)
 
     @_call_is_internally_initialized.setter
     def _call_is_internally_initialized(self, value: Any) -> None:
         """Accept compatibility writes for the computed internal-source alias."""
 
-        if value is not None and bool(value) != bool(self.is_internal_source):
+        if value is not None and bool(value) != bool(self.graph.is_internal_source):
             raise InvalidArgumentError(
                 "is_internally_initialized is derived from is_internal_source and "
                 f"cannot be set to {value!r}",
@@ -3103,17 +3110,17 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         s += "\n\tFamily info:"
         s += f"\n\t\tParents: {self.parents}"
         s += f"\n\t\tChildren: {self.children}"
-        s += f"\n\t\tSpouses: {self.co_parents}"
-        s += f"\n\t\tSiblings: {self.siblings}"
+        s += f"\n\t\tSpouses: {self.graph.co_parents}"
+        s += f"\n\t\tSiblings: {self.graph.siblings}"
         s += (
-            f"\n\t\tOriginal Ancestors: {self.root_ancestors} "
-            f"(min dist {self.min_distance_from_input} nodes, max dist {self.max_distance_from_input} nodes)"
+            f"\n\t\tOriginal Ancestors: {self.graph.root_ancestors} "
+            f"(min dist {self.graph.min_distance_from_input} nodes, max dist {self.graph.max_distance_from_input} nodes)"
         )
         s += f"\n\t\tInput Ancestors: {self.input_ancestors}"
-        s += f"\n\t\tInternal Ancestors: {self.internal_source_ancestors}"
+        s += f"\n\t\tInternal Ancestors: {self.graph.internal_source_ancestors}"
         s += (
             f"\n\t\tOutput Descendents: {self.output_descendants} "
-            f"(min dist {self.min_distance_to_output} nodes, max dist {self.max_distance_to_output} nodes)"
+            f"(min dist {self.graph.min_distance_to_output} nodes, max dist {self.graph.max_distance_to_output} nodes)"
         )
         if self.out is not None:
             s += f"\n\tTensor contents: \n{print_override(self.out, '__str__')}"

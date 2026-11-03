@@ -1758,12 +1758,12 @@ def test_trace_mark_distances(default_input1):
     )
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.has_input_ancestor:
-            assert entry.min_distance_from_input is not None
-            assert entry.max_distance_from_input is not None
-        if entry.has_output_descendant:
-            assert entry.min_distance_to_output is not None
-            assert entry.max_distance_to_output is not None
+        if entry.graph.has_input_ancestor:
+            assert entry.graph.min_distance_from_input is not None
+            assert entry.graph.max_distance_from_input is not None
+        if entry.graph.has_output_descendant:
+            assert entry.graph.min_distance_to_output is not None
+            assert entry.graph.max_distance_to_output is not None
 
 
 def test_log_model_metadata(default_input1):

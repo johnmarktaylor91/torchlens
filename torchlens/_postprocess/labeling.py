@@ -286,7 +286,7 @@ def _normalize_io_role_flags(layer_entry: Op) -> None:
     layer_type = layer_entry.type
     layer_entry.is_input = layer_type == "input"
     layer_entry.is_output = layer_type == "output"
-    layer_entry.is_buffer = layer_type == "buffer"
+    layer_entry._graph_is_buffer = layer_type == "buffer"
 
 
 def _module_address_for_fx(module_call_label: Any) -> str:
@@ -775,11 +775,11 @@ def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:
     self._num_saved_ops = sum(
         1
         for layer_entry in self
-        if not getattr(layer_entry, "is_orphan", False) and layer_entry.has_saved_activation
+        if not record_member(layer_entry, "is_orphan", False) and layer_entry.has_saved_activation
     )
 
     num_logged_tensors = sum(
-        1 for layer_entry in self if not getattr(layer_entry, "is_orphan", False)
+        1 for layer_entry in self if not record_member(layer_entry, "is_orphan", False)
     )
 
     self._layer_list = []
@@ -792,7 +792,7 @@ def _build_lookup_keys_and_finalize_retained_layers(self: "Trace") -> None:
     i = 0
     for raw_tensor_label in self._raw_graph_ws.raw_layer_labels_list:
         layer_entry = self._raw_graph_ws.raw_layer_dict[raw_tensor_label]
-        if getattr(layer_entry, "is_orphan", False):
+        if record_member(layer_entry, "is_orphan", False):
             continue
         # Add the lookup keys for the layer, to itself and to Trace:
         _add_lookup_keys_for_layer_entry(self, layer_entry, i, num_logged_tensors)
@@ -938,12 +938,12 @@ def _add_lookup_keys_for_layer_entry(
             lookup_keys_for_tensor.append(module_key)
 
     # Allow using buffer/input/output address as key, too:
-    if layer_entry.is_buffer:
+    if layer_entry.graph.is_buffer:
         if self._buffer_num_calls.get(layer_entry.address, 1) == 1:
             lookup_keys_for_tensor.append(layer_entry.address)
-        lookup_keys_for_tensor.append(f"{layer_entry.address}:{layer_entry.buffer_pass}")
+        lookup_keys_for_tensor.append(f"{layer_entry.address}:{layer_entry.graph.buffer_pass}")
     elif layer_entry.is_input or layer_entry.is_output:
-        lookup_keys_for_tensor.append(layer_entry.io_role)
+        lookup_keys_for_tensor.append(layer_entry.graph.io_role)
 
     if layer_entry.fx_label is not None:
         lookup_keys_for_tensor.append(layer_entry.fx_label)

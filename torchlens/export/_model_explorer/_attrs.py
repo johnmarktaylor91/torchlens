@@ -46,7 +46,7 @@ def node_kind(entry: Any) -> str:
         return "input"
     if getattr(entry, "is_output", False):
         return "output"
-    if getattr(entry, "is_buffer", False):
+    if record_member(entry, "is_buffer", False):
         return "buffer"
     if record_member(entry, "is_terminal_bool", False):
         return "bool"

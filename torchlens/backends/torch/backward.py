@@ -1081,7 +1081,10 @@ def _prefer_direct_pairing_source_for_paired_ops(trace: Any) -> None:
         op = grad_fn_record.op
         if (
             op is not None
-            and (getattr(op, "is_compute_op", False) or getattr(op, "is_compute_layer", False))
+            and (
+                record_member(op, "is_compute_op", False)
+                or record_member(op, "is_compute_layer", False)
+            )
             and grad_fn_record.module_membership_source == "inferred"
         ):
             grad_fn_record.module_membership_source = "paired"
@@ -2385,7 +2388,7 @@ def _layer_grad_fn_pairing_rank(layer: Any) -> int:
         Lower rank is preferred; compute ops outrank boundary sentinels.
     """
 
-    is_compute = getattr(layer, "is_compute_op", False) or getattr(
+    is_compute = record_member(layer, "is_compute_op", False) or record_member(
         layer,
         "is_compute_layer",
         False,

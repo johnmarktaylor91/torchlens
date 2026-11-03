@@ -100,7 +100,7 @@ def _get_hidden_parent_buffer_addresses(
         Hidden buffer addresses in parent order, de-duplicated.
     """
 
-    if show_buffer_layers == "always" or node.is_buffer:
+    if show_buffer_layers == "always" or node.graph.is_buffer:
         return []
 
     hidden_addresses: list[str] = []
@@ -114,7 +114,7 @@ def _get_hidden_parent_buffer_addresses(
             parent_node = trace[parent_label]
         else:
             parent_node = trace._layer_logs[parent_label]
-        if not parent_node.is_buffer or _is_buffer_visible(parent_node, show_buffer_layers):
+        if not parent_node.graph.is_buffer or _is_buffer_visible(parent_node, show_buffer_layers):
             continue
         address = parent_node.address
         if address is None or address in seen_addresses:
@@ -571,7 +571,7 @@ def _build_layer_node(
     )
     node_bg_color = _get_node_bg_color(self, node)
 
-    if node.has_input_ancestor:
+    if node.graph.has_input_ancestor:
         line_style = "solid"
     else:
         line_style = "dashed"
@@ -657,7 +657,7 @@ def _build_layer_node(
     if collapsed_container_nodes is not None and node_args["name"] in collapsed_container_nodes:
         return node_color
     hidden_buffer_addresses = _get_hidden_parent_buffer_addresses(self, node, show_buffer_layers)
-    if hidden_buffer_addresses and not (node.is_input or node.is_output or node.is_buffer):
+    if hidden_buffer_addresses and not (node.is_input or node.is_output or node.graph.is_buffer):
         node_args["peripheries"] = "2"
         hidden_tooltip = f"Hidden buffers: {', '.join(hidden_buffer_addresses)}"
         if "tooltip" in node_args:
@@ -673,7 +673,7 @@ def _build_layer_node(
 
     graphviz_graph.node(**node_args)
 
-    if node.is_final_output:
+    if node.graph.is_final_output:
         with graphviz_graph.subgraph() as s:
             s.attr(rank="sink")
             s.node(_render_node_name(node, vis_mode))
@@ -1389,8 +1389,10 @@ def _build_collapsed_module_node(
         # this ONE call for an unrolled per-call box.
         scope_op_labels = tuple(module_call.ops)
         module_num_tensors = module_call.num_layers
-        module_num_buffers = sum(self[layer].is_buffer for layer in module_call.ops)
-        module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in module_call.ops)
+        module_num_buffers = sum(self[layer].graph.is_buffer for layer in module_call.ops)
+        module_has_input_ancestor = any(
+            self[layer].graph.has_input_ancestor for layer in module_call.ops
+        )
         if (
             _collapsed_module_should_show_remainder(
                 self,
@@ -1409,7 +1411,7 @@ def _build_collapsed_module_node(
             # remainder (num_layers over all passes) overstated every
             # multi-call box.
             module_num_tensors = max(0, module_num_tensors - len(surfaced_call_ops))
-            module_num_buffers -= sum(layer.is_buffer for layer in surfaced_call_ops)
+            module_num_buffers -= sum(layer.graph.is_buffer for layer in surfaced_call_ops)
             module_nparams = remainder_stats["num_params"]
             module_nparams_trainable = remainder_stats["num_params_trainable"]
             module_nparams_frozen = remainder_stats["num_params_frozen"]
@@ -1426,8 +1428,10 @@ def _build_collapsed_module_node(
         # presets aggregate per-pass op records across all calls.
         scope_op_labels = tuple(op_label for call in ml.ops.values() for op_label in call.ops)
         module_num_tensors = len(ml.layer_labels)
-        module_num_buffers = sum(self[layer].is_buffer for layer in ml.layer_labels)
-        module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in ml.layer_labels)
+        module_num_buffers = sum(self[layer].graph.is_buffer for layer in ml.layer_labels)
+        module_has_input_ancestor = any(
+            self[layer].graph.has_input_ancestor for layer in ml.layer_labels
+        )
         # Rolled boxes need the same surfaced-exit remainder belt as the
         # unrolled branch (round-25): the atomic-exit drop in
         # ``_collapse_address_for_node`` is vis_mode-independent, so the exit
@@ -1662,9 +1666,9 @@ def _buffer_versions_for_layer(layer_log: "Layer") -> tuple[int, ...]:
     """
 
     versions = {
-        int(op.buffer_pass)
+        int(op.graph.buffer_pass)
         for op in layer_log.ops.values()
-        if getattr(op, "buffer_pass", None) is not None
+        if record_member(op, "buffer_pass", None) is not None
     }
     return tuple(sorted(versions))
 
@@ -1690,7 +1694,7 @@ def _rolling_annotation(layer_log: GraphNode, vis_mode: str) -> RollingAnnotatio
         return None
 
     call_groups = _call_groups_for_layer(layer_log)
-    buffer_versions = _buffer_versions_for_layer(layer_log) if layer_log.is_buffer else ()
+    buffer_versions = _buffer_versions_for_layer(layer_log) if layer_log.graph.is_buffer else ()
     if not call_groups and not buffer_versions:
         return None
     return RollingAnnotation(call_groups=call_groups, buffer_versions=buffer_versions)
@@ -1758,7 +1762,7 @@ def _get_node_address_shape_color(
         node_address = "<br/>@" + node_address
         node_shape = "box"
         node_color = "black"
-    elif node.is_buffer:
+    elif node.graph.is_buffer:
         annotation = (
             _rolling_annotation(source_node, "rolled") if isinstance(source_node, Layer) else None
         )
@@ -1767,12 +1771,12 @@ def _get_node_address_shape_color(
         elif self._buffer_num_calls[source_node.address] == 1:
             address = source_node.address
         else:
-            address = f"{source_node.address}:{source_node.buffer_pass}"
+            address = f"{source_node.address}:{source_node.graph.buffer_pass}"
         node_address = "<br/>@" + address
         node_shape = "cylinder"
         node_color = "black"
     elif node.is_output or node.is_input:
-        node_address = "<br/>@" + node.io_role
+        node_address = "<br/>@" + node.graph.io_role
         node_shape = "oval"
         node_color = "black"
     else:
@@ -1821,7 +1825,8 @@ def _is_only_non_buffer_in_module(
         else:
             parent_layer = self._layer_logs[parent_layer_label]
         if (
-            (not parent_layer.is_buffer) or _is_buffer_visible(parent_layer, show_buffer_layers)
+            (not parent_layer.graph.is_buffer)
+            or _is_buffer_visible(parent_layer, show_buffer_layers)
         ) and ((len(parent_layer.modules) > 0) and parent_layer.modules[-1] == node.modules[-1]):
             return False
 
@@ -1847,7 +1852,7 @@ def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
         bg_color = OUTPUT_COLOR
     elif record_member(node, "is_terminal_bool", False):
         bg_color = BOOL_NODE_COLOR
-    elif node.is_buffer:
+    elif node.graph.is_buffer:
         bg_color = BUFFER_NODE_COLOR
     elif node.has_params:
         source = node.original if isinstance(node, FocusNode) else node

@@ -122,6 +122,7 @@ from ..._utils._call_site import (
     CALL_SITE_CLASS_MARKER,  # noqa: F401 (re-exported to the split modules)
 )
 from ..._utils._callable_safety import _PURE_TENSOR_PROPERTY_NAMES
+from ..._utils._record_group_table import op_attr
 from ..._utils._torch_compat import (
     saved_tensors_default_hooks_active,
     tensor_version_or_none,
@@ -277,7 +278,7 @@ _ANCESTOR_FIELD_NAMES = (
     "output_descendants",
 )
 _ANCESTOR_SLOT_DESCRIPTORS = {
-    field_name: vars(Op)[field_name] for field_name in _ANCESTOR_FIELD_NAMES
+    field_name: vars(Op)[op_attr(field_name)] for field_name in _ANCESTOR_FIELD_NAMES
 }
 
 # The bitset is a sanctioned finished-cell encoding: reads through the
@@ -588,12 +589,12 @@ from ._ops_capture_records import (  # noqa: E402
 
 setattr(
     Op,
-    "root_ancestors",
+    op_attr("root_ancestors"),
     property(_get_root_ancestors, _set_root_ancestors, _delete_root_ancestors),
 )
 setattr(
     Op,
-    "internal_source_ancestors",
+    op_attr("internal_source_ancestors"),
     property(
         _get_internal_source_ancestors,
         _set_internal_source_ancestors,

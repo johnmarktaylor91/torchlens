@@ -152,7 +152,7 @@ def test_h2_arange_tensor_end_is_parent_not_internal_source() -> None:
 
     assert arange_op.parents == (long_label,)
     assert arange_op.call.parent_arg_positions["args"].get(0) == long_label
-    assert not arange_op.is_internal_source
+    assert not arange_op.graph.is_internal_source
     assert arange_op.call.unattributed_tensor_args == ()
     assert tl.validate(_ArangeTensorEnd().eval(), x, scope="forward")
 

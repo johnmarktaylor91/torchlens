@@ -40,6 +40,7 @@ from example_models import BufferRewriteModel
 
 import torchlens as tl
 from torchlens._state import pause_logging
+from torchlens._utils._record_group_table import record_member
 from torchlens.backends.torch import rescue
 from torchlens.errors import TraceNotReproducibleWarning
 from torchlens.options import CaptureOptions
@@ -125,7 +126,7 @@ def _drop_diamond_edge(trace) -> None:
             ]
     for key in [k for k in list(p_op.out_versions_by_child) if k in c1_labels]:
         del p_op.out_versions_by_child[key]
-    p_op.has_children = len(p_op.children) > 0
+    p_op._graph_has_children = len(p_op.children) > 0
 
 
 def test_w31_diamond_baseline_passes() -> None:
@@ -330,7 +331,7 @@ def test_w33_has_children_corruption_still_caught() -> None:
     trace, _ = _capture(_Diamond(), torch.randn(3, 4))
     p_op = [op for op in trace._layer_list if op.func_name == "__mul__"][0]
     assert p_op.children
-    p_op.has_children = False
+    p_op._graph_has_children = False
 
     with pytest.raises(MetadataInvariantError) as exc_info:
         check_metadata_invariants(trace)
@@ -344,7 +345,7 @@ def test_w33_derived_flag_properties_are_read_only_truths() -> None:
     op_type = type(trace._layer_list[1])
     for name in ("has_parents", "has_siblings", "has_co_parents"):
         assert isinstance(getattr(op_type, name), property)
-    assert not isinstance(getattr(op_type, "has_children", None), property)
+    assert not isinstance(record_member(op_type, "has_children", None), property)
 
 
 # ---------------------------------------------------------------------------

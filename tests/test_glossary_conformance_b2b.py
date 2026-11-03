@@ -83,7 +83,7 @@ def test_op_and_layer_convenience_properties() -> None:
     assert op.num_param_tensors_frozen == sum(1 for param in op.params if not param.is_trainable)
     assert op.has_trainable_params == (op.num_params_trainable > 0)
     assert op.has_frozen_params == (op.num_params_frozen > 0)
-    assert op.is_compute_op is True
+    assert op.graph.is_compute is True
 
     assert layer.cost.total_activation_memory == sum(
         (child.cost.activation_memory or 0) for child in layer.ops.values()
@@ -104,8 +104,8 @@ def test_op_and_layer_convenience_properties() -> None:
     assert layer.param_dtypes == [param.dtype for param in layer.params]
     assert layer.has_trainable_params == (layer.num_params_trainable > 0)
     assert layer.has_frozen_params == (layer.num_params_frozen > 0)
-    assert layer.is_compute_layer is True
-    assert layer.is_orphan == any(child.is_orphan for child in layer.ops.values())
+    assert layer.graph.is_compute is True
+    assert layer.graph.is_orphan == any(child.graph.is_orphan for child in layer.ops.values())
 
     if op.fx_label is not None:
         assert layer.fx_label == op.fx_label

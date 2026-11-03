@@ -135,7 +135,7 @@ def _is_provable_functionless_source_or_boundary(
     func_call_id = record_member(layer, "func_call_id", None)
     is_buffer_boundary = (
         func_call_id is None
-        and bool(getattr(layer, "buffer_source", None))
+        and bool(record_member(layer, "buffer_source", None))
         and bool(getattr(layer, "buffer_write_kind", None))
     )
     if is_buffer_boundary:

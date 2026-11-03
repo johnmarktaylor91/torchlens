@@ -18,6 +18,7 @@ from typing import Any, NoReturn
 
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
+from .._utils._record_group_table import record_member
 from .format_errors import ArtifactError
 
 
@@ -43,7 +44,7 @@ def _refuse_edge_intervened_save(trace: Any) -> None:
     carriers = [
         op.label
         for op in (trace._layer_list if is_live_trace(trace) else ()) or ()
-        if getattr(op, "edge_substitutions", None)
+        if record_member(op, "edge_substitutions", None)
     ]
     if not carriers:
         return

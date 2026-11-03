@@ -15,6 +15,7 @@ from _record_fakes import FakeRecord
 import torchlens as tl
 from torchlens._data_classes.trace import ConditionalAccessor, ConditionalEvent, Trace
 from torchlens._postprocess.finalization import _build_conditional_records
+from torchlens._utils._record_group_table import record_member
 from torchlens.validation.invariants import MetadataInvariantError
 
 
@@ -210,25 +211,25 @@ def test_equivalent_ops_are_renamed_to_final_labels() -> None:
     repeated_ops = [
         op
         for op in trace._layer_list
-        if len(trace.graph.op_equivalence_classes.get(op.equivalence_class, set())) > 1
+        if len(trace.graph.op_equivalence_classes.get(op.graph.equivalence_class, set())) > 1
     ]
 
     assert repeated_ops
     for op in repeated_ops:
-        expected_group = trace.graph.op_equivalence_classes[op.equivalence_class]
-        assert op.equivalent_ops == expected_group
-        assert all(not label.endswith("_raw") for label in op.equivalent_ops)
+        expected_group = trace.graph.op_equivalence_classes[op.graph.equivalence_class]
+        assert op.graph.equivalent_ops == expected_group
+        assert all(not label.endswith("_raw") for label in op.graph.equivalent_ops)
 
     repeated_layers = [
         layer
         for layer in trace._layer_logs.values()
-        if len(getattr(layer, "equivalent_ops", set())) > 1
+        if len(record_member(layer, "equivalent_ops", set())) > 1
     ]
     assert repeated_layers
     for layer in repeated_layers:
         first_pass = next(iter(layer.ops.values()))
-        assert layer.equivalent_ops == first_pass.equivalent_ops
-        assert all(not label.endswith("_raw") for label in layer.equivalent_ops)
+        assert layer.graph.equivalent_ops == first_pass.graph.equivalent_ops
+        assert all(not label.endswith("_raw") for label in layer.graph.equivalent_ops)
 
 
 def test_equivalence_invariant_rejects_stale_per_op_views() -> None:
@@ -238,10 +239,10 @@ def test_equivalence_invariant_rejects_stale_per_op_views() -> None:
     target_op = next(
         op
         for op in trace._layer_list
-        if len(trace.graph.op_equivalence_classes.get(op.equivalence_class, set())) > 1
+        if len(trace.graph.op_equivalence_classes.get(op.graph.equivalence_class, set())) > 1
     )
-    target_op.equivalent_ops = {"linear_1_2_raw"}
-    trace._layer_logs[target_op.layer_label].equivalent_ops = {"linear_1_2_raw"}
+    target_op._graph_equivalent_ops = {"linear_1_2_raw"}
+    trace._layer_logs[target_op.layer_label]._graph_equivalent_ops = {"linear_1_2_raw"}
 
     with pytest.raises(MetadataInvariantError, match="equivalence_symmetry"):
         trace.check_metadata_invariants()
@@ -253,7 +254,7 @@ def test_synthetic_output_node_resets_equivalent_ops() -> None:
     trace = tl.trace(_EquivalentOpsModel(), torch.randn(1, 4))
     output_op = next(op for op in trace._layer_list if op.is_output)
 
-    assert output_op.equivalent_ops == {output_op.label}
+    assert output_op.graph.equivalent_ops == {output_op.label}
 
 
 def test_build_conditional_records_disambiguates_colliding_bool_layers() -> None:
@@ -432,5 +433,5 @@ def test_internal_sink_logging_never_rescans_the_sink_ledgers() -> None:
         label for i, label in enumerate(layers) if i % 2 == 0
     ]
     for i, label in enumerate(layers):
-        assert layers[label].is_internal_sink is True
+        assert layers[label].graph.is_internal_sink is True
         assert layers[label].control_flow.is_terminal_bool is (i % 2 == 0)

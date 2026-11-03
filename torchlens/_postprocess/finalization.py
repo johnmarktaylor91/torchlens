@@ -175,7 +175,7 @@ def _finalize_param_logs(self: "Trace") -> None:
 
     # Clear actual Parameter tensor references from Op entries to save memory.
     for layer_entry in self._layer_list:
-        layer_entry.parent_params = []
+        layer_entry._graph_parent_params = []
 
 
 def _build_root_module_log(
@@ -1245,15 +1245,15 @@ def _build_layer_logs(self: "Trace") -> None:
             # Subsequent pass: merge only the 3 aggregate fields.
             layer_log = layer_logs[no_call_label]
             # Merge field 1/3: has_input_ancestor (OR across ops).
-            if pass_log.has_input_ancestor:
-                layer_log.has_input_ancestor = True
+            if pass_log.graph.has_input_ancestor:
+                layer_log._graph_has_input_ancestor = True
             # Merge field 2/3: io_role (char-merge with '*').
-            if layer_log.io_role is not None and pass_log.io_role is not None:
+            if layer_log.graph.io_role is not None and pass_log.graph.io_role is not None:
                 merged = "".join(
                     c if c == s else "*"
                     for c, s in zip_longest(
-                        layer_log.io_role,
-                        pass_log.io_role,
+                        layer_log.graph.io_role,
+                        pass_log.graph.io_role,
                         fillvalue="",
                     )
                 )
@@ -1261,7 +1261,7 @@ def _build_layer_logs(self: "Trace") -> None:
                     merged = merged[:-1]
                 if merged.endswith("*"):
                     merged = merged.rstrip("*") + "*"
-                layer_log.io_role = merged
+                layer_log._graph_io_role = merged
             # Merge field 3/3: is_atomic_module (OR across ops).
             if pass_log.module_context.is_atomic_module:
                 layer_log._module_context_is_atomic_module = True

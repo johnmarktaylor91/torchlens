@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Optional
 from .._constants import LAYER_LOG_FIELD_ORDER
 from .._errors import AmbiguousOpLookupError
 from .._io import FieldPolicy
+from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor, attach_source_honesty
 from ._layer_views import _layer_log_to_row
 
@@ -205,7 +206,7 @@ class LayerAccessor(Accessor["Layer"]):
     def _composition_note(self) -> str | None:
         """Composition breakdown for the one-line card: ops vs buffers."""
 
-        buffer_count = sum(1 for layer in self._list if getattr(layer, "is_buffer", False))
+        buffer_count = sum(1 for layer in self._list if record_member(layer, "is_buffer", False))
         if not buffer_count:
             return None
         return f"{len(self._list) - buffer_count} ops, {buffer_count} buffers"

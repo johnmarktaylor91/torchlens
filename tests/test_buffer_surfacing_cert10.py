@@ -190,7 +190,7 @@ def test_record_does_not_crash_on_registered_buffer_output() -> None:
 
         assert len(output_layer.parents) == 1
         parent = trace[output_layer.parents[0]]
-        assert parent.is_buffer
+        assert parent.graph.is_buffer
         assert parent.address == "counter"
     finally:
         trace.cleanup()

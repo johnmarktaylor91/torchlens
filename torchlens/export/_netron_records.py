@@ -191,7 +191,7 @@ def _hide_counter_chains(classified: _Classified, policy: str) -> None:
             node_id = classified.node_ids[id(entry)]
             if node_id in classified.hidden:
                 continue
-            if getattr(entry, "is_buffer", False):
+            if record_member(entry, "is_buffer", False):
                 continue
             if getattr(entry, "is_input", False) or getattr(entry, "is_output", False):
                 continue
@@ -225,7 +225,7 @@ def classify(log: Any, show_buffers: str) -> _Classified:
     hidden: set[str] = set()
     hidden_buffers: dict[str, list[str]] = {}
     for entry in entries:
-        if getattr(entry, "is_buffer", False) and _buffer_hidden(entry, show_buffers):
+        if record_member(entry, "is_buffer", False) and _buffer_hidden(entry, show_buffers):
             node_id = node_ids[id(entry)]
             hidden.add(node_id)
             hidden_buffers.setdefault(_owning_module(entry), []).append(node_id)

@@ -537,13 +537,13 @@ def test_l6_edge_family_roundtrip(tmp_path) -> None:
     fork = _edge_fork()
     child = fork["conv2d_2_3"].ops[0]
     store_key = ("positional", (0,))
-    assert store_key in child.edge_substitutions
-    live_value = child.edge_substitutions[store_key]["value"]
+    assert store_key in child.graph.edge_substitutions
+    live_value = child.graph.edge_substitutions[store_key]["value"]
     live_stamps = child.edge_replacement_stamps
     live_edge_address = next(record.edge_address for record in child.edits if record.edge_address)
     loaded = _plain_roundtrip(fork, tmp_path, "edges")
     loaded_child = loaded["conv2d_2_3"].ops[0]
-    assert torch.equal(loaded_child.edge_substitutions[store_key]["value"], live_value)
+    assert torch.equal(loaded_child.graph.edge_substitutions[store_key]["value"], live_value)
     assert _persisted_eq(loaded_child.edge_replacement_stamps, live_stamps)
     assert (
         next(record.edge_address for record in loaded_child.edits if record.edge_address)
@@ -551,7 +551,7 @@ def test_l6_edge_family_roundtrip(tmp_path) -> None:
     )
     gen2 = _second_generation(loaded, tmp_path, "edges")
     gen2_child = gen2["conv2d_2_3"].ops[0]
-    assert torch.equal(gen2_child.edge_substitutions[store_key]["value"], live_value)
+    assert torch.equal(gen2_child.graph.edge_substitutions[store_key]["value"], live_value)
 
 
 def test_l7a_structure_only_family_roundtrip(tmp_path) -> None:

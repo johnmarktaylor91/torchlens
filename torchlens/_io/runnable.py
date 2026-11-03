@@ -2324,7 +2324,7 @@ def _group_computational_ops(ops: Sequence[Any]) -> list[tuple[int, list[Any]]]:
         call_number = record_member(op, "func_call_id", None)
         if call_number is None or bool(getattr(op, "is_input", False)):
             continue
-        if bool(getattr(op, "is_buffer", False)) or bool(getattr(op, "is_output", False)):
+        if bool(record_member(op, "is_buffer", False)) or bool(getattr(op, "is_output", False)):
             continue
         call_number = int(call_number)
         groups[call_number].append(op)
@@ -2430,7 +2430,7 @@ def _input_binding_for_op(
                     container_path=container_path,
                 )
 
-    io_role = str(getattr(op, "io_role", ""))
+    io_role = str(record_member(op, "io_role", ""))
     if io_role.count(".") > 1:
         diagnostics.append(
             _diagnostic(
@@ -3263,7 +3263,7 @@ def _escape_witnesses(
         call_id = call_id_by_slot.get(slot_id)
         if call_id is None and not (is_input or is_output):
             continue
-        is_sink = bool(getattr(op, "is_internal_sink", False))
+        is_sink = bool(record_member(op, "is_internal_sink", False))
         if not is_escape and not is_sink:
             continue
         escape_draft = slot_drafts.get(slot_id)
@@ -4415,7 +4415,7 @@ def _op_slot_role(op: Any) -> TensorSlotRole:
 
     if bool(getattr(op, "is_input", False)):
         return TensorSlotRole.MODEL_INPUT
-    if bool(getattr(op, "is_buffer", False)):
+    if bool(record_member(op, "is_buffer", False)):
         return TensorSlotRole.BUFFER
     if bool(getattr(op, "is_output", False)):
         return TensorSlotRole.OUTPUT

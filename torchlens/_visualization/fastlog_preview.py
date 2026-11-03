@@ -80,7 +80,7 @@ def _kind_from_layer(op_log: Any) -> str:
 
     if bool(getattr(op_log, "is_input", False)):
         return "input"
-    if bool(getattr(op_log, "is_buffer", False)):
+    if bool(record_member(op_log, "is_buffer", False)):
         return "buffer"
     return "op"
 
@@ -118,7 +118,7 @@ def _context_from_layer(
             "dtype": getattr(op_log, "dtype", None),
             "output_index": getattr(op_log, "multi_output_index", None),
             "is_bottom_level_func": getattr(op_log, "is_bottom_level_func", None),
-            "input_output_address": getattr(op_log, "io_role", None),
+            "input_output_address": record_member(op_log, "io_role", None),
             "address": module_frame.address if module_frame else None,
             "module_type": module_frame.module_type if module_frame else None,
             "module_pass_number": module_frame.pass_number if module_frame else None,
@@ -156,7 +156,7 @@ def _evaluate_preview_node(
 ) -> PreviewNode:
     """Evaluate one preview predicate and capture display metadata."""
 
-    if not bool(getattr(op_log, "has_input_ancestor", True)):
+    if not bool(record_member(op_log, "has_input_ancestor", True)):
         return PreviewNode(ctx=ctx, decision=Decision.UNREACHABLE)
     if predicate is None:
         return PreviewNode(ctx=ctx, decision=Decision.REJECTED)

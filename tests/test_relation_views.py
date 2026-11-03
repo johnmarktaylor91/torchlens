@@ -313,8 +313,8 @@ class TestFinishedTraceSurface:
         assert type(op.children) is tuple
         op.input_ancestors = MutableSet({"input_1_1"})
         assert type(op.input_ancestors) is frozenset
-        op.equivalent_ops = MutableSet({"relu_1_2"})
-        assert type(op.equivalent_ops) is frozenset
+        op._graph_equivalent_ops = MutableSet({"relu_1_2"})
+        assert type(op.graph.equivalent_ops) is frozenset
 
     def test_finished_assignment_refuses_non_container_values(self) -> None:
         import pytest
@@ -339,8 +339,8 @@ class TestFinishedTraceSurface:
         assert type(layer.modules) is tuple
         escape.append("late_mutation")
         assert "late_mutation" not in layer.modules
-        layer.equivalent_ops = {"relu_1_2"}
-        assert type(layer.equivalent_ops) is frozenset
+        layer._graph_equivalent_ops = {"relu_1_2"}
+        assert type(layer.graph.equivalent_ops) is frozenset
         layer.input_ancestors = {"input_1_1"}
         assert type(layer.input_ancestors) is frozenset
 

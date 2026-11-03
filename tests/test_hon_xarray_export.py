@@ -40,7 +40,7 @@ def _resnet_and_images() -> tuple[nn.Module, torch.Tensor]:
 def _assert_buffers_are_module_state(dataset: Any, trace: Any, model: nn.Module) -> None:
     """Every saved buffer layer is its own variable: own dims, exact values, marked."""
 
-    buffers = [op for op in trace._layer_list if op.has_saved_activation and op.is_buffer]
+    buffers = [op for op in trace._layer_list if op.has_saved_activation and op.graph.is_buffer]
     assert buffers, "the leg needs retained buffers"
     labels = [op.layer_label for op in buffers]
     assert dataset.attrs["module_state_variables"] == labels
@@ -75,8 +75,8 @@ def test_partial_resnet_trace_exports_buffers_and_discloses_skipped_layers() -> 
 
     skipped = array.attrs["skipped_unsaved_layers"]
     assert dataset.attrs["skipped_unsaved_layers"] == skipped
-    saved = [op for op in trace._layer_list if op.has_saved_activation and not op.is_buffer]
-    buffers = [op for op in trace._layer_list if op.has_saved_activation and op.is_buffer]
+    saved = [op for op in trace._layer_list if op.has_saved_activation and not op.graph.is_buffer]
+    buffers = [op for op in trace._layer_list if op.has_saved_activation and op.graph.is_buffer]
     assert skipped and buffers, "the leg needs both unsaved layers and retained buffers"
     assert len(skipped) + len(buffers) + len(saved) == len(trace._layer_list)
     assert array.sizes["presentation"] == 8
@@ -107,7 +107,7 @@ def test_save_all_batchnorm_trace_exports_everything() -> None:
     activations = [
         op
         for op in trace._layer_list
-        if not op.is_buffer and isinstance(op.out, torch.Tensor) and op.out.ndim > 0
+        if not op.graph.is_buffer and isinstance(op.out, torch.Tensor) and op.out.ndim > 0
     ]
     assert {op.layer_label for op in activations} <= set(array.coords["layer"].values)
     for op in activations:

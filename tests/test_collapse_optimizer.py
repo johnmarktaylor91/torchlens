@@ -1539,12 +1539,12 @@ def test_max_salience_floor_fold_representative_uses_single_instance_stats(
         )
         representative_label = format_collapsed_module_contents(
             len(representative.layer_labels),
-            sum(trace[label].is_buffer for label in representative.layer_labels),
+            sum(trace[label].graph.is_buffer for label in representative.layer_labels),
         )
         aggregate_label = format_collapsed_module_contents(
             aggregate_layers,
             sum(
-                trace[label].is_buffer
+                trace[label].graph.is_buffer
                 for address in fold.addresses
                 for label in trace.modules[address].layer_labels
             ),

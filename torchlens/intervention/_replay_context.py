@@ -326,7 +326,7 @@ def _group_representative(
                 member
                 for member in call_groups.get(site.call.call_id, ())
                 if not getattr(member, "is_output", False)
-                and not getattr(member, "is_buffer", False)
+                and not record_member(member, "is_buffer", False)
             ),
             replay_group[0],
         )

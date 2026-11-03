@@ -15,6 +15,7 @@ import torch.nn as nn
 from torchlens import trace as trace_fn
 from torchlens._data_classes.op import Op
 from torchlens._data_classes.trace import ConditionalEvent, Trace
+from torchlens._utils._record_group_table import record_member
 from torchlens.options import CaptureOptions
 
 
@@ -605,7 +606,7 @@ def test_buffer_merge_repoints_step5_conditional_edges(monkeypatch) -> None:
         f"{traced.graph.conditional_branch_edges}"
     )
     surviving_buffer_labels = {
-        op.layer_label for op in traced._layer_list if getattr(op, "is_buffer", False)
+        op.layer_label for op in traced._layer_list if record_member(op, "is_buffer", False)
     }
     for parent, _child in buffer_branch_edges:
         assert parent in surviving_buffer_labels

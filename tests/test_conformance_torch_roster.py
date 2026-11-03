@@ -113,7 +113,9 @@ def test_closure_constant_is_a_constant_source_op_and_validates() -> None:
     assert _captured_op_kinds(trace) == ROWS[CLOSURE_ROW].expected_op_kinds
     (constant,) = _constant_ops(trace)
     assert tuple(constant.parents or ()) == ()
-    assert constant.is_internal_source and not constant.is_buffer and not constant.is_input
+    assert (
+        constant.graph.is_internal_source and not constant.graph.is_buffer and not constant.is_input
+    )
     assert constant.layer_label.startswith("constant_")
     np.testing.assert_array_equal(constant.out.detach().numpy(), torch_roster.W44)
     (matmul,) = [op for op in trace._layer_list if str(op.func_name) == "matmul"]

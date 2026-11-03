@@ -1160,7 +1160,7 @@ def _gradient_site_ops(trace: Any, op: Any) -> list[Any]:
     """
 
     ops = [op]
-    if not getattr(op, "is_output_parent", False):
+    if not record_member(op, "is_output_parent", False):
         return ops
     layer_dict = trace._layer_dict_all_keys if is_live_trace(trace) else {}
     for child_label in getattr(op, "children", ()) or ():

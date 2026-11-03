@@ -1246,7 +1246,7 @@ def validate_parents_of_saved_layer(
 
         all_parent_edges = _all_data_parent_edges_for_replay(self, ops_to_replay)
         for target_op, perturb_layer in all_parent_edges:
-            if getattr(target_op, "edge_substitutions", None):
+            if record_member(target_op, "edge_substitutions", None):
                 if decision_recorder is not None:
                     decision_recorder.record(
                         op_label=target_op.label,
@@ -1323,7 +1323,7 @@ def validate_parents_of_saved_layer(
             # Don't enqueue terminal seeds (inputs, parentless buffers) --
             # they have no parents to validate further.
             if (not parent_op.is_input) and not (
-                parent_op.is_buffer and (parent_op.buffer_source is None)
+                parent_op.graph.is_buffer and (parent_op.graph.buffer_source is None)
             ):
                 layers_to_validate_parents_for.append(parent_op.label)
 
@@ -1352,7 +1352,9 @@ def _is_intentional_intervention_replacement(layer: "Op") -> bool:
         Whether validation should treat the op as an intervention boundary.
     """
 
-    if not (getattr(layer, "is_edited", False) and not getattr(layer, "is_internal_source", False)):
+    if not (
+        getattr(layer, "is_edited", False) and not record_member(layer, "is_internal_source", False)
+    ):
         return False
     has_own_live_replacement = any(
         getattr(record, "replaced", False) for record in (getattr(layer, "edits", None) or ())
@@ -3742,7 +3744,7 @@ def _is_buffer_version_parent(parent_layer: Op) -> bool:
     """Return whether a parent is a written buffer-version node."""
 
     return bool(
-        getattr(parent_layer, "is_buffer", False)
+        record_member(parent_layer, "is_buffer", False)
         and getattr(parent_layer, "buffer_write_kind", None) is not None
     )
 

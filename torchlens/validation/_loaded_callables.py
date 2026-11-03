@@ -42,7 +42,7 @@ def _is_resolution_exempt(layer: Any) -> bool:
     if (
         getattr(layer, "is_input", False)
         or getattr(layer, "is_output", False)
-        or getattr(layer, "is_buffer", False)
+        or record_member(layer, "is_buffer", False)
     ):
         return True
     return str(getattr(layer, "func_name", "none")) in STRUCTURAL_FUNC_NAMES

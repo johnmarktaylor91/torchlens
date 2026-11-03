@@ -638,7 +638,7 @@ def _assert_buffer_sink_refusal(exc_info):
 def _tamper_recorded_training_literal(log, sink, value):
     """Flip the recorded literal mode argument on one sink's producing op."""
 
-    source = log._layer_dict_all_keys[sink.buffer_source]
+    source = log._layer_dict_all_keys[sink.graph.buffer_source]
     args = list(source.non_tensor_pos_args)
     index = next(i for i, arg in enumerate(args) if isinstance(arg, bool))
     args[index] = value
@@ -759,7 +759,7 @@ def test_train_claim_with_unchanged_values_refuses():
     try:
         sinks = _buffer_sinks(log)
         assert all(sink.buffer_value_changed is False for sink in sinks)
-        bn_sink = next(sink for sink in sinks if sink.buffer_source_func_name == "batch_norm")
+        bn_sink = next(sink for sink in sinks if sink.graph.buffer_source_func_name == "batch_norm")
         _tamper_recorded_training_literal(log, bn_sink, True)
         with pytest.raises(BufferSinkRoutingError) as exc_info:
             log.save_new_outs(model, torch.randn(3, 4))
@@ -778,7 +778,9 @@ def test_tampered_training_literal_claim_refuses_typed():
     log = trace_fn(model, torch.randn(3, 4))
     try:
         bn_sink = next(
-            sink for sink in _buffer_sinks(log) if sink.buffer_source_func_name == "batch_norm"
+            sink
+            for sink in _buffer_sinks(log)
+            if sink.graph.buffer_source_func_name == "batch_norm"
         )
         _tamper_recorded_training_literal(log, bn_sink, False)
         with pytest.raises(BufferSinkRoutingError) as exc_info:

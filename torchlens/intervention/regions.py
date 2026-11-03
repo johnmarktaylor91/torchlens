@@ -49,6 +49,7 @@ from typing import Any
 import torch
 
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 from .errors import RegionError
 from .types import Edit
 
@@ -895,7 +896,7 @@ def _commit_region_occurrence(
     address, value, edge = occurrence
     _call_id, arg_kind, arg_path = address
     store_key = (arg_kind, tuple(arg_path))
-    store = dict(getattr(child_op, "edge_substitutions", None) or {})
+    store = dict(record_member(child_op, "edge_substitutions", None) or {})
     store[store_key] = {
         "value": value.detach().clone(),
         "parent_label": graph.ops[edge.parent].layer_label,
@@ -1011,7 +1012,7 @@ def apply_region_do(
             replay_module.push_from(trace, graph.ops[child_label])
     except BaseException:
         for child_op, store_key in committed:
-            store = dict(getattr(child_op, "edge_substitutions", None) or {})
+            store = dict(record_member(child_op, "edge_substitutions", None) or {})
             stamps = dict(getattr(child_op, "edge_replacement_stamps", None) or {})
             store.pop(store_key, None)
             stamps.pop(store_key, None)

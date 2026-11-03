@@ -8,6 +8,8 @@ from typing import Any, Protocol, TypeVar, cast, runtime_checkable
 
 from torchlens._ir.capture_events import CaptureEvents
 
+from ._utils._record_group_table import record_member
+
 ActivationT = TypeVar("ActivationT")
 
 #: Addresses listed in an ``activation_address_unmatched`` refusal before eliding.
@@ -268,7 +270,7 @@ class TraceLike:
         if ctx is not None:
             return getattr(ctx, "address", None)
         buffer_address = getattr(activation, "address", None)
-        if getattr(activation, "is_buffer", False) and isinstance(buffer_address, str):
+        if record_member(activation, "is_buffer", False) and isinstance(buffer_address, str):
             return buffer_address
         module = getattr(activation, "module", None)
         if not isinstance(module, str):

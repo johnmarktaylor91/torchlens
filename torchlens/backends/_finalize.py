@@ -22,6 +22,7 @@ from .._postprocess._recurrence import compute_preview_recurrence_assignments, r
 from .._postprocess.finalization import _build_module_logs, _build_root_module_log
 from .._postprocess.loop_grouping_adapter import RecurrenceAssignment
 from .._quantities import Bytes
+from .._utils._record_group_table import op_attr, record_member
 from .._utils.hashing import compute_graph_shape_hash, populate_normalized_layer_addresses
 from ._constants import ConstantLedger, apply_constants_rule
 from ._finalize_totals import _count_trace_ops, _update_param_totals_from_layers
@@ -483,18 +484,18 @@ def compute_preview_input_output_distances(trace: Trace) -> None:
         (
             "input",
             trace.input_layers,
-            "min_distance_from_input",
-            "max_distance_from_input",
-            "has_input_ancestor",
+            op_attr("min_distance_from_input"),
+            op_attr("max_distance_from_input"),
+            op_attr("has_input_ancestor"),
             "input_ancestors",
             "children",
         ),
         (
             "output",
             trace.output_layers,
-            "min_distance_to_output",
-            "max_distance_to_output",
-            "has_output_descendant",
+            op_attr("min_distance_to_output"),
+            op_attr("max_distance_to_output"),
+            op_attr("has_output_descendant"),
             "output_descendants",
             "parents",
         ),
@@ -565,7 +566,7 @@ def _mint_preview_site_keys(trace: Trace) -> None:
 
     minter = SiteKeyMinter()
     for op_log in trace._raw_graph_ws.raw_layer_dict.values():
-        if getattr(op_log, "is_orphan", False):
+        if record_member(op_log, "is_orphan", False):
             continue
         op_log.site_key = minter.mint(
             getattr(op_log, "modules", None) or (),
@@ -637,7 +638,7 @@ def _finalize_single_op(
     op_log.pass_number = pass_index
     op_log.num_passes = num_passes
     if assignment is not None:
-        op_log.equivalence_class = assignment.equivalence_key
+        op_log._graph_equivalence_class = assignment.equivalence_key
     trace._layer_list.append(op_log)
     # Torch parity: layer_dict_main_keys is ALWAYS keyed by the pass-qualified
     # op.label (_postprocess/labeling.py's
@@ -758,13 +759,13 @@ def _apply_recurrence_relabel_epilogue(
 
     equivalent_labels_by_key: dict[str, set[str]] = {}
     for op_log in raw_dict.values():
-        equivalent_labels_by_key.setdefault(op_log.equivalence_class, set()).add(op_log.label)
+        equivalent_labels_by_key.setdefault(op_log.graph.equivalence_class, set()).add(op_log.label)
     for label, op_log in raw_dict.items():
-        op_log.equivalent_ops = equivalent_labels_by_key[op_log.equivalence_class]
+        op_log._graph_equivalent_ops = equivalent_labels_by_key[op_log.graph.equivalence_class]
         recurrent_labels = (
             assignments[label].recurrent_labels if assignments is not None else (label,)
         )
-        op_log.recurrent_ops = [
+        op_log._graph_recurrent_ops = [
             raw_to_final_op[member] for member in recurrent_labels if member in raw_to_final_op
         ]
     trace._graph_op_equivalence_classes.clear()

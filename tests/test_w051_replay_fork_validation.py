@@ -178,7 +178,7 @@ def test_stamp_digest_mismatch_fails_the_boundary_and_the_validation(two) -> Non
     fork.do(edge.__selection__(), tl.zero_ablate())
     child = first_op(fork[_add_op(trace).label])
     key = (edge.arg_kind, edge.arg_path)
-    store = dict(child.edge_substitutions)
+    store = dict(child.graph.edge_substitutions)
     store[key] = {**store[key], "value": store[key]["value"] + 1.0}
     child._internal_set("edge_substitutions", store)
     verdict = _check_edge_intervention_boundary(fork, child)

@@ -46,7 +46,7 @@ def _bundle_node_style(node: Any, theme: VisualizationTheme) -> dict[str, str]:
     layer = next(iter(getattr(node, "layer_refs", {}).values()), None)
     shape, fill = "oval", "white"
     if layer is not None:
-        if getattr(layer, "is_buffer", False):
+        if record_member(layer, "is_buffer", False):
             shape = "cylinder"
         elif record_member(layer, "is_atomic_module", False) and getattr(layer, "modules", None):
             shape = "box"

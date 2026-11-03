@@ -1214,7 +1214,7 @@ def _splice_param_substitutions(
     """
 
     for member in group:
-        entries = getattr(member, "edge_substitutions", None) or {}
+        entries = record_member(member, "edge_substitutions", None) or {}
         for store_key, payload in entries.items():
             if not isinstance(payload, dict):
                 continue
@@ -1667,7 +1667,7 @@ def _threaded_source_value(
         Threaded value for a buffer record; None for an input leaf or a gap.
     """
 
-    if not getattr(site, "is_buffer", False):
+    if not record_member(site, "is_buffer", False):
         return None
     return _threaded_buffer_value(site, trace, overlay, strict=strict)
 

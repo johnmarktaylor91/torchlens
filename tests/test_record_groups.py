@@ -331,6 +331,32 @@ def test_payload_group_reads_the_transformed_output() -> None:
         captured.cleanup()
 
 
+def test_graph_group_reads_the_position(trace: tl.Trace) -> None:
+    """The graph group serves stored and derived graph members on Op and Layer."""
+
+    op = trace.ops["linear_1_1"]
+    layer = trace.layers["linear_1"]
+    assert op.graph.has_parents is True
+    assert op.graph.has_children is True
+    assert op.graph.is_compute is True
+    assert op.graph.has_input_ancestor is True
+    assert op.graph.min_distance_from_input == op._graph_min_distance_from_input
+    assert layer.graph.has_parents is True
+    assert layer.graph.is_compute is True
+    assert layer.graph.is_orphan is False
+    assert layer.graph.min_distance_from_input == op.graph.min_distance_from_input
+    assert layer.graph.equivalence_class == op.graph.equivalence_class
+    with pytest.raises(FacadeTeachingError):
+        _ = op.has_parents
+    with pytest.raises(FacadeTeachingError):
+        _ = op.is_compute_op
+    with pytest.raises(FacadeTeachingError):
+        _ = layer.is_compute_layer
+    # Layer.siblings and Layer.co_parents stay flat on Layer.
+    assert "siblings" not in LAYER_MOVED_MEMBERS
+    assert isinstance(layer.siblings, (list, tuple))
+
+
 class _Twice(nn.Module):
     """One module called twice, so its layer has two passes."""
 

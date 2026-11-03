@@ -520,7 +520,7 @@ def test_reflected_bitwise_and_captures_tensor_parent() -> None:
     )
     op = trace[and_ops[0]]
     assert op.parents, "reflected & op must capture its tensor parent, not be orphaned"
-    assert op.is_internal_source is False
+    assert op.graph.is_internal_source is False
 
 
 @pytest.mark.parametrize(
@@ -637,8 +637,8 @@ def test_schema_corrected_unary_specs_capture_all_tensor_parents(
 
     assert expected_arg_positions <= set(op.call.parent_arg_positions["args"])
     assert len(op.parents) == expected_parent_count
-    assert op.is_internal_source is False
-    assert all(trace[parent_label].has_output_descendant for parent_label in op.parents)
+    assert op.graph.is_internal_source is False
+    assert all(trace[parent_label].graph.has_output_descendant for parent_label in op.parents)
 
 
 class _DeepcopyBufferModel(torch.nn.Module):

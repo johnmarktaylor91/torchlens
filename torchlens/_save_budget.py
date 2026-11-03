@@ -951,7 +951,7 @@ def retained_activation_bytes(ops: Any) -> int:
     total = 0
     seen: set[tuple[Any, ...]] = set()
     for op in ops:
-        if not getattr(op, "has_saved_activation", False) or getattr(op, "is_orphan", False):
+        if not getattr(op, "has_saved_activation", False) or record_member(op, "is_orphan", False):
             continue
         counted_payload = False
         for payload in (getattr(op, "out", None), record_member(op, "transformed_out", None)):

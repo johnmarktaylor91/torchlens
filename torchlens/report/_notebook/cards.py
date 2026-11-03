@@ -278,7 +278,7 @@ def _intervention_badges(op: Any) -> tuple[CardNode, ...]:
     nodes: list[CardNode] = []
     if getattr(op, "is_edited", False):
         nodes.append(CardText("intervened: value replaced", role="notice"))
-    if getattr(op, "edge_substitutions", None):
+    if record_member(op, "edge_substitutions", None):
         nodes.append(CardText("intervened: edge substitution", role="notice"))
     return tuple(nodes)
 

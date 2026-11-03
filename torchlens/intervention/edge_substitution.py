@@ -57,6 +57,7 @@ from .._selection.selection import (
     _trace_edge_records,
     edge_address_of,
 )
+from .._utils._record_group_table import record_member
 from ._replay_values import tensor_content_digest
 from .masked_edit import _validate_edited
 from .types import Edit
@@ -138,7 +139,7 @@ def _current_edge_value(
     parent's current out (pushed upstream edits included).
     """
 
-    entries = getattr(child_op, "edge_substitutions", None) or {}
+    entries = record_member(child_op, "edge_substitutions", None) or {}
     existing = entries.get(store_key)
     if isinstance(existing, dict):
         value = existing.get("value")
@@ -405,7 +406,7 @@ def _recompute_path(
             for parent in op.parents:
                 needed.update(label_keys.get(parent, ()))
     path = [op for op in between if site_key(op) in needed]
-    buffers = [op.label for op in path if getattr(op, "is_buffer", False)]
+    buffers = [op.label for op in path if record_member(op, "is_buffer", False)]
     if buffers:
         return (
             f"the path from edge child {record.child_label!r} to {target_label!r} "
@@ -487,7 +488,7 @@ def _record_edge_substitution(
     """Tier (ii): write the occurrence-granular intervention-owned store entry
     with the save-time corroboration stamp; return the stamped value digest."""
 
-    store = dict(getattr(child_op, "edge_substitutions", None) or {})
+    store = dict(record_member(child_op, "edge_substitutions", None) or {})
     store[store_key] = {
         "value": substituted.detach().clone(),
         "parent_label": meta["parent_label"],
@@ -512,7 +513,7 @@ def _rollback_uncommitted_edges(
     """Roll back tier-(ii) entries for occurrences that did not complete."""
 
     for child_op, store_key in committed:
-        store = dict(getattr(child_op, "edge_substitutions", None) or {})
+        store = dict(record_member(child_op, "edge_substitutions", None) or {})
         stamps = dict(getattr(child_op, "edge_replacement_stamps", None) or {})
         if not any(
             item["edge_address"] == repr((child_op.call.call_id,) + store_key) for item in applied

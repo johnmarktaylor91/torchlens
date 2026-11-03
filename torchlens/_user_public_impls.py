@@ -43,6 +43,7 @@ from ._literals import (
 from ._record_type import record_type
 from ._robustness import check_model_and_input_variants
 from ._save_budget import SaveBudgetOption
+from ._utils._record_group_table import record_member
 from ._utils.arg_handling import normalize_input_args, safe_copy_input_tree
 from ._utils.display import warn_parallel
 from ._utils.hashing import compute_graph_shape_hash
@@ -873,7 +874,7 @@ def _layer_signature(layer: Any) -> tuple[Any, ...]:
         getattr(layer, "func_name", None),
         len(getattr(layer, "parents", ()) or ()),
         bool(getattr(layer, "is_output", False)),
-        bool(getattr(layer, "is_buffer", False)),
+        bool(record_member(layer, "is_buffer", False)),
     )
 
 

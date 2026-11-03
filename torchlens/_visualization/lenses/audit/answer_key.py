@@ -214,7 +214,9 @@ def generate_answer_key(
     lens_name = resolution.lens.name if resolution is not None else "bare"
 
     inputs = [op.layer_label for op in trace._layer_list if getattr(op, "is_input", False)]
-    outputs = [op.layer_label for op in trace._layer_list if getattr(op, "is_final_output", False)]
+    outputs = [
+        op.layer_label for op in trace._layer_list if record_member(op, "is_final_output", False)
+    ]
     if inputs and outputs:
         questions.append(
             KeyQuestion(

@@ -44,6 +44,8 @@ from torchlens.attribution._audit_sites import _SitesPlan, _SiteUnit
 from torchlens.attribution._core import _temporarily_eval
 from torchlens.attribution._result import AttributionError
 
+from .._utils._record_group_table import record_member
+
 # The reductions ``edge_scores`` records, mapped to the reduction over examples.
 _REDUCTIONS = {"sum_positions_mean_examples": "mean", "sum_positions_sum_examples": "sum"}
 _METHODS = ("eap", "eap_ig")
@@ -183,7 +185,7 @@ def _written(fork: Any, receiver: Any) -> Tensor:
     if receiver.kind in ("q", "k", "v"):
         return fork.ops[str(_head_spec(fork, receiver).home_label)].out.detach().clone()
     record = _input_edge_record(fork, receiver)
-    store = getattr(fork.ops[str(record.child_label)], "edge_substitutions", None) or {}
+    store = record_member(fork.ops[str(record.child_label)], "edge_substitutions", None) or {}
     (value,) = [
         entry["value"] for entry in store.values() if entry["parent_label"] == record.parent_label
     ]

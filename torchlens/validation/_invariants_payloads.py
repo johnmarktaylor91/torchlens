@@ -322,7 +322,7 @@ def _check_op_log_fields(ml: Trace) -> None:
         is_functionless_replacement = (
             lpl.func_name == "intervention_replacement"
             and getattr(lpl, "is_edited", False)
-            and not getattr(lpl, "is_internal_source", False)
+            and not record_member(lpl, "is_internal_source", False)
             and op_has_genuine_replacement_evidence(lpl, ml)
         )
 
@@ -332,14 +332,14 @@ def _check_op_log_fields(ml: Trace) -> None:
         # and func_name is "none". Traced ops that merely have an internal-source
         # ancestor still carry a real callable func and are NOT exempted here.
         is_functionless_internal_source = (
-            getattr(lpl, "is_internal_source", False) and lpl.func is None
+            record_member(lpl, "is_internal_source", False) and lpl.func is None
         )
 
         # Function applied (non-input, non-buffer, non-output, non-source,
         # non-hook-replacement layers).
         if not (
             lpl.is_input
-            or lpl.is_buffer
+            or lpl.graph.is_buffer
             or lpl.is_output
             or is_functionless_internal_source
             or is_functionless_replacement
@@ -374,7 +374,7 @@ def _check_op_log_fields(ml: Trace) -> None:
                 )
 
         # Operation numbering (input/buffer/output bookkeeping layers have step_index=0)
-        if not (lpl.is_input or lpl.is_buffer or lpl.is_output):
+        if not (lpl.is_input or lpl.graph.is_buffer or lpl.is_output):
             if lpl.step_index is not None and lpl.step_index < 1:
                 raise MetadataInvariantError(
                     name, f"Layer {label}: step_index={lpl.step_index} < 1"

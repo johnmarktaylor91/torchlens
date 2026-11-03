@@ -22,6 +22,7 @@ from torchlens._capture.flops import (
 )
 from torchlens._data_classes import FuncCallLocation
 from torchlens._record_type import record_type
+from torchlens._utils._record_group_table import record_member
 
 
 class _SharedMultiOutputModel(nn.Module):
@@ -293,8 +294,8 @@ def test_input_layer_properties(small_input):
     assert input_entry is not None
     assert input_entry.is_input is True
     assert input_entry.is_output is False
-    assert input_entry.has_parents is False
-    assert input_entry.has_children is True
+    assert input_entry.graph.has_parents is False
+    assert input_entry.graph.has_children is True
 
 
 def test_output_layer_properties(small_input):
@@ -308,7 +309,7 @@ def test_output_layer_properties(small_input):
             break
     assert output_entry is not None
     assert output_entry.is_output is True
-    assert output_entry.has_children is False
+    assert output_entry.graph.has_children is False
 
 
 def test_entry_tensor_info_fields(small_input):
@@ -409,7 +410,7 @@ def test_buffer_layer_fields():
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.is_buffer:
+        if entry.graph.is_buffer:
             assert isinstance(entry.address, str)
             found = True
             break
@@ -422,7 +423,7 @@ def test_internally_initialized_fields(small_input):
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.is_internal_source:
+        if entry.graph.is_internal_source:
             found = True
             break
     assert found, "SimpleInternallyGenerated should have internally init layers"
@@ -468,7 +469,7 @@ def test_layer_siblings_tolerate_orphan_relation_labels():
     )
     orphan_labels = list(mh.graph.orphans.keys())
     assert orphan_labels, "probe model must produce orphans"
-    orphan_sibling = next(k for k in orphan_labels if mh.graph.orphans[k].siblings)
+    orphan_sibling = next(k for k in orphan_labels if mh.graph.orphans[k].graph.siblings)
 
     mainline = next(
         mh[label] for label in mh.layer_labels if not mh[label].is_input and mh[label].parents
@@ -479,7 +480,7 @@ def test_layer_siblings_tolerate_orphan_relation_labels():
     parent_op.children = list(parent_op.children) + [orphan_sibling]
 
     op0 = list(mainline.ops.values())[0]
-    assert orphan_sibling in op0.siblings  # op level tolerates and appends
+    assert orphan_sibling in op0.graph.siblings  # op level tolerates and appends
     aggregated = mainline.siblings  # RED before the fix: uncaught lookup error
     assert mh.graph.orphans[orphan_sibling].layer_label in aggregated
     assert isinstance(mainline.co_parents, list)
@@ -524,11 +525,11 @@ def test_distances_with_flag(small_input):
     )
     for label in mh.layer_labels:
         entry = mh[label]
-        assert entry.min_distance_from_input is not None
-        assert entry.max_distance_from_input is not None
-        assert entry.min_distance_to_output is not None
-        assert entry.max_distance_to_output is not None
-        assert isinstance(entry.min_distance_from_input, int)
+        assert entry.graph.min_distance_from_input is not None
+        assert entry.graph.max_distance_from_input is not None
+        assert entry.graph.min_distance_to_output is not None
+        assert entry.graph.max_distance_to_output is not None
+        assert isinstance(entry.graph.min_distance_from_input, int)
 
 
 # =============================================================================
@@ -563,7 +564,7 @@ def test_recurrent_same_layer_operations(input_2d):
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.recurrent_ops and len(entry.recurrent_ops) > 0:
+        if entry.graph.recurrent_ops and len(entry.graph.recurrent_ops) > 0:
             found = True
             break
     assert found, "Recurrent model should have recurrent_ops"
@@ -655,7 +656,7 @@ def test_exhaustive_saved_layer_count_uses_finalized_layer_list() -> None:
         {
             op.layer_label
             for op in trace._layer_list
-            if op.has_saved_activation and not getattr(op, "is_orphan", False)
+            if op.has_saved_activation and not record_member(op, "is_orphan", False)
         }
     )
 

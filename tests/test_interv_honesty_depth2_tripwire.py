@@ -114,11 +114,11 @@ def test_validation_splice_fails_nested_key_even_when_corroborated(capture) -> N
     fork = _identity_edge_fork(trace)
     child = fork["conv2d_2_3"].ops[0]
 
-    old_key = next(iter(child.edge_substitutions))
+    old_key = next(iter(child.graph.edge_substitutions))
     arg_kind, arg_path = old_key
     nested_key = (arg_kind, tuple(arg_path) + (1,))
 
-    store = dict(child.edge_substitutions)
+    store = dict(child.graph.edge_substitutions)
     store[nested_key] = store.pop(old_key)
     child._internal_set("edge_substitutions", store)
 

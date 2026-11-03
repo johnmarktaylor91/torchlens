@@ -156,7 +156,7 @@ class _TraceGraph:
         return [
             label
             for label, op in self.ops.items()
-            if op.is_input and not getattr(op, "is_buffer", False)
+            if op.is_input and not record_member(op, "is_buffer", False)
         ]
 
     def output_labels(self) -> list[str]:

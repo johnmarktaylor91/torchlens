@@ -735,7 +735,7 @@ def _is_append_buffer_side_effect_layer(layer: Any, layer_by_raw: dict[str, Any]
         if child_layer is None:
             return False
         if not (
-            getattr(child_layer, "is_buffer", False)
+            record_member(child_layer, "is_buffer", False)
             and getattr(child_layer, "buffer_write_kind", None) is not None
         ):
             return False
@@ -756,7 +756,7 @@ def _validate_append_tensor_pair(old_layer: Any, new_layer: Any, field_name: str
         Tensor field to compare.
     """
 
-    if getattr(old_layer, "is_buffer", False) or getattr(new_layer, "is_buffer", False):
+    if record_member(old_layer, "is_buffer", False) or record_member(new_layer, "is_buffer", False):
         return
     old_value = getattr(old_layer, field_name, None)
     new_value = getattr(new_layer, field_name, None)

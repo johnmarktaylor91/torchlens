@@ -400,7 +400,7 @@ def test_closure_constant_is_a_parentless_source_op_with_payload_and_a_consumer_
     constant = _op_by_raw(trace, labels["w"])
     assert constant.func_name == CONSTANT_FUNC_NAME
     assert tuple(constant.parents) == ()
-    assert constant.is_input is False and constant.is_buffer is False
+    assert constant.is_input is False and constant.graph.is_buffer is False
     assert constant.out is not None and tuple(constant.out.shape) == (2, 3)
     assert tuple(constant.shape) == (2, 3)
     assert is_closure_constant_op(constant) and is_constant_op(constant)
@@ -685,8 +685,8 @@ def test_torch_already_satisfies_the_rule_structure() -> None:
     # The closure tensor arrives as a parentless buffer source op (torch's existing
     # buffer and parameter source logging): a payload-bearing leaf, never a lost edge.
     sources = [p for p in parents if not p.is_input]
-    assert len(sources) == 1, [(p.label, p.is_input, p.is_buffer) for p in parents]
-    assert sources[0].is_buffer is True
+    assert len(sources) == 1, [(p.label, p.is_input, p.graph.is_buffer) for p in parents]
+    assert sources[0].graph.is_buffer is True
     assert tuple(sources[0].parents) == ()
     assert sources[0].out is not None
     assert tuple(record_member(mul, "unattributed_tensor_args", ()) or ()) == ()

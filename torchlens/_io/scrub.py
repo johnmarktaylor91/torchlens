@@ -27,6 +27,7 @@ import torch
 from .._constants import MODEL_LOG_FIELD_ORDER
 from .._data_classes._state_adapter import state_items, state_new, state_restore
 from .._data_classes.trace import Trace, _scrubbed_transform_repr
+from .._utils._record_group_table import record_member
 from ..errors._base import TorchLensWarning
 from . import TLSPEC_VERSION, ArtifactError, BlobRef, FieldPolicy, prerelease as _prerelease
 from ._small_raw import _small_raw_value
@@ -421,13 +422,15 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
         remapped_barcodes = [remap_barcode_text(barcode) for barcode in original_barcodes]
         remapped_group = "_".join(sorted(remapped_barcodes))
         record._param_barcodes = remapped_barcodes
-        equivalence_class = getattr(record, "equivalence_class", None)
+        equivalence_class = record_member(record, "equivalence_class", None)
         if isinstance(equivalence_class, str) and original_group:
-            record.equivalence_class = equivalence_class.replace(original_group, remapped_group)
+            record._graph_equivalence_class = equivalence_class.replace(
+                original_group, remapped_group
+            )
         else:
-            record.equivalence_class = remap_barcode_text(equivalence_class)
-        if isinstance(equivalence_class, str) and isinstance(record.equivalence_class, str):
-            equivalence_class_map[equivalence_class] = record.equivalence_class
+            record._graph_equivalence_class = remap_barcode_text(equivalence_class)
+        if isinstance(equivalence_class, str) and isinstance(record.graph.equivalence_class, str):
+            equivalence_class_map[equivalence_class] = record.graph.equivalence_class
         # Spec gate FIRST: Layer delegates `parent_param_ops` per pass and its
         # multi-pass accessor raises InvalidArgumentError (a ValueError, which
         # getattr does not swallow), so probing before the gate broke every
@@ -435,10 +438,12 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
         # `parent_param_ops` row; only Op-side records reach the getattr.
         record_spec = getattr(type(record), "_PORTABLE_STATE_SPEC", {})
         parent_param_ops = (
-            getattr(record, "parent_param_ops", None) if "parent_param_ops" in record_spec else None
+            record_member(record, "parent_param_ops", None)
+            if "parent_param_ops" in record_spec
+            else None
         )
         if isinstance(parent_param_ops, dict):
-            record.parent_param_ops = {
+            record._graph_parent_param_ops = {
                 remap_barcode_text(key): value for key, value in parent_param_ops.items()
             }
 
@@ -1520,7 +1525,7 @@ def _structure_only_buffer_payload_field(owner: Any, field_name: str) -> bool:
         "transformed_grad",
         "saved_args",
         "saved_kwargs",
-    } and bool(getattr(owner, "is_buffer", False))
+    } and bool(record_member(owner, "is_buffer", False))
 
 
 def _effective_policy(

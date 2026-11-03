@@ -23,6 +23,7 @@ from _refuses_as_2x import assert_refuses_as_2x
 
 import torchlens as tl
 from torchlens._io import ArtifactError
+from torchlens._utils._record_group_table import record_member
 
 
 class _Model(nn.Module):
@@ -156,7 +157,7 @@ def test_pass_stamp_out_of_range_refuses(
 def test_forged_edge_substitutions_refuse(source_bundle: Path, tmp_path: Path) -> None:
     def forge(state: dict[str, Any]) -> None:
         op = state["_layer_list"][2]
-        op.edge_substitutions = {("positional", (0,)): {"forged": True}}
+        op._graph_edge_substitutions = {("positional", (0,)): {"forged": True}}
         op.edge_replacement_stamps = {("positional", (0,)): {"forged": True}}
 
     path = _tampered(source_bundle, tmp_path / "edge.tlspec", forge)
@@ -165,7 +166,7 @@ def test_forged_edge_substitutions_refuse(source_bundle: Path, tmp_path: Path) -
 
 def test_edge_carrier_without_matching_stamps_refuses(source_bundle: Path, tmp_path: Path) -> None:
     def forge(state: dict[str, Any]) -> None:
-        state["_layer_list"][2].edge_substitutions = {("positional", (0,)): {}}
+        state["_layer_list"][2]._graph_edge_substitutions = {("positional", (0,)): {}}
 
     path = _tampered(source_bundle, tmp_path / "edge2.tlspec", forge)
     _assert_refuses(path, "artifact_edge_substitutions_invalid")
@@ -184,7 +185,7 @@ def test_genuine_edge_intervention_round_trips(tmp_path: Path) -> None:
     path = tmp_path / "genuine_edge.tlspec"
     fork.save(path)
     loaded = tl.load(path)
-    carriers = [op for op in loaded._layer_list if getattr(op, "edge_substitutions", None)]
+    carriers = [op for op in loaded._layer_list if record_member(op, "edge_substitutions", None)]
     assert carriers, "the genuine tier-(ii) carrier must persist and load"
 
 

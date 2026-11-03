@@ -177,7 +177,7 @@ def test_planted_recurrent_group_spanning_two_sites_fails_step7(
         relus = [entry for entry in trace if entry.func_name == "relu"]
         joined = sorted(entry._label_raw for entry in relus)
         for entry in relus:
-            entry.recurrent_ops = joined
+            entry._graph_recurrent_ops = joined
 
     monkeypatch.setattr(loop_detection, "_rebuild_pass_assignments", _joining_rebuild)
     _capture_must_breach(_TwoReluLines(), "iii")
@@ -216,11 +216,11 @@ def test_row_shapes_are_what_the_replaced_invariants_refused() -> None:
     scalar = tl.trace(_ScalarLoop(), _x())
     muls = [op for op in scalar._layer_list if op.type == "mul"]
     assert len({op.layer_label for op in muls}) == 1
-    assert len({op.equivalence_class for op in muls}) == 3  # row 49: argument hash
+    assert len({op.graph.equivalence_class for op in muls}) == 3  # row 49: argument hash
     shared = tl.trace(_SharedWeightTwoLines(), _x())
     matmuls = [op for op in shared._layer_list if op.type == "matmul"]
     assert len({op.layer_label for op in matmuls}) == 2  # row 25: shared W, two layers
-    assert len({op.equivalence_class for op in matmuls}) == 1
+    assert len({op.graph.equivalence_class for op in matmuls}) == 1
 
 
 def test_post_hoc_recheck_fires_on_a_corrupted_side_table() -> None:

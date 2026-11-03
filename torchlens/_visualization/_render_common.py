@@ -291,6 +291,16 @@ class BoundaryNode:
         self.layer_type = self.boundary_kind
         self.io_role = self.boundary_kind
 
+    @property
+    def graph(self) -> "BoundaryNode":
+        """Answer the record graph-group spelling (``node.graph.is_buffer``) from own fields.
+
+        Render code reads ``node.graph.<leaf>`` on every graph node; an Op or Layer
+        answers through its graph group, a boundary stub through its flat fields.
+        """
+
+        return self
+
 
 GraphNode = BaseGraphNode | BoundaryNode | FocusNode
 CollapseFn = Callable[["Module"], bool]

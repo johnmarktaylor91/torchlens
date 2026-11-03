@@ -769,7 +769,7 @@
   position, never proven source identity: per-call-instance cardinality guard
   + source-location witness + corroborated/positional/refused verdict tiers,
   internal until S2). Per-pass keys read as `layer.ops[k].site_key`
-  (within-call recurrence groups span sites); `Layer.site_peers` indexes same-site layers live; keyless legacy
+  (within-call recurrence groups span sites); `Layer.graph.site_peers` indexes same-site layers live; keyless legacy
   artifacts refuse `site_key_unavailable`. `Layer.shape_summary` is the
   derived across-pass shape string ("2->4" monotone / "2-4" min-max /
   first->last full shapes; contains `->`, escape at render). The
@@ -1005,7 +1005,7 @@
   design is an escalated named future) — the child re-executes from the
   substituted input (node-level `is_edited` never fires for
   edges), the substituted value rides the tier-(ii) store
-  `Op.edge_substitutions` (+ `edge_replacement_stamps`,
+  `Op.graph.edge_substitutions` (+ `edge_replacement_stamps`,
   `FireRecord.edge_address`; all persisted as of tlspec v8, so ordinary
   saves of edge-intervened traces proceed), and capture truth
   (saved_args / out_versions_by_child / parent.out) is retained unmodified
@@ -1723,7 +1723,9 @@
   (`op.module_context.call_stack`, `op.module_context.atomic_module`,
   `layer.module_context.output_of_modules`), and `op.payload` (`tl.types.OpPayload`) and
   `layer.payload` (`tl.types.LayerPayload`) hold the transformed payloads and lazy materialization
-  (`op.payload.transformed_out`, `op.payload.materialize_out()`); a Layer group reads an
+  (`op.payload.transformed_out`, `op.payload.materialize_out()`), and `op.graph`
+  (`tl.types.OpGraph`) and `layer.graph` (`tl.types.LayerGraph`) hold graph position
+  (`op.graph.has_parents`, `op.graph.min_distance_from_input`, `layer.graph.is_orphan`); a Layer group reads an
   Op-only member of its group through the single pass (`layer.control_flow.branch_stack`); a former
   flat spelling such as `op.flops_forward` refuses typed (`facade_redirect`) and names the new one. The backend registry
   reads `tl.backends.spec(name)`, `tl.backends.specs()`, `tl.backends.register(spec)`,

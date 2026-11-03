@@ -284,7 +284,7 @@ def record_host_tensor_source_advisory(trace: Any) -> None:
             continue
         if (
             getattr(op, "parents", None)
-            or getattr(op, "parent_params", None)
+            or record_member(op, "parent_params", None)
             or record_member(op, "unattributed_tensor_args", None)
         ):
             continue

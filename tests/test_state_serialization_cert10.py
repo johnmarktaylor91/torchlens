@@ -195,7 +195,7 @@ def test_layer_setstate_absent_container_field_restores_typed() -> None:
     restored = Layer.__new__(Layer)
     restored.__setstate__(state)
 
-    assert isinstance(restored.equivalent_ops, frozenset)
+    assert isinstance(restored.graph.equivalent_ops, frozenset)
 
 
 def test_module_call_setstate_absent_container_field_restores_typed() -> None:

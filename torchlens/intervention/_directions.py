@@ -40,6 +40,7 @@ import torch
 
 from .._errors import InvalidArgumentError, PayloadUnavailableError
 from .._selection.subspace import BasisProvenance, _basis_digest
+from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from .types import Edit
@@ -434,7 +435,7 @@ def _captured_mask(trace: Any) -> torch.Tensor | None:
     """Return the saved ``attention_mask`` input of a trace, if any."""
 
     for layer in trace._layer_list:
-        role = getattr(layer, "io_role", None)
+        role = record_member(layer, "io_role", None)
         if not getattr(layer, "is_input", False) or not isinstance(role, str):
             continue
         out = getattr(layer, "out", None)

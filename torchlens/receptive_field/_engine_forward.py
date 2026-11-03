@@ -215,7 +215,7 @@ def _seed_target(op: Op) -> _InputState:
     """Create identity geometry at one projective result target."""
 
     shape = tuple(op.shape)
-    role = op.io_role or op.label
+    role = op.graph.io_role or op.label
     identity = _identity_map()
     return _InputState(
         input_op_label=op.label,

@@ -209,7 +209,7 @@ def _input_io_roles(trace: Trace) -> set[str]:
         Input ``io_role`` values.
     """
 
-    return {cast(str, trace[label].io_role) for label in trace.input_layers}
+    return {cast(str, trace[label].graph.io_role) for label in trace.input_layers}
 
 
 def test_forward_exception_restores_capture_state() -> None:
@@ -297,7 +297,7 @@ def test_intervention_ready_walks_nested_output_containers() -> None:
         (DictKey("nested"), TupleIndex(0)),
         (DictKey("nested"), TupleIndex(1), TupleIndex(0)),
     ]
-    assert [trace[label].io_role for label in trace.output_layers] == [
+    assert [trace[label].graph.io_role for label in trace.output_layers] == [
         "output.a",
         "output.nested.0",
         "output.nested.1.0",
@@ -325,7 +325,7 @@ def test_buffer_mutation_reconciliation_orders_initial_and_written_versions() ->
 
     model = _BufferMutationModel()
     trace = tl.trace(model, torch.ones(2, 2), save="all")
-    buffer_versions = [layer for layer in trace._layer_list if layer.is_buffer]
+    buffer_versions = [layer for layer in trace._layer_list if layer.graph.is_buffer]
 
     assert len(buffer_versions) == 2
     # grouping rule row 74 (tests/test_grouping_call_sites.py; docs/guides/grouping.md):
@@ -334,9 +334,9 @@ def test_buffer_mutation_reconciliation_orders_initial_and_written_versions() ->
     assert [layer.pass_number for layer in buffer_versions] == [1, 1]
     assert len({layer.layer_label for layer in buffer_versions}) == 2
     assert buffer_versions[0].buffer_write_kind is None
-    assert buffer_versions[0].buffer_source is None
+    assert buffer_versions[0].graph.buffer_source is None
     assert buffer_versions[1].buffer_write_kind == "inplace"
-    assert str(buffer_versions[1].buffer_source).startswith("add_2_")
+    assert str(buffer_versions[1].graph.buffer_source).startswith("add_2_")
     assert buffer_versions[1].parents == ("add_2_2",)
     # A default capture is a pure observer (U40.1): the live buffer is restored.
     assert torch.equal(model.offset, torch.zeros(2, 2))
