@@ -320,7 +320,10 @@ def draw_measurement(scores: dict[str, float], out: Path) -> None:
     ax.plot(xs, ys, color="#0072b2", linewidth=2)
     ax.plot([0, 1], [0, 1], color="#888888", linestyle=":")
     ax.text(0.65, 0.5, "Chance", color="#555555")
-    ax.set(xlim=(0, 1), ylim=(0, 1.03), xlabel="False positive rate", ylabel="True positive rate")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1.03)
+    ax.set_xlabel("False positive rate")
+    ax.set_ylabel("True positive rate")
     ax.set_title(f"Wang head membership: ROC AUC {roc_auc(heads, members):.4f}")
     for suffix in ("png", "svg"):
         fig.savefig(out / f"ioi_roc.{suffix}", dpi=200)
@@ -377,14 +380,12 @@ def draw_connections(scores: dict[str, float], out: Path) -> None:
             label=label,
             zorder=3,
         )
-    ax.set(
-        xticks=range(12),
-        yticks=range(12),
-        xlabel="Layer (zero-based)",
-        ylabel="Head index (zero-based)",
-        xlim=(-0.4, 11.4),
-        ylim=(-0.4, 11.4),
-    )
+    ax.set_xticks(range(12))
+    ax.set_yticks(range(12))
+    ax.set_xlabel("Layer (zero-based)")
+    ax.set_ylabel("Head index (zero-based)")
+    ax.set_xlim(-0.4, 11.4)
+    ax.set_ylim(-0.4, 11.4)
     ax.set_title("Twenty strongest head-to-head attribution edges")
     ax.legend(
         loc="upper center",
