@@ -17,6 +17,7 @@ import dataclasses
 import enum
 import math
 import re
+from collections import defaultdict
 from collections.abc import Callable, Mapping
 from functools import cache
 from typing import Any, Final
@@ -40,6 +41,7 @@ from .contract import (
     UNENCODABLE_REPR_LIMIT,
 )
 from .values import (
+    _DEFAULT_FACTORIES,
     BYTES_LIMIT,
     TAG_FIELDS,
     RowRef,
@@ -48,6 +50,7 @@ from .values import (
     dtype_table,
     enum_table,
     record_type_table,
+    tuple_subtypes,
 )
 
 # Decoding: the closed vocabulary back to Python values
@@ -95,7 +98,15 @@ _INT_TEXT = re.compile(r"-?[0-9]+")
 _DOTTED_NAME = re.compile(r"[A-Za-z_][\w.]{0,255}")
 _PLACEHOLDER_POSITION = re.compile(r"\d+(\.[\w\[\]\.]+)?")
 #: Fields a tag may carry beyond its required ones (the tensor cell's payload fields).
-_OPTIONAL_FIELDS: Final[dict[str, tuple[str, ...]]] = {"tensor": TENSOR_REFERENCE_FIELDS}
+_OPTIONAL_FIELDS: Final[dict[str, tuple[str, ...]]] = {
+    "tensor": TENSOR_REFERENCE_FIELDS,
+    "tuple": ("subtype",),
+    "dict": ("subtype", "default_factory"),
+}
+#: The one mapping subtype the ``dict`` tag may declare.
+_DEFAULTDICT_SUBTYPE: Final = "collections.defaultdict"
+#: Builtin factories a defaultdict cell may name; the artifact string only selects here.
+_FACTORY_TABLE: Final[dict[str, type]] = {cls.__name__: cls for cls in _DEFAULT_FACTORIES}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -291,7 +302,23 @@ class Decoder:
             Current typed-value nesting depth.
         """
 
-        return tuple(self._items(data, at, depth, "tuple"))
+        items = tuple(self._items(data, at, depth, "tuple"))
+        subtype = data.get("subtype")
+        if subtype is None:
+            return items
+        # The wire string only selects from the code-owned constructor table; nothing is
+        # imported or looked up by name from the artifact.
+        cls = tuple_subtypes().get(subtype) if isinstance(subtype, str) else None
+        if cls is None:
+            raise cell_error(
+                at, f"tuple subtype {subtype!r} is not a known tuple type", code=CELL_CODE
+            )
+        try:
+            return cls(items)
+        except (TypeError, ValueError):
+            raise cell_error(
+                at, f"tuple subtype {subtype!r} does not accept these items", code=CELL_CODE
+            ) from None
 
     def _set(self, data: Mapping[str, Any], at: str, depth: int) -> set[Any]:
         """Decode a set after checking member hashability.
@@ -355,6 +382,36 @@ class Decoder:
             if key in result:
                 raise cell_error(at, f"dict key {key!r} repeats", code=CELL_CODE)
             result[key] = self.decode(pair[1], at=f"{at}[{index}]", depth=depth)
+        return self._mapping_subtype(data, result, at, depth)
+
+    def _mapping_subtype(
+        self, data: Mapping[str, Any], result: dict[Any, Any], at: str, depth: int
+    ) -> dict[Any, Any]:
+        """Apply a declared ``dict`` subtype: a defaultdict whose factory is a builtin name
+        rebuilds with that factory; a disclosed foreign factory reloads as a plain dict (the
+        disclosure is counted by the manifest's load advisory). No factory ever executes here.
+        """
+
+        subtype = data.get("subtype")
+        if subtype is None:
+            if "default_factory" in data:
+                raise cell_error(at, "default_factory needs a dict subtype", code=CELL_CODE)
+            return result
+        if subtype != _DEFAULTDICT_SUBTYPE:
+            raise cell_error(at, f"dict subtype {subtype!r} is not a known mapping", code=CELL_CODE)
+        if "default_factory" not in data:
+            raise cell_error(at, "a defaultdict cell names its default_factory", code=CELL_CODE)
+        factory = data["default_factory"]
+        if isinstance(factory, str):
+            cls = _FACTORY_TABLE.get(factory)
+            if cls is None:
+                raise cell_error(at, f"default_factory {factory!r} is not builtin", code=CELL_CODE)
+            return defaultdict(cls, result)
+        disclosed = self.decode(factory, at=f"{at}.default_factory", depth=depth)
+        if not isinstance(disclosed, UnencodableValue):
+            raise cell_error(
+                at, "default_factory must be a builtin name or a disclosure", code=CELL_CODE
+            )
         return result
 
     # -- scalars ------------------------------------------------------------
