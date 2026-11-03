@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .._debug_report import FoundReport
+from .._debug_report import FoundReport, at_source
 
 __all__ = ["FirstBadThing", "amp_scaled_grads_hint"]
 
@@ -99,7 +99,7 @@ class FirstBadThing(FoundReport):
 
         findings = [self.message] if self.message else []
         if self.label is not None:
-            findings.append(f"first bad: {self.label} ({self.kind}) at {self.source_line}")
+            findings.append(f"first bad: {self.label} ({self.kind}){at_source(self.source_line)}")
         return findings
 
 
