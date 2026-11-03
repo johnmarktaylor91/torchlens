@@ -727,7 +727,7 @@ class PaddleBackend:
                         loss,
                         differentiated,
                         retain_graph=grad_options.intermediate_grads,
-                        create_graph=grad_options.intermediate_grads,
+                        create_graph=False,
                         allow_unused=True,
                     )
                 else:
@@ -740,7 +740,7 @@ class PaddleBackend:
                     "kind": "derived_gradient",
                     "mechanism": "paddle.grad",
                     "loss_fn": _callable_identity(grad_options.loss_fn),
-                    "create_graph": grad_options.intermediate_grads,
+                    "create_graph": False,
                 },
             )
         finally:
@@ -796,7 +796,7 @@ class PaddleBackend:
                 loss,
                 replay_values,
                 retain_graph=True,
-                create_graph=True,
+                create_graph=False,
                 allow_unused=True,
             )
             replay_grads_by_id.update(

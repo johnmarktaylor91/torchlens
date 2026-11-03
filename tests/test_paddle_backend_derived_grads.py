@@ -166,6 +166,33 @@ def test_paddle_intermediate_grads_match_direct_oracle_and_skip_unused() -> None
     _assert_close(records[sum_label].grad, paddle.ones([], dtype="float32"))
 
 
+def test_paddle_intermediate_grads_cross_a_flatten_layer() -> None:
+    """Per-op grads work on a conv net with a flatten layer, which has no double-grad op."""
+
+    paddle.seed(0)
+    model = paddle.nn.Sequential(
+        paddle.nn.Conv2D(1, 4, 3), paddle.nn.ReLU(), paddle.nn.Flatten(), paddle.nn.Linear(64, 2)
+    )
+    x = paddle.randn([1, 1, 6, 6], dtype="float32")
+    trace = tl.trace(
+        model,
+        x,
+        backend="paddle",
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(loss_fn=_loss, intermediate_grads=True)
+        ),
+    )
+
+    records = trace.autograd.intermediate_derived_grads
+    relu_label = next(op.label for op in trace._layer_list if "relu" in op.func_name)
+    assert relu_label in records
+    x.stop_gradient = False
+    hidden = model[1](model[0](x))
+    expected = paddle.grad(_loss(model[3](model[2](hidden))), [hidden])[0]
+    _assert_close(records[relu_label].grad, expected)
+    assert trace.autograd.derived_grads["inputs.0"].provenance["create_graph"] is False
+
+
 def test_paddle_same_shape_relus_are_disambiguated_by_ordinal() -> None:
     """Two same-shape relus should receive their own cotangents."""
 
