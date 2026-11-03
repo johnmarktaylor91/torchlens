@@ -45,7 +45,7 @@ artifact each, and `relations.json`. A recipe saved on its own by `save_interven
 | `format_version` | integer | the format major; `3` for this contract |
 | `tlspec_version` | integer | the record contract version the records follow |
 | `kind` | string | `trace`, `bundle` or `intervention` |
-| `torchlens_version`, `python_version`, `torch_version`, `platform`, `created_at` | string | writer identity (`created_at` is ISO 8601 UTC; `python_version` and `torch_version` parse under PEP 440); required, never part of any digest |
+| `torchlens_version`, `python_version`, `torch_version`, `platform`, `created_at` | string | writer identity (`created_at` is ISO 8601 UTC; the three version stamps parse under PEP 440); required, never part of any digest |
 | `backend`, `backend_runtime` | string | the capture backend and its runtime, as the tlspec 11 manifest stamps them |
 | `save_level` | string | one of `portable`, `audit`, `runnable`, `executable_with_callables` |
 | `payload_policy` | object | the resolved flags `include_outs`, `include_grads`, `include_saved_args`, `include_rng_states`, `include_buffer_values`, `structure_only`, all booleans |
@@ -60,14 +60,14 @@ artifact each, and `relations.json`. A recipe saved on its own by `save_interven
 | `disclosures` | object | optional; `{"count": N, "first": [up to 16 field paths]}` when the artifact holds N > 0 unencodable disclosures (section 4), absent when none; when present the loader attaches the load advisory `unencodable_values_stringified` |
 
 The writer identity strings (`torchlens_version`, `python_version`, `torch_version`, `platform`,
-`created_at`) follow the code-owned grammar `contract.IDENTITY_FIELD_PATTERNS`: non-empty. No
-stricter version-string pattern applies until this contract states it. After the floor and
-ceiling checks the reader applies the writer-version floor, then the shared runtime identity
-policy: a `torchlens_version` older than the first TorchLens that writes format 3 is an
-impossible pairing and refuses `artifact_version_below_floor`; a torch major mismatch
-refuses `bundle_torch_incompatible`, a torch minor mismatch, a newer TorchLens writer and a
-Python major mismatch warn, an unparsable TorchLens writer version refuses
-`bundle_producer_unverifiable`.
+`created_at`) follow the code-owned grammar `contract.IDENTITY_FIELD_PATTERNS`: non-empty. The
+three version stamps must also parse under PEP 440; one that does not is malformed manifest
+data and refuses `manifest_schema_invalid`, naming the field, at schema-check time, before any
+runtime identity policy runs. After the floor and ceiling checks the reader applies the
+writer-version floor, then the shared runtime identity policy: a `torchlens_version` older than
+the first TorchLens that writes format 3 is an impossible pairing and refuses
+`artifact_version_below_floor`; a torch major mismatch refuses `bundle_torch_incompatible`; a
+torch minor mismatch, a newer TorchLens writer and a Python major mismatch warn.
 
 ### Version floor and refusals
 
@@ -322,9 +322,8 @@ One table for the writer and the reader. Codes are rows of
 | no `manifest.json` | `manifest_missing` | reader |
 | manifest unreadable or over the parse bound | `manifest_unreadable` | reader |
 | manifest root not an object | `manifest_not_json_object` | reader |
-| manifest violates this contract (missing field, wrong type, unparsable `python_version` or `torch_version`, `records` or `files` entry wrong) | `manifest_schema_invalid` | reader |
+| manifest violates this contract (missing field, wrong type, a version stamp that is not PEP 440, `records` or `files` entry wrong) | `manifest_schema_invalid` | reader |
 | 2.x artifact, `format_version` below 3, record contract below the floor, or a `torchlens_version` older than the first TorchLens that writes format 3 | `artifact_version_below_floor` | reader |
-| `torchlens_version` not parseable under PEP 440 | `bundle_producer_unverifiable` | reader |
 | `format_version` above 3 or record contract above the runtime | `artifact_version_above_runtime` | reader |
 | specialized loader given another kind | `artifact_kind_mismatch` | reader |
 | unknown save level | `artifact_save_level_invalid` | writer, reader |

@@ -461,8 +461,11 @@ def test_current_manifest_refuses_unparseable_torchlens_version(tmp_path: Path) 
     manifest["torchlens_version"] = "not-a-version"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
-    with pytest.raises(ArtifactError, match="could not be parsed"):
+    with pytest.raises(
+        ArtifactError, match="torchlens_version must be a PEP 440 version string"
+    ) as info:
         tl.load(path)
+    assert info.value.fields.get("code") == "manifest_schema_invalid"
 
 
 @pytest.mark.smoke

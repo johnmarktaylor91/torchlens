@@ -282,14 +282,14 @@ def manifest_schema_errors(manifest: Mapping[str, Any]) -> list[str]:
     return errors
 
 
-#: Writer stamps the runtime policy compares as versions; the writer's own stamp is judged by
-#: that policy (``bundle_producer_unverifiable``), these two by the manifest table.
-_PEP440_STAMPS: Final = ("python_version", "torch_version")
+#: Writer version stamps: each must parse under PEP 440 at schema-check time, before any
+#: runtime identity policy compares it (ruled 3 Nov 2026); an unparsable one is malformed data.
+_PEP440_STAMPS: Final = ("torchlens_version", "python_version", "torch_version")
 
 
 def _identity_errors(manifest: Mapping[str, Any]) -> list[str]:
     """The format name, the two version stamps, the writer-contract digest, the writer
-    identity strings (the python and torch stamps parse under PEP 440) and the artifact kind."""
+    identity strings (the three version stamps parse under PEP 440) and the artifact kind."""
 
     errors: list[str] = []
     if manifest["format"] != contract.FORMAT_NAME:
@@ -303,16 +303,22 @@ def _identity_errors(manifest: Mapping[str, Any]) -> list[str]:
     elif manifest[TLSPEC_KEY] == TLSPEC_VERSION and digest != _current_contract_digest():
         errors.append("contract_digest does not name this runtime's writer contract")
     for key, pattern in contract.IDENTITY_FIELD_PATTERNS.items():
-        value = manifest[key]
-        if not isinstance(value, str) or re.fullmatch(pattern, value) is None:
-            errors.append(f"{key} must be a string matching the identity grammar {pattern!r}")
-        elif (
-            key in _PEP440_STAMPS and parse_pep440(value, label=key, warn_on_failure=False) is None
-        ):
-            errors.append(f"{key} must be a PEP 440 version string")
+        error = _identity_string_error(key, pattern, manifest[key])
+        if error is not None:
+            errors.append(error)
     if manifest["kind"] not in contract.ARTIFACT_KINDS:
         errors.append(f"kind {manifest['kind']!r} is not one of {contract.ARTIFACT_KINDS}")
     return errors
+
+
+def _identity_string_error(key: str, pattern: str, value: Any) -> str | None:
+    """One writer identity string against its grammar, and a version stamp against PEP 440."""
+
+    if not isinstance(value, str) or re.fullmatch(pattern, value) is None:
+        return f"{key} must be a string matching the identity grammar {pattern!r}"
+    if key in _PEP440_STAMPS and parse_pep440(value, label=key, warn_on_failure=False) is None:
+        return f"{key} must be a PEP 440 version string"
+    return None
 
 
 @cache
@@ -715,21 +721,7 @@ def _check_module_derived_cells(
     code = contract.REFUSAL_CODES["record_schema_invalid"]
     for kind in ("module", "module_call"):
         for index, row in enumerate(tables.get(kind, ())):
-            name = row.get("name")
-            if name is not None and name != _address_name(row.get("address")):
-                raise _invariant_error(
-                    root, f"{kind}[{index}].name does not derive from its address", code=code
-                )
-            addresses = row.get("all_addresses")
-            multiple = row.get("has_multiple_addresses")
-            if (
-                multiple is not None
-                and isinstance(addresses, list)
-                and multiple != (len(addresses) > 1)
-            ):
-                raise _invariant_error(
-                    root, f"{kind}[{index}].has_multiple_addresses disagrees", code=code
-                )
+            _check_address_derived_cells(row, f"{kind}[{index}]", root, code)
     module_rows = {id(obj): i for i, obj in enumerate(objects.get("module", ()))}
     for index, row in enumerate(tables.get("module_call", ())):
         if row.get("module") is None:
@@ -740,18 +732,34 @@ def _check_module_derived_cells(
             raise _invariant_error(
                 root, f"module_call[{index}].module is not the module at its address", code=code
             )
-        for column in _CALL_CELLS_FROM_MODULE:
-            own, theirs = row.get(column), module.get(column)
-            if own is not None and theirs is not None and own != theirs:
-                raise _invariant_error(
-                    root, f"module_call[{index}].{column} differs from its module's", code=code
-                )
-        params = module.get("params")
-        count = row.get("num_param_tensors")
-        if count is not None and isinstance(params, list) and count != len(params):
-            raise _invariant_error(
-                root, f"module_call[{index}].num_param_tensors is not its module's", code=code
-            )
+        _check_call_cells_copied_from_module(row, module, f"module_call[{index}]", root, code)
+
+
+def _check_address_derived_cells(row: Mapping[str, Any], label: str, root: Path, code: str) -> None:
+    """``name`` is the address's last segment; ``has_multiple_addresses`` counts ``all_addresses``."""
+
+    name = row.get("name")
+    if name is not None and name != _address_name(row.get("address")):
+        raise _invariant_error(root, f"{label}.name does not derive from its address", code=code)
+    addresses = row.get("all_addresses")
+    multiple = row.get("has_multiple_addresses")
+    if multiple is not None and isinstance(addresses, list) and multiple != (len(addresses) > 1):
+        raise _invariant_error(root, f"{label}.has_multiple_addresses disagrees", code=code)
+
+
+def _check_call_cells_copied_from_module(
+    row: Mapping[str, Any], module: Mapping[str, Any], label: str, root: Path, code: str
+) -> None:
+    """A module call's parameter counts and flags copy its module row's."""
+
+    for column in _CALL_CELLS_FROM_MODULE:
+        own, theirs = row.get(column), module.get(column)
+        if own is not None and theirs is not None and own != theirs:
+            raise _invariant_error(root, f"{label}.{column} differs from its module's", code=code)
+    params = module.get("params")
+    count = row.get("num_param_tensors")
+    if count is not None and isinstance(params, list) and count != len(params):
+        raise _invariant_error(root, f"{label}.num_param_tensors is not its module's", code=code)
 
 
 class _AnchorView:

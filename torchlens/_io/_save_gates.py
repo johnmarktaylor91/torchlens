@@ -41,7 +41,6 @@ if TYPE_CHECKING:
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 from .._runnable import RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION, PayloadLayerDescriptor
-from ..intervention.types import CapturedArgTemplate
 from .format3.runnable import _WriteContext
 from .runnable import (
     require_sparse_run_descriptor,
@@ -234,10 +233,7 @@ def _validated_descriptor_for_resave(trace: Any) -> SparseRunDescriptor | None:
     descriptor = trace._runnable.descriptor
     if descriptor is None or not getattr(trace, "_loaded_from_bundle", False):
         return None
-    if any(
-        isinstance(getattr(op, "args_template", None), CapturedArgTemplate)
-        for op in trace._layer_list
-    ):
+    if any(getattr(op, "args_template", None) is not None for op in trace._layer_list):
         return None
     layers = descriptor.payload_layers
     return replace(
