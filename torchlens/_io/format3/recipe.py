@@ -448,6 +448,7 @@ def write_recipe(root: Path, recipe: Mapping[str, Any]) -> dict[str, Any]:
 _BOUND_CONTAINER_TAGS: Final = frozenset({"tuple", "set", "frozenset", "dict", "record"})
 
 
+# Complexity: one recursive recipe visitor binds the closed edit and captured-argument tags.
 def _bind(data: Any, root: Path, at: str) -> Any:
     """Decode recipe data, reading tensors and keeping placeholders typed."""
 
@@ -578,6 +579,7 @@ def _recipe_shape_problem(data: Mapping[str, Any]) -> tuple[str, str] | None:
     return None
 
 
+# Complexity: the closed capture-rule grammar checks selector and edit portability together.
 def _capture_rules_problem(rules: Any) -> str | None:
     """Check the closed capture-rule schema before decoding any member."""
 

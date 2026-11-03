@@ -238,6 +238,7 @@ def _is_tensor_tag(value: Any) -> bool:
     return isinstance(value, dict) and value.get(TYPED_VALUE_KEY) == "tensor"
 
 
+# Complexity: one recursive payload oracle checks all closed tensor-reference alternatives.
 def _tensor_ref_cell_ok(cell: Any) -> bool:
     """A ``tensor_ref`` cell: null, a tensor reference, or a container of them."""
 
@@ -256,6 +257,7 @@ def _tensor_ref_cell_ok(cell: Any) -> bool:
     return False
 
 
+# Complexity: the recursive edge oracle must distinguish row references from nested value cells.
 def _id_array_cell_ok(cell: Any) -> bool:
     """An ``id_array`` cell: null or a container of label strings, row indices or refs."""
 
@@ -293,6 +295,7 @@ def _cell_type_problem(kind: str, name: str, json_type: str, cell: Any) -> str |
 
 
 @pytest.mark.parametrize("label", _TRACE_LABELS)
+# Complexity: the cross-product witness checks every record column against its declared wire kind.
 def test_every_record_key_present_with_its_json_type(saved: dict[str, Path], label: str) -> None:
     root = saved[label]
     policy = _manifest(root)["payload_policy"]
@@ -379,6 +382,7 @@ def test_blobs_are_codec_chunks_with_monotone_opaque_keys(
         _check_blob_layout(root)
 
 
+# Complexity: the archive consistency oracle compares the complete payload index in one pass.
 def _check_blob_layout(root: Path) -> dict[str, list[str]]:
     """Assert the chunk naming and key rules; return the keys of each chunk."""
 
@@ -497,6 +501,7 @@ def test_disclosures_count_and_first_paths(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("label", (*_TRACE_LABELS, "bundle-members"))
+# Complexity: one cross-level witness keeps optional payload-column expectations together.
 def test_io2_op_columns_at_every_level(saved: dict[str, Path], label: str) -> None:
     roots = (
         [root for name, root in _trace_roots(saved) if name.startswith("bundle/")]

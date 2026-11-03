@@ -410,6 +410,7 @@ def _capture_nonpersistent_buffer_blob_specs(
     ]
 
 
+# Complexity: preserve the cohesive activation archive preflight moved from bundle unchanged.
 def _capture_activation_blob_specs(
     trace: Trace,
     descriptor: SparseRunDescriptor,

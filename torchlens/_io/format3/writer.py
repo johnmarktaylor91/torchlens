@@ -253,6 +253,7 @@ def encode_tables(
     return files, encoder.disclosures
 
 
+# Complexity: fixed-point row discovery must encode newly referenced rows before the same pass ends.
 def _encode_record_rows(
     tables: RecordTables,
     encoder: ValueEncoder,
