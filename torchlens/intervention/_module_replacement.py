@@ -232,7 +232,6 @@ def _identity_fields(trace: Trace, site: Op, before: dict[str, Any]) -> dict[str
         "edits": [r for r in site.edits if not any(r is o for o in before["edits"])],
         "is_edited": True,
         "equivalence_class": f"{REPLACEMENT_TYPE}::{site.equivalence_class}",
-        "equivalent_ops": [],
         "is_input": False,
         "is_output": False,
         "is_final_output": False,
@@ -453,6 +452,10 @@ def _splice_into_containers(
         site_keys[:] = [k for k in site_keys if k not in taken]
     trace._layer_num_calls[replacement.layer_label] = 1
     trace._num_ops += 1  # a computational layer, like the capture-time replacement
+    group = trace._graph_op_equivalence_classes.setdefault(replacement.equivalence_class, set())
+    group.add(replacement.label)
+    replacement._internal_set("equivalent_ops", group)
+    replacement._internal_set("recurrent_ops", [replacement.label])
     layer = type(trace._layer_logs[site.layer_label])(replacement)  # the Layer class
     layer.ops[1] = replacement
     logs: OrderedDict[str, Any] = OrderedDict()
