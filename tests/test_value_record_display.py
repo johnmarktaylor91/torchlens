@@ -198,3 +198,13 @@ def test_source_row_never_reads_current_source(captured, monkeypatch) -> None:
     card = str(trace["tanh_1:2"])
     assert "source    " in card and " in " in card
     assert "(capture not finished)" not in card
+
+
+def test_graph_count_names_output_descendants(captured) -> None:
+    """Reachable model outputs are not a count of every downstream operation."""
+
+    trace, _ = captured
+    op = trace["tanh_1:2"]
+    count = len(op.output_descendants)
+    noun = "output" if count == 1 else "outputs"
+    assert f"({count} {noun} downstream)" in str(op)

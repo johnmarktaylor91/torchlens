@@ -42,7 +42,7 @@ def _names(record: Any, labels: Any) -> str:
 
 
 def _graph(op: Any) -> str:
-    """Graph neighbours in execution order with an exact downstream count."""
+    """Graph neighbours and the captured count of reachable model outputs."""
 
     parents = getattr(op, "parents", ()) or ()
     children = getattr(op, "children", ()) or ()
@@ -54,7 +54,7 @@ def _graph(op: Any) -> str:
     downstream = getattr(op, "output_descendants", None)
     if downstream is not None:
         count = len(downstream)
-        noun = "operation" if count == 1 else "operations"
+        noun = "output" if count == 1 else "outputs"
         graph += f" ({format_exact_count(count)} {noun} downstream)"
     return graph
 
