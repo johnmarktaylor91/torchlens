@@ -104,3 +104,44 @@ def test_every_example_runs(package: str) -> None:
         if result.status == "failed":
             failures.append(f"{result.path}:\n{result.detail}")
     assert not failures, f"{len(failures)} examples failed:\n" + "\n".join(failures)
+
+
+def _absent_optional() -> None:
+    """Stand-in whose example needs a module that is never installed.
+
+    Examples
+    --------
+    >>> # requires: torchlens_absent_optional_module
+    >>> 1 / 0
+    """
+
+
+def _present_optional() -> None:
+    """Stand-in whose example needs a module that always imports.
+
+    Examples
+    --------
+    >>> # requires: json
+    >>> json_text = "[1]"
+    >>> json_text
+    '[1]'
+    """
+
+
+def test_requires_marker_skips_when_module_is_absent() -> None:
+    """A comment-only ``>>> # requires: X`` first line skips the example where X is absent."""
+
+    symbol = docstring_examples.PublicSymbol(
+        "tl.absent_optional", __name__, "function", _absent_optional
+    )
+    result = docstring_examples.run_example(symbol, {})
+    assert (result.status, result.detail) == ("skipped", "torchlens_absent_optional_module")
+
+
+def test_requires_marker_runs_when_module_is_present() -> None:
+    """The same marker runs the example where X imports."""
+
+    symbol = docstring_examples.PublicSymbol(
+        "tl.present_optional", __name__, "function", _present_optional
+    )
+    assert docstring_examples.run_example(symbol, {}).status == "ok"

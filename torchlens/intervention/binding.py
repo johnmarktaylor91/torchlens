@@ -102,6 +102,14 @@ class BindReport:
     ``trace=None`` -- spec and model stamps, resolved static targets, per-rule
     fire counts, zero-fire rules, errors, and the cleanup verdict. No per-op
     claims are made: nothing was captured.
+
+    Examples
+    --------
+    >>> bound = tl.when(tl.func("relu"), tl.zero_ablate()).bind(model)
+    >>> _ = bound(x)
+    >>> report = bound.last_report
+    >>> isinstance(report, BindReport), report.status, report.num_fires
+    (True, 'fired', 1)
     """
 
     schema: str = "bind_report_v1"
@@ -1209,6 +1217,14 @@ class BoundModel:
     serialization. A bound executor reads the helper's tensor at each call;
     in-place changes apply to the next call (``.last_report`` records each
     helper tensor's version counter).
+
+    Examples
+    --------
+    >>> spec = tl.when(tl.func("relu"), tl.zero_ablate())
+    >>> bound = spec.bind(model)
+    >>> out = bound(x)
+    >>> isinstance(bound, BoundModel), bound.recipe == spec, tuple(out.shape)
+    (True, True, (1, 2, 8, 8))
     """
 
     def __init__(self, spec: Recipe, model: Any, *, on_zero_fire: str) -> None:
