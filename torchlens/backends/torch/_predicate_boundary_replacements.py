@@ -14,11 +14,32 @@ from ..._capture.projections import append_projected_event
 from ..._ir.predicate import RetroactiveCaptureDecision
 from ..._utils._tensor_label import get_tensor_label, set_tensor_label
 from ...recording.types import CaptureSpec
+from . import _ops_predicates as _preds
 from ._ops_containers import _walk_output_tensors_with_paths
-from ._ops_predicates import _record_predicate_output
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
+
+
+def _record_output(ctx: Any, tensor: Any, spec: CaptureSpec) -> tuple[Any, Any]:
+    """Record one replacement's payloads, looked up on ``_ops_predicates`` at call time.
+
+    Parameters
+    ----------
+    ctx
+        Op record context of the replacement leaf.
+    tensor
+        The replacement tensor.
+    spec
+        The save decision for the leaf.
+
+    Returns
+    -------
+    tuple[Any, Any]
+        The RAM payload and the transformed RAM payload.
+    """
+
+    return _preds._record_predicate_output(ctx, tensor, spec)
 
 
 def log_predicate_boundary_replacements(trace: Trace, state: Any, out: Any) -> None:
@@ -107,7 +128,7 @@ def log_predicate_boundary_replacements(trace: Trace, state: Any, out: Any) -> N
             decision = _evaluate_keep_op(ctx, state.options)
             if not isinstance(decision, RetroactiveCaptureDecision):
                 spec = decision
-                ram_payload, transformed_ram_payload = _record_predicate_output(ctx, tensor, spec)
+                ram_payload, transformed_ram_payload = _record_output(ctx, tensor, spec)
         # The user's save= predicate may raise anything; the recording state's
         # handler applies the capture's predicate-error policy, as every
         # predicate evaluation site does.

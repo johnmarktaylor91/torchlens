@@ -29,8 +29,8 @@ from .._data_classes._state_adapter import state_items
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.module import set_attribute_writes
 from .._storage_bindings import rebind_if_moved, record_storage_binding
+from .._utils import rng as _rng
 from .._utils._sparse_parts import sparse_component_tensors
-from .._utils.rng import log_current_rng_states, set_rng_from_saved_states
 from ..errors import TorchLensWarning
 from .state import (
     LiveDeclaredStateSnapshot,
@@ -250,7 +250,7 @@ def snapshot_capture_observer_state(model: Any) -> CaptureObserverSnapshot:
         buffer_clones=clones,
         buffer_versions=versions,
         modes=tuple((module, bool(module.training)) for _path, module in modules),
-        rng=log_current_rng_states(),
+        rng=_rng.log_current_rng_states(),
         attrs=attrs,
         paths=tuple(modules),
         buffer_bindings=bindings,
@@ -314,7 +314,7 @@ def restore_capture_observer_state(
         writes, attr_failures = settle_module_attrs(snapshot.attrs, restore=True)
         failed.extend(attr_failures)
     try:
-        set_rng_from_saved_states(snapshot.rng)
+        _rng.set_rng_from_saved_states(snapshot.rng)
     except _RESTORE_ERRORS as exc:
         failed.append(f"random state ({exc!r})")
     if failed:

@@ -13,8 +13,8 @@ from weakref import ref
 
 from .. import _state
 from .._data_classes._trace_grad_sites import gradient_rule_sites
-from .._ir.events import OpEvent
-from .._ir.selector_eval import module_address_matches, module_exit_bound_addresses
+from .._ir import OpEvent, selector_eval as _selector_eval
+from .._ir.selector_eval import module_address_matches
 from .._record_type import record_type
 from .._trace_selection_shape import _selector_requires_unwindowed_escrow
 from .._utils.tensor_utils import safe_copy
@@ -1043,7 +1043,7 @@ def compile_legacy_capture_plan(
     # A selector whose matches all lie among module-pass outputs (``tl.module``
     # terms joined by ``|``, or intersected with anything by ``&``) resolves
     # only to such ops, so the session escrows only inside matching passes.
-    module_exit_addresses = module_exit_bound_addresses(deferred_selector)
+    module_exit_addresses = _selector_eval.module_exit_bound_addresses(deferred_selector)
     retention_profile = RetentionProfile(
         activation_kind=(
             RetentionKind.ACTIVATION

@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 import torch
 from torch import nn
 
+from .._capture import run_entry as _run_entry
 from .._capture.prepare.chunked import iter_chunked_inputs, normalize_chunk_paths, plan_chunks
-from .._capture.run_entry import _run_model_and_save_specified_outs
 from .._capture_state_helpers import (
     _reject_opaque_wrappers,
     _unwrap_data_parallel,
@@ -1037,7 +1037,7 @@ def _capture_with_active_spec(
     save_grads_policy = log._options_save_grads
     grads_to_save = "all" if save_grads_policy is True else save_grads_policy
     with _share_source_state_clones(log):
-        return _run_model_and_save_specified_outs(
+        return _run_entry._run_model_and_save_specified_outs(
             model=model,
             input_args=x,
             input_kwargs={},

@@ -42,7 +42,7 @@ from ..._utils._type_new_slot import (
     reinstate_original_new,
     restore_new_override,
 )
-from .wrappers import torch_func_decorator
+from . import wrappers as _wrappers
 
 __all__ = [
     "install_legacy_constructor_wrappers",
@@ -122,7 +122,7 @@ def _build_new_impl(cls: type, func_name: str, c_tp_new: int | None = None) -> C
     original.__name__ = cls.__name__
     original.__qualname__ = cls.__qualname__
     original.__module__ = cls.__module__
-    logged = torch_func_decorator(original, func_name)
+    logged = _wrappers.torch_func_decorator(original, func_name)
 
     def legacy_new(subtype: type, *args: Any, **kwargs: Any) -> Any:
         """Dispatch a legacy constructor call through the TorchLens logging gate."""

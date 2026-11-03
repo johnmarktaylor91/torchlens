@@ -18,7 +18,7 @@ from typing import Any, TypeAlias
 
 import torch
 
-from .._io.runnable_load import _unwrap_decorated
+from .._io import runnable_load as _runnable_load
 from .._utils._torch_symbols import torch_attr
 from ..errors import RunCapabilityUnavailableError
 from . import (
@@ -27,8 +27,9 @@ from . import (
     SparseRunDescriptor,
     TensorSlotDescriptor,
     TensorSlotRole,
+    state as _state,
 )
-from .state import _allocation_budget_bytes, _slot_device, _torch_dtype
+from .state import _slot_device, _torch_dtype
 
 _VIEW_LOGICAL_ELEMENT_CEILING = 1 << 32
 """Largest logical extent the admitted pure-view slots of one run may have, summed.
@@ -152,7 +153,7 @@ def _resolved_forms(
     for (namespace, name), forms in entries.items():
         found = torch_attr(name) if namespace == "torch" else getattr(torch.Tensor, name, None)
         if found is not None:
-            resolved[_unwrap_decorated(found)] = forms
+            resolved[_runnable_load._unwrap_decorated(found)] = forms
     return resolved
 
 
@@ -420,7 +421,7 @@ def _preflight_retention_floor(
             _charge(slot)
 
     for key, requested in sorted(floor.items()):
-        available = _allocation_budget_bytes(devices[key])
+        available = _state._allocation_budget_bytes(devices[key])
         if requested > available:
             raise RunCapabilityUnavailableError(
                 f"Loaded-sparse replay retains at least {requested} bytes of op outputs "
@@ -462,7 +463,7 @@ def _check_unretained_extent(
         return
 
     logical_bytes = numel * int(value.element_size())
-    available = _allocation_budget_bytes(value.device)
+    available = _state._allocation_budget_bytes(value.device)
     if logical_bytes <= available and not off_cpu:
         return
     reason = (

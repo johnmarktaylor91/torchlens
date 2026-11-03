@@ -56,13 +56,12 @@ from ..._training_validation import (
 )
 from ..._utils.display import warn_parallel
 from ..._utils.tensor_utils import SaveMode
-from ...backends.torch import rescue as _rescue
+from ...backends.torch import model_prep as _model_prep, rescue as _rescue
 from ...backends.torch._op_markers import refuse_unavailable_nvtx
 from ...backends.torch.bound_root import (
     TLBoundMethodRoot,
     is_bound_method_of_module,
 )
-from ...backends.torch.model_prep import release_model
 from ...errors.episode import EpisodeDeclarationError
 from ...intervention.errors import ChunkedForwardConfigError
 from ...options import (
@@ -203,7 +202,7 @@ def _release_preparation_after_failed_capture(model: nn.Module) -> None:
     """
 
     try:
-        release_model(model)
+        _model_prep.release_model(model)
     except CaptureNotActiveError as refusal:
         if refusal.fields.get("code") == "release_during_active_capture":
             # A NESTED capture failed while an outer capture still owns the

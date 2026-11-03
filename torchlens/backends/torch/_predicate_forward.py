@@ -19,12 +19,12 @@ import torch
 from torch import nn
 
 from ... import _state
+from ..._capture import predicates as _predicates
 from ..._capture.predicates import (
     _evaluate_halt,
     _evaluate_keep_op,
     _is_halt_only_capture,
     _module_capture_spec,
-    _plain_module_union,
 )
 from ..._capture.projections import (
     _build_record_context,
@@ -81,12 +81,12 @@ def _record_predicate_module_boundary_outputs(
 
     from ..._selection.selectors import BaseSelector
     from ...intervention.runtime import _peek_module_intervention_parent_labels
-    from ...recording.types import ActivationRecord
 
     log_predicate_boundary_replacements(trace, state, out)
     predicate = state.options.keep_op
     if not isinstance(predicate, BaseSelector) or (
-        _plain_module_union(predicate) is None and not selector_contains_kind(predicate, "module")
+        _predicates._plain_module_union(predicate) is None
+        and not selector_contains_kind(predicate, "module")
     ):
         return
     contexts_by_label = {
