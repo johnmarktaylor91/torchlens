@@ -50,8 +50,6 @@ DOC_FILE_GROUPS: dict[str, tuple[str, ...]] = {
         # FW2 closure sweep: the 2026-08-28 pages whose fences are
         # self-contained programs (spelling-only sketches on them are tagged
         # ```text).
-        "migration/coming_from_torchsnooper.md",
-        "migration/from_hooks.md",
         "native-torch.md",
         "recipes/lrp_epsilon_litmus.md",
         "guides/grouping.md",
