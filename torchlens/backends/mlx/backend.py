@@ -17,6 +17,7 @@ from torchlens.backends.registry import BackendUnsupportedError
 
 from ... import _state
 from ..._capture.outcome import StopRequest, stamp_backend_finalized
+from ..._data_classes._trace_state_io import fill_unset_declared_fields
 from ..._data_classes.derived_grad import (
     DerivedGradAccessor,
     DerivedGradRecord,
@@ -61,7 +62,6 @@ from .._finalize import (
     nearest_metadata_parent,
     normalize_op_module_calls,
     numel_from_shape as _numel,
-    preview_trace_shell,
     session_callable_identity as _callable_identity,
     value_nbytes as _nbytes,
 )
@@ -1001,38 +1001,35 @@ class MLXBackend:
         compiled_attribute_paths = _find_mlx_compiled_attributes(model, transform_type)
         module_tree = discover_mlx_module_tree(model)
         use_object_module = _resolve_mlx_module_identity_mode(module_identity_mode, module_tree)
-        trace = preview_trace_shell(
-            Trace(
-                model_class_name=type(model).__name__,
-                output_device=output_device,
-                activation_transform=cast("Callable[[Any], Any] | None", activation_transform),
-                grad_transform=None,
-                save_raw_activations=save_raw_activations,
-                save_raw_grads=True,
-                keep_orphans=keep_orphans,
-                save_args=save_args,
-                save_grads=None,
-                detach_saved_activations=detach_saved_activations,
-                mark_layer_depths=compute_input_output_distances,
-                source_context_lines=num_context_lines,
-                optimizer=None,
-                save_source_context=save_source_context,
-                save_rng=save_rng,
-                recurrence_detection=recurrence_detection,
-                verbose=verbose,
-                backward_ready=backward_ready,
-                module_filter=cast("Callable[[Any], bool] | None", module_filter),
-                emit_nvtx=False,
-                input_transform=cast("Callable[[Any], Any] | None", transform),
-                input=raw_input,
-                save_raw_input=save_raw_input,
-                batch_render=batch_render,
-                output_transform=cast("Callable[[Any], Any] | None", output_transform),
-                save_transformed_output=save_transformed_output,
-                layer_visualizers=layer_visualizers,
-                save_visualizations=save_visualizations,
-            )
+        trace = Trace(
+            model_class_name=type(model).__name__,
+            output_device=output_device,
+            activation_transform=cast("Callable[[Any], Any] | None", activation_transform),
+            save_raw_activations=save_raw_activations,
+            save_raw_grads=True,
+            keep_orphans=keep_orphans,
+            save_args=save_args,
+            save_grads=None,
+            detach_saved_activations=detach_saved_activations,
+            mark_layer_depths=compute_input_output_distances,
+            source_context_lines=num_context_lines,
+            save_source_context=save_source_context,
+            save_rng=save_rng,
+            recurrence_detection=recurrence_detection,
+            verbose=verbose,
+            backward_ready=backward_ready,
+            module_filter=cast("Callable[[Any], bool] | None", module_filter),
+            emit_nvtx=False,
+            input_transform=cast("Callable[[Any], Any] | None", transform),
+            input=raw_input,
+            save_raw_input=save_raw_input,
+            batch_render=batch_render,
+            output_transform=cast("Callable[[Any], Any] | None", output_transform),
+            save_transformed_output=save_transformed_output,
+            layer_visualizers=layer_visualizers,
+            save_visualizations=save_visualizations,
         )
+        fill_unset_declared_fields(trace)
         trace.name = name
         trace._provenance_backend = cast(BackendName, self.name)
         # Root entry-point identity fact (C07X item (iv)): tf's spelling for a module

@@ -4,14 +4,14 @@ The v11 respell made shared readers (save's scrub, the summary report,
 capture-honesty) read declared fields such as ``Trace._provenance_verified``
 directly. Only torch capture stages stamp that field and its siblings (the
 completeness, escape and thread-provenance stamps), so every tf, jax, mlx,
-paddle and tinygrad save or summary raised ``AttributeError``. Preview traces
-now pass through one shell, ``backends/_finalize.py::preview_trace_shell``,
-which fills each declared-but-unset field with the neutral value a reloaded
-trace receives.
+paddle and tinygrad save or summary raised ``AttributeError``. Every preview
+``Trace(...)`` construction is now followed by one shared fill,
+``_trace_state_io.fill_unset_declared_fields``, which gives each
+declared-but-unset field the neutral value a reloaded trace receives.
 
-The first three tests need no preview framework: they check the shell itself
-and statically require every preview ``Trace(...)`` construction to go through
-it. The marked tests capture a tiny function root on each installed preview
+The first three tests need no preview framework: they check the fill itself
+and statically require every preview ``Trace(...)`` construction to be
+followed by it. The marked tests capture a tiny function root on each installed preview
 backend and check the field set plus a save and reload.
 """
 
@@ -26,8 +26,9 @@ import pytest
 
 import torchlens as tl
 from torchlens._constants import MODEL_LOG_FIELD_ORDER
+from torchlens._data_classes._trace_state_io import fill_unset_declared_fields
 from torchlens._data_classes.trace import Trace
-from torchlens.backends._finalize import new_preview_function_trace, preview_trace_shell
+from torchlens.backends._finalize import new_preview_function_trace
 
 _BACKENDS_DIR = Path(tl.__file__).parent / "backends"
 
@@ -74,14 +75,15 @@ def test_shared_preview_constructor_yields_every_declared_field() -> None:
     assert trace._provenance_verification_reason is None
 
 
-def test_preview_trace_shell_fills_absent_fields_only_with_fresh_values() -> None:
-    """The shell never overwrites a stamped field and never shares a mutable default."""
+def test_declared_field_fill_sets_absent_fields_only_with_fresh_values() -> None:
+    """The fill never overwrites a stamped field and never shares a mutable default."""
 
     first = Trace("first")
     first._provenance_verified = False
     first._provenance_verification_reason = "compiled_attribute"
-    preview_trace_shell(first)
-    second = preview_trace_shell(Trace("second"))
+    second = Trace("second")
+    fill_unset_declared_fields(first)
+    fill_unset_declared_fields(second)
 
     assert _missing_declared_fields(first) == []
     assert _missing_declared_fields(second) == []
@@ -104,40 +106,58 @@ def _preview_backend_sources() -> list[Path]:
     return sources
 
 
-def _trace_constructions_outside_shell(path: Path) -> list[str]:
-    """``Trace(...)`` calls in ``path`` that are not ``preview_trace_shell``'s argument."""
+def _is_fill_of(statement: ast.stmt, name: str) -> bool:
+    """Whether ``statement`` is ``fill_unset_declared_fields(<name>)``."""
+
+    return (
+        isinstance(statement, ast.Expr)
+        and isinstance(statement.value, ast.Call)
+        and isinstance(statement.value.func, ast.Name)
+        and statement.value.func.id == "fill_unset_declared_fields"
+        and [ast.unparse(arg) for arg in statement.value.args] == [name]
+    )
+
+
+def _unfilled_trace_constructions(path: Path) -> list[str]:
+    """``Trace(...)`` calls in ``path`` not assigned and then filled at once."""
 
     tree = ast.parse(path.read_text(encoding="utf-8"))
-    wrapped: set[int] = set()
+    filled: set[int] = set()
     for node in ast.walk(tree):
-        if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == "preview_trace_shell"
-        ):
-            wrapped.update(id(arg) for arg in node.args)
+        for field in ("body", "orelse", "finalbody"):
+            body = getattr(node, field, None)
+            if not isinstance(body, list):
+                continue
+            for statement, following in zip(body, body[1:], strict=False):
+                if (
+                    isinstance(statement, ast.Assign)
+                    and isinstance(statement.value, ast.Call)
+                    and len(statement.targets) == 1
+                    and _is_fill_of(following, ast.unparse(statement.targets[0]))
+                ):
+                    filled.add(id(statement.value))
     return [
         f"{path.relative_to(_BACKENDS_DIR.parent.parent)}:{node.lineno}"
         for node in ast.walk(tree)
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
         and node.func.id == "Trace"
-        and id(node) not in wrapped
+        and id(node) not in filled
     ]
 
 
-def test_every_preview_trace_construction_goes_through_the_shell() -> None:
-    """A preview backend that builds ``Trace(...)`` directly would skip the field fill."""
+def test_every_preview_trace_construction_is_filled() -> None:
+    """A preview backend that builds ``Trace(...)`` without the fill skips declared fields."""
 
     sources = _preview_backend_sources()
     packages = {path.parent.name for path in sources if path.parent != _BACKENDS_DIR}
     assert {"jax", "mlx", "paddle", "tf", "tinygrad"} <= packages
 
-    offenders = [site for path in sources for site in _trace_constructions_outside_shell(path)]
+    offenders = [site for path in sources for site in _unfilled_trace_constructions(path)]
 
     assert offenders == [], (
-        "wrap these Trace(...) constructions in backends._finalize.preview_trace_shell "
-        f"so the trace gets every declared field: {offenders}"
+        "follow these `trace = Trace(...)` constructions with "
+        f"fill_unset_declared_fields(trace) so the trace gets every declared field: {offenders}"
     )
 
 

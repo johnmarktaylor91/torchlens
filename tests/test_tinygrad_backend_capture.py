@@ -944,7 +944,10 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     assert trace.provenance.param_source == "none"
     assert list(trace.params.keys()) == []
     assert trace.autograd.has_backward_pass is False
-    assert len(trace.autograd.backward_passes) == 0
+    # The public pass count is len(trace.autograd.backward_passes); a backend without
+    # backward capture refuses that read typed rather than reporting zero passes.
+    with pytest.raises(ValueError, match="do not capture true backward graphs"):
+        _ = trace.autograd.backward_passes
     assert trace.autograd.num_backward_edges is None
     assert set(trace.autograd.derived_grads.keys()) == {"inputs.0"}
     assert trace.autograd.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])

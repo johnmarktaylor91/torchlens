@@ -1141,31 +1141,6 @@ def attach_module_owned_op_params(
     seen_param_barcodes.update(param.barcode for param in params)
 
 
-def preview_trace_shell(trace: Trace) -> Trace:
-    """Complete a freshly constructed preview-backend trace's declared field set.
-
-    Every preview backend builds its ``Trace`` through this function, so the
-    full declared field set comes from one place: fields only torch capture
-    stages stamp (``_provenance_verified`` and the completeness, escape and
-    thread-provenance stamps) take their neutral reload value instead of being
-    absent, and shared readers (save, summary, capture-honesty) can read them
-    directly. A backend may still overwrite any of them later in capture.
-
-    Parameters
-    ----------
-    trace:
-        Trace returned by ``Trace(...)`` for a preview backend.
-
-    Returns
-    -------
-    Trace
-        The same trace, with every declared field present.
-    """
-
-    fill_unset_declared_fields(trace)
-    return trace
-
-
 def new_preview_function_trace(
     *,
     backend_name: str,
@@ -1226,38 +1201,35 @@ def new_preview_function_trace(
         Empty trace initialized for the preview backend.
     """
 
-    trace = preview_trace_shell(
-        Trace(
-            model_class_name=getattr(model, "__name__", type(model).__name__),
-            output_device="same",
-            activation_transform=None,
-            grad_transform=None,
-            save_raw_activations=True,
-            save_raw_grads=True,
-            keep_orphans=keep_orphans,
-            save_args=False,
-            save_grads=None,
-            detach_saved_activations=False,
-            mark_layer_depths=compute_input_output_distances,
-            source_context_lines=num_context_lines,
-            optimizer=None,
-            save_source_context=False,
-            save_rng=False,
-            recurrence_detection=recurrence_detection,
-            verbose=verbose,
-            backward_ready=False,
-            module_filter=None,
-            emit_nvtx=False,
-            input_transform=None,
-            input=raw_input,
-            save_raw_input=save_raw_input,
-            batch_render=batch_render,
-            output_transform=cast("Callable[[Any], Any] | None", output_transform),
-            save_transformed_output=save_transformed_output,
-            layer_visualizers=None,
-            save_visualizations=False,
-        )
+    trace = Trace(
+        model_class_name=getattr(model, "__name__", type(model).__name__),
+        output_device="same",
+        activation_transform=None,
+        save_raw_activations=True,
+        save_raw_grads=True,
+        keep_orphans=keep_orphans,
+        save_args=False,
+        save_grads=None,
+        detach_saved_activations=False,
+        mark_layer_depths=compute_input_output_distances,
+        source_context_lines=num_context_lines,
+        save_source_context=False,
+        save_rng=False,
+        recurrence_detection=recurrence_detection,
+        verbose=verbose,
+        backward_ready=False,
+        module_filter=None,
+        emit_nvtx=False,
+        input_transform=None,
+        input=raw_input,
+        save_raw_input=save_raw_input,
+        batch_render=batch_render,
+        output_transform=cast("Callable[[Any], Any] | None", output_transform),
+        save_transformed_output=save_transformed_output,
+        layer_visualizers=None,
+        save_visualizations=False,
     )
+    fill_unset_declared_fields(trace)
     trace.name = name
     trace._provenance_backend = cast(BackendName, backend_name)
     trace._options_module_identity_mode = "function_root"
