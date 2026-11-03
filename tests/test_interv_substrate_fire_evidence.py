@@ -150,6 +150,47 @@ def test_two_edit_misfire_names_the_unfired_rule() -> None:
     assert firing.rules[0].rule_id not in row["zero_fire_rule_ids"]
 
 
+def _zero_site_warnings(caught: list[warnings.WarningMessage]) -> list[str]:
+    return [str(w.message) for w in caught if "fired at zero sites" in str(w.message)]
+
+
+def test_a_fired_user_callable_is_not_reported_as_unfired() -> None:
+    """A plain function edit that fired is evidence, not a zero-fire rule."""
+
+    def halve(t: torch.Tensor, *, ctx: object) -> torch.Tensor:
+        return t * 0.5
+
+    model = _TinyModel()
+    spec = tl.when(tl.module("fc1"), halve)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        log = tl.trace(model, torch.randn(2, 4), intervene=spec)
+    row = _event_rows(log)[-1]
+    assert row["fire_count"] == 1
+    assert row["zero_fire_rule_ids"] == []
+    assert _zero_site_warnings(caught) == []
+
+
+def test_two_user_callables_name_only_the_unfired_one() -> None:
+    """With user callables on both rules, the misfire is still named."""
+
+    def halve(t: torch.Tensor, *, ctx: object) -> torch.Tensor:
+        return t * 0.5
+
+    def never(t: torch.Tensor, *, ctx: object) -> torch.Tensor:
+        return t
+
+    model = _TinyModel()
+    firing = tl.when(tl.func("relu"), halve)
+    misfiring = tl.when(tl.func("softmax"), never)  # no softmax in the model
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        log = tl.trace(model, torch.randn(2, 4), intervene=firing.merge(misfiring))
+    row = _event_rows(log)[-1]
+    assert row["zero_fire_rule_ids"] == [misfiring.rules[0].rule_id]
+    assert [misfiring.rules[0].rule_id in m for m in _zero_site_warnings(caught)] == [True]
+
+
 def test_replay_door_zero_site_rule_refuses_with_error_evidence() -> None:
     """On the recorded-graph door a zero-site rule REFUSES typed (never a
     silent no-op), and the refused attempt still leaves error evidence."""

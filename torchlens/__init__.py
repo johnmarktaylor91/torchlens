@@ -7,9 +7,11 @@ the first call to ``trace()`` and stay wrapped afterward. TorchLens 2.0 keeps
 the top-level namespace intentionally small; historical spellings live in
 their owning submodules.
 
-For AI agents: ``trace.to_agent_json()``, ``trace.explain(max_tokens=N)``,
-``torchlens.agent.guide()``, and the CLI
-(``python -m torchlens --help``) are the machine-facing doors.
+For AI agents: start with ``torchlens.agent.guide()`` (or
+``python -m torchlens guide``), a cookbook of copyable recipes for module
+outputs, NaN origins, edits, activation patching and gradients. Also
+``trace.to_agent_json()``, ``trace.explain(max_tokens=N)``, and the CLI
+(``python -m torchlens --help``).
 """
 
 from __future__ import annotations
@@ -666,8 +668,23 @@ def extract(
     dict[str, torch.Tensor]
         Mapping from user labels to outs for mapping inputs, or from
         resolved layer labels to outs for list inputs.
+
+    Notes
+    -----
+    When every name is an exact module address, the model is in eval mode and
+    ``inputs`` is one tensor on the model's device, the outs come from one plain
+    forward with module hooks (same values, a fraction of the cost); a module
+    that runs more than once or returns more than one tensor falls back to the
+    full capture.
     """
 
+    from ._extract_fast import try_module_output_extract  # deferred: init stays torch-free
+
+    fast = try_module_output_extract(
+        model, inputs, layers, detach_saved_activations=detach_saved_activations
+    )
+    if fast is not None:
+        return fast
     _trace, outputs, _views = _extract_layers_with_trace(
         model, inputs, layers, detach_saved_activations=detach_saved_activations
     )

@@ -89,6 +89,48 @@ def test_hf_entry_recovery_is_typed_and_teaching() -> None:
     # inferred rung, so the historical trace_inputs_missing site is gone.
 
 
+def test_option_field_keyword_names_its_options_class() -> None:
+    """tl.trace(model, x, save_grads=True) names CaptureOptions, not input_kwargs."""
+
+    import torch
+    from torch import nn
+
+    with pytest.raises(TypeError) as exc:
+        tl.trace(nn.Linear(4, 4), torch.ones(1, 4), save_grads=True)
+    message = str(exc.value)
+    assert exc.value.fields["code"] == "trace_forward_kwargs_unrouted"
+    assert "capture=tl.options.CaptureOptions(save_grads=...)" in message
+    assert "input_kwargs={" not in message
+    with pytest.raises(TypeError) as near:
+        tl.trace(nn.Linear(4, 4), torch.ones(1, 4), save_grad=True)
+    assert "CaptureOptions(save_grads=...)" in str(near.value)
+
+
+def test_guessed_attribute_names_point_at_the_real_field() -> None:
+    """op.activation, trace.layer_list and op.parent_layers name .out/.layers/.parents."""
+
+    import torch
+    from torch import nn
+
+    trace = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.ones(1, 4))
+    layer = list(trace.layers)[1]
+    op = layer.ops[0]
+    for subject, name, field in (
+        (trace, "layer_list", "trace.layers"),
+        (layer, "activation", ".out"),
+        (op, "activation", ".out"),
+        (op, "parent_layers", ".parents"),
+        (op, "containing_module", ".address"),
+    ):
+        with pytest.raises(AttributeError) as exc:
+            getattr(subject, name)
+        assert field in str(exc.value), (name, str(exc.value))
+    assert not hasattr(layer, "tensor_contents")
+    with pytest.raises(AttributeError) as plain:
+        getattr(op, "no_such_field_anywhere")
+    assert "no_such_field_anywhere" in str(plain.value)
+
+
 def test_hf_remedy_spelling_actually_works() -> None:
     """The remedy the refusal teaches runs: input_kwargs routes keyword forwards."""
 
@@ -109,6 +151,51 @@ def test_hf_remedy_spelling_actually_works() -> None:
 
     log = tl.trace(KeywordOnly(), (), input_kwargs={"input_ids": torch.randn(2, 4)})
     assert log._num_ops >= 1
+
+
+#: The small transformer the guide's snippets name (``blocks.0.attn.out_proj`` and so on):
+#: an embedding, two pre-norm-free blocks with an inline softmax, and a head.
+_GUIDE_MODEL_SOURCE = """
+class Attn(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.qkv = nn.Linear(8, 24)
+        self.out_proj = nn.Linear(8, 8)
+
+    def forward(self, h):
+        q, k, v = self.qkv(h).chunk(3, dim=-1)
+        probs = torch.softmax(q @ k.transpose(-1, -2) / 8**0.5, dim=-1)
+        return self.out_proj(probs @ v)
+
+
+class Block(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.attn = Attn()
+        self.mlp = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 8))
+
+    def forward(self, h):
+        h = h + self.attn(h)
+        return h + self.mlp(h)
+
+
+class Net(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.embed = nn.Embedding(50, 8)
+        self.blocks = nn.ModuleList([Block(), Block()])
+        self.head = nn.Linear(8, 50)
+
+    def forward(self, ids):
+        h = self.embed(ids)
+        for block in self.blocks:
+            h = block(h)
+        return self.head(h)
+
+
+model = Net().eval()
+x = torch.randint(0, 50, (2, 6))
+"""
 
 
 @pytest.mark.heavy
@@ -137,16 +224,20 @@ def test_guide_snippets_run_verbatim(tmp_path: Path) -> None:
             "import torch\n"
             "from torch import nn\n"
             "torch.manual_seed(0)\n"
-            "model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())\n"
-            "x = torch.randn(2, 4)\n"
-            f"import os; os.chdir({str(tmp_path)!r})\n" + code
+            # A guide recipe that warns teaches agents to distrust a correct result.
+            "import warnings\n"
+            "from torchlens.errors import TorchLensWarning\n"
+            "warnings.simplefilter('error', TorchLensWarning)\n"
+            + _GUIDE_MODEL_SOURCE
+            + f"import os; os.chdir({str(tmp_path)!r})\n"
+            + code
         )
         result = subprocess.run(
             [sys.executable, "-c", harness], capture_output=True, text=True, cwd=REPO_ROOT
         )
         assert result.returncode == 0, (code, result.stderr[-600:])
         ran += 1
-    assert ran >= 3, "the snippet lint stopped covering the guide"
+    assert ran >= 11, "the snippet lint stopped covering the guide"
 
 
 @pytest.mark.smoke

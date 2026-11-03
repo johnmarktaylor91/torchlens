@@ -76,6 +76,13 @@ from .options import (
 )
 from .recording.options import PredicateFn
 
+#: ``trace()`` parameters that take an options object; unrouted-keyword remedies name them.
+_TRACE_OPTION_CLASSES: dict[str, type] = {
+    "capture": CaptureOptions,
+    "storage": StorageOptions,
+    "episode": EpisodeOptions,
+}
+
 
 def _facet_snapshot_provider(extra_recipes: Any) -> Any:
     """Build a trace's facet snapshot, loading the facets appliance on first use.
@@ -337,7 +344,7 @@ def trace(
     """
     with zero_fire_policy_scope(None if on_zero_fire is MISSING else on_zero_fire):
         _reject_extra_positional_input(extra_positional)
-        _reject_unrouted_forward_kwargs(forward_kwargs)
+        _reject_unrouted_forward_kwargs(forward_kwargs, _TRACE_OPTION_CLASSES)
         del forward_kwargs  # must never ride the ladder's locals() snapshot below
         _reject_non_mapping_input_kwargs(input_kwargs)
         model, intervene = _model_door.resolve_trace_operands(model, intervene)

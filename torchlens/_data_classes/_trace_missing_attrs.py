@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from ._familiar_names import familiar_name_hint
+
 if TYPE_CHECKING:
     from .trace import Trace
 
@@ -101,6 +103,13 @@ def _raise_missing_trace_attribute(trace: Trace, name: str) -> Any:
     hint = _MISSING_ATTR_HINTS.get(name)
     if hint is not None:
         raise AttributeError(f"{type(trace).__name__!s} object has no attribute {name!r}; {hint}")
+    hint = familiar_name_hint("Trace", name)
+    if hint is not None:
+        raise AttributeError(
+            f"{type(trace).__name__!s} object has no attribute {name!r}; {hint}",
+            name=name,
+            obj=None,
+        )
     raise AttributeError(f"{type(trace).__name__!s} object has no attribute {name!r}")
 
 

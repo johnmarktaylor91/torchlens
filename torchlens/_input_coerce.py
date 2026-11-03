@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import dataclasses
+import difflib
+from collections.abc import Mapping
 from typing import Any
 
 from ._errors import ArgumentTypeError
@@ -60,7 +63,9 @@ def _coerce_input(model: Any, x: Any, *, whole_input: bool = True) -> Any:
     return x
 
 
-def _reject_unrouted_forward_kwargs(forward_kwargs: dict[str, Any]) -> None:
+def _reject_unrouted_forward_kwargs(
+    forward_kwargs: dict[str, Any], option_classes: Mapping[str, type] | None = None
+) -> None:
     """Refuse unknown ``trace()`` keywords with a typed routing remedy.
 
     Typed recovery on the natural HF spelling (agent memo 3.10 item 5):
@@ -74,6 +79,9 @@ def _reject_unrouted_forward_kwargs(forward_kwargs: dict[str, Any]) -> None:
     forward_kwargs:
         The unknown keyword arguments ``trace()`` collected. Empty means
         nothing to refuse and the function returns silently.
+    option_classes:
+        ``trace() parameter -> options class`` whose fields a keyword may name
+        (``{"capture": CaptureOptions, ...}``); a match names its home.
 
     Raises
     ------
@@ -85,20 +93,66 @@ def _reject_unrouted_forward_kwargs(forward_kwargs: dict[str, Any]) -> None:
     if not forward_kwargs:
         return
 
-    unknown = ", ".join(sorted(forward_kwargs))
+    keys = sorted(forward_kwargs)
+    homes = _option_homes(keys, option_classes or {})
+    model_inputs = [key for key in keys if key not in homes]
+    remedies = [
+        f"{key} is a {class_name} field: tl.trace(model, x, "
+        f"{param}=tl.options.{class_name}({field}=...))"
+        for key, (param, class_name, field) in homes.items()
+    ]
+    if model_inputs:
+        remedies.append(
+            "model forward keywords travel through input_kwargs=: tl.trace(model, (), "
+            "input_kwargs={" + ", ".join(f"{key!r}: ..." for key in model_inputs) + "}); "
+            "for HuggingFace text models, torchlens.bridge.transformers.trace_text(model, "
+            "'prompt') builds the inputs for you"
+        )
     raise ArgumentTypeError(
-        f"trace() got model-input keyword(s) it does not route: {unknown}. "
-        "Forward keyword arguments travel through input_kwargs=",
+        f"trace() got keyword(s) it does not route: {', '.join(keys)}. Capture settings "
+        "are grouped in option objects and forward keyword arguments travel through "
+        "input_kwargs=",
         code="trace_forward_kwargs_unrouted",
-        remedy=(
-            "pass them as tl.trace(model, (), input_kwargs={"
-            + ", ".join(f"{key!r}: ..." for key in sorted(forward_kwargs))
-            + "}); for HuggingFace text models, "
-            "torchlens.bridge.transformers.trace_text(model, 'prompt') builds the "
-            "inputs for you"
-        ),
-        unrouted_keywords=sorted(forward_kwargs),
+        remedy="; ".join(remedies),
+        unrouted_keywords=keys,
     )
+
+
+def _option_homes(
+    keys: list[str], option_classes: Mapping[str, type]
+) -> dict[str, tuple[str, str, str]]:
+    """Map each unknown keyword that names (or nearly names) an option field to its home.
+
+    Parameters
+    ----------
+    keys:
+        Unknown ``trace()`` keywords.
+    option_classes:
+        ``trace() parameter -> options dataclass`` to search.
+
+    Returns
+    -------
+    dict[str, tuple[str, str, str]]
+        ``keyword -> (trace parameter, options class name, field name)`` for the
+        keywords that match an option field exactly or by a close spelling.
+    """
+
+    fields: dict[str, tuple[str, str]] = {}
+    for param, option_class in option_classes.items():
+        if not dataclasses.is_dataclass(option_class):
+            continue
+        for option_field in dataclasses.fields(option_class):
+            if not option_field.name.startswith("_"):
+                fields.setdefault(option_field.name, (param, option_class.__name__))
+    homes: dict[str, tuple[str, str, str]] = {}
+    for key in keys:
+        match = key if key in fields else None
+        if match is None:
+            close = difflib.get_close_matches(key, list(fields), n=1, cutoff=0.8)
+            match = close[0] if close else None
+        if match is not None:
+            homes[key] = (*fields[match], match)
+    return homes
 
 
 def _reject_extra_positional_input(extra_positional: tuple[Any, ...]) -> None:

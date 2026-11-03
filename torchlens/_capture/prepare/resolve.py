@@ -41,7 +41,7 @@ from ..._trace_selector_helpers import (
 )
 from ...intervention.hooks import gradient_inners, normalize_hook_plan, split_site_branches
 from ...intervention.predicates import InterventionPredicate
-from ...intervention.spec import Recipe, Rule, _canonical_repr
+from ...intervention.spec import Recipe, Rule, _canonical_repr, _opaque_callable_repr
 from ...intervention.types import InterventionDecision, InterventionSpec, TargetSpec
 from .request import _DoorArgs, _DoorState
 
@@ -248,6 +248,31 @@ def _fired_capture_records(trace: Trace) -> tuple[list[str], int, list[Any]]:
     return fired_labels, fire_count, fired_records
 
 
+def _fired_action_repr(record: Any) -> str:
+    """Render the action a fire record came from the way its rule renders it.
+
+    A declared helper records its ``Edit``. A user callable records no ``Edit``,
+    only its qualname, so it renders as its rule does
+    (``callable:<qualname>@opaque``); without this every fired user callable
+    was reported as a rule that fired at zero sites. Two user callables that
+    share a qualname (two lambdas) render alike here, as their rule actions do.
+
+    Parameters
+    ----------
+    record:
+        One fire record from ``op.edits``.
+
+    Returns
+    -------
+    str
+        The canonical action rendering to match against ``rules_payload``.
+    """
+
+    if record.edit is not None:
+        return _canonical_repr(record.edit)
+    return _opaque_callable_repr(str(record.edit_name or ""))
+
+
 def _record_capture_intervention_event(trace: Trace, intervene_request: Any) -> None:
     """Write the capture-door InterventionEvent envelope (C03 fire evidence).
 
@@ -271,9 +296,7 @@ def _record_capture_intervention_event(trace: Trace, intervene_request: Any) -> 
         rules = rules_payload(intervene_request)
         edit_names = tuple(str(rule["action"]) for rule in rules)
         selection_repr = " | ".join(str(rule["where"]) for rule in rules)
-        fired_action_reprs = {
-            _canonical_repr(record.edit) for record in fired_records if record.edit is not None
-        }
+        fired_action_reprs = {_fired_action_repr(record) for record in fired_records}
         zero_fire_rule_ids = tuple(
             str(rule["rule_id"]) for rule in rules if str(rule["action"]) not in fired_action_reprs
         )
@@ -616,7 +639,10 @@ def _refuse_predicate_shapes(args: _DoorArgs) -> None:
         raise ArgumentTypeError(
             f"intervene received non-callable type {type(args.intervene).__name__}",
             code="intervention_predicate_type_invalid",
-            remedy="pass a predicate callable such as tl.when(...) or None",
+            remedy=(
+                "pass a predicate callable such as tl.when(...) or None; combine several "
+                "edits into one with &: tl.when(site_a, edit_a) & tl.when(site_b, edit_b)"
+            ),
             argument="intervene",
             received_type=type(args.intervene).__name__,
         )
