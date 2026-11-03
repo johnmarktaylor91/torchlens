@@ -949,7 +949,12 @@ def test_loaded_intervened_trace_door_refuses_typed(mlp, tmp_path, origin: str, 
     loaded = _reload(_intervened_trace(model, x, origin), tmp_path)
     readout = loaded.output_ops[0].out.clone()
     call, (error_type, code) = _LOADED_DOORS[door]
-    if error_type is EngineDispatchError:
+    if door == "run_inputs":
+        with pytest.raises(EngineDispatchError) as staged_refusal:
+            call(loaded, model, x2)
+        assert staged_refusal.value.fields["code"] == "run_staged_spec_unapplied"
+        assert torch.equal(loaded.output_ops[0].out, readout)
+    if error_type is EngineDispatchError or door == "run_inputs":
         # Fault injection retains the original missing-recipe guard witness:
         # honest format 3 saves now preserve these built-in recipes.
         assert loaded._intervention_spec.metadata["recipe_placeholders"] == []
@@ -969,7 +974,7 @@ def test_loaded_builtin_recipe_rerun_keeps_the_original_intervention(mlp, tmp_pa
     loaded = _reload(_intervened_trace(model, x, origin), tmp_path)
     expected = _hooked(model, {"fc2": lambda out: out * 0.5}, x2)
     loaded.run(model, x2)
-    torch.testing.assert_close(_readout(loaded), expected)
+    torch.testing.assert_close(loaded.output_ops[0].out, expected)
 
 
 def test_loaded_plain_trace_reruns_with_a_new_edit(mlp, tmp_path) -> None:

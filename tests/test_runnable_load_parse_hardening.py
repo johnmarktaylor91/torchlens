@@ -213,9 +213,11 @@ def test_runnable_resave_refusal_is_honest_and_code_bearing(tmp_path: Path) -> N
 
     from torchlens._io import ArtifactError
 
+    model = TinyModel().eval()
+    inputs = torch.ones(2, 3)
     captured = tl.trace(
-        TinyModel(),
-        torch.ones(2, 3),
+        model,
+        inputs,
         capture=CaptureOptions(
             replayable=True,
             capture_container_structure=True,
@@ -229,6 +231,7 @@ def test_runnable_resave_refusal_is_honest_and_code_bearing(tmp_path: Path) -> N
     loaded.save(resaved, level="runnable", include_weights=True)
     assert read_runnable(with_weights) == read_runnable(resaved)
     assert tl.load(resaved).readiness.status is ReadinessStatus.READY
+    torch.testing.assert_close(tl.load(resaved).run(inputs=inputs).output, model(inputs))
 
     recaptured = tl.trace(
         TinyModel(),
@@ -245,6 +248,13 @@ def test_runnable_resave_refusal_is_honest_and_code_bearing(tmp_path: Path) -> N
     bare_resaved = tmp_path / "bare-resaved.tlspec"
     loaded_bare.save(bare_resaved, level="runnable")
     assert read_runnable(without_weights) == read_runnable(bare_resaved)
+    with pytest.raises(ArtifactError) as missing_weights:
+        loaded_bare.save(
+            tmp_path / "missing-weights.tlspec", level="runnable", include_weights=True
+        )
+    assert missing_weights.value.fields["code"] == "run_capability_unavailable"
+    assert "capture-time state snapshot" in str(missing_weights.value)
+    assert not (tmp_path / "missing-weights.tlspec").exists()
     # Preserve the missing-producer refusal witness after a validated descriptor
     # became sufficient for a resave: remove that descriptor deliberately.
     loaded_bare._runnable.descriptor = None
