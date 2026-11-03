@@ -11,7 +11,6 @@ docs-md	AGENTS.md	2.15
 docs-md	AGENTS.md	20
 docs-md	AGENTS.md	2026
 docs-md	AGENTS.md	26.04
-docs-md	AGENTS.md	27,644
 docs-md	AGENTS.md	28
 docs-md	AGENTS.md	3.10,
 docs-md	AGENTS.md	32
@@ -9853,3 +9852,4 @@ test-docstrings	tests/test_checks_kit_session.py	203
 test-docstrings	tests/test_summary_rebuild_ladder.py	19
 test-docstrings	tests/test_summary_rebuild_ladder.py	3.4,
 test-docstrings	tests/test_summary_rebuild_ladder.py	48
+docs-md	AGENTS.md	26,610
