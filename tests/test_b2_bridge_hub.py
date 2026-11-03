@@ -73,9 +73,7 @@ def trace() -> Any:
     """A fully saved trace of the tiny MLP."""
 
     torch.manual_seed(0)
-    return tl.trace(
-        _Tiny(), torch.randn(2, 4), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    return tl.trace(_Tiny(), torch.randn(2, 4), save="all")
 
 
 def test_from_hub_round_trips_a_trace_through_the_safe_loader(trace: Any, tmp_path: Path) -> None:

@@ -163,7 +163,7 @@ def derive_nonfinite_channel(trace: Trace) -> NonfiniteChannel:
         legend = (
             "nonfinite status: NOT CHECKED -- no saved payloads to examine; "
             "re-capture with save retention or "
-            "CaptureOptions(track_nonfinite=True)",
+            "CaptureOptions(on_nonfinite='track')",
         )
     else:
         present = sorted(set(states.values()))

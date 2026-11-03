@@ -1399,13 +1399,12 @@ def _vis(
     show_model_graph(
         model,
         x,
-        view=vis_mode,
+        rolled=vis_mode == "rolled",
         depth=depth,
         code_panel=code_panel,
         seed=42,
         visualization=tl.options.VisualizationOptions(
             container_path=opj(VIS_DIR, filename),
-            save_only=True,
             file_format="pdf",
             show_buffers="always" if buffer_layers else "never",
             direction=direction,
@@ -1433,10 +1432,9 @@ def _vis_grad(
     output = log[log.output_layers[0]].out
     output.sum().backward()
     log.draw(
-        vis_mode=vis_mode,
-        vis_call_depth=depth,
+        rolled=vis_mode == "rolled",
+        depth=depth,
         path=opj(VIS_DIR, filename),
-        vis_save_only=True,
         file_format="pdf",
         direction=direction,
     )
@@ -1576,7 +1574,6 @@ class TestVisualizationBugfixes:
         outpath = tmp_path / "identity_render"
         try:
             log.draw(
-                vis_save_only=True,
                 path=str(outpath),
                 file_format="pdf",
             )
@@ -1616,7 +1613,6 @@ class TestVisualizationBugfixes:
         try:
             with pytest.raises(GraphvizRenderError):
                 log.draw(
-                    vis_save_only=True,
                     path=str(outpath),
                     file_format="pdf",
                 )
@@ -1629,7 +1625,7 @@ class TestVisualizationBugfixes:
             log.cleanup()
 
     def test_vis_call_depth_0(self):
-        """vis_call_depth=0 should not crash and must emit a real PDF."""
+        """depth=0 should not crash and must emit a real PDF."""
         model = _SimpleLinear()
         log = trace_fn(model, torch.randn(2, 10))
         pdf_path = Path(VIS_DIR) / "test_call_depth_0.pdf"
@@ -1640,7 +1636,6 @@ class TestVisualizationBugfixes:
             dot = draw(
                 log,
                 vis_call_depth=0,
-                vis_save_only=True,
                 vis_outpath=opj(VIS_DIR, "test_call_depth_0"),
             )
         except ImportError:
@@ -1666,17 +1661,15 @@ class TestVisualizationBugfixes:
         log.set(func("relu"), torch.zeros(2, 3))
         try:
             node_mark = log.draw(
-                vis_save_only=True,
                 path=opj(VIS_DIR, "test_intervention_node_mark"),
                 file_format="dot",
-                vis_intervention_mode="node_mark",
-            )
+                intervention_mode="node_mark",
+            ).dot
             as_node = log.draw(
-                vis_save_only=True,
                 path=opj(VIS_DIR, "test_intervention_as_node"),
                 file_format="dot",
-                vis_intervention_mode="as_node",
-            )
+                intervention_mode="as_node",
+            ).dot
             assert "#7B1FA2" in node_mark and "tl_edited" in node_mark
             assert "tl_downstream" not in node_mark  # downstream highlighter off by default
             assert "shape=diamond" in as_node
@@ -1686,15 +1679,13 @@ class TestVisualizationBugfixes:
     def test_vis_selective_save(self):
         """Selective activation saving should render a real PDF, not just not crash."""
         model = _SimpleLinear()
-        log = trace_fn(
-            model, torch.randn(2, 10), capture=tl.options.CaptureOptions(layers_to_save="all")
-        )
+        log = trace_fn(model, torch.randn(2, 10), save="all")
         pdf_path = Path(VIS_DIR) / "test_selective_save.pdf"
         pdf_path.unlink(missing_ok=True)
         try:
             from torchlens._visualization._render_dot import draw
 
-            dot = draw(log, vis_save_only=True, vis_outpath=opj(VIS_DIR, "test_selective_save"))
+            dot = draw(log, vis_outpath=opj(VIS_DIR, "test_selective_save"))
         except ImportError:
             pytest.skip("graphviz not available")
         # A no-op renderer would return "" and write nothing; assert real output.
@@ -1726,7 +1717,7 @@ class TestVisModuleListFormat:
         log = trace_fn(model, torch.randn(2, 10))
         pdf_path = Path(VIS_DIR) / "test_nested_modules.pdf"
         pdf_path.unlink(missing_ok=True)
-        dot = log.draw(vis_save_only=True, path=opj(VIS_DIR, "test_nested_modules"))
+        dot = log.draw(path=opj(VIS_DIR, "test_nested_modules")).dot
         # A no-op renderer would return "" and write nothing; assert real output.
         assert isinstance(dot, str) and "digraph" in dot
         _assert_generated_pdf(pdf_path)

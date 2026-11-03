@@ -9,7 +9,9 @@ package module, so a thin record method reads
 ``_doors.report()._trace_summary.summary(trace)``. The imports are plain
 ``from`` statements (never ``importlib`` strings) so ``tools/layering/graph.py``
 keeps seeing every edge. No other module in ``_data_classes`` imports this
-one; a lane that needs a new door appends a function here in its own commit.
+one; ``PartialTrace.draw`` (``torchlens._partial``, L3) reaches the drawing
+destination through ``visualization()`` the same way. A lane that needs a new
+door appends a function here in its own commit.
 """
 
 from __future__ import annotations

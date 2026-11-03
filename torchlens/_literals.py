@@ -3,6 +3,7 @@
 from typing import Literal
 
 OutputDeviceLiteral = Literal["same", "cpu", "cuda"]
+OnNonfiniteLiteral = Literal["ignore", "track", "warn", "raise"]
 BufferVisibilityLiteral = Literal["never", "meaningful", "always"]
 CollapseLiteral = Literal["none", "auto", "max"] | float
 FoldRepeatsLiteral = Literal[None, True, False]

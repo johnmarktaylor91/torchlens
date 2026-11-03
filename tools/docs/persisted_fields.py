@@ -1,8 +1,8 @@
 """Generate ``docs/maintainers/persisted_fields.md``, the persisted field set of the saved format.
 
 One command: ``python tools/docs/persisted_fields.py``. It reads the writer contract of
-record (``torchlens/schemas/writer_contract_v12.json``), the frozen previous contract
-(``writer_contract_v11.json``) for the key diff, the generated storage bindings
+record (``torchlens/schemas/writer_contract_v11.json``), the frozen previous contract
+(``writer_contract_v10.json``) for the key diff, the generated storage bindings
 (``torchlens/_data_classes/_schema_bindings.py``) for each key's storage kind and type
 annotation, and the record-class modules under ``torchlens/_data_classes/`` with ``ast``
 (nothing is imported) for the public accessor that reads each private store. It writes
@@ -26,8 +26,8 @@ from typing import Any
 
 REPO = Path(__file__).resolve().parents[2]
 SCHEMAS = REPO / "torchlens" / "schemas"
-CONTRACT = SCHEMAS / "writer_contract_v12.json"
-PREVIOUS_CONTRACT = SCHEMAS / "writer_contract_v11.json"
+CONTRACT = SCHEMAS / "writer_contract_v11.json"
+PREVIOUS_CONTRACT = SCHEMAS / "writer_contract_v10.json"
 DATA_CLASSES = REPO / "torchlens" / "_data_classes"
 BINDINGS = DATA_CLASSES / "_schema_bindings.py"
 GROUPS_MODULE = DATA_CLASSES / "_trace_groups.py"
@@ -110,23 +110,43 @@ def _binding_fields(call: ast.expr) -> tuple[str, str | None]:
 
 
 def read_bindings(path: Path = BINDINGS) -> dict[str, dict[str, tuple[str, str | None]]]:
-    """Return ``{binding key: {field: (kind, annotation)}}`` from the generated bindings."""
+    """Return ``{binding key: {field: (kind, annotation)}}`` from the generated bindings.
+
+    A record table may be split into a sibling generated module and named in
+    ``STORAGE_BINDINGS`` by a ``from .<module> import <TABLE>`` binding; such a
+    name resolves to that module's top-level ``<TABLE>`` dict literal.
+    """
 
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported = {
+        alias.asname or alias.name: path.parent / f"{node.module}.py"
+        for node in tree.body
+        if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module
+        for alias in node.names
+    }
+
+    def _table_node(value: ast.expr) -> ast.expr:
+        if not isinstance(value, ast.Name) or value.id not in imported:
+            return value
+        source = imported[value.id]
+        for item in ast.parse(source.read_text(encoding="utf-8"), filename=str(source)).body:
+            if (
+                isinstance(item, ast.AnnAssign)
+                and isinstance(item.target, ast.Name)
+                and item.target.id == value.id
+                and item.value is not None
+            ):
+                return item.value
+        raise SystemExit(f"{source}: no {value.id} table found")
+
     for node in tree.body:
         if not isinstance(node, ast.AnnAssign) or not isinstance(node.target, ast.Name):
             continue
         if node.target.id != "STORAGE_BINDINGS" or not isinstance(node.value, ast.Dict):
             continue
         table: dict[str, dict[str, tuple[str, str | None]]] = {}
-        for record_node, fields_node in zip(node.value.keys, node.value.values, strict=True):
-            if (
-                isinstance(fields_node, ast.Subscript)
-                and isinstance(fields_node.value, ast.Name)
-                and fields_node.value.id == "_TRACE_STORAGE_BINDINGS"
-            ):
-                table.update(read_bindings(path.with_name("_schema_bindings_trace.py")))
-                continue
+        for record_node, value_node in zip(node.value.keys, node.value.values, strict=True):
+            fields_node = _table_node(value_node)
             if record_node is None or not isinstance(fields_node, ast.Dict):
                 continue
             fields = {}

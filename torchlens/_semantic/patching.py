@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import copy
-import itertools
 import warnings
 from collections.abc import Callable, Mapping, Sequence
-from contextlib import ExitStack
 from typing import Any
 
 import torch
@@ -17,6 +15,7 @@ from .._selection.selectors import facet
 from .._user_funcs import trace
 from ..errors._base import TorchLensError, TorchLensWarning
 from ..options import CaptureOptions
+from ._state_guard import _CounterfactualStateGuard, _teardown
 from .facets import Facet, MissingGrad
 
 Metric = Callable[[Any], torch.Tensor]
@@ -34,171 +33,6 @@ class PatchApplicationError(TorchLensError, RuntimeError):
     ``patch_ineffective``; the ``RuntimeError`` lineage is preserved for
     existing catch sites.
     """
-
-
-class _CounterfactualStateGuard:
-    """Snapshot and restore model state and global RNG around patching runs.
-
-    Activation and attribution patching run several forward passes (a clean
-    baseline, a corrupted baseline, and one per patched cell) on the SAME live
-    model. Without resetting state between runs, mutable buffers (e.g.
-    BatchNorm running statistics or any buffer written during forward) and the
-    global RNG drift: every counterfactual after the first starts from a
-    different model/RNG state than the clean baseline, so the reported effect is
-    a silently wrong comparison, and the caller's model + global RNG are left
-    mutated when the helper returns.
-
-    Call :meth:`open` before the first run and :meth:`close` in a ``finally``.
-    ``open`` snapshots the model's parameters/buffers and enters
-    ``torch.random.fork_rng`` so the caller's global RNG is restored robustly on
-    ``close`` no matter what the traced forwards do. Call :meth:`reset` before
-    each counterfactual run to return the model and RNG to the captured baseline
-    so every counterfactual is a true comparison. ``close`` restores the model
-    state and releases the forked RNG.
-    """
-
-    def __init__(self, model: nn.Module) -> None:
-        """Snapshot the model's parameters/buffers/grads and the global RNG state."""
-
-        self._tensors: list[tuple[torch.Tensor, torch.Tensor]] = [
-            (tensor, tensor.detach().clone()) for tensor in _stateful_tensors(model)
-        ]
-        self._grads: list[tuple[torch.Tensor, torch.Tensor | None]] = [
-            (tensor, None if tensor.grad is None else tensor.grad.detach().clone())
-            for tensor, _saved in self._tensors
-        ]
-        self._rng: dict[str, Any] = _snapshot_rng()
-        self._fork: Any = None
-
-    def open(self) -> None:
-        """Enter a forked-RNG scope so the caller's global RNG is preserved."""
-
-        self._fork = torch.random.fork_rng(devices=_fork_rng_devices())
-        self._fork.__enter__()
-
-    def close(self) -> None:
-        """Restore the model state and release the forked RNG scope."""
-
-        try:
-            self._restore_model()
-        finally:
-            fork, self._fork = self._fork, None
-            if fork is not None:
-                fork.__exit__(None, None, None)
-
-    def reset(self) -> None:
-        """Reset model state and global RNG to the captured baseline."""
-
-        self._restore_model()
-        _restore_rng(self._rng)
-
-    def _restore_model(self) -> None:
-        """Restore every DRIFTED parameter/buffer value and grad in place.
-
-        The copy is equality-gated on purpose: an unconditional ``copy_``
-        bumps the autograd version counter of every parameter consumed by an
-        earlier captured forward, so the later ``log_backward`` on the clean
-        and corrupted baselines raised "modified by an inplace operation" on
-        ANY model with parameters (attribution patching was unusable outside
-        zero-parameter toys). A value-equal tensor needs no write and keeps
-        its autograd graphs valid; a genuinely drifted tensor (a mutated
-        buffer, a forward that writes a parameter) is still written back --
-        comparison honesty beats preserving a graph that no longer matches
-        the model state, and autograd's in-place tripwire then fires on a
-        REAL divergence instead of on bookkeeping.
-
-        Grad slots are restored to their snapshot (usually ``None``) so
-        counterfactual runs start from the baseline grad state and the
-        caller's model does not accumulate patching-run gradients. Grad
-        assignment never touches version counters.
-        """
-
-        with torch.no_grad():
-            for tensor, saved in self._tensors:
-                if not torch.equal(tensor, saved):
-                    tensor.copy_(saved)
-        for tensor, saved_grad in self._grads:
-            current = tensor.grad
-            if saved_grad is None:
-                if current is not None:
-                    tensor.grad = None
-            elif current is None or not torch.equal(current, saved_grad):
-                tensor.grad = saved_grad.clone()
-
-
-def _teardown(guard: _CounterfactualStateGuard, *logs: Any) -> None:
-    """Run every teardown step even when an earlier one raises.
-
-    The entry points used to tear down as bare sequential statements, so a
-    raising ``Trace.cleanup()`` skipped ``guard.close()`` and left the USER's
-    model parameters unrestored and the global RNG permanently advanced.
-    ``ExitStack`` callbacks run last-registered-first, so the guard is
-    registered first (closes LAST, after every log cleanup) and each
-    ``logs``-order cleanup still runs even if an earlier one raises.
-    """
-
-    with ExitStack() as stack:
-        stack.callback(guard.close)
-        for log in reversed(logs):
-            if log is not None:
-                stack.callback(log.cleanup)
-
-
-def _stateful_tensors(model: nn.Module) -> list[torch.Tensor]:
-    """Return every distinct parameter and buffer tensor of a model.
-
-    Uses object identity to include non-persistent buffers and to stage tied /
-    double-registered tensors exactly once.
-    """
-
-    seen: set[int] = set()
-    tensors: list[torch.Tensor] = []
-    for _, tensor in itertools.chain(model.named_parameters(), model.named_buffers()):
-        if id(tensor) in seen:
-            continue
-        seen.add(id(tensor))
-        tensors.append(tensor)
-    return tensors
-
-
-def _fork_rng_devices() -> list[int]:
-    """Return the CUDA device ordinals to fork RNG for (empty when CPU-only).
-
-    Gated on ``is_initialized()``, not ``is_available()`` (R36-4): if this
-    process never initialized CUDA, no CUDA generator fed any captured op,
-    and forking RNG for every visible device would allocate the very CUDA
-    contexts (~300-600 MB each) this path does not need -- the exact stale
-    pre-fix gate ``utils/rng.py`` documents.
-    """
-
-    from .._utils._cuda_probe import _is_cuda_initialized
-
-    if _is_cuda_initialized() and torch.cuda.is_available():
-        return list(range(torch.cuda.device_count()))
-    return []
-
-
-def _snapshot_rng() -> dict[str, Any]:
-    """Capture the global CPU (and CUDA, when live) RNG state."""
-
-    from .._utils.rng import _snapshot_cuda_rng_states
-
-    snapshot: dict[str, Any] = {"cpu": torch.get_rng_state()}
-    # Initialized-CUDA-only, latch-guarded (R36-4): returns [] on a
-    # CUDA-less or never-initialized process without touching the driver.
-    cuda_states = _snapshot_cuda_rng_states()
-    if cuda_states:
-        snapshot["cuda"] = cuda_states
-    return snapshot
-
-
-def _restore_rng(snapshot: Mapping[str, Any]) -> None:
-    """Restore the global CPU (and CUDA, when available) RNG state."""
-
-    torch.set_rng_state(snapshot["cpu"])
-    cuda_states = snapshot.get("cuda")
-    if cuda_states is not None and torch.cuda.is_available():
-        torch.cuda.set_rng_state_all(cuda_states)
 
 
 def activation_patch_residual_stream(
@@ -610,7 +444,7 @@ def _trace_kwargs(
 ) -> dict[str, Any]:
     """Return trace keyword arguments with the helper's REQUIRED fields applied.
 
-    The patching helpers cannot work without ``layers_to_save="all"`` (facet
+    The patching helpers cannot work without ``save="all"`` (facet
     values must be readable on every candidate module) and
     ``save_args=True`` (reconstructed facets read saved op args), and
     attribution additionally needs ``save_grads``. These used to be supplied
@@ -619,7 +453,7 @@ def _trace_kwargs(
     partially absent and grids were computed over a silently narrowed module
     set. The required fields now COMPOSE with the user's options: fields the
     user left unspecified are filled in, an explicitly matching value passes,
-    and an explicitly CONFLICTING ``layers_to_save``/``save_arg_values``
+    and an explicitly CONFLICTING ``save``/``save_args``
     refuses with the requirement named (an explicit user ``save_grads``
     predicate is honored as-is -- a too-narrow one fails loudly at the
     gradient read). Flat capture spellings (``layers_to_save=`` etc.) were
@@ -638,17 +472,16 @@ def _trace_kwargs(
             "accepts capture knobs only through the grouped spelling "
             "capture=tl.options.CaptureOptions(...). Move these fields into capture=."
         )
-    if "capture" in kwargs:
-        kwargs["capture"] = _compose_required_capture(kwargs["capture"], save_grads=save_grads)
-        return kwargs
-    capture_fields: dict[str, Any] = {"layers_to_save": "all", "save_args": True}
-    if save_grads is not None:
-        capture_fields["save_grads"] = save_grads
-    kwargs["capture"] = CaptureOptions(**capture_fields)
+    kwargs["capture"] = _compose_required_capture(
+        kwargs.get("capture", CaptureOptions()),
+        save_grads=save_grads,
+        _save=kwargs.get("save", "all"),
+    )
+    kwargs["save"] = "all"
     return kwargs
 
 
-def _compose_required_capture(capture: Any, *, save_grads: bool | None) -> Any:
+def _compose_required_capture(capture: Any, *, save_grads: bool | None, _save: Any = "all") -> Any:
     """Merge the patching-required capture fields into user capture options.
 
     Parameters
@@ -673,17 +506,19 @@ def _compose_required_capture(capture: Any, *, save_grads: bool | None) -> Any:
 
     if not isinstance(capture, CaptureOptions):
         return capture
-    required: dict[str, Any] = {"layers_to_save": "all", "save_arg_values": True}
+    required: dict[str, Any] = {"save_args": True}
     conflicts = [
         field_name
         for field_name, required_value in required.items()
-        if capture.is_field_explicit(field_name) and getattr(capture, field_name) != required_value
+        if capture._is_field_explicit(field_name) and getattr(capture, field_name) != required_value
     ]
+    if not isinstance(_save, str) or _save != "all":
+        conflicts.append("save")
     if conflicts:
         raise ValueError(
-            f"Patching helpers require capture options {required!r}, but the supplied "
-            f"capture= explicitly sets {conflicts!r} to conflicting values. Facet values "
-            "must be readable on every candidate module (layers_to_save='all') and "
+            f"Patching helpers require save='all' and capture options {required!r}, but the supplied "
+            f"trace kwargs explicitly set {conflicts!r} to conflicting values. Facet values "
+            "must be readable on every candidate module (save='all') and "
             "reconstructed facets read saved op args (save_args=True); a narrower "
             "capture silently shrinks or empties the patch table. Drop these fields from "
             "capture= (they are filled in automatically) or set them to the required "
@@ -692,15 +527,15 @@ def _compose_required_capture(capture: Any, *, save_grads: bool | None) -> Any:
     fills = {
         field_name: required_value
         for field_name, required_value in required.items()
-        if not capture.is_field_explicit(field_name)
+        if not capture._is_field_explicit(field_name)
     }
-    if save_grads is not None and not capture.is_field_explicit("save_grads"):
+    if save_grads is not None and not capture._is_field_explicit("save_grads"):
         fills["save_grads"] = save_grads
     if not fills:
         return capture
     values = capture.as_dict()
     values.update(fills)
-    return CaptureOptions.from_values(
+    return CaptureOptions._from_values(
         values, frozenset(capture._specified_fields) | frozenset(fills)
     )
 

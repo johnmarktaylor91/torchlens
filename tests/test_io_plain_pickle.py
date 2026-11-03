@@ -77,7 +77,8 @@ def _build_trace(seed: int = 0) -> Trace:
     return trace_fn(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(layers_to_save="all", seed=seed),
+        capture=tl.options.CaptureOptions(seed=seed),
+        save="all",
     )
 
 
@@ -123,7 +124,7 @@ def test_conditional_body_cache_survives_pickle_and_tlspec_round_trips(tmp_path:
     trace = trace_fn(
         _ConditionalBodyCacheModel(),
         torch.ones(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     cached_op = next(op for op in trace.ops if op._is_in_conditional_body is True)
     label = cached_op.layer_label
@@ -495,6 +496,9 @@ def test_plain_pickle_preserves_in_memory_outs(tmp_path: Path) -> None:
     with pickle_path.open("rb") as handle:
         restored = pickle.load(handle)
 
+    assert trace._output_slot is not None
+    assert trace.__getstate__()["_output_slot"] is None
+    assert restored._output_slot is None
     restored_layer = _first_saved_layer(restored)
     assert isinstance(restored_layer.out, torch.Tensor)
     assert restored_layer.out_ref is None
@@ -513,7 +517,7 @@ def test_plain_pickle_survives_a_lambda_activation_transform() -> None:
     log = trace_fn(
         _PlainPickleModel(),
         torch.ones(1, 3),
-        save=tl.options.SaveOptions(activation_transform=lambda t: t * 2),
+        capture=tl.options.CaptureOptions(activation_transform=lambda t: t * 2),
     )
     restored = pickle.loads(pickle.dumps(log))
     assert restored.options.activation_transform is None

@@ -25,7 +25,8 @@ def _capture(model: nn.Module, x: torch.Tensor, seed: int = 0):
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", save_args=True, seed=seed),
+        capture=CaptureOptions(save_args=True, seed=seed),
+        save="all",
     )
     return trace, ground_truth
 

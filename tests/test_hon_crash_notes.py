@@ -190,7 +190,7 @@ def test_nonfinite_prefix_failure_note_appears(monkeypatch: pytest.MonkeyPatch) 
         lambda: tl.trace(
             _NaNModel(),
             torch.randn(2, 4),
-            capture=tl.options.CaptureOptions(raise_on_nan=True),
+            capture=tl.options.CaptureOptions(on_nonfinite="raise"),
         ),
         Exception,
     )

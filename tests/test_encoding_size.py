@@ -166,11 +166,10 @@ def varying_log() -> Any:
 def _draw(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
     tmp_path.mkdir(parents=True, exist_ok=True)
     return log.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "graph"),
         **kwargs,
-    )
+    ).dot
 
 
 def _state(log: tl.Trace) -> Any:
@@ -226,7 +225,7 @@ def test_scale_closed_vocabulary() -> None:
 
 def test_scale_without_size_by_refuses(mlp_log: tl.Trace, tmp_path: Path) -> None:
     with pytest.raises(Exception) as excinfo:
-        _draw(mlp_log, tmp_path, scale="sqrt")
+        _draw(mlp_log, tmp_path, size_scale="sqrt")
     assert excinfo.value.fields["code"] == "scale_requires_size_by"
 
 
@@ -276,9 +275,9 @@ def test_plain_draw_untouched_by_size_machinery(mlp_log: tl.Trace, tmp_path: Pat
 
 
 def test_scale_linear_vs_sqrt_changes_geometry(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    _draw(mlp_log, tmp_path, size_by="dims", scale="sqrt")
+    _draw(mlp_log, tmp_path, size_by="dims", size_scale="sqrt")
     sqrt_sizes = dict(_state(mlp_log).sizes)
-    _draw(mlp_log, tmp_path, size_by="dims", scale="linear")
+    _draw(mlp_log, tmp_path, size_by="dims", size_scale="linear")
     linear_sizes = dict(_state(mlp_log).sizes)
     assert sqrt_sizes != linear_sizes
     # Extremes agree (min-max normalization pins both endpoints)...
@@ -291,7 +290,7 @@ def test_scale_linear_vs_sqrt_changes_geometry(mlp_log: tl.Trace, tmp_path: Path
 def test_per_pass_op_nodes_size_by_their_own_pass(spatial_log: tl.Trace, tmp_path: Path) -> None:
     """Unrolled per-pass nodes of a shape-varying layer size per-pass."""
 
-    _draw(spatial_log, tmp_path, size_by="dims", vis_mode="unrolled")
+    _draw(spatial_log, tmp_path, size_by="dims", rolled=False)
     state = _state(spatial_log)
     conv_sizes = {key: value for key, value in state.sizes.items() if "conv" in key}
     assert len(conv_sizes) == 3
@@ -331,7 +330,7 @@ def test_negative_value_under_sqrt_refuses(mlp_log: tl.Trace, tmp_path: Path) ->
         _draw(mlp_log, tmp_path, size_by=lambda node: -1.0)
     assert excinfo.value.fields["code"] == "encoding_value_invalid"
     # Same values under scale='linear' are legal (min-max handles negatives).
-    _draw(mlp_log, tmp_path, size_by=lambda node: -float(node.raw_index), scale="linear")
+    _draw(mlp_log, tmp_path, size_by=lambda node: -float(node.raw_index), size_scale="linear")
     assert _state(mlp_log).sizes
 
 
@@ -352,7 +351,7 @@ def test_rolled_varying_dims_refuses(spatial_log: tl.Trace, tmp_path: Path) -> N
     """Refusal fires BEFORE dims resolution (ordering pin: no '3..4' strings)."""
 
     with pytest.raises(Exception) as excinfo:
-        _draw(spatial_log, tmp_path, size_by="dims", vis_mode="rolled")
+        _draw(spatial_log, tmp_path, size_by="dims", rolled=True)
     assert excinfo.value.fields["code"] == "size_by_rolled_varying"
 
 
@@ -360,17 +359,17 @@ def test_interior_only_variation_refuses(interior_log: tl.Trace, tmp_path: Path)
     """first==last with interior variation — the case a first/last summary misses."""
 
     with pytest.raises(Exception) as excinfo:
-        _draw(interior_log, tmp_path, size_by="dims", vis_mode="rolled")
+        _draw(interior_log, tmp_path, size_by="dims", rolled=True)
     assert excinfo.value.fields["code"] == "size_by_rolled_varying"
 
 
 def test_uniform_multipass_dims_no_refusal(uniform_log: tl.Trace, tmp_path: Path) -> None:
-    _draw(uniform_log, tmp_path, size_by="dims", vis_mode="rolled")
+    _draw(uniform_log, tmp_path, size_by="dims", rolled=True)
     assert _state(uniform_log).sizes
 
 
 def test_single_pass_layers_unaffected(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    _draw(mlp_log, tmp_path, size_by="activation_memory", vis_mode="rolled")
+    _draw(mlp_log, tmp_path, size_by="activation_memory", rolled=True)
     assert _state(mlp_log).sizes
 
 
@@ -378,12 +377,12 @@ def test_varying_scalar_field_refuses(varying_log: tl.Trace, tmp_path: Path) -> 
     """Generalized refusal: ANY marker-varying size source, not just shapes."""
 
     with pytest.raises(Exception) as excinfo:
-        _draw(varying_log, tmp_path, size_by="activation_memory", vis_mode="rolled")
+        _draw(varying_log, tmp_path, size_by="activation_memory", rolled=True)
     assert excinfo.value.fields["code"] == "size_by_rolled_varying"
 
 
 def test_uniform_scalar_field_encodes(uniform_log: tl.Trace, tmp_path: Path) -> None:
-    _draw(uniform_log, tmp_path, size_by="activation_memory", vis_mode="rolled")
+    _draw(uniform_log, tmp_path, size_by="activation_memory", rolled=True)
     assert _state(uniform_log).sizes
 
 
@@ -392,7 +391,7 @@ def test_summed_alias_encodes_with_aggregation_line(varying_log: tl.Trace, tmp_p
     activation_memory on the same varying recurrence (different quantities,
     both disclosed)."""
 
-    _draw(varying_log, tmp_path, size_by="total_activation_memory", vis_mode="rolled")
+    _draw(varying_log, tmp_path, size_by="total_activation_memory", rolled=True)
     state = _state(varying_log)
     assert state.sizes
     assert any("total across passes" in line for line in state.size_aggregation_lines)
@@ -402,7 +401,7 @@ def test_mirrored_per_call_numeric_refuses(varying_log: tl.Trace, tmp_path: Path
     """Widened semantics: an unreconciled first-pass projection refuses."""
 
     with pytest.raises(Exception) as excinfo:
-        _draw(varying_log, tmp_path, size_by="transformed_gradient_memory", vis_mode="rolled")
+        _draw(varying_log, tmp_path, size_by="transformed_gradient_memory", rolled=True)
     assert excinfo.value.fields["code"] == "size_by_rolled_varying"
 
 
@@ -410,7 +409,7 @@ def test_per_pass_field_refuses_on_rolled(varying_log: tl.Trace, tmp_path: Path)
     """A per-pass attribute cannot be certified single-valued on a rolled node."""
 
     with pytest.raises(Exception) as excinfo:
-        _draw(varying_log, tmp_path, size_by="func_duration", vis_mode="rolled")
+        _draw(varying_log, tmp_path, size_by="func_duration", rolled=True)
     assert excinfo.value.fields["code"] == "size_by_rolled_varying"
 
 
@@ -420,12 +419,12 @@ def test_unclassified_source_on_rolled_refuses(varying_log: tl.Trace, tmp_path: 
     assert "num_inputs" in LAYER_PASS_LOG_FIELD_ORDER
     assert "num_inputs" not in LAYER_SOURCE_ROWS
     with pytest.raises(Exception) as excinfo:
-        _draw(varying_log, tmp_path, size_by="num_inputs", vis_mode="rolled")
+        _draw(varying_log, tmp_path, size_by="num_inputs", rolled=True)
     assert excinfo.value.fields["code"] == "encoding_source_invalid"
 
 
 def test_callable_on_rolled_bypasses_with_disclosure(varying_log: tl.Trace, tmp_path: Path) -> None:
-    _draw(varying_log, tmp_path, size_by=lambda node: float(node.num_passes), vis_mode="rolled")
+    _draw(varying_log, tmp_path, size_by=lambda node: float(node.num_passes), rolled=True)
     state = _state(varying_log)
     assert state.sizes
     assert NOTE_CALLABLE in state.size_notes
@@ -471,7 +470,7 @@ def test_legend_states_scale_transform(mlp_log: tl.Trace, tmp_path: Path) -> Non
     dot = _draw(mlp_log, tmp_path, size_by="dims")
     assert "TorchLens encoding" in dot
     assert "sqrt(dims)" in dot
-    dot_linear = _draw(mlp_log, tmp_path, size_by="dims", scale="linear")
+    dot_linear = _draw(mlp_log, tmp_path, size_by="dims", size_scale="linear")
     assert "linear(dims)" in dot_linear
 
 

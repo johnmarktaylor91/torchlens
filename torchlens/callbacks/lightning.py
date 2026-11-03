@@ -302,7 +302,7 @@ class _LayerProfilerCallbackMixin:
         """
 
         from torchlens import trace
-        from torchlens.options import CaptureOptions
+        from torchlens.errors import TorchLensError, TorchLensWarning
 
         # Snapshot every submodule's flag: ``pl_module.train()`` afterwards
         # would flip a frozen (eval-mode) backbone back into train mode.
@@ -314,7 +314,7 @@ class _LayerProfilerCallbackMixin:
                 return trace(
                     pl_module,
                     model_input,
-                    capture=CaptureOptions(layers_to_save=self.layers_to_save),
+                    save=self.layers_to_save,
                 )
         # Training must never die for a profile (disclosed below). These are what
         # a forward fed a guessed input raises plus every TorchLens refusal.
