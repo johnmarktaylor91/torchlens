@@ -1303,7 +1303,7 @@ torchlens/receptive_field/_gradient.py::gradient_for_unit	171
 torchlens/receptive_field/_gradient_forward.py::_build_projective_result	72
 torchlens/receptive_field/_gradient_forward.py::projective_gradient_for_unit	89
 torchlens/receptive_field/_path.py::resolve_graph_point	78
-torchlens/receptive_field/_query.py	1134
+torchlens/receptive_field/_query.py	930
 torchlens/receptive_field/_query.py::_build_box	163
 torchlens/receptive_field/_query.py::_map_passthrough	64
 torchlens/receptive_field/_query.py::box_for_unit	70
@@ -1323,7 +1323,7 @@ torchlens/receptive_field/_view.py::ReceptiveFieldView.show	71
 torchlens/receptive_field/_viz.py::node_spec	63
 torchlens/receptive_field/_viz.py::show	83
 torchlens/receptive_field/rules/interpolation.py::interpolate	63
-torchlens/receptive_field/rules/transforms.py::getitem	76
+torchlens/receptive_field/rules/transforms.py::getitem	75
 torchlens/receptive_field/rules/transforms.py::pad	73
 torchlens/recording/_record_one_shot.py::record	166
 torchlens/recording/_recorder.py	853
