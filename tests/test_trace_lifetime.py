@@ -25,6 +25,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils.rng.monitor import host_nondeterminism_monitor
 from torchlens.options import CaptureOptions
 from torchlens.recording import dry_run
 
@@ -96,6 +97,31 @@ def _death_by_refcount() -> tuple[bool, bool, int]:
     finally:
         gc.enable()
     return trace_dead, core_dead, delta
+
+
+def test_rng_monitor_window_is_freed_by_refcount() -> None:
+    """A torn-down host RNG monitor dies with its last reference, not at the next collection.
+
+    The replayable capture's monitor window used to leave a cycle (monitor -> profile
+    hooks -> closures -> monitor, plus the owner-sync session) holding its per-window
+    caches until a gen-2 collection; the monitor now holds its hooks weakly and drops the
+    session at teardown.
+    """
+
+    model = _Stack().eval()
+    x = torch.randn(2, 6)
+    _replayable_capture()  # a warm process: lazy torch and torchlens imports are done
+    monitor = host_nondeterminism_monitor(model)
+    with monitor:
+        model(x)
+    ref = weakref.ref(monitor)
+    gc.collect()
+    gc.disable()
+    try:
+        del monitor
+        assert ref() is None, "the monitor window survived its last reference (held by a cycle)"
+    finally:
+        gc.enable()
 
 
 def test_dead_trace_is_freed_by_refcount() -> None:

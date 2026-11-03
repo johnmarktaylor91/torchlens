@@ -17,6 +17,7 @@ import sys as _sys_module
 import threading as _threading_module
 import time as _time_module
 import uuid as _uuid_module
+import weakref as _weakref_module
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
 from types import CodeType, FrameType
@@ -48,7 +49,7 @@ from .inventory_types import (
     _torchlens_module_globals_ids,
     _untrusted_rng_override,
 )
-from .monitor_state import _PATCH_STACKS, _PatchStackEntry, _skip_retired_hooks
+from .monitor_state import _PATCH_STACKS, _PatchStackEntry, _retired_hook_event, _skip_retired_hooks
 from .registry import (
     _CLOCK_COUNTER_NAMES,
     _CLOCK_IMPLICIT_NOW,
@@ -181,8 +182,8 @@ class host_nondeterminism_monitor:
         self._previous_threading_profile: Any = None
         self._orig_sys_setprofile: Any = None
         self._orig_threading_setprofile: Any = None
-        self._sys_hook: Any = None
-        self._threading_hook: Any = None
+        self._sys_hook_ref: Any = None
+        self._threading_hook_ref: Any = None
         self._sys_profile_installed = False
         self._threading_profile_installed = False
         # Window lifecycle. ``_entered`` refuses a second arm on the same instance and
@@ -929,6 +930,27 @@ class host_nondeterminism_monitor:
                 return True
         return False
 
+    @property
+    def _sys_hook(self) -> Any:
+        """The owner-thread profile hook, held WEAKLY: the ``sys`` slot owns it in-window.
+
+        Hooks hold the monitor (closure and ``_tl_owner``), never the reverse, so a torn-down
+        window is freed by refcount; a thread still carrying a retired hook keeps it alive."""
+        return None if self._sys_hook_ref is None else self._sys_hook_ref()
+
+    @_sys_hook.setter
+    def _sys_hook(self, hook: Any) -> None:
+        self._sys_hook_ref = None if hook is None else _weakref_module.ref(hook)
+
+    @property
+    def _threading_hook(self) -> Any:
+        """The new-thread profile hook, held weakly (see :attr:`_sys_hook`)."""
+        return None if self._threading_hook_ref is None else self._threading_hook_ref()
+
+    @_threading_hook.setter
+    def _threading_hook(self, hook: Any) -> None:
+        self._threading_hook_ref = None if hook is None else _weakref_module.ref(hook)
+
     def _make_profile_hook(self, predecessor: Any, *, records_thread_ident: bool = False) -> Any:
         """Build the ``sys``/``threading`` profile hook, chained ahead of ``predecessor``.
 
@@ -945,31 +967,9 @@ class host_nondeterminism_monitor:
             """Classify one profile event, then chain to the predecessor hook."""
 
             if self._hooks_retired:
-                # The window that installed this hook is over. ``threading.setprofile``
-                # only seeds NEW threads, so a worker started in-window keeps this hook
-                # as its thread-local profile function forever -- a permanent per-call
-                # tax, a permanent strong reference to the model graph, and (worse) a
-                # later capture's draws on that thread classifying into this dead
-                # window's discarded result. A non-LIFO overlap can likewise hand this
-                # hook back to the process. Self-uninstall on the first event after
-                # teardown -- but ONLY when this hook is the one currently installed on
-                # this thread: while it is merely a LINK in a live successor's chain,
-                # uninstalling would tear down that successor's window too.
-                try:
-                    if _sys_module.getprofile() is hook:
-                        # Held original: a LIVE later window may have its
-                        # swap-detection wrapper on the module attr, and this
-                        # dead-window self-uninstall must not flag it.
-                        setter = self._orig_sys_setprofile or _sys_module.setprofile
-                        setter(predecessor)
-                except Exception:
-                    pass
-                if predecessor is not None:
-                    try:
-                        predecessor(frame, event, arg)
-                    except Exception:
-                        pass
-                return None
+                return _retired_hook_event(
+                    self, records_thread_ident, predecessor, frame, event, arg
+                )
             if records_thread_ident:
                 # r41 hon2_1: the threading hook registers every hooked thread's ident
                 # (idempotent set.add, GIL-atomic) during thread bootstrap -- BEFORE the
@@ -1218,9 +1218,9 @@ class host_nondeterminism_monitor:
             self._flag_uncertain("teardown_interrupted")
             if deferred is None:
                 deferred = exc
-        # A thread parked in an in-window wait wrapper, or still holding a retired profile
-        # hook, keeps this monitor reachable; past the settled verdict it must not pin the model.
-        self._model = None
+        # A thread parked in an in-window wait wrapper or holding a retired profile hook keeps
+        # this monitor reachable; past the verdict it must pin neither model nor sync session.
+        self._model = self._owner_sync_session = None
         self._generator_states, self._deep_generator_states = [], []
         self._numpy_frame_rng_states = {}
         if deferred is not None:
@@ -1482,16 +1482,16 @@ class host_nondeterminism_monitor:
         # records each hooked thread's ident in the diagnostic registry (the r41
         # escape-belt 3-class consumer was deleted r43; owner/non-owner is binary now).
         self._previous_sys_profile = _sys_module.getprofile()
-        self._sys_hook = self._make_profile_hook(self._previous_sys_profile)
-        _sys_module.setprofile(self._sys_hook)
+        self._sys_hook = sys_hook = self._make_profile_hook(self._previous_sys_profile)
+        _sys_module.setprofile(sys_hook)
         self._sys_profile_installed = True
         self._previous_threading_profile = (
             _threading_module.getprofile() if hasattr(_threading_module, "getprofile") else None
         )
-        self._threading_hook = self._make_profile_hook(
+        self._threading_hook = threading_hook = self._make_profile_hook(
             self._previous_threading_profile, records_thread_ident=True
         )
-        _threading_module.setprofile(self._threading_hook)
+        _threading_module.setprofile(threading_hook)
         self._threading_profile_installed = True
         # Raw ``_thread`` spawns bypass ``threading.setprofile`` entirely (that
         # hook rides ``threading.Thread``'s bootstrap), so an in-window
