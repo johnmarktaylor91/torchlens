@@ -1,12 +1,10 @@
 """Reader of the 3.0 saved format: manifest first, digests, record tables, records.
 
-Every step refuses typed before the next opens a file: :func:`read_manifest` (2.x
-test, manifest schema, version window), :func:`validate_artifact` (listed files' bytes
-and SHA-256), the record tables (envelope, columns against the field bindings, one typed
-decode per cell through :mod:`.values`), cross-record references, record construction
-through the state hooks under the governed load, tensors through the lazy layer, and the
-load validators unchanged. Nothing here evaluates, unpickles or imports by a name from the
-file. Design: ``docs/maintainers/saved_format_3_design.md`` (sections 2, 3, 9 and 14).
+Every step refuses typed before the next opens a file: manifest (2.x test, schema, version
+window), listed files' digests, record tables (envelope, columns, one typed decode per cell),
+cross-record references, record construction through the state hooks under the governed load,
+tensors through the lazy layer. Nothing here evaluates, unpickles or imports by a name from
+the file. Design: ``docs/maintainers/saved_format_3_design.md`` (sections 2, 3, 9 and 14).
 """
 
 from __future__ import annotations
@@ -125,11 +123,11 @@ _ACCESSOR_COLUMNS: Final[dict[tuple[str, str], tuple[str, str, str | None]]] = {
 def read_manifest(path: str | Path) -> dict[str, Any]:
     """Read and validate ``manifest.json``; the first door, before any other file is opened.
 
-    Raises ``ArtifactTooOldError`` (``artifact_version_below_floor``: no ``format`` key, a
-    ``metadata.pkl`` or ``bundle.json`` at the root, or a version below the floor) or
-    ``ArtifactError`` (``manifest_missing``, ``manifest_unreadable``,
-    ``manifest_not_json_object``, ``manifest_schema_invalid``, ``artifact_save_level_invalid``,
-    ``artifact_version_above_runtime``, ``load_path_symlink_rejected``).
+    Raises ``ArtifactTooOldError`` (``artifact_version_below_floor``: no ``format`` key, a 2.x
+    root marker, or a version below the floor) or ``ArtifactError`` (``manifest_missing``,
+    ``manifest_unreadable``, ``manifest_not_json_object``, ``manifest_schema_invalid``,
+    ``artifact_save_level_invalid``, ``artifact_version_above_runtime``,
+    ``load_path_symlink_rejected``).
     """
 
     root = Path(path)
@@ -188,12 +186,8 @@ def _refuse_schema_errors(manifest_path: Path, errors: list[str]) -> None:
 
 
 def validate_artifact(path: str | Path) -> dict[str, Any]:
-    """Validate the manifest and every file it lists; return the manifest.
-
-    Every listed file must exist under the root with the manifest's byte count
-    and SHA-256, and no unlisted file may be present
-    (``bundle_metadata_integrity_refused`` otherwise).
-    """
+    """Validate the manifest and every listed file (bytes, SHA-256, no unlisted file;
+    ``bundle_metadata_integrity_refused`` otherwise); return the manifest."""
 
     root = Path(path)
     manifest = read_manifest(root)
@@ -207,11 +201,9 @@ def validate_artifact(path: str | Path) -> dict[str, Any]:
 class TensorRefSink:
     """Collects the tensor cells a decode meets, as ``BlobRef`` markers plus lazy-layer entries.
 
-    The entries reach the rehydrate path as the manifest's tensor index, so eager and lazy
-    materialization run through ``LazyActivationRef`` on (chunk, key) unchanged. A
-    structure-only cell (no ``blob``, no ``key``) decodes to ``None`` and is counted. The
-    codec must be listed, the chunk in ``files``, the key an opaque ``t<k>``, and a (chunk,
-    key) referenced twice must be declared identically.
+    The entries reach the rehydrate path as the manifest's tensor index (``LazyActivationRef``
+    on (chunk, key)). A structure-only cell decodes to ``None`` and is counted. The codec must
+    be listed, the chunk in ``files``, the key ``t<k>``; a repeated (chunk, key) must agree.
     """
 
     def __init__(self, *, codecs: tuple[str, ...], files: Mapping[str, Mapping[str, Any]]) -> None:
@@ -487,6 +479,26 @@ class DecodedArtifact:
                     for column, slot in _RESTORED_COMPUTED.get(kind, {}).items():
                         if cells.get(column) is not None:
                             object.__setattr__(obj, slot, cells[column])
+                    if kind == "module":
+                        self._install_module_templates(cells)
+
+    def _install_module_templates(self, cells: Mapping[str, Any]) -> None:
+        """Hand a module row's templates to its first call, where the module property reads them."""
+
+        labels = cells.get("call_labels") or []
+        if not labels or all(cells.get(column) is None for column in _TEMPLATE_SLOTS):
+            return
+        if not hasattr(self, "_calls_by_label"):
+            rows, calls = self.tables.get("module_call", ()), self.objects.get("module_call", ())
+            self._calls_by_label = {
+                row.get("label"): call for row, call in zip(rows, calls, strict=True)
+            }
+        call = self._calls_by_label.get(labels[0])
+        if call is None:
+            return
+        for column, slot in _TEMPLATE_SLOTS.items():
+            if cells.get(column) is not None and call.__dict__.get(slot) is None:
+                call.__dict__[slot] = cells[column]
 
     def _rebuild_accessors(
         self, kind: str, row_number: int, row: Mapping[str, Any]
@@ -587,7 +599,6 @@ def computed_columns(kind: str) -> frozenset[str]:
 def _restore_record(
     obj: Any, row: Mapping[str, Any], *, version: int, computed: frozenset[str] = frozenset()
 ) -> None:
-    # A COMPUTED column comes from the live property; installing it would shadow the property.
     """Run the record's state hook on its decoded row, computed columns dropped."""
 
     state = {name: value for name, value in row.items() if name not in computed}
@@ -602,16 +613,15 @@ def _restore_record(
 
 # ---- Doors -----------------------------------------------------------------
 
-#: The rehydration step of each door, installed by ``torchlens._io.bundle`` through
-#: :func:`install_load_hooks` (trace: decoded artifact and load options; bundle: members).
+#: The rehydration step of each door, installed by ``torchlens._io.bundle`` (install_load_hooks).
 _LOAD_HOOKS: dict[str, Callable[..., Any]] = {}
 _HOOK_KINDS: Final = frozenset({"trace", "bundle", "recipe"})
 
-#: Computed columns kept behind their property after a load (column to backing slot).
+#: Computed columns kept behind their property after a load (column to backing slot); a
+#: ``module`` row's templates go to its first call (``_install_module_templates``).
 _TEMPLATE_SLOTS: Final = {
     f"forward_{k}_template": f"_forward_{k}_template" for k in ("args", "kwargs")
 }
-# ``module`` derives its templates from its first call; only ``module_call`` keeps a slot.
 _RESTORED_COMPUTED: Final[dict[str, dict[str, str]]] = {
     "module_call": _TEMPLATE_SLOTS,
     "op": {"arg_expressions": "_arg_expressions_cache"},
@@ -619,12 +629,9 @@ _RESTORED_COMPUTED: Final[dict[str, dict[str, str]]] = {
 
 
 def install_load_hooks(**hooks: Callable[..., Any]) -> None:
-    """Install the rehydration step of the ``trace``, ``bundle`` and ``recipe`` doors.
-
-    Turning decoded tables into records runs the rehydrate path above this package in
-    the import layering, so ``torchlens._io.bundle`` installs the steps when imported.
-    A door called without its step refuses with ``bundle_load_failed``.
-    """
+    """Install the rehydration step of the ``trace``, ``bundle`` and ``recipe`` doors
+    (``torchlens._io.bundle`` installs them; a door without its step refuses with
+    ``bundle_load_failed``)."""
 
     unknown = set(hooks) - _HOOK_KINDS
     if unknown:
@@ -660,12 +667,8 @@ def _require_kind(manifest: Mapping[str, Any], root: Path, expected: str) -> Non
 
 
 def read_tables(root: Path, manifest: Mapping[str, Any]) -> DecodedArtifact:
-    """Decode every record table, resolve every reference and run the state hooks.
-
-    The cross-record validators run between reference resolution and
-    construction; the record anchors of the manifest are checked against the
-    decoded trace row. Nothing here touches the rehydrate path.
-    """
+    """Decode every table, resolve every reference, run the cross-record validators and the
+    manifest anchor check, then the state hooks. Nothing here touches the rehydrate path."""
 
     artifact = DecodedArtifact(root, manifest)
     artifact.decode_tables()
@@ -686,12 +689,8 @@ def load_trace(
     materialize_nested: bool = False,
     payload_hints: Any = None,
 ) -> Any:
-    """Load one ``kind: trace`` artifact of the 3.0 saved format.
-
-    Every table is decoded and every reference resolved before any state hook runs under
-    the governed load (the load validators run as for in-process state); the installed
-    ``trace`` step then rehydrates tensors, accessors and the listed recipe.
-    """
+    """Load one ``kind: trace`` artifact: tables and references first, then the state hooks
+    under the governed load, then the installed ``trace`` step (tensors, accessors, recipe)."""
 
     root = Path(path)
     manifest = validate_artifact(root)
@@ -780,10 +779,8 @@ def _iter_members(root: Path, manifest: Mapping[str, Any]) -> Iterator[tuple[str
 def load_intervention_recipe(path: str | Path) -> Any:
     """Load the intervention recipe (``intervention.json``) of a trace or intervention artifact.
 
-    Built-in edits come back through the helper registry; a callable
-    placeholder loads as an audit-only edit that every rerun door refuses
-    (``run_intervention_spec_not_persisted``). Grammar: ``format3.recipe``;
-    object construction: the installed ``recipe`` step.
+    Built-in edits come back through the helper registry; a callable placeholder loads as an
+    audit-only edit every rerun door refuses (``run_intervention_spec_not_persisted``).
     """
 
     root = Path(path)
