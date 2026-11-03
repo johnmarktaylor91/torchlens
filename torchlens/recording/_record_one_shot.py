@@ -25,7 +25,7 @@ from ..intervention.predicates import InterventionPredicate
 from ..options import CaptureOptions, StorageOptions
 from ._generation import GenerationRecording, enrich_generation, record_generation
 from ._recorder import Recorder
-from ._validation import validate_postprocess
+from ._validation import refuse_episode_on_record, validate_postprocess
 from .options import ForwardErrorMode, HaltPredicateFn, PredicateErrorMode, PredicateFn
 from .types import CaptureSpec, Recording
 
@@ -151,6 +151,7 @@ def record(
     narrate: Any | None = None,
     backend: BackendName | None = None,
     generate_kwargs: Mapping[str, Any] | None = None,
+    episode: Any | None = None,
 ) -> Recording | GenerationRecording:
     """Record one model forward pass with capture predicates.
 
@@ -230,6 +231,8 @@ def record(
         prompts, assisted decoding, encoder-decoder models, ``use_cache=False``,
         ``intervene=``, ``stop_after=`` and partial forward-error modes refuse with
         code ``record_generation_unsupported``.
+    episode:
+        Refused typed (``episode_unsupported_on_record``); episode capture runs on ``tl.trace``.
 
     Returns
     -------
@@ -241,18 +244,23 @@ def record(
 
     _require_torch_fastlog_backend(backend)
     model = unwrap_compiled_model(model)
-    flat = _unfold_capture_options(capture)
-    lookback = flat["lookback"]
-    lookback_payload_policy = flat["lookback_payload_policy"]
-    halt = stop_after
-    seed = flat["seed"]
-    activation_transform = flat["activation_transform"]
-    save_raw_activations = flat["save_raw_activations"]
-    save_grads = flat["save_grads"]
-    grad_transform = flat["grad_transform"]
-    save_raw_grads = flat["save_raw_grads"]
-    backward_ready = flat["backward_ready"]
-    detach_saved_activations = flat["detach_saved_activations"]
+    refuse_episode_on_record(episode)
+    recorder_kwargs: dict[str, Any] = {
+        "save": save,
+        "default_op": default_op,
+        "default_module": default_module,
+        "history_size": history_size,
+        "include_source_events": include_source_events,
+        "intervene": intervene,
+        "halt": stop_after,
+        "max_predicate_failures": max_predicate_failures,
+        "on_predicate_error": on_predicate_error,
+        "on_forward_error": on_forward_error,
+        "storage": storage,
+        "default_grad": default_grad,
+        "narrate": narrate,
+        **_unfold_capture_options(capture),
+    }
     validate_postprocess(postprocess)
     input_args = _coerce_input_args(model, input_args)
     # Fail fast on tensor variants the logging pipeline cannot handle (meta tensors have no
@@ -262,64 +270,11 @@ def record(
     check_model_and_input_variants(model, input_args, input_kwargs)
     if generate_kwargs is not None:
         output, generation = record_generation(
-            model,
-            input_args,
-            input_kwargs,
-            generate_kwargs,
-            {
-                "save": save,
-                "default_op": default_op,
-                "default_module": default_module,
-                "history_size": history_size,
-                "lookback": lookback,
-                "lookback_payload_policy": lookback_payload_policy,
-                "include_source_events": include_source_events,
-                "intervene": intervene,
-                "halt": halt,
-                "max_predicate_failures": max_predicate_failures,
-                "on_predicate_error": on_predicate_error,
-                "on_forward_error": on_forward_error,
-                "storage": storage,
-                "seed": seed,
-                "activation_transform": activation_transform,
-                "save_raw_activations": save_raw_activations,
-                "save_grads": save_grads,
-                "default_grad": default_grad,
-                "grad_transform": grad_transform,
-                "save_raw_grads": save_raw_grads,
-                "backward_ready": backward_ready,
-                "narrate": narrate,
-                "detach_saved_activations": detach_saved_activations,
-            },
+            model, input_args, input_kwargs, generate_kwargs, recorder_kwargs
         )
         object.__setattr__(generation.recording, "_output", output_returned(output))
         return enrich_generation(generation, postprocess)
-    with Recorder(
-        model,
-        save=save,
-        default_op=default_op,
-        default_module=default_module,
-        history_size=history_size,
-        lookback=lookback,
-        lookback_payload_policy=lookback_payload_policy,
-        include_source_events=include_source_events,
-        intervene=intervene,
-        halt=halt,
-        max_predicate_failures=max_predicate_failures,
-        on_predicate_error=on_predicate_error,
-        on_forward_error=on_forward_error,
-        storage=storage,
-        seed=seed,
-        activation_transform=activation_transform,
-        save_raw_activations=save_raw_activations,
-        save_grads=save_grads,
-        default_grad=default_grad,
-        grad_transform=grad_transform,
-        save_raw_grads=save_raw_grads,
-        backward_ready=backward_ready,
-        narrate=narrate,
-        detach_saved_activations=detach_saved_activations,
-    ) as recorder:
+    with Recorder(model, **recorder_kwargs) as recorder:
         recorder(input_args, input_kwargs)
     result = recorder.recording
     if postprocess != "none":

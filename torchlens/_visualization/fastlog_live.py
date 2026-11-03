@@ -10,7 +10,8 @@ from typing import Any, cast
 
 import graphviz
 
-from ..recording.types import DryRun, RecordContext
+from ..recording._dry_run import DryRun
+from ..recording.types import RecordContext
 from ..viz._drawing import Drawing
 from . import _render_utils
 from ._render_common import GraphvizRenderError

@@ -296,3 +296,48 @@ def test_removed_bundle_member_redirects_typed(name: str) -> None:
         getattr(bundle, name)
     assert excinfo.value.fields["code"] == "facade_redirect"
     assert excinfo.value.fields["attribute"] == name
+
+
+def test_bundle_summary_is_a_text_card() -> None:
+    """Bundle.summary returns the card: members, outcomes, baseline, relations (RC-278)."""
+
+    bundle = _capture_pair(seed=0, offset=0.5)
+    card = bundle.summary()
+    assert isinstance(card, str)
+    assert "members (2): baseline (baseline), changed" in card
+    assert "baseline: 'baseline'" in card
+    assert "outcomes:" in card and "relations:" in card
+    assert "structurally consistent:" in card
+
+
+def test_bundle_to_pandas_stacks_members() -> None:
+    """Bundle.to_pandas stacks each member's table under a leading member column (RC-278)."""
+
+    pd = pytest.importorskip("pandas")
+    bundle = _capture_pair(seed=0, offset=0.5)
+    frame = bundle.to_pandas()
+    assert list(frame.columns)[0] == "member"
+    assert list(frame.index) == list(range(len(frame)))
+    per_member = {name: len(bundle[name].to_pandas()) for name in bundle.names}
+    assert frame["member"].value_counts().to_dict() == per_member
+    assert list(dict.fromkeys(frame["member"])) == bundle.names
+    empty = tl.Bundle().to_pandas()
+    assert isinstance(empty, pd.DataFrame)
+    assert list(empty.columns) == ["member"] and len(empty) == 0
+
+
+def test_bundle_to_agent_json_dumps_every_member() -> None:
+    """Bundle.to_agent_json is the agent_bundle.v1 dump with per-member dumps (RC-278)."""
+
+    import json
+
+    bundle = _capture_pair(seed=0, offset=0.5)
+    dump = bundle.to_agent_json(max_ops=3)
+    assert dump["schema"] == "torchlens.agent_bundle.v1"
+    assert dump["member_count"] == 2
+    assert dump["names"] == ["baseline", "changed"]
+    assert dump["baseline_name"] == "baseline"
+    assert sum(dump["outcome"].values()) == 2
+    assert set(dump["members"]) == {"baseline", "changed"}
+    assert dump["members"]["changed"] == bundle["changed"].to_agent_json(max_ops=3)
+    json.dumps(dump)

@@ -1,4 +1,5 @@
-"""Bundle card and outcome fold: ``repr``, ``str`` and the derived outcome of a ``Bundle``."""
+"""Bundle card and folds: ``repr``, ``str``, ``summary``, the member table, the agent dump
+and the derived outcome of a ``Bundle``."""
 
 from __future__ import annotations
 
@@ -85,3 +86,70 @@ def bundle_outcome(self: Bundle) -> CaptureOutcome:
     return _fold_member_outcomes(
         [(name, outcome_for(member)) for name, member in self._members.items()]
     )
+
+
+def bundle_summary(self: Bundle) -> str:
+    """Multi-line bundle card (``Bundle.summary``): members, outcomes, baseline, relations."""
+
+    distribution = self._outcome_distribution()
+    members = ", ".join(
+        f"{name} (baseline)" if name == self._baseline_name else name for name in self.names
+    )
+    outcomes = ", ".join(f"{token}={count}" for token, count in sorted(distribution.items()))
+    relation_count = fail_open(lambda: len(self.relations()), lambda _error: 0)
+    return "\n".join(
+        [
+            self.__repr__(),
+            f"  members ({len(self)}): {members or 'none'}",
+            f"  outcomes: {outcomes or 'none'}",
+            f"  baseline: {self._baseline_name!r}",
+            f"  relations: {relation_count}",
+            f"  structurally consistent: {self.is_structurally_consistent}",
+        ]
+    )
+
+
+def bundle_table(self: Bundle) -> Any:
+    """One stacked member-keyed table (``Bundle.to_pandas``).
+
+    The leading ``member`` column names the member; the remaining columns are
+    each member's own ``Trace.to_pandas()`` rows, concatenated in ``names``
+    order with a fresh index. An empty bundle gives an empty frame that still
+    carries the ``member`` column.
+    """
+
+    try:
+        import pandas as pd
+    except ImportError as exc:
+        raise ImportError(
+            "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
+        ) from exc
+
+    frames = []
+    for name in self.names:
+        frame = self._members[name].to_pandas().copy()
+        frame.insert(0, "member", name)
+        frames.append(frame)
+    if not frames:
+        return pd.DataFrame({"member": pd.Series([], dtype=object)})
+    return pd.concat(frames, ignore_index=True)
+
+
+def bundle_agent_json(self: Bundle, *, max_ops: int | None = None) -> dict[str, Any]:
+    """The ``torchlens.agent_bundle.v1`` dump (``Bundle.to_agent_json``).
+
+    Card facts first, then every member's own ``Trace.to_agent_json`` dump
+    keyed by member name; ``max_ops`` is passed through to each member.
+    """
+
+    return {
+        "schema": "torchlens.agent_bundle.v1",
+        "member_count": len(self),
+        "names": list(self.names),
+        "baseline_name": self._baseline_name,
+        "outcome": dict(self._outcome_distribution()),
+        "structurally_consistent": bool(self.is_structurally_consistent),
+        "members": {
+            name: self._members[name].to_agent_json(max_ops=max_ops) for name in self.names
+        },
+    }

@@ -15,6 +15,10 @@ q = log.modules["blocks.0.attn"].facets["q"]
 h_n = log.modules["lstm"].facets["h_n"]
 ```
 
+Facets live on a `Trace`. `tl.record` takes no facet keyword and a `Recording` has no
+`modules[...].facets`; cook it first with `recording.to_trace()` and read the facets there
+(a facet whose inputs the `save=` predicate did not keep fails explicitly).
+
 Attribute access is convenience sugar for valid Python identifiers that do not
 collide with `FacetView` methods:
 
