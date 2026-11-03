@@ -434,7 +434,7 @@ def _draw_ioi_edges(data: dict[str, Any], out: Path) -> list[Path]:
     top_class = max(set(ends), key=lambda label: (ends.count(label), label))
     scale = max((abs(edge["score"]) for edge in edges), default=1.0)
     with plt.rc_context(STYLE):
-        fig, ax = plt.subplots(figsize=(WIDTH + 0.1, 5.8), layout="constrained")
+        fig, ax = plt.subplots(figsize=(WIDTH + 0.2, 5.8), layout="constrained")
         for edge in edges:
             ax.annotate(
                 "",
