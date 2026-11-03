@@ -475,7 +475,7 @@ def hf_config_classifier(outputs: Any, meta: dict[str, Any]) -> ResolvedPostproc
     id2label = meta.get("id2label")
     if not isinstance(id2label, dict) or not id2label:
         return None
-    return ResolvedPostprocessing(
+    resolved = ResolvedPostprocessing(
         source="hf_config",
         identifier="config.id2label",
         verified=True,
@@ -487,6 +487,38 @@ def hf_config_classifier(outputs: Any, meta: dict[str, Any]) -> ResolvedPostproc
         label_source_version=DETECTOR_VERSION,
         confidence=0.99,
     )
+    if not _labels_cover_selected_logits(outputs, resolved, meta, id2label):
+        return None
+    return resolved
+
+
+def _labels_cover_selected_logits(
+    outputs: Any, resolved: ResolvedPostprocessing, meta: dict[str, Any], id2label: dict[Any, Any]
+) -> bool:
+    """Return whether ``id2label`` can label the logits this record would select.
+
+    Every Hugging Face config carries a placeholder ``id2label`` (two
+    ``LABEL_n`` entries) even on language models, whose ``logits`` are a
+    rank-3 vocabulary-width tensor no label table covers. Claiming those
+    outputs would block the tokenizer-backed text decode behind them, so the
+    classifier detector declines when the selected logits are not a rank-1 or
+    rank-2 tensor at most ``len(id2label)`` wide. An ambiguous head choice
+    (no single logits tensor) keeps the claim: the ambiguity is disclosed on
+    the record instead.
+    """
+
+    logits_info = _select_logits(outputs, resolved, meta)
+    if logits_info is None:
+        return True
+    logits = logits_info[0]
+    width = _safe_last_dim(logits)
+    if width is None:
+        return True
+    try:
+        rank = int(logits.ndim)
+    except Exception:
+        return True
+    return rank in (1, 2) and width <= len(id2label)
 
 
 @register(name="imagenet_verified", priority=20)

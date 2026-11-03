@@ -41,23 +41,31 @@ over the built-in styles (`classification`, `imagenet`, `imagenet1k`,
 with the available heads, and several qualifying heads with none named
 refuse `decode_head_ambiguous`.
 
-Text models traced through `tl.bridge.transformers.trace_text` decode as text
-automatically: the bridge attaches the tokenizer for the span of the capture
-and the `hf_text` detector fires on it, decoding only a head named `logits`
-(or one bare output tensor). A text classifier with `config.id2label` gets its
-labels instead.
+Text models traced from a raw string (`tl.trace(model, "text")` routes a
+Hugging Face language model through `tl.bridge.transformers.trace_text`)
+decode as text automatically: the bridge attaches the tokenizer for the span
+of the capture and the `hf_text` detector fires on it, decoding only a head
+named `logits` (or one bare output tensor). A text classifier with
+`config.id2label` gets its labels instead; the placeholder `id2label` every
+Hugging Face config carries (`LABEL_0`, `LABEL_1`) never claims
+vocabulary-width or per-token logits, so language models fall through to the
+text decode.
 
 `trace.provenance.output_postprocessor` records the resolver source, selected style,
 selected head, label source, confidence, ambiguity flag, and captured top-N
 bound. `trace.output_table(top_n, batch_items)` returns a dataframe with
-`batch_item`, `rank`, `label`, and `prob`. `batch_items=None` returns all
-captured items, an integer returns the first `N` batch items, and a sequence
-selects explicit batch indices.
+`batch_item`, `rank`, `label`, and `prob` for a classification decode, and
+with `batch_item`, `rank`, `text`, and `token_ids` for a text decode.
+`batch_items=None` returns all captured items, an integer returns the first
+`N` batch items, and a sequence selects explicit batch indices.
 
 `trace.decode_output(top_n)` returns the captured JSON-primitive decoded
 representation. It can recompute from retained logits when available; otherwise
 requests above the capture-time bound raise a clear "logits not retained"
-error.
+error. When nothing was decoded at capture, it runs the output detectors over
+the retained output tensors on demand and refuses typed when none is retained
+(`decoded_output_unavailable`) or no detector resolves a style
+(`decode_style_unknown`).
 
 For tabular graph export, decoded text is opt-in:
 

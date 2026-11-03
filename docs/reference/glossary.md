@@ -4484,7 +4484,7 @@ alphabetical order.
 | `Trace.collapse_order` | Return each module's smart-collapse score as (module address, score) pairs, highest first, for the chosen policy |
 | `Trace.completeness_diagnostics` | List of reports of ATen dispatch events the completeness witness could not account for; empty when capture was complete |
 | `Trace.compute_coverage` | Counts of layer-list rows in each of four compute-coverage categories, as a dict |
-| `Trace.decode_output` | Return the decoded output rows captured during tracing, up to `k` ranks per batch item; with `style=`, `head=` or `tokenizer=` decode again on demand from the retained output tensors without touching `decoded_output`; raise if nothing was captured and no output tensor is retained |
+| `Trace.decode_output` | Return the decoded output rows captured during tracing, up to `k` ranks per batch item; with `style=`, `head=` or `tokenizer=` decode again on demand from the retained output tensors without touching `decoded_output`; with nothing captured, run the output detectors over the retained output tensors and raise if none is retained or no detector resolves a style |
 | `Trace.disarm_triggers` | Detach this Trace from global autograd backward interception so plain backward calls no longer record into it |
 | `Trace.escape_diagnostics` | List of reports of raw torch callables that ran outside their registered wrapper during capture, each with file, line and function |
 | `Trace.factcore` | The single numbers substrate for this trace: counts, identity spine, parameter totals, compute aggregation and memory figures |
