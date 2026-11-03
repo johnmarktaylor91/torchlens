@@ -454,7 +454,7 @@ def test_tinygrad_spec_registered() -> None:
     assert capabilities.supports_payload_materialization is True
     assert capabilities.module_identity_modes == ("function_root", "object_module")
     assert capabilities.payload_policy == "array_payloads"
-    assert capabilities.trace_options == ("module_identity_mode", "grad_options")
+    assert capabilities.trace_options == ("module_identity_mode", "grad_options", "facets")
 
 
 def test_unrealized_closure_constant_refuses_typed() -> None:

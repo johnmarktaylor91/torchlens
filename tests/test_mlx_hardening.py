@@ -806,7 +806,7 @@ def test_mlx_capability_flags_match_materialized_contract() -> None:
     assert spec.capabilities.payload_materialization is True
     assert spec.capabilities.intermediate_derived_grads is True
     assert spec.capabilities.module_identity_modes == ("function_root", "object_module")
-    assert spec.capabilities.trace_options == ("module_identity_mode", "grad_options")
+    assert spec.capabilities.trace_options == ("module_identity_mode", "grad_options", "facets")
     assert spec.serialization_policy.payload_policy == "array_payloads"
     assert spec.serialization_policy.body_format == "safetensors"
     assert capabilities.supports_payload_materialization is True
