@@ -7774,6 +7774,7 @@ test-docstrings	tests/test_ci_packaging_gates.py	85
 test-docstrings	tests/test_circ2_edge_scores.py	64
 test-docstrings	tests/test_circ2_faithfulness.py	12
 test-docstrings	tests/test_classics_corpus.py	256
+test-docstrings	tests/test_collapse_optimizer.py	0957027
 test-docstrings	tests/test_collapse_optimizer.py	1.75
 test-docstrings	tests/test_collapse_optimizer.py	10
 test-docstrings	tests/test_collapse_optimizer.py	19
