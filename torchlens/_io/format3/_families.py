@@ -204,10 +204,11 @@ def _family_mapping(node: Mapping[str, Any], value: Any, at: str, code: str) -> 
         Schema node, candidate object, diagnostic path and inherited refusal code.
     """
 
+    # Essential interpreter complexity: normalize both admitted object representations.
     keys = node.get("keys", {})
     if node.get("attributes") and not isinstance(value, Mapping):
         if isinstance(value, PendingRecord):
-            value = value.fields
+            value = {key: value.fields[key] for key in keys if key in value.fields}
         else:
             value = {key: getattr(value, key) for key in keys if hasattr(value, key)}
     if not isinstance(value, Mapping):

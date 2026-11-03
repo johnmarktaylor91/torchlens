@@ -707,7 +707,7 @@ def _migration_samples() -> dict[str, list[Any]]:
     }
     for family in ("ACT", "EDGE", "PARAM", "EVENT"):
         valid = _audit(family)
-        for key in set(valid) - {"sites", "edges", "params"}:
+        for key in sorted(set(valid) - {"sites", "edges", "params"}):
             samples["intervention_audit"].append([{**valid, key: None}])
             samples["intervention_audit"].append([{k: v for k, v in valid.items() if k != key}])
     return samples

@@ -158,6 +158,14 @@ def cell_error(at: str, detail: str, *, code: str = CELL_CODE) -> ArtifactError:
 
 
 def _is_int(value: Any) -> bool:
+    """Return whether a value is an integer with boolean values excluded.
+
+    Parameters
+    ----------
+    value:
+        Candidate scalar.
+    """
+
     return isinstance(value, int) and not isinstance(value, bool)
 
 
@@ -281,6 +289,20 @@ class Decoder:
     # -- containers ---------------------------------------------------------
 
     def _items(self, data: Mapping[str, Any], at: str, depth: int, tag: str) -> list[Any]:
+        """Decode container items and check the set-member hashability contract.
+
+        Parameters
+        ----------
+        data:
+            Encoded typed-value fields.
+        at:
+            Record-cell diagnostic path.
+        depth:
+            Current typed-value nesting depth.
+        tag:
+            Tuple, set or frozenset container tag.
+        """
+
         items = data["items"]
         if not isinstance(items, list):
             raise cell_error(at, f"{tag} items must be an array", code=CELL_CODE)
@@ -293,15 +315,63 @@ class Decoder:
         return decoded
 
     def _tuple(self, data: Mapping[str, Any], at: str, depth: int) -> tuple[Any, ...]:
+        """Decode a tuple from its ordered item cells.
+
+        Parameters
+        ----------
+        data:
+            Encoded typed-value fields.
+        at:
+            Record-cell diagnostic path.
+        depth:
+            Current typed-value nesting depth.
+        """
+
         return tuple(self._items(data, at, depth, "tuple"))
 
     def _set(self, data: Mapping[str, Any], at: str, depth: int) -> set[Any]:
+        """Decode a set after checking member hashability.
+
+        Parameters
+        ----------
+        data:
+            Encoded typed-value fields.
+        at:
+            Record-cell diagnostic path.
+        depth:
+            Current typed-value nesting depth.
+        """
+
         return set(self._items(data, at, depth, "set"))
 
     def _frozenset(self, data: Mapping[str, Any], at: str, depth: int) -> frozenset[Any]:
+        """Decode an immutable set after checking member hashability.
+
+        Parameters
+        ----------
+        data:
+            Encoded typed-value fields.
+        at:
+            Record-cell diagnostic path.
+        depth:
+            Current typed-value nesting depth.
+        """
+
         return frozenset(self._items(data, at, depth, "frozenset"))
 
     def _dict(self, data: Mapping[str, Any], at: str, depth: int) -> dict[Any, Any]:
+        """Decode mapping pairs with unique, hashable keys.
+
+        Parameters
+        ----------
+        data:
+            Encoded typed-value fields.
+        at:
+            Record-cell diagnostic path.
+        depth:
+            Current typed-value nesting depth.
+        """
+
         items = data["items"]
         if not isinstance(items, list):
             raise cell_error(
@@ -326,6 +396,18 @@ class Decoder:
     # -- scalars ------------------------------------------------------------
 
     def _bytes(self, data: Mapping[str, Any], at: str, depth: int) -> bytes:
+        """Decode bounded base64 text and verify its declared byte count.
+
+        Parameters
+        ----------
+        data:
+            Encoded typed-value fields.
+        at:
+            Record-cell diagnostic path.
+        depth:
+            Current typed-value nesting depth.
+        """
+
         text, length = data["base64"], data["bytes"]
         if not isinstance(text, str) or len(text) > (BYTES_LIMIT * 4) // 3 + 4:
             raise cell_error(
@@ -342,18 +424,54 @@ class Decoder:
         return raw
 
     def _float(self, data: Mapping[str, Any], at: str, depth: int) -> float:
+        """Decode a tagged non-finite floating-point value.
+
+        Parameters
+        ----------
+        data:
+            Encoded typed-value fields.
+        at:
+            Record-cell diagnostic path.
+        depth:
+            Current typed-value nesting depth.
+        """
+
         text = data["v"]
         if text not in ("nan", "inf", "-inf"):
             raise cell_error(at, f"float v {text!r} is not nan, inf or -inf", code=CELL_CODE)
         return float(text)
 
     def _int(self, data: Mapping[str, Any], at: str, depth: int) -> int:
+        """Decode a bounded decimal integer representation.
+
+        Parameters
+        ----------
+        data:
+            Encoded typed-value fields.
+        at:
+            Record-cell diagnostic path.
+        depth:
+            Current typed-value nesting depth.
+        """
+
         text = data["v"]
         if not isinstance(text, str) or len(text) > INT_TEXT_LIMIT or not _INT_TEXT.fullmatch(text):
             raise cell_error(at, "int v must be a bounded decimal string", code=CELL_CODE)
         return int(text)
 
     def _complex(self, data: Mapping[str, Any], at: str, depth: int) -> complex:
+        """Decode the numeric real and imaginary parts of a complex value.
+
+        Parameters
+        ----------
+        data:
+            Encoded typed-value fields.
+        at:
+            Record-cell diagnostic path.
+        depth:
+            Current typed-value nesting depth.
+        """
+
         parts: list[float] = []
         for name in ("re", "im"):
             part = self.decode(data[name], at=f"{at}.{name}", depth=depth)
@@ -363,6 +481,18 @@ class Decoder:
         return complex(parts[0], parts[1])
 
     def _dtype(self, data: Mapping[str, Any], at: str, depth: int) -> Any:
+        """Resolve a dtype through the code-owned dtype table.
+
+        Parameters
+        ----------
+        data:
+            Encoded typed-value fields.
+        at:
+            Record-cell diagnostic path.
+        depth:
+            Current typed-value nesting depth.
+        """
+
         name = data["name"]
         dtype = dtype_table().get(name) if isinstance(name, str) else None
         if dtype is None:
@@ -370,6 +500,18 @@ class Decoder:
         return dtype
 
     def _device(self, data: Mapping[str, Any], at: str, depth: int) -> torch.device:
+        """Build a device from the bounded device-string grammar.
+
+        Parameters
+        ----------
+        data:
+            Encoded typed-value fields.
+        at:
+            Record-cell diagnostic path.
+        depth:
+            Current typed-value nesting depth.
+        """
+
         name = data["name"]
         if not isinstance(name, str) or not DEVICE_TEXT.fullmatch(name):
             raise cell_error(at, f"device name {name!r} is not a device string", code=CELL_CODE)
@@ -381,12 +523,36 @@ class Decoder:
             ) from None
 
     def _type(self, data: Mapping[str, Any], at: str, depth: int) -> str:
+        """Return a dotted type identity without importing it.
+
+        Parameters
+        ----------
+        data:
+            Encoded typed-value fields.
+        at:
+            Record-cell diagnostic path.
+        depth:
+            Current typed-value nesting depth.
+        """
+
         name = data["name"]
         if not isinstance(name, str) or not _DOTTED_NAME.fullmatch(name):
             raise cell_error(at, "type name must be a dotted identifier", code=CELL_CODE)
         return name
 
     def _enum(self, data: Mapping[str, Any], at: str, depth: int) -> enum.Enum:
+        """Resolve a member of a code-owned enum class.
+
+        Parameters
+        ----------
+        data:
+            Encoded typed-value fields.
+        at:
+            Record-cell diagnostic path.
+        depth:
+            Current typed-value nesting depth.
+        """
+
         type_name, member = data["type"], data["name"]
         cls = enum_table().get(type_name) if isinstance(type_name, str) else None
         if cls is None:
@@ -401,6 +567,18 @@ class Decoder:
     # -- objects ------------------------------------------------------------
 
     def _record(self, data: Mapping[str, Any], at: str, depth: int) -> Any:
+        """Decode the fields of an allowlisted value-object class.
+
+        Parameters
+        ----------
+        data:
+            Encoded typed-value fields.
+        at:
+            Record-cell diagnostic path.
+        depth:
+            Current typed-value nesting depth.
+        """
+
         type_name, fields = data["type"], data["fields"]
         cls = record_type_table().get(type_name) if isinstance(type_name, str) else None
         if cls is None:
@@ -423,6 +601,18 @@ class Decoder:
         return build_component(cls, decoded, at=at)
 
     def _ref(self, data: Mapping[str, Any], at: str, depth: int) -> RowRef:
+        """Decode a nonnegative row reference to a known record table.
+
+        Parameters
+        ----------
+        data:
+            Encoded typed-value fields.
+        at:
+            Record-cell diagnostic path.
+        depth:
+            Current typed-value nesting depth.
+        """
+
         record, row = data["record"], data["row"]
         if record not in _RECORD_KINDS or not _is_int(row) or row < 0:
             raise cell_error(
@@ -431,12 +621,36 @@ class Decoder:
         return RowRef(record, row)
 
     def _tensor(self, data: Mapping[str, Any], at: str, depth: int) -> Any:
+        """Delegate a tensor reference to the record-table payload sink.
+
+        Parameters
+        ----------
+        data:
+            Encoded typed-value fields.
+        at:
+            Record-cell diagnostic path.
+        depth:
+            Current typed-value nesting depth.
+        """
+
         if self.tensor_ref is None:
             raise cell_error(at, "a tensor reference outside a record table", code=CELL_CODE)
         return self.tensor_ref(data, at)
 
     @staticmethod
     def _unencodable(data: Mapping[str, Any], at: str, depth: int) -> Unencodable:
+        """Decode an unencodable-value disclosure with bounded repr text.
+
+        Parameters
+        ----------
+        data:
+            Encoded typed-value fields.
+        at:
+            Record-cell diagnostic path.
+        depth:
+            Current typed-value nesting depth.
+        """
+
         typed = isinstance(data["type"], str) and isinstance(data["repr"], str)
         counted = _is_int(data["repr_length"]) and data["repr_length"] >= 0
         if not (typed and counted and isinstance(data["at"], str)):
@@ -447,6 +661,18 @@ class Decoder:
 
     @staticmethod
     def _callable_placeholder(data: Mapping[str, Any], at: str, depth: int) -> CallablePlaceholder:
+        """Decode a callable disclosure with a valid recipe position.
+
+        Parameters
+        ----------
+        data:
+            Encoded typed-value fields.
+        at:
+            Record-cell diagnostic path.
+        depth:
+            Current typed-value nesting depth.
+        """
+
         position = data["position"]
         indexed = _is_int(position) and position >= 0
         pathed = isinstance(position, str) and _PLACEHOLDER_POSITION.fullmatch(position)
