@@ -13,6 +13,9 @@ import torch
 from torch import nn
 
 from .._errors import InvalidArgumentError
+from .._selection.selectors import site as site_selector
+from .._user_funcs import trace as _trace
+from ..intervention.spec import when as _when
 
 # ``source_model`` stays importable from this module (audit notebook 16 calls
 # ``bridge.captum.source_model``).
@@ -410,10 +413,6 @@ def _spliced_forward(probe: _SiteProbe) -> Any:
     the probe's ordinal.
     """
 
-    import torchlens as tl
-
-    from .._selection.selectors import site as site_selector
-
     model = probe.model()
     seen = {"count": 0}
 
@@ -431,7 +430,7 @@ def _spliced_forward(probe: _SiteProbe) -> Any:
         result = probe(out)
         return result.clone() if isinstance(result, torch.Tensor) else result
 
-    spec = tl.when(site_selector(probe.site_key), splice)
+    spec = _when(site_selector(probe.site_key), splice)
     return functools.partial(_run_spliced, model, probe, spec, seen)
 
 
@@ -439,8 +438,6 @@ def _run_spliced(
     model: nn.Module, probe: _SiteProbe, spec: Any, seen: dict[str, int], *args: Any, **kwargs: Any
 ) -> Any:
     """Run one capture with the site counter reset; refuse a forward that misses the site."""
-
-    import torchlens as tl
 
     seen["count"] = 0
     raw_output: dict[str, Any] = {}
@@ -452,7 +449,7 @@ def _run_spliced(
 
     handle = model.register_forward_hook(keep_output)
     try:
-        captured = tl.trace(
+        captured = _trace(
             model,
             list(args) if args else None,
             dict(kwargs) if kwargs else None,
