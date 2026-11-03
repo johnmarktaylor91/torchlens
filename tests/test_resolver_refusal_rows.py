@@ -10,6 +10,9 @@ letters say which doors must refuse it:
   ref's own module (stdlib stays denied under an allowlist: the r31 contract);
 * ``U`` the bundle unpickler (``SafeBundleUnpickler``) refuses a bare GLOBAL and a bare
   STACK_GLOBAL reference, default, trusted and allowlisted alike;
+* ``T`` the unpickler refuses the reference under trust and under its module's allowlist,
+  while the untrusting default load-tolerates it as an inert deferred reference (the
+  ``operator`` root is carved out of the stdlib denial, so the gadget gate is a trust gate);
 * ``P`` the pure-forward purity gate refuses the live callable;
 * ``E`` the sparse run-path reattach ladder resolves the key to no callable.
 
@@ -30,7 +33,7 @@ from typing import Any
 import pytest
 import torch
 
-from torchlens._io._safe_unpickle import SafeBundleUnpickler
+from torchlens._io._safe_unpickle import SafeBundleUnpickler, _DeferredForeignCallable
 from torchlens._utils._callable_safety import (
     _is_callable_invoker_name,
     _is_side_effecting_callable_name,
@@ -92,56 +95,56 @@ REFUSED_REFS: tuple[tuple[str, str, str], ...] = (
     # r33: operator gadgets that enable the attrgetter(__globals__) chain, at both operator roots.
     (
         "operator:attrgetter",
-        "RLU",
+        "RLT",
         _R33 + ": generic operator gadget or mutator denied under operator trust",
     ),
-    ("_operator:attrgetter", "RLU", _R33 + ": _operator routes to the name-allowlisted fixed root"),
+    ("_operator:attrgetter", "RLT", _R33 + ": _operator routes to the name-allowlisted fixed root"),
     (
         "operator:methodcaller",
-        "RLU",
+        "RLT",
         _R33 + ": generic operator gadget or mutator denied under operator trust",
     ),
     (
         "_operator:methodcaller",
-        "RLU",
+        "RLT",
         _R33 + ": _operator routes to the name-allowlisted fixed root",
     ),
     (
         "operator:itemgetter",
-        "RLU",
+        "RLT",
         _R33 + ": generic operator gadget or mutator denied under operator trust",
     ),
-    ("_operator:itemgetter", "RLU", _R33 + ": _operator routes to the name-allowlisted fixed root"),
+    ("_operator:itemgetter", "RLT", _R33 + ": _operator routes to the name-allowlisted fixed root"),
     (
         "operator:call",
-        "RLU",
+        "RLT",
         _R33 + ": generic operator gadget or mutator denied under operator trust",
     ),
-    ("_operator:call", "RLU", _R33 + ": _operator routes to the name-allowlisted fixed root"),
+    ("_operator:call", "RLT", _R33 + ": _operator routes to the name-allowlisted fixed root"),
     (
         "operator:setitem",
-        "RLU",
+        "RLT",
         _R33 + ": generic operator gadget or mutator denied under operator trust",
     ),
-    ("_operator:setitem", "RLU", _R33 + ": _operator routes to the name-allowlisted fixed root"),
+    ("_operator:setitem", "RLT", _R33 + ": _operator routes to the name-allowlisted fixed root"),
     (
         "operator:delitem",
-        "RLU",
+        "RLT",
         _R33 + ": generic operator gadget or mutator denied under operator trust",
     ),
-    ("_operator:delitem", "RLU", _R33 + ": _operator routes to the name-allowlisted fixed root"),
+    ("_operator:delitem", "RLT", _R33 + ": _operator routes to the name-allowlisted fixed root"),
     (
         "operator:iadd",
-        "RLU",
+        "RLT",
         _R33 + ": generic operator gadget or mutator denied under operator trust",
     ),
-    ("_operator:iadd", "RLU", _R33 + ": _operator routes to the name-allowlisted fixed root"),
+    ("_operator:iadd", "RLT", _R33 + ": _operator routes to the name-allowlisted fixed root"),
     (
         "operator:imul",
-        "RLU",
+        "RLT",
         _R33 + ": generic operator gadget or mutator denied under operator trust",
     ),
-    ("_operator:imul", "RLU", _R33 + ": _operator routes to the name-allowlisted fixed root"),
+    ("_operator:imul", "RLT", _R33 + ": _operator routes to the name-allowlisted fixed root"),
 )
 
 ALLOWED_REFS: tuple[tuple[str, str, str], ...] = (
@@ -319,6 +322,22 @@ def test_refused_at_unpickler_default_trusted_and_allowlisted(ref: str, builder)
         SafeBundleUnpickler(io.BytesIO(blob), trust_custom_callables=True).load()
     with pytest.raises(pickle.UnpicklingError):
         SafeBundleUnpickler(io.BytesIO(blob), allowed_custom_callable_modules={module_name}).load()
+
+
+@pytest.mark.parametrize("builder", _PICKLE_BUILDERS, ids=["GLOBAL", "STACK_GLOBAL"])
+@pytest.mark.parametrize("ref", _rows(REFUSED_REFS, "T"))
+def test_refused_at_unpickler_trusted_and_allowlisted_inert_by_default(
+    ref: str, builder: Callable[[str, str], bytes]
+) -> None:
+    module_name, name = ref.split(":", 1)
+    blob = builder(module_name, name)
+    with pytest.raises(pickle.UnpicklingError):
+        SafeBundleUnpickler(io.BytesIO(blob), trust_custom_callables=True).load()
+    with pytest.raises(pickle.UnpicklingError):
+        SafeBundleUnpickler(io.BytesIO(blob), allowed_custom_callable_modules={module_name}).load()
+    loaded = SafeBundleUnpickler(io.BytesIO(blob)).load()
+    assert isinstance(loaded, _DeferredForeignCallable)
+    assert loaded is not getattr(operator, name, None)
 
 
 @pytest.mark.parametrize("ref", _rows(REFUSED_REFS, "P"))
