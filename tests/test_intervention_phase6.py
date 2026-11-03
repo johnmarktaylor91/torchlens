@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import pickle
 import warnings
 from collections.abc import Callable
 from typing import Any, cast
@@ -533,3 +534,18 @@ def test_default_trace_do_matches_replayable_replay_and_rerun() -> None:
     assert torch.equal(final(default), final(replayable))
     assert torch.equal(final(default), final(rerun))
     assert torch.allclose(final(default), expected)
+
+
+def test_default_trace_pickle_drops_argument_templates() -> None:
+    """Templates hold live parameters; a pickled default trace must not carry the weights."""
+
+    model = torch.nn.Sequential(torch.nn.Linear(1024, 1024), torch.nn.ReLU())
+    log = tl.trace(model, torch.randn(1, 1024))
+    assert any(op.args_template is not None for op in log.ops)
+
+    data = pickle.dumps(log)
+    restored = pickle.loads(data)
+
+    weight_bytes = model[0].weight.numel() * model[0].weight.element_size()
+    assert len(data) < weight_bytes
+    assert all(op.args_template is None for op in restored.ops)

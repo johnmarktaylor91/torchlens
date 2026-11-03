@@ -2761,6 +2761,12 @@ class Op(OpAtenMixin, _SelectionOperand):
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state with weakrefs stripped."""
         state = dict(state_items(self))
+        # Argument templates hold the model's live parameters. A pickled op has no
+        # func, so its templates cannot drive replay; only a replayable capture keeps
+        # them (its pickle form is unchanged), so a default trace pickles at its old size.
+        if not getattr(self._source_trace_or_none(), "is_replayable", False):
+            state["args_template"] = None
+            state["kwargs_template"] = None
         state["_source_trace_ref"] = None
         state.pop("_facets_cache", None)
         state.pop("_receptive_field_cache", None)
