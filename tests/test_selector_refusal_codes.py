@@ -115,7 +115,7 @@ def test_model_input_site_refusals_carry_one_code_from_both_doors() -> None:
     with pytest.raises(SelectorCapabilityError) as set_info:
         trace.do(
             tl.model_input(0),
-            lambda out: out * 0.5,
+            _scale_hook,
             intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
         )
     with pytest.raises(SelectorCapabilityError) as attach_info:
