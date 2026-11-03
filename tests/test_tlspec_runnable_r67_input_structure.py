@@ -28,6 +28,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from tests._format3_envelope import (
+    mutate_runnable_descriptor,
+    read_runnable_descriptor,
+)
 from torchlens._input_walk import (
     INPUT_CONTAINER_KINDS,
     decode_mapping_key,
@@ -1021,9 +1025,6 @@ def test_r71c_no_live_dict_getattr_in_normative_module() -> None:
 # ======================================================================================
 
 
-import json as _json  # noqa: E402
-import os as _os  # noqa: E402
-
 from torchlens._runnable import (  # noqa: E402
     WITNESS_FAMILY_REGISTRY,
     WITNESS_FAMILY_REGISTRY_VERSION,
@@ -1063,11 +1064,8 @@ class _RichFamilies(nn.Module):
         return t + 100.0
 
 
-def _mutate_manifest(path: Path, fn) -> None:
-    manifest_path = _os.path.join(path, "manifest.json")
-    manifest = _json.load(open(manifest_path))
-    fn(manifest["run"])
-    _json.dump(manifest, open(manifest_path, "w"))
+def _mutate_descriptor(path: Path, fn) -> None:
+    mutate_runnable_descriptor(path, fn)
 
 
 def _assert_context_field_invalid(path: Path, run_inputs) -> None:
@@ -1151,11 +1149,11 @@ def test_r69_registry_generated_strip_matrix_refuses(tmp_path: Path) -> None:
 
     x = torch.randn(3)
     source = _save(_trace(_RichFamilies(), [x, 1]), tmp_path / "matrix_src.tlspec")
-    manifest = _json.load(open(_os.path.join(source, "manifest.json")))
+    descriptor = read_runnable_descriptor(source)
     present_families = sorted(
         {
             str(w.get("site_label", "")).split(":", 1)[0]
-            for w in manifest["run"]["control_witnesses"]
+            for w in descriptor["control_witnesses"]
             if any(
                 str(w.get("site_label", "")).startswith(f"{family}:")
                 for family in WITNESS_FAMILY_REGISTRY
@@ -1190,7 +1188,7 @@ def test_r69_registry_generated_strip_matrix_refuses(tmp_path: Path) -> None:
                     twin["order"] = 9999
                     run["control_witnesses"] = list(run["control_witnesses"]) + [twin]
 
-            _mutate_manifest(path, _apply)
+            _mutate_descriptor(path, _apply)
             _assert_context_field_invalid(path, run_inputs)
     _heal_capture_state(source, [x.clone(), 1])
 
@@ -1206,7 +1204,7 @@ def test_r69_forged_inventory_mutations_refuse(tmp_path: Path) -> None:
     def _case(name: str, fn) -> None:
         path = tmp_path / f"forge_{name}.tlspec"
         _shutil.copytree(source, path)
-        _mutate_manifest(path, fn)
+        _mutate_descriptor(path, fn)
         _assert_context_field_invalid(path, [x.clone(), 1])
 
     def _row(run: dict, family: str) -> dict:
@@ -1289,7 +1287,7 @@ def test_r69_secA_f1_structure_strip_no_longer_restores_weak_semantics(
 
     x = torch.randn(3)
     path = _save(_trace(_KindBranch(), {"a": [x.clone()]}), tmp_path / "seca.tlspec")
-    _mutate_manifest(path, lambda run: _strip_family(run, "input_structure"))
+    _mutate_descriptor(path, lambda run: _strip_family(run, "input_structure"))
     _assert_context_field_invalid(path, {"a": (x.clone(),)})
 
 
@@ -1302,7 +1300,7 @@ def test_r69_literal_fact_strip_breaks_the_cross_anchor(tmp_path: Path) -> None:
 
     path = tmp_path / "anchor.tlspec"
     _shutil.copytree(source, path)
-    _mutate_manifest(path, lambda run: _strip_family(run, "model_input_literal", count=1))
+    _mutate_descriptor(path, lambda run: _strip_family(run, "model_input_literal", count=1))
     _assert_context_field_invalid(path, [x.clone(), 1])
     _heal_capture_state(source, [x.clone(), 1])
 
@@ -1325,7 +1323,7 @@ def test_r69_unregistered_family_fact_refuses(tmp_path: Path) -> None:
         twin["kind"] = "shape_structure_fact"
         run["control_witnesses"] = list(run["control_witnesses"]) + [twin]
 
-    _mutate_manifest(path, _forge)
+    _mutate_descriptor(path, _forge)
     _assert_context_field_invalid(path, [x.clone(), 1])
     _heal_capture_state(source, [x.clone(), 1])
 

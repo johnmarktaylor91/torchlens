@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import gc
-import json
-import pickle
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +11,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from tests._format3_envelope import (
+    read_manifest,
+    read_record,
+    read_runnable_descriptor,
+    tensor_references,
+)
 from torchlens._io.runnable import (
     assert_sparse_core_has_no_tensor_payload,
     build_sparse_run_descriptor,
@@ -215,24 +219,6 @@ def _capture(model: nn.Module, value: Any) -> tl.Trace:
     )
 
 
-def _read_manifest(path: Path) -> dict[str, Any]:
-    """Read one emitted manifest JSON object."""
-
-    with (path / "manifest.json").open("r", encoding="utf-8") as handle:
-        value = json.load(handle)
-    assert isinstance(value, dict)
-    return value
-
-
-def _read_sparse_metadata(path: Path) -> dict[str, Any]:
-    """Read trusted test-produced portable metadata for invariant inspection."""
-
-    with (path / "metadata.pkl").open("rb") as handle:
-        value = pickle.load(handle)  # noqa: S301 - artifact is created in this test process
-    assert isinstance(value, dict)
-    return value
-
-
 def test_runnable_save_emits_frozen_sparse_descriptor_and_value_free_recipe(
     tmp_path: Path,
 ) -> None:
@@ -249,10 +235,11 @@ def test_runnable_save_emits_frozen_sparse_descriptor_and_value_free_recipe(
 
     trace.save(path, level="runnable")
     tl.validation.validate_tlspec(path)
-    manifest = _read_manifest(path)
-    run = manifest["run"]
+    manifest = read_manifest(path)
+    run = read_runnable_descriptor(path)
 
-    assert manifest["schema_version"] == 2
+    assert manifest["format_version"] == 3
+    assert manifest["tlspec_version"] == 12
     assert manifest["save_level"] == "runnable"
     assert run["capability"] == "sparse_recorded_taken_path_v2"
     assert run["call_recipe"] == "non_tensor_args_tensor_slots_context_and_obligations_v3"
@@ -318,7 +305,7 @@ def test_runnable_save_emits_frozen_sparse_descriptor_and_value_free_recipe(
 
 
 def test_runnable_sparse_core_contains_no_tensor_payload_family(tmp_path: Path) -> None:
-    """Assert descriptor, manifest body, and scrubbed Trace contain no tensor values."""
+    """Assert descriptor, JSON records, and restored Trace contain no tensor values."""
 
     trace = _capture(
         SparseProducerModel(),
@@ -328,16 +315,21 @@ def test_runnable_sparse_core_contains_no_tensor_payload_family(tmp_path: Path) 
     path = tmp_path / "no_payload.tlspec"
 
     trace.save(path, level="runnable")
-    manifest = _read_manifest(path)
-    metadata = _read_sparse_metadata(path)
+    manifest = read_manifest(path)
+    records = {kind: read_record(path, kind) for kind in manifest["records"]}
+    loaded = tl.load(path)
 
-    assert manifest["body_index"] == []
-    assert list((path / "blobs").iterdir()) == []
-    assert_sparse_core_has_no_tensor_payload(manifest["run"])
-    assert_sparse_core_has_no_tensor_payload(metadata)
-    assert metadata["_buffer_initial_values"] == {}
-    assert all(op.func is None for op in metadata["_layer_list"])
-    for op in metadata["_layer_list"]:
+    assert tensor_references(path) == {}
+    assert not list(path.rglob("*.safetensors"))
+    assert all(
+        family not in manifest["runnable"] for family in ("state_dict", "buffers", "activations")
+    )
+    assert_sparse_core_has_no_tensor_payload(read_runnable_descriptor(path))
+    assert_sparse_core_has_no_tensor_payload(records)
+    assert_sparse_core_has_no_tensor_payload(loaded.__getstate__())
+    assert loaded._buffer_initial_values == {}
+    assert all(op.func is None for op in loaded._layer_list)
+    for op in loaded._layer_list:
         assert op.out is None
         assert op.transformed_out is None
         assert op.saved_args is None
@@ -524,7 +516,7 @@ def test_runnable_control_flow_emits_bool_loop_and_arm_entry_witnesses(
     path = tmp_path / "control.tlspec"
 
     trace.save(path, level="runnable")
-    run = _read_manifest(path)["run"]
+    run = read_runnable_descriptor(path)
     kinds = {witness["kind"] for witness in run["control_witnesses"]}
 
     assert run["witness_completeness"] == "complete"

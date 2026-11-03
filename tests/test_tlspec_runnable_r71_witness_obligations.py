@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import copy as _copy
 import inspect
-import json as _json
 import shutil as _shutil
 import warnings
 from collections.abc import Callable
@@ -35,6 +34,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from tests._format3_envelope import (
+    mutate_runnable_descriptor,
+    read_runnable_descriptor,
+)
 from torchlens._runnable import (
     _VERDICT_STEERING_WITNESS_FAMILIES,
     WITNESS_FAMILY_REGISTRY,
@@ -64,10 +67,7 @@ def _save(trace: tl.Trace, path: Path) -> Path:
 
 
 def _mutate(path: Path, mutate: Callable[[dict], None]) -> None:
-    manifest_path = path / "manifest.json"
-    manifest = _json.loads(manifest_path.read_text())
-    mutate(manifest["run"])
-    manifest_path.write_text(_json.dumps(manifest))
+    mutate_runnable_descriptor(path, mutate)
 
 
 def _verdict(path: Path, inputs: Any) -> tuple[str, Any]:
@@ -419,7 +419,7 @@ def _strip_inventory_members(run: dict, family: str) -> None:
 
 
 def _strip_third_leg(run: dict, family: str) -> None:
-    """Remove the owner-record obligation / claim leg where one exists in-manifest."""
+    """Remove the owner-record obligation / claim leg where one exists in the descriptor."""
 
     if family in {"scalar_bool", "loop_predicate"}:
         for call in run["calls"]:
@@ -468,8 +468,7 @@ def test_r71_strip_matrix_never_verified(family: str, tmp_path: Path) -> None:
 
     model_factory, capture_inputs, run_inputs = _FAMILY_FIXTURES[family]
     source = _save(_trace(model_factory(), capture_inputs()), tmp_path / f"{family}.tlspec")
-    manifest = _json.loads((source / "manifest.json").read_text())
-    present = _copy.deepcopy(manifest["run"])
+    present = _copy.deepcopy(read_runnable_descriptor(source))
     stripped_probe = _strip_family_witnesses(present, family)
     if family == "model_input_literal":
         assert stripped_probe > 0, "fixture must emit literal facts"

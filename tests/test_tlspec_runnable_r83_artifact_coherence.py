@@ -1,9 +1,9 @@
 """Artifact self-coherence closures (r83 C3, r82 secA S3 + S4).
 
-S3 -- the callable a loaded artifact EXECUTES comes from ``manifest.json ->
-run.callable_registry[].key``. The SAME call is named independently by
-``manifest.json -> sites[].function_path`` and by ``metadata.pkl ->
-layer_list[].func_name`` / ``.func_id.qualname``. Nothing reconciled them, so
+S3 -- the callable a loaded artifact EXECUTES comes from ``runnable/descriptor.json ->
+callable_registry[].key``. The SAME call is named independently by
+the site and op JSON records under ``records/``
+(``function_path``, ``func_name`` / ``func_id.qualname``). Nothing reconciled them, so
 editing ONE JSON field (``Tensor.__add__`` -> ``__sub__``) left an internally
 self-contradictory artifact that RAN and reported ``VERIFIED`` with different
 numbers while three other persisted fields still said ``add``.
@@ -38,6 +38,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from tests._format3_envelope import (
+    read_runnable_descriptor,
+    write_runnable,
+)
 from torchlens._runnable import PathFaithfulness
 from torchlens.options import CaptureOptions
 
@@ -70,10 +74,10 @@ def _save(path: Path, *, cache: bool = False) -> Path:
     return path
 
 
-def _recompute_runtime_fingerprints(manifest: dict[str, Any]) -> None:
+def _recompute_runtime_fingerprints(run: dict[str, Any]) -> None:
     """Rewrite each call's ``runtime_fingerprint`` per the loader recipe.
 
-    Naive manifest tampers are now caught at PARSE time by c9904d19's
+    Naive descriptor tampers are now caught at PARSE time by c9904d19's
     ``_verify_runtime_fingerprints`` check (sha256 over callable key, argument
     names, arity, output slot shapes/dtypes, and execution context), which
     would pre-empt the deeper gates this suite pins. Recomputing the
@@ -82,7 +86,6 @@ def _recompute_runtime_fingerprints(manifest: dict[str, Any]) -> None:
     their point.
     """
 
-    run = manifest["run"]
     keys_by_registry_id = {entry["registry_id"]: entry["key"] for entry in run["callable_registry"]}
     slots_by_id = {slot["slot_id"]: slot for slot in run["tensor_slots"]}
     for call in run["calls"]:
@@ -128,15 +131,15 @@ def _retarget_registry(source: Path, target: Path, frm: str, to: str) -> Path:
 
     shutil.rmtree(target, ignore_errors=True)
     shutil.copytree(source, target)
-    manifest = json.loads((target / "manifest.json").read_text())
+    run = read_runnable_descriptor(target)
     hits = 0
-    for entry in manifest["run"]["callable_registry"]:
+    for entry in run["callable_registry"]:
         if entry["key"]["qualname"] == frm:
             entry["key"]["qualname"] = to
             hits += 1
     assert hits == 1, f"expected exactly one {frm!r} registry entry, found {hits}"
-    _recompute_runtime_fingerprints(manifest)
-    (target / "manifest.json").write_text(json.dumps(manifest))
+    _recompute_runtime_fingerprints(run)
+    write_runnable(target, run)
     return target
 
 
