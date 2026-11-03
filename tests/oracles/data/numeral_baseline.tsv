@@ -7388,7 +7388,6 @@ test-docstrings	tests/test_auto_collapse_metrics.py	30
 test-docstrings	tests/test_auto_collapse_metrics.py	47
 test-docstrings	tests/test_auto_collapse_metrics.py	7296
 test-docstrings	tests/test_auto_collapse_metrics.py	9344
-test-docstrings	tests/test_autoroute_output_a2.py	1000
 test-docstrings	tests/test_autoroute_output_a2.py	65
 test-docstrings	tests/test_b2_bridge_preprocessing.py	224
 test-docstrings	tests/test_b2_extract_harvest_gate.py	18
@@ -7541,7 +7540,6 @@ test-docstrings	tests/test_checks_kit_session.py	203
 test-docstrings	tests/test_checks_kit_session.py	21
 test-docstrings	tests/test_checks_kit_session.py	4.2
 test-docstrings	tests/test_checks_kit_session.py	4.3
-test-docstrings	tests/test_chunk_size.py	10
 test-docstrings	tests/test_ci_packaging_gates.py	10
 test-docstrings	tests/test_ci_packaging_gates.py	13.1
 test-docstrings	tests/test_ci_packaging_gates.py	13.2
@@ -7615,7 +7613,6 @@ test-docstrings	tests/test_conditional_branches.py	3.11
 test-docstrings	tests/test_conditional_integration.py	14
 test-docstrings	tests/test_conditional_integration.py	3.11
 test-docstrings	tests/test_conditional_invariants.py	10
-test-docstrings	tests/test_conditional_invariants.py	11
 test-docstrings	tests/test_conditional_invariants.py	12
 test-docstrings	tests/test_conditional_invariants.py	13
 test-docstrings	tests/test_conditional_invariants.py	14
@@ -7689,7 +7686,6 @@ test-docstrings	tests/test_dtype_range_audit.py	32
 test-docstrings	tests/test_dtype_range_audit.py	65504
 test-docstrings	tests/test_dynamo_fake_guard.py	2.6
 test-docstrings	tests/test_ecosystem_rt_conformance.py	256
-test-docstrings	tests/test_ecosystem_rt_plugins.py	256
 test-docstrings	tests/test_ecosystem_rt_rider_runnable_real.py	17
 test-docstrings	tests/test_ecosystem_rt_rider_runnable_real.py	18
 test-docstrings	tests/test_ecosystem_rt_rider_runnable_real.py	21
@@ -8153,7 +8149,6 @@ test-docstrings	tests/test_layer_grad_oracle.py	100
 test-docstrings	tests/test_layer_grad_oracle.py	177
 test-docstrings	tests/test_layer_grad_oracle.py	341
 test-docstrings	tests/test_layer_log.py	10
-test-docstrings	tests/test_layer_log.py	120
 test-docstrings	tests/test_layer_log.py	15
 test-docstrings	tests/test_layer_log.py	32
 test-docstrings	tests/test_layer_sites.py	10,
@@ -8289,7 +8284,6 @@ test-docstrings	tests/test_module_containment_save_load.py	11
 test-docstrings	tests/test_module_containment_save_load.py	11.
 test-docstrings	tests/test_module_focus.py	25
 test-docstrings	tests/test_module_import_isolation.py	470
-test-docstrings	tests/test_module_log.py	10
 test-docstrings	tests/test_module_save_live_retention.py	5,000
 test-docstrings	tests/test_multi_output_modules.py	4024
 test-docstrings	tests/test_multi_output_modules.py	4025
@@ -8476,7 +8470,6 @@ test-docstrings	tests/test_peak_memory_counter_lag.py	44
 test-docstrings	tests/test_peak_memory_counter_lag.py	63
 test-docstrings	tests/test_peak_memory_counter_lag.py	64
 test-docstrings	tests/test_perf5_rf_invariant_cost.py	40
-test-docstrings	tests/test_perf7_eviction_walk.py	30
 test-docstrings	tests/test_perf7_eviction_walk.py	512
 test-docstrings	tests/test_perf7_eviction_walk.py	545
 test-docstrings	tests/test_perf7_fork_reads.py	512
@@ -8704,7 +8697,6 @@ test-docstrings	tests/test_repo_privacy.py	10
 test-docstrings	tests/test_repo_privacy.py	25
 test-docstrings	tests/test_repo_privacy.py	74
 test-docstrings	tests/test_repo_privacy.py	82
-test-docstrings	tests/test_report_explain.py	14
 test-docstrings	tests/test_report_family_cost.py	10
 test-docstrings	tests/test_report_family_cost.py	100
 test-docstrings	tests/test_report_family_cost.py	11
@@ -8866,14 +8858,11 @@ test-docstrings	tests/test_selection_align.py	1_2
 test-docstrings	tests/test_selection_compare_producers.py	64
 test-docstrings	tests/test_selection_compare_producers.py	64.
 test-docstrings	tests/test_selection_completeness_examples.py	300
-test-docstrings	tests/test_selection_completeness_examples.py	64
 test-docstrings	tests/test_selection_do.py	17
 test-docstrings	tests/test_selection_do.py	2026
 test-docstrings	tests/test_selection_gallery.py	12
 test-docstrings	tests/test_selection_gallery.py	12.
-test-docstrings	tests/test_selection_gallery.py	4.6
 test-docstrings	tests/test_selection_gallery.py	64
-test-docstrings	tests/test_selection_gallery.py	7.7
 test-docstrings	tests/test_selection_influence.py	1..5.
 test-docstrings	tests/test_selection_influence.py	1..7
 test-docstrings	tests/test_selection_influence.py	16
@@ -8886,11 +8875,9 @@ test-docstrings	tests/test_selection_influence.py	3..5,
 test-docstrings	tests/test_selection_influence.py	6..9,
 test-docstrings	tests/test_selection_influence.py	7..8
 test-docstrings	tests/test_selector_composition_scaling.py	500
-test-docstrings	tests/test_selector_semantics_matrix.py	278
 test-docstrings	tests/test_selector_semantics_matrix.py	45
 test-docstrings	tests/test_selector_semantics_matrix.py	53
 test-docstrings	tests/test_sem_recon_tolerance.py	18.80
-test-docstrings	tests/test_sem_recon_tolerance.py	32
 test-docstrings	tests/test_semantic_io_a3.py	1000
 test-docstrings	tests/test_silent_swallow_seals.py	22
 test-docstrings	tests/test_site_join.py	1,3
@@ -9688,7 +9675,6 @@ test-names	tests/test_attrib_methods_captum_ledger.py	18_
 test-names	tests/test_attrib_methods_realmodel.py	121_
 test-names	tests/test_attrib_methods_text.py	17_
 test-names	tests/test_attribution_cam_choice.py	18
-test-names	tests/test_autoroute_output_a2.py	1000_
 test-names	tests/test_b2_extract_harvest_gate.py	18_64_
 test-names	tests/test_b2_extract_intervened.py	208_
 test-names	tests/test_b2_sel_timm_stage_names.py	50_
@@ -9712,7 +9698,6 @@ test-names	tests/test_conditional_branches.py	310_
 test-names	tests/test_conditional_integration.py	310_
 test-names	tests/test_conditional_integration.py	311_
 test-names	tests/test_conditional_invariants.py	10_
-test-names	tests/test_conditional_invariants.py	11_
 test-names	tests/test_conditional_invariants.py	12_
 test-names	tests/test_conditional_invariants.py	13_
 test-names	tests/test_conditional_invariants.py	14_
@@ -9944,7 +9929,6 @@ test-names	tests/test_schema_v10_contract_and_goldens.py	216_
 test-names	tests/test_site_join.py	18_
 test-names	tests/test_site_key.py	2_4
 test-names	tests/test_snoop_real_model.py	18_
-test-names	tests/test_stats_trajectory.py	64
 test-names	tests/test_stoch_edits_population.py	32
 test-names	tests/test_streaming_stats.py	10
 test-names	tests/test_subspace_spec_portable.py	32_

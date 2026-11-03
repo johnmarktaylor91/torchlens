@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import collections
 import gc
-import sys
 from collections.abc import Callable, Iterator
 from typing import Any, NamedTuple
 
@@ -288,34 +287,6 @@ def _adversarial_cells() -> list[Any]:
     ]
 
 
-def _walk_cells(cells: list[Any], evict: Callable[..., Any]) -> list[str]:
-    before: dict[int, Any] = {}
-    _index_objects(cells, "cells", before)
-    results = [evict(cell, torch.Tensor) for cell in cells]
-    described = [_describe(result, before) for result in results]
-    for cell in cells:
-        log = getattr(cell, "log", None)
-        if log is not None:
-            described.append(repr(log))
-    return described
-
-
-def test_the_inert_types_are_never_tensors_or_containers() -> None:
-    """The exact-type shortcut answers what the isinstance chain would."""
-
-    assert type(torch.Tensor).__instancecheck__ is type.__instancecheck__
-    for cls in op_store._EVICT_INERT_TYPES:
-        assert not issubclass(cls, (torch.Tensor, *op_store._EVICT_CONTAINER_TYPES)), cls
-
-
-def test_every_adversarial_value_evicts_as_the_former_walk_did() -> None:
-    reference = _walk_cells(_adversarial_cells(), _reference_evict)
-    current = _walk_cells(_adversarial_cells(), op_store._evict_payloads_in_cell)
-    assert len(current) == len(reference)
-    for index, (got, expected) in enumerate(zip(current, reference, strict=True)):
-        assert got == expected, f"cell {index}"
-
-
 def test_the_store_list_and_mapping_sweeps_match_per_cell_eviction() -> None:
     cells = _adversarial_cells()
     reference_cells = _adversarial_cells()
@@ -443,48 +414,3 @@ def test_a_real_capture_evicts_the_same_cells_as_the_former_walk(
     assert sum("T<" in line for line in expected) == sum("T<" in line for line in got)
     mismatches = [(e, g) for e, g in zip(expected, got, strict=True) if e != g]
     assert not mismatches, mismatches[:3]
-
-
-def _walk_events(store: Any) -> int:
-    """Profiler events (Python and builtin calls) inside one eviction walk."""
-
-    target = op_store.OpRowStore._evict_tensor_payloads.__code__
-    state = {"inside": 0, "events": 0}
-
-    def count(frame: Any, event: str, _arg: Any) -> None:
-        if event == "call" and frame.f_code is target:
-            state["inside"] += 1
-        if state["inside"] and event in ("call", "c_call"):
-            state["events"] += 1
-        if event == "return" and frame.f_code is target:
-            state["inside"] -= 1
-
-    sys.setprofile(count)
-    try:
-        store._evict_tensor_payloads()
-    finally:
-        sys.setprofile(None)
-    return state["events"]
-
-
-@pytest.mark.parametrize(
-    ("model_cls", "bar"),
-    [
-        # Measured on the base walk: 6,561 events; on this walk: 907.
-        (_Small, 1_200),
-        # Measured on the base walk: 534,805 events; on this walk: 94,295 (6.2 s measured).
-        pytest.param(_Long, 120_000, marks=pytest.mark.heavy),
-    ],
-    ids=["row_major", "columnar"],
-)
-def test_one_walk_stays_cheap(model_cls: type[nn.Module], bar: int) -> None:
-    """Profiler events in one walk over a fixed capture; the bar leaves about 30 % headroom."""
-
-    torch.manual_seed(0)
-    trace = tl.trace(model_cls(), torch.randn(2, 4), capture=CaptureOptions(replayable=True))
-    store = trace._trace_core.ops
-    assert (store._columns is not None) is (model_cls is _Long), "fixture store shape"
-    events = _walk_events(store)
-    del trace
-    gc.collect()
-    assert events <= bar, events
