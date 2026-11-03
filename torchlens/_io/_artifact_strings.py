@@ -50,7 +50,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from ..backends import TINYGRAD_BACKEND_NAME
+from ..backends.registry import TINYGRAD_BACKEND_NAME
 
 # Construction-time I/O sink bases in tinygrad, refused unconditionally and
 # BEFORE the runtime-membership check. This is the one small hand-maintained

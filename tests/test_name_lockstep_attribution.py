@@ -381,6 +381,50 @@ def test_a_moved_member_pairs_on_its_spelling_and_keeps_retired_owners_as_residu
     ]
 
 
+def test_a_mixin_member_folded_onto_its_public_owner_is_a_move(tmp_path: Path) -> None:
+    """``TraceStatsMixin.compute_ops`` reached as ``Trace.compute_ops`` folds onto ``Trace``: one name."""
+
+    old = _row(
+        "member:tl._data_classes._trace_stats:TraceStatsMixin.compute_ops",
+        "member",
+        "compute_ops",
+        "TraceStatsMixin.compute_ops",
+        "f-old",
+        owner_names=["Trace"],
+    )
+    new = _row(
+        "member:tl._data_classes.trace:Trace.compute_ops",
+        "member",
+        "compute_ops",
+        "Trace.compute_ops",
+        "f-new",
+        owner_names=["Trace"],
+    )
+    surface_diff = diff_inventories(_inventory(TRACE, old), _inventory(TRACE, new))
+    assert [(m.basis, m.old_id, m.new_id) for m in surface_diff.moved] == [
+        ("moved", old["id"], new["id"])
+    ]
+    assert surface_diff.new == () and surface_diff.removed == ()
+
+
+def test_a_folded_leaf_shared_by_two_public_owners_does_not_pair(tmp_path: Path) -> None:
+    """Two owners spelling the same leaf at base keep a fold from guessing which one moved."""
+
+    old_a = _row(
+        "member:tl.a:AMixin.size", "member", "size", "AMixin.size", "f-a", owner_names=["Trace"]
+    )
+    old_b = _row(
+        "member:tl.b:BMixin.size", "member", "size", "BMixin.size", "f-b", owner_names=["Trace"]
+    )
+    new = _row(
+        "member:tl.trace:Trace.size", "member", "size", "Trace.size", "f-n", owner_names=["Trace"]
+    )
+    surface_diff = diff_inventories(_inventory(TRACE, old_a, old_b), _inventory(TRACE, new))
+    assert surface_diff.moved == ()
+    assert {row["id"] for row in surface_diff.removed} == {old_a["id"], old_b["id"]}
+    assert [row["id"] for row in surface_diff.new] == [new["id"]]
+
+
 # --- string literals and other callables' keywords in code -----------------------------
 
 TRANSFORM_PARAM = _row(
