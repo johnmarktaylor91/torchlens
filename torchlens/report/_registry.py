@@ -34,6 +34,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .._errors import InvalidArgumentError
+
 #: Closed subject vocabulary (D12).
 SUBJECTS: tuple[str, ...] = (
     "MODEL",
@@ -300,8 +302,6 @@ SURFACE_REGISTRY: tuple[SurfaceEntry, ...] = (
 
 def registry_entry(key: str) -> SurfaceEntry:
     """Look up one registry row by key, refusing unknowns typed."""
-
-    from .._errors import InvalidArgumentError
 
     for entry in SURFACE_REGISTRY:
         if entry.key == key:

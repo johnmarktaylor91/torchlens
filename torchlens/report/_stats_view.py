@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
+from ._stats_table import build_stats_table
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -223,7 +224,6 @@ def stats_rows_markdown(table: StatsTable, columns: tuple[str, ...]) -> str:
 def build_stats_summary(trace: Trace, config: SummaryConfig) -> SummaryReport:
     """Build the ``view="stats"`` report over one finished trace."""
 
-    from ._stats_table import build_stats_table
     from ._summary_report import SummaryReport, build_summary_data
 
     grain = "module" if config.level == "module" else "op"

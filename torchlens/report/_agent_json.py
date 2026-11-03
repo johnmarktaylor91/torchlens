@@ -27,6 +27,8 @@ from .._capture_honesty import (
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._utils.json_safe import json_safe
 from ._explain import _safe_len
+from ._factcore import _memory
+from ._health import health_facts
 
 #: Schema identifier for the agent trace dump.
 AGENT_TRACE_SCHEMA = "torchlens.agent_trace.v1"
@@ -224,8 +226,6 @@ def _json_shape(shape: Any) -> list[int] | None:
 def _memory_scopes(log: Any) -> dict[str, Any]:
     """Both payload-scope byte figures, named (C02; sumfam D8)."""
 
-    from ._factcore import _memory
-
     memory = _memory(log)
     return {
         "at_capture_bytes": memory.captured_bytes,
@@ -277,8 +277,6 @@ def _health_summary(log: Any) -> dict[str, Any]:
     scan -- this serves the basis in hand and reads NOT-CHECKED otherwise
     (the explicit scan spelling is ``trace.health_facts``).
     """
-
-    from ._health import health_facts
 
     facts = health_facts(log, allow_scan=False)
     return {

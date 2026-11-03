@@ -11,6 +11,10 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
+from .._autoroute import _builtin_output
+from .._quickstart._gate import require_gold
+from .._runnable import refuse_poisoned_trace
+
 if TYPE_CHECKING:
     import pandas as pd
 
@@ -213,8 +217,6 @@ def _decode_door() -> ModuleType:
     decode and shared by every decode path of the mixin.
     """
 
-    from .._autoroute import _builtin_output
-
     return _builtin_output
 
 
@@ -380,7 +382,6 @@ _TO_PANDAS_COLUMN_TYPES: dict[str, type] = {
 
 def to_pandas(trace: "Trace", include_decoded_output_summary: bool = False) -> "pd.DataFrame":
     """Body of ``Trace.to_pandas``; the method docstring is the contract."""
-    from .._runnable import refuse_poisoned_trace
 
     refuse_poisoned_trace(trace, "tabular export")
     if not trace._tracing_finished:
@@ -485,7 +486,6 @@ def decode_output(
     # synthesized input values would be a statement about random numbers
     # presented as a statement about data. One chokepoint for every
     # decode door (output_table, to_pandas decoded summary, direct calls).
-    from .._quickstart._gate import require_gold
 
     require_gold(trace, "decoded output labels")
     if style is not None or head is not None or tokenizer is not None:

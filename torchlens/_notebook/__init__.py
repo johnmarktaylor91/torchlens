@@ -25,6 +25,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING as _TYPE_CHECKING
 
+from .._utils.facade import facade_dir, resolve_facade_attr
+
 if _TYPE_CHECKING:
     from typing import Any
 
@@ -71,8 +73,6 @@ def __getattr__(name: str) -> Any:
         dependency is absent.
     """
 
-    from .._utils.facade import resolve_facade_attr
-
     return resolve_facade_attr(
         owner=__name__,
         name=name,
@@ -94,8 +94,6 @@ def __dir__() -> list[str]:
         Sorted public names; accidental implementation imports are not
         advertised.
     """
-
-    from .._utils.facade import facade_dir
 
     return facade_dir(globals(), _LAZY_ATTRS, _SUBMODULES)
 

@@ -18,6 +18,7 @@ from .._capture_honesty import (
     refuse_presenter_subject,
 )
 from .._data_classes._trace_missing_attrs import is_live_trace
+from .._partial import PartialTrace
 from ._summary_columns import attention_full_square_line, counted_attention_ops
 
 Audience = Literal["researcher", "practitioner", "auto"]
@@ -276,8 +277,6 @@ def _is_partial_trace(log: Any) -> bool:
     bool
         Whether the object is a failed partial capture wrapper.
     """
-
-    from .._partial import PartialTrace
 
     return isinstance(log, PartialTrace)
 

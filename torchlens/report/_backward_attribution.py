@@ -39,6 +39,7 @@ from typing import Any
 
 from .._capture.flops import DISPATCH_COUNTING_CONVENTION
 from .._utils import _torch_compat
+from ..backends.torch._backward_dispatch import shared_backward_partners
 
 #: Closed key set of the persisted per-pass record (SCHEMA-REQUESTS row 15).
 EXECUTED_FLOPS_RECORD_KEYS: frozenset[str] = frozenset(
@@ -203,8 +204,6 @@ class _OwnedElsewhere:
 
     def __init__(self, trace: Any, pass_index: int) -> None:
         """Collect the other captures that shared this pass's engine run."""
-
-        from ..backends.torch._backward_dispatch import shared_backward_partners
 
         self._partners = shared_backward_partners(trace, pass_index)
         self._cache: dict[int, bool] = {}

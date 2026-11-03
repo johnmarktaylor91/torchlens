@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._data_classes._site_key import operation_witness
+
 #: The only grouping key ``profile(group_by=...)`` accepts today.
 PROFILE_GROUP_BY_KEYS: tuple[str, ...] = ("source_line",)
 
@@ -44,8 +46,6 @@ def source_line_key(row: dict[str, Any], op: Any) -> str:
     str
         ``"<file>:<line>"``, or one of the two sentinel group names.
     """
-
-    from .._data_classes._site_key import operation_witness
 
     if row.get("kind") == "boundary":
         return BOUNDARY_GROUP_NAME

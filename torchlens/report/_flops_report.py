@@ -34,6 +34,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
+from .._utils._torch_compat import force_mha_slow_path
 from ._cost_backward import backward_status
 from ._cost_tree import build_cost_tree
 from ._factcore import factcore
@@ -397,7 +398,6 @@ def _capture_for_report(model: Any, input_args: Any, input_kwargs: dict[str, Any
     import torch
 
     from .._user_public_impls import trace as _trace
-    from .._utils._torch_compat import force_mha_slow_path
     from .._utils.rng import log_current_rng_states, set_rng_from_saved_states
 
     saved_training_flags = [(module, module.training) for module in model.modules()]

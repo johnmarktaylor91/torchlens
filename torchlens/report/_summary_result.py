@@ -16,10 +16,17 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from .._capture_honesty import honesty_banner_lines
 from .._errors import InvalidArgumentError
+from .._observe._peaks import pass_peak_facts
+from ._compute_truth import unknown_op_ledger
+from ._factcore import factcore
+from ._health import health_facts, nonfinite_option_hint
+from ._summary_columns import optimizer_state_facts
 from ._summary_config import SummaryConfig
+from ._summary_html import render_html
 from ._summary_ladder import ResolvedView, ViewRow, resolve_view
-from ._summary_render import SummaryFacts, render_summary_pair
+from ._summary_render import SummaryFacts, _banner_lines, _cell, cell_totals, render_summary_pair
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -62,11 +69,6 @@ def collect_summary_facts(
 ) -> SummaryFacts:
     """Gather every trace-side fact the renderer prints, detached."""
 
-    from .._capture_honesty import honesty_banner_lines
-    from ._compute_truth import unknown_op_ledger
-    from ._factcore import factcore
-    from ._health import health_facts, nonfinite_option_hint
-
     core = factcore(trace)
     health = health_facts(trace)
     input_shapes, input_dtypes = _tensor_leaf_shapes(trace)
@@ -74,7 +76,6 @@ def collect_summary_facts(
     # Pass-level peaks publish ONLY through the observe gate (F24 item 4):
     # the basis is named, cpu/mps render under their real meaning, and a
     # CUDA 0 is a high-water fact -- never a raw forward-peak read here.
-    from .._observe._peaks import pass_peak_facts
 
     peak_facts = pass_peak_facts(trace, "forward")
     unexecuted_names: tuple[str, ...] = tuple(
@@ -82,7 +83,6 @@ def collect_summary_facts(
     )
     unknown_groups = unknown_op_ledger(trace)
     unknown_names = tuple(group.func_name or "?" for group in unknown_groups)
-    from ._summary_columns import optimizer_state_facts
 
     pruned = core.params.pruned
     buffer_count = None
@@ -238,9 +238,6 @@ def build_rebuilt_summary(
 def render_result_html(payload: RebuiltPayload) -> str:
     """The HTML fragment for one rebuilt payload (shared by both doors)."""
 
-    from ._summary_html import render_html
-    from ._summary_render import _banner_lines
-
     facts = payload.facts
     header = facts.model_class_name or "model"
     if facts.input_shapes:
@@ -336,7 +333,6 @@ def result_to_markdown(report: SummaryReport) -> str:
             code="summary_result_legacy",
             remedy="call summary() with the rebuilt grammar (bare call, level=, view=, ...)",
         )
-    from ._summary_render import _cell, cell_totals
 
     columns = payload.config.resolved_columns(payload.view.mixed_trainability)
     totals = cell_totals(payload.facts)

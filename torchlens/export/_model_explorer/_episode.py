@@ -21,6 +21,7 @@ import json
 from dataclasses import dataclass, replace
 from typing import Any
 
+from .._common import _iter_layers
 from ._attrs import AttrContext, dtype_string, shape_string
 from ._build import BuildResult, GraphSpec, build_graph
 from ._edges import build_label_map
@@ -411,8 +412,6 @@ def _proxy_node(source: Any, proxy_id: str) -> dict[str, Any]:
 
 def _all_entries(log: Any) -> list[Any]:
     """Return every layer-pass entry of the episode trace."""
-
-    from .._common import _iter_layers
 
     return _iter_layers(log)
 

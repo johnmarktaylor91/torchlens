@@ -29,6 +29,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .._data_classes._nonfinite import nonfinite_coverage, nonfinite_op_labels
 from .._data_classes._trace_missing_attrs import is_live_trace
 
 #: Annotations key carrying the persisted record (field_intent.tsv row C02).
@@ -163,7 +164,6 @@ def _parse_persisted(payload: Any, revision: str) -> HealthFacts:
 def _derive(trace: Any) -> HealthFacts:
     """Derive HealthFacts from the strongest basis in hand."""
 
-    from .._data_classes._nonfinite import nonfinite_coverage, nonfinite_op_labels
     from ._factcore import capture_fingerprint
 
     revision = capture_fingerprint(trace)

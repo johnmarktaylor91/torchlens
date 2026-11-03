@@ -20,13 +20,18 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
+from torchlens._observe import memory_timeline_v2 as _build_v2
+
 from .._capture.structure_only import (
     require_structure_only_capability as _require_structure_only_capability,
 )
 from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
 from .._data_classes._trace_missing_attrs import is_live_trace
+from .._errors import InvalidArgumentError
+from .._extraction.trace_safetensors import write_trace_safetensors
 from .._io._json import loads_bounded
 from .._utils.display import atomic_write_text
+from ..intervention.errors import BundleComparisonError
 from ._common import _iter_layers, _scalarize_cell, _static_graph_data
 from ._graphs import netron
 from ._naming import _duration_us, _layer_display_name, _safe_id, _sanitize_flamegraph_frame
@@ -553,8 +558,6 @@ def memory_timeline_v2(trace: Any, path: str | Path) -> Path:
         Written JSON path.
     """
 
-    from torchlens._observe import memory_timeline_v2 as _build_v2
-
     destination = Path(path)
     destination.parent.mkdir(parents=True, exist_ok=True)
     artifact = _build_v2(trace)
@@ -666,7 +669,6 @@ def xarray(trace: Any) -> Any:
         raise ImportError(
             "xarray export requires xarray. Install with: pip install torchlens[neuro]"
         ) from exc
-    from .._errors import InvalidArgumentError
 
     arrays = []
     layer_coord: list[str] = []
@@ -910,8 +912,6 @@ def _chrome_trace_diff_deltas(bundle: Any) -> tuple[dict[str, dict[str, float]],
     status records the gate's stable code and message. The gate is never bypassed.
     """
 
-    from ..intervention.errors import BundleComparisonError
-
     try:
         return bundle._norm_delta(), {"status": "computed", "operation": "norm_delta"}
     except BundleComparisonError as exc:
@@ -1092,8 +1092,6 @@ def safetensors(trace: Any, path: str | Path) -> Path:
     Path
         Written path.
     """
-
-    from .._extraction.trace_safetensors import write_trace_safetensors
 
     return write_trace_safetensors(trace, path)
 

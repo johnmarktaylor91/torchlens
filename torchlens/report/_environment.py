@@ -24,6 +24,7 @@ from .._constants import get_orig_torch_funcs
 from .._utils import _subprocess as _sp, _torch_compat as _tc
 from .._utils._torch_compat import OPTIONAL_CAPABILITY_FLAGS, get_torch_capability_snapshot
 from .._utils.introspection import nested_getattr
+from ..backends.torch.belt import belt_report
 
 
 @dataclass(frozen=True)
@@ -437,8 +438,6 @@ def _probe_mechanical_belt() -> _EnvironmentCheck:
         with zero signal while the capture still reports
         ``capture_verified=True`` (grind-r6 b3 R02, sol MED).
     """
-
-    from ..backends.torch.belt import belt_report
 
     if not _state._is_decorated:
         return _EnvironmentCheck(
