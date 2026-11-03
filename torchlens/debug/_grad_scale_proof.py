@@ -25,6 +25,8 @@ from collections import deque
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from torchlens._data_classes.trace import Trace
 
 #: Autograd node classes that can rescale every gradient below them.
@@ -41,6 +43,9 @@ _SCALING_GRAD_FNS = frozenset(
 
 #: Engine keyword arguments that seed the backward with a caller tensor.
 _SEED_KEYS = ("gradient", "grad_tensors")
+
+#: ``scale_provenance`` when the trace proves the backward ran unscaled.
+PROVEN_UNSCALED = "proven_unscaled"
 
 
 def _autocast_reason(trace: Trace) -> str | None:
@@ -145,3 +150,40 @@ def unscaled_proof(trace: Trace, bwd: int) -> tuple[bool, str]:
         "no op ran under autocast and no multiply, divide or custom function "
         "sits between the loss and the model output"
     )
+
+
+def resolve_scale(
+    trace: Trace,
+    bwd: int,
+    grad_scale: float | None,
+    grad_scales: Mapping[int, float] | None,
+) -> tuple[float | None, str, str | None]:
+    """Choose the loss scale ``grad_health`` audits backward pass ``bwd`` at.
+
+    A caller-passed ``grad_scale`` / ``grad_scales`` wins (provenance
+    ``"explicit"``). Without one, a plain run needs no stamp: when
+    :func:`unscaled_proof` holds, the scale is 1.0 (provenance
+    ``"proven_unscaled"``). Anything the proof cannot establish keeps the
+    scale unknown, which is what protects AMP runs from false verdicts.
+
+    Parameters
+    ----------
+    trace:
+        Completed TorchLens trace with at least one backward pass.
+    bwd:
+        One-based backward pass number.
+    grad_scale, grad_scales:
+        The validated ``grad_health`` scale options.
+
+    Returns
+    -------
+    tuple[float | None, str, str | None]
+        ``(scale, provenance, proof_note)``; ``proof_note`` is the proof's
+        reason when it ran, else ``None``.
+    """
+
+    if grad_scale is not None or grad_scales is not None:
+        scale = grad_scales.get(bwd) if grad_scales is not None else grad_scale
+        return scale, ("explicit" if scale is not None else "unknown"), None
+    proven, note = unscaled_proof(trace, bwd)
+    return (1.0, PROVEN_UNSCALED, note) if proven else (None, "unknown", note)

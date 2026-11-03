@@ -247,6 +247,7 @@ def test_compare_shape_mismatch_is_counted_not_compared() -> None:
     assert "not compared" in str(report)
 
 
+@pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUDA")
 def test_compare_cpu_against_cuda() -> None:
     """A CPU run against a CUDA run is compared on the CPU."""

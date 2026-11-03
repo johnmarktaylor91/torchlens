@@ -312,7 +312,7 @@ def _compare_rows(
         op_b = ops_b.get(label)
         if op_a is None:
             summary["only_b"] += 1
-            rows.append(_activation_row(label, "only-b", "only-b", _source_line(op_b)))
+            rows.append(_activation_row(label, "only-b", "only-b", _source_line(ops_b[label])))
             continue
         if op_b is None:
             summary["only_a"] += 1

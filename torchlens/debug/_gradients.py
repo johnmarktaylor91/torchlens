@@ -38,7 +38,7 @@ from torchlens._errors import InvalidArgumentError, KeywordConflictError
 
 from .._debug_report import Report, table_report, trace_subject
 from ._common import _op_label, _require_pandas, _source_line, _tensor_unavailable_reason
-from ._grad_scale_proof import unscaled_proof
+from ._grad_scale_proof import PROVEN_UNSCALED, resolve_scale
 
 #: Column order shared by the rows core and the DataFrame view. The first
 #: seven are the historical columns (semantics unchanged under the default
@@ -62,9 +62,6 @@ _GRAD_AUDIT_COLUMNS = (
     "source_line",
 )
 
-#: ``scale_provenance`` when the trace proves the backward ran unscaled
-#: (:func:`torchlens.debug._grad_scale_proof.unscaled_proof`).
-_PROVEN_UNSCALED = "proven_unscaled"
 
 #: The empty-report hint: the capture recipe that makes this audit run.
 _NO_GRADS_HINT = (
@@ -514,17 +511,7 @@ def gradient_flow_audit_rows(  # noqa: PLR0913 -- the D17 fix-pack public surfac
             "backward_passes": num_backward,
         }
     selected_bwd = bwd if bwd is not None else 1
-    scale = grad_scales.get(selected_bwd) if grad_scales is not None else grad_scale
-    provenance = "explicit" if scale is not None else "unknown"
-    proof_note: str | None = None
-    if grad_scale is None and grad_scales is None:
-        # A plain run needs no stamp: when the trace PROVES no loss scaling
-        # (no autocast, no multiply/divide/custom node between the loss and
-        # the model output, no seeded gradient), audit at scale 1.0. Anything
-        # the proof cannot establish keeps the scale unknown (the AMP guard).
-        proven, proof_note = unscaled_proof(trace, selected_bwd)
-        if proven:
-            scale, provenance = 1.0, _PROVEN_UNSCALED
+    scale, provenance, proof_note = resolve_scale(trace, selected_bwd, grad_scale, grad_scales)
     ctx = _AuditScaleContext(
         scale=scale,
         provenance=provenance,
@@ -668,7 +655,7 @@ def _scale_coverage(attrs: Mapping[str, Any], *, has_rows: bool) -> str | None:
         message = attrs.get("message")
         return str(message) if message else None
     provenance = attrs.get("scale_provenance")
-    if provenance == _PROVEN_UNSCALED:
+    if provenance == PROVEN_UNSCALED:
         return f"loss scale 1.0 (proven: {attrs.get('scale_proof')})"
     if provenance == "explicit":
         scale = attrs.get("grad_scale")
