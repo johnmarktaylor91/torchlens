@@ -29,8 +29,13 @@ from collections.abc import Callable
 
 from _harness import REPO_ROOT, run_checks
 
-import torchlens.backends as tl_backends
-from torchlens.conformance._scorecard import shipped_scorecard
+if str(REPO_ROOT) not in sys.path:
+    # pytest puts the repo root on sys.path (pyproject ``pythonpath``); the
+    # conformance scorecard lives in ``tests/conformance`` and is imported by name.
+    sys.path.insert(0, str(REPO_ROOT))
+
+import torchlens.backends as tl_backends  # noqa: E402
+from tests.conformance._scorecard import shipped_scorecard  # noqa: E402
 
 _DOCS = REPO_ROOT / "docs"
 _GUIDE = _DOCS / "backends.md"
@@ -244,7 +249,7 @@ def check_can_and_cannot_table(backend: str) -> None:
     card = shipped_scorecard(backend)
     assert card is not None, (
         f"{backend} ships no scorecard record, so its can and cannot table has no measured "
-        f"basis; write it with python -m torchlens.conformance.scorecard --backend {backend} "
+        f"basis; write it with python -m tests.conformance.scorecard --backend {backend} "
         "--write on the pinned leg"
     )
     summary = dict(card.capabilities)
