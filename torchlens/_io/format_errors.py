@@ -17,6 +17,10 @@ from ..errors._base import CompatibilityError, ConfigurationError
 __tl_layer__ = "L0"
 __tl_vocabulary__ = True
 
+#: Remedy for a tensor with no saved-format payload codec (a sparse or other
+#: non-strided layout): the ``metadata_value_unportable`` save refusal carries it.
+DENSE_REMEDY = 'make the tensor dense and strided before the save, or save at level="audit"'
+
 
 class ArtifactError(CompatibilityError, RuntimeError):
     """Raised when TorchLens portable bundle state is invalid or unsupported.
