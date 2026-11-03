@@ -1020,7 +1020,7 @@ torchlens/bridge/transformers.py::_resolve_image_preprocessing	62
 torchlens/bridge/transformers.py::trace_text	67
 torchlens/bundle/__init__.py	1429
 torchlens/bundle/_alternatives.py::_bundle_add_alternative	63
-torchlens/bundle/_compare_gate.py::require_comparable	143
+torchlens/bundle/_compare_gate.py::require_comparable	99
 torchlens/bundle/_lineage.py::validate_member_construction	77
 torchlens/bundle/_outcome_fold.py::_fold_member_outcomes	63
 torchlens/bundle/_provenance.py::bundle_why	96
