@@ -75,7 +75,7 @@ def test_demo_1_zero_ablation_via_do():
     baseline_relu = trace["relu_1_2"].out.clone()
 
     fork = trace.fork()
-    fork.do(trace["relu_1_2"].__selection__(), tl.zero_ablate())
+    fork.do(trace.layers["relu_1_2"].__selection__(), tl.zero_ablate())
 
     # downstream deltas real
     assert bool((fork["relu_1_2"].out == 0).all())
@@ -101,7 +101,9 @@ def test_demo_1_zero_ablation_via_do():
             return inputs / (inputs - inputs)
 
     with pytest.raises(Exception) as excinfo:
-        tl.trace(_NanNet(), torch.ones(2, 2), capture=tl.options.CaptureOptions(raise_on_nan=True))
+        tl.trace(
+            _NanNet(), torch.ones(2, 2), capture=tl.options.CaptureOptions(on_nonfinite="raise")
+        )
     assert "non-finite" in str(excinfo.value).lower()
 
 

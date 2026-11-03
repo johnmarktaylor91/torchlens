@@ -100,6 +100,7 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_state": "L2",
     "_kernel_telemetry": "L2",
     "_options_validation": "L2",
+    "_options_removed": "L2",
     "_option_receipt": "L2",
     "_save_budget": "L2",
     "_distributed": "L2",
@@ -146,10 +147,8 @@ PACKAGE_LAYERS: dict[str, str] = {
     "dataset_extraction": "L5",
     "_extraction": "L5",
     "debug": "L5",
-    "checks": "L5",
     # -- L6 APPLIANCES ---------------------------------------------------------
     "_semantic": "L6",
-    "_notebook": "L6",
     "neuro": "L6",
     # -- L7 PRESENT --------------------------------------------------------------
     "_visualization": "L7",
@@ -205,7 +204,6 @@ TORCH_PRIVATE_LICENSED_PACKAGES: frozenset[str] = frozenset(
         "intervention",
         "_ir",
         "_io",
-        "_kernel_telemetry",
         "_merged",
         "_postprocess",
         "_runnable",

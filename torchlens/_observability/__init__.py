@@ -71,7 +71,6 @@ from ._quantiles import (
 from ._region import RegionRecord, region
 from ._render import (
     color_by_watch,
-    contact_sheet_pages,
     rank_sites,
 )
 from ._schema import (
@@ -139,7 +138,6 @@ __all__ = [
     "WatchSettings",
     "categorized_key_counts",
     "color_by_watch",
-    "contact_sheet_pages",
     "derived_quantile",
     "derived_quantiles",
     "format_markdown",

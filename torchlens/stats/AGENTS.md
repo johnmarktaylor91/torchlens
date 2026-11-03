@@ -26,9 +26,12 @@ Streaming statistics over activations and dataloaders (`tl.stats`, lazy).
   and restores saved states in place on a hit; anything it cannot key
   refuses (`stats_aggregate_cache_unkeyable`), never a guessed key.
 
+- `_trace_tables.py` - bodies of the `Trace` export verbs (`to_pandas`, `decode_output`,
+  `output_table`), reached from the records through `_data_classes._doors.stats()`;
+  the record keeps one thin method per verb.
 - `tl.trace(model, x, save="stats")` (reduce and discard; `_capture_stats.py`):
   `_trace_selector_helpers._route_save_label_selection` turns `"stats"` into
-  `SaveOptions(activation_transform=<summary-role reducer>,
+  `CaptureOptions(activation_transform=<summary-role reducer>,
   save_raw_activations=False)`, so the capture's reduce-only path keeps one
   packed 16-slot `RunningStats` vector per op in `transformed_out` and no payload.
   `site_stats(trace)` decodes them. `Op.out` on such a trace refuses

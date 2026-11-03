@@ -15,7 +15,9 @@ from typing import TYPE_CHECKING
 import torch
 
 from .._utils._stochastic_funcs import _STOCHASTIC_FUNC_NAMES
+from ._replay_cone import _disclosure_label
 from ._replay_context import _replay_site_key
+from .errors import ReplayPreconditionError
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -94,12 +96,37 @@ def _unmet_log_precondition(log: Trace) -> str | None:
     return None
 
 
+def _require_hook_origins(origins: list[Op]) -> list[Op]:
+    """Return a push's resolved origin sites, refusing an empty set.
+
+    Parameters
+    ----------
+    origins:
+        Hook target sites resolved for one push, in execution order.
+
+    Returns
+    -------
+    list[Op]
+        ``origins`` unchanged.
+
+    Raises
+    ------
+    ReplayPreconditionError
+        When no hook resolved to a site, so the push has nothing to replay from.
+    """
+
+    if not origins:
+        raise ReplayPreconditionError("push requires at least one hook target")
+    return origins
+
+
 def _keeps_captured_draw(
     representative: Op,
     replay_group: Sequence[Op],
     *,
     pending_updates: Mapping[str, torch.Tensor],
     label_keys: Mapping[str, tuple[str, ...]],
+    log: Trace | None = None,
 ) -> bool:
     """Whether a stochastic call keeps its captured output instead of re-executing.
 
@@ -113,6 +140,13 @@ def _keeps_captured_draw(
     call whose arguments did change re-executes as well (its new draw is the
     disclosed stochastic-propagation behaviour).
 
+    "Changed" means the parent's replay VALUE differs from its captured
+    value. The cone over-approximates (a hooked member's call-group
+    siblings and their consumers are recomputed too), so a parent is often
+    recomputed to exactly the value the trace holds; that recomputation is
+    not a changed argument, and the draw keeps. Without ``log`` the check
+    degrades to presence in ``pending_updates``.
+
     Parameters
     ----------
     representative:
@@ -123,6 +157,8 @@ def _keeps_captured_draw(
         Values this replay has recomputed so far, by replay site key.
     label_keys:
         Label spelling to replay site keys.
+    log:
+        The trace being replayed, for the parents' captured values.
 
     Returns
     -------
@@ -140,7 +176,7 @@ def _keeps_captured_draw(
         # would apply it twice. The raw draw is only recoverable by
         # re-execution (seeded when RNG states were saved).
         return False
-    return not _any_parent_updated(representative, pending_updates, label_keys)
+    return not _any_parent_updated(representative, pending_updates, label_keys, log=log)
 
 
 def _edited_at_capture(site: Op) -> bool:
@@ -192,8 +228,10 @@ def _any_parent_updated(
     site: Op,
     pending_updates: Mapping[str, torch.Tensor],
     label_keys: Mapping[str, tuple[str, ...]],
+    *,
+    log: Trace | None = None,
 ) -> bool:
-    """Whether any parent of ``site`` was recomputed earlier in this replay.
+    """Whether any parent of ``site`` carries a changed value in this replay.
 
     Parameters
     ----------
@@ -203,18 +241,56 @@ def _any_parent_updated(
         Values this replay has recomputed so far, by replay site key.
     label_keys:
         Label spelling to replay site keys.
+    log:
+        The trace being replayed. When given, a pending parent whose replay
+        value equals its captured value does not count as updated; a parent
+        whose captured record cannot be found or compared does.
 
     Returns
     -------
     bool
-        True when a parent's replay key carries a pending update.
+        True when a parent's replay key carries a pending update whose value
+        differs from the captured one (or any pending update, without ``log``).
     """
 
     for parent in site.parents or ():
         for key in label_keys.get(parent, (parent,)):
-            if key in pending_updates:
+            if key not in pending_updates:
+                continue
+            if log is None or _pending_value_differs(log, key, pending_updates[key]):
                 return True
     return False
+
+
+def _pending_value_differs(log: Trace, key: str, pending: torch.Tensor) -> bool:
+    """Whether a staged replay value differs from the captured value at ``key``.
+
+    Parameters
+    ----------
+    log:
+        The trace being replayed.
+    key:
+        Replay site key (pass-qualified label) of the recomputed site.
+    pending:
+        The value this replay staged for that site.
+
+    Returns
+    -------
+    bool
+        False only when the captured record is found, holds a tensor of the
+        same shape and dtype, and compares equal element-wise.
+    """
+
+    captured = log._layer_dict_all_keys.get(key)
+    captured_out = getattr(captured, "out", None)
+    if not isinstance(captured_out, torch.Tensor) or not isinstance(pending, torch.Tensor):
+        return True
+    if captured_out.shape != pending.shape or captured_out.dtype != pending.dtype:
+        return True
+    try:
+        return not torch.equal(captured_out.detach(), pending.detach().to(captured_out.device))
+    except RuntimeError:
+        return True
 
 
 def _frontier_leaf(
@@ -314,4 +390,48 @@ def _buffer_write_corroborated(captured_site: object, captured_producer: object)
         and isinstance(captured_producer, torch.Tensor)
         and captured_site.shape == captured_producer.shape
         and bool(torch.equal(captured_site, captured_producer))
+    )
+
+
+def _parent_value(
+    parent: Op,
+    pass_log: Op,
+    overlay: dict[str, torch.Tensor],
+    differentiable_frontier: dict[str, torch.Tensor] | None,
+) -> torch.Tensor:
+    """Return the value ``pass_log`` reads from ``parent`` during replay.
+
+    In order: the replay overlay, the version of the parent this child saw at
+    capture (``out_versions_by_child``), then the parent's saved out; a
+    differentiable replay reads the latter two through frontier leaves.
+    """
+
+    parent_key = _replay_site_key(parent)
+    if parent_key in overlay:
+        return overlay[parent_key]
+    versions = getattr(parent, "out_versions_by_child", {}) or {}
+    child_spelling = next(
+        (
+            spelling
+            for spelling in (_replay_site_key(pass_log), pass_log.layer_label)
+            if spelling in versions
+        ),
+        None,
+    )
+    if child_spelling is not None:
+        version = versions[child_spelling]
+        if isinstance(version, torch.Tensor):
+            if differentiable_frontier is not None:
+                return _frontier_leaf(
+                    differentiable_frontier,
+                    f"{_disclosure_label(parent)}->{_disclosure_label(pass_log)}",
+                    version,
+                )
+            return version
+    if isinstance(parent.out, torch.Tensor):
+        if differentiable_frontier is not None:
+            return _frontier_leaf(differentiable_frontier, _disclosure_label(parent), parent.out)
+        return parent.out
+    raise ReplayPreconditionError(
+        f"parent {parent.layer_label!r} for {pass_log.layer_label!r} has no out"
     )

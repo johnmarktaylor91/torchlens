@@ -303,13 +303,13 @@ _REFUSAL_HINTS: dict[str, str] = {
     "N4": (
         "A halted capture records a PREFIX of the forward; the sparse "
         "runnable contract requires the complete taken path. Re-capture "
-        "without halt= to save a runnable artifact."
+        "without stop_after= to save a runnable artifact."
     ),
     "N5": (
         "Live-provider replay re-drives the FULL native forward, but a "
         "halted capture recorded only a prefix; results would silently "
-        "disagree with the recorded graph. Re-capture without halt= "
-        "(re-arming raise_on_nan/halt options as needed), or load the "
+        "disagree with the recorded graph. Re-capture without stop_after= "
+        "(re-arming on_nonfinite/stop_after options as needed), or load the "
         "artifact and use loaded-sparse run()."
     ),
 }

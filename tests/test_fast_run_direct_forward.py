@@ -13,14 +13,13 @@ from typing import Any
 import pytest
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 import torchlens as tl
 from tests.classics_corpus._loader import build_entry, corpus_entries
-from torchlens._fast_live_steer import refusal_code
 from torchlens._utils._module_call_dispatch import forward_entered_through_module_call
 from torchlens._utils._torch_compat import HAS_MODULE_CALL_DISPATCH_FRAME
 from torchlens.backends.torch._tl import get_module_meta
-from torchlens.errors import PathDivergenceError
 
 pytestmark = pytest.mark.skipif(
     not HAS_MODULE_CALL_DISPATCH_FRAME, reason="torch build cannot tell a direct forward() call"
@@ -119,6 +118,28 @@ def _assert_same(left: Any, right: Any) -> None:
         assert torch.equal(want.detach(), have.detach())
 
 
+def _assert_same_payloads(full: Any, fast: Any) -> None:
+    """Assert the fast run refreshed every non-buffer payload the full rerun saved, exactly.
+
+    Buffer ops have no live event; the fast run clears their payloads rather
+    than keep stale ones, so they are the only saved ops it may leave out.
+    """
+
+    def saved(trace: Any) -> dict[str, torch.Tensor]:
+        return {
+            op.label: op.out.detach()
+            for op in trace._layer_list
+            if op.has_saved_activation and isinstance(op.out, torch.Tensor)
+        }
+
+    want, have = saved(full), saved(fast)
+    buffers = {op.label for op in full._layer_list if op.is_buffer}
+    assert want and have.keys() <= want.keys()
+    assert want.keys() - have.keys() <= buffers
+    for label, value in have.items():
+        assert torch.equal(want[label], value), label
+
+
 def test_caller_frame_tells_a_direct_forward_call_apart() -> None:
     """``module(x)`` reads as a module call, ``module.forward(x)`` as direct, hooked or not."""
 
@@ -182,12 +203,13 @@ def test_fast_run_collects_a_direct_forward_site_on_a_new_input(
     trace = tl.trace(model, torch.randn(2, 3))
     new_x = torch.randn(2, 3)
     result = trace.run(inputs=new_x, fast=True)
-    assert trace.last_run["engine"] == "guarded_fast", trace.last_run.get("fast_refused")
+    product = result.trace
+    assert product.last_run["engine"] == "guarded_fast", product.last_run.get("fast_refused")
     with torch.no_grad():
         native = model(new_x)
     _assert_same(native, result.output)
     fresh = tl.trace(model, new_x)
-    sites = list(trace.find_sites(tl.module("parent.inner")))
+    sites = list(product.find_sites(tl.module("parent.inner")))
     fresh_sites = list(fresh.find_sites(tl.module("parent.inner")))
     assert sites and len(sites) == len(fresh_sites)
     for site, fresh_site in zip(sites, fresh_sites, strict=True):
@@ -206,7 +228,7 @@ def test_fast_run_matches_the_full_run_on_the_same_input() -> None:
     full_trace = tl.trace(model, x)
     fast = fast_trace.run(inputs=x, fast=True)
     full = full_trace.run(inputs=x)
-    assert fast_trace.last_run["engine"] == "guarded_fast", fast_trace.last_run.get("fast_refused")
+    assert fast.trace.last_run["engine"] == "guarded_fast", fast.trace.last_run.get("fast_refused")
     _assert_same(full.output, fast.output)
 
 
@@ -267,33 +289,20 @@ def test_fast_run_routes_urbandriver_past_its_direct_forward_call() -> None:
 
     Before routing, the fast run refused at that call
     (``fast_live_module_hook_unobserved``). It now collects the embedding and
-    its parent and runs on; a later, unrelated divergence on this model (see
-    the strict xfail below) is the only refusal left.
+    its parent and runs to the end without a refusal.
     """
 
     model, inputs = _urbandriver()
     trace = tl.trace(model, inputs)
     assert any(address.endswith("embedding") for address in _marked(model))
-    try:
-        trace.run(inputs=inputs, fast=True)
-    except PathDivergenceError as exc:
-        assert refusal_code(exc) == "conditional_arm_mismatch:fast_live_function_path"
+    trace.run(inputs=inputs, fast=True)
     session = trace.__dict__["_fast_run_session"]
     assert session.module_index >= 2
     _assert_no_routed_forward(model)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=PathDivergenceError,
-    reason=(
-        "after the routed embedding, the live functional path diverges from the "
-        "captured function plan around LocalMLP's F.relu(x, inplace=True) "
-        "(expected '__getitem__', got 'relu'); not a direct-forward() gap"
-    ),
-)
 def test_fast_run_reruns_urbandriver() -> None:
-    """The corpus model reruns fast and equals the full rerun."""
+    """The corpus model reruns fast and equals the full rerun, output and every saved op."""
 
     model, inputs = _urbandriver()
     trace = tl.trace(model, inputs)
@@ -301,3 +310,60 @@ def test_fast_run_reruns_urbandriver() -> None:
     fast = trace.run(inputs=inputs, fast=True)
     full = full_trace.run(inputs=inputs)
     _assert_same(full.output, fast.output)
+    _assert_same_payloads(full.trace, fast.trace)
+    _assert_no_routed_forward(model)
+
+
+class InplaceMLP(nn.Module):
+    """urbandriver's ``LocalMLP``: linear, layer norm, ``F.relu(x, inplace=True)``."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.linear = nn.Linear(4, 4, bias=False)
+        self.norm = nn.LayerNorm(4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Normalize, then activate in place."""
+
+        return F.relu(self.norm(self.linear(x)), inplace=True)
+
+
+class DirectInplaceRoot(nn.Module):
+    """A directly called embedding, the in-place module, a mask, then a plain relu."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.embedding = nn.Embedding(5, 4)
+        self.mlp = InplaceMLP()
+        self.head = nn.Linear(4, 2)
+
+    def forward(self, indices: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """Embed by a direct ``forward()`` call and run the urbandriver pattern."""
+
+        x = self.mlp(self.embedding.forward(indices))
+        masked = x.masked_fill(mask[..., None] > 0, 0.0)
+        return F.relu(self.head(masked))
+
+
+def _direct_inplace_inputs(seed: int) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return seeded indices and an integer mask."""
+
+    generator = torch.Generator().manual_seed(seed)
+    indices = torch.randint(0, 5, (2, 3), generator=generator)
+    return indices, torch.randint(0, 2, (2, 3), generator=generator)
+
+
+def test_fast_run_reruns_a_direct_forward_with_an_inplace_activation() -> None:
+    """The synthetic urbandriver pattern reruns fast on a new input and equals a full rerun."""
+
+    torch.manual_seed(0)
+    model = DirectInplaceRoot().eval()
+    trace = tl.trace(model, _direct_inplace_inputs(0))
+    assert _marked(model) == {"embedding"}
+    assert {"relu_", "relu"} <= {str(op.func_name) for op in trace._layer_list}
+    fresh = _direct_inplace_inputs(1)
+    fast = trace.run(inputs=fresh, fast=True)
+    full = tl.trace(model, _direct_inplace_inputs(0)).run(inputs=fresh)
+    _assert_same(full.output, fast.output)
+    _assert_same_payloads(full.trace, fast.trace)
+    _assert_no_routed_forward(model)

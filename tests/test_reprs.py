@@ -111,7 +111,7 @@ def test_layer_repr_after_trace_collection_degrades_not_raises() -> None:
 
     import gc
 
-    layer = tl.trace(_TwoStage(), torch.randn(2, 4))["relu_1_2"]
+    layer = tl.trace(_TwoStage(), torch.randn(2, 4)).layers["relu_1_2"]
     gc.collect()
 
     text = repr(layer)
@@ -142,7 +142,7 @@ def test_layer_standalone_pickle_repr_and_accessors_typed() -> None:
     from torchlens._errors import RecordBindingError
 
     trace = tl.trace(_TwoStage(), torch.randn(2, 4))
-    restored = pickle.loads(pickle.dumps(trace["relu_1_2"]))
+    restored = pickle.loads(pickle.dumps(trace.layers["relu_1_2"]))
 
     text = repr(restored)
     assert "relu_1_2" in text
@@ -174,7 +174,7 @@ def test_op_source_trace_refuses_typed_when_detached() -> None:
     from torchlens._errors import RecordBindingError
 
     trace = tl.trace(_TwoStage(), torch.randn(2, 4))
-    op = trace["relu_1_2"].ops[0]
+    op = trace.layers["relu_1_2"].ops[0]
 
     restored = pickle.loads(pickle.dumps(op))
     with pytest.raises(RecordBindingError) as exc_info:
@@ -186,7 +186,7 @@ def test_op_source_trace_refuses_typed_when_detached() -> None:
         _ = restored.get_children()
     assert children_exc.value.fields["code"] == "record_not_bound"
 
-    dead = trace["relu_1_2"].ops[0]
+    dead = trace.layers["relu_1_2"].ops[0]
     del trace, op
     gc.collect()
     with pytest.raises(RecordBindingError) as dead_exc:
@@ -211,7 +211,7 @@ def test_op_repr_degrades_under_predicate_save() -> None:
     unsaved = next(op for op in trace._layer_list if not op.has_saved_activation)
     unsaved_text = f"{unsaved}"
     assert "not saved" in unsaved_text
-    saved = trace["relu_1_2"]
+    saved = trace.layers["relu_1_2"]
     assert "not saved" not in f"{saved.ops[0]}"
 
 
@@ -223,7 +223,7 @@ def test_layer_repr_on_live_trace_unchanged() -> None:
     """
 
     trace = tl.trace(_TwoStage(), torch.randn(2, 4))
-    layer = trace["relu_1_2"]
+    layer = trace.layers["relu_1_2"]
     text = repr(layer)
     assert "relu_1_2" in text
     assert "\n" not in text
@@ -247,7 +247,7 @@ def test_op_repr_after_trace_collection_degrades_not_raises() -> None:
 
     from torchlens._errors import RecordBindingError
 
-    op = tl.trace(_TwoStage(), torch.randn(2, 4))["relu_1_2"].ops[0]
+    op = tl.trace(_TwoStage(), torch.randn(2, 4)).layers["relu_1_2"].ops[0]
     gc.collect()
 
     text = repr(op)
@@ -267,7 +267,7 @@ def test_op_standalone_pickle_accessors_refuse_typed() -> None:
     from torchlens._errors import RecordBindingError
 
     trace = tl.trace(_TwoStage(), torch.randn(2, 4))
-    restored = pickle.loads(pickle.dumps(trace["relu_1_2"].ops[0]))
+    restored = pickle.loads(pickle.dumps(trace.layers["relu_1_2"].ops[0]))
 
     text = repr(restored)
     assert "detached" in text
@@ -287,7 +287,7 @@ def test_op_repr_on_live_trace_unchanged() -> None:
     """An Op bound to a live Trace keeps the full informative repr (R52-B)."""
 
     trace = tl.trace(_TwoStage(), torch.randn(2, 4))
-    op = trace["relu_1_2"].ops[0]
+    op = trace.layers["relu_1_2"].ops[0]
     text = repr(op)
     assert "relu_1_2" in text
     assert "detached" not in text

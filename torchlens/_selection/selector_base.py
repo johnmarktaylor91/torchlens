@@ -8,10 +8,10 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, TypeAlias
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, TypeAlias
 
 from .._errors import ArgumentTypeError
-from . import selectors as _selectors
+from ._module_facet_fold import _fold_module_facet
 from .errors import SelectorCompositionError, UnclassifiedSelectorError
 from .target import FrozenTargetSpec, TargetSpec
 
@@ -39,7 +39,11 @@ class BaseSelector:
     selector_kind: SelectorKind
     selector_value: Any
 
-    def __and__(self, other: SelectorLike) -> CompositeSelector:
+    #: Attribute holding the single operand a wrapper selector (``~s``, ``tl.grad(s)``)
+    #: wraps; ``None`` for every other selector. ``_memo_safe`` unwraps through it.
+    _wrapped_operand_attr: ClassVar[str | None] = None
+
+    def __and__(self, other: SelectorLike) -> BaseSelector:
         """Return a selector that matches the intersection of two selectors.
 
         Parameters
@@ -49,18 +53,21 @@ class BaseSelector:
 
         Returns
         -------
-        CompositeSelector
+        BaseSelector
             Intersection selector. A non-selector operand that implements
             ``__selection__`` defers to that object's reflected operator, so
             ``selector & rf_box`` composes as a Selection; junk operands keep
-            their shipped refusals.
+            their shipped refusals. ``tl.module(address) & tl.head(i)`` (either
+            order) folds into the facet selector scoped to that module, the
+            same selector as ``tl.head(i).in_module(address)``, so it works at
+            every door a facet selector does.
         """
 
         if not isinstance(other, BaseSelector) and hasattr(other, "__selection__"):
             return NotImplemented
         return _compose("and", self, other)
 
-    def __rand__(self, other: str) -> CompositeSelector:
+    def __rand__(self, other: str) -> BaseSelector:
         """Return ``other & self`` for a bare label string on the left.
 
         Parameters
@@ -79,7 +86,7 @@ class BaseSelector:
             return NotImplemented
         return _compose("and", other, self)
 
-    def __or__(self, other: SelectorLike) -> CompositeSelector:
+    def __or__(self, other: SelectorLike) -> BaseSelector:
         """Return a selector that matches the union of two selectors.
 
         Parameters
@@ -103,7 +110,7 @@ class BaseSelector:
             )
         return _compose("or", self, other)
 
-    def __ror__(self, other: str) -> CompositeSelector:
+    def __ror__(self, other: str) -> BaseSelector:
         """Return ``other | self`` for a bare label string on the left.
 
         Parameters
@@ -151,7 +158,7 @@ class BaseSelector:
             )
         return NotSelector(self)
 
-    def __sub__(self, other: SelectorLike) -> CompositeSelector:
+    def __sub__(self, other: SelectorLike) -> BaseSelector:
         """Return a selector matching this selector minus ``other`` (DESUGAR).
 
         ``a - b`` desugars to ``CompositeSelector("and", (a, NotSelector(b)))``
@@ -354,6 +361,8 @@ class NotSelector(BaseSelector):
 
     selector: SelectorLike
 
+    _wrapped_operand_attr: ClassVar[str | None] = "selector"
+
     def __init__(self, selector: SelectorLike) -> None:
         """Create a negated selector.
 
@@ -524,7 +533,7 @@ def classify_selector_universe(sel: Any) -> SelectorUniverse | None:
                 return None
             combined = universes[0]
             for index in range(1, len(children)):
-                combined = _selectors._and_universe(
+                combined = _and_universe(
                     combined, universes[index], children[index - 1], children[index]
                 )
             return combined
@@ -533,6 +542,54 @@ def classify_selector_universe(sel: Any) -> SelectorUniverse | None:
         return _leaf_universe(str(sel.selector_kind))
     raise UnclassifiedSelectorError(
         f"{type(sel).__name__} has no universe classification; add an explicit bucket."
+    )
+
+
+def _and_universe(
+    left: SelectorUniverse | None,
+    right: SelectorUniverse | None,
+    left_sel: Any,
+    right_sel: Any,
+) -> SelectorUniverse | None:
+    """Combine two ``&`` operands' universes, refusing pairs that share no site."""
+
+    if left is None or right is None:
+        other = right if left is None else left
+        if other in (None, "activation"):
+            return other
+        left = left or "activation"
+        right = right or "activation"
+    if left == right and left != "mixed":
+        return left
+    pair = {left, right}
+    if "mixed" not in pair and "qualifier" in pair and pair & {"gradient", "node"}:
+        return "gradient" if "gradient" in pair else "node"
+    if pair == {"activation", "qualifier"}:
+        site, qualifier = (left_sel, right_sel) if left == "activation" else (right_sel, left_sel)
+        raise SelectorCompositionError(
+            f"{left_sel!r} & {right_sel!r} joins a backward pass qualifier to an "
+            "activation address; activations have no backward pass.",
+            code="selector_signal_mismatch",
+            remedy=f"a pass qualifier needs a gradient address: tl.grad({site!r}) & {qualifier!r}",
+        )
+    if "mixed" in pair:
+        remedy = "write & inside each branch of the |, e.g. (tl.grad(a) & q) | (a & b)"
+    elif pair == {"activation", "gradient"}:
+        remedy = "a gradient and an activation address never share a site; use | for both"
+    elif "activation" in pair:
+        remedy = (
+            "spell the node address alone: tl.grad_fn(label=...), or the tensor address tl.grad(s)"
+        )
+    else:
+        remedy = (
+            "the tensor address tl.grad(s) and the node address tl.grad_fn(...) differ in "
+            "payload; use one of them"
+        )
+    raise SelectorCompositionError(
+        f"Cross-universe composition not supported: {left_sel!r} & {right_sel!r} joins a "
+        f"{left} address and a {right} address, which never share a site.",
+        code="selector_cross_universe_and",
+        remedy=remedy,
     )
 
 
@@ -636,24 +693,28 @@ def _check_composition(
         Raises when composition is invalid.
     """
 
-    from .._ir.selector_eval import contains_followed_by, flatten_and_conjuncts
+    from .._ir.selector_eval import (
+        FollowedBySelector,
+        contains_followed_by,
+        flatten_and_conjuncts,
+    )
 
     a_memo, b_memo = _composition_memo(a), _composition_memo(b)
     a_universe, a_followed = a_memo or (classify_selector_universe(a), contains_followed_by(a))
     b_universe, b_followed = b_memo or (classify_selector_universe(b), contains_followed_by(b))
     if operator == "and":
-        universe = _selectors._and_universe(a_universe, b_universe, a, b)
+        universe = _and_universe(a_universe, b_universe, a, b)
     else:
         universe = _or_universe([a_universe, b_universe])
     if a_followed or b_followed:
         # `&` nests, so validate the FLAT conjunction: `a & fb & b` must pass
         # exactly like `a & b & fb` and the flat three-child spec.
         conjuncts = flatten_and_conjuncts((a, b))
-        direct = [c for c in conjuncts if isinstance(c, _selectors.FollowedBySelector)]
+        direct = [c for c in conjuncts if isinstance(c, FollowedBySelector)]
         buried = [
             c
             for c in conjuncts
-            if not isinstance(c, _selectors.FollowedBySelector) and contains_followed_by(c)
+            if not isinstance(c, FollowedBySelector) and contains_followed_by(c)
         ]
         if len(direct) != 1 or buried:
             raise SelectorCompositionError(
@@ -677,22 +738,28 @@ def _composition_memo(sel: Any) -> tuple[SelectorUniverse | None, bool] | None:
 def _memo_safe(operand: Any) -> bool:
     """Whether an operand's facts cannot drift after composition (no ``TargetSpec`` inside)."""
 
-    while isinstance(operand, (NotSelector, _selectors.GradSelector)):
-        operand = operand.selector if isinstance(operand, NotSelector) else operand.inner
+    while (attr := getattr(type(operand), "_wrapped_operand_attr", None)) is not None:
+        operand = getattr(operand, attr)
     if isinstance(operand, CompositeSelector):
         return _FACTS_KEY in operand.__dict__
     return isinstance(operand, (BaseSelector, str))
 
 
-def _compose(operator: Literal["and", "or"], left: Any, right: Any) -> CompositeSelector:
+def _compose(operator: Literal["and", "or"], left: Any, right: Any) -> BaseSelector:
     """Validate ``left <operator> right`` and build its flat composite.
 
     The composite memoises the facts ``_check_composition`` derived, so the
     next chained operator reads them instead of re-walking every accumulated
     child (an n-step chain was quadratic). They equal a fresh flat
     classification: the ``&`` fold and the ``|`` join combine per operand.
+    A module selector intersected with a facet selector folds into the facet
+    selector scoped to that module instead of a composite.
     """
 
+    if operator == "and":
+        folded = _fold_module_facet(left, right)
+        if folded is not None:
+            return folded
     facts = _check_composition(left, right, operator=operator)
     composite = CompositeSelector(operator, _flatten_same_operator(operator, left, right))
     if _memo_safe(left) and _memo_safe(right):

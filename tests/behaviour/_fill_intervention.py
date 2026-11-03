@@ -141,7 +141,7 @@ def _descendants(trace: Any, label: str) -> set[str]:
     frontier = [label]
     while frontier:
         current = frontier.pop()
-        for child in trace[current].children or ():
+        for child in trace.layers[_no_pass(current)].children or ():
             child_label = child if isinstance(child, str) else getattr(child, "label", str(child))
             child_label = _no_pass(child_label)
             if child_label not in seen:
@@ -349,7 +349,7 @@ def _rule_facts(recipe: Any) -> list[tuple[str, Any]]:
     if recipe is None:
         return []
     if isinstance(recipe, tl.Recipe):
-        return [("digest", recipe.digest())]
+        return [("digest", recipe.digest)]
     edit = recipe.helper.name if recipe.helper is not None else None
     targets = [repr(target) for target in recipe.targets]
     return [(target, edit) for target in targets] + [("records", len(recipe.records))]

@@ -17,7 +17,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes.aten_op import OpRef
-from torchlens.backends.torch._aten_capture import _activate_aten_recording_for_tests
 from torchlens.validation.invariants import MetadataInvariantError, check_metadata_invariants
 
 
@@ -118,8 +117,7 @@ def _armed_two_op_trace() -> Any:
         def forward(self, x: torch.Tensor) -> torch.Tensor:
             return torch.relu(x + 1).sum()
 
-    with _activate_aten_recording_for_tests():
-        return tl.trace(_TwoOp(), torch.ones(2))
+    return tl.trace(_TwoOp(), torch.ones(2), capture=tl.options.CaptureOptions(aten_ops=True))
 
 
 def test_primitive_profile_dense_rows_are_the_layer_list() -> None:

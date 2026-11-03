@@ -444,7 +444,7 @@ class TestModuleAccessorSummary:
         # (it stays None with no transform), so the single-pass-vs-multi-pass
         # None-guard assertions below are meaningful rather than trivially true.
         log = trace_fn(
-            model, input_2d, save=tl.options.SaveOptions(activation_transform=lambda x: x)
+            model, input_2d, capture=tl.options.CaptureOptions(activation_transform=lambda x: x)
         )
 
         # The whole table renders without raising.
@@ -487,11 +487,13 @@ class TestModuleAccessorSummary:
         # ``Layer._single_pass_or_error()`` for any multi-pass (recurrent) layer.
         # None of these three surfaces were covered by the assertions above, which
         # is exactly why the regression slipped through hotfix2.
-        multi_pass_labels = [label for label in fc1.layer_labels if log[label].num_passes > 1]
+        multi_pass_labels = [
+            label for label in fc1.layer_labels if log.layers[label].num_passes > 1
+        ]
         assert multi_pass_labels, "fixture must contain a multi-pass layer to exercise this gap"
 
         # 1) Layer.to_pandas() directly.
-        multi_pass_layer = log[multi_pass_labels[0]]
+        multi_pass_layer = log.layers[multi_pass_labels[0]]
         layer_df = multi_pass_layer.to_pandas()
         assert len(layer_df) == 1
         assert layer_df.iloc[0]["transformed_out"] is None

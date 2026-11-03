@@ -238,7 +238,7 @@ def scrub_for_save(
     if not isinstance(scrubbed_model, Trace):
         raise ArtifactError("Portable scrub expected a scrubbed Trace instance.")
 
-    scrubbed_state = dict(state_items(scrubbed_model))
+    scrubbed_state = {k: v for k, v in state_items(scrubbed_model) if k != "_layer_accessor_cache"}
     scrubbed_state["tlspec_version"] = TLSPEC_VERSION
 
     module_accessor = getattr(trace, "_module_logs", None)
@@ -1460,6 +1460,7 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_orphan_unattributed_tensor_args",
         "_plain_scalar_escape_labels",
         "_plain_direct_escape_gaps",
+        "_foreign_departures",
         "_unrecorded_operator_mutations",
         "_last_sibling_ordering_decision",
         # Sibling render diagnostic (same _render_dot write site as the row
@@ -1483,11 +1484,10 @@ def _is_runtime_only_trace_field(field_name: str) -> bool:
         "_capture_parent_edge_truth",
         "_orphan_pruned_func_call_ids",
         # B1-17: `_tl_predicate_intervention_{spec,target}_keys`,
-        # `_source_bundle_{path,manifest_sha256}` and the output-parent
-        # retention flag (now inside `_rerun_save_request`) moved out of this allowance
-        # into declared `Trace._PORTABLE_STATE_SPEC` DROP rows. This allowance is
-        # consulted BEFORE the spec, so an entry here makes the declared policy
-        # dead code.
+        # `_source_bundle_{path,manifest_sha256}` and the output-parent retention
+        # flag (now inside `_rerun_save_request`) moved out of this allowance into
+        # declared `Trace._PORTABLE_STATE_SPEC` DROP rows. This allowance is consulted
+        # BEFORE the spec, so an entry here makes the declared policy dead code.
         "jax_equation_captures",
         "jax_ordered_captures",
         "jax_region_captures",

@@ -141,7 +141,6 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "recording_failed_not_convertible",
         "recording_halt_frontier_missing",
         "recording_multipass_not_convertible",
-        "recording_option_duplicate",
         # run_fast_divergence_policy_invalid, run_fast_requires_inputs,
         # run_legacy_options_conflict, run_source_model_collected: rows
         # DELETED (shrink-only lock-in) -- the L4 S1-seam merge's compat pins
@@ -153,7 +152,6 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "stack_ordinals_duplicate",
         "stack_ordinals_unavailable",
         "stack_output_not_tensor",
-        "storage_argument_conflict",
         # summary_fields_invalid: row DELETED (shrink-only lock-in) -- the code
         # left the vocabulary with the removed legacy summary renderer.
         "sweep_intervention_conflict",

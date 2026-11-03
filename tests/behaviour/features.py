@@ -234,7 +234,7 @@ def _after_draw(cell: Cell) -> None:
         if trace is None:
             continue
         out = cell.tmp / f"graph-{name}"
-        trace.draw(path=str(out), vis_save_only=True, file_format="svg")
+        trace.draw(path=str(out), file_format="svg")
         rendered = list(cell.tmp.glob(f"graph-{name}*"))
         cell.expect(bool(rendered), f"{name} draw wrote nothing under {out}")
 
@@ -416,7 +416,7 @@ FEATURES: tuple[Feature, ...] = (
     Feature(
         "halt",
         CHEAP,
-        "Stop the forward early (halt=)",
+        "Stop the forward early (stop_after=)",
         changes=frozenset({"forward_match", "outcome"}),
         prepare=_prepare_halt,
         after=_after_halt,

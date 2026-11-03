@@ -765,7 +765,7 @@ def _disclose_episode_pass_axis(trace: Any, producer: str, layer_labels: list[st
         # step rows exist, so there is nothing provable to disclose.
         return
     n_steps = len(rows)
-    site_passes = {label: int(trace[label].num_passes) for label in layer_labels}
+    site_passes = {label: int(trace.layers[label].num_passes) for label in layer_labels}
     ran = ", ".join(f"{label} ran {count}x" for label, count in site_passes.items())
     warnings.warn(
         TorchLensWarning(

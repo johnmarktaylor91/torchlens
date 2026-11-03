@@ -19,6 +19,10 @@ from .._ir.container import (
     reconstruction_is_lossy_by_type,
     resolve_container_type,
 )
+from .._ir.distribution_container import (
+    DISTRIBUTION_CONTAINER_KIND,
+    distribution_type_rebuild_is_lossy,
+)
 from .._utils._torch_compat import tensor_version_or_none
 from ..errors import (
     RunPreconditionError,
@@ -511,6 +515,23 @@ def _container_spec_reconstruction_lossy(spec: ContainerSpec | None) -> bool:
     return any(_container_spec_reconstruction_lossy(child) for _, child in spec.child_specs)
 
 
+def _distribution_node_lossy(spec: Any) -> bool | None:
+    """Whether a distribution node rebuilds lossy; ``None`` for any other kind.
+
+    The view's own spec is the one being rebuilt: a lossy node in it (a
+    distribution carrying a transform list) is lossy even when the op-level
+    ``container_spec`` of a default capture is absent.
+    """
+
+    if spec.kind != DISTRIBUTION_CONTAINER_KIND:
+        return None
+    try:
+        container_type = resolve_container_type(spec)
+    except ContainerReconstructionError:
+        return True
+    return container_type is None or distribution_type_rebuild_is_lossy(container_type, spec)
+
+
 def _spec_node_reconstruction_lossy(spec: ContainerSpec) -> bool:
     """Return whether one dataclass / ``hf_model_output`` node reconstructs lossily.
 
@@ -551,6 +572,9 @@ def _spec_node_reconstruction_lossy(spec: ContainerSpec) -> bool:
         return namedtuple_type_can_carry_instance_state(
             container_type
         ) or _reconstruction_would_substitute_plain(container_type, "namedtuple", spec.fields, spec)
+    distribution_lossy = _distribution_node_lossy(spec)
+    if distribution_lossy is not None:
+        return distribution_lossy
     captured_names = spec.fields if spec.kind == "dataclass" else spec.keys
     try:
         container_type = resolve_container_type(spec)

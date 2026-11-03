@@ -2,14 +2,10 @@
  "schema": "interaction-matrix/1",
  "features": {
   "save": {
-   "summary": "Selective capture: which ops keep payloads (save=, CaptureOptions, save_mode, lookback)",
+   "summary": "Selective capture: which ops keep payloads (save=, CaptureOptions: save_mode, lookback, reconstruction_ready)",
    "trace_kwargs": [
     "save",
-    "save_mode",
-    "lookback",
-    "lookback_payload_policy",
-    "capture",
-    "reconstruction_ready"
+    "capture"
    ],
    "options": [
     "CaptureOptions"
@@ -26,31 +22,25 @@
    ]
   },
   "halt": {
-   "summary": "Stop the forward early at a site (halt=)",
+   "summary": "Stop the forward early at a site or on a predicate (stop_after=)",
    "trace_kwargs": [
-    "halt"
+    "stop_after"
    ],
    "options": []
   },
   "storage": {
-   "summary": "Payloads streamed or written to disk (storage=tl.to_disk, streaming=, chunking)",
+   "summary": "Payloads streamed or written to disk (storage=tl.to_disk, CaptureOptions.chunk_size, chunk_paths)",
    "trace_kwargs": [
     "storage",
-    "streaming",
-    "chunk_size",
     "chunk_paths"
    ],
    "options": [
-    "SaveOptions",
     "StorageOptions"
    ]
   },
   "backward": {
    "summary": "Gradient capture: backward_ready, save_grads, grad options, log_backward",
-   "trace_kwargs": [
-    "grad_transform",
-    "grad_options"
-   ],
+   "trace_kwargs": [],
    "options": []
   },
   "episode": {
@@ -65,17 +55,14 @@
   "backend": {
    "summary": "Non-torch backends (backend=, JAX static args)",
    "trace_kwargs": [
-    "backend",
-    "jax_static_argnums"
+    "backend"
    ],
    "options": []
   },
   "reporting": {
-   "summary": "Capture-time reporting: profile, echo, grouping",
+   "summary": "Capture-time reporting: narrate=, CaptureOptions.grouping",
    "trace_kwargs": [
-    "profile",
-    "narrate",
-    "grouping"
+    "narrate"
    ],
    "options": [
     "NarrationOptions"
@@ -179,7 +166,8 @@
  },
  "plain_trace_kwargs": [
   "model",
-  "input_args",
+  "inputs",
+  "extra_positional",
   "input_kwargs",
   "input_shape",
   "forward_kwargs"
@@ -273,7 +261,7 @@
    "status": "asymmetry",
    "asymmetry": "A05",
    "confidence": "high",
-   "note": "Paddle and MLX accept halt=; jax, tinygrad and tf refuse it typed."
+   "note": "Paddle and MLX accept stop_after=; jax, tinygrad and tf refuse it typed."
   },
   {
    "a": "backend",
@@ -625,7 +613,7 @@
    "evidence": "docs/reference/error_refusal_contract.md",
    "code": "model_door_binding_refused",
    "confidence": "medium",
-   "note": "halt= is a tl.trace option; the binding is capture-free and tl.trace refuses it as the model."
+   "note": "stop_after= is a tl.trace option; the binding is capture-free and tl.trace refuses it as the model."
   },
   {
    "a": "bind",
@@ -1017,7 +1005,7 @@
    "a": "draw",
    "b": "save",
    "status": "composes",
-   "evidence": "docs/agent-reference/common-patterns.md",
+   "evidence": "docs/internal/agent-reference/common-patterns.md",
    "confidence": "medium",
    "note": "The pattern doc draws the same trace it captured with save=tl.func('relu')."
   },
@@ -1290,7 +1278,7 @@
    "a": "episode",
    "b": "reporting",
    "status": "composes",
-   "evidence": "docs/agent-reference/current-2-x-surface.md",
+   "evidence": "docs/internal/agent-reference/current-2-x-surface.md",
    "confidence": "low",
    "note": "Not in the episode option table; grouping values other than structural may refuse grouping_policy_unavailable."
   },
@@ -1338,7 +1326,7 @@
    "a": "export",
    "b": "extract",
    "status": "composes",
-   "evidence": "docs/agent-reference/current-2-x-surface.md",
+   "evidence": "docs/internal/agent-reference/current-2-x-surface.md",
    "confidence": "medium",
    "note": "features.as_matrix feeds the rsatoolbox and xarray adapters; file and in-memory routes agree numerically."
   },
@@ -1481,7 +1469,7 @@
    "status": "asymmetry",
    "asymmetry": "A02",
    "confidence": "medium",
-   "note": "tl.extract has no halt= and always runs the full forward."
+   "note": "tl.extract has no stop_after= and always runs the full forward."
   },
   {
    "a": "extract",
@@ -1495,7 +1483,7 @@
    "a": "extract",
    "b": "index",
    "status": "composes",
-   "evidence": "docs/agent-reference/common-patterns.md",
+   "evidence": "docs/internal/agent-reference/common-patterns.md",
    "confidence": "high",
    "note": "extract resolves layer and module names through the same selector door as trace[...]."
   },
@@ -1519,7 +1507,7 @@
    "a": "extract",
    "b": "multipass",
    "status": "composes",
-   "evidence": "docs/agent-reference/common-patterns.md",
+   "evidence": "docs/internal/agent-reference/common-patterns.md",
    "confidence": "low",
    "note": "No extract-specific multi-pass document found."
   },
@@ -2054,16 +2042,16 @@
   {
    "a": "index",
    "b": "rerun",
-   "status": "asymmetry",
-   "asymmetry": "A29",
-   "confidence": "medium",
-   "note": "Label addressing reads fine after a rerun, but a staged edit addressed by a finalized label cannot be applied on rerun (rerun_staged_label_unmatchable); predicate selectors can."
+   "status": "composes",
+   "evidence": "tests/test_rerun_push_head_ablation_parity.py::test_final_label_and_head_spellings_fire_and_plain_capture_is_unchanged",
+   "confidence": "high",
+   "note": "Label addressing reads fine after a rerun, and a staged edit addressed by a finalized exact label is translated to its raw capture label before the forward, so it fires on the rerun too (walk-2 interventions.1); substring and regex label selectors still refuse through the live matcher."
   },
   {
    "a": "index",
    "b": "save",
    "status": "composes",
-   "evidence": "docs/agent-reference/common-patterns.md",
+   "evidence": "docs/internal/agent-reference/common-patterns.md",
    "confidence": "high",
    "note": "log['relu_1_2'].out after save=tl.func('relu'); an unsaved site refuses activation_not_saved."
   },
@@ -2102,7 +2090,7 @@
    "a": "intervene",
    "b": "multipass",
    "status": "composes",
-   "evidence": "docs/agent-reference/current-2-x-surface.md",
+   "evidence": "docs/internal/agent-reference/current-2-x-surface.md",
    "confidence": "medium",
    "note": "Pass-qualified replay edits exactly the addressed pass; predicate selectors fan out across passes."
   },
@@ -2479,7 +2467,7 @@
    "status": "composes",
    "evidence": "tests/test_interaction_battery.py::test_save_x_storage_reads_back_the_saved_values",
    "confidence": "high",
-   "note": "Exhaustive layers_to_save='all' with disk storage keeps payloads in RAM until postprocess and still counts against save_budget."
+   "note": "Exhaustive save='all' with disk storage keeps payloads in RAM until postprocess and still counts against save_budget."
   },
   {
    "a": "save",
@@ -2560,7 +2548,7 @@
     "backend",
     "halt"
    ],
-   "summary": "halt= works on torch, Paddle (live) and MLX (static-label) but jax, tinygrad and tf refuse it typed.",
+   "summary": "stop_after= works on torch, Paddle (live) and MLX (static-label) but jax, tinygrad and tf refuse it typed.",
    "evidence": "docs/backends.md",
    "recommendation": "document",
    "ruling": "pending"
@@ -2583,7 +2571,7 @@
     "recipes"
    ],
    "summary": "recipes= attaches facet recipes on torch and Paddle; tf (and jax, tinygrad, mlx) refuse it typed.",
-   "evidence": "docs/agent-reference/current-2-x-surface.md",
+   "evidence": "docs/internal/agent-reference/current-2-x-surface.md",
    "recommendation": "close",
    "ruling": "pending"
   },
@@ -2802,7 +2790,7 @@
     "halt",
     "storage"
    ],
-   "summary": "halt= composes with streaming to disk (tests/test_fastlog_halt.py::test_fastlog_halt_finalizes_disk_storage) but chunk_size refuses halt with a codeless ChunkedForwardConfigError, and stop_after refuses chunking (stop_after_chunked_conflict).",
+   "summary": "stop_after= composes with streaming to disk (tests/test_fastlog_halt.py::test_fastlog_halt_finalizes_disk_storage) but refuses chunking (stop_after_chunked_conflict).",
    "evidence": "tests/test_chunk_size.py::test_chunk_size_guarded_combinations",
    "recommendation": "document",
    "ruling": "pending"
@@ -2815,17 +2803,6 @@
    ],
    "summary": "A bare label works on single-pass layers; on a multi-pass layer trace['label'] returns a Layer, op-level reads need a pass qualifier, and do and attach_hooks refuse the bare label (multipass_bare_label_ambiguous).",
    "evidence": "tests/test_replay_pass_qualified.py::test_bare_multipass_label_refuses_in_do_and_resolve_sites",
-   "recommendation": "document",
-   "ruling": "pending"
-  },
-  {
-   "id": "A29",
-   "pair": [
-    "index",
-    "rerun"
-   ],
-   "summary": "Finalized labels address ops for reads after a rerun, but a staged edit addressed by a postprocess label cannot be applied on rerun (rerun_staged_label_unmatchable) because live capture matches selectors before labels exist.",
-   "evidence": "docs/reference/error_refusal_contract.md",
    "recommendation": "document",
    "ruling": "pending"
   },
@@ -2869,38 +2846,30 @@
     "storage"
    ],
    "summary": "trace(storage=tl.to_disk(...)) writes asynchronously by default and honors async_writes; tl.record streaming stays synchronous and refuses an explicit async_writes=True.",
-   "evidence": "docs/agent-reference/current-2-x-surface.md",
+   "evidence": "docs/internal/agent-reference/current-2-x-surface.md",
    "recommendation": "document",
-   "ruling": "pending"
-  },
-  {
-   "id": "A34",
-   "pair": [],
-   "summary": "The same disk option is spelled storage= and streaming= on tl.trace and tl.record; both together refuse storage_argument_conflict, and a silent conflict case is ledgered (accepted then discarded).",
-   "evidence": "tests/composition_expectations/data/composition_ledger.md",
-   "recommendation": "close",
    "ruling": "pending"
   },
   {
    "id": "A35",
    "pair": [],
    "summary": "The same capture concepts (random_seed, backward_ready, save_grads, detach_saved_activations) are flat keywords on tl.record but live inside capture=CaptureOptions(...) on tl.trace, and save= takes a selector, list or SaveOptions on trace but a predicate on record.",
-   "evidence": "docs/agent-reference/current-2-x-surface.md",
+   "evidence": "docs/internal/agent-reference/current-2-x-surface.md",
    "recommendation": "document",
    "ruling": "pending"
   },
   {
    "id": "A36",
    "pair": [],
-   "summary": "The model input is spelled input_args on trace, record and validate, x on extract and legacy run(model, x), inputs= on the unified run, and input_size= for declared shapes.",
-   "evidence": "docs/agent-reference/common-patterns.md",
+   "summary": "The model input is spelled inputs on trace, record and validate, x on extract and legacy run(model, x), inputs= on the unified run, and input_size= for declared shapes.",
+   "evidence": "docs/internal/agent-reference/common-patterns.md",
    "recommendation": "close",
    "ruling": "pending"
   },
   {
    "id": "A37",
    "pair": [],
-   "summary": "Which sites to keep is spelled save= on trace and record, layers on extract, and layers_to_save in CaptureOptions; using both save= and layers_to_save refuses save_selection_conflict.",
+   "summary": "Which sites to keep is spelled save= on trace and record, and layers on extract. CaptureOptions configures capture mechanics.",
    "evidence": "docs/reference/error_refusal_contract.md",
    "recommendation": "document",
    "ruling": "pending"
@@ -2914,18 +2883,10 @@
    "ruling": "pending"
   },
   {
-   "id": "A39",
-   "pair": [],
-   "summary": "Early stop has two spellings: halt= (a predicate) and stop_after= (a selector or site); setting both refuses stop_after_halt_conflict, and only stop_after refuses chunking with its own code.",
-   "evidence": "docs/reference/error_refusal_contract.md",
-   "recommendation": "document",
-   "ruling": "pending"
-  },
-  {
    "id": "A40",
    "pair": [],
    "summary": "Disk output is spelled storage=tl.to_disk(path) on trace and record, output_dir= on extract_dataset, and path inside streaming options.",
-   "evidence": "docs/agent-reference/current-2-x-surface.md",
+   "evidence": "docs/internal/agent-reference/current-2-x-surface.md",
    "recommendation": "document",
    "ruling": "pending"
   },

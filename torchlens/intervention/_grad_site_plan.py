@@ -34,6 +34,7 @@ from .._ir.selector_eval import looks_like_finalized_label, normalize_selector_l
 from .._selection.resolver import _resolve_unchecked
 from .._selection.selectors import CompositeSelector, NotSelector, label
 from ..options import ReplayOptions
+from ._rerun_predicate import raw_live_labels
 from .audit import record_intervention_event, site_keys_for_labels
 from .hooks import gradient_inners, normalize_hook_plan, split_site_branches
 from .replay import _reset_backward_projection, gradient_edit_replay_text
@@ -422,12 +423,9 @@ def _lower_label_leaves(trace: Trace, site: Any) -> Any:
         and isinstance(value, str)
         and looks_like_finalized_label(value)
     ):
-        fanout = len(trace._layer_list) + 1
-        ops = trace._resolve_sites(value, max_fanout=fanout)
-        raw = [getattr(op, "_layer_label_raw", None) for op in ops]
-        names = [name for name in raw if isinstance(name, str)]
-        if names and len(names) == len(raw):
-            return _join_union([label(name) for name in dict.fromkeys(names)])
+        names = raw_live_labels(trace, value)
+        if names:
+            return _join_union([label(name) for name in names])
     return site
 
 

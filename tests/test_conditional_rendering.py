@@ -163,7 +163,7 @@ class LoopRepeatedIfModel(nn.Module):
 def _render_dot_source(
     model: nn.Module,
     x: torch.Tensor,
-    vis_mode: str = "unrolled",
+    rolled: bool = False,
 ) -> tuple[str, Trace]:
     """Render a model graph and return the DOT source plus model log.
 
@@ -185,11 +185,10 @@ def _render_dot_source(
     with tempfile.TemporaryDirectory() as tmpdir:
         outpath = os.path.join(tmpdir, "conditional_render")
         dot_source = trace.draw(
-            vis_mode=vis_mode,
+            rolled=rolled,
             path=outpath,
-            vis_save_only=True,
             file_format="dot",
-        )
+        ).dot
     return dot_source, trace
 
 
@@ -322,7 +321,8 @@ def test_loop_repeated_if_condition_entries_remain_if() -> None:
         event = trace.graph.conditional_records[0]
         assert len(event.bool_layers) == 4
         assert all(
-            {op.conditional_context_kind for op in trace[bool_label].ops.values()} == {"if_test"}
+            {op.conditional_context_kind for op in trace.layers[bool_label].ops.values()}
+            == {"if_test"}
             for bool_label in event.bool_layers
         )
         edge_lines = [
@@ -401,7 +401,7 @@ def test_rolled_mixed_arm_graphviz_shows_composite_call_label() -> None:
     dot_source, trace = _render_dot_source(
         RolledMixedArmModel(),
         torch.ones(1, 4),
-        vis_mode="rolled",
+        rolled=True,
     )
 
     try:

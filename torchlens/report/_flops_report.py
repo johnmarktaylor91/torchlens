@@ -313,7 +313,7 @@ def _build_report(
 
 def flops(
     subject: Any,
-    input_args: Any = None,
+    inputs: Any = None,
     input_kwargs: dict[str, Any] | None = None,
     *,
     main_input_numel: int | None = None,
@@ -329,7 +329,7 @@ def flops(
         ONE capture under the summary execution contract: eval mode,
         ``torch.no_grad()``, module training flags and RNG state restored
         bit-identically afterwards).
-    input_args / input_kwargs:
+    inputs / input_kwargs:
         Model-door inputs; refused on the trace door.
     main_input_numel:
         Explicit 6ND ``D`` for the trace door (the comparator's HF
@@ -342,13 +342,13 @@ def flops(
     import torch.nn as nn
 
     if isinstance(subject, nn.Module):
-        if input_args is None:
+        if inputs is None:
             raise InvalidArgumentError(
                 "the model door needs example inputs to run its one capture.",
                 code="flops_report_inputs_required",
                 remedy="Call tl.report.flops(model, example_inputs).",
             )
-        trace = _capture_for_report(subject, input_args, input_kwargs)
+        trace = _capture_for_report(subject, inputs, input_kwargs)
         try:
             return _build_report(
                 trace,
@@ -358,9 +358,9 @@ def flops(
             )
         finally:
             trace.cleanup()
-    if input_args is not None or input_kwargs:
+    if inputs is not None or input_kwargs:
         raise InvalidArgumentError(
-            "input_args/input_kwargs are model-door arguments; the trace door takes none.",
+            "inputs/input_kwargs are model-door arguments; the trace door takes none.",
             code="flops_report_trace_door_inputs",
             remedy=(
                 "Call tl.report.flops(trace) on a finished trace, or pass the model "
@@ -405,7 +405,7 @@ def _capture_for_report(model: Any, input_args: Any, input_kwargs: dict[str, Any
     try:
         model.eval()
         with force_mha_slow_path(model), torch.no_grad():
-            return _trace(model, input_args, input_kwargs or {})
+            return _trace(model, input_args, input_kwargs=input_kwargs or {})
     finally:
         for module, was_training in saved_training_flags:
             module.training = was_training

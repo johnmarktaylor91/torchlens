@@ -32,6 +32,7 @@ def test_trace_field_set_subset_of_user_facing() -> None:
         "_uncalled_module_addresses",
         "_transform",
         "_output_transform",
+        "_output_slot",
         "_grad_transform",
         "_optimizer",
         "_visualizer_dir",
@@ -146,6 +147,9 @@ def test_trace_field_set_subset_of_user_facing() -> None:
         "_tl_injection_state",
         # measure.2: the CPU-peak opt-in session knob (DROP, RUNTIME binding).
         "measure_host_peak_memory",
+        # The aten_ops opt-in session knob (DROP, RUNTIME binding): read at
+        # capture entry to arm the ATen recorder; load restores the default.
+        "_options_aten_ops",
         # The capture's save request (FieldPolicy.DROP, RUNTIME binding,
         # session component): the backend reads its output-parent retention
         # flag during the forward and a legacy rerun replays it; popped in

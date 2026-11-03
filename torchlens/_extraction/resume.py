@@ -32,7 +32,7 @@ from .._data_substrate import (
     compare_signatures,
     compute_model_identity,
     read_trusted_rows,
-    refuse_v1_manifest,
+    refuse_2x_manifest,
     repair_ledger_tail,
     stimulus_ids_digest,
 )
@@ -552,10 +552,8 @@ def load_manifest(manifest_path: Path) -> dict[str, Any]:
     """
 
     try:
-        # read_bounded, never json.loads(read_text()): the manifest is a
-        # user-supplied artifact, so read_text() would materialize the whole
-        # file before any ceiling could apply (an over-size manifest is an
-        # allocation DoS).
+        # read_bounded, never json.loads(read_text()): the manifest is user-supplied, and
+        # an over-size one must refuse before it is materialized (allocation DoS).
         manifest = _json.read_bounded(manifest_path)
     except (OSError, ValueError) as exc:
         raise DatasetExtractionResumeError(
@@ -574,7 +572,9 @@ def load_manifest(manifest_path: Path) -> dict[str, Any]:
             remedy="delete the output directory and re-run the extraction from scratch",
             manifest_path=str(manifest_path),
         )
-    refuse_v1_manifest(manifest, container=manifest_path.parent)
+    from .. import __version__
+
+    refuse_2x_manifest(manifest, container=manifest_path.parent, running_version=__version__)
     return manifest
 
 

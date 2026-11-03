@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ._errors import ArgumentTypeError
+from ._options_removed import REMOVED_CAPTURE_MEMBERS
 
 
 def _coerce_input(model: Any, x: Any, *, whole_input: bool = True) -> Any:
@@ -86,50 +87,61 @@ def _reject_unrouted_forward_kwargs(forward_kwargs: dict[str, Any]) -> None:
         return
 
     unknown = ", ".join(sorted(forward_kwargs))
-    raise ArgumentTypeError(
-        f"trace() got model-input keyword(s) it does not route: {unknown}. "
-        "Forward keyword arguments travel through input_kwargs=",
-        code="trace_forward_kwargs_unrouted",
-        remedy=(
+    removed = [key for key in sorted(forward_kwargs) if key in REMOVED_CAPTURE_MEMBERS]
+    if removed:
+        # A removed capture option is never a model input: name its replacement.
+        message = f"trace() got removed capture option keyword(s): {', '.join(removed)}" + (
+            f" (and unrouted keyword(s): {unknown})" if len(removed) < len(forward_kwargs) else ""
+        )
+        remedy = "; ".join(f"{key}: {REMOVED_CAPTURE_MEMBERS[key]}" for key in removed)
+    else:
+        message = (
+            f"trace() got model-input keyword(s) it does not route: {unknown}. "
+            "Forward keyword arguments travel through input_kwargs="
+        )
+        remedy = (
             "pass them as tl.trace(model, (), input_kwargs={"
             + ", ".join(f"{key!r}: ..." for key in sorted(forward_kwargs))
             + "}); for HuggingFace text models, "
             "torchlens.bridge.transformers.trace_text(model, 'prompt') builds the "
             "inputs for you"
-        ),
+        )
+    raise ArgumentTypeError(
+        message,
+        code="trace_forward_kwargs_unrouted",
+        remedy=remedy,
         unrouted_keywords=sorted(forward_kwargs),
     )
 
 
-def _reject_extra_positional_input(grad_transform: Any) -> None:
-    """Refuse a tensor landing in ``trace()``'s fourth positional slot.
+def _reject_extra_positional_input(extra_positional: tuple[Any, ...]) -> None:
+    """Refuse anything past ``trace()``'s two positional slots.
 
     Parameters
     ----------
-    grad_transform:
-        The value ``trace()`` received in its ``grad_transform`` slot. A
-        ``torch.Tensor`` here is almost always an extra positional model
-        input that overflowed past ``input_args``.
+    extra_positional:
+        Positional values ``trace()`` received after ``inputs``. Only
+        ``model`` and the inputs are positional; a value here is almost always
+        an extra positional model input that overflowed past ``inputs``, or
+        an ``input_kwargs`` mapping passed by position.
 
     Raises
     ------
     ArgumentTypeError
-        With code ``extra_positional_input_invalid`` when the slot holds a
-        tensor.
+        With code ``extra_positional_input_invalid`` when the tuple is not empty.
     """
 
-    import torch
-
-    if not isinstance(grad_transform, torch.Tensor):
+    if not extra_positional:
         return
 
+    kinds = ", ".join(type(value).__name__ for value in extra_positional)
     raise ArgumentTypeError(
-        "grad_transform (the fourth positional slot) received a "
-        "torch.Tensor -- this is almost always an extra positional model "
-        "input. Bundle model inputs as one tuple, e.g. "
-        "tl.trace(model, (input_a, input_b, input_c)).",
+        f"trace() takes only model and inputs by position; received {len(extra_positional)} "
+        f"extra positional value(s) ({kinds}). Bundle model inputs as one tuple, e.g. "
+        "tl.trace(model, (input_a, input_b, input_c)), and pass keyword inputs as "
+        "input_kwargs={...}.",
         code="extra_positional_input_invalid",
-        remedy="bundle positional inputs into one tuple",
+        remedy="bundle positional inputs into one tuple; every other argument is a keyword",
     )
 
 

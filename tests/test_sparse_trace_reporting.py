@@ -204,7 +204,7 @@ def test_answer_hedges_when_nothing_is_saved() -> None:
     trace = tl.trace(
         _plain_model(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
     assert unexamined_payload_count(trace, kind="saved") > 0
     assert "could not be examined" in trace.first_nonfinite(link_format="text")
@@ -343,9 +343,9 @@ def test_recurrence_detection_off_matches_its_documented_tradeoff() -> None:
     rolled = tl.trace(_LoopModel(), x, capture=CaptureOptions(recurrence_detection=True))
     unrolled = tl.trace(_LoopModel(), x, capture=CaptureOptions(recurrence_detection=False))
 
-    assert rolled["relu_1_2"].num_passes == 6
+    assert rolled.layers["relu_1_2"].num_passes == 6
     assert len(unrolled.layer_labels) > len(rolled.layer_labels)
-    assert unrolled["relu_1_2"].num_passes == 1
+    assert unrolled.layers["relu_1_2"].num_passes == 1
     assert "relu_6_7" in unrolled.layer_labels
 
     assert unrolled.graph.is_recurrent is True

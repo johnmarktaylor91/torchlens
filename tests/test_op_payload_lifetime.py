@@ -72,7 +72,7 @@ def test_retained_op_does_not_pin_all_payloads() -> None:
     trace = _capture()
     refs = _payload_refs(trace)
     assert len(refs) >= 2
-    op = trace["relu_1_2"].ops[0]
+    op = trace.layers["relu_1_2"].ops[0]
     label = op.layer_label
     del trace
     gc.collect()
@@ -97,8 +97,8 @@ def test_live_fork_keeps_shared_base_payloads() -> None:
     gc.collect()
     dead = sorted(label for label, ref in refs.items() if ref() is None)
     assert not dead, f"parent GC evicted payloads a live fork still reads: {dead}"
-    assert isinstance(fork["relu_1_2"].ops[0].out, torch.Tensor)
-    op = fork["relu_1_2"].ops[0]
+    assert isinstance(fork.layers["relu_1_2"].ops[0].out, torch.Tensor)
+    op = fork.layers["relu_1_2"].ops[0]
     del fork
     gc.collect()
     gc.collect()
@@ -115,7 +115,7 @@ def test_fork_chain_owners_all_counted() -> None:
     fork = trace.fork()
     grandfork = fork.fork()
     refs = _payload_refs(trace)
-    op = grandfork["relu_1_2"].ops[0]
+    op = grandfork.layers["relu_1_2"].ops[0]
     del trace, fork
     gc.collect()
     gc.collect()
@@ -148,7 +148,7 @@ def test_loaded_trace_fork_death_does_not_evict_parent_payloads(tmp_path) -> Non
     gc.collect()
     dead = sorted(label for label, ref in refs.items() if ref() is None)
     assert not dead, f"fork GC evicted a LIVE loaded parent's payloads: {dead}"
-    assert isinstance(loaded["relu_1_2"].ops[0].out, torch.Tensor)
+    assert isinstance(loaded.layers["relu_1_2"].ops[0].out, torch.Tensor)
 
 
 @pytest.mark.heavy

@@ -15,4 +15,4 @@ they work well next to it:
   of a captured forward, not allocator behavior.
 - **torchprofile** counts a model's MACs from a `torch.jit.trace` graph with one call,
   `profile_macs(model, args)`. TorchLens counts FLOPs per executed op of an eager run
-  (`torchlens.report.flops_report`).
+  (`torchlens.report.flops`).

@@ -309,8 +309,9 @@ def test_streamed_bundle_lazy_load_keeps_relation_labels_as_strings(tmp_path: Pa
     tl.trace(
         _TwoOpModel(),
         torch.randn(1, 1, 8, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="all", seed=0),
-        streaming=tl.options.StorageOptions(path=bundle_path),
+        capture=tl.options.CaptureOptions(seed=0),
+        save="all",
+        storage=tl.options.StorageOptions(path=bundle_path),
     )
     lazy_log = tl.load(bundle_path, lazy=True)
     for op in lazy_log.ops:

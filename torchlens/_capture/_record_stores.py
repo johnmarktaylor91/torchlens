@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 import torch
 
 if TYPE_CHECKING:
-    from ..recording.options import RecordingOptions
+    from ..recording.options import _RecordingConfig
     from ..recording.types import (
         ActivationRecord,
         CaptureSpec,
@@ -64,7 +64,7 @@ class _StorageBackend(Protocol):
         spec: CaptureSpec,
         intent: StorageIntent,
         *,
-        options: RecordingOptions,
+        options: _RecordingConfig,
         ctx: RecordContext | GradRecordContext | None,
         kind: str = "activation",
     ) -> tuple[
