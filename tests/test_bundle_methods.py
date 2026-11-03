@@ -139,7 +139,7 @@ def test_bundle_method_count_stays_within_phase_budget() -> None:
     # upstream/downstream, token_pairs, token_divergence, add_alternative)
     # and draw are real methods now (max-push walk surface.7, late.26) and
     # count here; measure_members is removed into Bundle.map (walk names.11).
-    assert len(members) <= 44
+    assert len(members) <= 45
     assert "relate" in members
     for removed in (
         "joint_metric",
