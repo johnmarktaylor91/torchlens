@@ -193,3 +193,21 @@ def test_patched_field_attribute_keeps_the_facade_path(monkeypatch: pytest.Monke
         property(descriptor.__get__, descriptor.__set__, descriptor.__delete__),
     )
     assert op_mod.release_op_row(op, store, row) is False
+
+
+def test_every_stored_field_attribute_qualifies_for_row_release() -> None:
+    """Each stored field's ``Op`` attribute is a field descriptor or a registered overlay.
+
+    A property installed over a stored field after its registration ran (or never
+    registered) silently sends every op removal back to the per-field facade path;
+    this names the field instead.
+    """
+
+    namespace = vars(op_mod.Op)
+    unqualified = [
+        (name, type(namespace.get(name)).__name__)
+        for name in op_mod._OP_SLOT_NAMES
+        if namespace.get(name).__class__ not in op_mod._ROW_RELEASE_FIELD_CLASSES
+        and namespace.get(name) not in op_mod._ROW_RELEASE_PROPERTIES
+    ]
+    assert unqualified == []
