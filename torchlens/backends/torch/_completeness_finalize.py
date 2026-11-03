@@ -542,16 +542,20 @@ def capture_completeness_witness(trace: Any) -> Iterator[None]:
             finally:
                 _hub._ACTIVE_WITNESS_STATE = prior_active_state
                 _state._runnable_ledger_armed = prior_ledger_armed
+                state.release()
             return
-        with mode_context:
-            try:
-                yield
-            finally:
-                if mode == "shadow":
-                    _finalize_census(state)
-                else:
-                    _finalize_input_semantics_without_census(trace)
-                _finalize_plane_p(state)
+        try:
+            with mode_context:
+                try:
+                    yield
+                finally:
+                    if mode == "shadow":
+                        _finalize_census(state)
+                    else:
+                        _finalize_input_semantics_without_census(trace)
+                    _finalize_plane_p(state)
+        finally:
+            state.release()
 
 
 def _collect_authorized_internal_caller_modules() -> None:
