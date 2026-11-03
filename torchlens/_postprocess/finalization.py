@@ -45,12 +45,7 @@ from .._io.scrub import BlobSpec
 from .._io.streaming import BundleStreamWriter
 from .._ir.container_registry import _iter_tensor_leaves
 from .._quantities import Bytes, Duration, Flops
-from .._utils._record_group_table import (
-    layer_attr,
-    op_attr,
-    record_member,
-    record_storage_attr,
-)
+from .._utils._record_group_table import layer_attr, op_attr, record_member, record_storage_attr
 from .._utils._torch_symbols import torch_dtype_named
 from .._utils.hashing import sha256_file
 from ..backends.torch._tl import clear_meta
