@@ -25,14 +25,14 @@ pytestmark = pytest.mark.skipif(
 )
 
 import torchlens as tl  # noqa: E402
-from torchlens.distributed import (  # noqa: E402
-    _lifecycle as lifecycle,
-    is_vetted_build,
-)
-from torchlens.distributed._dtensor import (  # noqa: E402
+from torchlens._distributed import _lifecycle as lifecycle  # noqa: E402
+from torchlens._distributed._dtensor import (  # noqa: E402
     RANK_LOCAL_SHARD,
     shard_local_placements,
     value_marks_shard_local,
+)
+from torchlens.distributed import (  # noqa: E402
+    is_vetted_build,
 )
 
 # F1 ruling (Lead, 2026-10-01): full collective arming only runs where a

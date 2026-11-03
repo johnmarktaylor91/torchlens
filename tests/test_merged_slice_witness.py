@@ -11,14 +11,14 @@ from __future__ import annotations
 
 import pytest
 
-from torchlens._merged import BoundaryConsistency, derive_merge
-from torchlens._merged._errors import MergedFinding
-from torchlens._merged._evidence import RankEvidence
-from torchlens.distributed._ledger import (
+from torchlens._distributed._ledger import (
     GroupLifecycleEvent,
     GroupLifecycleLedger,
     membership_digest_for_ranks,
 )
+from torchlens._merged import BoundaryConsistency, derive_merge
+from torchlens._merged._errors import MergedFinding
+from torchlens._merged._evidence import RankEvidence
 
 WORLD = membership_digest_for_ranks([0, 1])
 

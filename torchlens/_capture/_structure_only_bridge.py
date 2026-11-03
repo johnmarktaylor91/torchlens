@@ -45,6 +45,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Final
 
+from ..errors.runnable import StateBindingError
+
 __all__ = [
     "STRUCTURE_ONLY_BRIDGE_ENTRY_OPEN",
     "BoundBufferBinding",
@@ -131,7 +133,6 @@ def compute_bound_state_digests(values: Mapping[str, Any]) -> dict[str, str]:
 
     from .. import fingerprint as tl_hash
     from .._runnable import RunnableErrorCode
-    from ..errors.runnable import StateBindingError
 
     digests: dict[str, str] = {}
     for name, value in values.items():

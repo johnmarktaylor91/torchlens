@@ -27,6 +27,11 @@ from typing import Any
 import pytest
 import torch
 
+from torchlens._distributed._ledger import (
+    GroupLifecycleEvent,
+    GroupLifecycleLedger,
+    membership_digest_for_ranks,
+)
 from torchlens._merged._artifact import load_merged
 from torchlens._merged._enums import (
     MERGED_BUNDLE_FORMAT,
@@ -36,11 +41,6 @@ from torchlens._merged._enums import (
     MergedErrorCode,
 )
 from torchlens._merged._errors import MergedArtifactError
-from torchlens.distributed._ledger import (
-    GroupLifecycleEvent,
-    GroupLifecycleLedger,
-    membership_digest_for_ranks,
-)
 
 _DIGEST = membership_digest_for_ranks([0, 1])
 

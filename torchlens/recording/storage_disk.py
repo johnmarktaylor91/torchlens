@@ -16,7 +16,6 @@ from typing import Any
 
 import torch
 
-from .. import __version__ as TORCHLENS_VERSION
 from .._io import TLSPEC_VERSION, ArtifactError
 from .._io._durability import fsync_dir, fsync_tree
 from .._io.manifest import Manifest, TensorEntry
@@ -577,12 +576,19 @@ def _write_metadata(path: Path, recording: Recording, options: _RecordingConfig)
         handle.write("\n")
 
 
+def _torchlens_version() -> str:
+    """Read the package version; the release workflow pins the literal to the root."""
+    from .. import __version__  # deferred: cycle torchlens (root facade)
+
+    return __version__
+
+
 def _build_fastlog_manifest(tensor_entries: list[TensorEntry]) -> Manifest:
     """Build a manifest for a finalized fastlog directory bundle."""
 
     return Manifest(
         tlspec_version=TLSPEC_VERSION,
-        torchlens_version=TORCHLENS_VERSION,
+        torchlens_version=_torchlens_version(),
         torch_version=torch.__version__,
         python_version=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
         platform=f"{platform.system().lower()}-{platform.machine().lower()}",

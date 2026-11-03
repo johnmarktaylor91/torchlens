@@ -1328,7 +1328,7 @@ def _strip_copied_forward_decorations(model: nn.Module) -> None:
         shallow copy taken mid-capture shares with its source module.
     """
 
-    from .backends.torch._tl import is_forward_call_decorated
+    from ._utils._tensor_label import is_forward_call_decorated
 
     for module in model.modules():
         current_forward = module.__dict__.get("forward", None)
@@ -2066,7 +2066,7 @@ def _move_tensors_to_device(obj: Any, device: torch.device | str) -> Any:
     try:
         moved = _move_tensors_to_device_inner(obj, device)
     except RecursionError as exc:
-        from torchlens._input_walk import raise_input_tree_stack_refusal
+        from torchlens._utils._input_tree import raise_input_tree_stack_refusal
 
         raise_input_tree_stack_refusal(exc)
         raise  # unreachable: the refusal always raises

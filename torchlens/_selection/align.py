@@ -36,6 +36,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .errors import SelectionError
+
 if TYPE_CHECKING:
     from .selection import Selection
 
@@ -64,8 +66,6 @@ def _alignment_invalid(reason: str, message: str, **fields: Any) -> Exception:
     ValueError
         If ``reason`` is outside the closed alignment-reason vocabulary.
     """
-
-    from .errors import SelectionError
 
     if reason not in ALIGNMENT_REASONS:
         raise ValueError(f"unknown selection alignment reason: {reason!r}")

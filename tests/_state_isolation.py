@@ -38,7 +38,7 @@ _WARN_ONCE_SENTINELS: tuple[tuple[str, str, object], ...] = (
     ("torchlens.backends.torch.legacy_ctors", "_WARNED_FOREIGN_NEW", set()),
     ("torchlens.backends.torch.ops", "_UNSUPPORTED_OUTPUT_CONTAINER_WARNED", set()),
     ("torchlens._data_classes._op_save", "_WARNED_REFERENCE_SAVE_MODE", False),
-    ("torchlens.distributed._lifecycle", "_AUTO_ARM_DEGRADATION", None),
+    ("torchlens._distributed._lifecycle", "_AUTO_ARM_DEGRADATION", None),
     ("torchlens.recording._storage_resolver", "_WARNED_REFERENCE_SAVE_MODE", False),
     ("torchlens._postprocess.ast_branches", "_source_drift_warned", set()),
     # SAE splice warnings (latents size, zero variance): once per session per code.
@@ -280,12 +280,12 @@ def _restore_distributed_arming() -> Iterator[None]:
     test order. Disarming restores the unarmed incoming state.
     """
 
-    lifecycle = sys.modules.get("torchlens.distributed._lifecycle")
+    lifecycle = sys.modules.get("torchlens._distributed._lifecycle")
     was_armed = lifecycle is not None and lifecycle.is_armed()
     try:
         yield
     finally:
-        lifecycle = sys.modules.get("torchlens.distributed._lifecycle")
+        lifecycle = sys.modules.get("torchlens._distributed._lifecycle")
         if not was_armed and lifecycle is not None and lifecycle.is_armed():
             lifecycle.disarm()
 

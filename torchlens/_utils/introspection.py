@@ -15,12 +15,11 @@ import numpy as np
 import torch
 from torch import nn
 
-from .._input_walk import INPUT_TREE_MAX_DEPTH
-
 # r-b4 R26-6c: read capability flags at USE time through the module object --
 # an import-time value binding never sees mark_torch_capability_missing flips.
 from . import _call_site, _torch_compat
 from ._call_site import _BOUNDARY_CODES
+from ._input_tree import INPUT_TREE_MAX_DEPTH
 from ._package_frames import _VERDICTS as _PACKAGE_VERDICTS, is_torchlens_code
 
 # Attributes to skip when crawling an object's namespace looking for tensors.

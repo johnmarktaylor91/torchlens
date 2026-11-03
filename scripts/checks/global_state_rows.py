@@ -97,7 +97,7 @@ _SCOPED_CAPTURE_STATE = frozenset(
         # cleared in its finally -- a survivor past the capture is exactly the
         # leaked-interposition class the session's teardown exists to prevent.
         ("torchlens/backends/torch/funcol.py", "_ACTIVE_FUNCOL_SESSION"),
-        ("torchlens/backends/torch/_tl.py", "_ACTIVE_LABEL_SESSION"),
+        ("torchlens/_utils/_tensor_label.py", "_ACTIVE_LABEL_SESSION"),
         ("torchlens/backends/torch/buffer_writes.py", "_WITNESS_MARKER_STATE"),
         ("torchlens/backends/torch/completeness_witness.py", "_CAPTURED_STORAGE_PTRS"),
         ("torchlens/backends/torch/completeness_witness.py", "_DISPATCH_TENSOR_ORIGINS"),
@@ -154,6 +154,10 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # Backend protocol shells resolve their spec through one lookup hook that
         # the registry installs once at import (install-time fact, never rebound).
         ("torchlens/backends/_backend_protocol.py", "_spec_lookup"),
+        # Engine hook slot: torchlens.validation installs the metadata-invariant
+        # tripwire once at import; tests may wrap it (install-time fact).
+        ("torchlens/_events.py", "_METADATA_INVARIANTS"),
+        ("torchlens/_events.py", "_ACTIVE_PROFILER_SESSION"),
         # Call-site grouping: the module forward wrapper code object, registered
         # idempotently when submodule forwards are decorated (one constant).
         ("torchlens/_utils/_call_site.py", "_BOUNDARY_CODES"),
@@ -202,7 +206,7 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         ("torchlens/_state.py", "_prepared_models"),
         ("torchlens/_state.py", "_prepared_root_by_module"),
         ("torchlens/_state.py", "_stale_prepared_roots"),
-        ("torchlens/backends/torch/_tl.py", "_RETIRED_LABEL_SESSION"),
+        ("torchlens/_utils/_tensor_label.py", "_RETIRED_LABEL_SESSION"),
         # F3b's lazy public-impl metadata sync (3c7ed93e): a one-way
         # synced-yet? sentinel flipped on first successful wrap, install-class.
         ("torchlens/_user_funcs.py", "_public_impl_metadata_synced"),
@@ -312,7 +316,7 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # It must not steer a capture with no initialized group: per-capture
         # consumers read it through capture_armed_state(), which is None then
         # (tests/test_distributed_teardown_dormancy.py pins it).
-        ("torchlens/distributed/_lifecycle.py", "_STATE"),
+        ("torchlens/_distributed/_lifecycle.py", "_STATE"),
     }
 )
 """Wrapper install / uninstall bookkeeping and prepared-model registration.
@@ -345,7 +349,7 @@ _WARN_ONCE_STATE = frozenset(
         # (user_funcs warn-once flag, C02 lovely tranche).
         ("torchlens/_capture/prepare/door.py", "_BATCHNORM_TRAIN_STATS_WARNED"),
         ("torchlens/_data_classes/_op_save.py", "_WARNED_REFERENCE_SAVE_MODE"),
-        ("torchlens/distributed/_lifecycle.py", "_AUTO_ARM_DEGRADATION"),
+        ("torchlens/_distributed/_lifecycle.py", "_AUTO_ARM_DEGRADATION"),
         ("torchlens/recording/_storage_resolver.py", "_WARNED_REFERENCE_SAVE_MODE"),
         # Once-per-file source-drift disclosure for the C4 pinned-digest refusal
         # (fix/postproc 7a58a021); reset row lives in tests/conftest.py.
@@ -1041,8 +1045,13 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_data_substrate/digests.py", "__all__"),
         ("torchlens/_data_substrate/model_identity.py", "__all__"),
         ("torchlens/_deploy_env.py", "__all__"),
-        ("torchlens/_distributed.py", "__all__"),
+        ("torchlens/_distributed/__init__.py", "__all__"),
         ("torchlens/_episode_spec.py", "__all__"),
+        ("torchlens/_utils/_sig_format.py", "__all__"),
+        ("torchlens/_utils/_input_tree.py", "__all__"),
+        ("torchlens/errors/validation.py", "__all__"),
+        ("torchlens/_events.py", "__all__"),
+        ("torchlens/backends/_invariants.py", "__all__"),
         ("torchlens/_extract_refusals.py", "__all__"),
         ("torchlens/_extraction/__init__.py", "__all__"),
         ("torchlens/_extraction/callable_identity.py", "__all__"),
@@ -1168,7 +1177,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/backends/torch/_op_markers.py", "__all__"),
         ("torchlens/backends/torch/_pinned_graph.py", "__all__"),
         ("torchlens/backends/torch/_protocol_redispatch.py", "__all__"),
-        ("torchlens/backends/torch/_tl.py", "__all__"),
+        ("torchlens/_utils/_tensor_label.py", "__all__"),
         ("torchlens/backends/torch/_weightsfree_ctx.py", "__all__"),
         ("torchlens/backends/torch/_weightsfree_transparency.py", "__all__"),
         ("torchlens/backends/torch/backend.py", "__all__"),
@@ -1264,10 +1273,10 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/differential.py", "__all__"),
         ("torchlens/distributed/__init__.py", "__all__"),
         ("torchlens/distributed/_audit.py", "__all__"),
-        ("torchlens/distributed/_dtensor.py", "__all__"),
-        ("torchlens/distributed/_ledger.py", "__all__"),
-        ("torchlens/distributed/_lifecycle.py", "__all__"),
-        ("torchlens/distributed/_recognizer.py", "__all__"),
+        ("torchlens/_distributed/_dtensor.py", "__all__"),
+        ("torchlens/_distributed/_ledger.py", "__all__"),
+        ("torchlens/_distributed/_lifecycle.py", "__all__"),
+        ("torchlens/_distributed/_recognizer.py", "__all__"),
         ("torchlens/_ecosystem/__init__.py", "__all__"),
         ("torchlens/errors/__init__.py", "__all__"),
         ("torchlens/errors/_base.py", "__all__"),
@@ -1526,7 +1535,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/validation/__init__.py", "__all__"),
         ("torchlens/validation/_invariants_primitive_ops.py", "__all__"),
         ("torchlens/validation/consolidated.py", "__all__"),
-        ("torchlens/validation/status.py", "__all__"),
+        ("torchlens/_validation_status.py", "__all__"),
         ("torchlens/_visualization/__init__.py", "__all__"),
         ("torchlens/_visualization/_backward_inventory.py", "__all__"),
         ("torchlens/_visualization/_backward_rows.py", "__all__"),

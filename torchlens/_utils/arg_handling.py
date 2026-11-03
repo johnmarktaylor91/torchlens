@@ -14,8 +14,15 @@ from typing import Any, cast
 import torch
 from torch import nn
 
-from .._input_walk import INPUT_TREE_MAX_DEPTH, _inspect_instance_state_items
-from .._state import ReentrantTraceError
+from .._errors import InvalidArgumentError
+from .._state import ReentrantTraceError, pause_logging
+from ._input_tree import (
+    INPUT_TREE_MAX_DEPTH,
+    _inspect_instance_state_items,
+    raise_input_tree_cycle_refusal,
+    raise_input_tree_depth_refusal,
+    raise_input_tree_stack_refusal,
+)
 from .alias_footprint import (
     TensorByteFootprint,
     tensor_byte_footprint,
@@ -92,8 +99,6 @@ def rebuild_tuple_like(arg_type: type[Any], items: list[Any]) -> Any:
         reproduces the items (callers fall back without crashing).
     """
 
-    from .._state import pause_logging
-
     if _is_structseq_type(arg_type):
         builds: tuple[Any, ...] = (lambda: arg_type(items),)
     else:
@@ -153,7 +158,7 @@ def _copy_instance_state_inertly(original: Any, rebuilt: Any) -> bool:
     """Copy ``original``'s enumerable instance state onto ``rebuilt`` verbatim.
 
     Mirrors the dataclass device-move arm: raw-channel enumeration through
-    :func:`torchlens._input_walk._inspect_instance_state_items` and
+    :func:`torchlens._utils._input_tree._inspect_instance_state_items` and
     ``object.__setattr__`` writes, never a live attribute protocol. Also copies
     the one trusted C-level extra the ladder knows by name
     (``defaultdict.default_factory``, via its member descriptor). Returns
@@ -336,8 +341,6 @@ def copy_arg_tree(arg: Any, _in_progress: dict[int, Any] | None = None, _depth: 
         try:
             return copy_arg_tree(arg, {}, _depth)
         except RecursionError as exc:
-            from .._input_walk import raise_input_tree_stack_refusal
-
             raise_input_tree_stack_refusal(exc)
             raise  # unreachable: the refusal always raises (narrows the memo type)
     if isinstance(arg, torch.Tensor):
@@ -365,7 +368,6 @@ def copy_arg_tree(arg: Any, _in_progress: dict[int, Any] | None = None, _depth: 
         # r-b4 R27-1: the canonical per-capture input copier is depth-bounded with the
         # SAME shared ceiling as every other input-boundary walker -- a deeper tree
         # refuses typed at capture entry instead of dying in a raw RecursionError.
-        from .._input_walk import raise_input_tree_depth_refusal
 
         raise_input_tree_depth_refusal(depth=_depth)
     if isinstance(arg, dict):
@@ -530,8 +532,6 @@ def _copy_input_tree_node(
     """
 
     if depth >= INPUT_TREE_MAX_DEPTH:
-        from .._input_walk import raise_input_tree_depth_refusal
-
         raise_input_tree_depth_refusal(depth=depth)
     if isinstance(value, torch.nn.Parameter):
         tensor_records.append((path, value, False))
@@ -570,8 +570,6 @@ def _copy_input_tree_node(
     if value_id in memo:
         return memo[value_id]
     if value_id in in_progress:
-        from .._input_walk import raise_input_tree_cycle_refusal
-
         # Only the tuple arm registers in ``in_progress`` (dict/list cycles
         # resolve through their memo shells), so the re-encountered node is
         # always a tuple: the historical "else mapping" guess was dead code
@@ -901,9 +899,6 @@ def safe_copy_input_tree(
         fallbacks but are explicitly reported as unverifiable.
     """
 
-    from .._errors import InvalidArgumentError
-    from .._state import pause_logging
-
     memo: dict[int, Any] = {}
     in_progress: set[int] = set()
     semantic_gaps: list[str] = []
@@ -929,8 +924,6 @@ def safe_copy_input_tree(
                 tensor_records=tensor_records,
             )
     except RecursionError as exc:
-        from .._input_walk import raise_input_tree_stack_refusal
-
         raise_input_tree_stack_refusal(exc)
         raise  # unreachable: the refusal always raises
     except InvalidArgumentError:

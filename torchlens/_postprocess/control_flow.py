@@ -21,8 +21,13 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._data_classes.op import Op
+from .._data_classes.trace import ConditionalEvent
 from .._utils.display import identity
 from .._utils.tensor_utils import safe_copy, tensor_nanequal
+from ..backends.torch._completeness_escape_state import (
+    host_escape_bool_consumer_locations,
+    host_escape_bool_source_labels,
+)
 from . import ast_branches
 
 if TYPE_CHECKING:
@@ -112,8 +117,6 @@ def _seed_proven_bool_consumers(self: Trace) -> None:
     predicate witness family.
     """
 
-    from ..backends.torch._completeness_escape_state import host_escape_bool_source_labels
-
     proven_labels = host_escape_bool_source_labels(self)
     # Shadow set over the list[str] ledger: the per-label list scan was
     # O(k^2) in terminated-bool count (hunt-6 R52-2 sibling site).
@@ -177,8 +180,6 @@ def _build_file_indexes(
         file could not be parsed or loaded.
     """
 
-    from ..backends.torch._completeness_escape_state import host_escape_bool_consumer_locations
-
     file_indexes: dict[str, ast_branches.FileIndex | None] = {}
     consumer_locations = host_escape_bool_consumer_locations(self)
     for bool_label in _iter_terminal_scalar_bool_labels(self):
@@ -218,8 +219,6 @@ def _classify_bool_layers(
         deduplicated list of branch-participating classifications (empty when
         the bool participates in no conditional).
     """
-
-    from ..backends.torch._completeness_escape_state import host_escape_bool_consumer_locations
 
     bool_classifications: dict[str, list[ast_branches.BoolClassification]] = {}
     ordered_conditional_keys: dict[ast_branches.ConditionalKey, None] = {}
@@ -362,8 +361,6 @@ def _materialize_conditional_records(
     Dict[ast_branches.ConditionalKey, ConditionalEvent]
         Mapping from structural conditional key to the dense event object.
     """
-
-    from .._data_classes.trace import ConditionalEvent
 
     record_lookup = _build_conditional_record_lookup(file_indexes)
     self._graph_conditional_records = []

@@ -19,13 +19,29 @@ import torch
 from torch import nn
 
 from ... import _state
+from ..._capture.predicates import (
+    _evaluate_halt,
+    _evaluate_keep_op,
+    _is_halt_only_capture,
+    _module_capture_spec,
+    _plain_module_union,
+)
+from ..._capture.projections import (
+    _build_record_context,
+    _record_from_record_context,
+    append_projected_event,
+    get_active_recording_state,
+)
 from ..._ir import ModuleExitEvent
 from ..._ir.op_record import amend_module_boundary_retention
+from ..._ir.predicate import RetroactiveCaptureDecision
+from ..._ir.selector_eval import selector_contains_kind
+from ..._utils._tensor_label import get_tensor_label
 from ...recording._halt import StopSignal
 from ...recording.types import ActivationRecord, CaptureSpec
 from . import module_stack as _mstack
+from ._ops_containers import _walk_output_tensors_with_paths
 from ._predicate_boundary_replacements import log_predicate_boundary_replacements
-from ._tl import get_tensor_label
 from .escape_detection import expected_original_call
 from .prehook_provenance import bind_invocation
 
@@ -63,14 +79,9 @@ def _record_predicate_module_boundary_outputs(
         ops are added to the sparse recording once.
     """
 
-    from ..._capture.predicates import _evaluate_keep_op, _plain_module_union
-    from ..._capture.projections import _record_from_record_context
-    from ..._ir.predicate import RetroactiveCaptureDecision
-    from ..._ir.selector_eval import selector_contains_kind
     from ..._selection.selectors import BaseSelector
     from ...intervention.runtime import _peek_module_intervention_parent_labels
     from ...recording.types import ActivationRecord
-    from ._ops_containers import _walk_output_tensors_with_paths
 
     log_predicate_boundary_replacements(trace, state, out)
     predicate = state.options.keep_op
@@ -186,8 +197,6 @@ def _predicate_module_enter(trace: Trace, state: Any, frame: Any, halt_only: boo
     raised by the halt predicate pops the module frame and propagates before
     the forward runs (exactly the pre-split shape).
     """
-    from ..._capture.predicates import _evaluate_halt, _module_capture_spec
-    from ..._capture.projections import _build_record_context, append_projected_event
 
     state.event_index += 1
     enter_ctx = _build_record_context(
@@ -258,8 +267,6 @@ def _predicate_module_exit(
     predicate failure instead of replacing it, and the echo frame is abandoned.
     """
     frame, halt_only, skipped_spec = entry
-    from ..._capture.predicates import _evaluate_halt, _module_capture_spec
-    from ..._capture.projections import _build_record_context, append_projected_event
 
     state.event_index += 1
     exit_ctx = _build_record_context(
@@ -332,8 +339,6 @@ def _predicate_module_forward(
 
     The cold arm of ``decorated_forward``: an exhaustive capture never enters it.
     """
-    from ..._capture.predicates import _is_halt_only_capture
-    from ..._capture.projections import get_active_recording_state
 
     state = get_active_recording_state()
     frame = _mstack.push_frame(trace, state.module_stack, module)

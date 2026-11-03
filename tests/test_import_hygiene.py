@@ -660,7 +660,7 @@ def test_bare_import_leaves_torch_functions_undecorated() -> None:
         "import torch; "
         "import torchlens; "
         "from torchlens import _state; "
-        "from torchlens.backends.torch._tl import is_decorated_function; "
+        "from torchlens._utils._tensor_label import is_decorated_function; "
         "assert _state._is_decorated is False; "
         "assert not is_decorated_function(torch.cos)"
     )
@@ -673,7 +673,7 @@ def test_first_trace_lazily_wraps_torch_functions() -> None:
         "import torch; "
         "import torchlens as tl; "
         "from torchlens import _state; "
-        "from torchlens.backends.torch._tl import is_decorated_function; "
+        "from torchlens._utils._tensor_label import is_decorated_function; "
         "model = torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.ReLU()); "
         "tl.trace(model, torch.ones(1, 2)); "
         "assert _state._is_decorated is True; "

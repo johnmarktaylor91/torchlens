@@ -24,7 +24,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._capture.outcome import classify_failure_origin
-from torchlens.distributed import _lifecycle
+from torchlens._distributed import _lifecycle
 from torchlens.errors import TraceCaptureError
 from torchlens.types import FailureOrigin
 

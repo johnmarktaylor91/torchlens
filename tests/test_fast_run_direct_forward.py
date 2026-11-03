@@ -17,8 +17,8 @@ from torch.nn import functional as F
 
 import torchlens as tl
 from tests.classics_corpus._loader import build_entry, corpus_entries
+from torchlens._utils._tensor_label import get_module_meta
 from torchlens._utils._torch_compat import HAS_MODULE_CALL_DISPATCH_FRAME
-from torchlens.backends.torch._tl import get_module_meta
 
 pytestmark = pytest.mark.skipif(
     not HAS_MODULE_CALL_DISPATCH_FRAME, reason="torch build cannot tell a direct forward() call"

@@ -31,7 +31,9 @@ from ..._ir.events import (
 from ..._utils._torch_compat import get_current_autograd_node_fn
 from ..._utils.tensor_utils import copy_tensor_payload
 from ._backward_markers import _ACTIVE_BACKWARD_GRAD_FN_REFS, executing_grad_fn_ref
+from ._completeness_types import _WitnessState
 from ._function_boundary import _active_witness_state
+from .completeness_witness import _CompletenessDispatchMode
 
 
 @dataclass(frozen=True, slots=True)
@@ -768,8 +770,6 @@ def _capture_backward_aten(trace: Any, pass_index: int) -> Iterator[None]:
         with nullcontext():
             yield
         return
-    from ._completeness_types import _WitnessState
-    from .completeness_witness import _CompletenessDispatchMode
 
     state = _WitnessState(
         trace=trace,

@@ -22,6 +22,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Any
 
+from .._ir.selector_eval import looks_like_finalized_label
 from .._selection.target import TargetSpec
 from .errors import ControlFlowDivergenceError
 
@@ -279,8 +280,6 @@ def translate_staged_final_labels(trace: Any, capture_spec: Any) -> Any:
     Any
         A new spec when any entry was translated, else ``capture_spec`` itself.
     """
-
-    from .._ir.selector_eval import looks_like_finalized_label
 
     def lower(entry: Any) -> Any:
         """Return ``entry`` with a finalized label target lowered to its one raw live label."""

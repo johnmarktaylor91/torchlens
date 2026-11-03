@@ -12,12 +12,12 @@ import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
 from ... import _state
-from ..._utils.tensor_utils import _is_uninitialized_lazy_tensor
-from ._tl import (
+from ..._utils._tensor_label import (
     get_tensor_label,
     get_tensor_meta,
     is_tensor_data_alias,
 )
+from ..._utils.tensor_utils import _is_uninitialized_lazy_tensor
 from .buffer_writes import session_validated_buffer_address
 from .escape_detection import (
     ExpectedOriginalToken,

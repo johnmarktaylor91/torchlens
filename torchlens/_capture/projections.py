@@ -17,10 +17,22 @@ import torch
 from .._ir.events import (
     ArgTemplateRef,
     FunctionCallRef,
+    GradFnFired,
     ModuleFrame,
     OpEvent,
+    OpGradObserved,
     OutputRef,
     ParentEdge,
+)
+from .._ir.op_record import (
+    AnnotationsFacet,
+    ControlFacet,
+    GraphFacet,
+    ModulesFacet,
+    OpCore,
+    OpRecord,
+    PolicyFacet,
+    RecordingFacet,
 )
 from .._ir.predicate import EventKind, coerce_deferred_value
 from .._ir.refs import DeviceRef, DtypeRef, TensorRef
@@ -33,6 +45,7 @@ from ..recording.exceptions import PredicateError
 from ..recording.types import (
     ActivationRecord,
     CaptureSpec,
+    GradRecord,
     GradRecordContext,
     ModuleStackFrame,
     PredicateFailure,
@@ -701,17 +714,6 @@ def _record_from_record_context(
     carries non-default values — plus ``graph``/``policy``, which the adapter
     constructs unconditionally).
     """
-
-    from .._ir.op_record import (
-        AnnotationsFacet,
-        ControlFacet,
-        GraphFacet,
-        ModulesFacet,
-        OpCore,
-        OpRecord,
-        PolicyFacet,
-        RecordingFacet,
-    )
 
     values = _sparse_freeze_values(
         ctx,
@@ -1395,9 +1397,6 @@ def sync_recording_grad_records_from_sidecar(state: RecordingState) -> None:
         ``state.recording.grad_records`` and its lookup indexes are replaced.
     """
 
-    from .._ir.events import GradFnFired, OpGradObserved
-    from ..recording.types import GradRecord
-
     trace = state.runtime_trace
     if trace is None:
         return
@@ -1449,8 +1448,6 @@ def _maybe_add_grad_fn_metadata_record(
     state: RecordingState, trace: Trace, event: Any, ordinal: int
 ) -> None:
     """Append a metadata-only grad-fn record when the active policy selects it."""
-
-    from ..recording.types import GradRecord
 
     grad_fn = trace._grad_fn_logs.get(event.object_id)
     if grad_fn is None or getattr(grad_fn, "has_op", False):

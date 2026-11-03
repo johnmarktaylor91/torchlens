@@ -62,7 +62,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.backends.torch._tl import is_decorated_function
+from torchlens._utils._tensor_label import is_decorated_function
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 
 # ---------------------------------------------------------------------------

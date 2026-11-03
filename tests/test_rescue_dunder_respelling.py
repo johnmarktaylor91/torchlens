@@ -23,7 +23,7 @@ from _stale_holders import OpaqueCallable
 from torch.overrides import TorchFunctionMode
 
 from torchlens._utils._callable_safety import _ALLOWED_FORWARD_DUNDERS
-from torchlens.backends.torch._tl import is_decorated_function
+from torchlens._utils._tensor_label import is_decorated_function
 from torchlens.backends.torch.rescue import (
     _canonical_op_name,
     capture_with_rescue,

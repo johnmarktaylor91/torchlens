@@ -15,6 +15,7 @@ import torch
 
 from ..._utils._torch_compat import tensor_version_or_none
 from ._completeness_origins import internal_scalar_read
+from .completeness_witness import _ORIG_TENSORBASE_UNTYPED_STORAGE, _ORIG_UNTYPED_STORAGE_DATA_PTR
 
 
 @dataclass(frozen=True)
@@ -33,11 +34,6 @@ class ParamFingerprint:
 
 def _storage_ptr(param: torch.Tensor) -> int | None:
     """Return the storage pointer through the unwrapped C accessors, or ``None``."""
-
-    from .completeness_witness import (
-        _ORIG_TENSORBASE_UNTYPED_STORAGE,
-        _ORIG_UNTYPED_STORAGE_DATA_PTR,
-    )
 
     try:
         return int(_ORIG_UNTYPED_STORAGE_DATA_PTR(_ORIG_TENSORBASE_UNTYPED_STORAGE(param)))

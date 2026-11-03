@@ -29,6 +29,7 @@ from torchlens.intervention.audit import (
 )
 from torchlens.intervention.hooks import split_site_branches as _split_site_branches
 
+from ..._io._source_privacy import _relativize_path_literals
 from ..._trace_selection_shape import (
     _layers_to_save_has_negative_index,
     _layers_to_save_live_subset,
@@ -41,6 +42,7 @@ from ..._trace_selector_helpers import (
     _is_selective_label_save,
     _make_layers_to_save_predicate,
 )
+from ...intervention.errors import MultiMatchWarning, SiteResolutionError
 from ...intervention.hooks import gradient_inners, normalize_hook_plan, split_site_branches
 from ...intervention.predicates import InterventionPredicate
 from ...intervention.spec import Recipe, Rule
@@ -478,8 +480,6 @@ def intervene_selector_fired_nowhere(trace: Trace, selector: Any) -> bool:
         ``True`` when every branch matched zero sites.
     """
 
-    from ...intervention.errors import MultiMatchWarning, SiteResolutionError
-
     branches = split_site_branches(selector)
     if any(universe == "node" for universe, _branch in branches):
         return False
@@ -642,7 +642,6 @@ def _record_unmatched_selector(
     annotations = getattr(trace, "annotations", None)
     if not isinstance(annotations, dict):
         return
-    from ..._io._source_privacy import _relativize_path_literals
 
     # R62: this ledger persists at every save level, so a selector repr
     # embedding an absolute host path (e.g. a file-payload predicate) must

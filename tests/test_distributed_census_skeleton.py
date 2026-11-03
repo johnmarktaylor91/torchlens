@@ -21,8 +21,8 @@ pytestmark = pytest.mark.skipif(
     reason="torch.distributed gloo unavailable",
 )
 
+from torchlens._distributed import _lifecycle as lifecycle  # noqa: E402
 from torchlens.distributed import (  # noqa: E402
-    _lifecycle as lifecycle,
     is_vetted_build,
 )
 

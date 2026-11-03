@@ -18,12 +18,12 @@ from typing import Any, cast
 
 from ... import _state
 from ..._data_classes.internal_types import FuncExecutionContext
+from ..._utils._tensor_label import mark_decorated_function
 from ..._utils._torch_compat import get_optional_torch_namespace
 from ..._utils.rng import log_current_autocast_state, log_current_rng_states
 from ._callable_location import _callable_source_location
 from ._ops_emission import apply_live_hooks_to_outputs, log_function_output_tensors
 from ._output_tensors import _collect_output_tensors
-from ._tl import mark_decorated_function
 
 
 def _warn_transform_boundary_collapse(transform_kind: str) -> None:

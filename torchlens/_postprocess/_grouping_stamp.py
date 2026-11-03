@@ -30,6 +30,7 @@ import warnings
 from typing import Any
 
 from .._data_classes._site_key import SITE_KEY_PREFIX
+from .._errors import InvalidArgumentError
 from ..errors._base import TorchLensWarning
 
 GROUPING_POLICY_SCHEMA = "grouping_policy_v1"
@@ -75,8 +76,6 @@ def validate_grouping_knob(value: Any) -> None:
         refused on plain captures until an affirmative D1 ruling (episode
         products fold by default via the product-layer site join instead).
     """
-
-    from .._errors import InvalidArgumentError
 
     if value not in GROUPING_KNOB_VALUES:
         raise InvalidArgumentError(

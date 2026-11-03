@@ -44,7 +44,7 @@ import torch
 from ... import _state
 from ..._utils import _torch_compat
 from ..._utils._foreign_data_replay import foreigndata
-from ._tl import get_tensor_label
+from ..._utils._tensor_label import get_tensor_label
 
 MetadataSetter = Callable[..., None]
 """The transform-metadata setter (``_transform_wrappers._set_transform_metadata``)."""

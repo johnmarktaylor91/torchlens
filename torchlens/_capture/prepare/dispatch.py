@@ -15,6 +15,8 @@ from ..._data_classes.trace import (
 from ..._deprecations import MISSING, MissingType
 from ..._literals import (
     OutputDeviceLiteral,
+    _ActivationPostfunc,
+    _GradientPostfunc,
 )
 from ..._postprocess._grouping_stamp import validate_grouping_knob
 from ..._postprocess._selective_save import (
@@ -42,6 +44,7 @@ from ...backends._options import (
     reject_extra_trace_kwargs,
 )
 from ...backends._trace_options import _CONTROL_FLOW
+from ...backends.mlx import MLXBackend
 from ...backends.registry import (
     BackendSpec,
     get_backend_spec,
@@ -55,7 +58,6 @@ from ...options import (
     merge_capture_options,
 )
 from ...recording.options import PredicateFn
-from ...types import _ActivationPostfunc, _GradientPostfunc
 
 _MLX_STATIC_LABEL_SAVE_SELECTOR_KINDS = frozenset(
     {"label", "func", "module", "contains", "in_module", "and", "or", "not"}
@@ -193,7 +195,6 @@ def _trace_mlx_model(
         else:
             model_input_args = transformed_input
             model_input_kwargs = None
-    from ...backends.mlx import MLXBackend
 
     backend = MLXBackend()
     trace = backend.capture_trace(

@@ -18,7 +18,7 @@ from typing import Any
 import torch
 from torch import nn
 
-from ._tl import clear_meta, is_forward_call_decorated
+from ..._utils._tensor_label import clear_meta, is_forward_call_decorated
 
 __all__ = [
     "_clear_callable_session_tensor_metadata",

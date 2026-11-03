@@ -27,8 +27,10 @@ from dataclasses import dataclass, field as dataclasses_field
 from typing import TYPE_CHECKING, Any, Final
 
 from .._data_classes._trace_missing_attrs import is_live_trace
+from ..backends.torch.completeness_witness import _HOST_ESCAPE_MUTABLE_WRITEBACK
 from ..errors._base import CaptureError
 from ._structure_only_facts import _backend_version, _input_geometry, _layer_claims
+from ._weightsfree_admission import wrap_generation_of
 
 if TYPE_CHECKING:
     pass
@@ -841,7 +843,6 @@ def _discharge_preflight(structure_trace: Any, real_trace: Any) -> None:
             "backend_runtime_version",
             f"structure side ran {structure_rt!r}, real side {real_rt!r}.",
         )
-    from ._weightsfree_admission import wrap_generation_of
 
     structure_generation = wrap_generation_of(structure_trace)
     real_generation = wrap_generation_of(real_trace)
@@ -864,7 +865,6 @@ def _discharge_preflight(structure_trace: Any, real_trace: Any) -> None:
             "exactly one side was produced by a rescue re-run; the rescued "
             "side's graph provenance is not comparable to the primary's.",
         )
-    from ..backends.torch.completeness_witness import _HOST_ESCAPE_MUTABLE_WRITEBACK
 
     if real_trace in _HOST_ESCAPE_MUTABLE_WRITEBACK:
         _refuse_incomparable(

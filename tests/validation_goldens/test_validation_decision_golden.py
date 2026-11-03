@@ -10,8 +10,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._validation_status import ValidationStatus
 from torchlens.options import CaptureOptions
-from torchlens.validation.status import ValidationStatus
 
 GOLDEN_PATH = Path(__file__).with_name("validation_decisions.json")
 

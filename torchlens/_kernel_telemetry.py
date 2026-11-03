@@ -120,7 +120,7 @@ def _payload_from_events(
             _relations=tuple((sequence, 0) for sequence in sorted(set(marker_sequences.values()))),
         )
 
-    from ._observability._join import MarkerSpan, _innermost_owner_by_runtime
+    from ._observability._join import MarkerSpan, _innermost_owner_by_runtime  # deferred: cycle
 
     markers = tuple(
         MarkerSpan(
@@ -466,8 +466,8 @@ def _profile_trace_with_cuda_kernels(factory: Callable[[], Any]) -> Any:
         The factory's Trace with a gated telemetry annotation.
     """
 
-    from ._observability._kineto import extract_events
-    from ._observability._session import session
+    from ._observability._kineto import extract_events  # deferred: cycle _observability
+    from ._observability._session import session  # deferred: cycle _observability
 
     cuda_available = bool(torch.cuda.is_available())
     if not cuda_available:

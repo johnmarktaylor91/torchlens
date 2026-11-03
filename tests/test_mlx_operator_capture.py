@@ -28,11 +28,11 @@ from tests.conformance._protocol_cases import (  # noqa: E402
     silent_gap_reason,
 )
 from tests.conformance._rosters.mlx import CONFIG_BUILT, W44, X24, roster  # noqa: E402
+from torchlens._validation_status import ValidationStatus  # noqa: E402
 from torchlens.backends._backend_protocol import REFUSAL_CODES, VALIDATION_REASONS  # noqa: E402
 from torchlens.backends.mlx import get_unwrapped_policy, unwrapped_policy  # noqa: E402
 from torchlens.backends.mlx.wrappers import is_mlx_wrapped  # noqa: E402
 from torchlens.backends.registry import BackendUnsupportedError  # noqa: E402
-from torchlens.validation.status import ValidationStatus  # noqa: E402
 
 _GLOBAL_SCALE = None
 

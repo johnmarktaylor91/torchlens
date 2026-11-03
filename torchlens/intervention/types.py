@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, ClassVar, Literal, TypeAlias
 
+from .._constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
 from .._io._field_policy import FieldPolicy
 from .._ir.container import (
     ContainerSpec,
@@ -18,7 +19,7 @@ from .._ir.container import (
     TupleIndex,
     rebuild_container_from_spec,
 )
-from .._selection.selection import _SelectionOperand
+from .._selection.selection import _selection_from_edge, _SelectionOperand
 from .._selection.target import (
     FrozenTargetSpec as FrozenTargetSpec,
     TargetSpec as TargetSpec,
@@ -420,8 +421,6 @@ class EdgeUseRecord(_SelectionOperand):
     def __selection__(self) -> Any:
         """Lift this edge occurrence as an EDGE selection term."""
 
-        from .._selection.selection import _selection_from_edge
-
         return _selection_from_edge(self)
 
     def __repr__(self) -> str:
@@ -761,8 +760,6 @@ def _build_trace_fork_policy() -> dict[str, ForkFieldPolicy]:
         Fork policies for Trace fields.
     """
 
-    from .._constants import MODEL_LOG_FIELD_ORDER
-
     table = _fork_policy_table(
         MODEL_LOG_FIELD_ORDER,
         share={
@@ -795,8 +792,6 @@ def _build_op_log_fork_policy() -> dict[str, ForkFieldPolicy]:
     dict[str, ForkFieldPolicy]
         Fork policies for Op fields.
     """
-
-    from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 
     table = _fork_policy_table(
         LAYER_PASS_LOG_FIELD_ORDER,

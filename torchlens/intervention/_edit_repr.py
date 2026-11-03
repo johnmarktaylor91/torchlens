@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .helpers import builtin_helper_constructor
+
 if TYPE_CHECKING:
     from .types import Edit
 
@@ -87,7 +89,6 @@ def _public_constructor(spec: Edit) -> tuple[str, Callable[..., Any]] | None:
 
     if spec.portability != "builtin" or spec.selection_recipe is not None:
         return None
-    from .helpers import builtin_helper_constructor
 
     target = builtin_helper_constructor(spec.name)
     if target is None:

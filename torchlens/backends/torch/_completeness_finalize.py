@@ -423,7 +423,7 @@ def _plane_p_requested() -> bool:
     """
 
     try:
-        from torchlens.distributed._lifecycle import capture_armed_state
+        from torchlens._distributed._lifecycle import capture_armed_state
 
         return capture_armed_state() is not None
     except Exception:

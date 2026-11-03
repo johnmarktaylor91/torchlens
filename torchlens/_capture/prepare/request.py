@@ -22,13 +22,12 @@ if TYPE_CHECKING:
     import torch
     from torch import nn
 
-    from ..._literals import OutputDeviceLiteral
+    from ..._literals import OutputDeviceLiteral, _ActivationPostfunc, _GradientPostfunc
     from ..._selection.selectors import BaseSelector
     from ..._utils.tensor_utils import SaveMode
     from ...intervention.predicates import InterventionPredicate
     from ...options import CaptureOptions, EpisodeOptions, StorageOptions, _SaveTransforms
     from ...recording.options import HaltPredicateFn, PredicateFn
-    from ...types import _ActivationPostfunc, _GradientPostfunc
 
 
 @dataclass(frozen=True, slots=True)

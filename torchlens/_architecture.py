@@ -52,8 +52,13 @@ PACKAGE_LAYERS: dict[str, str] = {
     # imports deferred per Rule F; its interior modules declare their own
     # __tl_layer__ (plan/grammar L2, resolver/gate L3).
     "_quickstart": "FACADE",
+    # Facade-role modules by function: the public-surface walker and the
+    # trace-entry guard split out of _user_funcs both reach the whole package.
+    "_surface": "FACADE",
+    "_user_funcs_guards": "FACADE",
     # -- L0 BASIS ---------------------------------------------------------
     "_errors": "L0",
+    "_events": "L0",
     "errors": "L0",
     "_vocab": "L0",
     "_literals": "L0",
@@ -61,6 +66,20 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_quantities": "L0",
     "_architecture": "L0",
     "_deprecations": "L0",
+    # The options family and the process state flags are basis vocabulary:
+    # every layer reads them and they read nothing above the basis.
+    "options": "L0",
+    "_options_validation": "L0",
+    "_option_receipt": "L0",
+    "_state": "L0",
+    "_deploy_env": "L0",
+    "_episode_spec": "L0",
+    "_extract_refusals": "L0",
+    "_memory_probes": "L0",
+    "_mutate_warnings": "L0",
+    "_plain_attr_fidelity": "L0",
+    "_record_type": "L0",
+    "_storage_bindings": "L0",
     # -- L1 PRODUCT -------------------------------------------------------
     "_data_classes": "L1",
     "_trace_core": "L1",
@@ -89,19 +108,18 @@ PACKAGE_LAYERS: dict[str, str] = {
     # requests, so it sits at their tier inside the L2 engine package.
     "_capture.prepare": "L4",
     "_capture.run_entry": "L4",
+    # The capture-door intervention glue builds on prepare.resolve, so it
+    # sits at the PREPARE tier with its only two importers.
+    "_capture_intervention": "L4",
     "backends": "L2",
     "_ir": "L2",
     "recording": "L2",
     "recording.types": "L1",
     "recording.recover": "L3",
     "recording.cleanup": "L3",
-    "options": "L2",
     "observers": "L2",
-    "_state": "L2",
     "_kernel_telemetry": "L2",
-    "_options_validation": "L2",
-    "_options_removed": "L2",
-    "_option_receipt": "L2",
+    "_options_removed": "L0",
     "_save_budget": "L2",
     "_distributed": "L2",
     "_model_wrappers": "L2",
@@ -112,6 +130,15 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_chunked_capture_helpers": "L4",
     "_capture_state_helpers": "L2",
     "_capture_fingerprint": "L2",
+    "_call_fingerprint": "L2",
+    "_capture_attr_observer": "L2",
+    "_capture_honesty": "L2",
+    "_robustness_offenses": "L2",
+    "_trace_selector_helpers": "L2",
+    # Capture-side snapshot helpers consumed by the engine; validation reads them.
+    "_validation_argument_references": "L2",
+    "_validation_state_snapshot": "L2",
+    "_validation_status": "L0",
     "_utils": "L1",
     # -- L3 SETTLE ----------------------------------------------------------
     "_postprocess": "L3",
@@ -123,6 +150,12 @@ PACKAGE_LAYERS: dict[str, str] = {
     "compat": "L3",
     "_captured_run": "L3",
     "_fast_run": "L3",
+    "_fast_live_plans": "L3",
+    "_fast_live_steer": "L3",
+    "_fast_live_until": "L3",
+    "_fast_sparse_state": "L3",
+    "_runnable_until": "L3",
+    "differential": "L3",
     "_runnable": "L3",
     "_transport": "L3",
     "_source_links": "L3",
@@ -151,9 +184,18 @@ PACKAGE_LAYERS: dict[str, str] = {
     "debug": "L5",
     # Pixel plotting helpers shared by the reads packages (no internal imports).
     "_plots": "L5",
+    "_extraction_provenance": "L5",
+    "_observe": "L5",
+    "_snoop": "L5",
+    "features": "L5",
+    "inventory": "L6",
+    "preprocessing": "L5",
     # -- L6 APPLIANCES ---------------------------------------------------------
     "_semantic": "L6",
     "neuro": "L6",
+    "experiment": "L6",
+    "mechinterp": "L6",
+    "transformer": "L6",
     # -- L7 PRESENT --------------------------------------------------------------
     "_visualization": "L7",
     "viz": "L7",
@@ -165,8 +207,11 @@ PACKAGE_LAYERS: dict[str, str] = {
     "bridge": "L8",
     "callbacks": "L8",
     "trackers": "L8",
+    "_ecosystem": "L8",
+    "agent": "FACADE",  # the agent inspection surface; a facade over every layer
     # -- L9 RECIPES -------------------------------------------------------------------
     "examples": "L9",
+    "conformance": "L9",
 }
 
 #: Packages licensed to touch torch privates: direct ``torch._*`` use or
@@ -201,7 +246,6 @@ TORCH_PRIVATE_LICENSED_PACKAGES: frozenset[str] = frozenset(
         "_constants",
         "_data_classes",
         "debug",
-        "distributed",
         "_distributed",
         "errors",
         "recording",

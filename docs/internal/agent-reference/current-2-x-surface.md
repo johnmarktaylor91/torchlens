@@ -607,7 +607,7 @@
   inert `DeviceMesh` remains informational. The bounded scan covers inspectable inputs/plain attrs
   and direct TP-namespace hook registries; slots/descriptor-only holders, opaque user-wrapped hooks,
   over-bound state, and tensors created inside `forward` remain disclosed residuals.
-  Detection lives in `torchlens/_distributed.py` and is shared verbatim by both surfaces; the
+  Detection lives in `torchlens/_distributed/` and is shared verbatim by both surfaces; the
   `HAS_DTENSOR` / `HAS_DEVICE_MESH` / `HAS_PIPELINING` capability flags gate the exact-`isinstance`
   path and fall back to structural namespace matching. The `dtensor` finding carries per-site
   dual geometry on `finding.geometry` (logical shape, placements, shard offset, local elements),

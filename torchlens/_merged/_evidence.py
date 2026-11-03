@@ -17,7 +17,7 @@ from typing import Any
 
 from .._capture.outcome import CaptureStatus, outcome_for
 from .._data_classes._trace_missing_attrs import is_live_trace
-from ..distributed._ledger import GroupLifecycleLedger
+from .._distributed._ledger import GroupLifecycleLedger
 
 # The boundary vocabularies and parse rules live in ``_boundary_rules`` (the
 # group-membership and role rules in ``_boundary_membership``); the

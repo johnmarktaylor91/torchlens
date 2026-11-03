@@ -11,6 +11,7 @@ import numpy as np
 from ... import _state
 from .._validation_shared import float_replay_tolerances, ops_by_label as _ops_by_label
 from ._param_writes import PARAMETER_WRITE_MARKER
+from .validation_decisions import REASON_EFFECTFUL_REGION, REASON_PARENT_PAYLOAD_MISSING
 
 _FACTORY_OR_SOURCE_OPS = {
     "arange",
@@ -472,8 +473,6 @@ def _coverage_first_gap(trace: Any) -> tuple[str | None, str, str] | None:
         ``None`` when capture records conserve tensor inputs and graph parents.
     """
 
-    from .validation_decisions import REASON_EFFECTFUL_REGION, REASON_PARENT_PAYLOAD_MISSING
-
     # A parameter the forward wrote in place outside any wrapped op is an
     # untraced effect even when nothing reads it afterwards: fail closed.
     for marker in _capture_gap_markers(trace):
@@ -501,8 +500,6 @@ def _coverage_first_gap(trace: Any) -> tuple[str | None, str, str] | None:
 
 def _capture_input_gap(capture: Any) -> tuple[str, str] | None:
     """Return ``(reason, detail)`` for an untraced input or capture-gap marker."""
-
-    from .validation_decisions import REASON_EFFECTFUL_REGION, REASON_PARENT_PAYLOAD_MISSING
 
     if _is_factory_or_source_capture(capture):
         return None

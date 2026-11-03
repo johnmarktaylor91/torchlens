@@ -66,7 +66,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import PathFaithfulness
-from torchlens.backends.torch._tl import (
+from torchlens._utils._tensor_label import (
     get_tensor_meta,
     raw_tensor_label,
     set_buffer_address,
@@ -487,8 +487,8 @@ def test_stale_label_is_invisible_to_the_next_capture() -> None:
     today's known vehicles must never be what the correctness rests on.
     """
 
-    from torchlens.backends.torch import _tl
-    from torchlens.backends.torch._tl import TensorMeta, get_tensor_label
+    from torchlens._utils import _tensor_label as _tl
+    from torchlens._utils._tensor_label import TensorMeta, get_tensor_label
 
     donor_token: list[int | None] = []
 
@@ -602,7 +602,7 @@ def test_leak_vehicles_are_swept_by_the_session_inventory() -> None:
     capture, and it is gone before that capture stamps or reads anything.
     """
 
-    from torchlens.backends.torch import _tl
+    from torchlens._utils import _tensor_label as _tl
 
     _LEAK_GLOBAL_LIST.clear()
     _LeakDonor.CLASS_CACHE = None
@@ -693,7 +693,7 @@ def test_live_capture_labels_are_anchored_and_readable() -> None:
     invisible, which would ceil every honest model.
     """
 
-    from torchlens.backends.torch._tl import get_tensor_label
+    from torchlens._utils._tensor_label import get_tensor_label
 
     samples: list[tuple[Any, Any]] = []
 
@@ -718,7 +718,7 @@ def test_live_capture_labels_are_anchored_and_readable() -> None:
 def test_meta_carries_the_session_anchor() -> None:
     """``TensorMeta`` must expose the anchor written alongside every label."""
 
-    from torchlens.backends.torch import _tl
+    from torchlens._utils import _tensor_label as _tl
 
     probe = torch.ones(4)
     set_tensor_label(probe, "outside_1_1_raw")

@@ -25,6 +25,7 @@ from ..._output_slot import returned
 from ..._quantities import Duration
 from ..._utils._exception_notes import annotate_guarded
 from ..._utils.display import _vprint, user_stacklevel
+from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
 from .._trace_capture_error import failed_forward_error
 from ..outcome import (
     CapturePhase,
@@ -99,7 +100,6 @@ def _fence_device_work(trace: Trace) -> None:
     """
     # R36-1 (the fence) and the deferred-flag drain, in that order.
     from ..._data_classes._nonfinite import drain_pending_nonfinite
-    from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
 
     synchronize_pending_cpu_async_copies()
     drain_pending_nonfinite(trace)

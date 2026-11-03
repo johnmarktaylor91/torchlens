@@ -27,6 +27,7 @@ from ..._capture.projections import (
 from ..._errors import UserTransformError
 from ..._ir.predicate import RetroactiveCaptureDecision
 from ..._training_validation import TrainingModeConfigError
+from ..._utils._tensor_label import get_tensor_meta, set_tensor_label
 from ..._utils.input_leaves import INPUT_WAS_PARAMETER_ATTR
 from ..._utils.introspection import (
     INPUT_SEARCH_DEPTH_LIMIT,
@@ -40,7 +41,7 @@ from ...recording.exceptions import PredicateError
 from ...recording.types import ActivationRecord, CaptureSpec
 from . import module_stack as _mstack
 from ._completeness_origins import internal_scalar_read
-from ._tl import get_tensor_meta, set_tensor_label
+from ._module_boundary_adoption import is_forward_closure_constant
 from .buffer_writes import buffer_version_key
 from .tensor_tracking import _add_tensor_backward_hook, _append_module_suffix_to_equivalence_class
 
@@ -144,7 +145,6 @@ def log_closure_constant_if_known(self: "Trace", t: torch.Tensor) -> bool:
 
     if self._options_mode != "exhaustive":
         return False
-    from ._module_boundary_adoption import is_forward_closure_constant
 
     if not is_forward_closure_constant(self, t):
         return False

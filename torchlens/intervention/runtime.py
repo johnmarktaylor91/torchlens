@@ -9,15 +9,19 @@ from typing import Any
 
 import torch
 
+from torchlens._utils import _tensor_label as _tl_meta
+
 from .. import _state
 from .._data_classes._site_key import call_instance_id, render_site_key, site_axis
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
 from .._ir.intervention import FireResult
+from .._ir.selector_eval import normalize_selector_like
 from .._record_type import record_type
+from .._selection.resolver import _resolve_unchecked
 from .._state import pause_logging
+from .._utils._tensor_label import copy_replacement_meta
 from .._utils.arg_handling import copy_arg_tree
-from ..backends.torch._tl import copy_replacement_meta
 from ._hooks_support import gradient_inner
 from ._module_boundary import (
     _apply_module_boundary_live_hooks as _apply_module_boundary_live_hooks,
@@ -73,6 +77,7 @@ from .hooks import (
     make_hook_context,
     split_site_branches,
 )
+from .injection import peek_injection_state
 from .spec import Recipe
 from .types import FireRecord
 
@@ -385,7 +390,6 @@ def _copy_reused_live_hook_result(out: torch.Tensor, result: torch.Tensor) -> to
 
     if result is out:
         return result
-    from torchlens.backends.torch import _tl as _tl_meta
 
     if _tl_meta.get(result) is None:
         return result
@@ -578,8 +582,6 @@ def _apply_live_hooks(
 
 def _armed_injection_state(trace: Any) -> dict[str, Any] | None:
     """The trace's consolidated injection state when ``log_injections`` is armed."""
-
-    from .injection import peek_injection_state
 
     state = peek_injection_state(trace)
     if isinstance(state, dict) and state.get("armed", False):
@@ -1225,9 +1227,6 @@ def _inner_selector_matches_op(inner: Any, op: Any) -> bool:
     bool
         Whether the selector matches the op.
     """
-
-    from .._ir.selector_eval import normalize_selector_like
-    from .._selection.resolver import _resolve_unchecked
 
     # Session-only cache in the run state (last_run is never persisted).
     cache: dict[tuple[str, str], bool] = _live_run_ctx().setdefault(

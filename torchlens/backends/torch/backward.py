@@ -22,12 +22,15 @@ from typing import Any, Literal, cast
 import torch
 
 from ... import _state
+from ..._capture import projections
 from ..._capture.peak_memory import (
     peak_rss_bytes,
     process_rss_bytes,
     record_backward_peak,
     reset_peak_rss,
 )
+from ..._capture.predicates import _evaluate_keep_op
+from ..._capture.projections import sync_recording_grad_records_from_sidecar
 from ..._data_classes._fork_lineage import _is_fork_relative
 from ..._data_classes._grad_fn_naming import (
     _grad_fn_label_parts,
@@ -40,6 +43,7 @@ from ..._data_classes.grad_fn import GradFn, _paired_pass_op
 from ..._data_classes.grad_fn_call import GradFnCall
 from ..._data_classes.op import _dtype_or_none, _memory_or_none, _shape_or_none
 from ..._deprecations import MISSING, MissingType
+from ..._errors import TorchLensWarning
 from ..._ir.events import (
     BackwardCoverageGap,
     BackwardPassEnd,
@@ -50,17 +54,24 @@ from ..._ir.events import (
     OpGradObserved,
     ParamGradObserved,
 )
+from ..._ir.predicate import RetroactiveCaptureDecision
 from ..._quantities import Bytes, Duration
 from ..._state import pause_logging
 from ..._utils._package_frames import is_torchlens_code
+from ..._utils._tensor_label import detached_saved_activation_label, get_tensor_label
 from ..._utils._torch_compat import (
     HAS_SAVED_TENSORS_HOOKS_PATCHABLE,
+    get_autograd_engine_queue_callback,
+    get_checkpoint_hook_class,
+    get_checkpoint_internal_hook_class,
     get_current_autograd_node_fn,
 )
 from ..._utils._torch_symbols import torch_dtype_named
 from ..._utils.introspection import _get_code_qualname, _get_col_offset
 from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
 from ...errors import ConfigurationError
+from ...recording.exceptions import InvalidStorageError, RecorderStateError
+from ...recording.types import CaptureSpec
 from ._autograd_grad_boundary import (
     record_autograd_backward_boundary,
     record_autograd_grad_boundary,
@@ -79,6 +90,7 @@ from ._fire_timing import (
     _pop_matching_fire_start,
     _register_fire_timing_prehook,
 )
+from ._function_boundary import install_function_apply_wrapper, uninstall_function_apply_wrapper
 from ._grad_fn_orders import (
     _assign_grad_fn_orders,
     _max_call_order,
@@ -94,9 +106,9 @@ from ._gradfn_markers import (
     _exit_gradfn_marker,
     _gradfn_marker_list,
 )
-from ._tl import detached_saved_activation_label, get_tensor_label
 from .escape_detection import expected_original_call
 from .tensor_tracking import (
+    _IMPLICIT_BACKWARD_TASK_IDS,
     _STATE_BOUNDARY_GRAD_FNS,
     _copy_grad_payload,
     _current_backward_graph_task_id,
@@ -356,8 +368,6 @@ def _active_forward_op_count_at_trigger() -> int | None:
         trigger's graph walk, or ``None`` when no forward capture is active.
     """
 
-    from ..._capture import projections
-
     active_state = getattr(projections, "_active_recording_state", None)
     if active_state is None:
         return None
@@ -504,8 +514,6 @@ def _close_implicit_backward_pass_if_open(trace: Any, *, _close_path: str = "syn
         DOCUMENTED-UNSTABLE (E-L9-4 routing).
     """
 
-    from .tensor_tracking import _IMPLICIT_BACKWARD_TASK_IDS
-
     if getattr(trace, "_implicit_backward_pass_open", False):
         pass_index = getattr(trace, "_active_backward_pass_index", None)
         if pass_index is not None:
@@ -573,7 +581,6 @@ def _enqueue_implicit_pass_drain_callback(
 
     if graph_task_id is None:
         return None
-    from .tensor_tracking import _IMPLICIT_BACKWARD_TASK_IDS
 
     trace_ref = weakref.ref(trace)
 
@@ -594,8 +601,6 @@ def _enqueue_implicit_pass_drain_callback(
         if _IMPLICIT_BACKWARD_TASK_IDS.get(live_trace) != graph_task_id:
             return
         _close_implicit_backward_pass_if_open(live_trace, _close_path="engine_drain")
-
-    from ..._utils._torch_compat import get_autograd_engine_queue_callback
 
     queue_callback = get_autograd_engine_queue_callback()
     if queue_callback is None:
@@ -1253,10 +1258,11 @@ def _bind_backward_epoch(trace: Any, *, full_rebuild: bool, revision: Any, water
     keep detached-backed records.
     """
 
+    from torchlens._trace_core.record_rows import BackwardEpoch, adopt_rows
+
     core = trace.__dict__.get("_trace_core")
     if core is None:
         return
-    from torchlens._trace_core.record_rows import BackwardEpoch, adopt_rows
 
     epochs = core.backward_epochs
     staged = full_rebuild or not epochs
@@ -2714,16 +2720,11 @@ def _rewalk_higher_order_grad_fns(trace: Any) -> None:
 def _is_static_truthy_keep_grad(value: Any) -> bool:
     """Return whether a gradient capture decision is statically keep-grad true."""
 
-    from ...recording.types import CaptureSpec
-
     return value is True or (isinstance(value, CaptureSpec) and value.save_grad)
 
 
 def _selected_fastlog_forward_labels(recording: Any) -> set[str]:
     """Return labels for predicate-selected forward records."""
-
-    from ..._capture.predicates import _evaluate_keep_op
-    from ..._ir.predicate import RetroactiveCaptureDecision
 
     recording._ensure_records()  # noqa: SLF001
     labels: set[str] = set()
@@ -2782,9 +2783,6 @@ def log_recording_backward(
     create_graph: bool = False,
 ) -> Any:
     """Run backward while capturing gradients for a fastlog ``Recording``."""
-
-    from ..._capture.projections import sync_recording_grad_records_from_sidecar
-    from ...recording.exceptions import InvalidStorageError, RecorderStateError
 
     recording_state = getattr(recording, "_recording_state", None)
     if recording_state is None:
@@ -3365,8 +3363,6 @@ def _resolve_checkpoint_hook_cls() -> type | None:
     compat chokepoint; absence flips ``HAS_CHECKPOINT_HOOK_CLASS`` there.
     """
 
-    from ..._utils._torch_compat import get_checkpoint_hook_class
-
     return get_checkpoint_hook_class()
 
 
@@ -3379,8 +3375,6 @@ def _checkpoint_hook_identity_attrs_in_play() -> bool:
     directly on the pack-hook callable across the enter/exit pair. Absence
     (torch 2.13 and earlier) means no such state exists to preserve.
     """
-
-    from ..._utils._torch_compat import get_checkpoint_internal_hook_class
 
     return get_checkpoint_internal_hook_class() is not None
 
@@ -3809,7 +3803,6 @@ def _warn_buried_autograd_sites(buried_sites: list[str]) -> None:
 
     if not buried_sites:
         return
-    from ..._errors import TorchLensWarning
 
     warnings.warn(
         "uninstall of TorchLens autograd wrappers left "
@@ -3859,7 +3852,6 @@ def install_autograd_wrappers() -> None:
     """
 
     global _AUTOGRAD_WRAPPERS_INSTALLED, _ORIGINAL_AUTOGRAD_BACKWARD, _ORIGINAL_AUTOGRAD_GRAD
-    from ._function_boundary import install_function_apply_wrapper
 
     _install_saved_tensors_hooks_scope()
     # The foreign-kernel boundary rides the same install/teardown pair as the
@@ -3964,7 +3956,6 @@ def uninstall_autograd_wrappers() -> None:
     """
 
     global _AUTOGRAD_WRAPPERS_INSTALLED
-    from ._function_boundary import uninstall_function_apply_wrapper
 
     buried_sites: list[str] = []
     _uninstall_saved_tensors_hooks_scope(buried_sites)

@@ -42,8 +42,24 @@ from typing import Any, Protocol
 
 import torch
 
+from torchlens._distributed._dtensor import dtensor_dual_geometry
+from torchlens._distributed._lifecycle import (
+    _patch_modules,
+    armed_state,
+    next_seq,
+    resolve_group_identity,
+    restore_wrapped_attr,
+)
+
+from ..._data_classes.internal_types import FuncExecutionContext
 from ..._transport import digest_byte_view
+from ..._utils._tensor_label import get_tensor_label, set_tensor_label
+from ..._utils.rng import log_current_autocast_state, log_current_rng_states
+from ..._utils.tensor_utils import safe_copy
 from ...errors._base import CompatibilityError
+from ._ops_capture_records import _record_label_version_snapshot
+from ._ops_emission import apply_live_hooks_to_outputs, log_function_output_tensors
+from .wrappers import _propagate_mutation_label_to_storage_aliases, _register_inplace_live_grad_hook
 
 __all__ = [
     "COLLECTIVE_SITES",
@@ -317,7 +333,6 @@ def _role_entry(role: str, index: int, tensor: torch.Tensor) -> dict[str, Any]:
         "mesh_coords": None,
         "shard_offset": None,
     }
-    from torchlens.distributed._dtensor import dtensor_dual_geometry
 
     geometry = dtensor_dual_geometry(tensor)
     if geometry is not None:
@@ -493,8 +508,6 @@ def _build_payload(
 def _journal_boundary(trace: Any, payload: dict[str, Any], op_labels: list[str]) -> None:
     """Append a boundary to the trace-level distributed journal."""
 
-    from torchlens.distributed._lifecycle import armed_state
-
     entry = dict(payload)
     entry["op_labels_raw"] = list(op_labels)
     record = trace.annotations.setdefault("distributed", {})
@@ -527,15 +540,6 @@ def _emit_boundary_op(
     """
 
     from ... import _state
-    from ..._data_classes.internal_types import FuncExecutionContext
-    from ..._utils.tensor_utils import safe_copy
-    from ._ops_capture_records import _record_label_version_snapshot
-    from ._ops_emission import apply_live_hooks_to_outputs, log_function_output_tensors
-    from ._tl import get_tensor_label, set_tensor_label
-    from .wrappers import (
-        _propagate_mutation_label_to_storage_aliases,
-        _register_inplace_live_grad_hook,
-    )
 
     raw_replay = partial(original, *args, **kwargs)
     raw_replay.__tl_collective_info__ = payload  # type: ignore[attr-defined]
@@ -634,8 +638,6 @@ def _make_collective_wrap(site: CollectiveSite, original: Callable[..., Any]) ->
         inner c10d call, or when argument binding fails (the call is about to raise
         its own ``TypeError`` anyway).
         """
-
-        from torchlens.distributed._lifecycle import armed_state, next_seq, resolve_group_identity
 
         state = armed_state()
         if state is None or _inside_boundary():
@@ -745,8 +747,6 @@ def _make_collective_wrap(site: CollectiveSite, original: Callable[..., Any]) ->
         async_op = bool(bound.get("async_op", False)) or site.attr in ("isend", "irecv")
         witness_policy = str(getattr(trace, "distributed_witness", "none") or "none")
 
-        from ..._utils.rng import log_current_autocast_state, log_current_rng_states
-
         save_rng = trace._options_save_rng
         rng_states = log_current_rng_states(torch_only=True) if save_rng else {}
         autocast_state = log_current_autocast_state()
@@ -808,7 +808,6 @@ def install_collective_wraps(originals: dict[tuple[Any, str], Any]) -> None:
 
     if not torch.distributed.is_available():
         return
-    from torchlens.distributed._lifecycle import _patch_modules
 
     for module in _patch_modules():
         for site in COLLECTIVE_SITES:
@@ -824,10 +823,8 @@ def remove_collective_wraps(originals: dict[tuple[Any, str], Any]) -> None:
 
     A site re-patched by a third party after installation is left in place
     with a warning instead of being clobbered back to the pristine function
-    (see :func:`torchlens.distributed._lifecycle.restore_wrapped_attr`).
+    (see :func:`torchlens._distributed._lifecycle.restore_wrapped_attr`).
     """
-
-    from torchlens.distributed._lifecycle import restore_wrapped_attr
 
     first_failure: Exception | None = None
     for (module, attr), original in list(originals.items()):

@@ -9,7 +9,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ._tl import get_tensor_label, set_tensor_label
+from ..._capture.predicates import _evaluate_keep_op, build_op_record_context
+from ..._capture.projections import append_projected_event
+from ..._ir.predicate import RetroactiveCaptureDecision
+from ..._utils._tensor_label import get_tensor_label, set_tensor_label
+from ...recording.types import CaptureSpec
+from ._ops_containers import _walk_output_tensors_with_paths
+from ._ops_predicates import _record_predicate_output
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -43,16 +49,10 @@ def log_predicate_boundary_replacements(trace: Trace, state: Any, out: Any) -> N
         whose parent is the op the edit replaced.
     """
 
-    from ..._capture.predicates import _evaluate_keep_op, build_op_record_context
-    from ..._capture.projections import append_projected_event
-    from ..._ir.predicate import RetroactiveCaptureDecision
     from ...intervention.runtime import (
         _peek_module_intervention_parent_labels,
         _peek_tensor_live_fire_results,
     )
-    from ...recording.types import CaptureSpec
-    from ._ops_containers import _walk_output_tensors_with_paths
-    from ._ops_predicates import _record_predicate_output
     from .model_prep import _live_intervention_machinery_armed, _note_replacement_event
 
     layer_type = "interventionreplacement"

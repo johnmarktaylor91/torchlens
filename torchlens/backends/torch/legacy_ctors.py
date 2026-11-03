@@ -27,6 +27,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from ..._errors import TorchLensWarning
 from ..._legacy_ctor_sites import LEGACY_TENSOR_CONSTRUCTOR_SITES
 from ..._utils import _torch_compat
 from ..._utils._type_new_slot import (
@@ -41,6 +42,7 @@ from ..._utils._type_new_slot import (
     reinstate_original_new,
     restore_new_override,
 )
+from .wrappers import torch_func_decorator
 
 __all__ = [
     "install_legacy_constructor_wrappers",
@@ -110,8 +112,6 @@ def _build_new_impl(cls: type, func_name: str, c_tp_new: int | None = None) -> C
         them) calls the original constructor unchanged.
     """
 
-    from .wrappers import torch_func_decorator
-
     call_original = original_new_caller(cls, c_tp_new)
 
     def original(*args: Any, **kwargs: Any) -> Any:
@@ -168,7 +168,6 @@ def _skip_class(func_name: str, cls: type, reason: str) -> None:
     if func_name in _WARNED_FOREIGN_NEW:
         return
     _WARNED_FOREIGN_NEW.add(func_name)
-    from ..._errors import TorchLensWarning
 
     warnings.warn(
         TorchLensWarning(

@@ -21,6 +21,11 @@ from ..._data_classes.op import (
 )
 from ..._robustness import UnsupportedTensorVariantError
 from ..._utils._call_site import CALL_SITE_CLASS_MARKER
+from ..._utils._tensor_label import (
+    get_tensor_label,
+    mark_detached_saved_activation,
+    pop_same_object_mutation,
+)
 from ..._utils._torch_compat import (
     tensor_version_or_none,
 )
@@ -31,11 +36,6 @@ from ..._utils.tensor_utils import (
 )
 from ._completeness_escape_state import record_alias_mutation_candidate
 from ._completeness_origins import internal_scalar_read
-from ._tl import (
-    get_tensor_label,
-    mark_detached_saved_activation,
-    pop_same_object_mutation,
-)
 from ._user_grad_fn import pop_user_grad_fn, recorded_op_grad_fn
 from .tensor_tracking import (
     _append_module_suffix_to_equivalence_class,

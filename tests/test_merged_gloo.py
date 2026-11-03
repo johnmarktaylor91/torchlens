@@ -21,8 +21,8 @@ import torch
 from torch import nn
 
 import torchlens as tl  # noqa: E402
+from torchlens._distributed import _lifecycle as lifecycle  # noqa: E402
 from torchlens.distributed import (  # noqa: E402
-    _lifecycle as lifecycle,
     is_vetted_build,
 )
 from torchlens.errors import (  # noqa: E402

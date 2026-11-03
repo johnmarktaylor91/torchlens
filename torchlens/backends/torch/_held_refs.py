@@ -27,6 +27,7 @@ from typing import Any
 from torch import nn
 
 from ... import _state
+from .wrappers import get_optional_torch_namespace
 
 __all__ = [
     "normalize_held_torch_function_refs",
@@ -87,7 +88,6 @@ def _live_counterpart(value: Any) -> Any | None:
     func_name = getattr(wrapper, "__qualname__", None)
     if not namespace_name or not func_name or "." in func_name:
         return None
-    from .wrappers import get_optional_torch_namespace
 
     namespace_obj = get_optional_torch_namespace(namespace_name)
     if namespace_obj is None or isinstance(namespace_obj, type):

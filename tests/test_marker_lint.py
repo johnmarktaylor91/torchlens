@@ -267,7 +267,7 @@ def test_warn_once_sentinel_census_matches_autouse_reset(
         # Last-degradation record for lazy auto-arm (fix/distributed-r4): not
         # "warned"-shaped, but a test that degrades arming would otherwise
         # leak its reason into every later auto_arm_degradation() read.
-        ("torchlens.distributed._lifecycle", "_AUTO_ARM_DEGRADATION"),
+        ("torchlens._distributed._lifecycle", "_AUTO_ARM_DEGRADATION"),
     }
     expected = discovered | runtime_only | sticky_latches
     assert configured == expected, (

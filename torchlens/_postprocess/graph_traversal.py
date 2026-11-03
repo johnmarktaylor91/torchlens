@@ -18,15 +18,29 @@ from .._data_classes.op import Op, _dtype_or_none, _memory_or_none, _shape_or_no
 from .._ir._output_occurrences import output_container_path_meta
 from .._ir.op_record import amend_late_buffer_output_parent
 from .._quantities import Bytes, Duration
+from .._utils._tensor_label import clear_tensor_label, get_tensor_label
+from .._utils._uninit_alloc import (
+    deterministic_fill_governs,
+    qualname_is_uninit_growth_resize,
+    qualname_is_uninit_total_writer,
+    qualname_is_uninitialized_alloc,
+)
 from .._utils.display import identity
 from .._utils.introspection import _get_code_context
-from .._utils.rng import log_current_rng_states
+from .._utils.rng import aten_qualname_is_seeded_rng, log_current_rng_states
 from .._utils.tensor_utils import (
     get_memory_amount_from_metadata,
     safe_copy,
     safe_to,
     tensor_nanequal,
 )
+from ..backends.torch._completeness_escape_state import (
+    alias_mutation_candidate_labels,
+    host_escape_source_labels,
+    record_pruned_alias_mutation_source,
+    record_pruned_rng_control_source,
+)
+from ..backends.torch.sources import log_source_tensor
 from ._buffer_addresses import _recorded_buffer_address
 from ._orphan_seeds import _orphan_flood_seeds
 
@@ -97,9 +111,6 @@ def _resolve_output_parent_labels(
         unattributable outputs before Step 1.
     """
     from collections import deque
-
-    from ..backends.torch._tl import clear_tensor_label, get_tensor_label
-    from ..backends.torch.sources import log_source_tensor
 
     # Common case: capture attributed every output -- the existing positional
     # pairing is exact, and nothing needs synthesizing.
@@ -686,8 +697,6 @@ def _child_edge_totally_overwrites(self: "Trace", walked_label: str, child_label
     writers never stop the walk (fail closed).
     """
 
-    from .._utils._uninit_alloc import qualname_is_uninit_total_writer
-
     op = self._raw_graph_ws.raw_layer_dict.get(child_label)
     if op is None:
         return False
@@ -755,12 +764,6 @@ def _orphan_is_uninit_alloc_source(self: "Trace", op: Any) -> bool:
     capture-time ambient snapshot proves deterministic fill.
     """
 
-    from .._utils._uninit_alloc import (
-        deterministic_fill_governs,
-        qualname_is_uninit_growth_resize,
-        qualname_is_uninitialized_alloc,
-    )
-
     func_id = getattr(op, "func_id", None)
     namespace = getattr(func_id, "namespace", None)
     qualname = getattr(func_id, "qualname", None)
@@ -812,12 +815,6 @@ def _record_pruned_rng_control_flow(self: "Trace", orphan_nodes: set[str]) -> No
     records a side-channel fact; it never alters the visible graph.
     """
 
-    from .._utils.rng import aten_qualname_is_seeded_rng
-    from ..backends.torch._completeness_escape_state import (
-        host_escape_source_labels,
-        record_pruned_rng_control_source,
-    )
-
     escape_sources = host_escape_source_labels(self)
     for label in orphan_nodes:
         op = self._raw_graph_ws.raw_layer_dict.get(label)
@@ -847,8 +844,6 @@ def _record_pruned_source_less_witness(self: "Trace", orphan_nodes: set[str]) ->
     nothing the outputs depend on) leaves no gap in the outputs' provenance.
     ``keep_orphans`` leaves the ops, and their per-op witness, in the trace.
     """
-
-    from ..backends.torch._completeness_escape_state import host_escape_source_labels
 
     escape_sources: frozenset[str] | None = None
     witness: list[str] = []
@@ -884,11 +879,6 @@ def _record_pruned_alias_mutation(self: "Trace", orphan_nodes: set[str]) -> None
     recorded. This only reads orphan metadata and records a side-channel fact; it never alters the
     visible graph.
     """
-
-    from ..backends.torch._completeness_escape_state import (
-        alias_mutation_candidate_labels,
-        record_pruned_alias_mutation_source,
-    )
 
     candidates = alias_mutation_candidate_labels(self)
     if not candidates:

@@ -25,12 +25,15 @@ from typing import Any, Literal, cast, get_args
 
 import torch
 
-from ..backends.torch._tl import get_tensor_label, set_tensor_label
+from .._state import pause_logging
+from ._internal_read import internal_scalar_read
 from ._sparse_parts import sparse_component_tensors
+from ._tensor_label import get_tensor_label, set_tensor_label
 from ._torch_compat import (
     HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
     get_fp8_dtypes,
     get_functorch_wrapped_tensor_checker,
+    get_tracing_tensor_types,
 )
 from ._torch_symbols import torch_attr
 from .env_flags import closed_bool_env
@@ -818,7 +821,7 @@ def concatenate_batch_tensors(left: torch.Tensor, right: torch.Tensor) -> torch.
         Tensor containing ``left`` followed by ``right`` on dimension 0.
     """
 
-    with _state_module().pause_logging():
+    with pause_logging():
         return torch.cat([left, right], dim=0)
 
 
@@ -860,7 +863,7 @@ def _pause_dispatch_modes_for_subclass_clone(x: Any) -> Iterator[None]:
     # Deferred: backends.torch is upward of utils in the layer map (C01 item
     # 1); this branch is the floor-only (torch 2.1/2.2) fallback, so a plain
     # `import torchlens` never pays for it.
-    from ..backends.torch._modes import pause_own_dispatch_modes
+    from ._dispatch_modes import pause_own_dispatch_modes
 
     with pause_own_dispatch_modes():
         yield
@@ -1011,7 +1014,6 @@ def _paused_internal_reads() -> Iterator[None]:
     must run under ``pause_logging`` plus ``internal_scalar_read`` or they
     would register as user raw-pointer escapes on witness-armed captures.
     """
-    from ..backends.torch._internal_read import internal_scalar_read
 
     with _state_module().pause_logging(), internal_scalar_read():
         yield
@@ -1028,7 +1030,6 @@ def _deferred_storage_key(x: torch.Tensor) -> tuple[int, int, str] | None:
     fires, and the entry guard's own contract is that FakeTensors never reach
     pointer-reading metadata (grind-r5 b6 R16, order-dependent repro).
     """
-    from ._torch_compat import get_tracing_tensor_types
 
     tracing_types = get_tracing_tensor_types()
     if tracing_types and isinstance(x, tracing_types):
@@ -1119,7 +1120,6 @@ def _try_defer_payload_alias(
     state_ptrs = _DEFER_STATE_PTRS
     if state_ptrs is None:
         return None
-    from ..backends.torch._internal_read import internal_scalar_read
 
     with internal_scalar_read():
         key = _deferred_storage_key(x)
@@ -1666,7 +1666,7 @@ def _clone_tensor_payload(
         Tensor payload with TorchLens raw label preserved, or a rewrapped
         parameter payload for parameter inputs.
     """
-    with _state_module().pause_logging():
+    with pause_logging():
         if save_mode not in SAVE_MODES:
             raise ValueError(
                 "save_mode must be one of " + ", ".join(repr(m) for m in sorted(SAVE_MODES))

@@ -601,7 +601,7 @@ def test_tamper_site_key_refuses_typed(tmp_path) -> None:
 def test_tamper_distributed_scope_refuses_typed(tmp_path) -> None:
     """A planted shard-scope vocabulary forgery refuses at load."""
 
-    from torchlens.distributed import _lifecycle as lifecycle
+    from torchlens._distributed import _lifecycle as lifecycle
 
     assert FORGERY_SURFACE_LEDGER["Trace.provenance.distributed_scope"] == "validated_refuse_typed"
     lifecycle.disarm()

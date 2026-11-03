@@ -10,7 +10,7 @@ by the existing authority (``torchlens._capture.outcome``) with its vocabulary
 unchanged, and no derivation here may bless COMPLETE or revise a settled
 record (the R06 discipline).
 
-Pattern-of-record: :mod:`torchlens.distributed._ledger` (S7 instruction) —
+Pattern-of-record: :mod:`torchlens._distributed._ledger` (S7 instruction) —
 closed ``Literal`` vocabularies, frozen payload key sets, fail-closed
 ``from_payload``, write-once container, derived views that refuse
 out-of-vocabulary tokens. Parse boundaries raise ``ValueError``; callers
@@ -40,6 +40,8 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 from .._utils.hashing import sha256_canonical_json
 from ..errors.episode import EpisodeCaptureError, EpisodeLedgerError
+from ..options import EpisodeOptions as _EpisodeSpec
+from ._episode_coupling import settlement_fire_counts, stamp_episode_steps
 from ._episode_derivation import (
     _call_returned,
     _declaration_error,
@@ -49,6 +51,7 @@ from ._episode_derivation import (
     mint_capture_digest,
     validate_step_output_positions,
 )
+from ._episode_join import EpisodeJoinSession, _validated_join_declaration, check_series_join_claim
 from ._episode_ledger_anchors import _anchor_loaded_ledger, quarantine_loaded_ledger
 
 if TYPE_CHECKING:
@@ -831,7 +834,6 @@ class EpisodeLedger:
                 "step_output_kind='tokens' or 'digest' to derive one.",
                 code="episode_ledger_incoherent",
             )
-        from ._episode_join import check_series_join_claim
 
         check_series_join_claim(self._header)
         return tuple(row.step_output for row in self._rows)
@@ -1298,8 +1300,6 @@ def resolve_episode_declaration(spec: EpisodeOptions, model: Any) -> ResolvedEpi
         ``episode_state_unsnapshotable`` for the E-A4 refusal.
     """
 
-    from ..options import EpisodeOptions as _EpisodeSpec
-
     if not isinstance(spec, _EpisodeSpec):
         raise _declaration_error(
             f"episode= expects an EpisodeOptions, got {type(spec).__name__}. "
@@ -1340,7 +1340,6 @@ def resolve_episode_declaration(spec: EpisodeOptions, model: Any) -> ResolvedEpi
             "diagnostic-tier cost explicitly.",
             code="episode_step_ceiling_exceeded",
         )
-    from ._episode_join import _validated_join_declaration
 
     crossings = _validated_join_declaration(spec, declared_steps)
     step_input_from = getattr(spec, "step_input_from", None)
@@ -1366,7 +1365,6 @@ def resolve_episode_declaration(spec: EpisodeOptions, model: Any) -> ResolvedEpi
             f"{sorted(_ESCALATION_REASONS)}."
         )
     _preflight_declared_state(spec)
-    from ._episode_join import EpisodeJoinSession
 
     return ResolvedEpisode(
         episode_id=f"ep-{uuid.uuid4().hex[:16]}",
@@ -1711,8 +1709,6 @@ def _write_settled_episode_ledger(trace: Any, resolved: ResolvedEpisode) -> Epis
         first = halt_frontier[0] if isinstance(halt_frontier, (list, tuple)) else halt_frontier
         frontier = {"boundary_kind": "op", "boundary_label": str(first)}
 
-    from ._episode_coupling import settlement_fire_counts, stamp_episode_steps
-
     rows = _build_ledger_rows(
         n_total,
         statuses,
@@ -1779,8 +1775,6 @@ def escalation_spec(
         ``episode_ledger_without_declaration`` when the producer carries no
         finalized episode ledger.
     """
-
-    from ..options import EpisodeOptions as _EpisodeSpec
 
     ledger = episode_ledger_for(producer)
     if ledger is None:

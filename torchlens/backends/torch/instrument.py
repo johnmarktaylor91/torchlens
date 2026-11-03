@@ -23,7 +23,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ..._capture.stages import InstrumentedModel
-from ._tl import active_label_session_token
+from ..._capture_state_helpers import CompiledCapturePrep, prepare_compiled_capture
+from ..._utils._tensor_label import active_label_session_token
+from .wrappers import unwrap_torch
 
 if TYPE_CHECKING:
     from torch import nn
@@ -101,8 +103,6 @@ def _observer_context(model: nn.Module, policy: WrapPolicy) -> Any:
 def _enter_compiled_prep(stack: ExitStack, model: nn.Module) -> Any:
     """Enter the compiled-capture preparation and return its site record."""
 
-    from ..._capture_state_helpers import CompiledCapturePrep, prepare_compiled_capture
-
     compiled_prep = stack.enter_context(prepare_compiled_capture(model))
     if not isinstance(compiled_prep, CompiledCapturePrep):
         compiled_prep = CompiledCapturePrep(sites=(), force_eager_stance=False)
@@ -111,8 +111,6 @@ def _enter_compiled_prep(stack: ExitStack, model: nn.Module) -> Any:
 
 def _unwrap_after_success() -> None:
     """Remove the torch wrappers once a capture that asked for it has completed."""
-
-    from .wrappers import unwrap_torch
 
     unwrap_torch()
 

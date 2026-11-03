@@ -24,7 +24,7 @@ from ..._data_classes.prehook import (
     TensorInputObservation,
     TypedInputPath,
 )
-from ._tl import get_tensor_label
+from ..._utils._tensor_label import get_tensor_label
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace

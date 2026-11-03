@@ -48,7 +48,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .._capture.arg_positions import _normalize_func_name
 from .._errors import InvalidArgumentError
+from ._resolver_registry import function_registry_key_from_callable, resolve_function_registry_key
+from .binding import _has_tensor, _wrap_name_universe
+from .errors import ReplayPreconditionError, UntrustedCallableError
 
 __all__ = [
     "InjectedOp",
@@ -178,9 +182,6 @@ class injection_recorder:
         import torch
         from torch.overrides import TorchFunctionMode
 
-        from .._capture.arg_positions import _normalize_func_name
-        from .binding import _has_tensor, _wrap_name_universe
-
         recorder = self
         wrap_universe = _wrap_name_universe()
 
@@ -252,7 +253,6 @@ class injection_recorder:
             ]
         else:
             outputs = []
-        from ._resolver_registry import function_registry_key_from_callable
 
         try:
             callable_ref = function_registry_key_from_callable(func)
@@ -784,9 +784,6 @@ def _resolve_record_callable(
     allowed_custom_callable_modules: Any,
 ) -> tuple[Any, str | None]:
     """Resolve one record's callable through the trust gate, or classify."""
-
-    from ._resolver_registry import resolve_function_registry_key
-    from .errors import ReplayPreconditionError, UntrustedCallableError
 
     try:
         func = resolve_function_registry_key(

@@ -58,6 +58,7 @@ import torch
 from torch.overrides import TorchFunctionMode, get_overridable_functions, get_testing_overrides
 
 from ... import _state
+from ..._constants import get_orig_torch_funcs
 
 __all__ = [
     "BeltReport",
@@ -242,8 +243,6 @@ def _resolve_namespace(namespace_name: str) -> Any | None:
 
 def _derive() -> tuple[BeltReport, dict[int, Any]]:
     """Measure the protocol-invisible wrapped set on the running build."""
-
-    from ..._constants import get_orig_torch_funcs
 
     inventory = get_orig_torch_funcs(include_torchvision=False)
     statically_visible: set[int] = set()

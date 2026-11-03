@@ -1,7 +1,6 @@
 """Public TorchLens type aliases and rarely used data classes."""
 
 import importlib
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 #: Role declaration (architecture memo build item 2, seeding the layer map
@@ -10,7 +9,6 @@ from typing import TYPE_CHECKING, Any
 #: licensed by the facade role (Rule F), not by a layer claim of its own.
 __tl_role__ = "FACADE"
 
-import torch
 
 from ._capture.outcome import CaptureOutcome, CapturePhase, CaptureStatus, FailureOrigin
 from ._captured_run import TraceLike
@@ -46,8 +44,10 @@ if TYPE_CHECKING:
     from ._trace_slice import TraceSlice
     from .recording.types import RecordingSettings
 
-_ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
-_GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
+from ._literals import (
+    _ActivationPostfunc as _ActivationPostfunc,
+    _GradientPostfunc as _GradientPostfunc,
+)
 
 __all__ = [
     "Accessor",

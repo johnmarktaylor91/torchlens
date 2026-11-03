@@ -37,12 +37,15 @@ from collections.abc import Callable, Generator, Iterator
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from .._capture.arg_positions import _normalize_func_name
 from .._errors import InvalidArgumentError
+from .._ir.predicate import ModuleStackFrame
 from .._selection.module_alias_guard import (
     bare_module_address,
     model_module_aliases,
     refuse_module_alias_spellings,
 )
+from .._selection.selectors import BaseSelector, CompositeSelector, NotSelector
 from ._bind_step import ACTIVE_BIND_SESSION, active_bind_decode_step
 from ._binding_calls import _alias_disclosure, _bound_leaves, _has_tensor, _is_in_place_call
 from ._helper_fingerprint import helper_versions
@@ -170,8 +173,6 @@ def _selector_terms(selector: Any, *, negated: bool = False) -> list[tuple[str, 
         resolve).
     """
 
-    from .._selection.selectors import BaseSelector, CompositeSelector, NotSelector
-
     if isinstance(selector, NotSelector):
         return _selector_terms(selector.selector, negated=not negated)
     if isinstance(selector, CompositeSelector):
@@ -212,8 +213,6 @@ def _boundary_parts(rule: Any) -> tuple[Any, tuple[Any, ...]] | None:
     tuple[Any, tuple[Any, ...]] | None
         ``(module_selector, step_selectors)``, or ``None`` for any other shape.
     """
-
-    from .._selection.selectors import CompositeSelector
 
     where = rule.target
     if getattr(where, "selector_kind", None) == "module":
@@ -527,8 +526,6 @@ class _BindDispatchMode:
         import torch
         from torch.overrides import TorchFunctionMode
 
-        from .._capture.arg_positions import _normalize_func_name
-
         wrap_universe = _wrap_name_universe()
 
         class _Mode(TorchFunctionMode):
@@ -810,8 +807,6 @@ class _ArmedRuntime:
 
     def _install_tracker_hooks(self) -> None:
         """Install the capture-parity module-stack tracker on every module."""
-
-        from .._ir.predicate import ModuleStackFrame
 
         session = self.session
         root_id = id(self.binding.model)

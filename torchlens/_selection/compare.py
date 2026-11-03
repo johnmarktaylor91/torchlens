@@ -63,6 +63,8 @@ from typing import Any
 
 import torch
 
+from .._data_classes.trace import Trace
+from .._postprocess._site_join import join_site_profiles, occurrence_coordinates, site_profile
 from .._record_type import record_type
 from ..errors._base import TorchLensError, TorchLensWarning
 from .selection import (
@@ -106,8 +108,6 @@ def _reference_display(reference: Any) -> str:
 
 def _validate_reference(reference: Any, producer: str) -> Any:
     """Validate the reference operand: exactly ONE Trace, refused with teaching."""
-
-    from .._data_classes.trace import Trace
 
     if isinstance(reference, Trace):
         return reference
@@ -185,12 +185,6 @@ class _JoinGuard:
     @classmethod
     def build(cls, subject: Any, reference: Any) -> _JoinGuard | None:
         """Build the guard, or ``None`` when either side is keyless."""
-
-        from .._postprocess._site_join import (
-            join_site_profiles,
-            occurrence_coordinates,
-            site_profile,
-        )
 
         try:
             subject_profile = site_profile(subject)

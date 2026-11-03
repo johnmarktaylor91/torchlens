@@ -38,14 +38,14 @@ from ..._postprocess._selective_save import (
 )
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
-from ...backends.registry import get_backend_spec
-from ...options import CaptureOptions, merge_capture_options
-from ...recording.types import CaptureSpec
-from ...validation.status import (
+from ..._validation_status import (
     ValidationReplaySource,
     ValidationStatus,
     count_importer_region_annotations,
 )
+from ...backends.registry import get_backend_spec
+from ...options import CaptureOptions, merge_capture_options
+from ...recording.types import CaptureSpec
 from .._facet_recipes import attach_facet_recipes, pop_facet_recipes
 from .._finalize import (
     attach_function_root_module,
@@ -60,6 +60,7 @@ from .._finalize import (
     session_callable_identity as _callable_identity,
     value_nbytes as _nbytes,
 )
+from .._invariants import run_metadata_invariants
 from .._options import (
     TINYGRAD_EXTRA_KWARG_POLICY,
     TINYGRAD_PREVIEW_TRACE_OPTION_POLICY,
@@ -626,9 +627,7 @@ class TinygradBackend:
             return status
         try:
             if kwargs.get("validate_metadata", True):
-                from ...validation.invariants import check_metadata_invariants
-
-                check_metadata_invariants(trace)
+                run_metadata_invariants(trace)
             verdict = self._validate_uops(trace)
             status_result = self._validation_status_from_counts(trace, verdict=verdict)
         except BackendUnsupportedError:

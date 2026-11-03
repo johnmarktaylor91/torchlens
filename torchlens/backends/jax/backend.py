@@ -56,6 +56,15 @@ from ..._postprocess.loop_grouping_adapter import (
 )
 from ..._quantities import Bytes, Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
+from ..._validation_status import (
+    REGION_REPLAY_CLASS,
+    REGION_REPLAY_CLASS_KEY,
+    REGION_REPLAY_IMPORTER_PROVENANCE,
+    REGION_REPLAY_PROVENANCE_KEY,
+    ValidationReplaySource,
+    ValidationStatus,
+    count_importer_region_annotations,
+)
 from ...backends._finalize import (
     attach_function_root_module,
     mirror_param_derived_grads,
@@ -69,16 +78,9 @@ from ...backends._finalize import (
 from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
 from ...options import CaptureOptions, merge_capture_options
 from ...recording.types import CaptureSpec
-from ...validation.status import (
-    REGION_REPLAY_CLASS,
-    REGION_REPLAY_CLASS_KEY,
-    REGION_REPLAY_IMPORTER_PROVENANCE,
-    REGION_REPLAY_PROVENANCE_KEY,
-    ValidationReplaySource,
-    ValidationStatus,
-    count_importer_region_annotations,
-)
 from .._facet_recipes import attach_facet_recipes, pop_facet_recipes
+from .._finalize import _attach_param_usage
+from .._invariants import run_metadata_invariants
 from .._options import (
     JAX_EXTRA_KWARG_POLICY,
     JAX_PREVIEW_TRACE_OPTION_POLICY,
@@ -826,9 +828,7 @@ class JAXBackend:
         log = _JaxValidationLog()
         try:
             if validate_metadata:
-                from ...validation.invariants import check_metadata_invariants
-
-                check_metadata_invariants(trace)
+                run_metadata_invariants(trace)
             passed = self._validate_jax_equations(trace, log)
             _record_jax_constant_leaves(trace, log)
             if passed and not self._validate_jax_regions(trace):
@@ -2440,8 +2440,6 @@ class JAXBackend:
         None
             Op parameter fields and reverse parameter usage lists are updated.
         """
-
-        from .._finalize import _attach_param_usage
 
         equation_labels = [
             label

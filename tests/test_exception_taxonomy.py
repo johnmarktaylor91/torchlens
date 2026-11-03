@@ -1310,7 +1310,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "multi-pass access refusal raised via record accessors; plain ValueError outside "
         "the taxonomy — flagged for future taxonomy adoption"
     ),
-    "torchlens.backends.torch._tl.TorchLensTLCollisionError": (
+    "torchlens._utils._tensor_label.TorchLensTLCollisionError": (
         "capture-entry _tl attribute-collision guard; plain AttributeError outside the "
         "taxonomy — flagged for future taxonomy adoption"
     ),

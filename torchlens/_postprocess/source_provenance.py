@@ -11,6 +11,12 @@ from __future__ import annotations
 import warnings
 from typing import TYPE_CHECKING, Any
 
+from .._capture_honesty import (
+    ADVISORY_MODULE_BOUNDARY_ADOPTION,
+    ADVISORY_ORPHAN_UNATTRIBUTED_ARGS,
+    ADVISORY_UNRECORDED_OPERATOR_MUTATION,
+    append_capture_advisory,
+)
 from .ast_branches import resolve_var_names
 
 if TYPE_CHECKING:
@@ -54,13 +60,6 @@ def _warn_unattributed_tensor_args(self: Trace) -> None:
     None
         Emits at most one aggregate warning.
     """
-
-    from .._capture_honesty import (
-        ADVISORY_MODULE_BOUNDARY_ADOPTION,
-        ADVISORY_ORPHAN_UNATTRIBUTED_ARGS,
-        ADVISORY_UNRECORDED_OPERATOR_MUTATION,
-        append_capture_advisory,
-    )
 
     offenders = _unattributed_op_offenders(self._layer_list or ())
     # Orphan pruning (step 3) runs BEFORE this step and strips the pruned ops, so a

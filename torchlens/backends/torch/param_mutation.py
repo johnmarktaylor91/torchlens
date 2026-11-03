@@ -34,12 +34,7 @@ from ..._capture_state_helpers import _is_uninitialized_param
 from ..._data_classes._trace_missing_attrs import is_live_trace
 from ..._data_classes.param import Param, ParamAccessor
 from ..._quantities import Bytes
-from ..._utils._torch_compat import HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
-from ..._utils.hashing import make_random_barcode
-from ..._utils.tensor_leaves import iter_tensors
-from ..._utils.tensor_utils import get_memory_amount, safe_copy
-from ._completeness_origins import internal_scalar_read
-from ._tl import (
+from ..._utils._tensor_label import (
     get_param_meta,
     get_tensor_label,
     mutated_parameter_label,
@@ -47,6 +42,11 @@ from ._tl import (
     set_tensor_label,
     storage_alias_index_key,
 )
+from ..._utils._torch_compat import HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
+from ..._utils.hashing import make_random_barcode
+from ..._utils.tensor_leaves import iter_tensors
+from ..._utils.tensor_utils import get_memory_amount, safe_copy
+from ._completeness_origins import internal_scalar_read
 from ._user_grad_fn import stamp_user_grad_fn
 from .buffer_writes import peek_buffer_write_tracker
 from .frozen_parameter_gradients import _forces_frozen_parameter_gradients
@@ -275,8 +275,6 @@ def _frozen_receiver_flag(receiver: torch.nn.Parameter) -> Iterator[None]:
         Control for the wrapped call.
     """
 
-    from ._completeness_origins import internal_scalar_read
-
     with _state.pause_logging(), internal_scalar_read():
         receiver.requires_grad_(False)
     try:
@@ -333,7 +331,6 @@ def frozen_parameter_receiver_context(
     receiver = args[0]
     if not isinstance(receiver, torch.nn.Parameter):
         return nullcontext()
-    from ._completeness_origins import internal_scalar_read
 
     with internal_scalar_read():
         is_forced_leaf = receiver.requires_grad and receiver.is_leaf

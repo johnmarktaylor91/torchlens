@@ -10,6 +10,7 @@ import torch
 from torch import nn
 
 from .._errors import InvalidArgumentError
+from .._utils.facade import resolve_facade_attr
 from ._helper_internals import (
     _align_direction,
     _donor_facet_slice,
@@ -1311,8 +1312,6 @@ if not TYPE_CHECKING:
         AttributeError
             Typed ``facade_redirect`` for a removed spelling, plain otherwise.
         """
-
-        from .._utils.facade import resolve_facade_attr
 
         return resolve_facade_attr(
             owner=__name__, name=name, module_globals=globals(), redirects=_REDIRECTS

@@ -44,14 +44,15 @@ from ..._output_slot import returned, stopped
 from ..._postprocess._materialize import materialize_from_events
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
+from ..._validation_status import ValidationReplaySource, ValidationStatus  # noqa: TC001
 from ...backends.registry import (
     BackendName,
     get_backend_spec,
     require_capability_implementation,
 )
+from ...errors import TorchLensWarning
 from ...recording._halt import StopSignal
 from ...recording.types import CaptureSpec
-from ...validation.status import ValidationReplaySource, ValidationStatus  # noqa: TC001
 from .._finalize import (
     attach_function_root_module,
     attach_module_owned_op_params,
@@ -66,6 +67,7 @@ from .._finalize import (
     session_callable_identity as _callable_identity,
     value_nbytes as _nbytes,
 )
+from .._invariants import run_metadata_invariants
 from .._options import MLX_PREVIEW_TRACE_OPTION_POLICY, reject_unsupported_trace_options
 from . import capabilities
 from ._capture_disclosures import _disclose_compiled_attributes, _disclose_unfired_selectors
@@ -1460,13 +1462,12 @@ class MLXBackend:
         failed_count = 0
         decisions: tuple[dict[str, Any], ...] = ()
         try:
-            from ...validation.invariants import check_metadata_invariants
-            from ...validation.status import count_importer_region_annotations
+            from ..._validation_status import count_importer_region_annotations
             from .validation import MLX_VALIDATION_REASONS, validate_mlx_captures_detailed
 
             exempted: dict[str, int] = {}
             unverified_reasons: dict[str, int] = {}
-            if kwargs.get("validate_metadata", True) and not check_metadata_invariants(trace):
+            if kwargs.get("validate_metadata", True) and not run_metadata_invariants(trace):
                 failed_count = 1
                 decisions = (_mlx_metadata_failed_decision(MLX_VALIDATION_REASONS),)
             else:
@@ -2178,7 +2179,6 @@ class MLXBackend:
                 "policy to keep the trace marked capture_verified=False instead",
                 code=UNWRAPPED_OP_REASON,
             )
-        from ...errors import TorchLensWarning
 
         warnings.warn(
             TorchLensWarning(

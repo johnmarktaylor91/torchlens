@@ -43,7 +43,7 @@
   then refused the fast tier). `test_values_leave_the_op_graph_unchanged` pins the op list, the
   raw-event hash and the call fingerprint equal across `aten_ops` spellings. A `run()` refresh
   re-records the profile; `run(..., fast=True)` refuses a values capture.
-- Distributed/sharded state is detected in `torchlens/_distributed.py` and refused at capture entry
+- Distributed/sharded state is detected in `torchlens/_distributed/` and refused at capture entry
   with `DistributedCaptureUnsupportedError`; the same detection feeds the `dtensor` / `device_mesh` /
   `tensor_parallel` / `pipeline_parallel` rows of `tl.report.doctor`, so the two cannot drift.
   `dtensor`, active TP hooks/styles, and `pipeline_parallel` refuse; dense parameters do not make a

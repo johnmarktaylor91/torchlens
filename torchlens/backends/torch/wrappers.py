@@ -35,6 +35,19 @@ from ..._capture_state_helpers import _is_uninitialized_param
 from ..._constants import _get_torchvision_funcs, get_orig_torch_funcs
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._errors import CaptureNotActiveError
+from ..._utils._dispatch_modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
+from ..._utils._tensor_label import (
+    _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
+    DescriptorCompatProperty,
+    get_tensor_label,
+    has_detached_saved_activations,
+    is_decorated_function,
+    is_tensor_data_alias,
+    mark_decorated_function,
+    mark_tensor_data_alias,
+    propagate_detached_saved_activation,
+    set_tensor_label,
+)
 from ..._utils._torch_compat import (
     HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
     dynamo_is_compiling,
@@ -81,7 +94,6 @@ from ._function_boundary import (
     unlogged_wrapper_name,
 )
 from ._logged_arguments import logged_args
-from ._modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
 from ._op_markers import _pop_op_markers, _push_op_markers
 from ._ops_autograd import register_call_input_container_snapshots
 from ._ops_capture_records import (
@@ -93,18 +105,7 @@ from ._ops_containers import _walk_output_tensors_with_paths
 from ._ops_emission import apply_live_hooks_to_outputs, log_function_output_tensors
 from ._output_tensors import _collect_output_tensors
 from ._protocol_redispatch import STILL_DECLINED, redispatch_declined
-from ._tl import (
-    _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
-    DescriptorCompatProperty,
-    get_tensor_label,
-    has_detached_saved_activations,
-    is_decorated_function,
-    is_tensor_data_alias,
-    mark_decorated_function,
-    mark_tensor_data_alias,
-    propagate_detached_saved_activation,
-    set_tensor_label,
-)
+from ._torch_ops_calls import install_torch_ops_call_recorders, uninstall_torch_ops_call_recorders
 from ._transform_wrappers import (  # noqa: F401  (re-exported by their pre-split spelling)
     DIRECT_TRANSFORM_SITES,
     TRANSFORM_BUILDER_SITES,
@@ -124,6 +125,7 @@ from ._weightsfree_ctx import active_factory_device as _active_factory_device
 from ._wrappers_refusals import _raise_if_subclass_ctor_under_dispatch_mode
 from .aliasing import _tensors_alias
 from .arg_names import get_arg_names
+from .belt import restore_belt_references, sweep_stale_belt_references
 from .buffer_writes import (
     record_op_buffer_writes,
     resolve_or_late_index_buffer_address,
@@ -150,6 +152,7 @@ from .param_mutation import (
     same_object_logging_copy as _same_object_logging_copy,
 )
 from .sources import log_closure_constant_if_known, log_source_tensor
+from .tensor_tracking import _add_tensor_backward_hook
 
 if TYPE_CHECKING:
     pass
@@ -702,7 +705,6 @@ def _register_inplace_live_grad_hook(
 
     if not isinstance(tensor, torch.Tensor):
         return
-    from .tensor_tracking import _add_tensor_backward_hook
 
     # The live tensor is what downstream ops consume, so it takes gradient
     # ownership of the label; the logged copy's hook (if any) stops emitting.
@@ -1455,7 +1457,7 @@ def torch_func_decorator(
         func_exec_start = time.time()
         device_memory_before = None
         if getattr(trace, "track_device_memory", False):
-            # Observe item 15 (deferred import per the spine layer lint).
+            # Observe item 15; deferred: cycle _observe.
             from ..._observe._device_memory import read_before as _dm_read_before
 
             device_memory_before = _dm_read_before(trace)
@@ -1492,7 +1494,7 @@ def torch_func_decorator(
         except torch.cuda.OutOfMemoryError:
             # Observe item 15: the OOM raised BEFORE this op committed -- name
             # the ATTEMPTED call, never the last committed op.
-            if getattr(trace, "track_device_memory", False):
+            if getattr(trace, "track_device_memory", False):  # deferred import: cycle _observe
                 from ..._observe._device_memory import settle_op_bracket
 
                 settle_op_bracket(trace, func_name, func_call_id, device_memory_before, oom=True)
@@ -1518,7 +1520,7 @@ def torch_func_decorator(
                 _record_mode_paused_interior(trace, owner_func_call_id=func_call_id)
         func_exec_duration = time.time() - func_exec_start
         if device_memory_before is not None or getattr(trace, "track_device_memory", False):
-            from ..._observe._device_memory import settle_op_bracket
+            from ..._observe._device_memory import settle_op_bracket  # deferred: cycle _observe
 
             settle_op_bracket(trace, func_name, func_call_id, device_memory_before)
         if _echo is not None:
@@ -2486,7 +2488,6 @@ def _unwrap_torch_locked() -> None:
     reset_detector_tables()
     _state._escape_detector_mode = "off"
     _state._completeness_witness_mode = "off"
-    from .belt import restore_belt_references
 
     restore_belt_references()
     from .backward import uninstall_autograd_wrappers
@@ -2495,7 +2496,6 @@ def _unwrap_torch_locked() -> None:
     from .legacy_ctors import uninstall_legacy_constructor_wrappers
 
     uninstall_legacy_constructor_wrappers()
-    from ._torch_ops_calls import uninstall_torch_ops_call_recorders
 
     uninstall_torch_ops_call_recorders()
 
@@ -2728,8 +2728,6 @@ def _wrap_torch_locked(
     # that landed after the first wrap gets its custom ops decorated here.
     _ensure_torchvision_ops_decorated()
 
-    from ._torch_ops_calls import install_torch_ops_call_recorders
-    from .belt import sweep_stale_belt_references
     from .legacy_ctors import install_legacy_constructor_wrappers
 
     # Legacy ``torch.<dtype>Tensor`` / ``Variable`` classes are patched in place
