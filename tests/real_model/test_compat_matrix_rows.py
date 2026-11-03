@@ -15,7 +15,7 @@ measured on.
   transformers' DTensor-native ``tp_plan="auto"`` loading are covered.
 * ``flash_attention_4``: capture plus validation on a CUDA device that the FlashAttention 4
   package supports; skipped elsewhere with the reason. It is a known capture gap today (strict
-  xfail), and a companion test pins that the trace is marked unverified rather than silent.
+  xfail), and a companion test pins that a witnessed trace is marked unverified, not silent.
 """
 
 from __future__ import annotations
@@ -294,17 +294,32 @@ def test_flash_attention_4_capture_and_validate() -> None:
 @pytest.mark.cuda
 @pytest.mark.heavy
 def test_flash_attention_4_capture_gap_is_flagged_not_silent() -> None:
-    """Until the gap is closed, a ``flash_attention_4`` trace says it is unverified.
+    """Until the gap is closed, a witnessed ``flash_attention_4`` trace says it is unverified.
 
-    The kernel's writes are invisible to capture, so the completeness witness must account for
-    them as unexplained dispatch events and mark the trace unverified. If this starts failing
-    because the gap was closed, drop the xfail on the test above and this test together.
+    The kernel's writes are invisible to capture, so the armed completeness witness must account
+    for them as unexplained dispatch events and mark the trace unverified (a plain trace leaves
+    the witness off and ``verified`` unrecorded). If this starts failing because the gap was
+    closed, drop the xfail on the test above and this test together.
     """
 
+    from torchlens import _state
+    from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
+
     model, input_ids = _fa4_llama()
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        trace = tl.trace(model, (), input_kwargs={"input_ids": input_ids})
+    saved_escape_detector = _state._escape_detector_mode
+    saved_completeness_witness = _state._completeness_witness_mode
+    unwrap_torch()
+    wrap_torch(completeness_witness=True)
+    try:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            trace = tl.trace(model, (), input_kwargs={"input_ids": input_ids})
+    finally:
+        unwrap_torch()
+        wrap_torch(
+            escape_detector=saved_escape_detector,
+            completeness_witness=saved_completeness_witness,
+        )
     try:
         provenance = trace.provenance
         facts = (
