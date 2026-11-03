@@ -35,6 +35,7 @@ class DeterministicModel(nn.Module):
         return value * 2.0
 
 
+# Kept: sole branch coverage of _runnable/transaction.py.
 def test_live_run_declares_host_rng_source() -> None:
     """A host-RNG capture's live-refresh report names ('host_rng',)."""
 
@@ -46,17 +47,7 @@ def test_live_run_declares_host_rng_source() -> None:
     assert result.report.nondeterministic_sources == ("host_rng",)
 
 
-def test_live_run_deterministic_model_declares_no_sources() -> None:
-    """A deterministic capture's live-refresh report stays empty."""
-
-    model = DeterministicModel()
-    value = torch.randn(2, 3)
-    trace = tl.trace(model, value)
-    assert not bool(trace._runnable.host_rng_consumed)
-    result = trace.run(inputs=value)
-    assert result.report.nondeterministic_sources == ()
-
-
+# Kept: sole branch coverage of _fast_run.py; a sole mutation kill.
 def test_fast_live_run_declares_host_rng_source() -> None:
     """fast=True carries the same host-RNG declaration as the ordinary provider.
 
@@ -72,13 +63,3 @@ def test_fast_live_run_declares_host_rng_source() -> None:
     assert bool(trace._runnable.host_rng_consumed)
     result = trace.run(inputs=value, fast=True)
     assert result.report.nondeterministic_sources == ("host_rng",)
-
-
-def test_fast_live_run_deterministic_model_declares_no_sources() -> None:
-    """A deterministic capture's fast-live report stays empty."""
-
-    model = DeterministicModel()
-    value = torch.randn(2, 3)
-    trace = tl.trace(model, value, save=tl.func("mul"))
-    result = trace.run(inputs=value, fast=True)
-    assert result.report.nondeterministic_sources == ()

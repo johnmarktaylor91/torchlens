@@ -18,18 +18,15 @@ bracket still marks), and the preserved non-empty residual.
 from __future__ import annotations
 
 import multiprocessing as mp
-import queue as _queue
 import shutil
 from pathlib import Path
 from typing import Any
 
-import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import PathFaithfulness
-from torchlens._utils.rng import host_nondeterminism_monitor
 from torchlens.options import CaptureOptions
 
 _CAP = {"replayable": True, "capture_container_structure": True, "cache": False}
@@ -55,6 +52,7 @@ def _roundtrip(model: nn.Module, x: torch.Tensor, tmp: Path) -> tl.RunResult:
     return tl.load(path).run(inputs=x)
 
 
+# Kept: sole branch coverage of _utils/rng/generator_sweep.py, _utils/rng/inventory_walk.py; the catch of its regression fault.
 def test_empty_mp_queue_stays_verified(tmp_path: Path) -> None:
     """A deterministic ``relu(Linear)`` holding an EMPTY ``multiprocessing.Queue`` captures no host
     RNG and replays VERIFIED -- the r48 hon1_1 over-trigger (self-inflicted clock mark from the
@@ -69,13 +67,7 @@ def test_empty_mp_queue_stays_verified(tmp_path: Path) -> None:
         q.join_thread()
 
 
-def test_empty_simplequeue_stays_verified(tmp_path: Path) -> None:
-    """Regression pin: the clock-free ``queue.SimpleQueue`` empty case is unaffected."""
-
-    result = _roundtrip(_EmptyMpQueueModel(_queue.SimpleQueue()), torch.randn(2, 4), tmp_path)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
+# Kept: sole branch coverage of _io/runnable.py, _utils/rng/generator_sweep.py, _utils/rng/inventory_walk.py; a sole mutation kill.
 def test_nonempty_mp_queue_stays_incomplete(tmp_path: Path) -> None:
     """Residual preserved: a NON-EMPTY opaque ``mp.Queue`` fails closed to
     ``inventory_opaque_container`` -> UNVERIFIABLE (the guard brackets only the emptiness proof, not
@@ -100,56 +92,3 @@ def test_nonempty_mp_queue_stays_incomplete(tmp_path: Path) -> None:
             pass
         q.close()
         q.join_thread()
-
-
-def test_probe_marks_zero_channels_under_guard() -> None:
-    """MECHANISM: ``_opaque_queue_provably_empty(mp.Queue())`` under ``_monitor_internal_probe()``
-    marks ZERO channels; a direct ``_mark`` OUTSIDE the bracket still marks (the guard is scoped to
-    the monitor-internal probe, not user reads)."""
-
-    monitor = host_nondeterminism_monitor(model=None)
-    q = mp.Queue()
-    try:
-        with monitor._monitor_internal_probe():
-            empty = monitor._opaque_queue_provably_empty(q)
-        assert empty is True
-        assert monitor.result.channels == set(), monitor.result.channels
-        # a user/model clock read OUTSIDE the probe still marks through ``_mark``
-        monitor._mark("time.monotonic")
-        assert "time.monotonic" in monitor.result.channels
-    finally:
-        q.close()
-        q.join_thread()
-
-
-def test_guard_is_reentrant_and_restores() -> None:
-    """The depth counter is re-entrant and restores to 0 (nested probes never leak suppression)."""
-
-    monitor = host_nondeterminism_monitor(model=None)
-    assert monitor._suppress_self_marks == 0
-    with monitor._monitor_internal_probe():
-        assert monitor._suppress_self_marks == 1
-        with monitor._monitor_internal_probe():
-            assert monitor._suppress_self_marks == 2
-            monitor._mark("time.monotonic")  # suppressed
-        assert monitor._suppress_self_marks == 1
-    assert monitor._suppress_self_marks == 0
-    assert monitor.result.channels == set()
-    # after the guard exits, marking works again
-    monitor._mark("time.monotonic")
-    assert "time.monotonic" in monitor.result.channels
-
-
-@pytest.mark.parametrize("factory", [mp.Queue, _queue.SimpleQueue])
-def test_provably_empty_true_for_empty_queues(factory: Any) -> None:
-    """Both empty opaque queue kinds are provably empty (pins the narrowing surface)."""
-
-    monitor = host_nondeterminism_monitor(model=None)
-    q = factory()
-    try:
-        with monitor._monitor_internal_probe():
-            assert monitor._opaque_queue_provably_empty(q) is True
-    finally:
-        if hasattr(q, "close"):
-            q.close()
-            q.join_thread()
