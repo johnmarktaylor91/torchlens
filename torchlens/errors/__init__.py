@@ -5,10 +5,6 @@ from __future__ import annotations
 import importlib
 from typing import Any
 
-from torchlens._utils._private_submodules import (
-    refuse_private_submodule as _refuse_private_submodule,
-)
-
 from ._base import (
     CaptureError,
     CompatibilityError,
@@ -418,7 +414,11 @@ def __getattr__(name: str) -> Any:
         If ``name`` is not part of the public error surface.
     """
 
-    _refuse_private_submodule(__name__, name)
+    # Resolved at call time like the lazy exception paths: torchlens._errors imports this
+    # package while it initializes, so a module-level import of the refusal helper is a cycle.
+    importlib.import_module("torchlens._utils._private_submodules").refuse_private_submodule(
+        __name__, name
+    )
 
     if name in _LAZY_EXCEPTION_PATHS:
         class_module, attr_name = _LAZY_EXCEPTION_PATHS[name]
