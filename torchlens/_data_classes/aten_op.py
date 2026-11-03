@@ -8,6 +8,8 @@ from typing import Any, ClassVar
 from .._constants import PRIMITIVE_OP_FIELD_ORDER
 from .._io import TLSPEC_VERSION, FieldPolicy, read_tlspec_version
 from .._trace_core.record_rows import install_record_facade as _install_record_facade
+from .._utils._display_bounded import short_dataclass_repr
+from ._aten_display import aten_repr, aten_str
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 
 
@@ -22,6 +24,8 @@ class OpRef:
     >>> type(ref).__name__, ref.op_label
     ('OpRef', 'relu_1_2')
     """
+
+    __repr__ = short_dataclass_repr
 
     op_row_index: int
     op_label: str
@@ -61,6 +65,8 @@ class _ModePausedInteriorGap:
 class _PrimitiveOpProfile:
     """Trace section carrying primitive rows and disclosure gaps."""
 
+    __repr__ = short_dataclass_repr
+
     primitive_ops: list[AtenOp] = field(default_factory=list)
     mode_paused_interior: list[_ModePausedInteriorGap] = field(default_factory=list)
     aten_event_watermark: int = 0
@@ -89,6 +95,9 @@ class AtenOp:
     >>> type(row).__name__, row.capture_phase
     ('AtenOp', 'forward')
     """
+
+    __repr__ = aten_repr
+    __str__ = aten_str
 
     label: str
     sequence: int
@@ -147,7 +156,11 @@ class AtenOp:
 
         from .._trace_core.record_rows import record_state_items
 
-        return record_state_items(self)
+        return (
+            (name, value)
+            for name, value in record_state_items(self)
+            if name != "_display_owner_keys"
+        )
 
     def __tl_state_restore__(self, mapping: dict[str, Any]) -> None:
         """Restore primitive state through the row-cell descriptors.

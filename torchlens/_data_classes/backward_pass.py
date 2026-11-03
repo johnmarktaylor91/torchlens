@@ -15,6 +15,7 @@ from .._io import (
     read_tlspec_version,
 )
 from .._quantities import Duration
+from .._utils._display_records import backward_repr, backward_str
 from ._accessor_base import Accessor
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 
@@ -85,6 +86,9 @@ class BackwardPass:
     >>> type(backward_pass).__name__, backward_pass.pass_number
     ('BackwardPass', 1)
     """
+
+    __repr__ = backward_repr
+    __str__ = backward_str
 
     _PORTABLE_STATE_POLICY: ClassVar[dict[str, FieldPolicy]] = {
         "pass_number": FieldPolicy.KEEP,

@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from typing import Any, Protocol, TypeVar, cast, runtime_checkable
 
 from torchlens._ir.capture_events import CaptureEvents
+from torchlens._utils._display_bounded import RecordTuple
 
 ActivationT = TypeVar("ActivationT")
 
@@ -87,10 +88,10 @@ class TraceLike:
 
         events = self.event_stream
         if events is None:
-            return ()
+            return RecordTuple((), "OpEvents", "events")
         if hasattr(events, "amended_op_records"):
-            return tuple(events.amended_op_records())
-        return tuple(events.op_events)
+            return RecordTuple(events.amended_op_records(), "OpEvents", "events")
+        return RecordTuple(events.op_events, "OpEvents", "events")
 
     @property
     def backward_events(self) -> tuple[Any, ...]:
@@ -98,8 +99,8 @@ class TraceLike:
 
         events = self.event_stream
         if events is None:
-            return ()
-        return tuple(getattr(events, "backward_events", ()))
+            return RecordTuple((), "BackwardEvents", "events")
+        return RecordTuple(getattr(events, "backward_events", ()), "BackwardEvents", "events")
 
     @property
     def sibling_events(self) -> tuple[Any, ...]:
@@ -107,12 +108,16 @@ class TraceLike:
 
         events = self.event_stream
         if events is None:
-            return ()
-        return (
-            *events.module_prep_events,
-            *events.module_enter_events,
-            *events.module_exit_events,
-            *events.output_version_events,
+            return RecordTuple((), "SiblingEvents", "events")
+        return RecordTuple(
+            (
+                *events.module_prep_events,
+                *events.module_enter_events,
+                *events.module_exit_events,
+                *events.output_version_events,
+            ),
+            "SiblingEvents",
+            "events",
         )
 
     @property

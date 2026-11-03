@@ -1,5 +1,4 @@
 """Opt-in shadow detection for stale detached torch callable invocations.
-
 The detector is diagnostic only in this rollout. It reports exact callable/code
 identity escapes and marks the Trace unverified; it does not enforce capture
 completeness without the separate dispatcher witness.
@@ -24,6 +23,7 @@ import torch
 
 from ... import _state
 from ..._errors import CaptureGapWarning
+from ..._utils._display_bounded import short_dataclass_repr
 from ._escape_detection_fields import _RECORDING_DIAGNOSTIC_FIELDS
 
 EscapeDetectorMode = Literal["off", "shadow"]
@@ -219,6 +219,8 @@ class ExpectedOriginalToken:
 class _GuardState:
     """Per-forward detector state installed only in the capture owner thread."""
 
+    __repr__ = short_dataclass_repr
+
     trace: Any
     tables: DetectorTables
     owner_thread_id: int
@@ -372,7 +374,6 @@ def expected_original_call(
     census_scope: Literal["owned", "expected_opaque"] = "owned",
 ) -> AbstractContextManager[ExpectedOriginalToken]:
     """Authorize exactly one immediate wrapper-to-original profiler event.
-
     Parameters
     ----------
     original:
@@ -388,7 +389,6 @@ def expected_original_call(
     census_scope:
         Whether dispatcher work belongs to a prospective captured op or an
         exact documented opaque boundary.
-
     Returns
     -------
     AbstractContextManager[ExpectedOriginalToken]

@@ -116,7 +116,6 @@ from . import (
 from ._accessor_base import Accessor
 from ._nonfinite import nonfinite_coverage, nonfinite_op_labels
 from ._preprocessing_provenance import status_of
-from ._repr import trace_honesty_suffix
 from ._trace_accessors import (
     OrphanAccessor,
     TraceGradFnCallAccessor,
@@ -1645,23 +1644,14 @@ class Trace(TraceOutputMixin, TraceLike):
             return _str_during_pass(self)
 
     def __repr__(self) -> str:
-        """Short identity-card representation for REPL display.
+        """One-line identity and stored health; never triggers an analysis."""
 
-        F10 (lovely matrix): the identity card gains the settled capture
-        outcome and the whole-trace health verdict -- ``no NaN/Inf (exact)``
-        is a per-trace PROOF served by the C02 three-state verdict, printed
-        only when the evidence supports it; NOT-CHECKED and FOUND states
-        print honestly instead. Never raises; the suffix degrades silently
-        when the facts are unavailable (mid-capture, legacy artifacts).
-        """
-        from .._visualization._summary_internal import format_model_repr
-
-        return f"{format_model_repr(self)}{self._repr_honesty_suffix()}"
+        return _doors.report()._trace_summary._trace_repr(self)
 
     def _repr_honesty_suffix(self) -> str:
         """Outcome + health suffix tokens for the identity repr (F10)."""
 
-        return trace_honesty_suffix(self)
+        return _doors.report()._trace_summary._trace_honesty_suffix(self)
 
     def __treescope_repr__(self, path: Any, subtree_renderer: Any) -> Any:
         """Thin lazy treescope hook (memo 3.2): the dataclass-dump guard.

@@ -7,6 +7,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
+from .._utils._display_bounded import short_dataclass_repr
 from .events import ModuleFrame
 
 
@@ -33,6 +34,8 @@ class LiveIndex:
     and small sibling-event counters. It intentionally does not expose
     mutable ``Op`` field dictionaries.
     """
+
+    __repr__ = short_dataclass_repr
 
     by_raw_label: dict[str, Any] = field(default_factory=dict)
     labels: list[str] = field(default_factory=list)

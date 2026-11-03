@@ -13,6 +13,8 @@ from dataclasses import dataclass, field
 from types import TracebackType
 from typing import TYPE_CHECKING, Any
 
+from .._utils._display_bounded import short_dataclass_repr
+
 if TYPE_CHECKING:
     from .._capture_state_helpers import CompiledCapturePrep
     from ..backends.registry import CaptureBackend
@@ -26,6 +28,8 @@ class _RunState:
     Private to this module: the hand-off records in ``stages.py`` cross stage
     boundaries; this one never leaves ``run_and_log_inputs_through_model``.
     """
+
+    __repr__ = short_dataclass_repr
 
     backend: CaptureBackend
     model: object

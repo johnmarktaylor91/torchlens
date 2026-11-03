@@ -10,6 +10,7 @@ from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Any
 
+from .._utils._display_bounded import short_dataclass_repr
 from ..errors._base import TorchLensWarning
 from .events import (
     BackwardCoverageGap,
@@ -102,7 +103,6 @@ _LANE_APPENDERS: dict[str, str] = {
 
 class SealedJournalWriteError(RuntimeError):
     """Base for every refused write to a sealed source journal.
-
     ``CaptureSession.seal()`` freezes a journal into its ``CapturedRunCore``:
     the op spine is snapshotted (folded through the amendment reducer) and the
     forward sibling lanes are snapshotted onto the pre-seal projection clone.
@@ -114,7 +114,6 @@ class SealedJournalWriteError(RuntimeError):
 
 class SealedJournalAmendmentError(SealedJournalWriteError):
     """A typed amendment was appended to a sealed source journal.
-
     After ``CaptureSession.seal()`` folds a journal into its
     ``CapturedRunCore``, the sealed source refuses further amendment appends
     fail-closed (DoR 4.5.5): post-seal knowledge must route through a working
@@ -125,7 +124,6 @@ class SealedJournalAmendmentError(SealedJournalWriteError):
 
 class SealedJournalAppendError(SealedJournalWriteError):
     """A forward-lane event was appended to a sealed source journal.
-
     Finding B1-15: sealed-journal enforcement was HALF-HEIGHT -- only the
     amendment lane checked ``amendments_sealed``, while the op lane's
     :meth:`CaptureEvents.append` and every forward sibling appender wrote
@@ -250,6 +248,8 @@ def _clone_op_event_for_replay(event: Any) -> Any:
 @dataclass(slots=False)
 class CaptureEvents:
     """Mutable event buffer allocated once per capture."""
+
+    __repr__ = short_dataclass_repr
 
     op_events: list[JournalOp] = field(default_factory=list)
     module_prep_events: list[ModulePrepEvent] = field(default_factory=list)

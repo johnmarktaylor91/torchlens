@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._utils._display_records import group_repr
+
 if TYPE_CHECKING:
     from .trace import Trace
 
@@ -22,11 +24,7 @@ class _TraceGroup:
 
         self._trace = trace
 
-    def __repr__(self) -> str:
-        """Name the group and its Trace."""
-
-        label = getattr(self._trace, "name", None)
-        return f"<{type(self).__name__} of Trace {label!r}>"
+    __repr__ = group_repr
 
     def __dir__(self) -> list[str]:
         """List the group's public members."""

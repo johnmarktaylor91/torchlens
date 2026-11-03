@@ -32,6 +32,7 @@ from typing import Any, NoReturn
 import torch
 
 from .._errors import InvalidArgumentError
+from .._utils._display_bounded import RecordTuple
 from .._utils._torch_symbols import torch_attr
 
 __tl_layer__ = "L5"
@@ -131,7 +132,7 @@ def _encode_sequence(value: Any, depth: int) -> Any:
         return _UNENCODABLE
     if type(value) is list:
         return items
-    if type(value) is tuple:
+    if type(value) in (tuple, RecordTuple):
         return {"$tuple": items}
     ordered = sorted(items, key=lambda item: json.dumps(item, sort_keys=True))
     return {"$set" if type(value) is set else "$frozenset": ordered}
@@ -175,6 +176,7 @@ _ENCODERS: Mapping[type, Any] = MappingProxyType(
         torch.device: lambda value, depth: {"$device": str(value)},
         list: _encode_sequence,
         tuple: _encode_sequence,
+        RecordTuple: _encode_sequence,
         set: _encode_sequence,
         frozenset: _encode_sequence,
         dict: _encode_dict,

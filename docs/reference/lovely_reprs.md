@@ -8,8 +8,9 @@ DOCUMENTED-UNSTABLE pending the naming session):
 - `str(x)` is a bounded card (at most 8 lines) whose **first line is the
   repr**; every card names its exits on a `More:` line.
 - Containers point, records show: collection reprs are one-line
-  composition cards (`LayerAccessor(553 layers (539 ops, 14 buffers) |
-  .head() .search() .to_pandas())`), never member dumps.
+  composition cards (`LayerAccessor: 553 layers (539 ops, 14 buffers)`),
+  with at most five members and `.head()`, `.search()` and `.to_pandas()`
+  exits in `str()`.
 
 ## The core line
 
@@ -67,12 +68,13 @@ _Poisoned/truediv_1_4 (pass 1/1) [op 4/5 __truediv__] -> f32[1,8]@cpu n=8 no_fin
 First non-finite saved out is in layer truediv_1_4 (op __truediv__, ...), shape=(1, 8),
 dtype=torch.float32, parents=relu_1_2, sub_1_3, source=<file>:14.
 >>> log
-Trace(name='_poisoned_1', model_class_qualname='_Poisoned', layers=7, state=PRISTINE) [NaN/Inf FOUND (.nonfinite_ops)]
+Trace _poisoned_1: _Poisoned, 7 layers, NaN/Inf FOUND (.nonfinite_ops)
 ```
 
 The flag says there was a crime; TorchLens hands you the crime scene --
-in the same one-line language as the health report. On a clean, fully
-checked capture the trace repr instead carries the per-trace PROOF line
+in the same one-line language as the health report. Trace rendering reads cached health evidence and never scans tensors. Until
+health has been checked it says `NaN/Inf not checked`. A clean, fully
+checked capture carries the per-trace proof
 `no NaN/Inf (exact)`.
 
 ## The graph-scale table
@@ -112,3 +114,14 @@ The philosophy this surface mines and extends:
   collapsed-first rendering.
 - **flax `tabulate`** (totals conservation), **Keras 3** (footer
   authority), **pysnooper** `normalize=True` (diffable summaries).
+
+## Trace and owned record collections
+
+`print(trace)` shows at most twelve rows below its identity line. The card
+contains stored model, capture, graph and save metadata; `trace.summary()`
+provides the module hierarchy. Default pristine state is omitted.
+
+ATen and event tuples keep tuple iteration, equality, hashing and slicing.
+Their bounded displays show counts and at most five records, for example
+`AtenOps: 500 calls`. Portable saves encode these sequences as ordinary
+tuples, so their display type does not change the artifact format.

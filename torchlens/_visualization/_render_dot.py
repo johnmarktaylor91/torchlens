@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 
 from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavailableError
+from .._utils._display_bounded import short_dataclass_repr
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
 from . import _render_utils
@@ -70,7 +71,6 @@ from .source_graph import _resolve_focus_module, build_source_graph
 
 def _view_rendered_file(filepath: str) -> None:
     """Open a rendered visualization file when a local viewer is available.
-
     Parameters
     ----------
     filepath:
@@ -93,6 +93,8 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class _ForwardRenderContext:
     """Resolved state shared by forward-IR construction and emission."""
+
+    __repr__ = short_dataclass_repr
 
     request: ResolvedRenderRequest
     target: RenderTarget
@@ -117,6 +119,8 @@ class _ForwardRenderContext:
 class _ForwardIRWork:
     """Mutable forward-IR assembly state passed into region finalization."""
 
+    __repr__ = short_dataclass_repr
+
     render_ir: "RenderIR"
     builder: _RenderIRDecisionBuilder
     module_clusters: dict[str, Any]
@@ -129,12 +133,10 @@ class _ForwardIRWork:
 
 def _strip_render_extension(vis_outpath: str) -> str:
     """Return output path without a Graphviz-rendered file extension.
-
     Parameters
     ----------
     vis_outpath:
         User-provided render output path.
-
     Returns
     -------
     str
@@ -148,7 +150,6 @@ def _strip_render_extension(vis_outpath: str) -> str:
 
 def _report_saved_graph(trace: "Trace", target: RenderTarget) -> None:
     """Report the written graph path: always for a bare draw, else only when verbose.
-
     Parameters
     ----------
     trace:
@@ -166,7 +167,6 @@ def _report_saved_graph(trace: "Trace", target: RenderTarget) -> None:
 
 def _validate_rendered_output(rendered_path: str, source_path: str, graph_kind: str) -> None:
     """Raise if Graphviz did not produce a non-empty rendered artifact.
-
     Parameters
     ----------
     rendered_path:
@@ -175,7 +175,6 @@ def _validate_rendered_output(rendered_path: str, source_path: str, graph_kind: 
         DOT source path that was passed to Graphviz.
     graph_kind:
         Human-readable graph type for the error message.
-
     Raises
     ------
     GraphvizRenderError
@@ -203,7 +202,6 @@ def _raise_graphviz_timeout(
     error: subprocess.TimeoutExpired,
 ) -> None:
     """Raise a typed Graphviz timeout error with mitigation guidance.
-
     Parameters
     ----------
     graph_kind:
@@ -1222,6 +1220,8 @@ def _publish_forward_render(
 @dataclass(frozen=True)
 class _ForwardLayout:
     """Format, bounds and post-processing of one forward layout run."""
+
+    __repr__ = short_dataclass_repr
 
     fileformat: str
     timeout: int

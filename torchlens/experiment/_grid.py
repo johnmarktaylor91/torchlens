@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils._display_bounded import short_dataclass_repr
 from ..errors.episode import BundleExperimentError
 from ._effects import EffectsView
 from ._engine import (
@@ -391,6 +392,8 @@ def _combine_sites(cell_id: str, parts: list[tuple[str, Any]]) -> Any:
 @dataclass(frozen=True)
 class _Plan:
     """The preflighted grid: resolved cells, refused cells, and the recorded shape."""
+
+    __repr__ = short_dataclass_repr
 
     names: dict[str, tuple[str, ...]]
     edit_axis: str | None
