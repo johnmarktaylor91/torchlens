@@ -80,15 +80,14 @@ def test_gated_entries_consult_the_structure_only_chokepoint() -> None:
     gate_calls = re.findall(
         r'require_structure_only_capability\(trace, "([a-z_]+)"\)', validation_source
     )
-    # One sibling call per capture-outcome gate site: save_new_outs, push,
-    # push_from, run (entry pre-gate + loaded-sparse + halted-analysis +
+    # One sibling call per capture-outcome gate site: save_new_outs, the replay
+    # do() door, run (entry pre-gate + loaded-sparse + halted-analysis +
     # unified-live + legacy-live), log_backward, recording_backward,
     # validate_forward_pass, check_metadata_invariants.
     assert sorted(gate_calls) == sorted(
         [
             "live_replay",  # save_new_outs
-            "live_replay",  # push
-            "live_replay",  # push_from
+            "live_replay",  # do(): replay door (_require_live_replay)
             "live_replay",  # run(): entry pre-gate
             "live_replay",  # run(): loaded sparse provider (values still required)
             "live_replay",  # run(): halted analysis-load pre-gate
