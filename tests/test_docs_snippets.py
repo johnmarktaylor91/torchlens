@@ -478,6 +478,11 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
         "executed end-to-end by tests/test_unhide_surfaces.py::"
         "test_stats_doc_python_fences_execute (needs the ambient demo model)"
     ),
+    "reference/selection_completeness.md": (
+        "executed end-to-end by tests/test_selection_completeness_examples.py::"
+        "test_page_examples_run_as_written (Section 5's four fences are one script run in "
+        "order; each later fence reads the first fence's trace and helpers)"
+    ),
     "backends.md": "preview-backend snippets need tf/jax/mlx/tinygrad/paddle runtimes",
     "backends/tf.md": (
         "tutorial fence executed by tests/backends/test_tf_docs_page.py under the "
