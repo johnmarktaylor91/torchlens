@@ -348,7 +348,7 @@ class Accessor(Generic[T]):
     def __str__(self) -> str:
         """Render only the first five members, then an exact remainder."""
 
-        return collection_str(repr(self), self._list)
+        return collection_str(repr(self), self)
 
     def head(self, n: int = 5) -> list[T]:
         """Return the first ``n`` records in order (a collection exit)."""

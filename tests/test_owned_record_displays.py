@@ -150,3 +150,17 @@ def test_explicit_health_check_is_reused_without_a_scan(trace, monkeypatch):
     monkeypatch.setattr(_health, "_derive", lambda *args: pytest.fail("display derived health"))
     assert "no NaN/Inf (exact)" in repr(trace)
     assert trace.annotations == before
+
+
+def test_trace_ops_display_uses_the_counted_view(trace):
+    from torchlens._utils._display_collections import member_repr
+
+    shown = list(trace.ops)[:5]
+    lines = str(trace.ops).splitlines()
+    assert lines[1 : len(shown) + 1] == ["  " + member_repr(op) for op in shown]
+    assert not any("input_1" in line for line in lines[1:])
+    remainder = len(trace.ops) - len(shown)
+    if remainder:
+        assert f"  ... and {remainder} more" in lines
+    else:
+        assert not any("... and" in line for line in lines)

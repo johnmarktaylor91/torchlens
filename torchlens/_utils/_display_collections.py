@@ -42,7 +42,10 @@ def member_repr(value: Any) -> str:
 def collection_str(header: str, items: Any) -> str:
     """Five members, exact remainder and explicit navigation exits."""
 
-    lines = [header, *bounded_lines(items, member_repr)]
+    shown = list(islice(items, LIST_LIMIT))
+    lines = [header, *bounded_lines(shown, member_repr)]
+    if len(items) > len(shown):
+        lines.append(f"  ... and {len(items) - len(shown)} more")
     lines.append(more_row((".head()", ".search()", ".to_pandas()")))
     return "\n".join(lines)
 
