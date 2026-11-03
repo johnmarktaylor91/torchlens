@@ -200,19 +200,10 @@ than the number of generated tokens, and the time per token grows as the run get
 2026-11-03 on the same 32-core Intel Xeon worker, four torch threads, one process per token count, on a development
 build of TorchLens from that day, with a 70-million-parameter GPT-NeoX-style model
 (`EleutherAI/pythia-70m`, float32), greedy decoding from a 7-token prompt, and the output of
-every block's MLP and of the final layer norm saved at every step:
-
-```python
-save = tl.module(sites[0])
-for site in sites[1:]:
-    save = save | tl.module(site)
-generation = tl.record(
-    model,
-    ids,
-    save=save,
-    generate_kwargs={"max_new_tokens": n, "min_new_tokens": n, "do_sample": False, "use_cache": True},
-)
-```
+every block's MLP and of the final layer norm saved at every step. Each row is one call of
+`tl.record(model, ids, save=sites, generate_kwargs={"max_new_tokens": n, "min_new_tokens": n,
+"do_sample": False, "use_cache": True})`, where `sites` joins `tl.module(...)` for each saved
+module with `|`.
 
 One process per row, no repeats. Peak process memory is the operating system's maximum resident
 set size; saved activations are the summed saved bytes of every step's record. Raw data:
@@ -249,7 +240,7 @@ OMP_NUM_THREADS=1 python -m benchmarks.capture.mi_workloads.matrix --model gpt2 
     --tools hooks,tl_bind --workloads steer_sweep --out mi-gpt2.jsonl --resdir mi-res
 # second run: ResNet-18 (add --device cuda for the GPU rows) and GPT-2 small full forwards
 OMP_NUM_THREADS=1 python benchmarks/capture/driver.py --smoke --warmups 3 --samples 20 \
-    --budget-s 20 --threads 1 --processes 3 --no-sweep --subjects resnet18 --out capture-r18.json
+    --budget-s 20 --threads 1 --processes 3 --no-sweep --subjects resnet18 --out capture-resnet18.json
 OMP_NUM_THREADS=1 python -m benchmarks.capture.mi_workloads.matrix --model gpt2 --timeout 1500 \
     --tools hooks,nnsight,tl_record,tl_trace --workloads cache,steer_sweep,patch_sweep \
     --out mi-gpt2.jsonl --resdir mi-res -- --slow-rep-s 0
