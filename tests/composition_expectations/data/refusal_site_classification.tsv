@@ -755,7 +755,7 @@ torchlens.intervention.stochastic:permute_batch.factory._hook:InvalidArgumentErr
 torchlens.intervention.stochastic:resample_rows_from:InvalidArgumentError::1	CONTRACTED	population_source_invalid	F02 resample_rows_from takes the population noun
 torchlens.intervention.stochastic:resample_rows_from:InvalidArgumentError::2	CONTRACTED	population_source_invalid	F02 row donors must be tensor members
 torchlens.intervention.stochastic:resample_rows_from.factory._hook:InvalidArgumentError::1	CONTRACTED	population_datum_count_mismatch	F02 per-row datum count vs batch extent
-torchlens.intervention.helpers:_broadcast_mean:InvalidArgumentError::1	CONTRACTED	sampling_geometry_mismatch	one mean door (R2 D.11): a reduced source or population mean does not broadcast to the site
+torchlens.intervention._helper_internals:_broadcast_mean:InvalidArgumentError::1	CONTRACTED	sampling_geometry_mismatch	one mean door (R2 D.11): a reduced source or population mean does not broadcast to the site
 torchlens.intervention.stochastic:set_direction_mean:InvalidArgumentError::1	CONTRACTED	direction_vector_invalid	F02 direction must be 1-D
 torchlens.intervention.stochastic:set_direction_mean:InvalidArgumentError::2	CONTRACTED	direction_vector_invalid	F02 direction must be finite nonzero-norm
 torchlens.intervention.stochastic:set_direction_mean:InvalidArgumentError::3	CONTRACTED	sampling_geometry_mismatch	F02 member does not carry the direction extent on feature_axis
@@ -1669,7 +1669,7 @@ torchlens.intervention.spec:refuse_invalid_loss:InvalidArgumentError::2	CONTRACT
 torchlens._data_classes._trace_grad_sites:select_signal_plan_engine:InvalidArgumentError::1	CONTRACTED	intervention_engine_invalid	grad-site P3: unknown engine on a gradient-site do
 torchlens._data_classes._trace_grad_sites:select_signal_plan_engine:InvalidArgumentError::2	CONTRACTED	replay_gradient_edit_unsupported	grad-site P3: replay or a model-less auto engine with a gradient site refuses before any mutation
 torchlens.intervention._trace_edits:set_site:InvalidArgumentError::2	CONTRACTED	intervention_direction_invalid	grad-site P3: set(direction='backward'|'both') no longer edits gradients; the remedy names tl.grad(site)
-torchlens.intervention.replay:_refuse_armed_gradient_rules:InvalidArgumentError::1	CONTRACTED	replay_gradient_edit_unsupported	grad-site P3: push on a recipe holding tl.grad rules refuses (replay never runs a backward)
+torchlens.intervention.replay:_refuse_armed_gradient_rules:InvalidArgumentError::1	CONTRACTED	replay_gradient_edit_unsupported	grad-site P3: a replay do on a recipe holding tl.grad rules refuses (replay never runs a backward)
 torchlens.stats._aggregate:aggregate:InvalidArgumentError::1	CONTRACTED	aggregate_loss_fn_required	grad-site P3: a tl.grad metric key needs loss_fn= (replaces the untyped TypeError)
 torchlens._selection.selectors:grad:SelectorCompositionError:_grad_refusal:1	CONTRACTED	grad_selector_nested	grad-site integration: tl.grad of a GradSelector refuses at construction (SPEC 1.3)
 torchlens._selection.selectors:_check_grad_inner_tree:SelectorCompositionError:_grad_refusal:1	CONTRACTED	grad_selector_nested	grad-site integration: tl.grad whose inner tree holds a gradient address (SPEC 1.3)
