@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1369 modules, 631802 lines, 0 modules without a docstring.
+84 packages, 1369 modules, 631858 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 12 | 4092 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 35 | 15823 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6316 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 66 | 42800 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 66 | 42799 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1146 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 753 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 7 | 2268 |
@@ -88,7 +88,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1389 |
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 17 | 5784 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3712 |
-| `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 33 | 13561 |
+| `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 33 | 13618 |
 | `torchlens.stats` | Streaming statistics for out aggregation (real subpackage; item 18). | 17 | 6891 |
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 4862 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 14 | 4571 |
@@ -832,7 +832,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (66 modules, 42800 lines)
+Computational graph visualization via Graphviz. (66 modules, 42799 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -865,7 +865,7 @@ Computational graph visualization via Graphviz. (66 modules, 42800 lines)
 | `_render_dot` | DOT orchestration and SVG composition helpers for Graphviz rendering. | 1938 |
 | `_render_edges` | Edge and endpoint helper functions for Graphviz rendering. | 2036 |
 | `_render_entrypoints` | Public backward and combined-graph rendering entrypoints. | 591 |
-| `_render_flow` | Focus, skip, container, and sibling setup helpers for Graphviz rendering. | 2065 |
+| `_render_flow` | Focus, skip, container, and sibling setup helpers for Graphviz rendering. | 2064 |
 | `_render_leaf` | Leaf helper functions for Graphviz rendering. | 2366 |
 | `_render_module_scope` | Module-scope placement for rendered edges and rolled endpoints. | 187 |
 | `_render_nodes` | Node construction and raw value helper functions for Graphviz rendering. | 2098 |
@@ -1844,7 +1844,7 @@ Import-clean representation geometry helpers (real subpackage; item 18). (8 modu
 
 ### `torchlens.report`
 
-Reports that describe a completed trace: summary, cost, profile, FLOPs and health. (33 modules, 13561 lines)
+Reports that describe a completed trace: summary, cost, profile, FLOPs and health. (33 modules, 13618 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1876,7 +1876,7 @@ Reports that describe a completed trace: summary, cost, profile, FLOPs and healt
 | `_summary_html` | Dependency-free summary HTML renderer (summary memo item 15). | 93 |
 | `_summary_hub` | Hub-name input form for ''tl.summary'' (spelling DOCUMENTED-UNSTABLE). | 78 |
 | `_summary_ladder` | The summary auto ladder (summary memo item 11, decisions 3.1/3.4). | 1293 |
-| `_summary_render` | The rebuilt summary renderer (summary /3.6/3.13). | 514 |
+| `_summary_render` | The rebuilt summary renderer (summary /3.6/3.13). | 571 |
 | `_summary_report` | The detached immutable summary report layer (summary memo item 10). | 530 |
 | `_summary_result` | Rebuilt summary result assembly (summary memo item 12, 3.7/3.8). | 367 |
 | `_trace_facts` | Trace fact functions reached from the records through ''_data_classes._doors.report''. | 206 |

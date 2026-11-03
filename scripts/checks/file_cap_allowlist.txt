@@ -598,7 +598,7 @@ torchlens/_visualization/_render_edges.py::_add_intervention_hook_nodes	67
 torchlens/_visualization/_render_edges.py::_label_rolled_call_indexs	77
 torchlens/_visualization/_render_entrypoints.py::render_backward_graph	266
 torchlens/_visualization/_render_entrypoints.py::render_combined_graph	254
-torchlens/_visualization/_render_flow.py	2065
+torchlens/_visualization/_render_flow.py	2064
 torchlens/_visualization/_render_flow.py::_base_rendered_node_emission	86
 torchlens/_visualization/_render_flow.py::_build_module_focus_entries	107
 torchlens/_visualization/_render_flow.py::_build_skip_filtered_edge_map	75
