@@ -420,6 +420,15 @@ def _replayed_outputs(
     return outputs_value
 
 
+def _boundary_source_trace(layer: Op) -> Trace:
+    """Return the trace a boundary op (``autogradgrad`` or ``autogradbackward``) replays in."""
+
+    trace = layer._source_trace
+    if trace is None:
+        raise AutogradGradReplayError(f"{layer.func_name} boundary op has no source trace")
+    return trace
+
+
 def _replay_boundary(
     layer: Op,
     input_args: dict[str, Any],
@@ -427,9 +436,7 @@ def _replay_boundary(
     outer: _ParamLeaves | None,
 ) -> tuple[Any, ...]:
     """Replay one autograd.grad boundary op; ``outer`` is an enclosing replay's leaves."""
-    trace = layer._source_trace
-    if trace is None:
-        raise AutogradGradReplayError("autograd.grad boundary op has no source trace")
+    trace = _boundary_source_trace(layer)
     args = list(input_args["args"])
     bound = grad_signature(original_autograd_grad()).bind(*args, **dict(input_args["kwargs"]))
     inputs_value, op_slots, input_values, param_leaves = _bind_inputs(
@@ -595,9 +602,7 @@ def _replay_backward_boundary(
         The re-derived leaf gradient, accumulated onto the previous grad when the pass did.
     """
 
-    trace = layer._source_trace
-    if trace is None:
-        raise AutogradGradReplayError("autograd.backward boundary op has no source trace")
+    trace = _boundary_source_trace(layer)
     args = list(input_args["args"])
     bound = recorder_signature().bind(*args, **dict(input_args["kwargs"]))
     inputs_value, op_slots, input_values, param_leaves = _bind_inputs(
@@ -615,7 +620,7 @@ def _replay_backward_boundary(
         )
         for path, label in op_slots.items():
             inputs_value = _write_path(inputs_value, path, replay.value(label))
-        grad = _replayed_leaf_grad(layer, roots, inputs_value, bound.arguments.get("grad_tensors"))
+        grad = _replayed_leaf_grad(roots, inputs_value, bound.arguments.get("grad_tensors"))
         if outer is None:
             grad = grad.detach()
         accumulate_into = bound.arguments.get("accumulate_into")
@@ -624,14 +629,11 @@ def _replay_backward_boundary(
     return grad
 
 
-def _replayed_leaf_grad(layer: Op, roots: Any, leaf: Any, grad_outputs: Any) -> torch.Tensor:
-    """Return the gradient of ``roots`` with respect to the replayed ``leaf``, or raise."""
+def _replayed_leaf_grad(roots: Any, leaf: Any, grad_outputs: Any) -> torch.Tensor:
+    """Return the gradient of ``roots`` with respect to the replayed ``leaf``.
 
-    grads = original_autograd_grad()(roots, leaf, grad_outputs=grad_outputs, allow_unused=True)
-    grad = grads[0] if grads else None
-    if grad is None:
-        raise AutogradGradReplayError(
-            f"autograd.backward boundary {layer.label!r}: its leaf is not reached from the "
-            "replayed roots"
-        )
-    return grad
+    A leaf the replayed roots do not reach raises torch's own unused-input error
+    (``allow_unused=False``), which fails the replay like any other replay error.
+    """
+
+    return original_autograd_grad()(roots, leaf, grad_outputs=grad_outputs)[0]
