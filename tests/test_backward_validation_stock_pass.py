@@ -100,7 +100,6 @@ def _sum(output: object) -> torch.Tensor:
     raise TypeError(f"no tensor leaf in {type(output).__name__}")
 
 
-@pytest.mark.smoke
 def test_dict_subclass_with_hostile_getattr_validates() -> None:
     x = torch.randn(4, 3)
     assert _tensor_leaves(_Pack(a=x)) == [x]
@@ -122,7 +121,6 @@ def test_tensor_grad_hook_tolerates_an_undefined_gradient() -> None:
     assert torch.equal(collector.stock_module_output_grads[key], grad)
 
 
-@pytest.mark.smoke
 def test_multi_output_child_with_an_unused_leaf_validates() -> None:
     torch.manual_seed(0)
     model = _UsesFirstHalf().eval()
@@ -136,7 +134,6 @@ def test_carried_graph_attributes_lists_graph_bearing_attributes() -> None:
     assert carried_graph_attributes(_PackModel()) == []
 
 
-@pytest.mark.smoke
 def test_carried_graph_refuses_typed_after_an_earlier_backward() -> None:
     torch.manual_seed(0)
     model = _KeyTable().eval()

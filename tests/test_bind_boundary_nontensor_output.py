@@ -71,7 +71,6 @@ def _build(head: type[nn.Module]) -> tuple[nn.Module, torch.Tensor, torch.Tensor
     return model, x, plain
 
 
-@pytest.mark.smoke
 def test_bound_boundary_rule_leaves_an_unaddressable_output_whole() -> None:
     model, x, plain = _build(_DistHead)
     bound = tl.when(tl.module("head"), tl.scale(0.5)).bind(model, on_zero_fire="disclose")
@@ -105,7 +104,6 @@ def test_capture_door_records_zero_fire_on_the_same_output() -> None:
     assert info.value.fields["code"] == "trace_zero_fire"
 
 
-@pytest.mark.smoke
 def test_bound_boundary_rule_still_edits_supported_container_leaves() -> None:
     model, x, plain = _build(_TupleHead)
     spec = tl.when(tl.module("head"), tl.scale(0.5))
