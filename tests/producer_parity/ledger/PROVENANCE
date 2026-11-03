@@ -4283,3 +4283,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 7bdb36e023a3fb79ced366e895e99ae7dd174c29 (dirty)
 recorded: 2026-11-03T02:44:49.048794+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: layering-3 restack on layering-2 fdd1442f6 (train 577895b6c): facade re-points, hoists and moved modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: b27cc162a7da613cc034ade20f2fdc38d7b0345e (dirty)
+recorded: 2026-11-03T21:12:14.344476+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: layering-3 restack on layering-2 fdd1442f6 (train 577895b6c): facade re-points, hoists and moved modules
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: b27cc162a7da613cc034ade20f2fdc38d7b0345e (dirty)
+recorded: 2026-11-03T21:12:22.102692+00:00
