@@ -16,7 +16,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.intervention.errors import ReplayPreconditionError
-from torchlens.options import InterventionOptions, ReplayOptions
+from torchlens.options import InterventionOptions
 
 CODE = "replay_param_changed_since_capture"
 RUN_KEY = "replayed_with_changed_params"
@@ -90,31 +90,34 @@ def _replay_fork_do(trace: tl.Trace, **options: bool) -> tl.Trace:
     )
 
 
-def _push(trace: tl.Trace, **options: bool) -> tl.Trace:
+def _do_mapping(trace: tl.Trace, **options: bool) -> tl.Trace:
     fork = trace.fork()
-    return fork.push(replay=ReplayOptions(hooks={tl.label(_relu_label(trace)): _double}, **options))
+    return fork.do(
+        {tl.label(_relu_label(trace)): _double},
+        intervention=InterventionOptions(engine="replay", **options),
+    )
 
 
-def _push_from(trace: tl.Trace, **options: bool) -> tl.Trace:
+def _do_value(trace: tl.Trace, **options: bool) -> tl.Trace:
     fork = trace.fork()
-    origin = fork._layer_dict_all_keys[_relu_label(trace)]
-    origin._internal_set("out", origin.out * 2.0)
-    return fork.push_from(origin, replay=ReplayOptions(**options))
+    label = _relu_label(trace)
+    value = fork._layer_dict_all_keys[label].out * 2.0
+    return fork.do(tl.label(label), value, intervention=InterventionOptions(**options))
 
 
-def _differentiable_push(trace: tl.Trace, **options: bool) -> tl.Trace:
-    return trace.fork().push(
-        replay=ReplayOptions(
-            differentiable=True, hooks={tl.label(_relu_label(trace)): _double}, **options
-        )
+def _differentiable_do(trace: tl.Trace, **options: bool) -> tl.Trace:
+    return trace.fork().do(
+        tl.label(_relu_label(trace)),
+        _double,
+        intervention=InterventionOptions(differentiable=True, **options),
     )
 
 
 DOORS: dict[str, Callable[..., tl.Trace]] = {
     "do_replay": _replay_fork_do,
-    "push": _push,
-    "push_from": _push_from,
-    "differentiable_push": _differentiable_push,
+    "do_mapping": _do_mapping,
+    "do_value": _do_value,
+    "differentiable_do": _differentiable_do,
 }
 
 

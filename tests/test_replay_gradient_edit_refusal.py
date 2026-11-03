@@ -17,7 +17,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.intervention.errors import ReplayPreconditionError
 
 
 class _Net(nn.Module):
@@ -53,6 +52,11 @@ def _ready(model: nn.Module) -> Any:
     return tl.trace(model, _X, capture=tl.options.CaptureOptions(replayable=True))
 
 
+def _sticky_hook_count(trace: Any) -> int:
+    spec = getattr(trace, "_intervention_spec", None)
+    return len(spec.hook_specs) if spec is not None else 0
+
+
 @pytest.mark.parametrize("edit", sorted(_EDITS))
 def test_fork_do_gradient_site_refuses_and_the_remedy_runs(edit: str) -> None:
     model = _Net()
@@ -66,12 +70,11 @@ def test_fork_do_gradient_site_refuses_and_the_remedy_runs(edit: str) -> None:
     message = str(excinfo.value)
     assert "linear_1_1" in message
     assert "model= and x=" in message and "engine='set_only'" in message
-    # Nothing changed: values, recipe, and no sticky hook left to re-fire on the next push.
+    # Nothing changed: values, recipe, and no sticky hook left to re-fire on the next do.
     for label, value in before.items():
         assert torch.equal(fork[label].out, value)
     assert fork.recipe == recipe_before
-    with pytest.raises(ReplayPreconditionError):
-        fork.push()
+    assert _sticky_hook_count(fork) == 0
     # The remedy, spelled as the refusal names it: rerun with the edit armed, then backward.
     result = fork.do(
         tl.grad("linear_1_1"),
@@ -86,10 +89,11 @@ def test_fork_do_gradient_site_refuses_and_the_remedy_runs(edit: str) -> None:
         assert torch.count_nonzero(model.l1.weight.grad) == 0
 
 
-def test_push_replay_hooks_gradient_site_refuses() -> None:
-    """The other forward-only door, ``push(replay=ReplayOptions(hooks=...))``, refuses alike."""
+def test_do_mapping_gradient_site_refuses() -> None:
+    """The mapping shape, ``do({grad_site: edit})``, refuses alike and stages nothing."""
 
-    replay = tl.options.ReplayOptions(hooks={tl.grad(tl.label("linear_1_1")): tl.zero_ablate()})
+    trace = _ready(_Net())
     with pytest.raises(InvalidArgumentError) as excinfo:
-        _ready(_Net()).push(replay=replay)
+        trace.do({tl.grad(tl.label("linear_1_1")): tl.zero_ablate()})
     assert excinfo.value.fields["code"] == "replay_gradient_edit_unsupported"
+    assert _sticky_hook_count(trace) == 0

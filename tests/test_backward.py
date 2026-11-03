@@ -838,10 +838,10 @@ def test_replay_fork_does_not_inherit_gradient_state() -> None:
     def _identity_hook(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         return out
 
-    fork = trace.push(
-        replay=tl.options.ReplayOptions(
-            hooks={tl.func("relu"): _identity_hook}, differentiable=True
-        )
+    fork = trace.do(
+        tl.func("relu"),
+        _identity_hook,
+        intervention=tl.options.InterventionOptions(differentiable=True, confirm_mutation=True),
     )
 
     assert fork.autograd.has_grads is False
@@ -878,10 +878,10 @@ def test_replay_fork_cannot_resurrect_has_grad_from_derived_payload() -> None:
     def _identity_hook(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         return out
 
-    fork = trace.push(
-        replay=tl.options.ReplayOptions(
-            hooks={tl.func("relu"): _identity_hook}, differentiable=True
-        )
+    fork = trace.do(
+        tl.func("relu"),
+        _identity_hook,
+        intervention=tl.options.InterventionOptions(differentiable=True, confirm_mutation=True),
     )
 
     fork_param = fork._param_logs[address]

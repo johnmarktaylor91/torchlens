@@ -248,11 +248,9 @@ def test_differentiable_replay_multipass_frontier_keys_are_per_pass(recurrent):
 
     _model, _x, trace = recurrent
     fork = trace.fork()
-    replayed = fork.push(
-        replay=tl.options.ReplayOptions(
-            differentiable=True,
-            hooks={tl.label("relu_1_2:1"): lambda out, *, ctx: torch.zeros_like(out)},
-        ),
+    replayed = fork.do(
+        {tl.label("relu_1_2:1"): lambda out, *, ctx: torch.zeros_like(out)},
+        intervention=tl.options.InterventionOptions(differentiable=True),
     )
     assert replayed is not fork
     assert bool((replayed._layer_dict_all_keys["relu_1_2:1"].out == 0).all())
@@ -356,25 +354,25 @@ def test_single_pass_replay_disclosures_keep_bare_labels(single_pass):
     assert all(":" not in label for label in last_run["origins"])
 
 
-def test_push_from_bare_multipass_string_refuses(recurrent):
-    """push_from with a bare multi-pass string refuses typed (never guesses)."""
+def test_do_value_bare_multipass_string_refuses(recurrent):
+    """do(site, value) with a bare multi-pass string refuses typed (never guesses)."""
 
     _model, _x, trace = recurrent
     fork = trace.fork()
+    value = torch.zeros_like(fork._layer_dict_all_keys["relu_1_2:1"].out)
     with pytest.raises(AmbiguousSiteError) as excinfo:
-        fork.push_from("relu_1_2")
+        fork.do("relu_1_2", value)
     assert excinfo.value.fields["code"] == "multipass_bare_label_ambiguous"
 
 
-def test_push_from_pass_qualified_op_recomputes_downstream_passes(recurrent):
-    """push_from(op) on pass 1 propagates through passes 2/3 with hand math."""
+def test_do_value_pass_qualified_op_recomputes_downstream_passes(recurrent):
+    """do(op, value) on pass 1 propagates through passes 2/3 with hand math."""
 
     model, x, trace = recurrent
     expected = _hand_forward_with_zeroed_pass(model, x, zeroed_pass=1)
     fork = trace.fork()
     origin = fork._layer_dict_all_keys["relu_1_2:1"]
-    origin._internal_set("out", torch.zeros_like(origin.out))
-    fork.push_from(origin)
+    fork.do(origin, torch.zeros_like(origin.out))
 
     for pass_index in (1, 2, 3):
         got = fork._layer_dict_all_keys[f"relu_1_2:{pass_index}"].out
