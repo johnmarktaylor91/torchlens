@@ -38,9 +38,9 @@ from ..recording.types import (
     Recording,
     StorageIntent,
 )
-from ._record_stores import _GradFnContextMap, _StorageBackend
+from ._record_stores import _GradFnContextMap, _RetainedRecordKeys, _StorageBackend
 from ._sparse_refs import (
-    _sparse_function_ref,
+    _module_frames_from_record_context,
     _sparse_graph_facet,
     _sparse_output_ref,
     _sparse_params_facet,
@@ -48,6 +48,7 @@ from ._sparse_refs import (
     _torch_device_from_string,
     _torch_dtype_from_string,
 )
+from ._sparse_shell import _sparse_function_ref
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -169,6 +170,12 @@ class RecordingState:
     # step 7 groups a cooked recording by call site like ``tl.trace``.
     call_site_index: dict[Any, int] = field(default_factory=dict)
     call_site_classes: dict[str, str] = field(default_factory=dict)
+    # Live indexes the module-boundary retention step reads on EVERY module
+    # exit: the latest op context per raw label (last-wins, like a dict built
+    # over ``all_contexts``) and the retained records' keys. Rebuilding both
+    # per exit made that step quadratic in model size.
+    op_context_by_raw_label: dict[str, RecordContext] = field(default_factory=dict)
+    retained_keys: _RetainedRecordKeys = field(default_factory=_RetainedRecordKeys)
 
     def __post_init__(self) -> None:
         """Initialize derived storage policy."""
@@ -187,6 +194,8 @@ class RecordingState:
         """Append an event context to the bounded sliding window."""
 
         self.all_contexts.append(ctx)
+        if ctx.kind == "op" and ctx.raw_label is not None:
+            self.op_context_by_raw_label[ctx.raw_label] = ctx
         window_size = self.options.lookback or self.options.history_size
         if window_size == 0:
             return
@@ -348,7 +357,7 @@ def _read_field(source: Any, name: str, default: Any = None) -> Any:
 
     if source is None:
         return default
-    if isinstance(source, Mapping):
+    if type(source) is dict or isinstance(source, Mapping):
         return source.get(name, default)
     return getattr(source, name, default)
 
@@ -467,32 +476,6 @@ def _build_record_context(
         transform_kind=_read_field(data, "transform_kind"),
         output_of_module_calls=tuple(_read_field(data, "output_of_module_calls", ()) or ()),
     )
-
-
-def _module_frames_from_record_context(ctx: RecordContext) -> tuple[ModuleFrame, ...]:
-    """Convert fastlog module-stack frames to IR module frames."""
-
-    return tuple(
-        ModuleFrame(
-            address=_module_frame_address(frame),
-            address_normalized=None,
-            module_type=frame.module_type,
-            call_index=frame.pass_number,
-            fx_qualpath=None,
-            entry_argnames=(),
-        )
-        for frame in ctx.module_stack
-        # The root frame (address "") is the Recording's own bookkeeping; exhaustive
-        # capture never lists the root as an op's containing module, so neither does
-        # the cooked Trace (module, modules, the loop-grouping suffix).
-        if frame.address
-    )
-
-
-def _module_frame_address(frame: ModuleStackFrame) -> str:
-    """Return the Trace-facing address for a predicate module-stack frame."""
-
-    return frame.address or "self"
 
 
 def _record_context_from_event(event: OpEvent) -> RecordContext:

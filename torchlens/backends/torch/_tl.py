@@ -799,15 +799,15 @@ def session_meta_is_anchored(meta: TensorMeta | None) -> bool:
 def _pinned_storage(t: Any) -> Any | None:
     """Return ``t``'s ``UntypedStorage`` for pinning/validation, else ``None``.
 
-    Read under ``pause_logging`` because ``untyped_storage`` is a WITNESSED
-    host-escape method (``completeness_witness._HOST_ESCAPE_METHODS``): an
-    unpaused read on the owner thread would record a spurious host-escape fact
-    for every labeled activation. Any failure (exotic/meta/fake tensor whose
-    storage cannot be read) returns ``None`` -- the validation below treats a
-    symmetric-inaccessible pair as identity-only, exactly like r81's buffer belt.
+    Calls the ORIGINAL accessor (wrapper ledger ``_decorated_to_orig``): the wrapped
+    read under ``pause_logging`` logs, fingerprints and collects nothing, so the facts
+    match at two frames less; a subclass override or a live fast collector keeps it.
     """
-
     try:
+        if _state._active_fast_run_collector is None:
+            original = _state._decorated_to_orig.get(id(getattr(type(t), "untyped_storage", None)))
+            if original is not None:
+                return original(t)
         with _state.pause_logging():
             return t.untyped_storage()
     except Exception:
