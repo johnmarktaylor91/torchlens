@@ -121,10 +121,18 @@ def test_lean_refuses_the_method_reads_that_need_the_full_journal(read: str) -> 
     [
         {"capture": tl.options.CaptureOptions(backward_ready=True)},
         {"capture": tl.options.CaptureOptions(save_grads=True)},
-        {"default_grad": True},
+        pytest.param(
+            {"recording": tl.options.RecordingOptions(default_grad=True)}, id="default_grad=True"
+        ),
         {"narrate": True},
-        {"on_forward_error": "return_partial"},
-        {"on_forward_error": "attach_partial"},
+        pytest.param(
+            {"recording": tl.options.RecordingOptions(on_forward_error="return_partial")},
+            id="on_forward_error=return_partial",
+        ),
+        pytest.param(
+            {"recording": tl.options.RecordingOptions(on_forward_error="attach_partial")},
+            id="on_forward_error=attach_partial",
+        ),
     ],
     ids=lambda kw: next(iter(kw)) + "=" + str(next(iter(kw.values())))[:40],
 )

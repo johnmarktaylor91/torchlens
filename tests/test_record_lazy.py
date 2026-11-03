@@ -191,8 +191,11 @@ def test_recorder_passes_defer_and_equal_the_default(deferred_count: list[int]) 
     [
         {"save": tl.func("relu")},
         {"save": tl.module("block2") | tl.func("relu")},
-        {"save": tl.module("block2"), "history_size": 0},
-        {"save": tl.module("block2"), "include_source_events": True},
+        {"save": tl.module("block2"), "recording": tl.options.RecordingOptions(history_size=0)},
+        {
+            "save": tl.module("block2"),
+            "recording": tl.options.RecordingOptions(include_source_events=True),
+        },
         {"save": tl.module("block2"), "stop_after": lambda ctx: False},
     ],
     ids=["op_selector", "mixed_union", "no_history", "source_events", "halt"],
