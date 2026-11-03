@@ -200,7 +200,9 @@ def _hf_tp_checkpoint(tmp_path: Path) -> str:
 
 
 @pytest.mark.slow
-def test_dtensor_tensor_parallel_on_a_two_process_cpu_mesh_refuses_typed(tmp_path: Path) -> None:
+def test_dtensor_tensor_parallel_on_a_two_process_cpu_mesh_refuses_typed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A sharded forward runs on two ranks; capture refuses typed on each rank."""
 
     if not torch.distributed.is_available() or not torch.distributed.is_gloo_available():
@@ -211,6 +213,9 @@ def test_dtensor_tensor_parallel_on_a_two_process_cpu_mesh_refuses_typed(tmp_pat
     import torch.multiprocessing as mp
 
     hf_dir = _hf_tp_checkpoint(tmp_path)
+    # The row is a CPU mesh. On a CUDA host transformers would bind each rank to its own GPU,
+    # so the spawned ranks (which inherit this environment) see no CUDA device.
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "")
     world_size = 2
     mp.spawn(
         _tp_rank,
