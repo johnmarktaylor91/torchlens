@@ -85,6 +85,54 @@ class UncopyableSeanetLikeModel(nn.Module):
         return (recurrent.permute(1, 2, 0) + y) * float(self.hop_length)
 
 
+def _module_with_large_non_alias_tensor_state() -> tuple[nn.Module, set[str]]:
+    """Large tensors that are not registered aliases, alone, mixed and copied."""
+
+    module = nn.Linear(128, 128)
+    module.cache = [torch.zeros(5000)]
+    module.mixed = [module.weight, torch.zeros(5000)]
+    module.copied_weight = module.weight.detach().clone()
+    return module, {"Linear[0].cache", "Linear[0].copied_weight", "Linear[0].mixed"}
+
+
+def _module_with_structured_numpy_void() -> tuple[nn.Module, set[str]]:
+    """A structured ``np.void`` is a writable view into its array, not an immutable scalar.
+
+    Snapshotting it by reference would let an in-place field write during the
+    forward pass go unseen; the sibling numpy scalar stays supported.
+    """
+
+    records = np.zeros(2, dtype=[("hop", "i8")])
+    record = records[0]
+    record["hop"] = 5
+    assert records[0]["hop"] == 5  # the scalar writes through to its array
+    module = nn.Module()
+    module.record = record
+    module.hop_length = np.prod([2, 2])
+    return module, {"Module[0].record"}
+
+
+@pytest.mark.parametrize(
+    "build",
+    [_module_with_large_non_alias_tensor_state, _module_with_structured_numpy_void],
+    ids=["large-non-alias-tensors", "structured-numpy-void"],
+)
+def test_unsupported_plain_attribute_state_is_still_refused(
+    build: Any,
+) -> None:
+    """The deepcopy-fallback snapshot names what it cannot restore instead of copying it.
+
+    Large non-alias tensor state and a structured ``np.void`` are reported as
+    unsupported paths; a silent by-reference copy would hide in-place writes
+    the forward makes to them.
+    """
+
+    module, expected = build()
+    snapshot = _ModuleTreePlainAttrSnapshot(module)
+    assert set(snapshot.unsupported_attr_paths) == expected
+    assert snapshot.is_complete is False
+
+
 def test_attrdict_model_validates_through_live_model_fallback() -> None:
     """A deepcopy that drops AttrDict attributes falls back instead of raising."""
 

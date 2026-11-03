@@ -63,3 +63,22 @@ def test_failed_validation_leaves_no_scratch_and_saves(
     assert _INDEX_KEY not in trace.__dict__
     trace.save(tmp_path / "trace.tlz")
     assert (tmp_path / "trace.tlz").exists()
+
+
+def test_validation_clears_scratch_when_it_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A run that raises mid-way still leaves no scratch index on the trace.
+
+    The failed-verdict sibling covers the normal exit; this is the raise path,
+    which only the ``finally`` of ``validate_saved_outs`` clears.
+    """
+
+    trace, _model, _passed = _failed_validation_trace(monkeypatch)
+
+    def _boom(*_args: Any, **_kwargs: Any) -> Any:
+        trace.__dict__[_INDEX_KEY] = {"stale": []}
+        raise RuntimeError("mid-run failure")
+
+    monkeypatch.setattr(validation_core, "_validate_saved_outs_run", _boom)
+    with pytest.raises(RuntimeError, match="mid-run failure"):
+        validation_core.validate_saved_outs(trace, [])
+    assert _INDEX_KEY not in trace.__dict__

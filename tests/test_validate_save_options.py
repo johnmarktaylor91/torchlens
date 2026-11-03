@@ -69,6 +69,40 @@ def _net_and_input(device: str = "cpu") -> tuple[_SmallNet, torch.Tensor]:
     return _SmallNet().to(device), torch.randn(2, 2, 6, 6, device=device)
 
 
+@pytest.mark.parametrize(
+    ("options", "expected"),
+    [
+        pytest.param({}, ("same", "auto"), id="defaults"),
+        pytest.param(
+            {"output_device": "cpu", "save_budget": None}, ("cpu", None), id="host-unbounded"
+        ),
+        pytest.param({"save_budget": 1 << 30}, ("same", 1 << 30), id="large-byte-cap"),
+        pytest.param({"save_budget": 1.0}, ("same", 1.0), id="full-fraction"),
+    ],
+)
+def test_both_validator_captures_receive_the_save_options(
+    options: dict[str, Any], expected: tuple[Any, Any]
+) -> None:
+    """The first capture and its reproducibility re-trace run under the caller's save options.
+
+    Defaults reach both captures as the capture API's own defaults; a host
+    output device on a CPU model, no budget, a large byte cap and the full
+    fraction reach both unchanged and still validate.
+    """
+
+    real_runner = user_funcs._run_model_and_save_specified_outs
+    seen: list[tuple[Any, Any, bool]] = []
+
+    def recording_runner(*args: Any, **kwargs: Any) -> Any:
+        seen.append((kwargs.get("output_device"), kwargs.get("save_budget"), kwargs["save_args"]))
+        return real_runner(*args, **kwargs)
+
+    model, x = _net_and_input()
+    with mock.patch.object(user_funcs, "_run_model_and_save_specified_outs", recording_runner):
+        assert tl.validate(model, x, scope="forward", **options) is True
+    assert seen == [(*expected, True), (*expected, False)]
+
+
 def test_intervention_scope_honors_save_options() -> None:
     """The intervention scope's forward validation runs under the save options."""
 
