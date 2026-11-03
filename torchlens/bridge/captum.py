@@ -332,11 +332,13 @@ def _spliced_forward(probe: _SiteProbe) -> Any:
     -------
     Callable
         ``forward(*args, **kwargs)`` running the source model through the
-        sparse ``tl.record`` lane (the capture wrappers, nothing saved) with
-        the probe called on the ``probe.ordinal``-th op at its site key, and
-        returning the model's own output with its autograd graph intact. The
-        same lane minted the site key the probe carries, so the key resolves
-        exactly as it did in the originating trace.
+        capture lane (``tl.trace`` retaining nothing) with the probe called on
+        the ``probe.ordinal``-th op at its site key, and returning the model's
+        own output with its autograd graph intact. The same lane minted the
+        site key the probe carries, so the key resolves exactly as it did in
+        the originating trace (``tl.record`` tracks no module stack and
+        ``spec.bind`` names a ``+=`` ``add`` where capture names it ``iadd``,
+        so neither can serve a nested or in-place site).
 
     Raises
     ------
@@ -349,7 +351,6 @@ def _spliced_forward(probe: _SiteProbe) -> Any:
     import torchlens as tl
 
     from ..intervention.selectors import site as site_selector
-    from ..intervention.site_keys import armed_live_minter
 
     model = probe.model()
     seen = {"count": 0}
@@ -363,21 +364,29 @@ def _spliced_forward(probe: _SiteProbe) -> Any:
     spec = tl.when(site_selector(probe.site_key), splice)
 
     def forward(*args: Any, **kwargs: Any) -> Any:
-        """Run one forward with the site counter reset; refuse a forward that misses the site."""
+        """Run one capture with the site counter reset; refuse a forward that misses the site."""
 
         seen["count"] = 0
-        # ``tl.record`` leaves the live site-key minter unarmed by design; the
-        # probe addresses the op by site key, so arm one for this forward.
-        with armed_live_minter():
-            output, _recording = tl.record(
+        raw_output: dict[str, Any] = {}
+
+        def keep_output(_module: nn.Module, _inputs: Any, output: Any) -> None:
+            """Keep the model's own return value (autograd graph intact)."""
+
+            raw_output["value"] = output
+
+        handle = model.register_forward_hook(keep_output)
+        try:
+            captured = tl.trace(
                 model,
                 list(args) if args else None,
                 dict(kwargs) if kwargs else None,
                 save=_save_nothing,
                 intervene=spec,
-                on_predicate_error="fail-fast",
-                return_output=True,
             )
+        finally:
+            handle.remove()
+        captured.cleanup()
+        output = raw_output["value"]
         if seen["count"] < probe.ordinal:
             raise InvalidArgumentError(
                 f"Captum site probe {probe.label!r} (site_key {probe.site_key!r}, call "
