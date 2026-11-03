@@ -249,6 +249,19 @@ class ResolvedPostprocessing:
         Number of decoded rows captured per item.
     ambiguous:
         Whether detection found multiple plausible postprocessing choices.
+
+    Examples
+    --------
+    >>> resolved = tl.postprocessing.ResolvedPostprocessing(
+    ...     source="project",
+    ...     identifier="my_labels",
+    ...     verified=True,
+    ...     config={"id2label": {0: "cat", 1: "dog"}},
+    ...     description="project label bank",
+    ...     style="classification",
+    ... )
+    >>> resolved.identifier, resolved.verified, resolved.style
+    ('my_labels', True, 'classification')
     """
 
     source: str

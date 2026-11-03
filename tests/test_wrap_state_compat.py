@@ -27,6 +27,7 @@ import io
 import pickle
 import re
 import sys
+from typing import Any
 
 import pytest
 import torch
@@ -291,38 +292,116 @@ class TestUnwrapSafety:
         assert not _state._logging_enabled
 
     # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/wrappers.py, campaign mutant kills.
-    def test_unwrap_warns_on_buried_wrapper(self):
-        # B8-6: a third-party wrapper installed on top of a torchlens wrapper
-        # is (correctly) not clobbered at teardown, but the burial must be
-        # named instead of silent.
+    def test_unwrap_rebases_foreign_wrapper_onto_original(self):
+        # B8-6 made honest: a peer that re-wraps a torch slot AFTER the first
+        # capture (nnsight's ``torch.Tensor.backward`` patch is ``functools.wraps``
+        # around whatever is installed, calling it through a module global)
+        # holds our wrapper in ``__wrapped__`` and in its module globals. Teardown
+        # rebases both onto the original and strips the markers ``wraps`` copied,
+        # so nothing torchlens is live, no burial is reported, and the foreign
+        # wrapper keeps working. Re-wrap adopts the foreign callable as the new
+        # original, so captures and ``tl.validate`` keep logging the slot.
         import functools
         import warnings as warnings_module
 
+        from torchlens.backends.torch._tl import is_decorated_function
         from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 
         _ensure_wrapped()
         tl_wrapper = torch.cos
-        assert id(tl_wrapper) in _state._decorated_to_orig, "torch.cos not wrapped"
+        true_orig = _state._decorated_to_orig[id(tl_wrapper)]
+        peer_module: dict[str, Any] = {"functools": functools, "_original_cos": tl_wrapper}
+        exec(
+            "@functools.wraps(_original_cos)\n"
+            "def foreign(*args, **kwargs):\n"
+            "    return _original_cos(*args, **kwargs)\n",
+            peer_module,
+        )
+        foreign = peer_module["foreign"]
+        assert foreign.__wrapped__ is tl_wrapper
+        assert is_decorated_function(foreign), "wraps() copies the decoration tag"
 
-        @functools.wraps(tl_wrapper)
-        def foreign(*args, **kwargs):
-            return tl_wrapper(*args, **kwargs)
+        class CosModel(nn.Module):
+            def forward(self, x):
+                return torch.cos(x) + 1
 
+        model, x = CosModel(), torch.zeros(1, 2)
         torch.cos = foreign
         try:
             with warnings_module.catch_warnings(record=True) as records:
                 warnings_module.simplefilter("always")
                 unwrap_torch()
-            buried_messages = [
-                str(record.message) for record in records if "buried" in str(record.message)
-            ]
-            assert len(buried_messages) == 1, buried_messages
-            assert "torch.cos" in buried_messages[0]
-            # Drift tolerance: the foreign wrapper is preserved, never clobbered.
+            assert not [r for r in records if "buried" in str(r.message)], records
+            assert not _state._is_decorated
+            # Preserved, rebased, and no longer impersonating a torchlens wrapper.
             assert torch.cos is foreign
+            assert foreign.__wrapped__ is true_orig
+            assert peer_module["_original_cos"] is true_orig
+            assert not is_decorated_function(foreign)
+            assert not hasattr(foreign, "__tl_wrapper_name__")
+            assert float(foreign(torch.tensor(0.0))) == 1.0
+
+            trace = tl.trace(model, x)
+            assert _state._is_decorated
+            assert _state._decorated_to_orig[id(torch.cos)] is foreign, "re-wrap adopts the drift"
+            assert "cos" in [op.func_name for op in trace]
+            adopted_wrapper = torch.cos
+            assert tl.validate(model, x, scope="forward", validate_metadata=False)
+            assert torch.cos is adopted_wrapper, "validate's unwrap/re-wrap cycle is stable"
         finally:
+            unwrap_torch()
+            torch.cos = true_orig
+            wrap_torch()
+        assert torch.cos is tl_wrapper
+
+    def test_unwrap_reports_burial_it_cannot_rebase_after_teardown(self):
+        # The warning still names a REAL gap: a foreign callable that reaches our
+        # wrapper through a read-only ``__wrapped__`` cannot be rebased, so the
+        # slot keeps running torchlens code and teardown says so. The report comes
+        # LAST: under warnings-as-errors (the test suite's filter) it used to raise
+        # before the decorated flag flipped, leaving torch restored under a flag
+        # that said wrapped, so every later capture skipped wrap_torch() and
+        # logged nothing but module boundaries.
+        import warnings as warnings_module
+
+        from torchlens._errors import TorchLensWarning
+        from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
+
+        _ensure_wrapped()
+        tl_wrapper = torch.cos
+        sin_wrapper = torch.sin
+        assert id(tl_wrapper) in _state._decorated_to_orig, "torch.cos not wrapped"
+        assert id(sin_wrapper) in _state._decorated_to_orig, "torch.sin not wrapped"
+
+        class Foreign:
+            __wrapped__ = property(lambda self: tl_wrapper)
+
+            def __call__(self, *args, **kwargs):
+                return tl_wrapper(*args, **kwargs)
+
+        foreign = Foreign()
+        torch.cos = foreign
+        try:
+            with warnings_module.catch_warnings():
+                warnings_module.simplefilter("error")
+                with pytest.raises(TorchLensWarning, match="torch.cos"):
+                    unwrap_torch()
+            # Teardown finished before the warning raised: the flag flipped and
+            # every torchlens-owned slot holds its original again.
+            assert not _state._is_decorated
+            assert torch.sin is _resolve(sin_wrapper)
+            assert torch.cos is foreign, "never clobber a foreign patch"
+            assert foreign.__wrapped__ is tl_wrapper, "the burial is real"
+            # The next capture re-wraps lazily and logs its ops instead of
+            # emitting a provenance warning over an unwrapped forward.
+            trace = tl.trace(nn.Sequential(nn.Linear(2, 2), nn.ReLU()), torch.ones(1, 2))
+            assert _state._is_decorated
+            assert [op.func_name for op in trace][1:-1] == ["linear", "relu"]
+        finally:
+            unwrap_torch()
             torch.cos = _resolve(tl_wrapper)
             wrap_torch()
+        assert torch.cos is tl_wrapper
 
 
 # ---------------------------------------------------------------------------

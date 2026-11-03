@@ -11,7 +11,7 @@ from torchlens.backends.registry import BackendUnsupportedError
 
 from .._capture_state_helpers import unwrap_compiled_model
 from .._deprecations import MISSING
-from .._errors import ArgumentTypeError
+from .._errors import ArgumentTypeError, InvalidArgumentError
 from .._input_coerce import _coerce_input_args
 from .._output_slot import returned as output_returned
 from .._robustness import check_model_and_input_variants
@@ -24,6 +24,7 @@ from ..backends.registry import (
 from ..intervention.predicates import InterventionPredicate
 from ..options import CaptureOptions, StorageOptions, _merge_grouped_options
 from ._generation import GenerationRecording, enrich_generation, record_generation
+from ._generation_options import GenerationOptions
 from ._recorder import Recorder
 from ._validation import validate_postprocess
 from .options import HaltPredicateFn, PredicateFn, RecordingOptions
@@ -90,6 +91,20 @@ def _unfold_recording_options(recording: RecordingOptions | None) -> dict[str, A
     }
 
 
+def _require_generate_kwargs(
+    generation: GenerationOptions | None, generate_kwargs: Mapping[str, Any] | None
+) -> None:
+    """Refuse ``generation=`` without ``generate_kwargs=``."""
+
+    if generation is not None and generate_kwargs is None:
+        raise InvalidArgumentError(
+            "tl.record(generation=GenerationOptions(...)) needs generate_kwargs=: the per-token "
+            "options describe a recorded generation",
+            code="record_generation_options_invalid",
+            remedy="pass generate_kwargs={} (the model's defaults) or drop generation=",
+        )
+
+
 def _require_torch_fastlog_backend(backend: Any) -> None:
     """Refuse unless the resolved backend binds the torch one-shot Recorder as fastlog."""
 
@@ -140,6 +155,7 @@ def record(
     narrate: Any | None = None,
     backend: BackendName | None = None,
     generate_kwargs: Mapping[str, Any] | None = None,
+    generation: GenerationOptions | None = None,
 ) -> Recording | GenerationRecording:
     """Record one model forward pass with capture predicates.
 
@@ -220,6 +236,12 @@ def record(
         prompts, assisted decoding, encoder-decoder models, ``use_cache=False``,
         ``intervene=``, ``stop_after=`` and partial forward-error modes refuse with
         code ``record_generation_unsupported``.
+    generation:
+        DOCUMENTED-UNSTABLE. :class:`~torchlens.recording.GenerationOptions` widening
+        the generation door: per-token ``reducers=``, ``kv_sites=``, a ``keep_last=``
+        ring buffer with ``spill=``, and the ``max_saved_bytes=`` guard. Read the
+        per-token values with ``GenerationRecording.series(name)``. Needs
+        ``generate_kwargs=``.
 
     Returns
     -------
@@ -249,8 +271,7 @@ def record(
     # record() shares trace()'s decorated hot path, so it must enforce the SAME up-front guard
     # instead of crashing deep in capture with an opaque torch error.
     check_model_and_input_variants(model, inputs, input_kwargs)
-    # The Recorder takes its own knobs as one ``recording=`` bundle; the
-    # door's ``postprocess`` stays here (an enrichment the constructor refuses).
+    _require_generate_kwargs(generation, generate_kwargs)
     recorder_kwargs: dict[str, Any] = {
         "save": save,
         "intervene": intervene,
@@ -261,11 +282,11 @@ def record(
         "recording": RecordingOptions(**knobs),
     }
     if generate_kwargs is not None:
-        output, generation = record_generation(
-            model, inputs, input_kwargs, generate_kwargs, recorder_kwargs
+        output, generated = record_generation(
+            model, (inputs, input_kwargs), generate_kwargs, recorder_kwargs, generation
         )
-        object.__setattr__(generation.recording, "_output", output_returned(output))
-        return enrich_generation(generation, postprocess)
+        object.__setattr__(generated.recording, "_output", output_returned(output))
+        return enrich_generation(generated, postprocess)
     with Recorder(model, **recorder_kwargs) as recorder:
         recorder(inputs, input_kwargs)
     result = recorder.recording
