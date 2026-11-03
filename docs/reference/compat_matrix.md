@@ -42,9 +42,9 @@ row-wise), and the sharded forward runs (the parameters are `DTensor`s). On ever
 refuses at entry with the typed `tl.errors.DistributedCaptureUnsupportedError`,
 whose findings name the `dtensor` and `tensor_parallel` kinds. This refusal is
 the supported behaviour today: capturing below the `DTensor` dispatch layer would
-record rank-local shims instead of the real ops. The planned capture design is
-[tensor_parallel_design.md](../internal/reference/tensor_parallel_design.md); until it is built,
-capture a rank-local dense copy of the module.
+record rank-local shims instead of the real ops. A capture design for sharded
+modules is planned but not built; until it is, capture a rank-local dense copy of
+the module.
 
 A model loaded by transformers with
 `distributed_config=transformers.DistributedConfig(tp_plan="auto")` is the
