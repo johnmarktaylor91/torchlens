@@ -24,8 +24,6 @@ import yaml
 
 semantic_release = pytest.importorskip("semantic_release")
 
-pytestmark = pytest.mark.heavy
-
 _ROOT = Path(__file__).resolve().parents[1]
 _SCRIPTS = ("check_release_major.py", "no_major_parser.py")
 _STOCK_PARSER = "conventional"
