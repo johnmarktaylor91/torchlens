@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .._errors import ArtifactError
+from .._io.format_errors import ArtifactError
 from .._utils._record_group_table import OP_GROUP_VIEWS
 from ._record_group_base import _LayerGroup, _RecordGroup
 
