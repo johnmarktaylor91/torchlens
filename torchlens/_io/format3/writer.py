@@ -30,7 +30,13 @@ import torch
 
 from ..._data_classes._state_adapter import state_items
 from .. import _json
+from ..field_registry import RECORD_CONTRACT_CLASSES
 from ..format_errors import ArtifactError
+from ..prerelease import (
+    PRERELEASE_STATE_KEY,
+    prerelease_fields_active,
+    registered_prerelease_fields,
+)
 from ..writer_contract import writer_contract_digest
 from . import reader as _reader
 from .contract import (
@@ -179,6 +185,19 @@ def settle_live_side(trace: Any) -> None:
                 setattr(op, key, {})
 
 
+def _write_columns(record: str, payload_policy: Mapping[str, bool]) -> list[str]:
+    """Add only switch-activated registrar fields to the normal persisted columns."""
+
+    names = level_columns(record, payload_policy)
+    if not prerelease_fields_active():
+        return names
+    owner = RECORD_CONTRACT_CLASSES[record][1]
+    extra = list(registered_prerelease_fields().get(owner, ()))
+    if record == "trace":
+        extra.append(PRERELEASE_STATE_KEY)
+    return [*names, *(name for name in extra if name not in names)]
+
+
 def encode_tables(
     state: Mapping[str, Any],
     *,
@@ -215,9 +234,9 @@ def encode_tables(
         name: encoder.encode(
             cells.cell("trace", state, state, name),
             f"trace.{name}",
-            payload=schema[name].storage == "payload",
+            payload=name in schema and schema[name].storage == "payload",
         )
-        for name in level_columns("trace", payload_policy)
+        for name in _write_columns("trace", payload_policy)
     }
     files: dict[str, dict[str, Any]] = {
         "trace": {"record": "trace", "tlspec_version": RECORD_CONTRACT_VERSION, "fields": fields}
@@ -247,7 +266,7 @@ def _encode_record_rows(
     rows appear.
     """
 
-    names = {kind: level_columns(kind, payload_policy) for kind, _, _ in RECORD_INDEX}
+    names = {kind: _write_columns(kind, payload_policy) for kind, _, _ in RECORD_INDEX}
     columns: dict[str, dict[str, list[Any]]] = {
         kind: {name: [] for name in names[kind]} for kind in names
     }
@@ -268,7 +287,7 @@ def _encode_record_rows(
                         encoder.encode(
                             cells.cell(kind, record, state, name),
                             f"{kind}[{row}].{name}",
-                            payload=schema[name].storage == "payload",
+                            payload=name in schema and schema[name].storage == "payload",
                         )
                     )
                 done[kind] += 1
