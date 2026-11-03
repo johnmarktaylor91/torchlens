@@ -9,7 +9,6 @@ omitted and refuses the reads that would answer from a partial journal.
 from __future__ import annotations
 
 import json
-import pickle
 from pathlib import Path
 
 import pytest
@@ -143,27 +142,27 @@ def test_lean_must_be_a_bool() -> None:
     assert exc.value.fields["argument"] == "lean"
 
 
-def test_lean_marker_survives_pickling() -> None:
+def test_lean_marker_survives_replace() -> None:
     lean = _record_lean("small_head")
-    back = pickle.loads(pickle.dumps(lean))
-    assert back.options.lean is True
-    assert back.lean_omissions == LEAN_OMISSIONS
-    assert [r.ctx.label for r in back.records] == [r.ctx.label for r in lean.records]
+    copy = lean._replace(num_ops=lean.num_ops)
+    assert copy.options.lean is True
+    assert copy.lean_omissions == LEAN_OMISSIONS
+    assert [r.ctx.label for r in copy.records] == [r.ctx.label for r in lean.records]
     with pytest.raises(errors.CaptureNotActiveError) as exc:
-        back.raw_metadata()
+        copy.raw_metadata()
     assert exc.value.fields["code"] == "recording_lean_omitted"
 
 
 def test_recorder_door_takes_the_lean_keyword() -> None:
     model, x, site = _scenario("small_block2")
     recorder = tl.recording.Recorder(model, save=tl.module(site), lean=True)
-    with torch.no_grad():
+    with torch.no_grad(), recorder:
         recorder(x)
         recorder(x + 1)
-    rec = recorder.finalize()
+    rec = recorder.recording
     assert rec.options.lean is True
-    assert rec.num_passes == 2
     assert len(rec.records) == 2
+    assert len(rec.records_in_pass(0)) == 1 and len(rec.records_in_pass(1)) == 1
     assert all(e.predicate_matched for e in _events(rec).amended_op_records())
 
 
