@@ -19,9 +19,11 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._io import ArtifactError
 from torchlens._io.format3 import writer as format_writer
 from torchlens._io.format3.contract import TYPED_VALUE_KEY, TYPED_VALUE_TAGS
 from torchlens._io.format3.values import ValueEncoder, decode_value, enum_table
+from torchlens.io import UnencodableValue
 
 _VALUE_SEEDS = range(40)
 _MODEL_SEEDS = range(6)
@@ -152,8 +154,10 @@ def test_unencodable_values_are_disclosed_never_pickled() -> None:
     encoder = ValueEncoder()
     parsed, decoded = _round_trip({"a": [1, Opaque()], "b": Opaque()}, encoder)
     assert [item["at"] for item in encoder.disclosures] == ["fuzz['a'][1]", "fuzz['b']"]
-    assert decoded["b"]["repr"] == "O" * 256
-    assert decoded["b"]["repr_length"] == 400
+    assert isinstance(decoded["b"], UnencodableValue)
+    assert decoded["b"].repr_text == "O" * 256
+    assert decoded["b"].at == "fuzz['b']"
+    assert parsed["b"]["repr_length"] == 400
     assert _tags(parsed) == {"unencodable"}
 
 
@@ -185,8 +189,9 @@ def test_tensor_in_metadata_position_is_disclosed() -> None:
 def test_decoder_refuses_unknown_tags(seed: int) -> None:
     rng = random.Random(seed)
     bogus = "".join(rng.choices("abcdefgh", k=8))
-    with pytest.raises(Exception, match="unknown tag"):
+    with pytest.raises(ArtifactError, match="unknown tag") as caught:
         decode_value({"x": [{TYPED_VALUE_KEY: bogus}]}, at="fuzz")
+    assert caught.value.fields["code"] == "record_schema_invalid"
 
 
 class _RandomNet(nn.Module):

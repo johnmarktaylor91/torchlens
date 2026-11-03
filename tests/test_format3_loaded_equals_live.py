@@ -49,6 +49,7 @@ from torchlens._io.format3.contract import TENSOR_REFERENCE_FIELDS
 from torchlens._io.format3.payloads import read_tensor
 from torchlens._io.format3.values import RowRef, decode_value, object_state
 from torchlens._io.format3.writer import record_kind_of
+from torchlens.io import UnencodableValue
 
 _LEVELS = ("portable", "audit", "runnable", "executable_with_callables")
 #: Seed containers: record kind to the live trace attribute whose order is the row order.
@@ -227,9 +228,8 @@ class _Comparison:
         if isinstance(live, torch.Tensor):
             self.compare_tensor(decoded, live, at)
             return
-        if isinstance(decoded, dict) and set(decoded) == {"type", "repr", "repr_length", "at"}:
-            text = repr(live)
-            if decoded["repr"] != text[:256] or decoded["repr_length"] != len(text):
+        if isinstance(decoded, UnencodableValue):
+            if decoded.repr_text != repr(live)[:256]:
                 self.miss(f"{at}: disclosure repr differs from the live repr")
             return
         self.compare_plain(decoded, live, at)

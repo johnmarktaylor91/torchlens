@@ -183,6 +183,7 @@ REFUSAL_CODES: Final[dict[str, str]] = {
     "manifest_unreadable": "manifest_unreadable",
     "manifest_not_object": "manifest_not_json_object",
     "manifest_invalid": "manifest_schema_invalid",
+    "record_schema_invalid": "record_schema_invalid",
     "format_older_than_floor": "artifact_version_below_floor",
     "format_newer_than_runtime": "artifact_version_above_runtime",
     "kind_mismatch": "artifact_kind_mismatch",
@@ -200,11 +201,9 @@ REFUSAL_CODES: Final[dict[str, str]] = {
     "reader_not_built": "bundle_load_failed",
 }
 #: Situations whose code is provisional: a private spelling builders can use
-#: until the public code is ruled. Each is also a row of ``REFUSAL_CODES``
-#: above with the existing code the reader raises meanwhile.
-PROVISIONAL_REFUSALS: Final[dict[str, str]] = {
-    "record_schema_invalid": "manifest_schema_invalid",
-}
+#: until the public code is ruled, mapped to the existing code raised meanwhile.
+#: Empty: ``record_schema_invalid`` was ruled on 2026-11-02 and is a row above.
+PROVISIONAL_REFUSALS: Final[dict[str, str]] = {}
 
 #: Where the per-step timing keys come from: ``_phase_timings`` is keyed by the
 #: ``name`` of each step of this tuple, nothing else.

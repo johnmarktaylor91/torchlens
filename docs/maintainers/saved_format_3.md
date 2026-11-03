@@ -123,8 +123,8 @@ validates the JSON value against it; `Any` admits any value the value rules prod
 
 A key the field page marks `required` is a column of every artifact. A key marked `optional`
 with a payload flag is a column exactly when that flag is on in `payload_policy`; otherwise the
-column is absent, never null-filled. A column the level forbids refuses `manifest_schema_invalid`
-(the record-level spelling is provisional, see section 6). A structure-only capture keeps every
+column is absent, never null-filled. A column the level forbids refuses `record_schema_invalid`
+(section 6). A structure-only capture keeps every
 payload column but its tensor references carry no blob (section 3).
 
 ### Keys and values the format adds
@@ -274,7 +274,7 @@ One table for the writer and the reader. Codes are rows of
 | unknown save level | `artifact_save_level_invalid` | writer, reader |
 | file digest or length mismatch, truncated record file | `bundle_metadata_integrity_refused` | reader |
 | key not in the record contract, or a `runtime` kind key | `unknown_persisted_field` | reader |
-| record value violates the contract (type, row length, column the level forbids, typed object with an unknown tag, `record` type off the allowlist) | `manifest_schema_invalid` (provisional spelling `record_schema_invalid`) | reader |
+| record value violates the contract (type, row length, column the level forbids, typed object with an unknown tag, `record` type off the allowlist) | `record_schema_invalid` | reader |
 | blob file or entry named by a reference is missing | `bundle_load_failed` | reader |
 | blob in a structure-only artifact, or a structure-only marker over retained payloads | `artifact_structure_only_incoherent` | writer, reader |
 | load path is a symlink | `load_path_symlink_rejected` | reader |

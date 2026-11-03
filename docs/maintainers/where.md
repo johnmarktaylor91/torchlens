@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1365 modules, 632465 lines, 0 modules without a docstring.
+85 packages, 1365 modules, 632491 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -23,7 +23,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10552 |
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 52 | 35441 |
-| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 10 | 3335 |
+| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 10 | 3359 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 21 | 10969 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5849 |
 | `torchlens._notebook` | Extras-gated notebook namespace with no public objects yet. | 9 | 2412 |
@@ -81,7 +81,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 69 | 34247 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1857 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 790 |
-| `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 365 |
+| `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 367 |
 | `torchlens.mechinterp` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 26 | 8482 |
 | `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 6 | 3841 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 8 | 2474 |
@@ -470,19 +470,19 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 
 ### `torchlens._io.format3`
 
-The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (10 modules, 3335 lines)
+The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (10 modules, 3359 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 15 |
-| `contract` | Constants of the 3.0 saved format, pinned against the persisted-field contract. | 259 |
+| `contract` | Constants of the 3.0 saved format, pinned against the persisted-field contract. | 258 |
 | `payloads` | Tensor payloads of the 3.0 saved format: chunked safetensors files and lazy references. | 476 |
 | `reader` | The 3.0 reader: manifest first, then every record validated against the contract. | 85 |
 | `recipe` | The intervention recipe of the 3.0 saved format: ''intervention.json''. | 671 |
 | `runnable` | The 3.0 runnable component: descriptor JSON plus safetensors state, no pickle. | 45 |
 | `schema` | Record schemas of the 3.0 saved format, derived from the field bindings. | 322 |
 | `validate` | Cross-record invariants of the 3.0 saved format, run after every table is decoded. | 23 |
-| `values` | The typed-value codec of the 3.0 saved format: Python values to tagged JSON and back. | 713 |
+| `values` | The typed-value codec of the 3.0 saved format: Python values to tagged JSON and back. | 738 |
 | `writer` | The 3.0 writer: a trace or bundle to typed JSON record tables plus safetensors chunks. | 726 |
 
 ### `torchlens._ir`
@@ -1702,11 +1702,11 @@ Topology comparison and supergraph construction for intervention bundles. (2 mod
 
 ### `torchlens.io`
 
-Public I/O and administrative helpers for TorchLens. (1 modules, 365 lines)
+Public I/O and administrative helpers for TorchLens. (1 modules, 367 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Public I/O and administrative helpers for TorchLens. | 365 |
+| `__init__` | Public I/O and administrative helpers for TorchLens. | 367 |
 
 ### `torchlens.mechinterp`
 

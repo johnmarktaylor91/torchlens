@@ -1464,6 +1464,11 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : `Trace.save` persists a `Trace` into a portable `.tlspec` directory bundle at a chosen
   level; `tl.load` loads a `.tlspec` object with eager tensor materialization.
   3.0 format: see [saved_format_3.md](../maintainers/saved_format_3.md).
+  A saved value with no typed encoding is written as text and counted in the manifest's
+  `disclosures`; it loads back as `tl.io.UnencodableValue`, a frozen stand-in carrying
+  `type_name` (the original type's dotted name), `repr_text` (its `repr`, cut at 256
+  characters) and `at` (where it was in the artifact). A saved cell that fails its type check
+  on load refuses `record_schema_invalid`.
   `Trace.save` writes the staged intervention spec as the typed recipe `intervention.json`
   beside the intervened values and their per-op provenance (`save_intervention` writes the same
   recipe as an artifact of its own). A loaded trace whose recipe holds only built-in edits reruns

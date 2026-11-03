@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 from .._errors import ArgumentTypeError
 from .._io import ArtifactError, JaxPayloadLoadHint, PayloadLoadHints, _json
 from .._io.bundle import cleanup_tmp, load as _load
+from .._io.format3.values import UnencodableValue
 from .._io.sidecar import (
     AnalysisOnlySidecar,
     SidecarFamily,
@@ -345,6 +346,7 @@ __all__ = [
     "AnalysisOnlySidecar",
     "SidecarFamily",
     "TraceState",
+    "UnencodableValue",
     "JaxPayloadLoadHint",
     "PayloadLoadHints",
     "attach_sidecar",
