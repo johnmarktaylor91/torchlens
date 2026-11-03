@@ -252,7 +252,6 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
     ),
     "numpy": (TEST_EXTRA, "core torchlens dependency; a skip means install breakage"),
     "pandas": (OPTIONAL_PREVIEW, "tabular extra"),
-    "pandas.api.types": (OPTIONAL_PREVIEW, "tabular extra"),
     "peft": (
         OPTIONAL_PREVIEW,
         "deploy extra (requested in the packaging-request ledger, F37 "

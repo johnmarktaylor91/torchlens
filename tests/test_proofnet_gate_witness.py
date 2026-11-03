@@ -156,7 +156,6 @@ EXCEPT_SKIP_LEDGER: frozenset[str] = frozenset(
         "test_distributed_census_topologies.py:109",
         "test_distributed_honesty.py:741",
         "test_distributed_honesty.py:757",
-        "test_distributed_tierb_identity.py:76",
         "test_input_coercion.py:378",
         "test_layer_log.py:436",
         "test_lit_bridge_real.py:53",
