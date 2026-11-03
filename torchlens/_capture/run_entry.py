@@ -7,7 +7,7 @@ recorder still call by name.
 import copy
 import dataclasses
 import inspect
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -38,6 +38,7 @@ from ..backends.torch._tl import get_tensor_label
 from ..backends.torch.bound_root import (
     TLBoundMethodRoot,
 )
+from ..intervention._zero_fire import capture_rule_fire_ledger
 from ..intervention.predicates import InterventionPredicate
 from ..recording.exceptions import PredicateError
 from ..recording.options import HaltPredicateFn, PredicateFn
@@ -483,8 +484,14 @@ def _abort_streaming_writer(trace: Trace, exc: BaseException) -> None:
         raise ArtifactError("Streaming out save failed during forward pass.") from exc
 
 
-def _finish_run_entry(trace: Trace, r: SimpleNamespace, echo_session: Any) -> None:
-    """Post-forward tail: root disclosure, echo close, zero-match warnings, events."""
+def _finish_run_entry(
+    trace: Trace, r: SimpleNamespace, echo_session: Any, fired_rule_ids: Collection[str]
+) -> None:
+    """Post-forward tail: root disclosure, echo close, zero-match warnings, events.
+
+    ``fired_rule_ids`` is the capture's fire ledger: the ids of the public-spec
+    ``intervene=`` rules that fired, settled per rule by the event writer.
+    """
 
     if isinstance(r.model, TLBoundMethodRoot):
         # F41 TL-authored-root disclosure (tlspec v9 entry-dark slot, C07X
@@ -520,6 +527,7 @@ def _finish_run_entry(trace: Trace, r: SimpleNamespace, echo_session: Any) -> No
             if r.lowered_intervene_spec is not None
             else r.module_intervene_selector
         ),
+        fired_rule_ids=fired_rule_ids,
     )
 
 
@@ -590,19 +598,20 @@ def _run_resolved_request(r: SimpleNamespace) -> Trace:
     from .._snoop._entry import echo_forward_failure
 
     trace, echo_session = _build_trace_for_run(r, _release_capture_slot)
-    try:
-        _forward_under_minter(trace, r, reservation_token)
-    except BaseException as exc:
-        # Crash tail (snoop D5 tail 2): synchronous flush; note rides PEP 678.
-        echo_forward_failure(echo_session, exc)
-        _abort_streaming_writer(trace, exc)
-        raise
-    finally:
-        _state.reset_capture_runtime_context()
-        _release_capture_slot()
-        if hasattr(trace, "_capture_container_structure"):
-            delattr(trace, "_capture_container_structure")
-    _finish_run_entry(trace, r, echo_session)
+    with capture_rule_fire_ledger() as fired_rule_ids:
+        try:
+            _forward_under_minter(trace, r, reservation_token)
+        except BaseException as exc:
+            # Crash tail (snoop D5 tail 2): synchronous flush; note rides PEP 678.
+            echo_forward_failure(echo_session, exc)
+            _abort_streaming_writer(trace, exc)
+            raise
+        finally:
+            _state.reset_capture_runtime_context()
+            _release_capture_slot()
+            if hasattr(trace, "_capture_container_structure"):
+                delattr(trace, "_capture_container_structure")
+    _finish_run_entry(trace, r, echo_session, frozenset(fired_rule_ids))
     return trace
 
 
