@@ -69,6 +69,21 @@ class _SameObjectDoubleFunction(torch.autograd.Function):
         return grad_output * 2
 
 
+class _WriteThroughDoubleFunction(torch.autograd.Function):
+    """DGL SpMM shape: the output is allocated in torch and a foreign kernel writes into it."""
+
+    @staticmethod
+    def forward(ctx, x):  # type: ignore[override]
+        out = torch.zeros_like(x)
+        host_view = out.numpy()
+        host_view[...] = x.detach().numpy() * 2
+        return out
+
+    @staticmethod
+    def backward(ctx, grad_output):  # type: ignore[override]
+        return grad_output * 2
+
+
 class _ForeignFunctionModel(nn.Module):
     """Linear, then a Function whose forward leaves torch, then relu."""
 
@@ -137,6 +152,7 @@ def _assert_validates_clean(model: nn.Module, x: torch.Tensor) -> None:
     [
         _DlpackDoubleFunction,
         _SameObjectDoubleFunction,
+        _WriteThroughDoubleFunction,
     ],
 )
 def test_foreign_function_is_one_boundary_op_and_validates(function) -> None:

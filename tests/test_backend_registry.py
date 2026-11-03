@@ -864,6 +864,7 @@ def test_fake_backend_trace_save_load_accessors_and_invariants(tmp_path: Path) -
         ),
         (lambda trace: setattr(trace, "_autograd_has_backward_pass", True), "has_backward_pass"),
         (lambda trace: trace._grad_fn_logs.__setitem__(1, object()), "_grad_fn_logs"),
+        (lambda trace: setattr(trace[0], "resolver_status", "lost"), "resolver_status"),
     ],
 )
 def test_fake_backend_invariant_corruptions_fail(

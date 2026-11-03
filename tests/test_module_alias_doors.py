@@ -470,6 +470,12 @@ def test_alias_spelling_refuses_with_one_code_and_message_at_every_door(
             lambda name: tl.func("relu") | tl.in_module(f"{name}:2"), "bind", id="or_pass-bind"
         ),
         pytest.param(lambda name: site(module_path=name), "trace", id="site_module_path-trace"),
+        # Sole named killer of campaign mutants in intervention/_module_alias_guard.py.
+        pytest.param(
+            lambda name: site(module_path=name),
+            "post_hoc_find_sites",
+            id="site_module_path-post_hoc_find_sites",
+        ),
     ],
 )
 def test_alias_inside_a_composite_refuses_the_same_way(
@@ -496,6 +502,7 @@ def test_alias_inside_a_composite_refuses_the_same_way(
         ("post_hoc_fork_do", "dec_after", "module"),
         ("bind", "dec_after", "in_module"),
         ("bind", "dec_after", "module_pass_1"),
+        ("trace", "dec_tail", "in_module_pass_2"),  # sole named killer of a campaign mutant
     ],
 )
 def test_canonical_spelling_fires_at_every_call_site(

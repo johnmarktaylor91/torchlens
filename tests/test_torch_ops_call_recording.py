@@ -339,7 +339,7 @@ class _UnreturnedWriteModel(nn.Module):
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 @pytest.mark.skipif(not _HAS_CUSTOM_OP, reason="torch.library.custom_op needs torch>=2.4")
-@pytest.mark.parametrize("op_name", ["buf_ret"])
+@pytest.mark.parametrize("op_name", ["mut_ret", "buf_ret"])
 def test_write_no_return_aliases_fails_validation(op_name: str) -> None:
     """A write beside a fresh return used to validate True with a pre-mutation graph."""
 

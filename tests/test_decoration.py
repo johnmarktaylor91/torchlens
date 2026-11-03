@@ -101,7 +101,7 @@ class IgnoredFunctionModel(nn.Module):
 # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 @pytest.mark.parametrize(
     "route",
-    ["asarray"],
+    ["empty_strided", "asarray"],
 )
 def test_ignored_tensor_producers_are_wrapped(route: str) -> None:
     """Ignored tensor producers emit capture ops, including input provenance."""

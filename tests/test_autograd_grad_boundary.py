@@ -62,6 +62,21 @@ def _tampered_validation(tamper: Callable[[Any], None]) -> Iterator[list[Any]]:
         validation_core.validate_saved_outs = original
 
 
+class _IntermediateInput(nn.Module):
+    """Grad of a non-scalar output with respect to an intermediate, with grad_outputs."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = self.lin(x)
+        y = torch.sin(h) * h
+        weights = torch.linspace(0.5, 1.5, y.shape[-1]).expand_as(y)
+        (dh,) = torch.autograd.grad(y, h, grad_outputs=weights, retain_graph=True)
+        return y + dh
+
+
 # Imported by tests/test_valmem3_saved_arg_offload.py.
 class _TwoLosses(nn.Module):
     """Differentiates one of two scalar losses with respect to its parameters."""
@@ -146,8 +161,8 @@ def test_autograd_grad_recorder_runs_once_and_holds_no_live_call() -> None:
 # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 @pytest.mark.parametrize(
     ("model_factory", "shape"),
-    [(MAMLInnerLoop, (4, 8))],
-    ids=["maml"],
+    [(MAMLInnerLoop, (4, 8)), (_IntermediateInput, (2, 4))],
+    ids=["maml", "intermediate_input_grad_outputs"],
 )
 def test_recorded_autograd_grad_validates_by_subgraph_replay(
     model_factory: Callable[[], nn.Module], shape: tuple[int, ...]
