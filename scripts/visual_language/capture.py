@@ -286,9 +286,9 @@ def probe_export(raw: Path) -> dict[str, str]:
     import inspect
     import re
 
-    from torchlens._data_classes._trace_viz import TraceVisualizationMixin
+    from torchlens._data_classes.trace import Trace
 
-    defaults = inspect.signature(TraceVisualizationMixin.draw).parameters
+    defaults = inspect.signature(Trace.draw).parameters
     model, inputs = FIXTURES["Flow"]()
     trace = tl.trace(model, inputs)
     facts: dict[str, str] = {}

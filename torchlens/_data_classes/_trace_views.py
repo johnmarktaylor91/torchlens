@@ -8,8 +8,16 @@ property per name with its public docstring and forwards to these.
 
 from __future__ import annotations
 
+import difflib
+from typing import TYPE_CHECKING, Any
+
+from .layer import Layer
+
+if TYPE_CHECKING:
+    from .trace import Trace
+
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
@@ -26,7 +34,7 @@ from ._trace_accessors import (
 from .backward_pass import BackwardPassAccessor
 from .derived_grad import IntermediateDerivedGradAccessor
 from .grad_fn import GradFnAccessor
-from .layer import Layer, LayerAccessor
+from .layer import LayerAccessor
 from .module import ModuleAccessor
 from .op import Op
 
@@ -461,3 +469,219 @@ def ops_with_params(trace: Trace) -> Accessor[Op]:
         [op for op in trace._layer_list if op.num_params > 0],
         trace._layer_num_calls,
     )
+
+
+def module_calls_with_output_in(trace: Trace, op_labels: set[str]) -> Accessor[Any]:
+    """Access ModuleCalls with at least one output Op among ``op_labels``.
+
+    The root call's layer-space output labels resolve to their Op labels
+    first (``op_label_aliases``), so the root call counts like any other.
+
+    Parameters
+    ----------
+    trace:
+        The owning trace.
+    op_labels:
+        Pass-qualified Op labels to match against each call's outputs.
+
+    Returns
+    -------
+    Accessor[Any]
+        Matching ModuleCalls keyed by call label, in call order.
+    """
+
+    from .._postprocess.saved_summary import op_label_aliases
+
+    aliases = op_label_aliases(trace)
+    calls: OrderedDict[str, Any] = OrderedDict()
+    for call in trace.module_calls:
+        if any(aliases.get(label, label) in op_labels for label in getattr(call, "output_ops", [])):
+            calls[call.label] = call
+    return TraceModuleCallAccessor(calls)
+
+
+class _CallableList(list[Any]):
+    """List that returns a plain list when called.
+
+    This keeps rare report surfaces callable for user ergonomics without adding
+    extra callable custom_methods to the Trace method state_history.
+    """
+
+    def __call__(self) -> list[Any]:
+        """Return a plain-list copy of this report.
+
+        Returns
+        -------
+        list[Any]
+            Plain list containing this report's items.
+        """
+
+        return list(self)
+
+
+def find_sites(trace: Trace, selector: Any, *, strict: bool = False, max_fanout: int = 8) -> Any:
+    """Return a table of intervention sites matching a query.
+
+    Parameters
+    ----------
+    trace:
+        The owning trace.
+    selector:
+        Selector, target spec, frozen target spec, or non-strict bare string.
+    strict:
+        Whether to reject non-portable query forms.
+    max_fanout:
+        Maximum number of matching sites.
+
+    Returns
+    -------
+    _SiteTable
+        Ordered table of matching layer-pass records.
+    """
+
+    from .._selection.resolver import find_sites
+
+    return find_sites(trace, selector, strict=strict, max_fanout=max_fanout)
+
+
+def find_layers(trace: Trace, selector: str, *, limit: int = 10) -> list[str]:
+    """Return layer labels matching a fuzzy query.
+
+    Parameters
+    ----------
+    trace:
+        The owning trace.
+    selector:
+        Layer-label substring or approximate layer name.
+    limit:
+        Maximum number of labels to return.
+
+    Returns
+    -------
+    List[str]
+        Matching no-pass layer labels in execution order, followed by close
+        fuzzy matches when substring matches are insufficient.
+    """
+
+    query_text = str(selector).lower()
+    labels = list(trace.layer_labels)
+    substring_matches = [label for label in labels if query_text in label.lower()]
+    if len(substring_matches) >= limit:
+        return substring_matches[:limit]
+    fuzzy_matches = difflib.get_close_matches(str(selector), labels, n=limit, cutoff=0.25)
+    result = substring_matches[:]
+    for label in fuzzy_matches:
+        if label not in result:
+            result.append(label)
+        if len(result) >= limit:
+            break
+    return result
+
+
+def find_nan(trace: Trace) -> Any:
+    """Return the first NaN or Inf among saved outputs in execution order.
+
+    Selectively saved traces identify this as the first finding among
+    saved tensors and report unsaved ancestor operations as an uncertainty
+    zone rather than claiming the true birth operation.
+
+    Returns
+    -------
+    FindNanReport
+        Structured non-finite diagnostic. Source locations are surfaced
+        from the operation's existing recorded code context when available.
+    """
+
+    from ..debug._nan import find_nan_in_trace
+
+    return find_nan_in_trace(trace)
+
+
+def check_plan(trace: Trace, plan: Any) -> Any:
+    """Audit-only plan check (nnsight-scan parity).
+
+    Resolves each plan entry's selector against this trace, checks
+    multiplicity, and compares declared replacement geometry (a meta
+    tensor or any shape/dtype-bearing spec) against the recorded
+    shape/dtype hypotheses. The report carries the source comparison
+    digest, the evidence status, every checked site, and
+    ``executable=False`` — checking a plan NEVER sets
+    ``replayable``, arms, replays, or lifts the late-bind
+    refusal. Refuses typed on callables, value-derived selection, and
+    REFUTED sources. Spelling DOCUMENTED-UNSTABLE (the public verb name
+    belongs to the UI sprint).
+
+    Parameters
+    ----------
+    trace:
+        The owning trace.
+    plan:
+        Iterable of selector entries or ``(selector, replacement)``
+        pairs.
+
+    Returns
+    -------
+    torchlens._capture._plan_check.PlanCheckReport
+        Frozen audit report.
+    """
+
+    from .._capture._plan_check import check_plan
+
+    return check_plan(trace, plan)
+
+
+def uncalled_modules(trace: Trace) -> _CallableList:
+    """Return registered modules that were not exercised in the captured pass.
+
+    Returns
+    -------
+    _CallableList
+        Module addresses present on the source model but absent from the
+        captured module accessor, recorded when the capture finished.
+        Returns an empty list when that record is missing (a loaded or
+        unpickled trace) and the source model is no longer available;
+        ``num_uncalled_modules`` reads ``None`` in that case.
+    """
+
+    stored = trace.__dict__.get("_uncalled_module_addresses")
+    if stored is not None:
+        return _CallableList(stored)
+    source_ref = None if trace.__dict__.get("_tl_cleaned_up", False) else trace._source_model_ref
+    model = source_ref() if source_ref is not None else None
+    if model is None:
+        return _CallableList()
+    registered = {address or "trace" for address, _module in model.named_modules()}
+    called = set(getattr(trace._module_logs, "_dict", {}).keys())
+    called.update(getattr(trace._module_logs, "_alias_dict", {}).keys())
+    return _CallableList(sorted(registered - called))
+
+
+def resolve_site_table(
+    trace: Trace, selector: Any, *, strict: bool = False, max_fanout: int = 8
+) -> Any:
+    """Resolve the record-grain site table for internal planning (private).
+
+    The public door is ``trace[selector]``: a set-naming selector returns a
+    ``tl.Selection`` of every match, never capped; a one-thing spelling
+    returns its one record.
+
+    Parameters
+    ----------
+    trace:
+        The owning trace.
+    selector:
+        Selector, target spec, frozen target spec, or non-strict bare string.
+    strict:
+        Whether to reject non-portable query forms.
+    max_fanout:
+        Maximum number of matching sites.
+
+    Returns
+    -------
+    _SiteTable
+        Ordered table of matching layer-pass records.
+    """
+
+    from .._selection.resolver import _resolve_sites
+
+    return _resolve_sites(trace, selector, strict=strict, max_fanout=max_fanout)

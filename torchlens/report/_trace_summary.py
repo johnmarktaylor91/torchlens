@@ -13,6 +13,7 @@ from .._errors import CaptureNotActiveError, InvalidArgumentError
 from .._notebook.cards import BRIDGE_SENTINEL_HTML, trace_repr_html
 from .._source_links import file_line_text, terminal_file_line_link, vscode_file_line_link
 from ._summary_config import resolve_config
+from ._summary_report import SummaryReport
 from ._summary_result import build_rebuilt_summary
 
 if TYPE_CHECKING:
@@ -80,7 +81,8 @@ def repr_html(trace: Trace) -> str:
     if not trace._tracing_finished:
         return card
     try:
-        summary_html = trace.summary()._repr_html_()
+        report = trace.summary()
+        summary_html = report._repr_html_() if isinstance(report, SummaryReport) else ""
     except Exception:  # noqa: BLE001 - a repr must never raise; the card still renders
         summary_html = ""
     return card + summary_html

@@ -1,41 +1,178 @@
-"""Trace visualization mixin."""
+"""Full docstrings of the ``Trace`` drawing, summaries, export, stacking and narration methods.
 
-from collections.abc import Callable, Iterable, Mapping
-from typing import TYPE_CHECKING, Any, Literal
+The methods on ``Trace`` carry a one-line summary; ``_trace_docs.attach_trace_docs`` binds the
+text here as their ``__doc__`` when ``trace.py`` finishes defining the class, so ``help()``
+and notebooks show the full reference while ``trace.py`` stays inside its file cap.
+"""
 
-if TYPE_CHECKING:
-    from .._visualization.code_panel import CodePanelOption
-    from ..intervention.types import FireRecord
-    from ..viz._drawing import Drawing
-    from .trace import Trace
+from __future__ import annotations
 
-    _TraceMixinBase = Trace
-else:
-    _TraceMixinBase = object
-from .._literals import (
-    BufferVisibilityLiteral,
-    CollapseLiteral,
-    FoldRepeatsLiteral,
-    VisDirectionLiteral,
-    VisInterventionModeLiteral,
-    VisNodeModeLiteral,
-    VisNodePlacementLiteral,
-    VisRendererLiteral,
-)
-from . import _doors
-from ._nonfinite import nonfinite_coverage, nonfinite_op_labels
-from ._trace_viz_arguments import _forward_draw, _forward_summary
-from .module import Module
+__all__ = ["DOCS"]
 
-GraphLiteral = Literal["forward", "backward", "combined"]
-
-
-class TraceVisualizationMixin(_TraceMixinBase):
-    """``Trace`` visualization surface: ``draw``, ``show``, and collapse diagnostics."""
-
-    def show(self: "Trace", kind: str | None = None, **kwargs: Any) -> Any:
+DOCS: dict[str, str] = {
+    "stack": (
+        """Stack selector-matched saved outputs in recorded execution order.
+        
+        Selector evaluation reuses :meth:`Trace.find_sites`. Matching operations
+        are then sorted explicitly by their recorded ``ordinal_index``; selector
+        iteration order is never treated as authoritative. The resulting rows can
+        feed ``torchlens.stats.cka``, across-layer PCA, or ``torchlens.repgeom.rdm``.
+        
+        Parameters
+        ----------
+        selector:
+            TorchLens selector accepted by :meth:`Trace.find_sites`.
+        
+        Returns
+        -------
+        StackedActivations
+            Tensor rows and their aligned layer labels.
+        
+        Raises
+        ------
+        ValueError
+            If no operations match, execution ordinals are invalid, a payload was
+            not saved, a primary output is not one tensor, or shapes differ.
+        """
+    ),
+    "logged_values": (
+        """Return values recorded via ``log_value`` during this capture.
+        
+        DOCUMENTED-UNSTABLE spelling (naming ratification pending). This is
+        the read-back for ``torchlens.observers.log_value``, which was a
+        writer nothing read back: values land in
+        ``annotations["logged_values"]`` and persist with the trace.
+        Returns a copy -- write through ``log_value`` during capture, never by
+        mutating this view.
+        
+        Returns
+        -------
+        dict[str, Any]
+            Name-to-value mapping of capture-time logged values (empty when
+            none were recorded).
+        """
+    ),
+    "to_agent_json": (
+        """Return a self-describing machine-readable dump of this trace.
+        
+        DOCUMENTED-UNSTABLE spelling (naming ratification pending). The dump
+        is a navigation aid over the SAME public surface a human drives: it
+        embeds a ``guide`` block mapping every record back to the live
+        spelling to call next (``trace[label]``, ``trace.explain``, ...),
+        and carries the capture outcome/verification honesty facts verbatim.
+        Tensor payloads are never inlined.
+        
+        Parameters
+        ----------
+        max_ops:
+            Optional cap on emitted op rows (execution order, first ``max_ops``
+            kept). Any omission is disclosed in the ``truncation`` block.
+        
+        Returns
+        -------
+        dict[str, Any]
+            JSON-serializable dump under the ``torchlens.agent_trace.v1``
+            schema.
+        """
+    ),
+    "_attach_dataframe_honesty": (
+        """Stamp ``frame.attrs`` with this trace's capture-honesty facts.
+        
+        The one place the records reach ``_capture_honesty`` for tabular exports:
+        ``to_pandas`` here and ``_accessor_base.attach_source_honesty`` both call it.
+        """
+    ),
+    "to_pandas": (
+        """Return a dataframe containing one row per layer pass.
+        
+        Parameters
+        ----------
+        include_decoded_output_summary:
+            If ``True``, add a gated ``decoded_output_summary`` column populated
+            only on output-node rows. The default remains schema-stable.
+        
+        Returns
+        -------
+        pd.DataFrame
+            Layer-pass table for this model log.
+        
+        Raises
+        ------
+        RuntimeError
+            If called before the forward pass has completed.
+        ValueError
+            If an exported field such as ``grad`` is ambiguous across multiple
+            backward passes and must be accessed through a pass-specific record.
+        """
+    ),
+    "decode_output": (
+        """Return decoded output rows: the captured rows, or a decode on demand.
+        
+        With no keywords this returns the rows the automatic capture-time
+        decode produced. Naming a ``style``, a ``head`` or a ``tokenizer``
+        decodes again from the retained output tensors, the persisted
+        ``output_id2label`` and the ImageNet bank, never ``decoded_output``.
+        
+        Parameters
+        ----------
+        k:
+            Optional maximum rank to return per batch item.
+        style:
+            Decode style: ``"classification"``, ``"imagenet"``,
+            ``"imagenet1k"``, ``"hf_text"`` or a registered custom style.
+            ``None`` lets the registered detectors pick one.
+        head:
+            Output head to decode, as an output container path such as
+            ``"logits"``, ``"0"`` or ``"0.logits"``.
+        tokenizer:
+            Tokenizer with a ``decode`` method, used by ``"hf_text"``; without
+            one the rows carry the argmax ``token_ids`` and ``text`` is ``None``.
+        
+        Returns
+        -------
+        Any
+            JSON-primitive decoded output.
+        
+        Raises
+        ------
+        ValueError
+            If decoded output was not captured or the requested ``k`` exceeds
+            the capture-time bound (``decoded_output_unavailable``); a style
+            no detector resolves (``decode_style_unknown``); a head that is
+            not an output head (``decode_head_unknown``) or an ambiguous head
+            (``decode_head_ambiguous``).
+        """
+    ),
+    "output_table": (
+        """Return decoded output as a batch top-k dataframe.
+        
+        Parameters
+        ----------
+        k:
+            Maximum number of class rows per batch item.
+        batch_items:
+            ``None`` returns all captured batch items, an integer returns the
+            first ``N`` batch items, and a sequence selects explicit batch item
+            indices.
+        style:
+            Optional decode style for a decode on demand (see ``decode_output``).
+        head:
+            Optional output head for a decode on demand (see ``decode_output``).
+        
+        Returns
+        -------
+        pd.DataFrame
+            Table with columns ``batch_item``, ``rank``, ``label``, and ``prob``.
+        
+        Raises
+        ------
+        ValueError
+            If classification logits were not decoded or cannot be recomputed.
+        """
+    ),
+    "show": (
         """Render this trace using a lightweight notebook-friendly dispatcher.
-
+        
         Parameters
         ----------
         kind:
@@ -43,74 +180,21 @@ class TraceVisualizationMixin(_TraceMixinBase):
             returns ``repr(self)``, and ``"html"`` returns ``_repr_html_()``.
         **kwargs:
             Visualization keyword arguments forwarded to :meth:`draw`.
-
+        
         Returns
         -------
         Any
             The :class:`~torchlens.viz.Drawing` from :meth:`draw`, or the
             requested text representation.
         """
-
-        return _doors.visualization()._trace_draw.show(self, kind=kind, **kwargs)
-
-    def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field is a keyword
-        self: "Trace",
-        path: str | None = None,
-        *,
-        graph: GraphLiteral = "forward",
-        rolled: bool = False,
-        depth: int = 1000,
-        module: "Module | str | None" = None,
-        collapse: CollapseLiteral = "none",
-        fold_repeats: FoldRepeatsLiteral = None,
-        fold_patterns: Any = None,
-        theme: str = "torchlens",
-        layout: VisNodePlacementLiteral = "auto",
-        renderer: VisRendererLiteral = "graphviz",
-        direction: VisDirectionLiteral | None = None,
-        node_style: VisNodeModeLiteral = "default",
-        show_buffers: BufferVisibilityLiteral = "meaningful",
-        show_legend: bool | None = None,
-        color_by: Any = None,
-        size_by: str | Callable[[Any], Any] | None = None,
-        size_scale: str | None = None,
-        stack_by: str | bool | Callable[[Any], Any] | None = None,
-        node_overlay: str | Mapping[str, Any] | Callable[[Any], Any] | None = None,
-        node_label_fields: list[str] | None = None,
-        graph_overrides: dict[str, Any] | None = None,
-        edge_overrides: dict[str, Any] | None = None,
-        grad_edge_overrides: dict[str, Any] | None = None,
-        module_overrides: dict[str, Any] | None = None,
-        node_spec_fn: Callable[..., Any] | None = None,
-        collapsed_node_spec_fn: Callable[..., Any] | None = None,
-        collapse_fn: Callable[..., Any] | None = None,
-        skip_fn: Callable[..., Any] | None = None,
-        intervention_mode: VisInterventionModeLiteral = "node_mark",
-        show_cone: bool = False,
-        code_panel: "CodePanelOption" = False,
-        font_size: int | None = None,
-        dpi: int | None = None,
-        order_siblings: bool = True,
-        show_containers: Literal[False, "labels", "collapsed", "nodes"] = False,
-        container_max_inline: int = 12,
-        show_input_transform_summary: bool = False,
-        show_orphans: bool = False,  # Invariants support flipping this; owner visual review pending.
-        show_redundant_args: bool = False,
-        show_saved_for_backward: bool = False,
-        bwd: int | Iterable[int] | None = None,
-        show_module_paths: bool = False,
-        show_grad_values: bool = False,
-        backward_node_spec_fn: Callable[..., Any] | None = None,
-        intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
-        file_format: str = "pdf",
-        open_viewer: bool = False,
-    ) -> "Drawing":
+    ),
+    "draw": (
         """Draw this trace and return the picture as a :class:`~torchlens.viz.Drawing`.
-
+        
         The keywords are the :class:`~torchlens.options.VisualizationOptions`
         field names. ``str(drawing)`` is the Graphviz DOT source, ``drawing.save(path)``
         writes it and ``drawing.show()`` displays it.
-
+        
         Parameters
         ----------
         path:
@@ -259,28 +343,20 @@ class TraceVisualizationMixin(_TraceMixinBase):
         open_viewer:
             ``True`` opens the written picture in the system viewer; the
             default never opens anything.
-
+        
         Returns
         -------
         Drawing
             The picture: DOT source (or animation HTML), its format, the written
             path when a file was written, and the resolved policy.
         """
-
-        return _forward_draw(_doors.visualization()._trace_draw.draw, locals())
-
-    def animate(
-        self: "Trace",
-        site: Any,
-        path: str | None = None,
-        *,
-        open_viewer: bool = False,
-    ) -> "Drawing":
+    ),
+    "animate": (
         """Animate the passes at ``site`` and return the picture as a :class:`~torchlens.viz.Drawing`.
-
+        
         The animation is its own door: ``draw`` draws graphs, ``animate`` plays
         the repeated ops at one site.
-
+        
         Parameters
         ----------
         site:
@@ -293,26 +369,21 @@ class TraceVisualizationMixin(_TraceMixinBase):
             ``None`` (the default) keeps the animation in memory.
         open_viewer:
             ``True`` opens the animation in the system viewer.
-
+        
         Returns
         -------
         Drawing
             The HTML animation (``file_format == "html"``).
-
+        
         Raises
         ------
         KeyError
             ``site`` names no layer of this trace.
         """
-
-        return _doors.visualization()._trace_draw.animate(
-            self, site, path=path, open_viewer=open_viewer
-        )
-
-    @property
-    def nonfinite_ops(self: "Trace") -> tuple[str, ...]:
+    ),
+    "nonfinite_ops": (
         """Return pass-qualified labels of ops whose output held NaN or Inf.
-
+        
         DOCUMENTED-UNSTABLE spelling (pending naming-session ratification; no
         deprecation shim owed on rename). This is the queryable per-op record:
         when this capture ran with ``CaptureOptions(on_nonfinite='track')`` it
@@ -322,40 +393,33 @@ class TraceVisualizationMixin(_TraceMixinBase):
         capture-time cost. An empty tuple is only as strong as its coverage --
         read :attr:`nonfinite_coverage` before trusting a clean answer from a
         capture that retained few payloads.
-
+        
         Returns
         -------
         tuple[str, ...]
             Pass-qualified op labels (``Op.label``) in scan order; each is a
             valid ``trace[label]`` key.
         """
-
-        return nonfinite_op_labels(self)
-
-    @property
-    def nonfinite_coverage(self: "Trace") -> Any:
+    ),
+    "nonfinite_coverage": (
         """Return the evidence basis and coverage behind :attr:`nonfinite_ops`.
-
+        
         DOCUMENTED-UNSTABLE spelling (pending naming-session ratification; no
         deprecation shim owed on rename). A clean :attr:`nonfinite_ops` answer
         must not read as a whole-capture verdict when the scan could not
         examine everything; this discloses the basis (``"capture"`` vs
         ``"saved_payloads"``) and the checked / unchecked / unexamined counts.
-
+        
         Returns
         -------
         NonfiniteCoverage
             Frozen coverage record (see
             :class:`torchlens._data_classes._nonfinite.NonfiniteCoverage`).
         """
-
-        return nonfinite_coverage(self)
-
-    def first_nonfinite(
-        self: "Trace", link_format: Literal["terminal", "html", "text"] = "text"
-    ) -> str:
+    ),
+    "first_nonfinite": (
         """Return a text answer describing the first saved non-finite out.
-
+        
         Parameters
         ----------
         link_format:
@@ -366,24 +430,17 @@ class TraceVisualizationMixin(_TraceMixinBase):
             path inside the link target: returned strings flow into logs,
             saved reports, JSON, and MCP responses, where an escape byte
             breaks diffs/caches and an absolute path is a leak.
-
+        
         Returns
         -------
         str
             Human-readable single-paragraph answer naming the layer, operation,
             module, shape, dtype, parents, and source location.
         """
-
-        return _doors.report()._trace_summary.first_nonfinite(self, link_format=link_format)
-
-    def preview_fastlog(
-        self: "Trace",
-        predicate: Callable[..., Any] | None = None,
-        keep_op: Callable[..., Any] | None = None,
-        **kwargs: Any,
-    ) -> str:
+    ),
+    "preview_fastlog": (
         """Render a fastlog predicate preview for this model graph.
-
+        
         Parameters
         ----------
         predicate, keep_op:
@@ -391,36 +448,30 @@ class TraceVisualizationMixin(_TraceMixinBase):
             objects.
         **kwargs:
             Forwarded to :func:`torchlens._visualization.fastlog_preview.preview_fastlog`.
-
+        
         Returns
         -------
         str
             Graphviz DOT source.
         """
-
-        return _doors.visualization()._trace_draw.preview_fastlog(
-            self, predicate=predicate, keep_op=keep_op, **kwargs
-        )
-
-    def last_run_records(self: "Trace") -> tuple["FireRecord", ...]:
+    ),
+    "last_run_records": (
         """Return fire records from the most recent replay, rerun, or live capture.
-
+        
         Returns
         -------
         tuple[FireRecord, ...]
             Immutable snapshot of matching intervention fire records.
         """
-
-        return _doors.visualization()._trace_draw.last_run_records(self)
-
-    def _repr_html_(self: "Trace") -> str:
+    ),
+    "_repr_html_": (
         """Return the notebook HTML representation for this model log.
-
+        
         Returns
         -------
         str
             HTML fragment for IPython/Jupyter display.
-
+        
         Document composition (F08 x C05 x F16): the Trace card (treescope
         memo B1/B2 -- identity, honesty badge, NaN/Inf line, and the
         budgeted lookup-key index, assembled through
@@ -435,46 +486,17 @@ class TraceVisualizationMixin(_TraceMixinBase):
         (memo 3.6) -- appending the summary there would duplicate the
         render treescope owns.
         """
-
-        return _doors.report()._trace_summary.repr_html(self)
-
-    def summary(  # noqa: PLR0913 - the ratified public grammar: every axis is a named keyword
-        self: "Trace",
-        level: str | None = None,
-        *,
-        # Rebuilt grammar (F08; summary memo 3.10). Spellings
-        # DOCUMENTED-UNSTABLE pending naming-session ratification.
-        view: str | None = None,
-        depth: Any = None,
-        columns: list[str] | None = None,
-        where: Any = None,
-        buffers: str | None = None,
-        fold_repeats: Any = None,
-        max_rows: int | None = None,
-        flop_convention: str | None = None,
-        units: str | None = None,
-        style: str | None = None,
-        max_scan_elements: int | None = None,
-        # One-call-only spellings (typed errors here, never no-ops).
-        input_shape: Any = None,
-        execution_mode: str | None = None,
-        grad_mode: str | None = None,
-        # Internal plumbing from the one-call door (not public grammar).
-        _execution_note: str | None = None,
-        _input_synthesis: str | None = None,
-        # Anything else refuses typed (removed legacy spellings name their
-        # successor; unknown names get the nearest grammar option).
-        **unsupported: Any,
-    ) -> str:
+    ),
+    "summary": (
         """Render a summary of this capture.
-
+        
         A bare ``trace.summary()`` resolves the automatic view ladder
         (hybrid / folded module tree / elision) under a 48-body-row budget
         and returns a detached typed report whose ``str`` payload is
         canonical byte-stable ASCII. The legacy spellings (``level=
         "graph"``, ``preset=``, ``fields=``, ``show_ops=``, ...) are
         removed: each refuses typed and names its replacement.
-
+        
         Parameters
         ----------
         level:
@@ -519,7 +541,7 @@ class TraceVisualizationMixin(_TraceMixinBase):
         input_size, execution_mode, grad_mode:
             ONE-CALL-ONLY spellings: valid on ``tl.summary(model, ...)``,
             typed errors here (this method reports an existing capture).
-
+        
         Returns
         -------
         str
@@ -527,36 +549,42 @@ class TraceVisualizationMixin(_TraceMixinBase):
             totals, capture facts, and the
             render/print/to_pandas/to_markdown/to_html result API.
         """
-
-        return _forward_summary(_doors.report()._trace_summary.summary, locals())
-
-    def to_dagua_graph(
-        self: "Trace",
-        rolled: bool = False,
-        depth: int = 1000,
-        show_buffers: bool = False,
-        direction: str = "bottomup",
-        include_grad_edges: bool | None = None,
-    ) -> Any:
+    ),
+    "to_dagua_graph": (
         """Translate this model log into an experimental Dagua graph.
-
+        
         Parameters
         ----------
         rolled, depth, show_buffers, direction, include_grad_edges:
             Forwarded unchanged to
             :func:`torchlens.experimental.dagua.trace_to_dagua_graph`.
-
+        
         Returns
         -------
         Any
             Dagua graph object.
         """
-
-        return _doors.visualization()._trace_draw.to_dagua_graph(
-            self,
-            vis_mode="rolled" if rolled else "unrolled",
-            vis_call_depth=depth,
-            show_buffers=show_buffers,
-            direction=direction,
-            include_grad_edges=include_grad_edges,
-        )
+    ),
+    "narrate": (
+        """Render this trace's events in the live-narration grammar (snoop D5).
+        
+        Post-hoc narration works when ``narrate=`` was never enabled: the same
+        renderer serves ``Trace``, ``PartialTrace``, and ``Recording``. Final
+        labels render natively here; ``trace.nonfinite_ops`` evidence (when
+        available) flags the first nonfinite op in the footer.
+        
+        Parameters
+        ----------
+        last:
+            Keep only the last ``last`` rows (the crash-tail idiom).
+        select:
+            Optional filter: a substring, or a callable over
+            :class:`torchlens.types.NarrationEvent` rows.
+        
+        Returns
+        -------
+        str
+            Rendered narration block (no trailing newline).
+        """
+    ),
+}

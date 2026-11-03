@@ -1855,7 +1855,7 @@ def test_fork_deep_copy_debug_mode_rethrows(monkeypatch: pytest.MonkeyPatch) -> 
     """
     import copy
 
-    from torchlens._data_classes import _trace_intervention as trace_intervention
+    from torchlens._data_classes import _trace_fork as trace_intervention
 
     class _PoisonDeepCopy:
         """Object whose deepcopy always fails (shallow copy still works)."""
