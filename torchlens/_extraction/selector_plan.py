@@ -24,6 +24,8 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
+from .._selection.selection import Selector
+from .._selection.selectors import BaseSelector
 
 __tl_layer__ = "L5"
 
@@ -95,8 +97,6 @@ def _is_selector(value: Any) -> bool:
         instances.
     """
 
-    from .._selection.selectors import BaseSelector
-
     return isinstance(value, BaseSelector)
 
 
@@ -151,8 +151,6 @@ def is_selector_request(layers: Any) -> bool:
         string lookups and selectors (one request resolves through one
         door).
     """
-
-    from .._selection.selection import Selector
 
     if isinstance(layers, Selector):
         _refuse_partial_units(layers)

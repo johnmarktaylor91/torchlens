@@ -37,6 +37,7 @@ from typing import Any
 
 import torch
 
+from .._data_substrate import LEDGER_FILENAME, STIMULUS_IDS_FILENAME
 from .._errors import InvalidArgumentError
 from .._io._durability import fsync_dir, fsync_file
 from .._utils.hashing import sha256_file
@@ -650,8 +651,6 @@ def _write_provenance(reader: Any, temp: Path) -> None:
         Temp destination.
     """
 
-    from .._data_substrate import LEDGER_FILENAME, STIMULUS_IDS_FILENAME
-
     provenance = temp / _PROVENANCE_SUBDIR
     provenance.mkdir()
     source = Path(reader._container)
@@ -680,8 +679,6 @@ def _write_contract(
 
     reader, selected, stems = job.reader, job.selected, job.stems
     temp, conversions = job.temp, job.conversions
-
-    from .._data_substrate import LEDGER_FILENAME
 
     manifest = reader.manifest
     source = Path(reader._container)

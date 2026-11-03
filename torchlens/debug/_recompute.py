@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._capture_honesty import attach_dataframe_honesty
+
 if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
 
@@ -79,7 +81,6 @@ def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> Rep
     frame.attrs["budget_gb"] = budget_gb
     for key, value in excluded.items():
         frame.attrs[f"excluded_{key}_count"] = value
-    from .._capture_honesty import attach_dataframe_honesty
 
     return table_report(
         "recompute_candidates",

@@ -11,11 +11,14 @@ from typing import Any, cast
 import torch
 from torch import nn
 
+from .. import _state
 from .._debug_report import Report, rows_of
 from .._errors import _actionable_message, _ActionableErrorMixin
 from .._input_coerce import _coerce_input_args
 from .._utils import _torch_compat
 from .._utils.arg_handling import normalize_input_args
+from .._utils.rng import _snapshot_cuda_rng_states
+from ..backends.torch.wrappers import unwrap_torch, wrap_torch
 from ..errors._base import CompatibilityError
 from ._dynamo_explain_shapes import (
     _DynamoExplainOutputError,
@@ -197,7 +200,6 @@ def _snapshot_model_state(model: nn.Module) -> tuple[dict[str, torch.Tensor], An
     cpu_rng = torch.get_rng_state()
     # Initialized-CUDA-only, latch-guarded (R36-4): the bare is_available()
     # gate allocated a CUDA context per visible device on CPU-only runs.
-    from .._utils.rng import _snapshot_cuda_rng_states
 
     cuda_rng = _snapshot_cuda_rng_states() or None
     return params, cpu_rng, cuda_rng
@@ -244,9 +246,6 @@ def _clean_torch() -> Iterator[None]:
         Control while torch is unwrapped; wrappers are re-installed on exit if
         they were installed on entry.
     """
-
-    from .. import _state
-    from ..backends.torch.wrappers import unwrap_torch, wrap_torch
 
     was_decorated = bool(getattr(_state, "_is_decorated", False))
     if was_decorated:

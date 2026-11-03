@@ -20,6 +20,9 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils._cuda_probe import _is_cuda_initialized
+from ..options import CaptureOptions
+
 if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
 
@@ -37,8 +40,6 @@ def _initialized_cuda_devices() -> list[int]:
     list[int]
         Device ordinals with a live CUDA context, or an empty list.
     """
-
-    from .._utils._cuda_probe import _is_cuda_initialized
 
     if _is_cuda_initialized() and torch.cuda.is_available():
         return list(range(torch.cuda.device_count()))
@@ -188,7 +189,6 @@ def isolated_capture(
     """
 
     from .._user_public_impls import release_model, trace
-    from ..options import CaptureOptions
 
     run_model = copy.deepcopy(model)
     # Releasing the copy starts its preparation from scratch (a no-op on

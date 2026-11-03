@@ -26,6 +26,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from torchlens._data_classes.trace import ResolvedPreprocessing
+
 from ._attached import (
     adapt_torchvision_preset,
     discover_attached,
@@ -162,8 +164,6 @@ def _record(
     Resolution
         Assembled resolution.
     """
-
-    from torchlens._data_classes.trace import ResolvedPreprocessing
 
     config: dict[str, Any] = {"resolution_method": "explicit"}
     if declared is not None:
@@ -677,8 +677,6 @@ def _discover_from_model(model: Any, offline: bool | None) -> Resolution:
 
 def _as_model_metadata(resolution: Resolution) -> Resolution:
     """Re-stamp an explicit-adapter resolution as model-attached metadata."""
-
-    from torchlens._data_classes.trace import ResolvedPreprocessing
 
     record = resolution.preprocessing
     config = dict(record.config)

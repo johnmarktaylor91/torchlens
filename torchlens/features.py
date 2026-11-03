@@ -24,7 +24,11 @@ from typing import Any, cast
 
 import torch
 
+from torchlens._data_substrate import STIMULUS_IDS_FILENAME
 from torchlens._errors import _actionable_message, _ActionableErrorMixin
+from torchlens._extraction_provenance import input_preprocessing_of
+from torchlens._io import _json
+from torchlens.dataset_extraction import LoadedExtraction, load_extraction
 from torchlens.errors._base import ConfigurationError
 
 __tl_layer__ = "L5"
@@ -215,9 +219,6 @@ def _matrix_from_trace(trace: Any, site: str) -> SiteMatrix:
 def _extraction_row_ids(loaded: Any) -> list[str] | None:
     """Read the recorded stimulus ids of a loaded extraction, if any."""
 
-    from torchlens._data_substrate import STIMULUS_IDS_FILENAME
-    from torchlens._io import _json
-
     manifest = loaded.manifest
     if not (manifest.get("stimulus_provenance") or {}).get("ids_recorded"):
         return None
@@ -245,7 +246,6 @@ def _matrix_from_extraction(loaded: Any, site: str) -> SiteMatrix:
         )
     ids = _extraction_row_ids(loaded)
     matrix, record = as_matrix(loaded.activations[site], row_ids=ids)
-    from torchlens._extraction_provenance import input_preprocessing_of
 
     return SiteMatrix(
         matrix=matrix,
@@ -284,8 +284,6 @@ def site_matrix(source: Any, site: str) -> SiteMatrix:
     """
 
     from pathlib import Path
-
-    from torchlens.dataset_extraction import LoadedExtraction, load_extraction
 
     if isinstance(source, LoadedExtraction):
         return _matrix_from_extraction(source, site)

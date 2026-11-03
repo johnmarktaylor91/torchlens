@@ -45,6 +45,7 @@ from typing import Any
 import torch
 from torch import nn
 
+from .._data_substrate import compute_model_identity
 from .._errors import InvalidArgumentError
 from .._utils.tensor_leaves import tensor_payload_bytes
 
@@ -437,8 +438,6 @@ def _fold_module_callable(fold: _Fold, module: nn.Module, path: str, depth: int)
     depth:
         Remaining depth.
     """
-
-    from .._data_substrate import compute_model_identity
 
     forward = type(module).forward
     if isinstance(forward, types.FunctionType):

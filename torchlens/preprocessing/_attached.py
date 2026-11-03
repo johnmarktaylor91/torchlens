@@ -22,6 +22,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from torchlens._errors import InvalidArgumentError
+
 if TYPE_CHECKING:
     from torchlens._data_classes.trace import ResolvedPreprocessing
 
@@ -66,8 +68,6 @@ def attach_authority(model: ModelT, authority: Any) -> ModelT:
         the authority, ``preprocessing_attach_opaque`` when it resolves to an
         opaque callable that declares nothing.
     """
-
-    from torchlens._errors import InvalidArgumentError
 
     from ._authorities import _probe_torchvision_weights, resolve
 

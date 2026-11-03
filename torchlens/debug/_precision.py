@@ -17,6 +17,7 @@ import torch
 
 from .._debug_report import FoundReport, rows_of
 from .._utils._stochastic_funcs import _STOCHASTIC_FUNC_NAMES
+from ..options import CaptureOptions
 from ._common import _compute_ops, _op_label, _safe_out, _source_line, _tensor_unavailable_reason
 
 if TYPE_CHECKING:
@@ -168,7 +169,6 @@ def bisect_precision(
         First divergence plus the full per-op comparison table.
     """
 
-    from ..options import CaptureOptions
     from ._rerun import isolated_capture
 
     _refuse_unsupported_reference_device(model, reference_dtype)

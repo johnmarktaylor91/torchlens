@@ -31,7 +31,17 @@ from typing import Any, NoReturn
 
 import torch
 
+from .._data_classes._state_adapter import state_items
 from .._errors import InvalidArgumentError
+from .._io import MIN_TLSPEC_VERSION, TLSPEC_VERSION
+from .._io._json import loads_bounded
+from .._io._source_privacy import (
+    _apply_advisory_source_policy,
+    _apply_source_metadata_policy,
+    _apply_trace_blob_policy,
+)
+from .._io.scrub import _ScrubOptions
+from .._io.writer_contract import writer_contract, writer_contract_digest
 from .._utils._torch_symbols import torch_attr
 from .._version import __version__
 
@@ -387,14 +397,6 @@ def _portable_trace_state(trace: Any) -> dict[str, Any]:
         A shallow state copy with the privacy policy applied.
     """
 
-    from .._data_classes._state_adapter import state_items
-    from .._io._source_privacy import (
-        _apply_advisory_source_policy,
-        _apply_source_metadata_policy,
-        _apply_trace_blob_policy,
-    )
-    from .._io.scrub import _ScrubOptions
-
     state = dict(state_items(trace))
     if isinstance(state.get("annotations"), dict):
         state["annotations"] = dict(state["annotations"])
@@ -431,10 +433,7 @@ def write_trace_safetensors(trace: Any, path: str | Path) -> Path:
     from safetensors.torch import save_file
 
     from .._capture_honesty import capture_honesty_facts
-    from .._data_classes._state_adapter import state_items
     from .._data_classes.trace import Trace
-    from .._io import TLSPEC_VERSION
-    from .._io.writer_contract import writer_contract, writer_contract_digest
 
     if not isinstance(trace, Trace):
         raise InvalidArgumentError(
@@ -521,8 +520,6 @@ def _require_honourable(document: dict[str, Any], path: Path) -> None:
         window; ``trace_safetensors_invalid`` for a malformed digest.
     """
 
-    from .._io import MIN_TLSPEC_VERSION, TLSPEC_VERSION
-
     version = document.get("tlspec_version")
     if type(version) is not int or not MIN_TLSPEC_VERSION <= version <= TLSPEC_VERSION:
         raise InvalidArgumentError(
@@ -562,9 +559,6 @@ def read_trace_safetensors(path: str | Path) -> SafetensorsTrace:
     """
 
     from safetensors import safe_open
-
-    from .._io._json import loads_bounded
-    from .._io.writer_contract import writer_contract_digest
 
     source = Path(path)
     with safe_open(str(source), framework="pt") as handle:

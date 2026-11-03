@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._debug_report import Report
+from .._errors import InvalidArgumentError
 from .._utils._torch_compat import read_legacy_fp32_controls, snapshot_fp32_precision_controls
 from ._common import _compute_ops, _op_label, _safe_out, _source_line
 from ._first_bad import FirstBadThing
@@ -499,7 +500,6 @@ def check_determinism(
         If ``runs < 2`` (code ``determinism_runs_invalid``).
     """
 
-    from .._errors import InvalidArgumentError
     from ._rerun import isolated_capture
 
     if runs < 2:

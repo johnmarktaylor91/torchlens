@@ -20,6 +20,7 @@ from typing import Any
 import torch
 
 from torchlens._errors import InvalidArgumentError
+from torchlens.preprocessing import PreprocessingComparison, Resolution, compare as _audit
 
 __tl_layer__ = "L5"
 
@@ -139,8 +140,6 @@ def coerce_input_preprocessing(
         When a declaration-only resolution (no callable) is passed as
         ``input_transform``.
     """
-
-    from torchlens.preprocessing import PreprocessingComparison, Resolution, compare as _audit
 
     transform_callable: Any = None
     identity: Any = None

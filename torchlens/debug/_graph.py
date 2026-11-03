@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import torch
 
+from torchlens._runnable import refuse_poisoned_trace
+
 if TYPE_CHECKING:
     from torchlens._data_classes.op import Op
     from torchlens._data_classes.trace import Trace
@@ -221,8 +223,6 @@ def _compare_rows(
         divergence the forward actually executed; :func:`first_divergence`
         returns it directly.
     """
-
-    from torchlens._runnable import refuse_poisoned_trace
 
     refuse_poisoned_trace(trace_a, "faithful comparison")
     refuse_poisoned_trace(trace_b, "faithful comparison")

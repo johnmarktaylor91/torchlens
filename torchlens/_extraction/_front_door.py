@@ -12,7 +12,17 @@ from typing import TYPE_CHECKING, Any as _Any
 
 import torch
 
+from .._errors import AmbiguousOpLookupError
+from .._extract_refusals import (
+    CaptureOptions,
+    TorchLensError,
+    refuse_activation_not_saved,
+    refuse_lookup_not_found,
+)
+from .._selection.selectors import FacetSelector
+from .._trace_selector_helpers import canonical_module_site_key
 from .._user_public_impls import trace as _capture_trace
+from ..options import CaptureOptions as _LazyCaptureOptions
 
 if TYPE_CHECKING:
     from torch import nn
@@ -66,13 +76,6 @@ def _out_from_log(trace: Trace, layer: str) -> torch.Tensor:
         ``activation_not_saved`` if it resolved but kept no out.
     """
 
-    from .._extract_refusals import (
-        TorchLensError,
-        refuse_activation_not_saved,
-        refuse_lookup_not_found,
-    )
-    from .._trace_selector_helpers import canonical_module_site_key
-
     try:
         layer_log = trace[canonical_module_site_key(trace, layer) or layer]
     except TorchLensError:
@@ -125,9 +128,6 @@ def _matching_saved_layer_labels(trace: Trace, pattern: str) -> list[str]:
     list[str]
         Matching no-pass layer labels in execution order.
     """
-
-    from .._errors import AmbiguousOpLookupError
-    from .._trace_selector_helpers import canonical_module_site_key
 
     if pattern in trace._layer_dict_all_keys:
         return [pattern]
@@ -186,8 +186,6 @@ def pluck(
         ``activation_not_saved`` if it produced no saved tensor.
     """
 
-    from .._extract_refusals import CaptureOptions
-
     # an explicit site rides the capture options, where the trace
     # validates it; without one the trace reads the ambient site itself.
     capture = (
@@ -204,8 +202,6 @@ def _extract_facet_plan(layers: _Any) -> dict[str, _Any]:
 
     A list entry keys by the selector's spelling; a mapping entry by the user label.
     """
-
-    from .._selection.selectors import FacetSelector
 
     items = layers.items() if isinstance(layers, _Mapping) else ((None, v) for v in layers)
     return {
@@ -229,8 +225,6 @@ def _extract_with_facets(
     several-facet request captures with every op saved. Other entries resolve
     as in a plain extract, from the same trace.
     """
-
-    from ..options import CaptureOptions as _LazyCaptureOptions
 
     capture = _LazyCaptureOptions(detach_saved_activations=detach_saved_activations)
     only = next(iter(facet_plan.values())) if len(facet_plan) == len(layers) == 1 else None
@@ -287,9 +281,6 @@ def _extract_layers_with_trace(
     InvalidArgumentError
         ``op_lookup_not_found`` (no such layer) or ``activation_not_saved`` (no saved tensor).
     """
-
-    from .._extract_refusals import CaptureOptions, refuse_lookup_not_found
-    from .._trace_selector_helpers import canonical_module_site_key
 
     facet_plan = _extract_facet_plan(layers)
     if facet_plan:

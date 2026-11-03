@@ -29,8 +29,15 @@ from typing import Any
 
 import torch
 
-from .._data_substrate import ExtractionArtifactError, read_trusted_rows
+from .._data_substrate import (
+    STIMULUS_IDS_FILENAME,
+    ExtractionArtifactError,
+    read_trusted_rows,
+    value_reduction,
+)
 from .._errors import InvalidArgumentError
+from .._extraction_provenance import input_preprocessing_of
+from .._io import _json
 from .._utils._torch_symbols import torch_attr
 from .harvest_schema import HARVEST_BLOCK_KEY, validate_harvest_block
 from .ragged import RaggedBatch, to_padded
@@ -263,9 +270,6 @@ class ExtractionReader:
             Ordered identifiers, or ``None``.
         """
 
-        from .._data_substrate import STIMULUS_IDS_FILENAME
-        from .._io import _json
-
         sidecar = self._container / STIMULUS_IDS_FILENAME
         if not sidecar.exists():
             return None
@@ -434,8 +438,6 @@ class ExtractionReader:
             ``extraction_shard_integrity_mismatch`` on the first mismatch
             of either labeled integrity fact.
         """
-
-        from .._data_substrate import value_reduction
 
         crc_checked = 0
         values_checked = 0
@@ -1099,8 +1101,6 @@ class ExtractionReader:
         dict[str, Any]
             The input-preprocessing block.
         """
-
-        from .._extraction_provenance import input_preprocessing_of
 
         return input_preprocessing_of(self.manifest)
 

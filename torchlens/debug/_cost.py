@@ -7,6 +7,9 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import torch
 
+from .._observability._join import require_availability
+from .._observability._native_profile import join_result_for
+
 if TYPE_CHECKING:
     from torchlens._data_classes.op import Op
     from torchlens._data_classes.trace import Trace
@@ -222,9 +225,6 @@ def _device_time_lookup(trace: Trace) -> dict[str, int]:
     typed ladder refusal (``device_time_unavailable``) instead of returning
     silent zeros.
     """
-
-    from .._observability._join import require_availability
-    from .._observability._native_profile import join_result_for
 
     result = join_result_for(trace)
     if result is None:

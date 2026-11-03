@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._debug_report import FoundReport, rows_of
+from .._errors import InvalidArgumentError
 from ._first_bad import FirstBadThing, amp_scaled_grads_hint
 
 if TYPE_CHECKING:
@@ -288,8 +289,6 @@ def _select_backward_pass(trace: Trace, bwd: int | None) -> tuple[Any, int]:
         ``backward_capture_required`` / ``bwd_selector_required`` /
         ``bwd_selector_unknown`` (passes never collapse).
     """
-
-    from .._errors import InvalidArgumentError
 
     try:
         backward_passes = list(trace.autograd.backward_passes)

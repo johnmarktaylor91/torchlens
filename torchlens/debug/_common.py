@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
+
 if TYPE_CHECKING:
     from torchlens._data_classes.op import Op
     from torchlens._data_classes.trace import Trace
@@ -100,8 +102,6 @@ def _op_label(op: Op) -> str:
         Op label, or the aggregate ``layer_label`` for a multi-pass Layer.
     """
 
-    from .._utils._multipass_access import get_multipass_attr
-
     label = get_multipass_attr(op, "label", None, multipass=None)
     if isinstance(label, str) and label:
         return label
@@ -141,8 +141,6 @@ def _resolve_op(trace: Trace, op_or_label: Any) -> tuple[Op | None, str | None]:
     tuple[Op | None, str | None]
         Resolved op and error message.
     """
-
-    from .._utils._multipass_access import is_multipass_layer
 
     candidate = op_or_label
     if not (hasattr(candidate, "parents") and hasattr(candidate, "children")):

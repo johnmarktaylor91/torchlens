@@ -37,6 +37,7 @@ from .._data_substrate import (
     stimulus_ids_digest,
 )
 from .._errors import InvalidArgumentError, _actionable_message, _ActionableErrorMixin
+from .._extraction_provenance import undeclared_input_block
 from .._io import _json
 from .._utils.tensor_leaves import tensor_payload_bytes
 from .._version import __version__
@@ -488,8 +489,6 @@ def _base_manifest(
     dict[str, Any]
         Bounded manifest header with no layer metadata or totals yet.
     """
-
-    from .._extraction_provenance import undeclared_input_block
 
     shard_format = "safetensors" if signature["native_format"] == "safetensors_shards_v1" else "pt"
     return {

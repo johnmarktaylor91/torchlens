@@ -41,12 +41,9 @@ from .._data_substrate import (
 from .._errors import InvalidArgumentError
 from .._extraction_provenance import apply_input_transform
 from .._user_public_impls import trace as _capture_trace
-from ..errors._base import TorchLensWarning
+from ..errors._base import TorchLensError, TorchLensWarning
 from ..options import CaptureOptions
-from ..transforms import (
-    TransformContext,
-    TransformPipeline,
-)
+from ..transforms import TensorSpec, TransformContext, TransformPipeline
 from ._engine_batching import _iter_item_batches, _move_envelope_to_device
 from ._front_door import _extract_layers_with_trace, _matching_saved_layer_labels
 from .context import BatchContext, _run_post_store_hooks, validate_row_counts
@@ -1018,8 +1015,6 @@ def _freeze_transform_plans(
         Per-key frozen plan rows.
     """
 
-    from ..transforms import TensorSpec
-
     plans: dict[str, Any] = {}
     for key, tensor in batch_outputs.items():
         pipeline = _pipeline_for(plan, key)
@@ -1115,8 +1110,6 @@ def _site_identity(
     plan_sites: Mapping[str, tuple[str, Any]],
 ) -> tuple[str, str | None, str | None]:
     """Resolve one output key's layer label, site key and site-key-unavailable code."""
-
-    from ..errors._base import TorchLensError
 
     if layer_views is not None and key in layer_views:
         layer = layer_views[key]

@@ -7,9 +7,12 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._capture._nonfinite_prefix import canonical_public_label
+from .._data_classes._nonfinite import nonfinite_coverage
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._debug_report import FoundReport, Report
 from ..errors import CaptureError
+from ..options import CaptureOptions
 
 if TYPE_CHECKING:
     from torchlens._data_classes.op import Op
@@ -240,8 +243,6 @@ def _op_label(op: Op) -> str:
         Canonical public label, or ``"unknown"`` when none exists.
     """
 
-    from .._capture._nonfinite_prefix import canonical_public_label
-
     label = canonical_public_label(op)
     return label if label else "unknown"
 
@@ -423,7 +424,6 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanReport:
     """
 
     from .._user_public_impls import trace
-    from ..options import CaptureOptions
 
     capture = trace_kwargs.pop("capture", None)
     trace_kwargs.pop("raise_on_nan", None)
@@ -763,8 +763,6 @@ def nonfinite_origin(subject: Any, x: Any = None, **trace_kwargs: Any) -> Nonfin
         Structured findings, coverage disclosure, capture outcome, cost
         tier, AMP disclosure, and the deferred-authority recipe.
     """
-
-    from .._data_classes._nonfinite import nonfinite_coverage
 
     if is_live_trace(subject) or hasattr(subject, "ops"):
         trace = subject
