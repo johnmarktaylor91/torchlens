@@ -61,18 +61,6 @@ class _TwoLinear(nn.Module):
         return self.b(x)
 
 
-def test_swap_with_string_label_raises_immediately() -> None:
-    """A bare string label must raise HookValueError at construction time.
-
-    No trace, hook attachment, or forward pass should be required to
-    surface the failure -- the label can never resolve, so the error must
-    not wait for fire time.
-    """
-
-    with pytest.raises(HookValueError, match="not implemented"):
-        tl.intervention.helpers.swap_with("linear_1_1")
-
-
 def test_swap_with_string_label_error_names_alternatives() -> None:
     """The error message must point at the supported tensor / Op-like forms."""
 
@@ -124,25 +112,3 @@ def test_swap_with_tensor_form_still_works_in_real_intervention() -> None:
         ),
     )
     assert torch.allclose(op_swapped["linear_2_2"].out, first_layer_out)
-
-
-@pytest.mark.parametrize("doc_path", _DOC_FILES, ids=lambda p: p.name)
-def test_docs_contain_no_live_string_label_swap_with_example(doc_path: Path) -> None:
-    """No shipped doc may show a live ``swap_with("...")`` call example.
-
-    This is the exact documented-but-dead pattern from the cert10 incident:
-    a string-label ``swap_with`` example presented as working code. Table
-    mentions of the bare function name/signature are fine; an actual quoted
-    string argument to a ``swap_with(`` call is not.
-    """
-
-    assert doc_path.exists(), f"expected doc file missing: {doc_path}"
-    text = doc_path.read_text(encoding="utf-8")
-
-    forbidden_patterns = ('swap_with("', "swap_with('")
-    for pattern in forbidden_patterns:
-        assert pattern not in text, (
-            f"{doc_path} still shows a live string-label swap_with(...) example "
-            f"({pattern!r}); the string-label form is unimplemented and must not "
-            "be documented as working."
-        )

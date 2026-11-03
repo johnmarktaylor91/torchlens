@@ -7035,9 +7035,6 @@ test-docstrings	tests/_validation_capture.py	25,
 test-docstrings	tests/backend_conformance/test_ci_zero_test_guard.py	49
 test-docstrings	tests/backend_conformance/test_ci_zero_test_guard.py	50
 test-docstrings	tests/backend_conformance/test_deviceref_vocabulary.py	17
-test-docstrings	tests/backend_parity/test_b10_torch_characterization.py	18
-test-docstrings	tests/backend_parity/test_b10_torch_characterization.py	200
-test-docstrings	tests/backend_parity/test_b10_torch_characterization.py	2026
 test-docstrings	tests/backend_parity/test_torch_parity_gates.py	10
 test-docstrings	tests/backend_parity/test_torch_parity_gates.py	256
 test-docstrings	tests/backend_parity/test_torch_parity_gates.py	53
@@ -7347,8 +7344,6 @@ test-docstrings	tests/test_backward_p5_modules.py	27
 test-docstrings	tests/test_backward_validation_walker_guards.py	40
 test-docstrings	tests/test_bound_method_root_contract.py	41
 test-docstrings	tests/test_brainpipe_byte_model.py	64
-test-docstrings	tests/test_brainpipe_capture_floor.py	11
-test-docstrings	tests/test_brainpipe_capture_floor.py	20
 test-docstrings	tests/test_brainpipe_capture_floor.py	3.5
 test-docstrings	tests/test_brainpipe_capture_floor.py	332
 test-docstrings	tests/test_brainpipe_capture_floor.py	55
@@ -7692,9 +7687,6 @@ test-docstrings	tests/test_extract_v2_text.py	41.6
 test-docstrings	tests/test_extract_v2_workflows.py	10
 test-docstrings	tests/test_extract_v2_workflows.py	14
 test-docstrings	tests/test_factcore_report_layer.py	3.8,
-test-docstrings	tests/test_factcore_repr_harness.py	10
-test-docstrings	tests/test_factcore_repr_harness.py	12
-test-docstrings	tests/test_factcore_repr_harness.py	31
 test-docstrings	tests/test_factcore_safety_tranche.py	10
 test-docstrings	tests/test_factcore_safety_tranche.py	17
 test-docstrings	tests/test_factcore_safety_tranche.py	20
@@ -8476,9 +8468,7 @@ test-docstrings	tests/test_r18p_streaming_lazy.py	33
 test-docstrings	tests/test_r18p_streaming_lazy.py	500
 test-docstrings	tests/test_r19c_cache_capability.py	25,
 test-docstrings	tests/test_r19d_hash_scalar.py	256
-test-docstrings	tests/test_r19d_hash_scalar.py	60416438
 test-docstrings	tests/test_r19d_hash_scalar.py	64
-test-docstrings	tests/test_r19d_hash_scalar.py	86
 test-docstrings	tests/test_r20i_ir_livelane.py	10
 test-docstrings	tests/test_r20j_container.py	99
 test-docstrings	tests/test_r20l_ir_refs.py	11
@@ -8532,11 +8522,6 @@ test-docstrings	tests/test_r7_torch_type_io_rce.py	49
 test-docstrings	tests/test_r8_operator_gate_rce.py	32
 test-docstrings	tests/test_r8_operator_gate_rce.py	41
 test-docstrings	tests/test_ragged_docs_moe_grouper.py	11
-test-docstrings	tests/test_ragged_docs_moe_grouper.py	17
-test-docstrings	tests/test_ragged_docs_moe_grouper.py	17,
-test-docstrings	tests/test_ragged_docs_moe_grouper.py	26
-test-docstrings	tests/test_ragged_docs_moe_grouper.py	29
-test-docstrings	tests/test_ragged_docs_moe_grouper.py	51
 test-docstrings	tests/test_real_world_models.py	10
 test-docstrings	tests/test_real_world_models.py	79
 test-docstrings	tests/test_recipe_dissection.py	12
@@ -8874,7 +8859,6 @@ test-docstrings	tests/test_surgery_live_injections.py	44
 test-docstrings	tests/test_surgery_live_regions.py	18
 test-docstrings	tests/test_surgery_live_regions.py	50
 test-docstrings	tests/test_surgery_visuals_realism.py	50
-test-docstrings	tests/test_swap_with_string_cert10.py	10
 test-docstrings	tests/test_tap_record_span.py	54
 test-docstrings	tests/test_themes_encoding_fixes.py	13
 test-docstrings	tests/test_themes_encoding_fixes.py	16
