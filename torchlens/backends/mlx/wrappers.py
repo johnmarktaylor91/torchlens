@@ -82,6 +82,7 @@ MLX_CORE_FUNCTION_OPS: tuple[str, ...] = (
     "logical_not",
     # shape and indexing
     "reshape",
+    "unflatten",
     "transpose",
     "swapaxes",
     "moveaxis",

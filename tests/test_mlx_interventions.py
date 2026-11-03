@@ -137,14 +137,15 @@ def test_mlx_module_exit_inside_opaque_parent_validates(root: bool) -> None:
 
     x = mx.arange(8).reshape(1, 2, 4).astype(mx.float32) / 8
     model = Model()
+    expected = np.asarray(model(x)) * 0.5
     address = "value_proj" if root else "attn.value_proj"
     trace = tl.trace(
         model.attn if root else model,
         (x, x, x) if root else x,
         backend="mlx",
-        intervene=tl.when(tl.module(address), tl.zero_ablate()),
+        intervene=tl.when(tl.module(address), tl.scale(0.5)),
     )
-    assert np.allclose(np.asarray(trace._layer_list[-1].out), 0)
+    assert np.allclose(np.asarray(trace._layer_list[-1].out), expected)
     assert MLXBackend().validate_trace(trace).passed
 
 
