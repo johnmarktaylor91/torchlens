@@ -5687,7 +5687,7 @@ meaning; `tests/test_glossary_params.py` fails on a public parameter no row name
 | `backward_id=` | constructor keyword of `tl.debug.CheckFinding` (default `None`) |
 | `backward_node_spec_fn=` | keyword of `Trace.draw_combined` (default `None`): Forwarded unchanged to `render_combined_graph`; keyword of `Trace.draw` (keyword-only; default `None`): Combined graph: per-node styling callback for the backward nodes |
 | `backward_pass=` | constructor keyword of `tl.debug.BackwardNanReport` (required): The one-based backward pass walked; constructor keyword of `tl.debug.FirstBadThing` (default `None`): One-based backward pass for backward findings, else `None` |
-| `backward_pass_index=` | constructor keyword of `tl.types.GradFnCall` (default `None`) |
+| `backward_pass_number=` | constructor keyword of `tl.types.GradFnCall` (default `None`) |
 | `backward_pre_hooks=` | constructor keyword of `tl.types.Module` (default `None`): Registered backward pre-hooks |
 | `backward_reads=` | constructor keyword of `tl.debug.ScaleLedgerSnapshot` (required) |
 | `backward_ready=` | keyword of `Trace.save_new_outs` (default `None`): Forwarded unchanged to `save_new_outs`; constructor keyword of `tl.Trace` (default `False`); constructor keyword of `tl.options.CaptureOptions` (optional) |
