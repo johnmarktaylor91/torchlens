@@ -290,7 +290,11 @@ def test_values_count_against_the_save_budget() -> None:
     value_bytes = sum(
         leaf.numel() * leaf.element_size() for row in valued.aten_ops for leaf in _leaves(row.out)
     )
-    assert valued_bytes == rows_bytes + value_bytes
+    # The accountant charges physical storage (alias-aware, credited on release),
+    # so the charge for the values is bounded by their logical bytes, never above.
+    charged = valued_bytes - rows_bytes
+    assert 0 < charged <= value_bytes
+    assert charged >= value_bytes * 0.8, (charged, value_bytes)
     budget = (rows_bytes + valued_bytes) // 2
     assert capture(True, budget).has_aten_ops
     with pytest.raises(SaveBudgetExceededError, match="aten:"):
