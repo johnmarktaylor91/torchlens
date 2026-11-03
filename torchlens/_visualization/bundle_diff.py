@@ -81,7 +81,7 @@ def bundle_diff(
     --------
     >>> # requires: graphviz
     >>> import os, tempfile
-    >>> bundle = tl.Bundle({"clean": tl.trace(model, x), "shifted": tl.trace(model, x + 1)})
+    >>> bundle = tl.Bundle({"clean": tl.trace(model, x), "again": tl.trace(model, x)})
     >>> with tempfile.TemporaryDirectory() as tmp:
     ...     dot = bundle_diff(bundle, path=os.path.join(tmp, "diff"), vis_save_only=True)
     >>> "digraph" in dot

@@ -768,8 +768,7 @@ def trace_to_dagua_graph(
     >>> # requires: dagua
     >>> graph = trace_to_dagua_graph(tl.trace(model, x))
     >>> type(graph).__name__
-    'DaguaGraph'
-    """
+    'DaguaGraph'"""
     import dagua
 
     g = dagua.DaguaGraph(direction=_to_dagua_direction(direction))

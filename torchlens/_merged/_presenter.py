@@ -194,8 +194,7 @@ class MergeReport:
     >>> report.to_markdown().splitlines()[:2]
     ['# Cross-rank merge report', '- ranks: [0, 1]']
     >>> len(report.gaps), len(report.conflicts)
-    (0, 0)
-    """
+    (0, 0)"""
 
     ranks: tuple[int, ...]
     expected_ranks: tuple[int, ...] | None
@@ -299,12 +298,12 @@ class MergedTrace:
     Lifetime contract (R37): the presenter holds its rank traces STRONGLY for
     its own lifetime -- ``merge_ranks([live_a, live_b])`` transitively pins
     both rank traces (and their retained activations) until the presenter is
-    dropped or :meth:`release` is called. Call :meth:`release` when finished
+    dropped or :meth:`cleanup` is called. Call :meth:`cleanup` when finished
     with a presenter built over live traces you do not otherwise retain.
 
     Examples
     --------
-    >>> hasattr(MergedTrace, "release")
+    >>> callable(MergedTrace.cleanup)
     True
     >>> trace = tl.trace(model, x)
     >>> try:
@@ -332,7 +331,7 @@ class MergedTrace:
         """Read each loaded member's settled capture-outcome status once.
 
         Computed at construction (statuses are settled and frozen) so the
-        disclosure stays readable after :meth:`release` and never forces a
+        disclosure stays readable after :meth:`cleanup` and never forces a
         lazy member load. Members whose object carries no settled outcome
         sidecar (hand-built evidence carriers) make no claim and are absent.
         """
@@ -433,7 +432,7 @@ class MergedTrace:
         never claims ``attested_complete`` silently over a halted prefix.
         Ranks whose member object carries no settled outcome sidecar are
         absent. Settled at construction; stays readable after
-        :meth:`release`.
+        :meth:`cleanup`.
         """
 
         return dict(self._member_outcomes)
