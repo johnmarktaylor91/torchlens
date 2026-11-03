@@ -89,6 +89,26 @@ def test_root_reachability_rows_resolve() -> None:
     assert "torchlens.load" in str(excinfo.value)
 
 
+def test_root_underscore_rows_are_gone() -> None:
+    """The existing public version is the sole lazy dunder; private names still refuse."""
+
+    assert {name for name in tl._LAZY_ATTRS if name.startswith("_")} == {"__version__"}
+    assert "__version__" in dir(tl)
+    from torchlens import __version__
+
+    assert __version__ == tl.__version__ == "2.36.3"
+    with pytest.raises(AttributeError):
+        tl._trace  # noqa: B018 - attribute access IS the assertion.
+
+
+def test_hasattr_never_explodes_across_namespaces() -> None:
+    """hasattr answers False (never raises) on every facade namespace."""
+
+    for namespace in (tl, tl.neuro, _NOTEBOOK, tl.bridge, tl.callbacks):
+        assert hasattr(namespace, "definitely_not_a_real_name_xyz") is False
+        assert hasattr(namespace, "_ipython_canary_method_should_not_exist_") is False
+
+
 def test_appliance_probes_import_nothing_foreign() -> None:
     """Probing appliance namespaces never imports the extras' foreign packages.
 

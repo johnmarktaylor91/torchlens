@@ -19,9 +19,11 @@ pre-fix behavior:
 
 from __future__ import annotations
 
+import json
 import os
 import stat
 from pathlib import Path
+from typing import Any
 
 import pytest
 import torch
@@ -30,6 +32,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._io import bundle as bundle_mod
 from torchlens._io.bundle import _reanchor_visualizer_paths, cleanup_tmp
+from torchlens._io.format3.decode import decode_value
 from torchlens.errors import ArtifactError
 
 
@@ -55,7 +58,7 @@ def _save(tmp_path: Path, name: str = "b.tlspec") -> Path:
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX mode bits are the checked signal")
 def test_bundle_sidecars_and_dirs_are_private(tmp_path: Path) -> None:
-    """metadata.pkl/manifest.json are 0600 and the directories 0700.
+    """Every file of a 3.0 save is 0600 and every directory 0700.
 
     Fail-before: the sidecars carrying forward source and harvested attributes
     inherited the umask (0664 under umask 002) while the blobs were 0600.
@@ -66,10 +69,14 @@ def test_bundle_sidecars_and_dirs_are_private(tmp_path: Path) -> None:
         spec = _save(tmp_path)
     finally:
         os.umask(prior)
-    assert stat.S_IMODE((spec / "metadata.pkl").stat().st_mode) & 0o077 == 0
-    assert stat.S_IMODE((spec / "manifest.json").stat().st_mode) & 0o077 == 0
-    assert stat.S_IMODE(spec.stat().st_mode) & 0o077 == 0
-    assert stat.S_IMODE((spec / "blobs").stat().st_mode) & 0o077 == 0
+    assert (spec / "manifest.json").is_file()
+    assert (spec / "blobs").is_dir()
+    open_modes = {
+        path.relative_to(spec).as_posix(): oct(stat.S_IMODE(path.stat().st_mode))
+        for path in (spec, *spec.rglob("*"))
+        if stat.S_IMODE(path.stat().st_mode) & 0o077
+    }
+    assert not open_modes, open_modes
 
 
 # --------------------------------------------------------------------------- #
@@ -134,20 +141,6 @@ def test_save_failure_persists_type_name_not_message(tmp_path: Path, monkeypatch
 
 
 # --------------------------------------------------------------------------- #
-# B8-16: metadata.pkl byte ceiling                                            #
-# --------------------------------------------------------------------------- #
-
-
-def test_metadata_pkl_byte_ceiling_refuses_oversize(tmp_path: Path, monkeypatch) -> None:
-    """An implausibly large metadata.pkl is refused typed before it is unpickled."""
-
-    spec = _save(tmp_path)
-    monkeypatch.setattr(bundle_mod, "_MAX_METADATA_PKL_BYTES", 16)
-    with pytest.raises(ArtifactError, match="ceiling"):
-        tl.load(str(spec))
-
-
-# --------------------------------------------------------------------------- #
 # B8-9: visualizer_path containment on load                                    #
 # --------------------------------------------------------------------------- #
 
@@ -173,10 +166,12 @@ def test_visualizer_path_inside_bundle_is_reanchored(tmp_path: Path) -> None:
     """A real thumbnail inside the bundle's visualizers/ dir is kept and re-anchored."""
 
     spec = _save(tmp_path)
+    trace = tl.load(str(spec))
+    # The 3.0 reader refuses any file the manifest does not list, so the thumbnail is
+    # placed after the load; re-anchoring is a per-trace step the loader runs on its paths.
     (spec / "visualizers").mkdir(exist_ok=True)
     thumb = spec / "visualizers" / "00000_layer.png"
     thumb.write_bytes(b"\x89PNG\r\n\x1a\n")
-    trace = tl.load(str(spec))
     trace._layer_list[0].visualizer_path = "/somewhere/else/00000_layer.png"
     _reanchor_visualizer_paths(trace, spec)
     kept = trace._layer_list[0].visualizer_path
@@ -187,6 +182,120 @@ def test_visualizer_path_inside_bundle_is_reanchored(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 # R21-1: persisted equivalence-class keys are canonically ordered              #
 # --------------------------------------------------------------------------- #
+
+
+class _NestedParamModel(nn.Module):
+    """Nested module so op-level equivalence keys carry a module suffix (R21-1)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.enc = nn.Sequential(nn.Linear(4, 4), nn.Linear(4, 4))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.enc(x)
+
+
+def _persisted_equivalence_groups(spec: Path) -> Any:
+    """Decode the trace record's persisted op equivalence groups from a 3.0 save."""
+
+    manifest = json.loads((spec / "manifest.json").read_text(encoding="utf-8"))
+    trace_table = json.loads(
+        (spec / manifest["records"]["trace"]["path"]).read_text(encoding="utf-8")
+    )
+    return decode_value(
+        trace_table["fields"].get("_graph_op_equivalence_classes"),
+        at="trace._graph_op_equivalence_classes",
+    )
+
+
+def test_persisted_equivalence_class_keys_are_canonically_ordered(tmp_path: Path) -> None:
+    """Trace-level op_equivalence_classes keys sort their param_NNNNNN run.
+
+    Fail-before (R21-1): weight-vs-bias order in a key was a per-capture coin flip
+    (random raw barcodes). The op-level field was re-sorted at save but the
+    trace-level dict keys of a NESTED module (whose op-level string carries a module
+    suffix, so it misses the op-level remap) fell through to an order-preserving
+    remap and stayed random -- breaking byte-reproducibility across processes. Many
+    captures make the flip near-certain to appear if the canonicalization is absent.
+    """
+
+    import re
+
+    param_token = re.compile(r"param_\d{6}")
+    checked = 0
+    for index in range(10):
+        trace = tl.trace(
+            _NestedParamModel().eval(),
+            torch.randn(2, 4),
+            save="all",
+        )
+        spec = tmp_path / f"nested_{index}.tlspec"
+        trace.save(str(spec))
+        groups = _persisted_equivalence_groups(spec)
+        for key in groups or {}:
+            tokens = param_token.findall(key)
+            if len(tokens) >= 2:
+                checked += 1
+                assert tokens == sorted(tokens), f"non-canonical equivalence key persisted: {key}"
+    assert checked > 0, "no multi-param equivalence keys were exercised"
+
+
+class _NestedMultiOutputParamModel(nn.Module):
+    """Nested LSTM so multi-output param-group keys carry `_outindex{N}` (R21)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.rnn = nn.LSTM(4, 4, batch_first=True)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out, _ = self.rnn(x)
+        return out
+
+
+def test_persisted_equivalence_keys_preserve_outindex_suffix(tmp_path: Path) -> None:
+    """Multi-output param-op equivalence groups survive save with distinct keys.
+
+    Fail-before (R21 fix-introduced regression, 6ff95fbc): canonical ordering of
+    the `param_NNNNNN` run rebuilt the key as prefix + sorted tokens, DISCARDING
+    the trailing `_outindex{N}` that disambiguates the outputs of a multi-output
+    parameterized op (e.g. LSTM's output/h/c). All N keys collided into one and
+    the dict rebuild silently kept only the last group.
+    """
+
+    import re
+
+    trace = tl.trace(
+        _NestedMultiOutputParamModel().eval(),
+        torch.randn(2, 3, 4),
+        save="all",
+    )
+    live_groups = dict(trace.graph.op_equivalence_classes)
+    live_outindex_keys = {key for key in live_groups if "_outindex" in key}
+    assert len(live_outindex_keys) >= 2, "expected multi-output param groups in-memory"
+
+    spec = tmp_path / "lstm_outindex.tlspec"
+    trace.save(str(spec))
+    persisted = _persisted_equivalence_groups(spec)
+    assert persisted is not None
+
+    persisted_outindex_keys = {key for key in persisted if "_outindex" in key}
+    suffix = re.compile(r"_outindex\d+$")
+    live_suffixes = sorted(suffix.search(key).group(0) for key in live_outindex_keys)
+    persisted_suffixes = sorted(
+        match.group(0) for match in (suffix.search(key) for key in persisted_outindex_keys) if match
+    )
+    assert persisted_suffixes == live_suffixes, (
+        "outindex-suffixed equivalence groups were collapsed at save: "
+        f"live={live_suffixes} persisted={persisted_suffixes}"
+    )
+    assert len(persisted) == len(live_groups), (
+        f"equivalence groups dropped at save: live={len(live_groups)} persisted={len(persisted)}"
+    )
+    param_token = re.compile(r"param_\d{6}")
+    for key in persisted:
+        tokens = param_token.findall(key)
+        if len(tokens) >= 2:
+            assert tokens == sorted(tokens), f"non-canonical equivalence key persisted: {key}"
 
 
 # --------------------------------------------------------------------------- #

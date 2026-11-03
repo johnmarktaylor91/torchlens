@@ -213,6 +213,10 @@ CELL_SOURCES: dict[str, str] = {
     "max_distance_to_output": "DEFAULT",
     # ---- buffers ----------------------------------------------------------------
     "is_buffer": "CORE",
+    # Like ``is_output``/``is_orphan``: not on the record. Ingest leaves the
+    # base-dict seed; the layer build (finalization ``_build_layer_logs``) and
+    # ``backends._constants.apply_constants_rule`` stamp the final bool.
+    "is_constant": "DEFAULT",
     "address": "JOIN:buffer_address",
     "buffer_pass": "DEFAULT",
     "buffer_source": "JOIN:buffer_source",

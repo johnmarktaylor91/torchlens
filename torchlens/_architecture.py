@@ -71,18 +71,24 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_io": "L1",
     "_io.format_errors": "L0",
     "_io.bundle": "L3",
+    "_io._save_gates": "L3",
     "_io.scrub": "L3",
     "_io.tlspec": "L3",
     "_io.rehydrate": "L3",
     "_io.lazy": "L3",
     "_io.runnable": "L3",
     "_io.runnable_load": "L3",
+    # The runnable binder sits with bundle and the state binders it is installed by.
+    "_io._format3_runnable_bind": "L3",
     "_io.accessor_rebuild": "L3",
     "_io.forgery_validation": "L3",
     # W051-IO: the AUD-CODE 3.0 load validators split out of forgery_validation
     # (R43 size cap) sit at ITS tier; the module imports its shared refusal/
     # census helpers back from it eagerly.
     "_io._load_validators": "L3",
+    # The tlspec identity and backend-field builders split out of tlspec
+    # (file cap) sit at its tier.
+    "_io._tlspec_identity": "L3",
     # -- L2 ENGINE ----------------------------------------------------------
     "_capture": "L2",
     # The PREPARE stage resolves intervention, autoroute and selective-save
@@ -124,6 +130,7 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_captured_run": "L3",
     "_fast_run": "L3",
     "_runnable": "L3",
+    "_runnable._schema_versions": "L1",
     "_transport": "L3",
     "_source_links": "L3",
     "_training_validation": "L3",

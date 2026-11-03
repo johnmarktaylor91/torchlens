@@ -1,16 +1,16 @@
-"""Refuse the legacy rerun of a loaded trace whose recorded values were intervened.
+"""Refuse the legacy rerun of a loaded trace whose saved recipe holds a placeholder.
 
-``Trace._intervention_spec`` is session-only (``FieldPolicy.DROP``): an
-ordinary save keeps the INTERVENED activations and their per-op provenance
-(``is_edited``, fire records, ``intervention_audit``) but not the
-recipe that produced them. The recipe travels separately through
-``save_intervention``; the runnable save already refuses intervened captures
-(``user_intervention_unsupported``) and names the analysis save as the door
-for them. The one place the split could mislead is the legacy rerun of a loaded
-artifact whose recorded values were intervened: it would re-execute without
-the recorded intervention (an edit staged after loading would run alone), so it
-refuses instead, on every legacy door (plain, append, chunked, fork, and
-``do(engine="rerun")``).
+``trace.save()`` writes the staged intervention spec as ``intervention.json``
+(the recipe grammar ``save_intervention`` also writes): rules of built-in
+edits persist with their arguments, so a loaded intervened trace reruns with
+its recorded intervention. A user callable is never saved; it becomes a
+``callable_placeholder`` (rule level, or inside a built-in edit's arguments),
+and the loaded spec records each one in ``metadata["recipe_placeholders"]``.
+Rerunning such a trace would re-execute without that callable (an edit staged
+after loading would run alone), so every legacy door (plain, append, chunked,
+fork, and ``do(engine="rerun")``) refuses ``run_intervention_spec_not_persisted``
+naming the rule position and the callable. A loaded trace whose values were
+intervened but which carries no recipe at all refuses the same way.
 """
 
 from __future__ import annotations
@@ -68,8 +68,28 @@ def _session_spec_has_fired(trace: Any) -> bool:
     return bool(getattr(trace._intervention_spec, "records", None))
 
 
+def _loaded_recipe_placeholders(trace: Any) -> list[dict[str, Any]] | None:
+    """Return the placeholders of the trace's loaded recipe, or ``None`` with no recipe.
+
+    Parameters
+    ----------
+    trace:
+        Trace to inspect.
+
+    Returns
+    -------
+    list[dict[str, Any]] | None
+        ``position``/``qualname`` rows (empty for a recipe of built-in edits),
+        or ``None`` when no recipe was loaded with the trace.
+    """
+
+    metadata = getattr(trace._intervention_spec, "metadata", None) or {}
+    placeholders = metadata.get("recipe_placeholders")
+    return None if placeholders is None else list(placeholders)
+
+
 def refuse_unpersisted_intervention_rerun(trace: Any, provider: Any) -> None:
-    """Refuse a legacy rerun of a loaded trace whose intervention recipe was dropped.
+    """Refuse a legacy rerun of a loaded trace whose recipe cannot be replayed.
 
     Parameters
     ----------
@@ -82,8 +102,9 @@ def refuse_unpersisted_intervention_rerun(trace: Any, provider: Any) -> None:
     ------
     EngineDispatchError
         ``run_intervention_spec_not_persisted`` when the trace was loaded from
-        an artifact whose recorded values were intervened and no rerun of this
-        session has replaced those values yet. Edits staged after loading do
+        an artifact whose recorded values were intervened, no rerun of this
+        session has replaced those values yet, and its recipe holds a callable
+        placeholder (or no recipe was saved). Edits staged after loading do
         not count: they would run without the recorded intervention. Live
         traces are never refused: an empty staged spec there means the user
         detached it on purpose.
@@ -95,14 +116,27 @@ def refuse_unpersisted_intervention_rerun(trace: Any, provider: Any) -> None:
         return
     if not _carries_intervened_values(trace):
         return
+    placeholders = _loaded_recipe_placeholders(trace)
+    if placeholders == []:
+        return
+    if placeholders:
+        first = placeholders[0]
+        raise EngineDispatchError(
+            "This trace was loaded from an artifact whose intervention recipe holds a "
+            f"user callable that was not saved (rule {first.get('position')}: "
+            f"{first.get('qualname')}), so run(model, x) would re-execute without it "
+            "(anything staged after loading would run alone) and return numbers that do "
+            "not match this trace. Remedy: rebuild that rule with its callable and pass it "
+            "as intervene= to a fresh capture with tl.trace(model, x, intervene=...), or "
+            "re-save the trace with built-in edits",
+            code="run_intervention_spec_not_persisted",
+        )
     raise EngineDispatchError(
         "This trace was loaded from an artifact whose recorded values were "
-        "intervened, but trace.save() does not persist the intervention spec, so "
-        "run(model, x) would re-execute without that intervention (anything "
-        "staged after loading would run alone) and return numbers that do not "
-        "match this trace. Remedy: re-capture with tl.trace(model, x, "
-        "intervene=...) (load a recipe saved with save_intervention via "
-        "tl.io.load_intervention_spec), or capture plainly with tl.trace(model, x) "
-        "for the un-intervened model",
+        "intervened, but the artifact carries no intervention recipe, so run(model, x) "
+        "would re-execute without that intervention (anything staged after loading "
+        "would run alone) and return numbers that do not match this trace. Remedy: "
+        "re-capture with tl.trace(model, x, intervene=...), or capture plainly with "
+        "tl.trace(model, x) for the un-intervened model",
         code="run_intervention_spec_not_persisted",
     )

@@ -48,7 +48,7 @@ from torchlens._io._safe_unpickle import (
     SafeBundleUnpickler,
 )
 from torchlens._io.bundle import _RenameAwareUnpickler
-from torchlens.io import inspect_tlspec
+from torchlens.io import detect_tlspec_format, inspect_tlspec
 
 _UNPICKLERS = [SafeBundleUnpickler, _RenameAwareUnpickler]
 
@@ -61,6 +61,13 @@ _UNPICKLERS = [SafeBundleUnpickler, _RenameAwareUnpickler]
 # runs at proto 0 = a single getattr, which never walks). Mirrors
 # tests/test_r27_dotted_walk_rce.py.
 # ---------------------------------------------------------------------------
+
+
+def _write_bundle_manifest(bundle: Path, obj: dict) -> None:
+    """Write a minimal ``manifest.json`` inside ``bundle``."""
+
+    bundle.mkdir(parents=True, exist_ok=True)
+    (bundle / "manifest.json").write_text(json.dumps(obj), encoding="utf-8")
 
 
 def _short_binunicode(text: str) -> bytes:
@@ -193,3 +200,12 @@ def test_inspect_tlspec_rejects_symlinked_spec(tmp_path: Path) -> None:
     (bundle / "spec.json").symlink_to(outside)
     with pytest.raises(ArtifactError, match="symlink"):
         inspect_tlspec(bundle)
+
+
+def test_detect_tlspec_format_regular_bundle_unaffected(tmp_path: Path) -> None:
+    """A regular (non-symlinked) bundle still classifies normally (no regression)."""
+
+    bundle = tmp_path / "regular.tlspec"
+    _write_bundle_manifest(bundle, {"kind": "x", "tlspec_version": 1})
+    assert detect_tlspec_format(bundle) == "pre_3"
+    assert inspect_tlspec(bundle)["kind"] == "x"

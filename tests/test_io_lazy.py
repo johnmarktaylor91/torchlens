@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 import safetensors  # noqa: F401
 import torch
+from _format3_envelope import read_record
 from torch import nn
 
 import torchlens as tl
@@ -192,7 +193,12 @@ def _corrupt_one_blob(bundle_path: Path) -> None:
         Bundle directory path.
     """
 
-    blob_path = next((bundle_path / "blobs").glob("*.safetensors"))
+    manifest = _read_manifest(bundle_path)
+    outs = read_record(bundle_path, "op")["columns"]["out"]
+    reference = next(cell for cell in outs if cell is not None)
+    assert reference["$tl"] == "tensor"
+    assert reference["blob"] in manifest["files"]
+    blob_path = bundle_path / reference["blob"]
     blob_bytes = bytearray(blob_path.read_bytes())
     blob_bytes[-1] = (blob_bytes[-1] + 1) % 256
     blob_path.write_bytes(bytes(blob_bytes))

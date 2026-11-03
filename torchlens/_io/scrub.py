@@ -12,13 +12,11 @@ from __future__ import annotations
 import copy
 import functools
 import inspect
-import pickle
-import re
 import warnings
 import weakref
 from collections import OrderedDict, defaultdict
 from collections.abc import Callable, Iterable, Iterator, Mapping, MutableMapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
@@ -29,7 +27,8 @@ from .._data_classes._state_adapter import state_items, state_new, state_restore
 from .._data_classes.trace import Trace, _scrubbed_transform_repr
 from ..errors._base import TorchLensWarning
 from . import TLSPEC_VERSION, ArtifactError, BlobRef, FieldPolicy, prerelease as _prerelease
-from ._small_raw import _small_raw_value
+from ._scrub_identities import _scrub_nondeterministic_identities
+from ._small_raw import _is_safely_picklable, _small_raw_value, _stringify_value
 from ._source_privacy import (
     _apply_advisory_source_policy,
     _apply_conditional_source_policy,
@@ -46,16 +45,6 @@ from .payload_codec import PayloadCodec, get_payload_codec
 # while the loaded run still reports VERIFIED -- a silent honesty violation. Both
 # are immutable and natively serializable by the portable (pickle) codec.
 _SIMPLE_KEEP_TYPES = (str, int, float, bool, type(None), torch.dtype, torch.device, bytes, slice)
-# Canonical remapped param barcode token (``param_000001``), for R21-1's
-# trace-level equivalence-key ordering.
-_EQUIV_PARAM_TOKEN = re.compile(r"param_\d{6}")
-
-#: One P-independent scan for the exact live-barcode shape: 8 chars of the
-#: barcode alphabet, bounded by non-alphanumerics (barcodes are '_'-joined in
-#: identity strings, and '_' is outside the alphabet). See the R29 note at
-#: the remap construction site.
-_BARCODE_TOKEN_PATTERN = re.compile(r"(?<![0-9A-Za-z])[0-9A-Za-z]{8}(?![0-9A-Za-z])")
-_BARCODE_TOKEN_FULLMATCH = re.compile(r"[0-9A-Za-z]{8}").fullmatch
 _PORTABLE_WALK_MAX_DEPTH = 200
 _SCRUB_IN_PROGRESS = object()
 
@@ -138,12 +127,19 @@ class _ScrubOptions:
     structure_only: bool = False
     backend_name: str = "torch"
     payload_materialization: bool = True
+    typed_values: bool = False
     payload_codec: PayloadCodec = field(default_factory=lambda: get_payload_codec("torch"))
     unsupported_tensor_records: list[dict[str, str]] = field(default_factory=list)
     # Once-per-type ledger of save-side container downgrades (foreign tuple
     # subclasses flattened, foreign defaultdict factories dropped), keyed by
     # qualified type name so a metadata tree full of one type warns once.
     container_portability_disclosures: dict[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Derive the selected backend codec while preserving an explicitly matching one."""
+
+        if self.payload_codec.backend_name != self.backend_name:
+            self.payload_codec = get_payload_codec(self.backend_name)
 
 
 def scrub_for_save(
@@ -160,6 +156,7 @@ def scrub_for_save(
     payload_materialization: bool = True,
     sparse_runnable: bool = False,
     blob_id_floor: int = 0,
+    record_pairs: list[tuple[Any, Any]] | None = None,
 ) -> tuple[dict[str, Any], list[BlobSpec], list[dict[str, str]]]:
     """Scrub a ``Trace`` into portable metadata plus tensor blob specs.
 
@@ -208,6 +205,8 @@ def scrub_for_save(
     blob_id_floor:
         Ids start at ``blob_id_floor + 1``; a streaming finalize passes the
         writer's issued count so no scrub id repeats a streamed id.
+    record_pairs:
+        Filled with ``(scrubbed copy, live original)`` pairs for the 3.0 writer.
 
     Returns
     -------
@@ -228,8 +227,8 @@ def scrub_for_save(
         structure_only=bool(isinstance(trace, Trace) and trace._options_structure_only),
         backend_name=str(backend_name or trace._provenance_backend),
         payload_materialization=payload_materialization,
+        typed_values=record_pairs is not None,
     )
-    options.payload_codec = get_payload_codec(options.backend_name)
     memo: dict[int, Any] = {}
     blob_specs: list[BlobSpec] = []
     blob_counter = [blob_id_floor]
@@ -248,13 +247,10 @@ def scrub_for_save(
         else None
     )
     _stamp_replacement_evidence(trace, scrubbed_state)
-    # AUD-CODE 3.11g: annotation tensors become plain detached tensors on the
-    # scrubbed copy (the live trace keeps its session-time objects).
-    from ._portability_preflight import sanitize_state_annotations
-
-    sanitize_state_annotations(scrubbed_state)
     _scrub_nondeterministic_identities(scrubbed_state)
     detach_conditional_trace_backrefs(scrubbed_state)
+    if record_pairs is not None:
+        record_pairs.extend((memo.get(id(item)), item) for item in memo.get(id(memo), ()))
     return scrubbed_state, blob_specs, options.unsupported_tensor_records
 
 
@@ -305,227 +301,6 @@ def _stamp_replacement_evidence(trace: Trace, state: dict[str, Any]) -> None:
             "origin": "live_capture_save_stamp",
         }
         scrubbed_op.annotations = annotations
-
-
-def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
-    """Remap process-local identity tokens to deterministic trace-local ordinals.
-
-    Parameters
-    ----------
-    state:
-        Scrubbed top-level trace state, mutated before it is persisted.
-
-    Notes
-    -----
-    Capture-time parameter barcodes and CPython ``id()`` values are useful while
-    constructing a trace, but neither is a portable identity.  The remap keeps all
-    within-artifact joins intact while making equivalent captures serialize the same
-    logical identifiers.
-    """
-
-    ops = list(state.get("_layer_list") or ())
-    layers = list((state.get("_layer_logs") or {}).values())
-    params = sorted(
-        (state.get("_param_logs") or {}).values(),
-        key=lambda param: (
-            str(getattr(param, "address", "")),
-            str(getattr(param, "name", "")),
-        ),
-    )
-
-    barcode_map: dict[str, str] = {}
-
-    def register_barcode(value: Any) -> None:
-        """Register one live barcode in deterministic encounter order."""
-
-        if isinstance(value, str) and value not in barcode_map:
-            barcode_map[value] = f"param_{len(barcode_map) + 1:06d}"
-
-    for param in params:
-        register_barcode(getattr(param, "barcode", None))
-    for record in (*ops, *layers):
-        for barcode in getattr(record, "_param_barcodes", ()) or ():
-            register_barcode(barcode)
-
-    # R29 (b4, 4th round): the all-P alternation regex trialed every one of P
-    # branches at essentially every position of every param-FREE record's
-    # guaranteed-miss key -- O(V_paramfree x P), ~40s of pure regex misses per
-    # portable save at 100k ops / 2k params. Live barcodes are exactly 8
-    # chars of ``[0-9A-Za-z]`` (utils/hashing barcode alphabet), so one
-    # P-independent bounded-token scan plus a dict probe does the same work
-    # in O(L) per string (~300x measured at P=4000). The alternation remains
-    # as the fallback for any registered token violating the 8-char
-    # invariant (legacy/exotic captures), keeping remap coverage identical.
-    fast_barcode_scan = bool(barcode_map) and all(
-        _BARCODE_TOKEN_FULLMATCH(barcode) is not None for barcode in barcode_map
-    )
-    if fast_barcode_scan:
-        barcode_pattern = _BARCODE_TOKEN_PATTERN
-    elif barcode_map:
-        barcode_pattern = re.compile(
-            "|".join(re.escape(barcode) for barcode in sorted(barcode_map, key=len, reverse=True))
-        )
-    else:
-        barcode_pattern = None
-
-    def remap_barcode_text(value: Any) -> Any:
-        """Replace registered barcodes in a scalar identity string."""
-
-        if not isinstance(value, str):
-            return value
-        if value in barcode_map:
-            return barcode_map[value]
-        if barcode_pattern is None:
-            return value
-        if fast_barcode_scan:
-            return barcode_pattern.sub(
-                lambda match: barcode_map.get(match.group(0), match.group(0)), value
-            )
-        return barcode_pattern.sub(lambda match: barcode_map[match.group(0)], value)
-
-    def canonical_equivalence_key(value: Any) -> Any:
-        """Remap AND canonically order the ``param_NNNNNN`` run in an equiv key.
-
-        R21-1: an ``op_equivalence_classes`` key is
-        ``f"{layer_type}_{'_'.join(sorted(raw_barcodes))}"`` -- but the raw barcodes
-        are per-capture RANDOM, so weight-vs-bias order in the key was a coin flip
-        per capture. The op-level ``equivalence_class`` field is re-sorted into
-        canonical order at save, but the trace-level dict keys fell through to the
-        ORDER-PRESERVING substring remapper and stayed random. Remapping barcodes to
-        their canonical ``param_NNNNNN`` ids and then sorting that trailing run makes
-        the persisted key byte-reproducible across processes.
-        """
-
-        remapped = remap_barcode_text(value)
-        if not isinstance(remapped, str):
-            return remapped
-        matches = list(_EQUIV_PARAM_TOKEN.finditer(remapped))
-        if len(matches) <= 1:
-            return remapped
-        tokens = [match.group(0) for match in matches]
-        run_start = matches[0].start()
-        run_end = matches[-1].end()
-        # Sort ONLY the contiguous param-token run; the producer legally appends
-        # `_outindex{N}` (multi-output param ops) after it, and dropping that tail
-        # collides all N keys into one, silently losing equivalence groups.
-        if remapped[run_start:run_end] != "_".join(tokens):
-            return remapped
-        return remapped[:run_start] + "_".join(sorted(tokens)) + remapped[run_end:]
-
-    equivalence_class_map: dict[str, str] = {}
-    for param in params:
-        param.barcode = remap_barcode_text(getattr(param, "barcode", None))
-    for record in (*ops, *layers):
-        original_barcodes = list(getattr(record, "_param_barcodes", ()) or ())
-        original_group = "_".join(sorted(original_barcodes))
-        remapped_barcodes = [remap_barcode_text(barcode) for barcode in original_barcodes]
-        remapped_group = "_".join(sorted(remapped_barcodes))
-        record._param_barcodes = remapped_barcodes
-        equivalence_class = getattr(record, "equivalence_class", None)
-        if isinstance(equivalence_class, str) and original_group:
-            record.equivalence_class = equivalence_class.replace(original_group, remapped_group)
-        else:
-            record.equivalence_class = remap_barcode_text(equivalence_class)
-        if isinstance(equivalence_class, str) and isinstance(record.equivalence_class, str):
-            equivalence_class_map[equivalence_class] = record.equivalence_class
-        # Spec gate FIRST: Layer delegates `parent_param_ops` per pass and its
-        # multi-pass accessor raises InvalidArgumentError (a ValueError, which
-        # getattr does not swallow), so probing before the gate broke every
-        # save of a multi-pass trace. Layer's _PORTABLE_STATE_SPEC has no
-        # `parent_param_ops` row; only Op-side records reach the getattr.
-        record_spec = getattr(type(record), "_PORTABLE_STATE_SPEC", {})
-        parent_param_ops = (
-            getattr(record, "parent_param_ops", None) if "parent_param_ops" in record_spec else None
-        )
-        if isinstance(parent_param_ops, dict):
-            record.parent_param_ops = {
-                remap_barcode_text(key): value for key, value in parent_param_ops.items()
-            }
-
-    equivalence_groups = state.get("_graph_op_equivalence_classes")
-    if isinstance(equivalence_groups, dict):
-        rebuilt_groups = {
-            equivalence_class_map.get(key) or canonical_equivalence_key(key): value
-            for key, value in equivalence_groups.items()
-        }
-        # Annotated as the common `dict` supertype: the two branches below
-        # construct a `defaultdict` and a plain `dict` respectively (a
-        # `defaultdict` is a `dict`, not the reverse), so the variable needs
-        # the wider declared type rather than inferring it from whichever
-        # branch happens to assign first.
-        remapped_groups: dict[Any, Any]
-        if isinstance(equivalence_groups, defaultdict):
-            # `type(groups)(generator)` treats the first positional arg as
-            # `default_factory`, which must be callable or None: a generator
-            # of (key, value) pairs raised `TypeError: first argument must be
-            # callable or None`. Preserve the factory explicitly instead.
-            remapped_groups = type(equivalence_groups)(equivalence_groups.default_factory)
-            remapped_groups.update(rebuilt_groups)
-        else:
-            remapped_groups = type(equivalence_groups)(rebuilt_groups)
-        state["_graph_op_equivalence_classes"] = remapped_groups
-
-    grad_fn_order = list(state.get("_autograd_grad_fn_order") or ())
-    grad_fn_logs = state.get("_grad_fn_logs") or {}
-    grad_id_map: dict[int, int] = {}
-
-    def register_grad_id(value: Any) -> None:
-        """Register one autograd identity in deterministic discovery order."""
-
-        if isinstance(value, int) and not isinstance(value, bool) and value not in grad_id_map:
-            grad_id_map[value] = len(grad_id_map) + 1
-
-    for grad_id in grad_fn_order:
-        register_grad_id(grad_id)
-    for grad_id in grad_fn_logs:
-        register_grad_id(grad_id)
-    for grad_fn in grad_fn_logs.values():
-        register_grad_id(getattr(grad_fn, "grad_fn_object_id", None))
-        register_grad_id(getattr(grad_fn, "creator_object_id", None))
-        for next_id in getattr(grad_fn, "next_grad_fn_ids", ()) or ():
-            register_grad_id(next_id)
-    for record in (*ops, *layers):
-        register_grad_id(getattr(record, "grad_fn_object_id", None))
-    # grind-r5 b3 R21-1: the BACKWARD-PASS rows carry the same autograd
-    # identities in ``root_grad_fn_ids``; the a169e886 dense-ordinal fix never
-    # reached them, so a raw grad_fn memory address persisted verbatim into
-    # ``.tlspec`` (process-dependent artifact bytes + a dangling address in a
-    # portable file). Register + remap them through the same trace-local map.
-    backward_pass_logs = state.get("_backward_pass_logs")
-    pass_records = (
-        tuple(backward_pass_logs.values()) if isinstance(backward_pass_logs, dict) else ()
-    )
-    for pass_record in pass_records:
-        for root_id in getattr(pass_record, "root_grad_fn_ids", None) or ():
-            register_grad_id(root_id)
-
-    def remap_grad_id(value: Any) -> Any:
-        """Return the trace-local ordinal for one autograd identity."""
-
-        return grad_id_map.get(value, value)
-
-    if isinstance(grad_fn_logs, dict):
-        remapped_logs = type(grad_fn_logs)()
-        for grad_id, grad_fn in grad_fn_logs.items():
-            grad_fn.grad_fn_object_id = remap_grad_id(grad_fn.grad_fn_object_id)
-            grad_fn.creator_object_id = remap_grad_id(grad_fn.creator_object_id)
-            grad_fn.next_grad_fn_ids = [
-                remap_grad_id(next_id) for next_id in grad_fn.next_grad_fn_ids
-            ]
-            remapped_logs[remap_grad_id(grad_id)] = grad_fn
-        state["_grad_fn_logs"] = remapped_logs
-    state["_autograd_grad_fn_order"] = [remap_grad_id(grad_id) for grad_id in grad_fn_order]
-    roots = state.get("_autograd_backward_root_grad_fn_object_ids") or ()
-    state["_autograd_backward_root_grad_fn_object_ids"] = [remap_grad_id(g) for g in roots]
-    for record in (*ops, *layers):
-        record.grad_fn_object_id = remap_grad_id(getattr(record, "grad_fn_object_id", None))
-    for pass_record in pass_records:
-        root_ids = getattr(pass_record, "root_grad_fn_ids", None)
-        if root_ids:
-            pass_record.root_grad_fn_ids = [remap_grad_id(root_id) for root_id in root_ids]
-
-    for object_id_key in ("_provenance_model_object_id", "_provenance_input_object_id"):
-        state[object_id_key] = 1 if state.get(object_id_key) is not None else None
 
 
 def detach_conditional_trace_backrefs(value: Any) -> None:
@@ -861,6 +636,7 @@ class _ScrubWalk:
     blob_counter: list[int]
     stringify_unknown: bool = False
     payload_owner: tuple[Any, str] | None = None
+    raw_payloads: bool = False
 
     @property
     def noun(self) -> str:
@@ -876,7 +652,7 @@ class _ScrubWalk:
         policies on a plain metadata walk sharing this walk's memo and blobs.
         """
 
-        if self.payload_owner is None and not self.stringify_unknown:
+        if self.payload_owner is None and not self.stringify_unknown and not self.raw_payloads:
             return self
         return _ScrubWalk(self.options, self.memo, self.blob_specs, self.blob_counter)
 
@@ -1049,7 +825,11 @@ def _empty_mapping_like(
     """
 
     if isinstance(value, defaultdict):
-        return defaultdict(_portable_default_factory(value, options))
+        return defaultdict(
+            value.default_factory
+            if options.typed_values
+            else _portable_default_factory(value, options)
+        )
     if isinstance(value, OrderedDict):
         return OrderedDict()
     return {}
@@ -1088,6 +868,15 @@ def _scrub_object_node(value: Any, walk: _ScrubWalk, depth: int) -> Any:
     """
 
     owner = walk.payload_owner
+    if owner is not None and walk.raw_payloads:
+        backend = "numpy" if isinstance(value, np.ndarray) else walk.options.backend_name
+        codec = get_payload_codec(backend)
+        if not codec.can_encode(value):
+            return value
+        options = replace(walk.options, backend_name=backend, payload_codec=codec)
+        return _blobify_tensor_field(
+            owner[0], owner[1], value, walk.blob_specs, walk.blob_counter, options
+        )
     if owner is not None and walk.options.payload_codec.can_encode(value):
         return _blobify_tensor_field(
             owner[0], owner[1], value, walk.blob_specs, walk.blob_counter, walk.options
@@ -1685,26 +1474,31 @@ def _scrub_raw_value_for_save(
     policy = getattr(owner, _RAW_SAVE_POLICY_ATTR.get(field_name, policy_name), "small")
     if policy is False:
         return None
-    if policy is True:
-        # Scrub with ``stringify_unknown=True`` (not the default
-        # passthrough) so live, un-picklable objects nested inside a raw
-        # input/output (generators, locks, open file handles, sockets, ...)
-        # fall through to ``_stringify_value``'s bounded placeholder instead
-        # of reaching ``pickle.dump`` unmodified. This mirrors the
-        # ``saved_args``/``forward_args``/``custom_attributes`` policy,
-        # which already uses a stringify fallback (via
-        # ``_blobify_recursive_value``) for exactly this class of object.
-        return _scrub_value(
-            value,
-            walk.options,
-            walk.memo,
-            walk.blob_specs,
-            walk.blob_counter,
-            stringify_unknown=True,
-        )
-    if policy != "small":
+    if policy is not True and policy != "small":
         raise ArtifactError(f"{policy_name} must be 'small', True, or False.")
-    return _small_raw_value(value, field_name=field_name)
+    if not walk.options.typed_values:
+        return (
+            _scrub_value(
+                value,
+                walk.options,
+                walk.memo,
+                walk.blob_specs,
+                walk.blob_counter,
+                stringify_unknown=True,
+            )
+            if policy is True
+            else _small_raw_value(value, field_name=field_name)
+        )
+    selected = value if policy is True else _small_raw_value(value, field_name=field_name)
+    raw_walk = _ScrubWalk(
+        walk.options,
+        walk.memo,
+        walk.blob_specs,
+        walk.blob_counter,
+        payload_owner=(owner, field_name),
+        raw_payloads=True,
+    )
+    return _scrub_node(selected, raw_walk, 0)
 
 
 def _blobify_tensor_field(
@@ -1812,77 +1606,6 @@ def _blobify_recursive_value(
     return _scrub_node(value, walk, depth)
 
 
-def _stringify_value(value: Any) -> str:
-    """Convert a non-portable object into a stable placeholder string."""
-
-    return f"<scrubbed:{type(value).__name__}>"
-
-
-_KNOWN_SAFELY_PICKLABLE_TYPES = (torch.Tensor,)
-
-
-def _is_safely_picklable(value: Any) -> bool:
-    """Return whether ``value`` can be pickled without raising.
-
-    Used by :func:`_scrub_value`'s ``stringify_unknown`` path to decide
-    whether an unspecced leaf value (one with no
-    ``_PORTABLE_STATE_SPEC``) reached via ``save_raw_input``/
-    ``save_transformed_output``'s ``True`` policy should be kept as-is (full
-    retention, per those options' docs) or degraded to a bounded
-    :func:`_stringify_value` placeholder. Probing picklability once, here,
-    at scrub time -- rather than letting the real ``pickle.dump()`` over
-    the full scrubbed state discover the problem later -- is what keeps
-    live-resource objects (generators, locks, open file handles, sockets,
-    ...) from ever reaching that later call, where a failure mid-write can
-    otherwise cost an already-saved bundle (see ``bundle.py``'s ``save()``
-    atomic-write/backup-restore contract).
-
-    ``torch.Tensor`` and ``numpy.ndarray`` values whose dtype holds no
-    object references (numeric, bool, string, and structured dtypes with
-    no object-typed field) are exempted from the probe: they always
-    support the standard pickle protocol via their own ``__reduce_ex__``
-    and hold no live OS resources that could make pickling fail, so
-    probing them would only pay a full extra ``pickle.dumps()`` pass --
-    doubling CPU and transiently doubling peak memory -- for a result
-    that is always ``True``. Any ``numpy.ndarray`` whose dtype reports
-    ``hasobject`` (a plain ``object``-dtype array, or a structured/
-    compound/nested dtype with an object-typed field), however, is NOT
-    exempted: it may hold arbitrary live Python objects (generators,
-    locks, or other unpicklable values) in any of its fields, just like a
-    plain ``list`` or ``dict`` can, so exempting it would reintroduce
-    exactly the hard ``save()`` failure this probe exists to prevent.
-    ``dtype.hasobject`` is used rather than a top-level
-    ``dtype != np.dtype("object")`` identity check because the latter is
-    only true for a bare object dtype -- a structured dtype whose fields
-    include ``object`` is never itself equal to ``np.dtype("object")`` and
-    would wrongly slip through an identity comparison even though it
-    genuinely embeds live object references. Skipping the probe only for
-    provably-safe types keeps the live-resource detection intact for
-    every value it actually protects.
-
-    Parameters
-    ----------
-    value:
-        Candidate value to probe.
-
-    Returns
-    -------
-    bool
-        ``True`` if ``pickle.dumps(value)`` succeeds, ``False`` otherwise.
-    """
-
-    if isinstance(value, _KNOWN_SAFELY_PICKLABLE_TYPES):
-        return True
-    if isinstance(value, np.ndarray) and not value.dtype.hasobject:
-        return True
-
-    try:
-        pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
-    except Exception:
-        return False
-    return True
-
-
 def _next_blob_id(blob_counter: list[int]) -> str:
     """Allocate the next monotonically increasing zero-padded blob id."""
 
@@ -1901,7 +1624,7 @@ def _blob_kind_for_field(owner: Any, field_name: str) -> str:
         return "grad"
     if field_name == "transformed_grad":
         return "transformed_grad"
-    if field_name in {"saved_args", "saved_kwargs"}:
+    if field_name in {"saved_args", "saved_kwargs", "input", "transformed_output"}:
         return "captured_arg"
     if field_name == "out_versions_by_child":
         return "child_version"

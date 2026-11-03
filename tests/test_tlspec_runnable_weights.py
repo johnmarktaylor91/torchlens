@@ -9,24 +9,29 @@ from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import read_record, read_runnable, tensor_references, write_runnable
 from safetensors.torch import load_file
 from torch import nn
 
 import torchlens as tl
 from torchlens._io import ArtifactError
+from torchlens._io.format3.decode import decode_value
 from torchlens._io.runnable import (
+    assert_sparse_core_has_no_tensor_payload,
     build_sparse_run_descriptor,
 )
 from torchlens._runnable import (
+    NumericAttestationStatus,
     PathFaithfulness,
     StateSource,
 )
+from torchlens._runnable.state import runnable_tensor_byte_digest
 from torchlens.errors import StateBindingError
 from torchlens.options import CaptureOptions
 
 
 def _fresh_warning() -> bool:
-    import torchlens._io.bundle as bundle
+    import torchlens._io._save_gates as bundle
 
     return not bundle._NONPERSISTENT_DISCLOSURE_WARNED
 
@@ -98,12 +103,9 @@ def _manifest(path: Path) -> dict[str, Any]:
 
 
 def _metadata(path: Path) -> dict[str, Any]:
-    """Read trusted test-produced sparse metadata for invariant checks."""
+    """Inspect the authoritative JSON record cells without invoking pickle."""
 
-    with (path / "metadata.pkl").open("rb") as handle:
-        value = pickle.load(handle)  # noqa: S301 - created in this test process
-    assert isinstance(value, dict)
-    return value
+    return {kind: read_record(path, kind) for kind in _manifest(path)["records"]}
 
 
 # shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
@@ -175,18 +177,15 @@ def test_used_nonpersistent_buffer_is_embedded_without_becoming_canonical_state(
     trace.save(weighted_path, level="runnable", include_weights=True)
 
     sparse_manifest = _manifest(sparse_path)
-    payload = sparse_manifest["run"]["payload_layers"]["nonpersistent_buffers"]
+    payload = read_runnable(sparse_path)["payload_layers"]["nonpersistent_buffers"]
     assert payload == {
         "present": True,
         "schema": "runnable_nonpersistent_buffer_v1",
     }
-    nonpersistent_entries = [
-        entry
-        for entry in sparse_manifest["tensors"]
-        if entry["kind"] == "runnable_nonpersistent_buffer"
-    ]
-    assert [entry["label"] for entry in nonpersistent_entries] == ["offset"]
-    stored_offset = load_file(str(sparse_path / nonpersistent_entries[0]["relative_path"]))["data"]
+    nonpersistent_entries = sparse_manifest["runnable"]["buffers_tensors"]
+    assert list(nonpersistent_entries) == ["offset"]
+    reference = nonpersistent_entries["offset"]
+    stored_offset = load_file(str(sparse_path / reference["blob"]))[reference["key"]]
     assert torch.equal(stored_offset, model.offset)
 
     loaded = tl.load(sparse_path)
@@ -202,14 +201,143 @@ def test_used_nonpersistent_buffer_is_embedded_without_becoming_canonical_state(
     assert staged_result.report.state_source is StateSource.USER_STATE_DICT
 
     weighted_manifest = _manifest(weighted_path)
-    weight_entries = [
-        entry for entry in weighted_manifest["tensors"] if entry["kind"] == "runnable_weight"
-    ]
-    assert [entry["label"] for entry in weight_entries] == ["persistent_guard"]
+    weight_entries = weighted_manifest["runnable"]["state_dict_tensors"]
+    assert list(weight_entries) == ["persistent_guard"]
     weighted = tl.load(weighted_path)
     weighted_result = weighted.run(inputs=inputs, seed=1)
     assert torch.equal(weighted_result.output, model(inputs))
     assert weighted_result.report.state_source is StateSource.EMBEDDED_CAPTURE_STATE
+
+
+def test_runnable_tensor_digest_includes_dtype_and_shape() -> None:
+    """Distinguish logical tensors that share only their raw byte representation."""
+
+    float_value = torch.tensor([1.0], dtype=torch.float32)
+    integer_value = float_value.view(torch.int32)
+    reshaped_value = float_value.reshape(1, 1)
+
+    assert torch.equal(float_value.view(torch.uint8), integer_value.view(torch.uint8))
+    assert runnable_tensor_byte_digest(float_value) != runnable_tensor_byte_digest(integer_value)
+    assert runnable_tensor_byte_digest(float_value) != runnable_tensor_byte_digest(reshaped_value)
+
+
+def test_include_weights_writes_full_state_dict_as_separate_blob_family(
+    tmp_path: Path,
+) -> None:
+    """Persist parameters and persistent buffers without touching the sparse core."""
+
+    model = WeightPayloadModel().eval()
+    trace = _capture(model)
+    sparse_path = tmp_path / "sparse.tlspec"
+    weighted_path = tmp_path / "weighted.tlspec"
+
+    trace.save(sparse_path, level="runnable")
+    trace.save(weighted_path, level="runnable", include_weights=True)
+
+    sparse_manifest = _manifest(sparse_path)
+    weighted_manifest = _manifest(weighted_path)
+    assert read_runnable(sparse_path)["payload_layers"]["weights"] == {
+        "present": False,
+        "schema": "state_dict_v1",
+    }
+    assert tensor_references(sparse_path) == {}
+    assert not any(name.startswith("blobs/") for name in sparse_manifest["files"])
+
+    assert read_runnable(weighted_path)["payload_layers"]["weights"] == {
+        "present": True,
+        "schema": "state_dict_v1",
+    }
+    weight_entries = weighted_manifest["runnable"]["state_dict_tensors"]
+    assert "buffers_tensors" not in weighted_manifest["runnable"]
+    expected_state = model.state_dict()
+    assert set(weight_entries) == set(expected_state)
+    assert "scratch" not in set(weight_entries)
+    assert "unused" in set(weight_entries)
+    for name, reference in weight_entries.items():
+        stored = load_file(str(weighted_path / reference["blob"]))[reference["key"]]
+        assert torch.equal(stored, expected_state[name])
+
+    metadata = _metadata(weighted_path)
+    assert_sparse_core_has_no_tensor_payload(read_runnable(weighted_path))
+    assert_sparse_core_has_no_tensor_payload(metadata)
+    assert (
+        decode_value(
+            metadata["trace"]["fields"]["_buffer_initial_values"], at="trace._buffer_initial_values"
+        )
+        == {}
+    )
+    assert "func" not in metadata["op"]["columns"]
+    tl.validation.validate_tlspec(weighted_path)
+
+
+def test_embedded_weights_run_matches_live_and_reports_capture_state(tmp_path: Path) -> None:
+    """Run self-contained real weights exactly without staging user state."""
+
+    model = WeightPayloadModel().eval()
+    trace = _capture(model)
+    path = tmp_path / "weighted.tlspec"
+    trace.save(path, level="runnable", include_weights=True)
+    loaded = tl.load(path)
+    inputs = torch.tensor([[2.0, -1.0, 0.5], [-3.0, 0.25, 4.0]])
+
+    result = loaded.run(inputs=inputs, seed=91)
+
+    assert torch.equal(result.output, model(inputs))
+    assert result.report.state_source is StateSource.EMBEDDED_CAPTURE_STATE
+    assert result.report.random_filled_slot_ids == ()
+    assert loaded.readiness is not None
+    assert loaded.readiness.state_sources_available[0] is StateSource.EMBEDDED_CAPTURE_STATE
+
+
+@pytest.mark.parametrize("drift_target", ("unchanged", "parameter", "buffer"))
+def test_delayed_weight_save_embeds_capture_state_and_attests(
+    tmp_path: Path,
+    drift_target: str,
+) -> None:
+    """Keep delayed saves bound to the state that produced captured activations."""
+
+    model = WeightPayloadModel().eval()
+    inputs = torch.ones(2, 3)
+    expected_output = model(inputs).detach().clone()
+    trace = _capture(model)
+
+    with torch.no_grad():
+        if drift_target == "parameter":
+            model.linear.weight.add_(10.0)
+        elif drift_target == "buffer":
+            model.scale.add_(10.0)
+
+    path = tmp_path / f"{drift_target}.tlspec"
+    trace.save(
+        path,
+        level="runnable",
+        include_weights=True,
+        include_activations=True,
+    )
+    result = tl.load(path).run(inputs=inputs)
+
+    assert torch.equal(result.output, expected_output)
+    assert result.report.state_source is StateSource.EMBEDDED_CAPTURE_STATE
+    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
+    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
+
+
+def test_user_state_dict_overrides_embedded_capture_state(tmp_path: Path) -> None:
+    """Give an explicitly staged user mapping precedence over embedded weights."""
+
+    model = WeightPayloadModel().eval()
+    trace = _capture(model)
+    path = tmp_path / "weighted.tlspec"
+    trace.save(path, level="runnable", include_weights=True)
+    loaded = tl.load(path)
+    user_state = {name: torch.zeros_like(value) for name, value in model.state_dict().items()}
+    user_state["scale"] = torch.ones_like(user_state["scale"])
+
+    loaded.load_state_dict(user_state)
+    result = loaded.run(inputs=torch.ones(2, 3), seed=17)
+
+    assert result.report.state_source is StateSource.USER_STATE_DICT
+    assert torch.equal(result.output, torch.zeros(2, 2))
 
 
 def test_mismatched_embedded_state_raises_shared_strict_binding_error(
@@ -221,18 +349,16 @@ def test_mismatched_embedded_state_raises_shared_strict_binding_error(
     trace = _capture(model)
     path = tmp_path / "weighted.tlspec"
     trace.save(path, level="runnable", include_weights=True)
-    manifest = _manifest(path)
+    descriptor = read_runnable(path)
     weight_slot = next(
         slot
-        for slot in manifest["run"]["tensor_slots"]
+        for slot in descriptor["tensor_slots"]
         if slot["state_binding"] is not None
         and slot["state_binding"]["state_dict_name"] == "linear.weight"
     )
     weight_slot["shape"] = [1]
     weight_slot["rank"] = 1
-    with (path / "manifest.json").open("w", encoding="utf-8") as handle:
-        json.dump(manifest, handle, indent=2)
-        handle.write("\n")
+    write_runnable(path, descriptor)
 
     with pytest.raises(StateBindingError) as caught:
         tl.load(path)

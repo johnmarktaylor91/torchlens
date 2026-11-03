@@ -850,7 +850,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   artifact). Pair kinds: `alternative_of` (peers; still comparable), `forked_from`,
   `successor_of`, `escalates`, `fed_by`, `selected_by`; member kind: `episode_member`. Each kind's
   params are a
-  closed set; rows persist in `bundle.json` and every load re-checks them. On a pair row `from` is
+  closed set; rows persist in the bundle artifact (`relations.json` in the 3.0 format) and every
+  load re-checks them. On a pair row `from` is
   always the LATER member. Rows are ordering and topology claims: members joined by a directed
   path of ordering kinds are not comparison operands.
 
@@ -1148,7 +1149,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Runnable artifact**
 : A `.tlspec` saved at `level="runnable"` with a sparse taken-path descriptor. Its source capture
   must use `replayable=True`; this flag supplies replay templates even when no intervention
-  is planned.
+  is planned. In the 3.0 format the descriptor is `runnable/descriptor.json` and the state is
+  safetensors files beside it, listed by the manifest's `runnable` object; no callable is ever
+  pickled ([saved_format_3.md](../maintainers/saved_format_3.md), section 7).
 
 **Readiness**
 : The non-executing runnable state `ready` or `unavailable`.
@@ -1724,6 +1727,22 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 ## Persistence, containers, and namespaces
 
+`tl.io.detect_tlspec_format(path)`
+: Inspects a saved-artifact directory without loading its payloads. Returns `"v3"` when the
+  root manifest names the 3.0 format, `"pre_3"` for TorchLens 2.x save markers, or `"unknown"`
+  when no TorchLens save markers are present. Symlinked metadata paths refuse. Detection does
+  not validate the artifact; use `tl.validation.validate_tlspec(path)` for validation.
+
+`tl.types.UnencodableValue`
+: The stand-in a loaded 3.0 artifact carries where the save met a value outside the saved
+  format's vocabulary (a user object in a module attribute, a custom metadata value). Frozen,
+  with `type_name` (the value's `module.qualname`), `repr_text` (its repr text, bounded)
+  and `at` (the record, row and column it sat in). The load attaches one advisory,
+  `unencodable_values_stringified`, to the trace's capture advisories when the artifact's
+  manifest discloses such values. A record cell that fails its typed schema refuses
+  `record_schema_invalid`.
+
+
 **Save / load**
 : `Trace.save` persists a `Trace` into a portable `.tlspec` directory bundle at a chosen
   level; `tl.load` loads a `.tlspec` object with eager tensor materialization.
@@ -1733,12 +1752,20 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   (`load_path_symlink_rejected` at load), a symlinked parent directory passes on both sides,
   and save and load use the same rule; `storage=tl.to_disk(...)` and `save_intervention`
   apply it to their own targets (documented as is, JMT, Sun 1 Nov 2026).
-  The staged intervention spec is session-only: `Trace.save` keeps the intervened
-  values and their per-op provenance, and every legacy rerun door of a loaded intervened trace
-  (`run(model, x)` plain, append or chunked, a fork's `run`, `do(engine="rerun")`, and an edit
-  staged after loading) refuses `run_intervention_spec_not_persisted` rather than rerun without
-  the recorded intervention (the recipe travels through `save_intervention`); the replay and
-  `run(inputs=...)` doors cannot run an analysis artifact at all.
+  A saved value with no typed encoding is written as text and counted in the manifest's
+  `disclosures`; it loads back as `tl.types.UnencodableValue`, a frozen stand-in carrying
+  `type_name` (the original type's dotted name), `repr_text` (its `repr`, cut at 256
+  characters) and `at` (where it was in the artifact). A saved cell that fails its type check
+  on load refuses `record_schema_invalid`.
+  `Trace.save` writes the staged intervention spec as the typed recipe `intervention.json`
+  beside the intervened values and their per-op provenance (`save_intervention` writes the same
+  recipe as an artifact of its own). A loaded trace whose recipe holds only built-in edits reruns
+  it through every legacy rerun door (`run(model, x)` plain, append or chunked, a fork's `run`,
+  `do(engine="rerun")`, and an edit staged after loading). A custom callable is saved as a
+  callable placeholder (its position and qualified name, never its code), and a recipe holding one
+  refuses `run_intervention_spec_not_persisted` naming the rule, rather than rerun without the
+  recorded intervention; the replay and `run(inputs=...)` doors cannot run an analysis artifact
+  at all.
   A rerun replays the capture's recorded `save=` request on its own graph, so it saves the same
   sites a fresh capture would even after a staged edit inserts ops. A trace restored from pickle
   carries no recorded request and re-saves by the capture's raw op indices, which is exact only
@@ -4930,6 +4957,7 @@ alphabetical order.
 | `Op.is_buffer` | Stored flag marking this Op as a buffer boundary; `is_buffer_source` exposes it |
 | `Op.is_buffer_source` | Whether this Op represents a buffer boundary (overwrites a buffer) |
 | `Op.is_compute_op` | Whether this Op executed a torch function rather than being a boundary sentinel |
+| `Op.is_constant` | Whether this Op is a constant, a closure constant or a literal producer, stamped by the shared constants rule |
 | `Op.is_final_output` | Whether this Op is a final model output |
 | `Op.is_in_conditional` | Whether this Op participates in any conditional role |
 | `Op.is_in_conditional_body` | Whether this Op sits inside the body of a conditional arm |
@@ -5847,6 +5875,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `ascending=` | keyword of `Trace.profile` (keyword-only; default `False`): Whether to sort the selected metric ascending; keyword of `Trace.projective_fields` (keyword-only; default `True`); keyword of `Trace.receptive_fields` (keyword-only; default `True`): Whether an explicit `sort_by` sorts ascending; keyword of `tl.report.profile` (keyword-only; default `False`): Whether to reverse the default descending order |
 | `assume_no_padding=` | keyword of `tl.positions` (keyword-only; default `False`): Assert that every position is real, licensing physical first/last without a mask (recorded in the edit's identity); keyword of `tl.transforms.cls_token` (default `False`): Recorded caller assertion licensing physical position 0; keyword of `tl.transforms.pool_tokens` (default `False`): Recorded caller assertion that every position is valid; the only licence for mask-free pooling (three-valued policy, decision 12) |
 | `async_writes=` | constructor keyword of `tl.options.StorageOptions` (keyword-only; optional): Whether `trace(..., storage=...)` blob writes overlap forward capture through a bounded single-worker pipeline instead of pausing capture for each write (DOCUMENTED-UNSTABLE spelling, naming deferred to the UI sprint). Tri-state: `None` (default) means the consumer default — async for `trace` ..; keyword of `tl.to_disk` (keyword-only; default `None`): Whether `trace(..., storage=...)` blob writes overlap capture on a bounded single-worker pipeline instead of pausing the forward for each write (DOCUMENTED-UNSTABLE spelling, naming deferred to the UI sprint). Tri-state: `None` (default) means async for `trace` captures and synchronous for .. |
+| `at=` | constructor keyword of `tl.types.UnencodableValue` (required) |
 | `aten_ops=` | constructor keyword of `tl.options.CaptureOptions` (keyword-only; optional) |
 | `atol=` | keyword of `ReceptiveFieldView.check`, `tl.receptive_field.cross_validate` (keyword-only; default `0.0`): Accepted for compatibility and ignored. Validation always uses exact finite nonzero gradient support; keyword of `ReceptiveFieldView.probe_grad` (keyword-only; default `0.0`): Non-negative gradient support thresholds; keyword of `tl.dead`, `tl.saturated`, `tl.sign`, `tl.stable_across_passes`, `tl.subspace` (keyword-only; default `0.0`); keyword of `tl.debug.bisect_precision` (keyword-only; default `None`): Fixed absolute tolerance; `None` derives per-op from native dtype; keyword of `tl.debug.check_determinism` (keyword-only; default `None`): Optional absolute tolerance; keyword of `tl.debug.compare`, `tl.debug.compare_params`, `tl.debug.first_divergence` (keyword-only; default `1e-08`): Absolute tolerance for `torch.allclose`; constructor keyword of `tl.receptive_field.GradReceptiveField` (required); keyword of `tl.validate` (keyword-only; default `None`): Backward-only absolute tolerance. `None` (default) derives per gradient dtype in `validate_backward_pass`; keyword of `tl.validation.validate_backward_pass` (keyword-only; default `None`): Absolute allclose tolerance. `None` (default) derives the tolerance per gradient dtype (R13); the historical fp32 decimal pair applied to every dtype was ~4.5e11 fp64 ULPs loose and false-failed fp16 grads |
 | `attachment=` | keyword of `tl.export.netron` (keyword-only; default `None`): The `<stem>.attachment.json` metrics companion (netron's own sidecar channel; drop it onto the open model). `None` (the default) writes it beside every file export and skips it for the memory-only serve, which has no file for it to sit beside; `True` demands it (and refuses `path=None`); .. |
@@ -6661,6 +6690,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `replicates=` | keyword of `tl.experiment.sweep_grid` (keyword-only; default `False`); keyword of `tl.experiment.sweep_sites` (keyword-only; default `False`): Whether duplicate resolved candidates are deliberate replicates |
 | `repo=` | keyword of `tl.bridge.pyreft.read` (keyword-only; default `None`): Optional names of where the directory came from (a Hub repo id and commit); recorded in `provenance` and the subspace `origin` |
 | `repo_id=` | keyword of `tl.bridge.huggingface_hub.from_hub` (required): Source Hugging Face repository ID; keyword of `tl.bridge.huggingface_hub.push_to_hub` (required): Target Hugging Face repository ID |
+| `repr_text=` | constructor keyword of `tl.types.UnencodableValue` (required) |
 | `request=` | keyword of `tl.agent.build_envelope` (keyword-only; default `None`): Normalized request echo |
 | `rerun=` | keyword of `Bundle.token_divergence` (required): The member (name or Trace) from the re-run compared against it, typically its copy from a steered second run (`"cf_critique"`) |
 | `reserved=` | keyword of `CaptureBackend.build_record_context` (required) |
@@ -6892,6 +6922,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `transforms=` | constructor keyword of `tl.facets.FacetSpec` (default `()`): Primitive transform chain |
 | `truncation=` | keyword of `tl.agent.build_envelope` (keyword-only; default `None`): Truncation disclosure, or `None` when nothing was dropped |
 | `trust_custom_callables=` | keyword of `tl.io.load_intervention_spec` (keyword-only; default `False`): Explicit permission to import custom callables when no allowlist is supplied. Enable only for specs from a trusted source; keyword of `tl.load` (keyword-only; default `False`): Explicit permission to import custom callables from an intervention spec when no allowlist is supplied. Enable only for trusted specs |
+| `type_name=` | constructor keyword of `tl.types.UnencodableValue` (required) |
 | `uncounted_op_counts=` | field of `BackwardStatus` |
 | `unflatten=` | keyword of `tl.types.register_container` (required): Callable accepting `(aux_data, children)` and returning an instance |
 | `unit=` | keyword of `ReceptiveFieldView.at` (required): Windowed-axis coordinates, or `"center"` for their midpoint. Coordinates must be non-negative and in range; unlike `.probe_grad()` and `.check()`, negative indices are rejected rather than wrapped; keyword of `ReceptiveFieldView.check`, `ReceptiveFieldView.probe_grad` (required): Complete target output-element index; keyword of `ReceptiveFieldView.show` (default `None`): Optional complete target output-element index; constructor keyword of `tl.attribution.SiteTarget` (keyword-only; default `None`): `None` (the default) attributes the whole output, summed. An int selects `output[..., unit]` (the last axis, as an integer `target=` does on the model output). A tuple indexes the axes after the batch axis, so `(3,)` is channel 3 of a convolution output and `(3, 1, 2)` one position of it; constructor keyword of `tl.receptive_field.GradReceptiveField` (required); keyword of `tl.receptive_field.node_spec` (keyword-only; default `None`): Draw-time RF options. `unit` is forwarded only when an input-node overlay is requested |

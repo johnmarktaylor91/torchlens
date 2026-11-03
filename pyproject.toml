@@ -696,7 +696,7 @@ combine-as-imports = true
 # =============================================================================
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
-version_variables = ["torchlens/__init__.py:__version__"]
+version_variables = ["torchlens/_vocab/_package_version.py:__version__"]
 branch = "main"
 major_on_zero = true
 # `build` is installed from the HASH-LOCKED release-requirements.txt before

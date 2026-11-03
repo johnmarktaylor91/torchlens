@@ -53,7 +53,7 @@ class StepContext:
 def _run_add_output_layers(ctx: StepContext) -> None:
     """Create dedicated output nodes for each attributable output tensor."""
 
-    with _vtimed(ctx.trace, "  Step 1: Add output layers"):
+    with _vtimed(ctx.trace, "  Step 1: Add output layers", bucket="add_output_layers"):
         graph_traversal._add_output_layers(
             ctx.trace,
             ctx.output_tensors,
@@ -65,14 +65,14 @@ def _run_add_output_layers(ctx: StepContext) -> None:
 def _run_find_output_ancestors(ctx: StepContext) -> None:
     """Mark every node that is an ancestor of a model output."""
 
-    with _vtimed(ctx.trace, "  Step 2: Trace output ancestors"):
+    with _vtimed(ctx.trace, "  Step 2: Trace output ancestors", bucket="find_output_ancestors"):
         graph_traversal._find_output_ancestors(ctx.trace)
 
 
 def _run_remove_orphan_nodes(ctx: StepContext) -> None:
     """Drop raw nodes that reach no model output."""
 
-    with _vtimed(ctx.trace, "  Step 3: Remove orphan nodes"):
+    with _vtimed(ctx.trace, "  Step 3: Remove orphan nodes", bucket="remove_orphan_nodes"):
         ctx.trace.__dict__.pop("_foreign_departures", None)  # capture-time journal ends here
         graph_traversal._remove_orphan_nodes(ctx.trace)
 
@@ -80,7 +80,7 @@ def _run_remove_orphan_nodes(ctx: StepContext) -> None:
 def _run_mark_layer_depths(ctx: StepContext) -> None:
     """Write the optional input/output distance metadata."""
 
-    with _vtimed(ctx.trace, "  Step 4: Input/output distances"):
+    with _vtimed(ctx.trace, "  Step 4: Input/output distances", bucket="mark_layer_depths"):
         _layer_depths._mark_layer_depths(ctx.trace)
 
 
@@ -93,14 +93,16 @@ def _should_run_mark_layer_depths(ctx: StepContext) -> bool:
 def _run_mark_conditional_branches(ctx: StepContext) -> None:
     """Attribute conditional branches (AST, bool, event, and edge evidence)."""
 
-    with _vtimed(ctx.trace, "  Step 5: Mark conditional branches"):
+    with _vtimed(
+        ctx.trace, "  Step 5: Mark conditional branches", bucket="mark_conditional_branches"
+    ):
         control_flow._mark_conditional_branches(ctx.trace)
 
 
 def _run_fix_buffer_layers(ctx: StepContext) -> None:
     """Deduplicate buffer layers and reconnect their edges."""
 
-    with _vtimed(ctx.trace, "  Step 6: Fix buffer layers"):
+    with _vtimed(ctx.trace, "  Step 6: Fix buffer layers", bucket="fix_buffer_layers"):
         control_flow._fix_buffer_layers(ctx.trace)
 
 
@@ -117,7 +119,7 @@ def _run_group_recurrent_layers(ctx: StepContext) -> None:
         if trace._options_recurrence_detection
         else "  Step 7: Loop detection (params only)"
     )
-    with _vtimed(trace, loop_desc):
+    with _vtimed(trace, loop_desc, bucket="group_recurrent_layers"):
         if trace._options_recurrence_detection:
             loop_detection._detect_and_label_loops(trace)
         else:
@@ -127,21 +129,21 @@ def _run_group_recurrent_layers(ctx: StepContext) -> None:
 def _run_map_final_labels(ctx: StepContext) -> None:
     """Build the raw-label to final-label map."""
 
-    with _vtimed(ctx.trace, "  Step 8: Map labels"):
+    with _vtimed(ctx.trace, "  Step 8: Map labels", bucket="map_final_labels"):
         labeling._map_raw_labels_to_final_labels(ctx.trace)
 
 
 def _run_log_final_layer_info(ctx: StepContext) -> None:
     """Write the final per-layer and per-module fields."""
 
-    with _vtimed(ctx.trace, "  Step 9: Log final info"):
+    with _vtimed(ctx.trace, "  Step 9: Log final info", bucket="log_final_layer_info"):
         labeling._log_final_info_for_layers(ctx.trace)
 
 
 def _run_rename_layer_references(ctx: StepContext) -> None:
     """Rename global label references to their final names."""
 
-    with _vtimed(ctx.trace, "  Step 10: Rename labels"):
+    with _vtimed(ctx.trace, "  Step 10: Rename labels", bucket="rename_layer_references"):
         labeling._rename_model_history_layer_names(ctx.trace)
 
 
@@ -153,7 +155,7 @@ def _run_build_lookup_keys(ctx: StepContext) -> None:
     finalizes.
     """
 
-    with _vtimed(ctx.trace, "  Step 11: Build lookup keys"):
+    with _vtimed(ctx.trace, "  Step 11: Build lookup keys", bucket="build_lookup_keys"):
         labeling._build_lookup_keys_and_finalize_retained_layers(ctx.trace)
         saved_summary._refresh_fast_saved_summary(ctx.trace)
         source_provenance._warn_unattributed_tensor_args(ctx.trace)
@@ -162,7 +164,9 @@ def _run_build_lookup_keys(ctx: StepContext) -> None:
 def _run_populate_source_var_names(ctx: StepContext) -> None:
     """Resolve source assignment variable names from the AST index."""
 
-    with _vtimed(ctx.trace, "  Step 11.5: Populate source var names"):
+    with _vtimed(
+        ctx.trace, "  Step 11.5: Populate source var names", bucket="populate_source_var_names"
+    ):
         source_provenance._populate_var_names(ctx.trace)
 
 
@@ -175,7 +179,9 @@ def _run_resolve_deferred_retention(ctx: StepContext) -> None:
 
     capture_session = ctx.capture_session
     assert capture_session is not None  # should_run gates on this
-    with _vtimed(ctx.trace, "  Step 11.75: Resolve deferred retention"):
+    with _vtimed(
+        ctx.trace, "  Step 11.75: Resolve deferred retention", bucket="resolve_deferred_retention"
+    ):
         capture_session.resolve_deferred_retention(ctx.trace, list(ctx.output_tensors))
 
 
@@ -188,7 +194,7 @@ def _should_run_resolve_deferred_retention(ctx: StepContext) -> bool:
 def _run_undecorate_saved_tensors(ctx: StepContext) -> None:
     """Strip TorchLens ``tl_*`` attributes from every saved tensor."""
 
-    with _vtimed(ctx.trace, "  Step 12: Undecorate tensors"):
+    with _vtimed(ctx.trace, "  Step 12: Undecorate tensors", bucket="undecorate_saved_tensors"):
         finalization._undecorate_all_saved_tensors(ctx.trace)
 
 
@@ -205,14 +211,14 @@ def _run_clear_cuda_cache(ctx: StepContext) -> None:
 def _run_log_time_elapsed(ctx: StepContext) -> None:
     """Record elapsed capture timing on the trace."""
 
-    with _vtimed(ctx.trace, "  Step 14: Log timing"):
+    with _vtimed(ctx.trace, "  Step 14: Log timing", bucket="log_time_elapsed"):
         finalization._log_time_elapsed(ctx.trace)
 
 
 def _run_finalize_param_logs(ctx: StepContext) -> None:
     """Build and complete the ``Param`` records."""
 
-    with _vtimed(ctx.trace, "  Step 15: Finalize params"):
+    with _vtimed(ctx.trace, "  Step 15: Finalize params", bucket="finalize_param_logs"):
         finalization._finalize_param_logs(ctx.trace)
 
 
@@ -225,7 +231,7 @@ def _run_build_layer_logs(ctx: StepContext) -> None:
     """
 
     trace = ctx.trace
-    with _vtimed(trace, "  Step 15.5: Build layer logs"):
+    with _vtimed(trace, "  Step 15.5: Build layer logs", bucket="build_layer_logs"):
         finalization._build_layer_logs(trace)
         trace._by_pass = {}
         for index, op in enumerate(trace._layer_list):
@@ -237,7 +243,7 @@ def _run_build_layer_logs(ctx: StepContext) -> None:
 def _run_build_module_logs(ctx: StepContext) -> None:
     """Build ``Module`` records and refresh the saved module-call count."""
 
-    with _vtimed(ctx.trace, "  Step 16: Build module logs"):
+    with _vtimed(ctx.trace, "  Step 16: Build module logs", bucket="build_module_logs"):
         finalization._build_module_logs(ctx.trace)
         saved_summary.refresh_saved_module_call_count(ctx.trace)
 
@@ -250,7 +256,7 @@ def _run_hash_graph_shape(ctx: StepContext) -> None:
     """
 
     trace = ctx.trace
-    with _vtimed(trace, "  Step 16.5: Graph shape hash"):
+    with _vtimed(trace, "  Step 16.5: Graph shape hash", bucket="hash_graph_shape"):
         _hashing.populate_normalized_layer_addresses(trace)
         trace._provenance_fingerprint = _hashing.compute_graph_shape_hash(trace)
 
@@ -258,7 +264,7 @@ def _run_hash_graph_shape(ctx: StepContext) -> None:
 def _run_mark_tracing_finished(ctx: StepContext) -> None:
     """Switch the trace from build-time to user-facing behavior."""
 
-    with _vtimed(ctx.trace, "  Step 17: Mark pass finished"):
+    with _vtimed(ctx.trace, "  Step 17: Mark pass finished", bucket="mark_tracing_finished"):
         finalization._set_tracing_finished(ctx.trace)
 
 
@@ -302,7 +308,9 @@ def _should_run_finalize_streamed_bundle(ctx: StepContext) -> bool:
 def _run_finalize_streamed_bundle(ctx: StepContext) -> None:
     """Finalize the streamed out bundle."""
 
-    with _vtimed(ctx.trace, "  Step 18: Finalize streamed bundle"):
+    with _vtimed(
+        ctx.trace, "  Step 18: Finalize streamed bundle", bucket="finalize_streamed_bundle"
+    ):
         finalization._finalize_streamed_bundle(ctx.trace)
 
 
@@ -315,14 +323,14 @@ def _should_run_evict_streamed_outs(ctx: StepContext) -> bool:
 def _run_evict_streamed_outs(ctx: StepContext) -> None:
     """Evict streamed outs from memory."""
 
-    with _vtimed(ctx.trace, "  Step 19: Evict streamed outs"):
+    with _vtimed(ctx.trace, "  Step 19: Evict streamed outs", bucket="evict_streamed_outs"):
         finalization._evict_streamed_outs(ctx.trace)
 
 
 def _run_release_param_refs(ctx: StepContext) -> None:
     """Release live parameter references held for finalization."""
 
-    with _vtimed(ctx.trace, "  Step 20: Release param refs"):
+    with _vtimed(ctx.trace, "  Step 20: Release param refs", bucket="release_param_refs"):
         ctx.trace._release_param_refs(allow_iter_rehydrate=True)
 
 

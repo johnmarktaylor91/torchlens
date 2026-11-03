@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import pickle
 from collections.abc import Callable
 from pathlib import Path
@@ -13,6 +12,7 @@ import numpy as np
 import pytest
 import safetensors  # noqa: F401
 import torch
+from _format3_envelope import redigest
 from torch import nn
 
 import torchlens as tl
@@ -20,14 +20,15 @@ from torchlens import Trace, func, load, trace as trace_fn
 from torchlens._io import (
     TLSPEC_VERSION,
     ArtifactError,
+    bundle as bundle_io,
 )
-from torchlens._io.manifest import Manifest
 from torchlens._io.paths import resolve_bundle_blob_path
 from torchlens._io.payload_codec import (
     _raise_for_unsupported_array_dtype,
     _unsupported_array_dtype_reason,
 )
 from torchlens.io import cleanup_tmp, detect_tlspec_format
+from torchlens.types import UnencodableValue
 
 
 class _ConvBundleModel(nn.Module):
@@ -229,8 +230,54 @@ def _first_blob_path(bundle_path: Path) -> Path:
         Path to the first saved blob.
     """
 
-    manifest = Manifest.read(bundle_path / "manifest.json")
-    return bundle_path / manifest.tensors[0].relative_path
+    manifest = _read_manifest(bundle_path)
+    relative_path = next(path for path in manifest["files"] if path.startswith("blobs/"))
+    return bundle_path / relative_path
+
+
+def _corrupt_blob_byte(blob_path: Path) -> None:
+    """Modify one byte in a blob file without deleting it.
+
+    Parameters
+    ----------
+    blob_path:
+        Blob file path to modify.
+    """
+
+    blob_bytes = bytearray(blob_path.read_bytes())
+    blob_bytes[-1] = (blob_bytes[-1] + 1) % 256
+    blob_path.write_bytes(bytes(blob_bytes))
+
+
+def test_manifest_provenance_roundtrip_and_hash_determinism(tmp_path: Path) -> None:
+    """Trace saves should carry a compact, deterministic provenance certificate."""
+
+    torch.manual_seed(44)
+    model = _InputTransformModel().eval()
+    inputs = torch.arange(12, dtype=torch.float32).reshape(3, 4)
+    captured = trace_fn(model, inputs, capture=tl.options.CaptureOptions(seed=44), save="all")
+    first_path = tmp_path / "first.tlspec"
+    second_path = tmp_path / "second.tlspec"
+
+    captured.save(first_path)
+    captured.save(second_path)
+    restored = load(first_path)
+    first = _read_manifest(first_path)
+    second = _read_manifest(second_path)
+
+    assert restored._num_ops == captured._num_ops
+    assert first["provenance"] is not None
+    assert second["provenance"] is not None
+    assert first["provenance"]["provenance_version"] == 1
+    assert first["provenance"]["capture_devices"] == ["cpu"]
+    assert first["provenance"]["dtype_policy"]["default_dtype"] == "torch.float32"
+    assert first["provenance"]["dtype_policy"]["observed_autocast"]
+    assert first["provenance"]["input_hash"] == second["provenance"]["input_hash"]
+    assert (
+        first["provenance"]["model_structure_hash"] == second["provenance"]["model_structure_hash"]
+    )
+    assert first["provenance"]["rng_state_digests"] == second["provenance"]["rng_state_digests"]
+    assert len(json.dumps(first["provenance"])) < 16_384
 
 
 def test_manifest_provenance_sentinel_round_trips_and_tamper_refuses(tmp_path: Path) -> None:
@@ -264,6 +311,21 @@ def test_manifest_provenance_sentinel_round_trips_and_tamper_refuses(tmp_path: P
             load(bundle_path)
 
 
+def test_manifest_without_optional_provenance_still_loads(tmp_path: Path) -> None:
+    """Pre-change manifests with no provenance block should retain load compatibility."""
+
+    bundle_path, _captured = _save_bundle(tmp_path)
+    manifest = _read_manifest(bundle_path)
+    manifest.pop("provenance")
+    _write_manifest(bundle_path, manifest)
+
+    parsed = _read_manifest(bundle_path)
+    restored = load(bundle_path)
+
+    assert parsed.get("provenance") is None
+    assert restored._num_ops > 0
+
+
 def test_manifest_git_commit_is_absent_outside_repository(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -288,10 +350,10 @@ def test_manifest_git_commit_is_absent_outside_repository(
     bundle_path = tmp_path / "outside.tlspec"
 
     captured.save(bundle_path)
-    manifest = Manifest.read(bundle_path / "manifest.json")
+    manifest = _read_manifest(bundle_path)
 
-    assert manifest.provenance is not None
-    assert manifest.provenance.git_commit_hash is None
+    assert manifest["provenance"] is not None
+    assert manifest["provenance"]["git_commit_hash"] is None
 
 
 def test_input_transform_repr_roundtrips_while_callable_drops(tmp_path: Path) -> None:
@@ -329,67 +391,27 @@ def test_input_transform_repr_roundtrips_while_callable_drops(tmp_path: Path) ->
     assert restored._transform is None
 
 
-def test_bundle_save_strict_false_records_unsupported_tensors(tmp_path: Path) -> None:
-    """Best-effort save should skip unsupported tensors and record them in the manifest."""
+def test_bundle_save_strict_false_refuses_sparse_tensors(tmp_path: Path) -> None:
+    """Format 3 never silently skips an unsupported tensor, even with strict=False."""
 
     trace = _build_sparse_out_log()
-    bundle_path = tmp_path / "sparse_bundle.tl"
-
-    trace.save(bundle_path, strict=False)
-
-    manifest = Manifest.read(bundle_path / "manifest.json")
-    assert manifest.unsupported_tensors
-    assert all(entry["kind"] == "out" for entry in manifest.unsupported_tensors)
-    assert all("sparse" in entry["reason"] for entry in manifest.unsupported_tensors)
+    with pytest.raises(ArtifactError) as caught:
+        trace.save(tmp_path / "sparse_bundle.tl", strict=False)
+    assert caught.value.fields["code"] == "metadata_value_unportable"
 
 
-def test_bundle_save_strict_default_raises_on_complex128_tensor(tmp_path: Path) -> None:
-    """Strict bundle save must reject ``complex128`` with a clean error, not a raw ``KeyError``.
-
-    Regression test for a data-loss BLOCKER (cert round 8): ``torch.complex128`` was
-    listed in ``tensor_policy._SUPPORTED_DTYPES`` even though the actual writer,
-    ``safetensors.torch.save_file()``, has no dtype-size-table entry for it. A
-    ``complex128`` tensor therefore sailed straight past the allow-list tripwire that
-    exists precisely to keep unsupported tensors out of ``save_file()`` and crashed with
-    a raw, unwrapped ``KeyError`` from deep inside the third-party library -- bypassing
-    every save-path hardening fix from cert rounds 3-7 entirely, since ``KeyError`` was
-    never in any of their except tuples. The fix drops ``complex128`` from the allow-list
-    so this now fails cleanly, before ``save_file()`` is ever reached.
-    """
+@pytest.mark.parametrize("strict", [True, False])
+def test_bundle_save_complex128_round_trips(tmp_path: Path, strict: bool) -> None:
+    """Complex128 persists as paired float64 values and reloads exactly."""
 
     trace = _build_complex_out_log(dtype=torch.complex128)
-    bundle_path = tmp_path / "complex128_bundle.tl"
-
-    with pytest.raises(ArtifactError, match="complex128"):
-        trace.save(bundle_path)
-
-    # The strict allow-list check fires before ``safetensors.torch.save_file()``
-    # is ever reached, so no raw ``KeyError`` escapes and ``bundle_path`` itself
-    # is never created. A leftover ``.tmp.*`` dir is expected (standard
-    # fresh-save failure contract) and must carry the PARTIAL sentinel so
-    # ``cleanup_tmp()`` can sweep it.
-    assert not bundle_path.exists()
-    tmp_dirs = [p for p in tmp_path.iterdir() if ".tmp." in p.name]
-    assert tmp_dirs
-    for tmp_dir in tmp_dirs:
-        assert (tmp_dir / "PARTIAL").exists()
-    removed = cleanup_tmp(bundle_path)
-    assert set(removed) == set(tmp_dirs)
-    assert not any(p.exists() for p in tmp_dirs)
-
-
-def test_bundle_save_strict_false_records_complex128_as_unsupported(tmp_path: Path) -> None:
-    """Best-effort save should skip ``complex128`` tensors and record them, not crash."""
-
-    trace = _build_complex_out_log(dtype=torch.complex128)
-    bundle_path = tmp_path / "complex128_bundle.tl"
-
-    trace.save(bundle_path, strict=False)
-
-    manifest = Manifest.read(bundle_path / "manifest.json")
-    assert manifest.unsupported_tensors
-    assert all(entry["kind"] == "out" for entry in manifest.unsupported_tensors)
-    assert all("complex128" in entry["reason"] for entry in manifest.unsupported_tensors)
+    path = tmp_path / "complex128.tlspec"
+    trace.save(path, strict=strict)
+    loaded = load(path)
+    for original, restored in zip(trace.ops, loaded.ops, strict=True):
+        if isinstance(original.out, torch.Tensor):
+            assert torch.equal(restored.out, original.out)
+            assert restored.out.dtype == original.out.dtype
 
 
 # shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
@@ -411,11 +433,12 @@ def test_bundle_save_strict_false_records_complex128_as_unsupported(tmp_path: Pa
             "does not read files saved by torchlens 0.x",
         ),
         (
-            # An older writer of the same major release loads and is logged.
-            "torchlens_older_supported",
+            # A format 3 manifest stamped by a writer older than the first TorchLens that
+            # writes format 3 is an impossible pairing: below the floor, before identity.
+            "torchlens_2x_writer",
             lambda manifest: manifest.__setitem__("torchlens_version", "2.36.1"),
-            "info_log",
-            "2.36.1",
+            "raise",
+            "first TorchLens that writes saved format 3",
         ),
         (
             "python_major_mismatch",
@@ -427,8 +450,6 @@ def test_bundle_save_strict_false_records_complex128_as_unsupported(tmp_path: Pa
 )
 def test_bundle_version_policy_rows(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
     scenario: str,
     mutate_manifest: Callable[[dict[str, Any]], Any],
     expectation: str,
@@ -443,10 +464,11 @@ def test_bundle_version_policy_rows(
     resolved_expected_text = expected_text() if callable(expected_text) else expected_text
 
     if expectation == "python_major_mismatch":
-        (bundle_path / "metadata.pkl").write_bytes(b"not a pickle")
+        # The 3.0 artifact is JSON plus safetensors: a Python major mismatch is advisory
+        # (the 2.x refusal came from its pickle failing under the other interpreter).
         with pytest.warns(UserWarning, match="python_version=999.0.0"):
-            with pytest.raises(ArtifactError, match="python_version=999.0.0"):
-                load(bundle_path)
+            loaded = load(bundle_path)
+        assert loaded.source.class_name == "_ConvBundleModel"
         return
 
     if expectation == "extra_blob_warning":
@@ -467,15 +489,6 @@ def test_bundle_version_policy_rows(
         assert loaded.source.class_name == "_ConvBundleModel"
         return
 
-    if expectation == "info_log":
-        with caplog.at_level(logging.INFO, logger="torchlens._io.manifest"):
-            loaded = load(bundle_path)
-        assert loaded.source.class_name == "_ConvBundleModel"
-        assert resolved_expected_text is not None
-        assert resolved_expected_text in caplog.text
-        assert "older than runtime torchlens_version" in caplog.text
-        return
-
     loaded = load(bundle_path)
     assert loaded.source.class_name == "_ConvBundleModel"
 
@@ -488,13 +501,60 @@ def test_bundle_load_raises_for_missing_safetensors_backend(
 
     bundle_path, _ = _save_bundle(tmp_path)
 
-    def _raise_backend_import(path: Path, device: str) -> dict[str, torch.Tensor]:
+    def _raise_backend_import(*_args: Any, **_kwargs: Any) -> Any:
         raise ImportError("missing backend")
 
-    monkeypatch.setattr("torchlens._io.bundle.load_file", _raise_backend_import)
+    monkeypatch.setattr("torchlens._io.lazy.safe_open", _raise_backend_import)
 
     with pytest.raises(ArtifactError, match="Install safetensors>=0.4"):
         load(bundle_path)
+
+
+def test_bundle_load_raises_on_corrupt_manifest(tmp_path: Path) -> None:
+    """Non-JSON manifests should fail with ``ArtifactError``."""
+
+    bundle_path, _ = _save_bundle(tmp_path)
+    (bundle_path / "manifest.json").write_text("{not valid json", encoding="utf-8")
+
+    with pytest.raises(ArtifactError) as excinfo:
+        load(bundle_path)
+    assert excinfo.value.fields["code"] == "manifest_unreadable"
+
+
+def test_bundle_load_raises_on_missing_blob_file(tmp_path: Path) -> None:
+    """Manifest entries without corresponding files should fail and name the blob path."""
+
+    bundle_path, _ = _save_bundle(tmp_path)
+    blob_path = _first_blob_path(bundle_path)
+    blob_path.unlink()
+
+    with pytest.raises(ArtifactError, match=blob_path.name) as excinfo:
+        load(bundle_path)
+    assert excinfo.value.fields["code"] == "bundle_metadata_integrity_refused"
+
+
+def test_bundle_load_raises_on_truncated_safetensors(tmp_path: Path) -> None:
+    """Truncated blob files should fail bundle load."""
+
+    bundle_path, _ = _save_bundle(tmp_path)
+    blob_path = _first_blob_path(bundle_path)
+    blob_path.write_bytes(blob_path.read_bytes()[:16])
+
+    with pytest.raises(ArtifactError) as excinfo:
+        load(bundle_path)
+    assert excinfo.value.fields["code"] == "bundle_metadata_integrity_refused"
+
+
+def test_bundle_load_raises_on_checksum_tamper(tmp_path: Path) -> None:
+    """Blob checksum tampering should be detected eagerly."""
+
+    bundle_path, _ = _save_bundle(tmp_path)
+    blob_path = _first_blob_path(bundle_path)
+    _corrupt_blob_byte(blob_path)
+
+    with pytest.raises(ArtifactError, match=blob_path.name) as excinfo:
+        load(bundle_path)
+    assert excinfo.value.fields["code"] == "bundle_metadata_integrity_refused"
 
 
 def test_bundle_save_overwrite_false_refuses_typed(tmp_path: Path) -> None:
@@ -515,31 +575,15 @@ def test_bundle_save_overwrite_typeerror_preserves_original_and_marks_partial(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A bare ``TypeError`` from ``pickle.dump`` must not destroy the original bundle.
-
-    Regression test for a data-loss BLOCKER: ``pickle.dump()`` raises a bare
-    ``TypeError`` (not the ``pickle.PickleError`` subclass) for many live
-    objects, e.g. ``TypeError: cannot pickle 'generator' object``. Before the
-    fix, ``save()``'s exception handler only caught
-    ``(ImportError, OSError, ValueError, pickle.PickleError)``, so a
-    ``TypeError`` propagated straight past every handler in the function --
-    skipping both the ``PARTIAL`` sentinel (leaving the ``.tmp`` dir
-    un-sweepable by ``cleanup_tmp()``) and the pre-overwrite backup restore
-    (permanently losing the original bundle under an undocumented
-    ``.bak.<uuid>`` directory name with a bare ``TypeError`` propagating to
-    the caller instead of a clean ``ArtifactError``).
-    """
+    """A bare ``TypeError`` writing JSON records must preserve the original bundle."""
 
     bundle_path, first_log = _save_bundle(tmp_path, seed=0)
     second_log = _build_conv_log(seed=1)
 
     def _poisoned_metadata_dump(*_args: Any, **_kwargs: Any) -> None:
-        raise TypeError("simulated live-resource pickling failure")
+        raise TypeError("simulated record encoding failure")
 
-    # ``save()`` writes metadata.pkl through ``dump_canonical_metadata()``
-    # (B3R4-R21-2 canonical container bytes), which drives a ``pickle._Pickler``
-    # subclass -- patching bare ``pickle.dump`` would no longer intercept it.
-    monkeypatch.setattr("torchlens._io.bundle.dump_canonical_metadata", _poisoned_metadata_dump)
+    monkeypatch.setattr("torchlens._io.format3.writer.write_record_files", _poisoned_metadata_dump)
 
     with pytest.raises(ArtifactError) as excinfo:
         second_log.save(bundle_path, overwrite=True)
@@ -614,9 +658,7 @@ def test_bundle_save_overwrite_arbitrary_exception_preserves_original_and_marks_
     def _poisoned_metadata_dump(*_args: Any, **_kwargs: Any) -> None:
         raise injected_exception
 
-    # Injected at the metadata.pkl writer (``dump_canonical_metadata()``,
-    # B3R4-R21-2): bare ``pickle.dump`` is no longer on the save path.
-    monkeypatch.setattr("torchlens._io.bundle.dump_canonical_metadata", _poisoned_metadata_dump)
+    monkeypatch.setattr("torchlens._io.format3.writer.write_record_files", _poisoned_metadata_dump)
 
     with pytest.raises(ArtifactError) as excinfo:
         second_log.save(bundle_path, overwrite=True)
@@ -655,23 +697,11 @@ class _LegacyPicklePlaceholder:
         self.value = value
 
 
-def test_legacy_multi_trace_bundle_load_typeerror_raises_torchlens_io_error(
+def test_legacy_multi_trace_bundle_refuses_before_unpickling(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A bare ``TypeError`` unpickling a legacy multi-trace ``Bundle`` must not escape.
-
-    Regression test for a recurrence of the round-5 bug class:
-    ``_load_unified_bundle()``'s legacy (pre-``bundle.json``) pickle-load
-    path -- reached from public ``tl.load(path)`` whenever ``manifest.json``
-    declares ``kind: "bundle"`` and no ``bundle.json`` sibling exists (old-
-    format bundles, an explicitly supported backward-compat case) -- was
-    missing ``TypeError`` from its except tuple, unlike the three sibling
-    call sites round 5 fixed (``bundle.py`` save, main-trace load,
-    ``streaming.py`` finalize). A bare ``TypeError`` (the same failure mode
-    ``pickle`` raises for many live-resource/incompatible-global objects)
-    escaped uncaught instead of the documented ``ArtifactError``.
-    """
+    """The 3.0 load door refuses 2.x bundles before reaching any unpickler."""
 
     bundle_path = tmp_path / "legacy_bundle.tl"
     bundle_path.mkdir()
@@ -680,17 +710,52 @@ def test_legacy_multi_trace_bundle_load_typeerror_raises_torchlens_io_error(
     )
     (bundle_path / "metadata.pkl").write_bytes(pickle.dumps(_LegacyPicklePlaceholder(1)))
 
-    def _poisoned_find_class(*_args: Any, **_kwargs: Any) -> Any:
-        raise TypeError("simulated live-resource unpickling failure")
+    reached_unpickler = False
 
-    monkeypatch.setattr(
-        "torchlens._io.bundle._RenameAwareUnpickler.find_class", _poisoned_find_class
-    )
+    def _poisoned_unpickler(*_args: Any, **_kwargs: Any) -> Any:
+        nonlocal reached_unpickler
+        reached_unpickler = True
+        raise AssertionError("2.x artifacts must not reach an unpickler")
+
+    monkeypatch.setattr(bundle_io, "_metadata_unpickler", _poisoned_unpickler)
+    monkeypatch.setattr(bundle_io._RenameAwareUnpickler, "load", _poisoned_unpickler)
 
     with pytest.raises(ArtifactError) as excinfo:
         load(bundle_path)
 
-    assert isinstance(excinfo.value.__cause__, TypeError)
+    assert excinfo.value.fields["code"] == "artifact_version_below_floor"
+    assert "2.36.x" in str(excinfo.value)
+    assert excinfo.value.__cause__ is None
+    assert not reached_unpickler
+
+
+def test_bundle_invalid_record_json_refuses_before_unpickling(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A correctly digested, invalid JSON record refuses before object construction."""
+
+    bundle_path, trace = _save_bundle(tmp_path)
+    reached_unpickler = False
+
+    def _poisoned_unpickler(*_args: Any, **_kwargs: Any) -> Any:
+        nonlocal reached_unpickler
+        reached_unpickler = True
+        raise AssertionError("JSON artifacts must not reach an unpickler")
+
+    monkeypatch.setattr(bundle_io, "_metadata_unpickler", _poisoned_unpickler)
+    monkeypatch.setattr(bundle_io._RenameAwareUnpickler, "load", _poisoned_unpickler)
+    assert load(bundle_path)._num_ops == trace._num_ops
+    assert not reached_unpickler
+    relpath = _read_manifest(bundle_path)["records"]["trace"]["path"]
+    (bundle_path / relpath).write_text("{not valid json", encoding="utf-8")
+    redigest(bundle_path, relpath)
+
+    with pytest.raises(ArtifactError) as excinfo:
+        load(bundle_path)
+
+    assert excinfo.value.fields["code"] == "bundle_metadata_integrity_refused"
+    assert not reached_unpickler
 
 
 def test_bundle_save_raw_input_stringifies_unpicklable_value_keeps_tensors(
@@ -729,7 +794,58 @@ def test_bundle_save_raw_input_stringifies_unpicklable_value_keeps_tensors(
     loaded = load(bundle_path)
     assert isinstance(loaded.input["tensor"], torch.Tensor)
     assert torch.equal(loaded.input["tensor"], raw_input["tensor"])
-    assert loaded.input["meta"] == "<scrubbed:generator>"
+    assert isinstance(loaded.input["meta"], UnencodableValue)
+    assert loaded.input["meta"].type_name == "builtins.generator"
+    assert "input" in loaded.input["meta"].at
+
+
+def test_bundle_save_raw_input_large_tensor_skips_picklability_probe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A large tensor in ``save_raw_input=True`` must not be pickle-probed twice.
+
+    Regression test for a MAJOR cost regression: ``_is_safely_picklable``'s
+    ``stringify_unknown`` probe called ``pickle.dumps()`` on every unspecced
+    value reached via ``save_raw_input``/``save_raw_output`` -- including
+    large tensors, which is the entire point of choosing the ``True`` "full
+    retention" policy over the default bounded ``"small"`` policy -- doubling
+    CPU cost and transiently doubling peak memory. ``torch.Tensor`` and
+    ``numpy.ndarray`` are known-serializable via their own ``__reduce_ex__``
+    (unlike generators/locks/file handles), so the probe should be skipped
+    for them entirely while the value still round-trips exactly.
+    """
+
+    tensor_dumps_calls = 0
+    real_dumps = pickle.dumps
+
+    def _counting_dumps(value: Any, *args: Any, **kwargs: Any) -> bytes:
+        nonlocal tensor_dumps_calls
+        if isinstance(value, torch.Tensor):
+            tensor_dumps_calls += 1
+        return real_dumps(value, *args, **kwargs)
+
+    monkeypatch.setattr(pickle, "dumps", _counting_dumps)
+
+    model = nn.Linear(3, 3)
+    large_tensor = torch.randn(200, 200)
+    raw_input = {"tensor": large_tensor, "x": torch.randn(1, 3)}
+    trace = trace_fn(
+        model,
+        raw_input,
+        capture=tl.options.CaptureOptions(
+            input_transform=lambda d: d["x"], save_raw_input=True, seed=0
+        ),
+    )
+
+    bundle_path = tmp_path / "raw_input_large_tensor_bundle.tl"
+    trace.save(bundle_path)
+
+    assert tensor_dumps_calls == 0
+
+    loaded = load(bundle_path)
+    assert isinstance(loaded.input["tensor"], torch.Tensor)
+    assert torch.equal(loaded.input["tensor"], large_tensor)
 
 
 def test_bundle_save_raw_input_numeric_ndarray_skips_picklability_probe(
@@ -749,7 +865,7 @@ def test_bundle_save_raw_input_numeric_ndarray_skips_picklability_probe(
             ndarray_dumps_calls += 1
         return real_dumps(value, *args, **kwargs)
 
-    monkeypatch.setattr("torchlens._io.scrub.pickle.dumps", _counting_dumps)
+    monkeypatch.setattr(pickle, "dumps", _counting_dumps)
 
     model = nn.Linear(3, 3)
     numeric_array = np.arange(100, dtype=np.float64).reshape(10, 10)
@@ -770,6 +886,92 @@ def test_bundle_save_raw_input_numeric_ndarray_skips_picklability_probe(
     loaded = load(bundle_path)
     assert isinstance(loaded.input["array"], np.ndarray)
     np.testing.assert_array_equal(loaded.input["array"], numeric_array)
+
+
+def test_bundle_save_raw_input_object_dtype_ndarray_stringifies_unpicklable_element(
+    tmp_path: Path,
+) -> None:
+    """An object-dtype ``numpy.ndarray`` holding a live unpicklable element must
+    still be probed and gracefully degraded, not blindly exempted.
+
+    Regression test for the round-7 MAJOR: the round-6 H4 fix exempted ALL
+    ``numpy.ndarray`` instances from the picklability probe, which is correct
+    for numeric/bool/string dtypes but wrong for ``dtype=object`` arrays --
+    those can hold arbitrary live Python objects (generators, locks, ...)
+    just like a plain list/dict, so exempting them reintroduces the hard
+    ``save()`` failure the probe exists to prevent.
+    """
+
+    def make_generator() -> Any:
+        yield 1
+
+    model = nn.Linear(3, 3)
+    object_array = np.array([make_generator(), 1, "text"], dtype=object)
+    raw_input = {"array": object_array, "x": torch.randn(1, 3)}
+    trace = trace_fn(
+        model,
+        raw_input,
+        capture=tl.options.CaptureOptions(
+            input_transform=lambda d: d["x"], save_raw_input=True, seed=0
+        ),
+    )
+
+    bundle_path = tmp_path / "raw_input_object_ndarray_bundle.tl"
+    # Must NOT raise -- the unpicklable element degrades gracefully instead
+    # of reaching the real pickle.dump() over the full scrubbed state.
+    trace.save(bundle_path)
+
+    loaded = load(bundle_path)
+    assert isinstance(loaded.input["array"], UnencodableValue)
+    assert loaded.input["array"].type_name == "numpy.ndarray"
+    assert "input" in loaded.input["array"].at
+
+
+def test_bundle_save_raw_input_structured_ndarray_object_field_stringifies_unpicklable_element(
+    tmp_path: Path,
+) -> None:
+    """A structured/record ``numpy.ndarray`` with an object-dtype field holding a
+    live unpicklable element must still be probed and gracefully degraded.
+
+    Regression test for the cert7 MAJOR: the round-7 fix's own guard
+    (``value.dtype != np.dtype("object")``) is a top-level dtype-identity
+    check, so a structured/record dtype whose *field* is object-typed
+    (e.g. ``np.dtype([('a', object), ('b', 'i4')])``) is never itself equal
+    to ``np.dtype("object")`` and wrongly slips past the exemption even
+    though it genuinely embeds live object references in the ``'a'``
+    field's storage -- reintroducing the exact ``save()`` failure the
+    round-6/round-7 fixes were written to close, one door narrower. The fix
+    is ``not value.dtype.hasobject`` (numpy's recursive containment check,
+    a strict superset of the identity comparison it replaces).
+    """
+
+    def make_generator() -> Any:
+        yield 1
+
+    record_dtype = np.dtype([("a", object), ("b", "i4")])
+    structured_array = np.array([(make_generator(), 1)], dtype=record_dtype)
+    assert structured_array.dtype != np.dtype("object")
+    assert structured_array.dtype.hasobject
+
+    model = nn.Linear(3, 3)
+    raw_input = {"array": structured_array, "x": torch.randn(1, 3)}
+    trace = trace_fn(
+        model,
+        raw_input,
+        capture=tl.options.CaptureOptions(
+            input_transform=lambda d: d["x"], save_raw_input=True, seed=0
+        ),
+    )
+
+    bundle_path = tmp_path / "raw_input_structured_ndarray_bundle.tl"
+    # Must NOT raise -- the unpicklable field element degrades gracefully
+    # instead of reaching the real pickle.dump() over the full scrubbed state.
+    trace.save(bundle_path)
+
+    loaded = load(bundle_path)
+    assert isinstance(loaded.input["array"], UnencodableValue)
+    assert loaded.input["array"].type_name == "numpy.ndarray"
+    assert "input" in loaded.input["array"].at
 
 
 def test_bundle_save_rejects_symlink_target(tmp_path: Path) -> None:
@@ -796,27 +998,28 @@ def _build_unified_bundle(tmp_path: Path) -> Path:
     Returns
     -------
     Path
-        Saved bundle directory that detects as ``v2.0_unified``.
+        Saved bundle directory that detects as ``v3``.
     """
 
     trace = _build_conv_log()
     bundle_path = tmp_path / "unified_bundle.tlspec"
     trace.save(bundle_path)
-    assert detect_tlspec_format(bundle_path) == "v2.0_unified"
+    assert detect_tlspec_format(bundle_path) == "v3"
     return bundle_path
 
 
-def test_unified_load_rejects_symlinked_metadata(tmp_path: Path) -> None:
-    """Unified loads should refuse a symlinked ``metadata.pkl`` member."""
+def test_unified_load_rejects_symlinked_record(tmp_path: Path) -> None:
+    """Unified loads should refuse a symlinked JSON record member."""
 
     bundle_path = _build_unified_bundle(tmp_path)
-    member = bundle_path / "metadata.pkl"
-    target = tmp_path / "real_metadata.pkl"
+    member = bundle_path / _read_manifest(bundle_path)["records"]["trace"]["path"]
+    target = tmp_path / "real_trace.json"
     member.rename(target)
     member.symlink_to(target)
 
-    with pytest.raises(ArtifactError, match="Refusing symlinked metadata"):
+    with pytest.raises(ArtifactError) as excinfo:
         load(bundle_path)
+    assert excinfo.value.fields["code"] == "load_path_symlink_rejected"
 
 
 def test_unified_load_rejects_symlinked_manifest(tmp_path: Path) -> None:
@@ -845,8 +1048,9 @@ def test_unified_load_rejects_symlinked_blobs_dir(tmp_path: Path) -> None:
     member.rename(target)
     member.symlink_to(target, target_is_directory=True)
 
-    with pytest.raises(ArtifactError, match="Refusing symlinked blobs directory"):
+    with pytest.raises(ArtifactError) as excinfo:
         load(bundle_path)
+    assert excinfo.value.fields["code"] == "load_path_symlink_rejected"
 
 
 def test_resolve_bundle_blob_path_rejects_symlinked_blobs_dir(tmp_path: Path) -> None:
@@ -948,29 +1152,10 @@ def test_cleanup_tmp_does_not_destroy_second_distinct_orphaned_backup(tmp_path: 
     assert surviving_marker in {"first-orphan", "second-orphan-distinct"}
 
 
-def test_unsupported_array_dtype_reason_rejects_complex128_but_allows_complex64() -> None:
-    """Non-torch backends must reject ``complex128`` arrays before the shared transport.
+def test_array_transport_admits_both_complex_widths() -> None:
+    """Both complex widths have a physical real-view encoding in the format 3 carrier."""
 
-    Regression test for the non-torch half of the cert round 8 BLOCKER:
-    ``_raise_for_unsupported_array_dtype()``/``_unsupported_array_dtype_reason()`` gate
-    every JAX/TF/Paddle/tinygrad/MLX payload before it reaches
-    ``numpy_to_transport_tensor()`` -> ``torch.from_numpy()`` -> the same unguarded
-    ``safetensors.torch.save_file()`` call the torch-native path hits. Before this fix,
-    the guard only rejected numpy dtype *kinds* ``{"O", "S", "U", "V"}`` -- ``complex128``
-    has kind ``"c"`` (shared with the genuinely-supported ``complex64``), so it sailed
-    through unblocked. The fix distinguishes by itemsize (complex128 is 16 bytes,
-    complex64 is 8) so only the unsupported width is rejected.
-    """
-
-    complex128_array = np.array([1 + 2j], dtype=np.complex128)
-    complex64_array = np.array([1 + 2j], dtype=np.complex64)
-
-    reason = _unsupported_array_dtype_reason(complex128_array)
-    assert reason is not None
-    assert "complex128" in reason
-    assert _unsupported_array_dtype_reason(complex64_array) is None
-
-    with pytest.raises(TypeError, match="complex128"):
-        _raise_for_unsupported_array_dtype(complex128_array, backend_name="jax")
-
-    _raise_for_unsupported_array_dtype(complex64_array, backend_name="jax")
+    for dtype in (np.complex64, np.complex128):
+        array = np.array([1 + 2j], dtype=dtype)
+        assert _unsupported_array_dtype_reason(array) is None
+        _raise_for_unsupported_array_dtype(array, backend_name="numpy")

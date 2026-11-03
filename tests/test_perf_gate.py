@@ -442,6 +442,22 @@ def test_partial_payload_is_not_writable_as_canonical() -> None:
         _assert_baseline_status_writable(payload)
 
 
+def test_emit_tensor_grad_event_populates_profile_buckets() -> None:
+    """Tensor grad hooks record P6 profiling buckets for later optimization."""
+
+    model = nn.Linear(3, 2)
+    x = torch.randn(1, 3, requires_grad=True)
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
+
+    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+
+    timings = trace._phase_timings
+    assert timings["backward_grad_event_ensure_stream"]["count"] >= 1
+    assert timings["backward_grad_event_ensure_pass"]["count"] >= 1
+    assert timings["backward_grad_event_payload"]["count"] >= 1
+    assert timings["backward_grad_event_append"]["count"] >= 1
+
+
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/loop_grouping_adapter.py.
 def test_loop_frontier_uses_deque_fifo_order() -> None:
     """Frontier popping is direction-major FIFO with deque-backed candidates."""

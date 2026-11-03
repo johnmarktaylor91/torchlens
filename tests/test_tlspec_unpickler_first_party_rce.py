@@ -26,20 +26,40 @@ from __future__ import annotations
 
 import io
 import pickle
+import sys
+from pathlib import Path
 
 import pytest
+import torch
+from torch import nn
 
 import torchlens as tl
+from torchlens._io import ArtifactError
 from torchlens._io._safe_unpickle import SafeBundleUnpickler
 from torchlens._utils._callable_safety import is_inert_first_party_callable
 from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.options import CaptureOptions
+from torchlens.report import _environment as tl_environment
 
 _CAP = CaptureOptions(
     replayable=True,
     capture_container_structure=True,
     cache=False,
 )
+
+
+class _ModuleInstalledGadget:
+    """``__reduce__`` -> ``torchlens.report._environment._module_is_installed('<attacker>')``.
+
+    On a vulnerable tree the unpickler admits the private helper and pickle INVOKES
+    it, importing the attacker module (whose top-level code writes a sentinel).
+    """
+
+    def __init__(self, attacker_module: str) -> None:
+        self._attacker = attacker_module
+
+    def __reduce__(self):  # type: ignore[no-untyped-def]
+        return (tl_environment._module_is_installed, (self._attacker,))
 
 
 def _global_ref_pickle(module: str, name: str) -> bytes:
@@ -66,9 +86,66 @@ def _has_unpickling_error(exc: BaseException | None) -> bool:
     return False
 
 
+def _assert_refused_before_unpickling(raised: BaseException | None) -> None:
+    """The planted pickle never reaches an unpickler: format 3 refuses the directory first.
+
+    A ``metadata.pkl`` at the artifact root marks a 2.x save, which the 3.0 reader refuses
+    ``artifact_version_below_floor`` without opening it (the direct-unpickler tests below
+    still pin the unpickler's own denial).
+    """
+
+    assert isinstance(raised, ArtifactError), "load-time gadget was not refused typed"
+    assert raised.fields.get("code") == "artifact_version_below_floor", raised
+    assert not _has_unpickling_error(raised), "the planted pickle was opened"
+
+
 # --------------------------------------------------------------------------- #
 # The confirmed load-time RCE: crafted metadata.pkl -> private import gadget.
 # --------------------------------------------------------------------------- #
+
+
+def test_module_is_installed_reduce_gadget_denied_through_tl_load(tmp_path: Path) -> None:
+    """A crafted bundle whose metadata REDUCE is the import gadget raises + no import."""
+
+    attacker_dir = tmp_path / "attacker_pkg"
+    attacker_dir.mkdir()
+    sentinel = tmp_path / "PWNED_R21"
+    attacker_name = "evil_r21_first_party_rce_module"
+    (attacker_dir / f"{attacker_name}.py").write_text(
+        f"from pathlib import Path\nPath({str(sentinel)!r}).write_text('pwned')\n"
+    )
+    sys.path.insert(0, str(attacker_dir))
+    sys.modules.pop(attacker_name, None)
+    try:
+        victim = tmp_path / "victim.tlspec"
+        tl.trace(nn.Linear(4, 4), torch.randn(1, 4), capture=_CAP).save(
+            victim, level="runnable", include_weights=True
+        )
+        with (victim / "metadata.pkl").open("wb") as handle:
+            pickle.dump(
+                _ModuleInstalledGadget(attacker_name), handle, protocol=pickle.HIGHEST_PROTOCOL
+            )
+
+        raised: BaseException | None = None
+        try:
+            tl.load(victim)
+        except (ArtifactError, pickle.UnpicklingError) as exc:
+            raised = exc
+
+        assert raised is not None, "load-time import gadget was not blocked"
+        _assert_refused_before_unpickling(raised)
+        assert not sentinel.exists(), "attacker sentinel written -> gadget executed (RCE)"
+        assert attacker_name not in sys.modules, "attacker module imported -> gadget executed"
+    finally:
+        sys.path.remove(str(attacker_dir))
+        sys.modules.pop(attacker_name, None)
+
+
+def test_module_is_installed_denied_by_direct_unpickler() -> None:
+    """The restricted unpickler refuses the private import gadget as a bare GLOBAL."""
+
+    with pytest.raises(pickle.UnpicklingError):
+        _load_ref("torchlens.report._environment", "_module_is_installed")
 
 
 # --------------------------------------------------------------------------- #
@@ -156,6 +233,78 @@ class _OsSystemGadget:
 # gate is now default-deny: only marker-stamped facet recipes and a frozen vetted-
 # inert set (identity + the pure intervention helper factories) admit.
 # --------------------------------------------------------------------------- #
+
+
+class _CleanupPartialGadget:
+    """``__reduce__`` -> ``torchlens.recording.cleanup.cleanup_partial('<attacker_dir>')``.
+
+    On the pre-r22 tree the PUBLIC-named ``cleanup_partial`` slipped the verb
+    denylist and pickle INVOKED it, ``shutil.rmtree``-ing an attacker-named directory
+    (one bearing a ``PARTIAL`` sentinel) on a plain ``tl.load``.
+    """
+
+    def __init__(self, victim_dir: str) -> None:
+        self._victim = victim_dir
+
+    def __reduce__(self):  # type: ignore[no-untyped-def]
+        from torchlens.recording.cleanup import cleanup_partial
+
+        return (cleanup_partial, (self._victim,))
+
+
+def test_fs_mutation_gadget_denied_through_tl_load(tmp_path: Path) -> None:
+    """A crafted bundle whose REDUCE is cleanup_partial must NOT delete the victim dir."""
+
+    victim = tmp_path / "victim_data"
+    victim.mkdir()
+    (victim / "important.txt").write_text("precious user data\n")
+    (victim / "PARTIAL").write_text("")  # the only precondition cleanup_partial needs
+
+    bundle = tmp_path / "b.tlspec"
+    tl.trace(nn.Linear(4, 4), torch.randn(1, 4), capture=_CAP).save(
+        bundle, level="runnable", include_weights=True
+    )
+    with (bundle / "metadata.pkl").open("wb") as handle:
+        pickle.dump(_CleanupPartialGadget(str(victim)), handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    raised: BaseException | None = None
+    try:
+        tl.load(bundle)
+    except (ArtifactError, pickle.UnpicklingError) as exc:
+        raised = exc
+
+    assert raised is not None, "fs-mutation gadget was not blocked"
+    _assert_refused_before_unpickling(raised)
+    assert victim.exists(), "attacker-named directory was deleted -> gadget executed"
+    assert (victim / "important.txt").exists(), "victim contents destroyed -> rmtree ran"
+
+
+def test_state_poison_gadget_denied_through_tl_load(tmp_path: Path) -> None:
+    """A REDUCE flipping a global HAS_* capability flag must leave the flag unchanged."""
+
+    import torchlens._utils._torch_compat as tc
+
+    cap = next(iter(tc._CAPABILITY_ATTRS))
+    before = getattr(tc, cap)
+
+    class _StateGadget:
+        def __reduce__(self):  # type: ignore[no-untyped-def]
+            from torchlens._utils._torch_compat import mark_torch_capability_missing
+
+            return (mark_torch_capability_missing, (cap, "poisoned-by-untrusted-bundle"))
+
+    bundle = tmp_path / "b.tlspec"
+    tl.trace(nn.Linear(4, 4), torch.randn(1, 4), capture=_CAP).save(
+        bundle, level="runnable", include_weights=True
+    )
+    with (bundle / "metadata.pkl").open("wb") as handle:
+        pickle.dump(_StateGadget(), handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    try:
+        tl.load(bundle)
+    except (ArtifactError, pickle.UnpicklingError):
+        pass
+    assert getattr(tc, cap) == before, "untrusted bundle flipped a global capability flag"
 
 
 def test_public_side_effecting_first_party_callables_denied() -> None:

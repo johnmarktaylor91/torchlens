@@ -4,19 +4,21 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import read_record, write_record
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TLSPEC_VERSION, ArtifactError
-from torchlens._io.tlspec import _TlSpecWriter
-from torchlens.errors import BackendPayloadUnsupportedError
+from torchlens._io import TLSPEC_VERSION, ArtifactError, ArtifactTooOldError
+from torchlens._io._tlspec_identity import _backend_runtime
+from torchlens.errors import EngineDispatchError
+from torchlens.intervention.errors import OpaqueCallableError
 from torchlens.intervention.types import Edit, FireRecord, InterventionSpec
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_tlspec
@@ -191,6 +193,65 @@ def _write_manifest(path: Path, manifest: dict[str, Any]) -> None:
     )
 
 
+def _schema_keywords(schema: dict[str, Any]) -> set[str]:
+    """Return JSON Schema keywords used at schema-fragment positions.
+
+    Parameters
+    ----------
+    schema:
+        Decoded root JSON Schema.
+
+    Returns
+    -------
+    set[str]
+        Keywords found without mistaking property names for keywords.
+    """
+
+    keywords: set[str] = set()
+
+    def visit(fragment: Any) -> None:
+        """Visit one schema fragment recursively."""
+
+        if not isinstance(fragment, dict):
+            return
+        keywords.update(fragment)
+        properties = fragment.get("properties")
+        if isinstance(properties, dict):
+            for property_schema in properties.values():
+                visit(property_schema)
+        for keyword in ("items", "if", "then", "additionalProperties"):
+            visit(fragment.get(keyword))
+        all_of = fragment.get("allOf")
+        if isinstance(all_of, list):
+            for child in all_of:
+                visit(child)
+
+    visit(schema)
+    return keywords
+
+
+def _tensor_cells(value: Any) -> Iterator[dict[str, Any]]:
+    """Yield tensor reference cells, including those inside saved containers."""
+
+    if isinstance(value, dict):
+        if value.get("$tl") == "tensor":
+            yield value
+        else:
+            for child in value.values():
+                yield from _tensor_cells(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _tensor_cells(child)
+
+
+def _first_out_record(path: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Read the op table and its first materialized output reference."""
+
+    record = read_record(path, "op")
+    cell = next(cell for cell in _tensor_cells(record["columns"]["out"]) if "blob" in cell)
+    return record, cell
+
+
 def _mlx_schema_v2_manifest(path: Path) -> dict[str, Any]:
     """Return a schema v2 non-torch audit manifest based on a torch fixture.
 
@@ -248,64 +309,76 @@ def _mlx_schema_v2_manifest(path: Path) -> dict[str, Any]:
 
 
 def _mlx_materialized_schema_v2_manifest(path: Path) -> dict[str, Any]:
-    """Return a schema v2 MLX materialized manifest backed by real blobs.
-
-    Parameters
-    ----------
-    path:
-        Existing ``.tlspec`` path whose saved blobs supply the body files.
-
-    Returns
-    -------
-    dict[str, Any]
-        Mutable schema v2 manifest with MLX codec body entries.
-    """
+    """Port a real save's tensor cells to the format 3 array codec vocabulary."""
 
     manifest = _read_manifest(path)
-    body_index = manifest["body_index"]
-    tensor_entries = manifest["tensors"]
-    for entry in [*body_index, *tensor_entries]:
-        logical_dtype = f"mlx.core.{entry['dtype']}"
-        entry.update(
-            {
-                "logical_backend": "mlx",
-                "codec": "numpy_safetensors_v1",
-                "logical_dtype": logical_dtype,
-                "logical_device": "unknown",
-                "transport_backend": "safetensors.torch",
-                "transport_dtype": entry["dtype"],
-                "codec_metadata": {"logical_shape": entry["shape"]},
+    for kind in manifest["records"]:
+        record = read_record(path, kind)
+        for cell in _tensor_cells(record):
+            cell["codec"] = {
+                "id": "numpy_safetensors_v1",
+                "logical_shape": cell["shape"],
             }
-        )
-    manifest.update(
+        write_record(path, kind, record)
+    # Record writes update both digest tables. Read those fresh before editing identity.
+    manifest = _read_manifest(path)
+    manifest["backend"] = "mlx"
+    manifest["backend_runtime"] = {
+        "name": "mlx",
+        "version": "0.0.test",
+        "runtime_config": {},
+        "device_summary": {},
+        "compat_policy": {"policy": "materialized-test"},
+    }
+    manifest["codecs"] = ["numpy_safetensors_v1"]
+    return manifest
+
+
+def test_schema_v2_accepts_array_payload_policy_and_codec_body_fields(tmp_path: Path) -> None:
+    """A current real save validates; the former schema-v2 artifact is below the floor."""
+
+    from torchlens.errors import ArtifactTooOldError
+
+    path = tmp_path / "array_payload_vocab.tlspec"
+    _captured_log().save(path)
+    validate_tlspec(path)
+    manifest = _mlx_schema_v2_manifest(path)
+    manifest["body_format"] = "safetensors"
+    manifest["payload_policy"] = {
+        "policy": "array_payloads",
+        "materialization_supported": True,
+        "payload_kinds": ["out"],
+    }
+    manifest["body_index"][0].update(
         {
-            "schema_version": 2,
-            "backend": "mlx",
-            "backend_runtime": {
-                "name": "mlx",
-                "version": "0.0.test",
-                "runtime_config": {},
-                "device_summary": {},
-                "compat_policy": {"policy": "materialized-test"},
-            },
-            "torch_version": None,
-            "model_fingerprint": {
-                "backend_fingerprint": {
-                    "callable_identity": "tests.test_tlspec_unified.mlx_fixture",
-                    "graph_digest": "mlx-materialized-fixture",
-                }
-            },
-            "body_format": "safetensors",
-            "backward_summary": None,
-            "derived_gradient_summary": None,
-            "payload_policy": {
-                "policy": "array_payloads",
-                "materialization_supported": True,
-                "payload_kinds": sorted({entry["intended_use"] for entry in body_index}),
-            },
+            "logical_backend": "mlx",
+            "codec": "numpy_safetensors_v1",
+            "logical_dtype": "mlx.core.float32",
+            "logical_device": "unknown",
+            "transport_backend": "safetensors.torch",
+            "transport_dtype": "float32",
+            "codec_metadata": {"logical_shape": [2, 3]},
         }
     )
-    return manifest
+    manifest["format_version"] = 2
+    manifest["tlspec_version"] = 11
+    _write_manifest(path, manifest)
+
+    for door in (validate_tlspec, tl.load):
+        with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x") as excinfo:
+            door(path)
+        assert excinfo.value.fields["code"] == "artifact_version_below_floor"
+
+
+def test_validate_tlspec_accepts_pre_hook_input_body_payloads(tmp_path: Path) -> None:
+    """The validator accepts the v6 pre-hook provenance schema extension."""
+
+    path = tmp_path / "pre_hook_input.tlspec"
+    _captured_pre_hook_log().save(path)
+    manifest = _read_manifest(path)
+
+    assert "pre_hook_input" in {entry["intended_use"] for entry in manifest["body_index"]}
+    validate_tlspec(path)
 
 
 def test_validate_tlspec_rejects_unknown_body_intended_use(tmp_path: Path) -> None:
@@ -318,11 +391,13 @@ def test_validate_tlspec_rejects_unknown_body_intended_use(tmp_path: Path) -> No
         item for item in manifest["body_index"] if item["intended_use"] == "pre_hook_input"
     )
     entry["intended_use"] = "unknown_provenance_payload"
+    manifest.update(format_version=2, tlspec_version=11)
     _write_manifest(path, manifest)
 
-    with pytest.raises(ValueError, match="intended_use"):
+    with pytest.raises(ArtifactTooOldError) as caught:
         validate_tlspec(path)
-    with pytest.raises(ArtifactError, match="intended_use"):
+    assert caught.value.fields["code"] == "artifact_version_below_floor"
+    with pytest.raises(ArtifactTooOldError):
         tl.load(path)
 
 
@@ -331,20 +406,22 @@ def test_unified_load_rejects_desynchronized_body_index(
     tmp_path: Path,
     mutation: str,
 ) -> None:
-    """Load cross-checks the public body index against operative tensors."""
+    """The file inventory and operative tensor references must agree."""
 
     path = tmp_path / f"desynchronized_{mutation}.tlspec"
     _captured_log().save(path)
+    assert isinstance(tl.load(path), tl.Trace)
     manifest = _read_manifest(path)
     if mutation == "ghost":
-        ghost_entry = dict(manifest["body_index"][0])
-        ghost_entry["filename"] = "blobs/ghost.safetensors"
-        manifest["body_index"].append(ghost_entry)
+        blob = next(name for name in manifest["files"] if name.startswith("blobs/"))
+        manifest["files"]["blobs/ghost.safetensors"] = dict(manifest["files"][blob])
+        _write_manifest(path, manifest)
     else:
-        manifest["body_index"][0]["filename"] = "blobs/ghost.safetensors"
-    _write_manifest(path, manifest)
+        record, cell = _first_out_record(path)
+        cell["blob"] = "blobs/ghost.safetensors"
+        write_record(path, "op", record)
 
-    with pytest.raises(ArtifactError, match="body_index"):
+    with pytest.raises(ArtifactError, match="ghost.safetensors"):
         tl.load(path)
 
 
@@ -361,7 +438,7 @@ def test_validate_tlspec_refuses_pre_floor_legacy_modellog_bundle() -> None:
     """A checked-in v2.16 model-log fixture refuses at the tlspec-6 floor.
 
     Both validation and loading refuse the same real pre-floor artifact with
-    the typed floor error; legacy 2.16 intervention specs remain accepted.
+    the typed floor error, as do legacy 2.16 intervention specs.
     """
 
     from torchlens.errors import ArtifactTooOldError
@@ -408,17 +485,46 @@ def test_unified_round_trip_preserves_requires_grad(tmp_path: Path) -> None:
     path = tmp_path / "requires_grad.tlspec"
 
     trace.save(path)
-    manifest = _read_manifest(path)
     loaded = tl.load(path)
     loaded_out = loaded.layers[source_op.layer_label].ops[0].out
     lazy_loaded = tl.load(path, lazy=True)
     lazy_out = lazy_loaded.layers[source_op.layer_label].ops[0].materialize_out()
 
-    assert any(entry["requires_grad"] is True for entry in manifest["tensors"])
+    assert any(
+        cell["requires_grad"] is True
+        for cell in _tensor_cells(read_record(path, "op")["columns"]["out"])
+    )
     assert isinstance(loaded_out, torch.Tensor)
     assert loaded_out.requires_grad is True
     assert isinstance(lazy_out, torch.Tensor)
     assert lazy_out.requires_grad is True
+
+
+def test_fresh_unified_save_reports_current_version(
+    tmp_path: Path,
+) -> None:
+    """A same-runtime save/load round trip must not report a false "older" version.
+
+    Regression test for a bug where ``torchlens._io.tlspec.TLSPEC_VERSION`` (a
+    second, independently-defined constant pinned at 1) collided with the
+    unrelated ``torchlens._io.TLSPEC_VERSION`` (the real portable-format
+    version) under the same ``"tlspec_version"`` manifest key. A ``dict.update``
+    merge in ``_TlSpecWriter.write_trace_manifest`` let the stale constant win,
+    so every freshly-saved bundle reported ``tlspec_version=1`` on disk and
+    every same-runtime load raised a false "Bundle tlspec_version=1 is older
+    than the runtime ``tlspec_version``" refusal.
+    """
+
+    log = _captured_log()
+    path = tmp_path / "fresh_version.tlspec"
+
+    log.save(path)
+    manifest = _read_manifest(path)
+    assert manifest["tlspec_version"] == TLSPEC_VERSION
+    assert tl.io.detect_tlspec_format(path) == "v3"
+
+    loaded = tl.load(path)
+    assert isinstance(loaded, tl.Trace)
 
 
 def test_unified_manifest_forward_compat_hard_fail_for_newer_bundle(tmp_path: Path) -> None:
@@ -449,7 +555,8 @@ def test_validate_tlspec_rejects_newer_portable_version(tmp_path: Path) -> None:
     # G3 ceiling consolidation: the validation entry raises the same typed
     # refusal (class, stable code, message) as every other above-ceiling door.
     expected = (
-        f"Bundle uses tlspec_version={TLSPEC_VERSION + 1}, but this runtime only supports "
+        f"Artifact tlspec_version uses tlspec_version={TLSPEC_VERSION + 1}, "
+        "but this runtime only supports "
         f"up to {TLSPEC_VERSION}."
     )
 
@@ -552,9 +659,36 @@ def test_unified_intervention_round_trips_per_save_level(tmp_path: Path, level: 
     assert isinstance(loaded, InterventionSpec)
     assert manifest["kind"] == "intervention"
     assert manifest["tlspec_version"] == TLSPEC_VERSION
-    assert manifest["format_version"] == "2"
+    assert manifest["format_version"] == 3
     assert manifest["save_level"] == level
     assert loaded.metadata["save_level"] == level
+
+
+def test_inspect_tlspec_returns_unified_manifest(tmp_path: Path) -> None:
+    """Manifest inspection returns parsed unified metadata."""
+
+    path = tmp_path / "inspect.tlspec"
+    _captured_log().save(path)
+
+    manifest = tl.io.inspect_tlspec(path)
+
+    assert manifest["kind"] == "trace"
+    assert manifest["body_format"] == "safetensors"
+    assert isinstance(manifest["sites"], list)
+
+
+def test_validate_tlspec_rejects_missing_unified_field(tmp_path: Path) -> None:
+    """Schema validation fails closed for malformed unified manifests."""
+
+    path = tmp_path / "invalid.tlspec"
+    _captured_log().save(path)
+    manifest = _read_manifest(path)
+    manifest.pop("contract_digest")
+    (path / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+    with pytest.raises(ArtifactError, match="contract_digest") as excinfo:
+        validate_tlspec(path)
+    assert excinfo.value.fields["code"] == "manifest_schema_invalid"
 
 
 def test_unified_manifest_records_backward_summary(tmp_path: Path) -> None:
@@ -587,13 +721,49 @@ def test_unified_manifest_records_backward_summary(tmp_path: Path) -> None:
     )
 
 
+def test_validate_tlspec_rejects_bad_backward_blob_kind(tmp_path: Path) -> None:
+    """Schema validation rejects malformed backward blob kinds."""
+
+    torch.manual_seed(2102)
+    model = UnifiedTinyModel().eval()
+    x = torch.randn(2, 3, requires_grad=True)
+    log = tl.trace(model, x, capture=CaptureOptions(save_grads=True))
+    log.log_backward(log[log.output_layers[0]].out.sum())
+    path = tmp_path / "bad_backward_kind.tlspec"
+    log.save(path)
+    manifest = _read_manifest(path)
+    manifest["backward_summary"]["gradient_blob_kinds"] = ["grad", "legacy_grad"]
+    (path / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+    with pytest.raises(ArtifactError, match="gradient_blob_kinds") as caught:
+        validate_tlspec(path)
+    assert caught.value.fields["code"] == "manifest_schema_invalid"
+
+
+@pytest.mark.parametrize("invalid_identity", ["", None, 7])
+def test_validate_tlspec_enforces_shipped_schema_properties_pattern(
+    tmp_path: Path, invalid_identity: Any
+) -> None:
+    """The code-owned format 3 identity grammar rejects empty or non-string values."""
+
+    path = tmp_path / "bad_python_version.tlspec"
+    _captured_log().save(path)
+    validate_tlspec(path)
+    manifest = _read_manifest(path)
+    manifest["python_version"] = invalid_identity
+    _write_manifest(path, manifest)
+    with pytest.raises(ArtifactError, match="python_version") as caught:
+        validate_tlspec(path)
+    assert caught.value.fields["code"] == "manifest_schema_invalid"
+
+
 # shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize("field_name", ("model_fingerprint",))
 def test_validate_tlspec_rejects_unknown_nested_schema_fields(
     tmp_path: Path,
     field_name: str,
 ) -> None:
-    """Nested ``additionalProperties: false`` declarations reject bogus keys."""
+    """The closed summary shapes refuse keys outside their contract tables."""
 
     path = tmp_path / f"bad_{field_name}_extra.tlspec"
     _captured_log().save(path)
@@ -603,32 +773,43 @@ def test_validate_tlspec_rejects_unknown_nested_schema_fields(
     nested["bogus_round5_field"] = True
     _write_manifest(path, manifest)
 
-    with pytest.raises(ValueError, match="unsupported fields"):
+    with pytest.raises(ArtifactError, match="unsupported fields") as caught:
         validate_tlspec(path)
+    assert caught.value.fields["code"] == "manifest_schema_invalid"
 
 
-def test_validate_tlspec_enforces_schema_v2_python_version_pattern(tmp_path: Path) -> None:
-    """Schema v2 (every non-torch backend) must reject malformed ``python_version`` too.
-
-    Regression test for a MAJOR finding: the round that made
-    ``schemas/tlspec_manifest_v1.json``'s ``properties`` block load-bearing
-    (see ``test_validate_tlspec_enforces_shipped_schema_properties_pattern``)
-    only exercised schema v1 (the torch-backend default). Schema v2 --
-    written for every non-torch backend (mlx/tf/paddle/tinygrad/jax/...) --
-    declared ``python_version`` in its ``required`` list but never in its
-    ``properties`` block, so the pattern constraint was decorative there: a
-    malformed ``python_version`` silently passed ``validate_tlspec()`` for
-    any schema-v2 bundle.
-    """
+@pytest.mark.parametrize("invalid_identity", ["", None, 7])
+def test_validate_tlspec_enforces_schema_v2_python_version_pattern(
+    tmp_path: Path, invalid_identity: Any
+) -> None:
+    """The same code-owned identity grammar applies to array codec artifacts."""
 
     path = tmp_path / "bad_python_version_v2.tlspec"
     _captured_log().save(path)
-    manifest = _mlx_schema_v2_manifest(path)
-    manifest["python_version"] = "not-a-version"
+    manifest = _mlx_materialized_schema_v2_manifest(path)
+    _write_manifest(path, manifest)
+    validate_tlspec(path)
+    manifest["python_version"] = invalid_identity
+    _write_manifest(path, manifest)
+    with pytest.raises(ArtifactError, match="python_version") as caught:
+        validate_tlspec(path)
+    assert caught.value.fields["code"] == "manifest_schema_invalid"
+
+
+def test_schema_v2_mlx_materialized_manifest_validates(tmp_path: Path) -> None:
+    """Format 3 admits the array codec with real chunks and re-digested record cells."""
+
+    path = tmp_path / "mlx_materialized.tlspec"
+    _captured_log().save(path)
+    manifest = _mlx_materialized_schema_v2_manifest(path)
     _write_manifest(path, manifest)
 
-    with pytest.raises(ValueError, match="python_version"):
-        validate_tlspec(path)
+    validate_tlspec(path)
+    assert manifest["format_version"] == 3
+    assert manifest["codecs"] == ["numpy_safetensors_v1"]
+    cells = list(_tensor_cells(read_record(path, "op")["columns"]["out"]))
+    assert cells
+    assert all(cell["codec"]["id"] == "numpy_safetensors_v1" for cell in cells)
 
 
 @pytest.mark.rare
@@ -653,38 +834,6 @@ def test_schema_v2_mlx_materialized_loads_payloads(tmp_path: Path) -> None:
     assert all(isinstance(op.out, mx.array) for op in saved_ops)
     assert loaded.validation_replay_status.state == "unavailable"
     assert loaded.validation_replay_status.reason == "loaded_trace_runtime_capture_stripped"
-
-
-@pytest.mark.smoke
-def test_schema_v2_mlx_old_audit_only_fixture_loads_metadata_only(tmp_path: Path) -> None:
-    """Old MLX audit-only schema-v2 bundles should still load metadata-only."""
-
-    path = tmp_path / "mlx_old_audit_only.tlspec"
-    _captured_log().save(path)
-    manifest = _mlx_schema_v2_manifest(path)
-    manifest["unsupported_tensors"].append(
-        {
-            "label": "relu_1_2_raw:1",
-            "kind": "out",
-            "reason": "mlx_array_audit_null",
-        }
-    )
-    _write_manifest(path, manifest)
-
-    validate_tlspec(path)
-    loaded = tl.load(path)
-    saved_ops = [op for op in loaded._layer_list if op.has_saved_activation]
-
-    assert isinstance(loaded, tl.Trace)
-    assert loaded.provenance.backend == "mlx"
-    assert getattr(loaded, "payload_load_status") == "audit_only"
-    assert saved_ops
-    assert all(op.out is None and op.out_ref is None for op in saved_ops)
-    assert all(op.shape is not None and op.dtype_ref is not None for op in saved_ops)
-    assert any(
-        record["reason"] == "mlx_array_audit_null"
-        for record in _read_manifest(path)["unsupported_tensors"]
-    )
 
 
 @pytest.mark.rare
@@ -729,64 +878,78 @@ def test_mlx_public_save_writes_materialized_manifest_body(tmp_path: Path) -> No
 
 
 def test_schema_v2_materialized_unknown_codec_fails_closed(tmp_path: Path) -> None:
-    """Materialized schema-v2 manifests with unknown codecs fail before loading."""
+    """Unknown codec ids refuse in the format 3 manifest before reading records."""
 
     path = tmp_path / "jax_unknown_codec.tlspec"
     _captured_log().save(path)
-    manifest = _mlx_schema_v2_manifest(path)
-    manifest["backend"] = "jax"
-    manifest["backend_runtime"]["name"] = "jax"
-    manifest["payload_policy"] = {
-        "policy": "array_payloads",
-        "materialization_supported": True,
-        "payload_kinds": ["out"],
-    }
-    manifest["body_index"][0].update(
-        {
-            "logical_backend": "jax",
-            "codec": "unknown_codec_v1",
-            "logical_dtype": "float32",
-            "logical_device": "cpu",
-        }
-    )
+    assert isinstance(tl.load(path), tl.Trace)
+    manifest = _read_manifest(path)
+    manifest["codecs"].append("unknown_codec_v1")
     _write_manifest(path, manifest)
 
-    with pytest.raises(BackendPayloadUnsupportedError, match="unknown_codec_v1"):
+    with pytest.raises(ArtifactError, match="codecs") as excinfo:
         tl.load(path)
+    assert excinfo.value.fields["code"] == "manifest_schema_invalid"
+
+
+def test_schema_v2_materialized_unknown_tensors_entry_codec_fails_closed(tmp_path: Path) -> None:
+    """An unknown record-cell codec refuses even when the manifest codec list is valid."""
+
+    path = tmp_path / "mlx_bad_tensor_codec.tlspec"
+    _captured_log().save(path)
+    assert isinstance(tl.load(path), tl.Trace)
+    record, cell = _first_out_record(path)
+    cell["codec"] = "unknown_codec_v1"
+    write_record(path, "op", record)
+
+    with pytest.raises(ArtifactError, match="unknown_codec_v1") as excinfo:
+        tl.load(path)
+    assert excinfo.value.fields["code"] == "record_schema_invalid"
 
 
 def test_schema_v2_materialized_missing_tensors_entry_codec_fails_closed(tmp_path: Path) -> None:
-    """Tensors entries missing a codec fail preflight with the typed IO error."""
+    """A tensor reference missing its required codec refuses with the typed IO error."""
 
     path = tmp_path / "mlx_missing_tensor_codec.tlspec"
     _captured_log().save(path)
-    manifest = _mlx_materialized_schema_v2_manifest(path)
-    del manifest["tensors"][0]["codec"]
-    _write_manifest(path, manifest)
+    assert isinstance(tl.load(path), tl.Trace)
+    record, cell = _first_out_record(path)
+    del cell["codec"]
+    write_record(path, "op", record)
 
-    with pytest.raises(ArtifactError, match="codec"):
+    with pytest.raises(ArtifactError, match="codec") as excinfo:
         tl.load(path)
+    assert excinfo.value.fields["code"] == "record_schema_invalid"
 
 
 def test_schema_v2_codec_preflight_wraps_registry_errors(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Unexpected codec-registry failures surface as ``ArtifactError``."""
+    """An active raw-value codec lookup wraps registry failures as typed IO refusals."""
 
-    import torchlens._io.bundle as bundle_module
+    import numpy as np
 
-    path = tmp_path / "mlx_registry_error.tlspec"
-    _captured_log().save(path)
-    _write_manifest(path, _mlx_materialized_schema_v2_manifest(path))
+    import torchlens._io.payload_codec as payload_module
 
-    def _exploding_codec_lookup(backend_name: str) -> Any:
+    raw = {"array": np.arange(6, dtype=np.float32), "x": torch.randn(2, 3)}
+    trace = tl.trace(
+        UnifiedTinyModel(),
+        raw,
+        capture=CaptureOptions(input_transform=lambda value: value["x"], save_raw_input=True),
+    )
+    path = tmp_path / "array_registry_error.tlspec"
+    trace.save(path)
+    assert isinstance(tl.load(path).input["array"], np.ndarray)
+
+    def exploding_lookup(backend_name: str) -> Any:
         raise RuntimeError("registry exploded")
 
-    monkeypatch.setattr(bundle_module, "get_payload_codec", _exploding_codec_lookup)
-
-    with pytest.raises(ArtifactError, match="Failed to resolve the payload codec"):
+    monkeypatch.setattr(payload_module, "get_payload_codec", exploding_lookup)
+    with pytest.raises(ArtifactError, match="Failed to resolve the payload codec") as caught:
         tl.load(path)
+    assert caught.value.fields["code"] == "bundle_load_failed"
+    assert isinstance(caught.value.__cause__, RuntimeError)
 
 
 # shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
@@ -799,7 +962,7 @@ def test_schema_v2_codec_preflight_wraps_registry_errors(
             lambda manifest: manifest.__setitem__("backward_summary", {"has_backward_pass": True}),
             "backward_summary",
         ),
-        (lambda manifest: manifest.__setitem__("torch_version", "2.0.0"), "torch_version=null"),
+        (lambda manifest: manifest.__setitem__("torch_version", None), "torch_version"),
     ],
 )
 def test_schema_v2_non_torch_corruptions_fail_closed(
@@ -807,16 +970,43 @@ def test_schema_v2_non_torch_corruptions_fail_closed(
     mutation: Callable[[dict[str, Any]], Any],
     match: str,
 ) -> None:
-    """Schema v2 backend-conditional fields reject malformed non-torch manifests."""
+    """Current array artifacts retain closed backend/runtime and summary validation."""
 
     path = tmp_path / "bad_v2.tlspec"
     _captured_log().save(path)
-    manifest = _mlx_schema_v2_manifest(path)
+    manifest = _mlx_materialized_schema_v2_manifest(path)
+    _write_manifest(path, manifest)
+    validate_tlspec(path)
     mutation(manifest)
     _write_manifest(path, manifest)
 
-    with pytest.raises(ValueError, match=match):
+    with pytest.raises(ArtifactError, match=match) as caught:
         validate_tlspec(path)
+    assert caught.value.fields["code"] == "manifest_schema_invalid"
+
+
+def test_schema_v1_rejects_schema_v2_body_uses(tmp_path: Path) -> None:
+    """Schema v1 fixtures stay torch-only and reject v2 intended-use literals."""
+
+    path = tmp_path / "v1_with_v2_body_use.tlspec"
+    _captured_log().save(path)
+    manifest = _read_manifest(path)
+    manifest["body_index"] = [
+        {
+            "filename": "audit.json",
+            "dtype": "mlx.float32",
+            "shape": [1],
+            "num_elements": 1,
+            "intended_use": "audit_record",
+        }
+    ]
+    manifest.update(format_version=2, tlspec_version=11)
+    _write_manifest(path, manifest)
+
+    with pytest.raises(ArtifactTooOldError) as caught:
+        validate_tlspec(path)
+
+    assert caught.value.fields["code"] == "artifact_version_below_floor"
 
 
 # shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
@@ -840,12 +1030,22 @@ def test_intervene_trace_round_trips_transient_dedup_state(
     )
     path = tmp_path / f"{helper_name}.tlspec"
 
-    trace.save(path)
+    if helper_name == "splice_module":
+        with pytest.raises(OpaqueCallableError) as excinfo:
+            trace.save(path, level="portable")
+        assert excinfo.value.fields["code"] == "intervention_spec_not_portable"
+        trace.save(path, level="audit")
+    else:
+        trace.save(path, level="portable")
     loaded = tl.load(path)
     replaced_ops = [op for op in loaded._layer_list if op.is_edited]
 
     assert replaced_ops
     assert any(record.edit_name == helper_name for op in replaced_ops for record in op.edits)
+    if helper_name == "splice_module":
+        with pytest.raises(EngineDispatchError) as excinfo:
+            loaded.run(UnifiedTinyModel(), torch.randn(2, 3))
+        assert excinfo.value.fields["code"] == "run_intervention_spec_not_persisted"
 
 
 def test_unknown_backend_runtime_version_serializes_as_null() -> None:
@@ -857,7 +1057,7 @@ def test_unknown_backend_runtime_version_serializes_as_null() -> None:
         backend_runtime_device_summary={},
     )
 
-    runtime = _TlSpecWriter._backend_runtime(source, backend_name="mlx")
+    runtime = _backend_runtime(source, backend_name="mlx")
 
     assert runtime["version"] is None
     assert '"version": null' in json.dumps(runtime)

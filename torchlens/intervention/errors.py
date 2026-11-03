@@ -3,6 +3,7 @@
 from typing import Literal
 
 from .._errors import KeywordConflictError, SelectionError
+from .._io.format_errors import OpaqueCallableError as OpaqueCallableError
 from .._selection.errors import (
     AmbiguousSiteError as AmbiguousSiteError,
     BindingPreflightError as BindingPreflightError,
@@ -205,18 +206,6 @@ class UntrustedCallableError(ReplayPreconditionError):
     >>> issubclass(UntrustedCallableError, tl.errors.ReplayPreconditionError)
     True
     >>> issubclass(UntrustedCallableError, RuntimeError)
-    True
-    """
-
-
-class OpaqueCallableError(ConfigurationError, ValueError):
-    """Raised when an executable intervention save would require opaque code.
-
-    Examples
-    --------
-    >>> issubclass(OpaqueCallableError, tl.errors.ConfigurationError)
-    True
-    >>> issubclass(OpaqueCallableError, ValueError)
     True
     """
 

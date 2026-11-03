@@ -65,7 +65,7 @@ def test_trace_profile_populates_phase_timings() -> None:
     trace = tl.trace(TenLayerMlp(), torch.randn(1, 8))
 
     timings = trace._phase_timings
-    assert timings["dispatch:forward_model"]["count"] == 1
-    assert timings["ctx_build:model_prepare"]["total_s"] >= 0.0
-    assert timings["clone_save:activation_fields"]["count"] > 0
-    assert timings["postprocess:Step 0: Materialize capture events"]["count"] == 1
+    assert timings["dispatch_forward_model"]["count"] == 1
+    assert timings["ctx_build_model_prepare"]["total_s"] >= 0.0
+    assert timings["clone_save_activation_fields"]["count"] > 0
+    assert timings["materialize_capture_events"]["count"] == 1

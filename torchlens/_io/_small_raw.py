@@ -8,9 +8,12 @@ nothing from the package.
 from __future__ import annotations
 
 import logging
+import pickle
+from collections.abc import Callable
 from io import BytesIO
 from typing import Any
 
+import numpy as np
 import torch
 
 _RAW_INPUT_TEXT_LIMIT = 10_000
@@ -25,6 +28,7 @@ _RAW_IMAGE_SENTINEL = "__torchlens_small_raw_image__"
 _LOGGER = logging.getLogger("torchlens._io.scrub")
 
 
+# Complexity: one bounded recursive scrub preserves the shared byte budget across value kinds.
 def _small_raw_value(value: Any, *, field_name: str) -> Any:
     """Return a bounded portable representation of a raw value.
 
@@ -50,8 +54,16 @@ def _small_raw_value(value: Any, *, field_name: str) -> Any:
     is_output = field_name == "transformed_output"
     if isinstance(value, str):
         return value[: _RAW_OUTPUT_TEXT_LIMIT if is_output else _RAW_INPUT_TEXT_LIMIT]
-    if isinstance(value, torch.Tensor):
-        tensor_bytes = value.nelement() * value.element_size()
+    if isinstance(value, (torch.Tensor, np.ndarray)):
+        if isinstance(value, np.ndarray) and (
+            value.dtype.kind not in "biufc" or value.dtype.hasobject
+        ):
+            return None
+        tensor_bytes = (
+            value.nbytes
+            if isinstance(value, np.ndarray)
+            else value.nelement() * value.element_size()
+        )
         tensor_limit = (
             _RAW_OUTPUT_TENSOR_BYTES_LIMIT if is_output else _RAW_INPUT_TENSOR_BYTES_LIMIT
         )
@@ -181,3 +193,159 @@ def _encode_small_raw_image(image: Any, *, fmt: str) -> bytes | None:
     if len(data) > _RAW_INPUT_IMAGE_BYTES_LIMIT:
         return None
     return data
+
+
+def _stringify_value(value: Any) -> str:
+    """Convert a non-portable object into a stable placeholder string."""
+
+    return f"<scrubbed:{type(value).__name__}>"
+
+
+_KNOWN_SAFELY_PICKLABLE_TYPES = (torch.Tensor,)
+
+
+def _is_safely_picklable(value: Any) -> bool:
+    """Return whether ``value`` can be pickled without raising.
+
+    Used by :func:`_scrub_value`'s ``stringify_unknown`` path to decide
+    whether an unspecced leaf value (one with no
+    ``_PORTABLE_STATE_SPEC``) reached via ``save_raw_input``/
+    ``save_transformed_output``'s ``True`` policy should be kept as-is (full
+    retention, per those options' docs) or degraded to a bounded
+    :func:`_stringify_value` placeholder. Probing picklability once, here,
+    at scrub time -- rather than letting the real ``pickle.dump()`` over
+    the full scrubbed state discover the problem later -- is what keeps
+    live-resource objects (generators, locks, open file handles, sockets,
+    ...) from ever reaching that later call, where a failure mid-write can
+    otherwise cost an already-saved bundle (see ``bundle.py``'s ``save()``
+    atomic-write/backup-restore contract).
+
+    ``torch.Tensor`` and ``numpy.ndarray`` values whose dtype holds no
+    object references (numeric, bool, string, and structured dtypes with
+    no object-typed field) are exempted from the probe: they always
+    support the standard pickle protocol via their own ``__reduce_ex__``
+    and hold no live OS resources that could make pickling fail, so
+    probing them would only pay a full extra ``pickle.dumps()`` pass --
+    doubling CPU and transiently doubling peak memory -- for a result
+    that is always ``True``. Any ``numpy.ndarray`` whose dtype reports
+    ``hasobject`` (a plain ``object``-dtype array, or a structured/
+    compound/nested dtype with an object-typed field), however, is NOT
+    exempted: it may hold arbitrary live Python objects (generators,
+    locks, or other unpicklable values) in any of its fields, just like a
+    plain ``list`` or ``dict`` can, so exempting it would reintroduce
+    exactly the hard ``save()`` failure this probe exists to prevent.
+    ``dtype.hasobject`` is used rather than a top-level
+    ``dtype != np.dtype("object")`` identity check because the latter is
+    only true for a bare object dtype -- a structured dtype whose fields
+    include ``object`` is never itself equal to ``np.dtype("object")`` and
+    would wrongly slip through an identity comparison even though it
+    genuinely embeds live object references. Skipping the probe only for
+    provably-safe types keeps the live-resource detection intact for
+    every value it actually protects.
+
+    Parameters
+    ----------
+    value:
+        Candidate value to probe.
+
+    Returns
+    -------
+    bool
+        ``True`` if ``pickle.dumps(value)`` succeeds, ``False`` otherwise.
+    """
+
+    if isinstance(value, _KNOWN_SAFELY_PICKLABLE_TYPES):
+        return True
+    if isinstance(value, np.ndarray) and not value.dtype.hasobject:
+        return True
+
+    try:
+        pickle.dumps(value, protocol=pickle.HIGHEST_PROTOCOL)
+    except Exception:
+        return False
+    return True
+
+
+def _rehydrate_small_raw_image(value: dict[str, Any]) -> Any:
+    """Decode one bounded raw-image sentinel, preserving all byte and dimension gates."""
+
+    data = value.get("data")
+    if not isinstance(data, bytes):
+        return value
+    # SECURITY (secF-1). ``data`` is attacker-controlled bytes on a plain
+    # ``tl.load()``: a hand-edited ``metadata.pkl`` is NOT bound by the
+    # save-time "small" policy, so this sink must re-impose the SAME canonical
+    # bounds the writer applies (never the attacker-echoed ``bytes_limit`` /
+    # ``max_edge`` fields sitting in ``value``) and fail CLOSED. Without this,
+    # a few-hundred-byte blob declaring huge dimensions forced a large
+    # ``Image.load()`` allocation (decompression-bomb DoS), and malformed
+    # bytes raised an UNCAUGHT Pillow error that crashed the whole load.
+    # 1) Byte cap: refuse to even hand oversized bytes to Pillow's C codecs.
+    if len(data) > _RAW_INPUT_IMAGE_BYTES_LIMIT:
+        return value
+    try:
+        from PIL import Image
+    except ImportError:
+        return value
+    # 2) Header-only dimension check BEFORE decode: ``Image.open`` reads the
+    #    format header (giving ``.size``) without allocating pixel buffers, so
+    #    an oversized *declared* image is rejected here -- before ``.load()``
+    #    can allocate -- and bounded to the documented save-time max edge.
+    # 3) Fail closed: any decoder error (malformed / truncated / unsupported
+    #    bytes, or an early decompression-bomb guard) degrades to the inert raw
+    #    sentinel dict instead of propagating out of ``tl.load()``.
+    try:
+        image = Image.open(BytesIO(data))
+        width, height = image.size
+        if (
+            width > _RAW_INPUT_IMAGE_MAX_EDGE
+            or height > _RAW_INPUT_IMAGE_MAX_EDGE
+            or width < 1
+            or height < 1
+        ):
+            return value
+        image.load()
+    except Exception:
+        return value
+    return image
+
+
+# Complexity: the bounded image visitor keeps byte and dimension checks on the same decode path.
+def _rehydrate_small_raw_images(value: Any) -> Any:
+    """Restore bounded raw-image sentinels to PIL images when possible.
+
+    Parameters
+    ----------
+    value:
+        Scrubbed raw input or output value.
+
+    Returns
+    -------
+    Any
+        Value with TorchLens small-image sentinels replaced by PIL images when
+        Pillow can decode them; otherwise the original sentinel is retained.
+    """
+
+    if isinstance(value, dict) and value.get(_RAW_IMAGE_SENTINEL) is True:
+        return _rehydrate_small_raw_image(value)
+    if isinstance(value, tuple) and type(value) is not tuple:
+        return value
+    if isinstance(value, list):
+        return [_rehydrate_small_raw_images(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_rehydrate_small_raw_images(item) for item in value)
+    if isinstance(value, frozenset):
+        return frozenset(_rehydrate_small_raw_images(item) for item in value)
+    if isinstance(value, dict):
+        restored = value.copy()
+        for key, item in value.items():
+            restored[key] = _rehydrate_small_raw_images(item)
+        return restored
+    return value
+
+
+def _rehydrate_trace_raw_values(trace: Any, materialize: Callable[[Any], Any]) -> None:
+    """Restore raw value payloads before the bounded image-sentinel decoder walks them."""
+
+    for name in ("input", "transformed_output"):
+        setattr(trace, name, _rehydrate_small_raw_images(materialize(getattr(trace, name, None))))

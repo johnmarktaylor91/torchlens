@@ -1,6 +1,6 @@
 """r53 free_1: bound the attacker-integer allocation-bomb CLASS on the default victim path.
 
-A hostile ``manifest.json`` integer (``num_positional_args=1e10``,
+A hostile ``runnable/descriptor.json`` integer (``num_positional_args=1e10``,
 ``shape=[1e9,1e9]``, ...) must never drive an 80 GB-8 EB single-shot allocation on
 the default-untrusting ``tl.load(path)`` / ``tl.load(path).run(...)`` path. This
 suite is the whole-class immunizer:
@@ -19,7 +19,6 @@ suite is the whole-class immunizer:
 from __future__ import annotations
 
 import dataclasses
-import json
 import resource
 import typing
 from collections.abc import Iterator
@@ -30,6 +29,7 @@ from typing import Any
 import pytest
 import torch
 import torch.nn as nn
+from _format3_envelope import mutate_runnable_descriptor
 
 import torchlens as tl
 from torchlens._runnable import (
@@ -72,10 +72,7 @@ def _build(tmp_path: Path, name: str, *, include_weights: bool = False) -> Path:
 
 
 def _tamper(bundle: Path, mutate: Any) -> None:
-    path = bundle / "manifest.json"
-    manifest = json.loads(path.read_text())
-    mutate(manifest)
-    path.write_text(json.dumps(manifest))
+    mutate_runnable_descriptor(bundle, mutate)
 
 
 @contextmanager
@@ -197,12 +194,32 @@ _DESCRIPTOR_DATACLASSES = (
 # --------------------------------------------------------------------------- #
 
 
+def test_num_positional_args_bomb_refused_at_load(tmp_path: Path) -> None:
+    """Locus 1 (readiness) + locus 2/3 (run): oversized arity -> parse refusal, no alloc."""
+
+    bundle = _build(tmp_path, "arity.tlspec", include_weights=True)
+    _tamper(
+        bundle, lambda descriptor: descriptor["calls"][0].__setitem__("num_positional_args", 10**10)
+    )
+    with _rlimit_cap():
+        loaded = tl.load(str(bundle))
+    readiness = loaded._runnable.readiness
+    assert readiness.status is ReadinessStatus.UNAVAILABLE
+    diags = readiness.diagnostics
+    assert RunnableErrorCode.CALL_ARITY_MISMATCH in {d.code for d in diags}
+    assert "descriptor_parse" in {d.detection_stage for d in diags}
+    with _rlimit_cap(), pytest.raises(RunCapabilityUnavailableError):
+        loaded.run(inputs=torch.randn(2, 4))
+
+
 # Kept: sole branch coverage of _io/runnable_load.py; a sole mutation kill.
 def test_num_keyword_args_bomb_refused_at_load(tmp_path: Path) -> None:
     """Oversized ``num_keyword_args`` is refused at parse."""
 
     bundle = _build(tmp_path, "kwarity.tlspec", include_weights=True)
-    _tamper(bundle, lambda m: m["run"]["calls"][0].__setitem__("num_keyword_args", 10**10))
+    _tamper(
+        bundle, lambda descriptor: descriptor["calls"][0].__setitem__("num_keyword_args", 10**10)
+    )
     with _rlimit_cap():
         loaded = tl.load(str(bundle))
     readiness = loaded._runnable.readiness
@@ -216,8 +233,8 @@ def test_sparse_positional_root_bomb_refused_at_load(tmp_path: Path) -> None:
 
     bundle = _build(tmp_path, "sparseroot.tlspec", include_weights=True)
 
-    def _bomb(manifest: dict[str, Any]) -> None:
-        for call in manifest["run"]["calls"]:
+    def _bomb(descriptor: dict[str, Any]) -> None:
+        for call in descriptor["calls"]:
             for arg in call["tensor_arguments"]:
                 if arg["argument_path"] and arg["argument_path"][0] == "args":
                     arg["argument_path"][1] = 10**10
@@ -237,8 +254,8 @@ def test_random_init_shape_bomb_refused_at_run(tmp_path: Path) -> None:
 
     bundle = _build(tmp_path, "shape.tlspec", include_weights=False)
 
-    def _bomb(manifest: dict[str, Any]) -> None:
-        for slot in manifest["run"]["tensor_slots"]:
+    def _bomb(descriptor: dict[str, Any]) -> None:
+        for slot in descriptor["tensor_slots"]:
             if slot.get("state_binding"):
                 slot["shape"] = [10**9, 10**9]  # ~8 EB, still int64-safe
                 slot["rank"] = 2
@@ -259,8 +276,8 @@ def test_int64_overflow_shape_refused_at_load(tmp_path: Path) -> None:
 
     bundle = _build(tmp_path, "overflow.tlspec", include_weights=False)
 
-    def _bomb(manifest: dict[str, Any]) -> None:
-        for slot in manifest["run"]["tensor_slots"]:
+    def _bomb(descriptor: dict[str, Any]) -> None:
+        for slot in descriptor["tensor_slots"]:
             if slot.get("state_binding"):
                 slot["shape"] = [2**40, 2**40]
                 slot["rank"] = 2
@@ -280,8 +297,8 @@ def test_rank_shape_mismatch_refused_at_load(tmp_path: Path) -> None:
 
     bundle = _build(tmp_path, "rankmismatch.tlspec", include_weights=False)
 
-    def _bomb(manifest: dict[str, Any]) -> None:
-        for slot in manifest["run"]["tensor_slots"]:
+    def _bomb(descriptor: dict[str, Any]) -> None:
+        for slot in descriptor["tensor_slots"]:
             if slot.get("state_binding"):
                 slot["rank"] = 99
                 return

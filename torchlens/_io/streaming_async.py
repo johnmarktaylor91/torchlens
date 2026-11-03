@@ -1,9 +1,11 @@
 """Bounded single-worker write pipeline behind the async streaming bundle writer.
 
 ``BundleStreamWriter`` submits prepared blob-write jobs here so the slow parts
-of a streamed disk save (safetensors serialization, the page-cache write, and
-the sha256 integrity hash) overlap forward capture instead of pausing it. The
-engine guarantees the four properties the async path must never trade away:
+of a streamed disk save (queueing each snapshot into the open payload chunk,
+and serializing and writing a chunk once it reaches the cap) overlap forward
+capture instead of pausing it. Chunk digests are taken when the bundle is
+staged. The engine guarantees the four properties the async path must never
+trade away:
 
 - ORDERING: exactly one worker thread executes jobs strictly FIFO, so manifest
   entries land in submission (= blob id) order.
@@ -18,7 +20,7 @@ engine guarantees the four properties the async path must never trade away:
 
 The worker thread never runs wrapped torch functions: jobs receive
 caller-thread-prepared CPU-contiguous snapshots and call only safetensors
-serialization plus hashlib (both non-torch), and the torch-function wrapper
+serialization (non-torch), and the torch-function wrapper
 gate additionally passes non-owner threads through unlogged.
 """
 
@@ -27,8 +29,8 @@ from __future__ import annotations
 import threading
 from collections import deque
 from collections.abc import Callable
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import torch
@@ -62,11 +64,16 @@ class _PreparedPayload:
         Device string of the ORIGINAL tensor at submission time.
     requires_grad:
         ``requires_grad`` of the original tensor at submission time.
+    reference:
+        Tensor reference fields of the original tensor (dtype, shape, device,
+        codec), computed on the submitting thread; the chunk file and key are
+        added when the payload lands in a chunk.
     """
 
     payload: torch.Tensor
     device_at_save: str
     requires_grad: bool
+    reference: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
