@@ -192,7 +192,7 @@ def _torch_subject() -> _Subject:
 
 
 def _jax_subject() -> _Subject:
-    jax_nn = pytest.importorskip("jax.nn")
+    jax = pytest.importorskip("jax")
     jnp = pytest.importorskip("jax.numpy")
     nnx = pytest.importorskip("flax.nnx")
 
@@ -214,7 +214,7 @@ def _jax_subject() -> _Subject:
         params = {"w": jnp.ones((3, 2)), "b": jnp.zeros((2,))}
 
         def fn(p: Any, inp: Any) -> Any:
-            return jax_nn.relu(inp @ p["w"] + p["b"])
+            return jax.nn.relu(inp @ p["w"] + p["b"])
 
         options = _grad_options("jax")(
             params=params,
