@@ -2,7 +2,7 @@
 
 Regression pin: the capture-engine rerun re-saved by the ORIGINAL capture's
 raw op indices. A staged edit inserts an ``intervention_replacement`` op, so
-every later op shifts by one: after ``attach_hooks`` on a plain capture saved
+every later op shifts by one: after staging a hook on a plain capture saved
 with ``tl.module("blocks.1") | tl.module("head")``, the rerun saved the op
 before the head (an ``add``) instead of the head, and left the steered site
 output unsaved. Every rerun door here must save exactly what a fresh steered
@@ -142,6 +142,10 @@ def fresh() -> dict[str, Any]:
     return reference
 
 
+#: Stage the steer as a sticky hook without propagating it (the rerun propagates it).
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
+
 def _assert_matches_fresh(trace: Any, fresh: dict[str, Any]) -> None:
     """Assert the trace saved exactly what the fresh steered capture saved."""
 
@@ -152,12 +156,12 @@ def _assert_matches_fresh(trace: Any, fresh: dict[str, Any]) -> None:
 
 
 @pytest.mark.smoke
-def test_rerun_after_attach_hooks_resaves_the_requested_sites(fresh: dict[str, Any]) -> None:
-    """``attach_hooks`` on a plain capture, then reruns, save the steered sites."""
+def test_rerun_after_staged_do_resaves_the_requested_sites(fresh: dict[str, Any]) -> None:
+    """A staged ``do`` on a plain capture, then reruns, save the steered sites."""
 
     model, x = fresh["model"], fresh["x"]
     trace = tl.trace(model, x, save=_save())
-    trace.attach_hooks(tl.module(_SITE), _steer(), confirm_mutation=True)
+    trace.do({tl.module(_SITE): _steer()}, intervention=_STAGE)
     for _ in range(_REPEATS):
         _rerun(trace, model, x)
         _assert_matches_fresh(trace, fresh)
@@ -200,11 +204,11 @@ def test_fork_do_rerun_engine_resaves_the_requested_sites(fresh: dict[str, Any])
 
 
 def test_chunked_rerun_resaves_the_requested_sites(fresh: dict[str, Any]) -> None:
-    """A chunked rerun after ``attach_hooks`` saves the steered sites."""
+    """A chunked rerun after a staged ``do`` saves the steered sites."""
 
     model, x = fresh["model"], fresh["x"]
     trace = tl.trace(model, x, save=_save())
-    trace.attach_hooks(tl.module(_SITE), _steer(), confirm_mutation=True)
+    trace.do({tl.module(_SITE): _steer()}, intervention=_STAGE)
     _rerun(trace, model, x, replay=tl.options.ReplayOptions(chunk_size=1))
     _assert_matches_fresh(trace, fresh)
 
@@ -253,7 +257,7 @@ def test_restored_trace_rerun_with_shifted_graph_refuses() -> None:
     model, x = _setup()
     trace = _restored(model, x)
     before = _saved_labels(trace)
-    trace.attach_hooks(tl.module(_SITE), _steer(), confirm_mutation=True)
+    trace.do({tl.module(_SITE): _steer()}, intervention=_STAGE)
     with pytest.raises(ControlFlowDivergenceError) as excinfo:
         trace.run(model, x)
     assert excinfo.value.fields["code"] == "rerun_resave_ops_shifted"

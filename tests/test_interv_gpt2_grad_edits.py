@@ -225,16 +225,20 @@ def _assert_matches_oracle(got: Grads, want: Grads, clean: Grads) -> None:
     assert changed, "the gradient edit had no effect on any parameter gradient"
 
 
+#: Stage an edit without propagating it: the post-capture door the backward runners then read.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
+
 def _apply_door(trace: Any, door: str, selector: Any, helper: Any) -> None:
     """Attach one gradient edit to a finished trace through a post-capture door."""
 
-    if door == "attach_hooks":
-        trace.attach_hooks(selector, helper, confirm_mutation=True)
+    if door == "stage":
+        trace.do(selector, helper, intervention=_STAGE)
     elif door == "layer_record":
         # A Layer record addresses its gradient through tl.grad(record) on the trace;
-        # Layer.attach_hooks itself edits the activation.
+        # do(trace[label], edit) itself edits the activation.
         layer_label = trace.find_sites(selector).first().layer_label
-        trace.attach_hooks(tl.grad(trace[layer_label]), helper, confirm_mutation=True)
+        trace.do(tl.grad(trace[layer_label]), helper, intervention=_STAGE)
     else:
         raise AssertionError(door)
 
@@ -283,7 +287,7 @@ def tiny() -> _Fixture:
     return fixture
 
 
-_DOORS = ("intervene", "attach_hooks", "layer_record")
+_DOORS = ("intervene", "stage", "layer_record")
 
 
 # 30 cells of about 0.4 s each: heavy-class aggregate compute (tests/AGENTS.md, families).
@@ -309,7 +313,7 @@ def test_module_selector_grad_zero_every_spelling(
 
 
 @pytest.mark.parametrize("helper_name", sorted(_HELPERS))
-@pytest.mark.parametrize("door", ("intervene", "attach_hooks"))
+@pytest.mark.parametrize("door", ("intervene", "stage"))
 def test_func_selector_every_helper(tiny: _Fixture, door: str, helper_name: str) -> None:
     """``tl.grad(tl.func)`` reaches every layer norm, including the multi-pass graph's."""
 
@@ -326,7 +330,7 @@ def test_func_selector_every_helper(tiny: _Fixture, door: str, helper_name: str)
 
 
 @pytest.mark.parametrize("helper_name", sorted(_HELPERS))
-@pytest.mark.parametrize("door", ("intervene", "attach_hooks"))
+@pytest.mark.parametrize("door", ("intervene", "stage"))
 def test_grad_fn_selector_every_helper(tiny: _Fixture, door: str, helper_name: str) -> None:
     """``tl.grad_fn`` edits the grad inputs of every matching autograd node."""
 
@@ -356,7 +360,7 @@ def test_grad_fn_selector_grad_input_family(tiny: _Fixture) -> None:
     )
 
 
-@pytest.mark.parametrize("door", ("attach_hooks", "layer_record"))
+@pytest.mark.parametrize("door", ("stage", "layer_record"))
 def test_label_selector_post_capture_doors(tiny: _Fixture, door: str) -> None:
     """A finalized label addresses one layer norm on every post-capture door."""
 
@@ -500,9 +504,9 @@ class TestRealGPT2:
         ("door", "runner"),
         [
             ("intervene", "trace.backward"),
-            ("attach_hooks", "loss.backward"),
+            ("stage", "loss.backward"),
             ("layer_record", "autograd.grad"),
-            ("attach_hooks", "trace.log_backward"),
+            ("stage", "trace.log_backward"),
         ],
     )
     def test_module_selector_doors(self, real: _Fixture, door: str, runner: str) -> None:

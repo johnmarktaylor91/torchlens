@@ -1,7 +1,7 @@
 """C03: the ONE immutable public InterventionSpec accepted at every door.
 
 Surgery memo 3.1: ``tl.when(...)`` returns the immutable multi-clause spec;
-the exact same object is accepted by ``fork.do``, ``fork.attach_hooks``,
+the exact same object is accepted by ``fork.do`` (propagating or staged),
 ``intervene=``, ``sweep``, and the save/load path. Lane options never enter
 the spec, no lane silently drops a rule, and per-rule IDs distinguish rules
 differing in ANY action argument.
@@ -17,6 +17,9 @@ import torchlens as tl
 from torchlens import Recipe
 from torchlens._errors import ArgumentTypeError, InvalidArgumentError
 from torchlens.intervention.spec import classify_where
+
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
 
 
 class _TinyModel(nn.Module):
@@ -138,12 +141,13 @@ def test_do_door_accepts_spec_unchanged() -> None:
     assert torch.count_nonzero(fork["relu_1_2"].out) == 0
 
 
-def test_attach_hooks_door_accepts_spec_unchanged() -> None:
+def test_staged_do_door_accepts_spec_unchanged() -> None:
     model = _TinyModel()
     log = _ready_trace(model)
     fork = log.fork()
-    handle = fork.attach_hooks(tl.when(tl.func("relu"), tl.scale(0.0)), confirm_mutation=True)
-    assert len(handle.handle_ids) == 1
+    fork.do(tl.when(tl.func("relu"), tl.scale(0.0)), intervention=_STAGE)
+    assert len(fork._intervention_spec.hook_specs) == 1
+    assert torch.equal(fork["relu_1_2"].out, log["relu_1_2"].out)
 
 
 def test_spec_door_refuses_extra_arguments() -> None:
@@ -154,7 +158,7 @@ def test_spec_door_refuses_extra_arguments() -> None:
         log.fork().do(spec, tl.scale(0.5))
     assert excinfo.value.fields["code"] == "spec_door_extra_arguments"
     with pytest.raises(InvalidArgumentError) as excinfo:
-        log.fork().attach_hooks(spec, tl.scale(0.5), confirm_mutation=True)
+        log.fork().do(spec, tl.scale(0.5), intervention=_STAGE)
     assert excinfo.value.fields["code"] == "spec_door_extra_arguments"
 
 
