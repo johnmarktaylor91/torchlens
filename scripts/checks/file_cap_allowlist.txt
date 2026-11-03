@@ -132,7 +132,7 @@ torchlens/_extraction/engine.py::_consume_skipped_with_replay	63
 torchlens/_extraction/engine.py::_correct_envelope_positions	71
 torchlens/_extraction/engine.py::_layer_metadata	74
 torchlens/_extraction/engine.py::_process_one_batch	80
-torchlens/_extraction/engine.py::_store_batch	76
+torchlens/_extraction/engine.py::_store_batch	72
 torchlens/_extraction/engine.py::run_to_disk	90
 torchlens/_extraction/envelope.py::coerce_envelope	100
 torchlens/_extraction/envelope.py::resolve_tokenizer_once	72
