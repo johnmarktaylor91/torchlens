@@ -534,3 +534,13 @@ def test_recursion_during_rehydration_refuses_typed(saved, monkeypatch):
     with pytest.raises(ArtifactError) as info:
         tl.load(saved)
     assert info.value.fields["code"] == "rehydrate_recursion_limit"
+
+
+def test_contract_backends_are_the_payload_codec_registry() -> None:
+    """The closed ``backend`` vocabulary names exactly the registered payload codecs."""
+
+    from torchlens._io import payload_codec
+    from torchlens._io.format3 import contract
+
+    assert set(contract.BACKENDS) == set(payload_codec._CODECS)
+    assert contract.DEFAULT_BACKEND in contract.BACKENDS

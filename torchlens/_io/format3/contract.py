@@ -98,6 +98,9 @@ PAYLOAD_CODEC_IDS: Final[tuple[str, ...]] = ("torch_safetensors_v1", "numpy_safe
 #: The artifact backend an envelope without a ``backend`` key means: the torch writer's.
 #: An array-backend envelope names its backend; absent means the old meaning.
 DEFAULT_BACKEND: Final[str] = "torch"
+#: The backends an envelope may name (the payload codec registry's keys); any other
+#: ``backend`` is a typed manifest refusal, never a null codec.
+BACKENDS: Final[tuple[str, ...]] = ("torch", "jax", "mlx", "paddle", "tf", "tinygrad")
 #: Save levels, as ``torchlens._io.save_policy`` spells them.
 SAVE_LEVELS: Final[tuple[str, ...]] = (
     "portable",
