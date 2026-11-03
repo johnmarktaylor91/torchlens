@@ -11,7 +11,11 @@ Pins the two mechanical stops that need no maintainer action to stay armed:
 
 The approval file ``.github/MAJOR_RELEASE_APPROVED`` must never exist in the
 tree outside a test's temporary directory. Pure file reads and subprocesses on
-scratch files: no network, well under 5 s.
+scratch files: no network, well under 5 s. This file is not smoke-marked (the
+smoke tier sits at its size ceiling); the smoke job of
+``.github/workflows/tests.yml`` runs it by name, so every pull request and every
+release run (``release.yml`` calls ``tests.yml`` before the release job) runs it,
+and the first test pins that line.
 """
 
 from __future__ import annotations
@@ -22,10 +26,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
 import yaml
-
-pytestmark = pytest.mark.smoke
 
 _ROOT = Path(__file__).resolve().parents[1]
 _APPROVAL = _ROOT / ".github" / "MAJOR_RELEASE_APPROVED"
@@ -62,6 +63,15 @@ def test_release_guard_runs_before_semantic_release_version() -> None:
     assert "GH_TOKEN" not in str(steps[guard].get("env", {}))
     assert "continue-on-error" not in steps[guard]
     assert "if" not in steps[guard]
+
+    release = yaml.safe_load((_ROOT / ".github" / "workflows" / "release.yml").read_text())
+    assert release["jobs"]["tests"]["uses"] == "./.github/workflows/tests.yml"
+    assert "tests" in release["jobs"]["release"]["needs"]
+    tests = yaml.safe_load((_ROOT / ".github" / "workflows" / "tests.yml").read_text())
+    smoke_runs = "\n".join(step.get("run", "") for step in tests["jobs"]["smoke"]["steps"])
+    assert "pytest tests/test_major_version_guard.py tests/test_no_breaking_markers_arming.py" in (
+        smoke_runs
+    ), "tests.yml's smoke job must run the release guard tests by name"
 
 
 def test_approval_file_is_absent_from_the_tree() -> None:
