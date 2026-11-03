@@ -1300,7 +1300,6 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/intervention/save.py", "__all__"),
         ("torchlens/_selection/selectors.py", "__all__"),
         ("torchlens/intervention/site_keys.py", "__all__"),
-        ("torchlens/intervention/sites.py", "__all__"),
         ("torchlens/intervention/spec.py", "__all__"),
         ("torchlens/intervention/spec_compat.py", "__all__"),
         ("torchlens/intervention/stochastic.py", "__all__"),

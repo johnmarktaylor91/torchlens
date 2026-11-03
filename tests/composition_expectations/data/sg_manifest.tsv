@@ -31,7 +31,7 @@ SG#22	ledgered-open		A08	merged-directory load->save launders refused members
 SG#23	regression-node	tests/test_persist_honesty_structure_only.py	A08	structure_only save writes a poison artifact
 SG#24	regression-node	tests/test_persist_honesty_outcome_recording.py	A08	outcome gate structurally blind to Recording
 SG#25	ledgered-open		F15	recover() launders failed-partial evidence
-SG#26	ledgered-open		F04	log_backward on loaded trace crashes and half-mutates
+SG#26	ledgered-open		F04	backward on loaded trace crashes and half-mutates
 SG#27	ledgered-open		A08	halted streamed manifest carries no outcome field
 SG#28	ledgered-open		A08	activation digests leak weight-identity oracle
 SG#29	ledgered-open		A09	TraceSlice.summary launders honesty banners

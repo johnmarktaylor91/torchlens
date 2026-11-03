@@ -199,6 +199,7 @@ The site, not a keyword or a gradient-only helper, says which tensor an edit app
 | `Edit.kind`, `Edit.direction` | `Edit.signal`; `Rule.signal` (derived) | removed |
 | `Rule.direction`, `Rule(direction=)` | the target decides the pass: `Rule(tl.grad(site), edit)` for the gradient, `Rule(site, edit)` for the activation; `Rule.signal` (derived) | removed |
 | `HookContext.ctx`, `HookContext.run_ctx` | `HookContext.state`, `HookContext.run_state` | removed |
+| `torchlens.intervention.sites` (`sites()`, `SiteCollection`, `SiteSpec`) | pass selectors to `torchlens.experiment.sweep_sites(...)` directly | removed |
 
 ## Experiment Ledger
 

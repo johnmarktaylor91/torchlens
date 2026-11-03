@@ -21,7 +21,11 @@ V11_CONTRACT = SCHEMAS / "writer_contract_v11.json"
 V11_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
     "backward_pass": {"_executed_flops_record": "keep", "pass_number": "keep"},
     "buffer": {"grad_memory": "keep", "overwrite_index": "keep", "writer_label": "keep"},
-    "grad_fn_call": {"fire_record": "keep", "grad_fn_label": "keep"},
+    "grad_fn_call": {
+        "backward_pass_number": "keep",
+        "fire_record": "keep",
+        "grad_fn_label": "keep",
+    },
     "layer": {"is_edited": "keep", "short_layer_label": "keep"},
     "module_call": {"has_pre_hook_input_change": "keep", "label": "keep"},
     "op": {
@@ -35,6 +39,7 @@ V11_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
     "trace": {
         # Private storage behind the removed public Trace names: the capture
         # pipeline, the accessors and save/load still read these stores.
+        "_active_backward_pass_number": "drop",
         "_append_history": "keep",
         "_autograd_backward_root_grad_fn_object_ids": "keep",
         "_autograd_derived_grads": "keep",

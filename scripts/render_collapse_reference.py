@@ -19,6 +19,11 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from torchlens._visualization._trace_collapse import (
+    collapse_plan as _trace_collapse_plan,
+    collapse_schedule as _trace_collapse_schedule,
+)
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 AUDIT_DIR = REPO_ROOT / "notebooks" / "audit"
 VISUAL_DIR = AUDIT_DIR / "visual"
@@ -119,9 +124,9 @@ def _diagnostics_svg(trace: Any, output: Path) -> None:
         Destination SVG path.
     """
 
-    schedule = trace.collapse_schedule()
-    rows = ["collapse_plan(mode='auto')", repr(trace.collapse_plan(mode="auto")), ""]
-    rows.extend(["collapse_plan(mode='max')", repr(trace.collapse_plan(mode="max")), ""])
+    schedule = _trace_collapse_schedule(trace)
+    rows = ["collapse_plan(mode='auto')", repr(_trace_collapse_plan(trace, mode="auto")), ""]
+    rows.extend(["collapse_plan(mode='max')", repr(_trace_collapse_plan(trace, mode="max")), ""])
     rows.append("t      target  visible  collapsed module addresses")
     for step in schedule.steps:
         rows.append(

@@ -155,7 +155,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   really discarded its graph: a forward that turns grad back on (`with torch.enable_grad():`)
   and returns an output with autograd history is not inference-only, and backward stays
   available. An explicit `inference_only=True` is never changed. `Trace.options.inference_only` and
-  `outcome.inference_only` report the effective value; a later `log_backward()` refuses and names
+  `outcome.inference_only` report the effective value; a later `backward()` refuses and names
   the cause (`recording_backward_inference_only` on a `Recording`).
 
 **carry_state (CaptureOptions) / pure-observer capture** — *unstable — no deprecation shim owed*
@@ -347,7 +347,7 @@ without a compatibility alias. No validation or honesty tripwire may be weakened
 **aten_ops (CaptureOptions)**
 : Opt-in (default `False`): the torch capture records the ATen operations each logged torch call
   dispatched to, as value-free `AtenOp` rows, through a dispatch mode installed for the forward
-  and, with `backward_ready=True`, for `Trace.backward()` / `log_backward()`. The default installs
+  and, with `backward_ready=True`, for `Trace.backward()`. The default installs
   no dispatch mode and adds no per-op work. A session-time knob (not persisted; load restores
   `False`) that `run()` refreshes inherit; the recorded rows themselves persist (tlspec v8+), so a
   loaded trace keeps `has_aten_ops`. `run()` results, fast or not, inherit the recording of the
@@ -1082,8 +1082,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   measured (U, W) work estimator: over-budget requests degrade to a deterministic compact
   fallback plan (coded `collapse_budget_fallback`), never an uncollapsed wall; only
   pathological inputs (raw ops above 20x the constant) decline outright
-  (`collapse_pathological_skip`; `Trace.collapse_plan()` refuses typed
-  (`collapse_plan_unavailable`); `Trace.collapse_schedule()` degrades to its single
+  (`collapse_pathological_skip`; `Drawing.collapse_plan()` refuses typed
+  (`collapse_plan_unavailable`); `Drawing.collapse_schedule()` degrades to its single
   full-graph step).
 
 **Module.collapse_score / Trace.module_collapse_order** — *unstable — no deprecation shim owed*
@@ -1091,7 +1091,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   largest submodule's, rounded to 6 places; 0.0 for the root, a module of at most one Layer, or the
   only child of a non-root module that hides the same ops (the parent, the name the user wrote,
   ranks instead; in a chain of such wrappers the outermost ranks). It ranks candidates and never reads the selected plan
-  (`Trace.collapse_plan()` may skip a high-priority module); `module_collapse_order` lists every
+  (`Drawing.collapse_plan()` may skip a high-priority module); `module_collapse_order` lists every
   module's priority, highest first. Computed at access, never persisted.
 
 **Run folding**
@@ -1260,7 +1260,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   (one backward pass number), and `tl.without_op` (grad_fns without a paired forward op;
   the former `intervening` alias is removed). These are NODE selectors: they address an
   autograd node and its `grad_input` tuple, resolved against `trace.autograd.grad_fns` after
-  `log_backward()`. The gradient of a forward site's output is addressed with `tl.grad(site)`
+  `backward()`. The gradient of a forward site's output is addressed with `tl.grad(site)`
   instead (see **tl.grad**).
 
 **tl.grad(site)** *(spelling documented-unstable)*
@@ -1388,7 +1388,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   the gradient rules in the trace's recipe, and the trace summary says "N gradient edits armed;
   call trace.backward(loss)" until they fire. Each `trace.backward(loss)` then writes one settle
   envelope per arming transaction (`door="backward"`, `lane="live_hook"`, `parent_event_id` and
-  `extra["arming_event_id"]` the arming row, `backward_pass_index`, status `fired` or `no_fire`
+  `extra["arming_event_id"]` the arming row, `backward_pass_number`, status `fired` or `no_fire`
   with `no_fire_reason` `"gradient_not_reached"` or `"pass_filtered"`); a second backward never
   rewrites the first pass's row. `loss=` on `Trace.do` (and `tl.sweep`) is a callable of the
   returned trace returning a scalar with a `grad_fn`; the door runs `result.backward(loss(result))`
@@ -1426,7 +1426,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `rerun_predicate_restage_mismatch` (trace unchanged) when the predicate fires at
   different ops than the staged entries name, or at the same ops with changed rule content
   (a staged steer edited since capture). A staged edit addressed by a finalized exact label
-  (`Trace.set(label, ...)`, `attach_hooks(tl.label(...))`) is translated before the forward to
+  (`do(label, value)` with the `set_only` engine, `attach_hooks(tl.label(...))`) is translated before the forward to
   the raw capture labels of the ops it names, the translation a mixed gradient plan's
   activation half already uses, so it fires on the rerun; each pass of a multi-pass op keeps
   its own raw label, so a pass-qualified label edits that pass alone (JMT, Sun 1 Nov 2026).
@@ -2029,7 +2029,7 @@ shims, by declared contract. Each carries the same tag at its definition.
 **register / unregister (`tl.bridge.sae.register(name, sae, *, site)`, `tl.bridge.sae.unregister(name)`)** — *unstable — no deprecation shim owed*
 : Make (or stop making) an SAE's latents the facet family `name` at `site`.
   `tl.facet(name).latent(k)` then addresses latent `k` at the doors a
-  `tl.head` selector serves (`Trace.set`, `attach_hooks`, `Trace.do`,
+  `tl.head` selector serves (`attach_hooks`, `Trace.do`,
   `fork().do`; and, as a bare selector, `trace[selector]`, which returns the
   `Facet` whose `.value` is
   the read, and `tl.trace(save=selector)`, which keeps the ops that read
@@ -3637,6 +3637,8 @@ describe each surface in depth.
 | `ContributionScores.topk` | Return the ``k`` largest contributors at one (position, direction) |
 | `CurveStep.build_inputs` | The perturbed inputs of this step, shaped like the caller's ``inputs`` |
 | `CurveStep.build_interventions` | The recorded edits of this step, as ``(selection, edit)`` pairs |
+| `Drawing.collapse_plan` | Return the renderer-faithful diagnostic collapse plan for one mode, planned on the trace the draw retained |
+| `Drawing.collapse_schedule` | Return the ordered monotone float collapse schedule, planned on the trace the draw retained |
 | `Drawing.file_format` | The rendered file format (``"pdf"``, ``"svg"``, ...) |
 | `Drawing.receipt` | Execution receipt from the pinned capture policy |
 | `ExtractionPlan.batch_size` | field of `ExtractionPlan` |
@@ -4231,6 +4233,7 @@ The sections above describe each surface in depth.
 | `GuessInputShapeReport.value_range` | Synthetic value recipe: `("uniform", 0, 1)` or `("randint", 0, vocab)` |
 | `HealthFacts.num_nonfinite_ops` | Nonfinite ops in the identity partition (alias rows excluded) |
 | `HealthFacts.num_unmapped_ops` | Ops the health partition could not map |
+| `Histogram.compute` | Return the finalized histogram counts (`HistogramResult`) |
 | `HistogramPoint.bin_edges` | Histogram bin edges for the point's counts |
 | `HistoryReader.num_chunks` | Number of committed chunks |
 | `HookContext.run_state` | Run-scoped scratch dict shared by every hook of one run |
@@ -4554,7 +4557,6 @@ alphabetical order.
 | `Trace.completeness_diagnostics` | List of reports of ATen dispatch events the completeness witness could not account for; empty when capture was complete |
 | `Trace.compute_coverage` | Counts of layer-list rows in each of four compute-coverage categories, as a dict |
 | `Trace.decode_output` | Return the decoded output rows captured during tracing, up to `k` ranks per batch item; with `style=`, `head=` or `tokenizer=` decode again on demand from the retained output tensors without touching `decoded_output`; raise if nothing was captured and no output tensor is retained |
-| `Trace.disarm_triggers` | Detach this Trace from global autograd backward interception so plain backward calls no longer record into it |
 | `Trace.escape_diagnostics` | List of reports of raw torch callables that ran outside their registered wrapper during capture, each with file, line and function |
 | `Trace.factcore` | The single numbers substrate for this trace: counts, identity spine, parameter totals, compute aggregation and memory figures |
 | `Trace.find_layers` | Return the Layer labels that fuzzy-match a query string, up to `limit` results |
@@ -5182,7 +5184,7 @@ alphabetical order.
 | Spelling | Meaning |
 | --- | --- |
 | `GradFnCall.backward_duration` | Measured backward time for this call, or `None` when not measured |
-| `GradFnCall.backward_pass_index` | 1-based index of the backward pass this call belongs to, or `None` |
+| `GradFnCall.backward_pass_number` | 1-based number of the backward pass this call belongs to, or `None` |
 | `GradFnCall.label` | Pass-qualified label of this call, in the form `label:call_index` |
 | `GradFnCall.grad_inputs` | Gradients flowing into this grad-fn, as observed by the backward hook |
 | `GradFnCall.grad_outputs` | Gradients flowing out of this grad-fn, as observed by the backward hook |
@@ -5322,7 +5324,7 @@ alphabetical order.
 : Graph-shape facts of a Trace: edges, degrees, branching and conditionals; `trace.graph` is the instance a Trace serves. `TraceGraph.branching_factor`: mean fan-out: children (consumers) per compute Op; `TraceGraph.conditional_arm_entry_edges`: entry edges of each conditional arm, keyed by conditional; `TraceGraph.conditional_branch_edges`: edges that branch on a conditional; `TraceGraph.conditional_edge_call_indices`: call indices of the ops on each conditional edge; `TraceGraph.conditional_records`: raw conditional-flow records in trace order; `TraceGraph.conditionals`: conditionalAccessor (by int ordinal or stable label); `TraceGraph.edges`: return this trace's dataflow edge family (finalized edge views); `TraceGraph.has_conditional_branching`: whether any layer is in a conditional branch; `TraceGraph.has_conditionals`: whether this Trace contains conditional-flow records; `TraceGraph.is_branching`: whether any layer has more than one child; `TraceGraph.is_dynamic`: whether execution depends on runtime tensor values; `TraceGraph.is_recurrent`: whether any layer has more than one pass; `TraceGraph.manual_tensor_connections`: user-declared tensor connections added to the graph; `TraceGraph.max_in_degree`: maximum number of parents over compute Ops; `TraceGraph.max_ops_per_layer`: maximum number of ops for any layer; `TraceGraph.max_out_degree`: maximum number of children over compute Ops; `TraceGraph.num_buffer_edges`: distinct Op graph edges with at least one buffer endpoint; `TraceGraph.num_compute_edges`: distinct Op graph edges whose endpoints are both compute Ops; `TraceGraph.num_layer_edges`: distinct edges in the aggregate Layer graph; `TraceGraph.op_equivalence_classes`: dict of equivalence-class id → set of Op labels; `TraceGraph.orphans`: access retained orphan island operations by raw or final label; `TraceGraph.relationship_evidence`: evidence behind each inferred op relationship; `TraceGraph.stop_frontier`: early-halt state (partial trace); `TraceGraph.structure_evidence`: evidence behind the structure-only reconstruction; `TraceGraph.tied_param_groups`: alias-address groups of parameters registered at more than one path.
 
 **`tl.types.TraceAutograd`**
-: Backward-pass records and grad_fn facts of a Trace; `trace.autograd` is the instance a Trace serves. `TraceAutograd.backward_passes`: access backward pass records by 0-based position or named pass number; `TraceAutograd.backward_root_grad_fn_object_ids`: root grad-fn `object_id` per backward pass; `last_backward_root_grad_fn_object_id`; `TraceAutograd.derived_grads`: derivedGradAccessor for leaf-level derived gradients (non-torch backends / explicit derivation); `TraceAutograd.escape_detector_backward_coverage`: backward coverage reported by the escape detector; `TraceAutograd.grad_fn_calls`: access per-invocation GradFnCall records by qualified label or index; `TraceAutograd.grad_fn_fire_timings`: return live per-fire backward timing spans keyed like ``grad_fn_calls``; `TraceAutograd.grad_fn_order`: grad_fn labels in backward execution order; `TraceAutograd.grad_fns`: access backward grad_fn_handle metadata by label, index, pass label, or substring; `TraceAutograd.has_backward_pass`: backward data / gradient values present; `TraceAutograd.has_grads`: backward data / gradient values present; `TraceAutograd.intermediate_derived_grads`: access exact op-level derived gradient records, when a backend provides them; `TraceAutograd.last_backward_pass`: return the most recent backward pass record, if any; `TraceAutograd.last_backward_root_grad_fn_object_id`: most recent backward root grad_fn_handle object id, if any; `TraceAutograd.num_backward_edges`: distinct edges in the backward GradFn graph, or ``None`` if ungated; `TraceAutograd.saved_grad_fn_calls`: access GradFnCall records with saved gradient inputs or outputs; `TraceAutograd.saved_grad_fns`: access GradFns containing at least one saved GradFnCall.
+: Backward-pass records and grad_fn facts of a Trace; `trace.autograd` is the instance a Trace serves. `TraceAutograd.backward_passes`: access backward pass records by 0-based position or named pass number; `TraceAutograd.backward_root_grad_fn_object_ids`: root grad-fn `object_id` per backward pass; `last_backward_root_grad_fn_object_id`; `TraceAutograd.derived_grads`: derivedGradAccessor for leaf-level derived gradients (non-torch backends / explicit derivation); `TraceAutograd.disarm`: detach this Trace from global autograd backward interception so plain backward calls no longer record into it; `TraceAutograd.escape_detector_backward_coverage`: backward coverage reported by the escape detector; `TraceAutograd.grad_fn_calls`: access per-invocation GradFnCall records by qualified label or index; `TraceAutograd.grad_fn_fire_timings`: return live per-fire backward timing spans keyed like ``grad_fn_calls``; `TraceAutograd.grad_fn_order`: grad_fn labels in backward execution order; `TraceAutograd.grad_fns`: access backward grad_fn_handle metadata by label, index, pass label, or substring; `TraceAutograd.has_backward_pass`: backward data / gradient values present; `TraceAutograd.has_grads`: backward data / gradient values present; `TraceAutograd.intermediate_derived_grads`: access exact op-level derived gradient records, when a backend provides them; `TraceAutograd.last_backward_pass`: return the most recent backward pass record, if any; `TraceAutograd.last_backward_root_grad_fn_object_id`: most recent backward root grad_fn_handle object id, if any; `TraceAutograd.num_backward_edges`: distinct edges in the backward GradFn graph, or ``None`` if ungated; `TraceAutograd.saved_grad_fn_calls`: access GradFnCall records with saved gradient inputs or outputs; `TraceAutograd.saved_grad_fns`: access GradFns containing at least one saved GradFnCall.
 
 **`tl.types.TraceSource`**
 : Source facts of the traced model class: locations, signatures, docstrings; `trace.source` is the instance a Trace serves. `TraceSource.class_docstring`: model class location and docs; `TraceSource.class_file`: model class location and docs; `TraceSource.class_line`: model class location and docs; `TraceSource.class_location`: combined model class source location; `TraceSource.class_name`: short Python class name of the source model; `TraceSource.class_qualname`: fully qualified class name; useful for run verification; `TraceSource.cls`: return the live source model class when the model is still alive; `TraceSource.forward_docstring`: `forward()` info; `TraceSource.forward_file`: `forward()` info; `TraceSource.forward_line`: `forward()` info; `TraceSource.forward_location`: combined forward source location; `TraceSource.forward_signature`: `forward()` info; `TraceSource.frames`: python call-stack frames at capture time (`list[FuncCallLocation]`); `TraceSource.init_docstring`: `__init__` info; `TraceSource.init_file`: `__init__` info; `TraceSource.init_line`: `__init__` info; `TraceSource.init_location`: combined model ``__init__`` source location; `TraceSource.init_signature`: `__init__` info; `TraceSource.snapshots`: source snapshots taken for the traced model.

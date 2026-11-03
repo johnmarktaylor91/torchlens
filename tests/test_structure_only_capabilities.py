@@ -82,7 +82,7 @@ def test_gated_entries_consult_the_structure_only_chokepoint() -> None:
     )
     # One sibling call per capture-outcome gate site: save_new_outs, push,
     # push_from, run (entry pre-gate + loaded-sparse + halted-analysis +
-    # unified-live + legacy-live), log_backward, recording_backward,
+    # unified-live + legacy-live), backward, recording_backward,
     # validate_forward_pass, check_metadata_invariants.
     assert sorted(gate_calls) == sorted(
         [
@@ -94,7 +94,7 @@ def test_gated_entries_consult_the_structure_only_chokepoint() -> None:
             "live_replay",  # run(): halted analysis-load pre-gate
             "live_replay",  # run(): unified live provider
             "live_replay",  # run(): legacy rerun surface
-            "backward_grads",  # log_backward
+            "backward_grads",  # backward
             "backward_grads",  # recording_backward
             "validation_entry",  # validate_forward_pass
             "validation_entry",  # check_metadata_invariants
@@ -209,7 +209,7 @@ def test_validation_entry_refuses_typed() -> None:
 def test_backward_refuses_typed() -> None:
     log = _structure_trace()
     with pytest.raises(StructureOnlyCapabilityError) as excinfo:
-        log.log_backward(torch.tensor(1.0))
+        log.backward(torch.tensor(1.0))
     assert excinfo.value.fields["code"] == "structure_only_backward_unsupported"
 
 

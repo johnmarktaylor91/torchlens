@@ -351,13 +351,10 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "attach_hooks": "mutates the live model's hook registry",
     "clear_hooks": "mutates the live model's hook registry",
     "clear_edits": "mutates the live model's hook registry",
-    "disarm_triggers": "mutates armed trigger state",
     "backward": "autograd execution; writes gradient state",
-    "log_backward": "autograd execution; writes gradient state",
     "capture_backward": "autograd execution; writes gradient state",
     "cleanup": "destructive teardown of the trace",
     "do": "intervention editor (mutates fork state)",
-    "set": "intervention editor (mutates fork state)",
     "remove": "removal scrub (mutates the graph)",
     "push": "replay/push engine; execution, not presentation",
     "push_from": "replay/push engine; execution, not presentation",
@@ -377,14 +374,12 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
 _OP_METHOD_EXCLUSIONS: dict[str, str] = {
     "attach_hooks": "mutates the live model's hook registry",
     "do": "intervention editor (mutates fork state)",
-    "set": "intervention editor (mutates fork state)",
     "save_activation": "capture-internal payload writer",
 }
 
 _LAYER_METHOD_EXCLUSIONS: dict[str, str] = {
     "attach_hooks": "mutates the live model's hook registry",
     "do": "intervention editor (mutates fork state)",
-    "set": "intervention editor (mutates fork state)",
 }
 
 _PARAM_METHOD_EXCLUSIONS: dict[str, str] = {}
@@ -409,8 +404,6 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
             t.draw(path=str(out / "graph")),
             t.draw(path=str(out / "graph_encoded"), color_by="time"),
         ),
-        "collapse_plan": lambda t: t.collapse_plan(),
-        "collapse_schedule": lambda t: t.collapse_schedule(),
         "collapse_order": lambda t: t.collapse_order(),
         "receptive_fields": lambda t: t.receptive_fields(),
         "projective_fields": lambda t: t.projective_fields(),

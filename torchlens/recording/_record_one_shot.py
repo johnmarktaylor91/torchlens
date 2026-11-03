@@ -205,7 +205,7 @@ def record(
         ``grad_transform`` and ``save_raw_grads`` configure a later
         ``Recording.backward()``: gradient hooks are installed only when
         ``backward_ready=True``, ``save_grads=`` or ``default_grad=`` is given;
-        without one, ``log_backward()`` refuses with code
+        without one, ``backward()`` refuses with code
         ``recording_backward_not_requested``, and a record made under
         ``torch.no_grad()`` or ``torch.inference_mode()`` implies
         ``inference_only=True`` (``recording_backward_inference_only``).

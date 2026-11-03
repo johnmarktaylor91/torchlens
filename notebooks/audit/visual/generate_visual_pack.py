@@ -47,6 +47,10 @@ matplotlib.use("Agg")
 import torch
 
 import torchlens as tl
+from torchlens._visualization._trace_collapse import (
+    collapse_plan as _trace_collapse_plan,
+    collapse_schedule as _trace_collapse_schedule,
+)
 
 # Guard: a pip -e install of a DIFFERENT checkout must never silently supply
 # the renderer under audit (that would render the wrong code and lie to the pack).
@@ -93,7 +97,7 @@ def get_trace(model_key: str, variant: str = "plain", trace_builder=None):
         elif variant == "backward":
             trace = tl.trace(m, xs, capture=tl.options.CaptureOptions(backward_ready=True))
             out = trace[-1].out
-            trace.log_backward(out)
+            trace.backward(out)
         else:
             raise ValueError(f"Unknown trace variant {variant!r} without trace_builder")
     _TRACE_CACHE[ck] = trace
@@ -112,7 +116,11 @@ def _intervened_trace(model_key: str):
         m, x = MODELS[model_key]()
         trace = tl.trace(m, x, capture=tl.options.CaptureOptions(replayable=True))
         relu = next(layer for layer in trace.ops if layer.func_name == "relu")
-        trace.set(tl.func("relu"), torch.zeros(relu.shape))
+        trace.do(
+            tl.func("relu"),
+            torch.zeros(relu.shape),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
+        )
         return trace
 
     return _build
@@ -529,7 +537,7 @@ def _run_vacuous_demo_guards() -> None:
 def _plan_subtitle(t: float):
     def _fn(trace) -> str:
         try:
-            plan = trace.collapse_plan(mode=t)
+            plan = _trace_collapse_plan(trace, mode=t)
             return f"t={t} -- {len(plan.nodes)} visible nodes"
         except Exception as exc:  # diagnostic subtitle must never kill the page
             return f"t={t} (plan unavailable: {type(exc).__name__})"
@@ -541,22 +549,22 @@ def _collapse_diag_text() -> str:
     """Text body for the collapse diagnostics page (resnet18)."""
     trace = get_trace("resnet18")
     lines: list[str] = []
-    lines.append("Trace.collapse_plan(mode=...) -- renderer-faithful plan per mode (resnet18):")
+    lines.append("Drawing.collapse_plan(mode=...) -- renderer-faithful plan per mode (resnet18):")
     lines.append("")
     for mode in ("auto", "max", 0.5):
         try:
-            plan = trace.collapse_plan(mode=mode)
+            plan = _trace_collapse_plan(trace, mode=mode)
             lines.append(f"  collapse_plan(mode={mode!r}):")
             lines.append(f"    {plan!r}")
         except Exception as exc:
             lines.append(f"  collapse_plan(mode={mode!r}) FAILED: {exc}")
     lines.append("")
-    lines.append("Trace.collapse_schedule() -- ordered monotone float schedule:")
+    lines.append("Drawing.collapse_schedule() -- ordered monotone float schedule:")
     lines.append("")
     lines.append("      t      target  visible  #collapsed-module-addresses")
     lines.append("      ('=' marks steps sharing the same t as the row above)")
     try:
-        schedule = trace.collapse_schedule()
+        schedule = _trace_collapse_schedule(trace)
         steps = list(schedule.steps)
         shown = steps if len(steps) <= 28 else steps[:14] + steps[-14:]
         skipped = len(steps) - len(shown)
@@ -698,8 +706,8 @@ AXES: dict[str, str] = {
     "degenerate": "degenerate graphs (single op, no modules, scalar out)",
     "regression:large_bbox": "large-graph bbox non-blank regression",
     "artifact:apparent_cycle": "interleaved repeat-fold apparent-cycle artifact (known)",
-    "diag:collapse_plan": "Trace.collapse_plan() diagnostic",
-    "diag:collapse_schedule": "Trace.collapse_schedule() diagnostic",
+    "diag:collapse_plan": "Drawing.collapse_plan() diagnostic",
+    "diag:collapse_schedule": "Drawing.collapse_schedule() diagnostic",
     "labels:checked_suppression": (
         "default-on checked suppression of constructor args proven equal to captured shape dims"
     ),
@@ -734,7 +742,7 @@ NA_AXES: dict[str, str] = {
     "html_repr": "Trace._repr_html_() is a bespoke HTML identity card (layers/ops/"
     "save-level/NaN summary) for notebooks; an HTML widget, not a static Graphviz "
     "render, so it cannot appear in this PDF.",
-    "animate_ops": "trace.animate(site) returns an HTML play/pause Drawing for "
+    "animate": "trace.animate(site) returns an HTML play/pause Drawing for "
     "repeated-pass ops; interactive HTML, out of scope for a static PDF.",
     "code_panel:callable": "code_panel=<callable> reuses the same panel box styling "
     "as the string modes; only the text source differs.",
@@ -1409,7 +1417,7 @@ SECTIONS: list[Section] = [
                     "collapse accepts a float t in [0, 1] selecting a deterministic MONOTONE schedule: "
                     "t=0.0 is byte-identical to 'none', t=1.0 to 'max', and increasing t never uncollapses "
                     "anything (collapsed sets are nested). Subtitles show the visible node count reported by "
-                    "Trace.collapse_plan(mode=t).\n"
+                    "Drawing.collapse_plan(mode=t).\n"
                     "CHECK: visible counts never increase left-to-right; each frame looks like a strictly "
                     "further-condensed version of the previous one, never a re-arrangement."
                 ),
@@ -1599,7 +1607,7 @@ SECTIONS: list[Section] = [
             ),
             Page(
                 label="e9_collapse_diagnostics",
-                title="Diagnostics: Trace.collapse_plan() and Trace.collapse_schedule()",
+                title="Diagnostics: Drawing.collapse_plan() and Drawing.collapse_schedule()",
                 caption="",
                 text_fn=_collapse_diag_text,
                 covers=["diag:collapse_plan", "diag:collapse_schedule"],
@@ -1936,7 +1944,7 @@ SECTIONS: list[Section] = [
                 label="h1_backward",
                 title="draw_backward: the grad_fn graph",
                 caption=(
-                    "After log_backward(), draw_backward renders the captured autograd graph: grad_fn nodes "
+                    "After backward(), draw_backward renders the captured autograd graph: grad_fn nodes "
                     "(AddmmBackward, ReluBackward, ...) connected by gradient-flow edges. Default vis_mode "
                     "is 'rolled'; 'unrolled' shows per-call grad_fn instances.\n"
                     "CHECK: grad_fn names match the forward ops they differentiate; edge direction follows "
@@ -2120,7 +2128,7 @@ SECTIONS: list[Section] = [
                 title="vis_intervention_mode: 'node_mark' vs 'as_node'",
                 caption=(
                     "An intervention-ready trace with a PLANNED zero intervention registered at the relu "
-                    "site (trace.set(tl.func('relu'), zeros) -- the renderer visualizes planned "
+                    "site (trace.do(tl.func('relu'), zeros, intervention=tl.options.InterventionOptions(engine='set_only')) -- the renderer visualizes planned "
                     "intervention sites). 'node_mark' (default) "
                     "marks the edited op node itself (purple ring and a bold purple edit row such as "
                     "'\u0394 set(v)'); 'as_node' inserts explicit "

@@ -106,7 +106,7 @@ def test_rightleft_backward_draw_emits_rankdir_rl(tmp_path: Path) -> None:
         capture=tl.options.CaptureOptions(save_grads="all"),
     )
     try:
-        trace.log_backward(trace[trace.output_layers[0]].out.sum())
+        trace.backward(trace[trace.output_layers[0]].out.sum())
         dot = trace.draw(
             graph="backward",
             direction="rightleft",

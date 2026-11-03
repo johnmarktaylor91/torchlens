@@ -211,13 +211,13 @@ def test_gradient_flow_audit_empty_torch_only_and_defaults() -> None:
 
 
 def test_gradient_flow_audit_reports_saved_gradients() -> None:
-    """gradient_flow_audit reports saved gradients after log_backward."""
+    """gradient_flow_audit reports saved gradients after backward."""
 
     torch.manual_seed(5)
     x = torch.randn(2, 4, requires_grad=True)
     trace = tl.trace(TinyMlp(), x, capture=tl.options.CaptureOptions(save_grads=True))
     loss = trace[trace.output_layers[0]].out.sum()
-    trace.log_backward(loss)
+    trace.backward(loss)
 
     frame = tl.debug.grad_health(trace).to_pandas()
 

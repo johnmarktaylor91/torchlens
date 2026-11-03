@@ -118,7 +118,7 @@ def _logged_backward_trace() -> tl.Trace:
     """Return a trace after backward capture."""
 
     _model, _x, trace = _trace()
-    trace.log_backward(_loss(trace), retain_graph=True)
+    trace.backward(_loss(trace), retain_graph=True)
     return trace
 
 
@@ -342,7 +342,7 @@ def test_composite_backward_target_specs_match_live_hooks() -> None:
     ]
     for selector in selectors:
         trace_stub, grad_fn_handle = _hook_trace()
-        trace_stub._active_backward_pass_index = 1  # type: ignore[attr-defined]
+        trace_stub._active_backward_pass_number = 1  # type: ignore[attr-defined]
         grad_fn_handle.trace = trace_stub  # type: ignore[attr-defined]
         _state._active_hook_plan = normalize_hook_plan(selector, tl.clamp(low=0, high=0))
         hook = _make_grad_fn_hook(trace_stub, 1)
@@ -395,7 +395,7 @@ def test_composite_grad_output_selector_matches_real_live_backward_hook() -> Non
         confirm_mutation=True,
     )
 
-    trace.log_backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
+    trace.backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
 
     assert fires["count"] == 1
 
@@ -441,9 +441,9 @@ def test_live_backward_pass_selector_targets_second_retain_graph_pass() -> None:
         confirm_mutation=True,
     )
 
-    trace.log_backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
+    trace.backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
     assert fires["count"] == 0
-    trace.log_backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
+    trace.backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
 
     assert fires["count"] == 1
     materialized_sites = trace.find_sites(
@@ -451,7 +451,7 @@ def test_live_backward_pass_selector_targets_second_retain_graph_pass() -> None:
     )
     assert materialized_sites
     assert all(
-        any(call.backward_pass_index == 2 for call in site.calls._list)
+        any(call.backward_pass_number == 2 for call in site.calls._list)
         for site in materialized_sites
         if isinstance(site, GradFn)
     )
@@ -569,7 +569,7 @@ def test_backward_in_place_none_return_helper_records_gradient_effect() -> None:
     )
     trace.attach_hooks(tl.grad_fn(name="relu"), zero_in_place, confirm_mutation=True)
 
-    trace.log_backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
+    trace.backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
 
     assert x.grad is not None
     assert torch.equal(x.grad, torch.zeros_like(x.grad))
@@ -901,7 +901,7 @@ def test_backward_intervention_replacement_registers_higher_order_terminal() -> 
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
     trace.attach_hooks(tl.grad_fn(name="pow"), double_grad_input, confirm_mutation=True)
-    trace.log_backward(trace[trace.output_layers[0]].out, retain_graph=True, create_graph=True)
+    trace.backward(trace[trace.output_layers[0]].out, retain_graph=True, create_graph=True)
     pow_sites = [site for site in trace._grad_fn_logs.values() if site.type == "pow"]
 
     assert pow_sites
@@ -1011,7 +1011,7 @@ def test_backward_zero_match_selector_warns_after_backward() -> None:
     )
 
     with pytest.warns(UserWarning, match="matched zero sites; no intervention fired"):
-        trace.log_backward(trace[trace.output_layers[0]].out)
+        trace.backward(trace[trace.output_layers[0]].out)
 
 
 def test_matching_backward_selector_does_not_warn_zero_match() -> None:
@@ -1026,7 +1026,7 @@ def test_matching_backward_selector_does_not_warn_zero_match() -> None:
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        trace.log_backward(trace[trace.output_layers[0]].out)
+        trace.backward(trace[trace.output_layers[0]].out)
 
     assert not any("matched zero sites" in str(item.message) for item in caught)
 

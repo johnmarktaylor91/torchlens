@@ -249,7 +249,7 @@ def test_failed_forward_leaves_global_state_clean(mode: str) -> None:
     _assert_subsequent_record_works()
 
 
-def test_failed_recording_rejects_to_trace_and_log_backward() -> None:
+def test_failed_recording_rejects_to_trace_and_backward() -> None:
     """Failed partials cannot be cooked into traces or backward recordings."""
 
     recording = tl.record(
@@ -523,7 +523,7 @@ def test_accumulated_predicate_error_still_raises_without_forward_failure() -> N
         )
 
 
-def test_failed_recording_log_backward_refusal_carries_n3_code() -> None:
+def test_failed_recording_backward_refusal_carries_n3_code() -> None:
     """The failed-partial refusal mirrors the capability table's N3 code."""
 
     recording = tl.record(

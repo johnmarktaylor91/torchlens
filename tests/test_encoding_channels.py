@@ -37,6 +37,7 @@ from torchlens._visualization._encoding import (
     interpolate_hex,
     resolve_color_by,
 )
+from torchlens._visualization._trace_collapse import collapse_plan as _trace_collapse_plan
 from torchlens._visualization.node_spec import NodeSpec
 
 # ---------------------------------------------------------------------------
@@ -232,9 +233,9 @@ def test_collapse_plan_identical_with_channel_active(tmp_path: Path) -> None:
 
     model = nn.Sequential(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), nn.Linear(4, 2))
     log = tl.trace(model, torch.randn(2, 4))
-    plan_off = log.collapse_plan(mode="auto")
+    plan_off = _trace_collapse_plan(log, mode="auto")
     _draw(log, tmp_path, color_by="bytes", collapse="auto")
-    plan_on = log.collapse_plan(mode="auto")
+    plan_on = _trace_collapse_plan(log, mode="auto")
     assert plan_off == plan_on
 
 

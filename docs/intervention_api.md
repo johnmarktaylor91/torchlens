@@ -88,7 +88,7 @@ portable selector after discovery.
 
 ## Forward Helpers
 
-Forward helpers return `Edit` objects that can be passed to `set`,
+Forward helpers return `Edit` objects that can be passed to `do` (with the `set_only` engine),
 `attach_hooks`, `do`, live capture `hooks=...`, replay, or rerun.
 
 | Helper | Signature | Portability |
@@ -222,7 +222,7 @@ A full `tl.trace(...)` whose forward raises raises `tl.errors.TraceCaptureError`
 
 | Method | Use |
 | --- | --- |
-| `log.set(site, value)` | Record a one-shot tensor or callable replacement and mark the recipe stale. |
+| `log.do(site, value, intervention=tl.options.InterventionOptions(engine="set_only"))` | Record a one-shot tensor or callable replacement and mark the recipe stale, without propagating it. |
 | `log.attach_hooks(site, hook)` | Add sticky helper/callable hooks to the recipe. |
 | `log.do(...)` | Apply an intervention and dispatch to `push`, `run`, or `set_only`. |
 | `log.fork(name=None)` | Create an isolated branch for experiments. |
@@ -286,7 +286,7 @@ ran inside whatever came next, typically the next fork).
 
 `Trace.draw(intervention_mode=...)` visualizes the planned intervention
 recipe stored on an intervention-ready trace, such as sites registered with
-`log.set(...)` or `log.do(...)`. Each edited node gets a purple ring and a
+`log.do(...)`. Each edited node gets a purple ring and a
 last row naming the edit (`Δ zero_ablate`), and the header names the edits;
 `show_cone=True` (off by default) adds a translucent purple underlay
 under the arrows and node outlines the edit changed downstream. Capture-time `intervene=...` calls record

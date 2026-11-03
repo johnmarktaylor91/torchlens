@@ -11,7 +11,7 @@ pending naming-session ratification.
 ## The accumulators
 
 Every accumulator implements the `tl.stats.StreamingStat` protocol --
-`update(value)` folds one batch, `compute()` finalizes (`tl.stats.Histogram` finalizes with `result()`):
+`update(value)` folds one batch, `compute()` finalizes:
 
 | Accumulator | Result | Notes |
 |---|---|---|

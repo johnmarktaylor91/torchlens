@@ -1298,7 +1298,7 @@ def _live_backward_context_matches(
         return any(isinstance(value, torch.Tensor) for value in values or ())
     if isinstance(selector, BackwardPassSelector):
         trace = getattr(grad_fn_handle, "trace", None)
-        return getattr(trace, "_active_backward_pass_index", None) == selector.pass_index
+        return getattr(trace, "_active_backward_pass_number", None) == selector.pass_index
     return True
 
 

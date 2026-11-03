@@ -132,8 +132,8 @@ def _summary_dot(text: str) -> str:
     )
 
 
-def _log_backward(trace: Any) -> Any:
-    trace.log_backward(trace[trace.output_layers[0]].out)
+def _backward(trace: Any) -> Any:
+    trace.backward(trace[trace.output_layers[0]].out)
     return trace
 
 
@@ -156,8 +156,8 @@ def capture(panel: Panel) -> tuple[Any, Any]:
     if panel.intervene:
         kwargs["intervene"] = INTERVENTIONS[panel.intervene]()
     trace = tl.trace(model, inputs, **kwargs)
-    if panel.prep == "log_backward":
-        trace = _log_backward(trace)
+    if panel.prep == "backward":
+        trace = _backward(trace)
     elif panel.prep == "higher_order":
         trace = _higher_order(trace, inputs)
     return trace, inputs

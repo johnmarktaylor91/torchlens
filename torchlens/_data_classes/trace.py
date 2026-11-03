@@ -2376,7 +2376,7 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _doors.visualization()._trace_collapse.collapse_order(self, mode)
 
-    def collapse_plan(
+    def _collapse_plan(
         self,
         mode: Literal["auto", "max"] | float = "auto",
         context: "RenderContext | None" = None,
@@ -2385,7 +2385,7 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _doors.visualization()._trace_collapse.collapse_plan(self, mode, context)
 
-    def collapse_schedule(self, context: "RenderContext | None" = None) -> "CollapseSchedule":
+    def _collapse_schedule(self, context: "RenderContext | None" = None) -> "CollapseSchedule":
         """Return the public monotone float collapse schedule."""
 
         return _doors.visualization()._trace_collapse.collapse_schedule(self, context)
@@ -2756,21 +2756,6 @@ class Trace(TraceOutputMixin, TraceLike):
         """Forward to ``_trace_intervention_records.history_site_payload``."""
 
         return _trace_intervention_records.history_site_payload(site)
-
-    def set(
-        self,
-        site: Any,
-        value: Any,
-        *,
-        direction: str = "forward",
-        strict: bool = False,
-        confirm_mutation: bool = False,
-    ) -> "Trace":
-        """Set a site out recipe without propagating it."""
-
-        return _doors.intervention()._trace_edits.set_site(
-            self, site, value, direction=direction, strict=strict, confirm_mutation=confirm_mutation
-        )
 
     def attach_hooks(
         self,
@@ -3244,22 +3229,18 @@ class Trace(TraceOutputMixin, TraceLike):
             reservation_resume=reservation_resume,
         )
 
-    def log_backward(self, loss: torch.Tensor, **backward_kwargs: Any) -> "Trace":
-        """Run backward from ``loss`` while capturing first-class backward metadata."""
-        return _doors.backends_torch()._trace_backward.log_backward(self, loss, **backward_kwargs)
-
     def backward(self, loss: torch.Tensor, **backward_kwargs: Any) -> "Trace":
         """Run backward from ``loss`` and populate this Trace with backward metadata."""
 
-        return self.log_backward(loss, **backward_kwargs)
+        return _doors.backends_torch()._trace_backward.backward(self, loss, **backward_kwargs)
 
     def capture_backward(self) -> Any:
         """Return a context manager that captures user-managed backward calls."""
         return _doors.backends_torch()._trace_backward.capture_backward(self)
 
-    def disarm_triggers(self) -> None:
+    def _disarm_autograd(self) -> None:
         """Detach this Trace from global autograd backward interception."""
-        _doors.intervention()._trace_run.disarm_triggers(self)
+        _doors.intervention()._trace_run.disarm(self)
 
     def _remove_log_entry(
         self,

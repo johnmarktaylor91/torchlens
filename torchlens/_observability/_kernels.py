@@ -491,7 +491,7 @@ class Histogram:
         for key in _SPECIAL_KEYS:
             self._specials[key] += other._specials[key]
 
-    def result(self) -> HistogramResult:
+    def compute(self) -> HistogramResult:
         """Return the finalized histogram counts."""
 
         return HistogramResult(

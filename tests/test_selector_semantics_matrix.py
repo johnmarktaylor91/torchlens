@@ -224,7 +224,7 @@ def _backward_trace(model_key: str) -> Any:
             x.requires_grad_(True),
             capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
         )
-        log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
+        log.backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     return log
 
 

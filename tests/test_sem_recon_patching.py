@@ -127,7 +127,7 @@ def test_attribution_patch_works_on_parameterized_model() -> None:
     """The autograd/param-restore crash: red on ANY parameterized model pre-fix.
 
     The guard's unconditional ``copy_`` bumped every parameter's autograd
-    version counter between the two baseline captures, so ``log_backward``
+    version counter between the two baseline captures, so ``backward``
     raised "modified by an inplace operation". Equality-gated restore leaves
     value-equal parameters untouched.
     """

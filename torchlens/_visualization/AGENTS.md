@@ -89,7 +89,7 @@ Renders `GradFn` nodes and grad edges captured by `backends/torch/backward.py`.
 ### Collapse and Focus
 - The v2 smart-collapse ENGINE behind `draw(collapse="auto"/"max")` is
   `auto_collapse.py` + `collapse_optimizer.py` + `collapse_plan.py` (public
-  schedule via `Trace.collapse_plan()`/`collapse_schedule()`); change policy
+  schedule via `Drawing.collapse_plan()`/`collapse_schedule()`); change policy
   THERE. `_should_collapse_module()` (`_render_leaf.py`) is only the legacy
   per-leaf decision path.
 - `_is_collapsed_module()` protects indexing into `modules`; keep its guard strict.

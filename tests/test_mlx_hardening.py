@@ -582,7 +582,7 @@ def test_mlx_derived_grads_are_not_backward_capture() -> None:
     )
 
     with pytest.raises(BackendUnsupportedError, match="trace\\.autograd\\.derived_grads"):
-        trace.log_backward(trace[trace.output_layers[0]].out)
+        trace.backward(trace[trace.output_layers[0]].out)
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.autograd.backward_passes
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):

@@ -173,7 +173,7 @@ def backward_trace() -> Trace:
         torch.randn(2, 3, requires_grad=True),
         capture=tl.options.CaptureOptions(save_grads="all"),
     )
-    trace.log_backward(trace[trace.output_layers[0]].out)
+    trace.backward(trace[trace.output_layers[0]].out)
     return trace
 
 
@@ -730,7 +730,7 @@ def test_grad_edges_use_preserved_edge_cluster_key(
         capture=tl.options.CaptureOptions(save_grads="all"),
     )
     try:
-        trace.log_backward(trace[trace.output_layers[0]].out)
+        trace.backward(trace[trace.output_layers[0]].out)
         trace.draw(
             path=str(tmp_path / "nested_grad"),
             file_format="svg",

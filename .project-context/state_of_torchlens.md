@@ -174,7 +174,7 @@ version again.
 
 JAX M1 exposes leaf-level derived gradients through `trace.derived_grads` when capture receives
 `tl.backends.jax.GradOptions`. These records come from a second pure `jax.value_and_grad` run and
-are not backward capture; JAX traces keep `backward_capture=False`, and `trace.log_backward(...)`,
+are not backward capture; JAX traces keep `backward_capture=False`, and `trace.backward(...)`,
 `trace.backward_passes`, `trace.saved_grad_ops`, and `op.grads` raise with guidance to
 `trace.derived_grads`.
 

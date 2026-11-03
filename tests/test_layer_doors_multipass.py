@@ -98,7 +98,12 @@ def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) ->
         if door == "do":
             layer.do(tl.scale(2.0))
         elif door == "set":
-            layer.set(torch.zeros(2, 3), confirm_mutation=True)
+            layer.do(
+                torch.zeros(2, 3),
+                intervention=tl.options.InterventionOptions(
+                    engine="set_only", confirm_mutation=True
+                ),
+            )
         else:
             layer.attach_hooks(tl.scale(2.0), confirm_mutation=True)
         # The recipe doors apply on push, which re-resolves the same two sites.

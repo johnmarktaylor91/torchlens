@@ -61,7 +61,7 @@ class _CustomModel(nn.Module):
         return _DoubleFn.apply(x).sum()
 
 
-def _log_backward_model(model: nn.Module, x: torch.Tensor) -> tl.Trace:
+def _backward_model(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     """Return a Trace with backward metadata captured.
 
     Parameters
@@ -78,7 +78,7 @@ def _log_backward_model(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     """
 
     trace = tl.trace(model, x, capture=CaptureOptions(save_grads="all"))
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     return trace
 
 
@@ -100,14 +100,14 @@ def _log_two_backward_passes(model: nn.Module, x: torch.Tensor) -> tl.Trace:
 
     trace = tl.trace(model, x, capture=CaptureOptions(save_grads="all"))
     loss = trace[trace.output_layers[0]].out.sum()
-    trace.log_backward(loss, retain_graph=True)
-    trace.log_backward(loss)
+    trace.backward(loss, retain_graph=True)
+    trace.backward(loss)
     return trace
 
 
 def test_draw_backward_renders(tmp_path: Path) -> None:
     """draw_backward returns DOT source and writes a non-empty output file."""
-    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+    trace = _backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
     outpath = tmp_path / "backward_graph"
 
     dot = trace.draw(
@@ -123,7 +123,7 @@ def test_draw_backward_renders(tmp_path: Path) -> None:
 
 def test_backward_graph_includes_grad_fn_nodes(tmp_path: Path) -> None:
     """Backward DOT contains expected grad_fn_handle labels."""
-    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+    trace = _backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
     dot = trace.draw(
         graph="backward",
@@ -138,7 +138,7 @@ def test_backward_graph_includes_grad_fn_nodes(tmp_path: Path) -> None:
 
 def test_backward_graph_intervening_visual_distinction(tmp_path: Path) -> None:
     """Intervening grad_fns use the documented ``[i]`` label prefix."""
-    trace = _log_backward_model(_ViewModel(), torch.randn(2, 6, requires_grad=True))
+    trace = _backward_model(_ViewModel(), torch.randn(2, 6, requires_grad=True))
 
     dot = trace.draw(
         graph="backward",
@@ -151,7 +151,7 @@ def test_backward_graph_intervening_visual_distinction(tmp_path: Path) -> None:
 
 def test_backward_graph_custom_grad_fn_distinction(tmp_path: Path) -> None:
     """Custom autograd grad_fns use the documented ``[custom]`` suffix."""
-    trace = _log_backward_model(_CustomModel(), torch.randn(2, 3, requires_grad=True))
+    trace = _backward_model(_CustomModel(), torch.randn(2, 3, requires_grad=True))
 
     dot = trace.draw(
         graph="backward",
@@ -165,7 +165,7 @@ def test_backward_graph_custom_grad_fn_distinction(tmp_path: Path) -> None:
 
 def test_backward_graph_cross_references_forward_layers(tmp_path: Path) -> None:
     """Backward node labels include corresponding forward layer labels."""
-    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+    trace = _backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
     dot = trace.draw(
         graph="backward",
@@ -214,7 +214,7 @@ def test_backward_graph_bwd_filter_limits_visible_passes(tmp_path: Path) -> None
 
 def test_backward_graph_marks_order_and_accumulation_edges(tmp_path: Path) -> None:
     """Backward DOT includes order labels and accumulation-edge styling."""
-    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+    trace = _backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
     dot = trace.draw(
         graph="backward",
@@ -233,7 +233,7 @@ def test_backward_graph_marks_order_and_accumulation_edges(tmp_path: Path) -> No
 
 def test_draw_backward_top_level_function(tmp_path: Path) -> None:
     """``graph="backward"`` with an explicit path renders a Trace."""
-    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+    trace = _backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
     dot = trace.draw(
         graph="backward",
@@ -244,7 +244,7 @@ def test_draw_backward_top_level_function(tmp_path: Path) -> None:
     assert "addmm_back" in dot
 
 
-def test_draw_backward_errors_without_log_backward() -> None:
+def test_draw_backward_errors_without_backward() -> None:
     """draw_backward errors clearly before explicit backward capture."""
     trace = tl.trace(
         _LinearReluModel(),
@@ -252,7 +252,7 @@ def test_draw_backward_errors_without_log_backward() -> None:
         capture=CaptureOptions(save_grads="all"),
     )
 
-    with pytest.raises(ValueError, match="call log_backward\\(loss\\) first"):
+    with pytest.raises(ValueError, match="call backward\\(loss\\) first"):
         trace.draw(graph="backward")
 
 
@@ -272,7 +272,7 @@ def test_forward_graph_unchanged(tmp_path: Path) -> None:
             file_format="dot",
         ),
     )
-    trace = _log_backward_model(model, x)
+    trace = _backward_model(model, x)
     trace.draw(
         graph="backward",
         path=str(tmp_path / "backward"),

@@ -389,8 +389,8 @@ def attribution_patch_attention_heads(
         )
         clean_metric = _require_scalar_metric(metric(clean_log))
         corrupted_metric = _require_scalar_metric(metric(corrupted_log))
-        clean_log.log_backward(clean_metric)
-        corrupted_log.log_backward(corrupted_metric)
+        clean_log.backward(clean_metric)
+        corrupted_log.backward(corrupted_metric)
         modules = _modules_with_facet(clean_log, facet_name)
         _ensure_matching_modules(corrupted_log, modules, facet_name=facet_name)
         if not modules:

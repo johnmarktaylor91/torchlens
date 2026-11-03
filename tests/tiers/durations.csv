@@ -650,7 +650,7 @@ tests/test_intervention_phase11.py,5,4.56,2.11,unmarked
 tests/test_intervention_phase12.py,8,5.05,1.41,unmarked
 tests/test_intervention_phase13.py,8,2.50,0.85,unmarked
 tests/test_intervention_phase2.py,6,0.73,0.16,unmarked
-tests/test_intervention_phase3.py,26,4.93,0.67,smoke
+tests/test_intervention_phase3.py,25,4.93,0.67,smoke
 tests/test_intervention_phase4_5.py,4,0.58,0.21,unmarked
 tests/test_intervention_phase4a.py,4,0.75,0.40,unmarked
 tests/test_intervention_phase4b.py,6,0.98,0.28,smoke
@@ -1254,7 +1254,6 @@ tests/test_site_join.py,14,7.38,3.66,heavy
 tests/test_site_key.py,22,5.09,1.71,heavy
 tests/test_site_key_portability.py,8,5.55,1.09,unmarked
 tests/test_site_sweep_unit_candidates.py,4,2.01,1.09,heavy
-tests/test_sites.py,2,0.17,0.15,unmarked
 tests/test_skeleton_recipe_docs.py,5,2.95,2.89,heavy
 tests/test_skinfill_plain_param_separation.py,7,0.09,0.01,unmarked
 tests/test_skip_audit.py,15,11.61,3.94,missing

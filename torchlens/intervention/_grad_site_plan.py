@@ -602,7 +602,7 @@ def settle_armed_gradient_edits(trace: Any, *, pass_index: int) -> None:
     envelope records what the pass did: ``door="backward"``,
     ``lane="live_hook"``, ``parent_event_id`` = the arming row (registration
     identity), ``status`` ``"fired"`` or ``"no_fire"`` with this pass's
-    ``fire_count``, and ``extra`` ``arming_event_id`` / ``backward_pass_index``
+    ``fire_count``, and ``extra`` ``arming_event_id`` / ``backward_pass_number``
     plus a ``no_fire_reason`` from ``{"gradient_not_reached",
     "pass_filtered"}``. Each pass writes its own row, so a second backward
     never rewrites the first pass's row.
@@ -650,7 +650,7 @@ def _settle_arming_group(
     extra: dict[str, Any] = {
         "arming_event_id": arming_event_id,
         "arming_group": _arming_group(hook_specs[0]),
-        "backward_pass_index": pass_index,
+        "backward_pass_number": pass_index,
     }
     if arming_event_id is not None:
         extra["parent_event_id"] = arming_event_id

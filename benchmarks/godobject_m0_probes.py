@@ -181,7 +181,7 @@ def probe_mutation_inventory() -> None:
                 capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
             )
             loss = trace[trace.ops.keys()[-1]].out.sum()
-            trace.log_backward(loss)
+            trace.backward(loss)
 
             torch.manual_seed(_SEED)
             ablated = tl.trace(

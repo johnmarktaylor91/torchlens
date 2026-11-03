@@ -17,9 +17,12 @@ import sys
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Literal
 
-from .._errors import CaptureNotActiveError
+from .._errors import CaptureNotActiveError, refuse_cleaned_up
+
+if TYPE_CHECKING:
+    from .._visualization.collapse_plan import CollapsePlan, CollapseSchedule, RenderContext
 
 __tl_layer__ = "FACADE"
 
@@ -110,6 +113,83 @@ class Drawing:
                 temp_name = handle.name
             target = self.save(temp_name)
         _open_viewer(Path(target))
+
+    def collapse_plan(
+        self,
+        mode: Literal["auto", "max"] | float = "auto",
+        context: RenderContext | None = None,
+    ) -> CollapsePlan:
+        """Return the diagnostic collapse plan for the trace behind this drawing.
+
+        The plan is computed on the trace the draw retained, so it needs
+        ``return_trace=True`` and an open drawing (not yet ``close()``d).
+
+        Parameters
+        ----------
+        mode:
+            Collapse policy to plan: ``"auto"`` for a readable overview,
+            ``"max"`` for aggressive condensation, or a float in ``[0.0, 1.0]``
+            selecting the monotone collapse schedule (``0.0`` is the full
+            graph, ``1.0`` is byte-identical to ``"max"``).
+        context:
+            Optional ``RenderContext``. When omitted, the default unrolled
+            Graphviz context is used.
+
+        Returns
+        -------
+        CollapsePlan
+            Renderer-faithful diagnostic plan. Node kinds are ``ModuleBox`` for
+            collapsed module calls, ``RawOp`` for exposed operations,
+            ``RepeatFold`` for representative-plus-ellipsis repeated runs,
+            ``OpSegment`` and ``ChildSegment`` for condensed segment boxes, and
+            ``Boundary`` for input/output or renderer boundary nodes.
+
+        Raises
+        ------
+        ValueError
+            If ``mode`` is not ``"auto"``, ``"max"``, or a float in
+            ``[0.0, 1.0]``, or the optimizer declines to produce a plan for the
+            provided context.
+        TraceCleanedUpError
+            If this drawing retains no trace.
+        """
+
+        return self._retained_trace("collapse_plan")._collapse_plan(mode, context)
+
+    def collapse_schedule(self, context: RenderContext | None = None) -> CollapseSchedule:
+        """Return the monotone float collapse schedule for the trace behind this drawing.
+
+        Parameters
+        ----------
+        context:
+            Optional ``RenderContext``. When omitted, the default unrolled
+            Graphviz context is used.
+
+        Returns
+        -------
+        CollapseSchedule
+            Ordered schedule from ``t=0.0`` full graph to ``t=1.0`` max
+            collapse. Each step includes the selected plan, visible count, and
+            collapsed module-address set.
+
+        Raises
+        ------
+        TraceCleanedUpError
+            If this drawing retains no trace.
+        """
+
+        return self._retained_trace("collapse_schedule")._collapse_schedule(context)
+
+    def _retained_trace(self, name: str) -> Any:
+        """Return the retained trace, or refuse typed when the draw kept none."""
+
+        if self.trace is None:
+            refuse_cleaned_up(
+                f"this Drawing retains no trace, so {name}() has nothing to plan on",
+                remedy="draw with return_trace=True and call it before close()",
+                attribute=name,
+            )
+        return self.trace
 
     def close(self) -> None:
         """Release the retained trace.

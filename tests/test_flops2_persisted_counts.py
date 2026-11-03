@@ -78,7 +78,7 @@ def test_loaded_checkpointed_trace_keeps_its_recompute_label(tmp_path: Path) -> 
 def test_pass_states_stamped_below_the_floor_refuse(version: int) -> None:
     """A v9 or v10 pass state was written by torchlens 2.x: it refuses, never default-fills."""
 
-    record = BackwardPass(pass_number=1, trigger="log_backward", implicit=False)
+    record = BackwardPass(pass_number=1, trigger="backward", implicit=False)
     state = dict(record.__getstate__())
     state.pop("_executed_flops_record", None)
     state["tlspec_version"] = version

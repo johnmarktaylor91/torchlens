@@ -123,8 +123,8 @@ quality planner is admitted when `U <= 2000` AND the predicted cost fits the bud
 - Only PATHOLOGICAL inputs (raw ops above 20x the constant) still decline outright:
   `draw` warns (`collapse_pathological_skip`) and renders a bounded top-level
   module overview plus an expansion manifest (forks.11 FK4; uncollapsed only when
-  the root has no child module), `Trace.collapse_plan()` refuses typed (`collapse_plan_unavailable`, reason
-  `collapse_ops_ceiling`), and `Trace.collapse_schedule()` degrades to its single
+  the root has no child module), `Drawing.collapse_plan()` refuses typed (`collapse_plan_unavailable`, reason
+  `collapse_ops_ceiling`), and `Drawing.collapse_schedule()` degrades to its single
   full-graph step.
 - Over-ceiling residuals (forks.11 FK4, DOCUMENTED-UNSTABLE): when the served
   overview is still above the readable band -- a floor-fallback plan, or the
@@ -148,8 +148,11 @@ and `show_containers` styling are unaffected.
 
 ## `collapse_plan()` diagnostics
 
-`Trace.collapse_plan(mode=...)` exposes the renderer-faithful plan for one requested mode.
-`Trace.collapse_schedule()` exposes its ordered float steps, targets, visible counts, and collapsed
+`Drawing.collapse_plan(mode=...)` exposes the renderer-faithful plan for one requested mode. The
+diagnostics live on the draw result, so render with `return_trace=True` and ask the drawing
+(`tl.render(model, x, return_trace=True).collapse_plan("max")`); a drawing that kept no trace
+refuses with the typed `trace_cleaned_up` error.
+`Drawing.collapse_schedule()` exposes its ordered float steps, targets, visible counts, and collapsed
 module addresses. Use these diagnostics to inspect a rendering decision rather than inferring it
 from pixels.
 

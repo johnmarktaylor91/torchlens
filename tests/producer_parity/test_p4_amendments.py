@@ -541,7 +541,7 @@ def test_sealed_journal_still_accepts_backward_events(
 ) -> None:
     """The ONE documented exception: backward capture runs after the seal.
 
-    ``Trace.log_backward`` / ``Recording.backward`` append to the sealed
+    ``Trace.backward`` / ``Recording.backward`` append to the sealed
     journal by design and ``backward_events`` is not part of the sealed core, so
     fencing that lane would break real backward capture. Measured across the
     smoke tier: ``append_backward`` is the only appender that ever fires on a

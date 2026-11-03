@@ -1658,7 +1658,11 @@ class TestVisualizationBugfixes:
             torch.randn(2, 3),
             capture=tl.options.CaptureOptions(replayable=True),
         )
-        log.set(func("relu"), torch.zeros(2, 3))
+        log.do(
+            func("relu"),
+            torch.zeros(2, 3),
+            intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        )
         try:
             node_mark = log.draw(
                 path=opj(VIS_DIR, "test_intervention_node_mark"),

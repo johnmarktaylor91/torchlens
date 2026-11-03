@@ -117,8 +117,8 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `degenerate` | degenerate graphs (single op, no modules, scalar out) | p69 |
 | `regression:large_bbox` | large-graph bbox non-blank regression | p12 |
 | `artifact:apparent_cycle` | interleaved repeat-fold apparent-cycle artifact (known) | p39 |
-| `diag:collapse_plan` | Trace.collapse_plan() diagnostic | p40 |
-| `diag:collapse_schedule` | Trace.collapse_schedule() diagnostic | p40 |
+| `diag:collapse_plan` | Drawing.collapse_plan() diagnostic | p40 |
+| `diag:collapse_schedule` | Drawing.collapse_schedule() diagnostic | p40 |
 | `labels:checked_suppression` | default-on checked suppression of constructor args proven equal to captured shape dims | p47 |
 | `labels:show_redundant_args` | show_redundant_args=True opt-out (every captured arg) | p47 |
 | `channel:color_by` | color_by= fill encoding (field / scalar builtin / callable) | p74 |
@@ -180,7 +180,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | 37 | E | `e6_segments` | Segment boxes: max-mode condensed ranges | `resnet50` | 1 |
 | 38 | E | `e7_remainder_labels` | Remainder labels: 'N ops + M buffers' accounts for buffer leaves | `block_stack` | 2 |
 | 39 | E | `e8_interleaved_artifact` | KNOWN ARTIFACT: interleaved repeat-folds can look like a cycle | `interleaved_stack` | 2 |
-| 40 | E | `e9_collapse_diagnostics` | Diagnostics: Trace.collapse_plan() and Trace.collapse_schedule() | `(text page)` | - |
+| 40 | E | `e9_collapse_diagnostics` | Diagnostics: Drawing.collapse_plan() and Drawing.collapse_schedule() | `(text page)` | - |
 | 42 | F | `f1_node_modes` | node_mode: 'default' vs 'profiling' | `tiny_mlp` | 2 |
 | 43 | F | `f2_domain_modes` | node_spec_fn: vision_node_mode and attention_node_mode | `mini_inception`, `tiny_transformer` | 2 |
 | 44 | F | `f3_overlays` | node_overlay: builtin metrics and custom scores | `tiny_mlp` | 4 |

@@ -261,7 +261,7 @@ class Recorder:
             Gradient hooks are installed only when ``backward_ready=True``,
             ``save_grads=`` or ``default_grad=`` is given (``save_grads=None``
             or ``False`` and ``default_grad=False`` do not count); otherwise
-            ``log_backward()`` refuses, and a forward under ``torch.no_grad()``
+            ``backward()`` refuses, and a forward under ``torch.no_grad()``
             or ``torch.inference_mode()`` implies ``inference_only=True``.
         detach_saved_activations:
             DOCUMENTED-UNSTABLE. Whether retained activations are detached from
@@ -299,7 +299,7 @@ class Recorder:
         )
         self.model = unwrapped_model
         # Gradient hooks are installed only when the caller asks for a backward
-        # up front; ``log_backward`` refuses otherwise.
+        # up front; ``backward`` refuses otherwise.
         self._backward_requested = (
             backward_ready
             or not (save_grads is MISSING or save_grads is None or save_grads is False)

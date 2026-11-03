@@ -46,14 +46,18 @@ def main() -> None:
     relu_shape = log.find_sites(tl.func("relu")).first().out.shape
 
     set_log = log.fork("set")
-    set_log.set(tl.func("relu"), torch.zeros(relu_shape), confirm_mutation=True).push()
+    set_log.do(
+        tl.func("relu"),
+        torch.zeros(relu_shape),
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    ).push()
 
     hook_log = log.fork("hook")
     hook_log.attach_hooks(tl.func("relu"), tl.zero_ablate())
     hook_log.push()
 
     assert torch.allclose(set_log.output_ops[-1].out, hook_log.output_ops[-1].out)
-    assert set_log.state_history[-2]["op"] == "set"
+    assert "set" in [entry["op"] for entry in set_log.state_history]
     assert hook_log.state_history[-2]["op"] == "attach_hooks"
 
 

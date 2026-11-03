@@ -167,7 +167,7 @@ class TestMerges:
 
         h = Histogram()
         h.update(torch.tensor([1.0]))
-        with_sketch = _observed(sketch=h.result())
+        with_sketch = _observed(sketch=h.compute())
         without = _observed()
         with pytest.raises(HistorySchemaError) as excinfo:
             merge_observations(with_sketch, without)

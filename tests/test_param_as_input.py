@@ -194,7 +194,7 @@ def test_plain_requires_grad_leaf_input_links_and_backprops_to_original() -> Non
     x = _stimulus()
 
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads="all"))
-    trace.log_backward(trace[trace.output_layers[0]].out)
+    trace.backward(trace[trace.output_layers[0]].out)
 
     input_label = trace.input_layers[0]
     _assert_input_parent_edge(trace)
@@ -234,7 +234,7 @@ def test_parameter_input_links_and_backprops_to_original_after_fix() -> None:
     z = _parameter_stimulus()
 
     trace = tl.trace(model, z, capture=tl.options.CaptureOptions(save_grads="all"))
-    trace.log_backward(trace[trace.output_layers[0]].out)
+    trace.backward(trace[trace.output_layers[0]].out)
 
     input_label = trace.input_layers[0]
     _assert_input_parent_edge(trace)

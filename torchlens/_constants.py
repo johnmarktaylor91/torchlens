@@ -913,7 +913,7 @@ MODULE_LOG_FIELD_ORDER = [
 GRAD_FN_PASS_LOG_FIELD_ORDER = [
     "call_index",
     "ordinal",
-    "backward_pass_index",
+    "backward_pass_number",
     "label",
     "backward_duration",
     "grad_inputs",

@@ -867,7 +867,7 @@ def _capture_case(case: OracleCase, tmp_path: Path) -> dict[str, Any]:
         if collapsed_calls is not None:
             _assert_exactly_once(collapsed_calls, "collapsed_node_spec_fn")
         plans = {
-            str(mode): _stable_repr(trace.collapse_plan(mode=mode))
+            str(mode): _stable_repr(trace._collapse_plan(mode=mode))
             for mode in ("auto", "max", 0.25, 0.75)
         }
         return {
@@ -875,7 +875,7 @@ def _capture_case(case: OracleCase, tmp_path: Path) -> dict[str, Any]:
             "dot": source,
             "structural": _structural_digest(source),
             "plans": plans,
-            "schedule": _stable_repr(trace.collapse_schedule()),
+            "schedule": _stable_repr(trace._collapse_schedule()),
             "callbacks": {
                 "node_spec_fn": sorted((node_calls or {}).values()),
                 "collapsed_node_spec_fn": sorted((collapsed_calls or {}).values()),
@@ -907,7 +907,7 @@ def _capture_backward_combined(tmp_path: Path) -> dict[str, Any]:
     )
     try:
         loss = trace[trace.output_layers[0]].out.sum()
-        trace.log_backward(loss)
+        trace.backward(loss)
         _stabilize_backward_identifiers(trace)
         backward = trace.draw(
             graph="backward", rolled=True, path=str(tmp_path / "backward"), file_format="svg"

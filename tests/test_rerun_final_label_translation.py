@@ -77,7 +77,11 @@ def test_set_on_a_pass_qualified_label_applies_on_rerun() -> None:
     model, x, trace, tanh_labels = _recurrent_case()
     _first, second, _third = tanh_labels
     value = torch.full_like(trace[second].out, 0.25)
-    trace.set(second, value, confirm_mutation=True)
+    trace.do(
+        second,
+        value,
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     result = trace.run(model, x)
     assert result is trace
     assert result.last_run["hooks_unfired"] == 0

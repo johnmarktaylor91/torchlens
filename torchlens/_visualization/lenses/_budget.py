@@ -153,7 +153,7 @@ def resolve_budget(
         Active colour-channel values keyed by pass-qualified op label; when
         supplied the coverage floor is enforced alongside the band.
     context:
-        Optional render context forwarded to ``Trace.collapse_schedule``.
+        Optional render context forwarded to ``Drawing.collapse_schedule``.
 
     Returns
     -------
@@ -173,7 +173,7 @@ def resolve_budget(
     if op_count > COLLAPSE_OPTIMIZER_MAX_OPS:
         return _resolve_above_ceiling(trace, op_count, channel_active)
 
-    schedule = trace.collapse_schedule(context)
+    schedule = trace._collapse_schedule(context)
     full_visible = schedule.steps[0].visible_count
     if full_visible <= BAND_CEILING:
         coverage = (

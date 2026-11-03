@@ -40,7 +40,7 @@ def _backward_trace() -> tl.Trace:
         torch.randn(3, 4),
         capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
-    trace.log_backward(trace.output_ops[0].out.sum())
+    trace.backward(trace.output_ops[0].out.sum())
     return trace
 
 
@@ -82,8 +82,8 @@ def test_repeat_fires_get_independent_spans_and_monotone_wall_stamps() -> None:
         capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     loss = trace.output_ops[0].out.sum()
-    trace.log_backward(loss, retain_graph=True)
-    trace.log_backward(loss)
+    trace.backward(loss, retain_graph=True)
+    trace.backward(loss)
     fired = _fired_events(trace)
     by_object: dict[int, list[GradFnFired]] = {}
     for event in fired:
@@ -108,7 +108,7 @@ def test_higher_order_backward_pairs_lifo_correctly() -> None:
         capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     loss = trace.output_ops[0].out.pow(2).sum()
-    trace.log_backward(loss, create_graph=True)
+    trace.backward(loss, create_graph=True)
     for event in _fired_events(trace):
         if event.fire_started_monotonic is None:
             continue
@@ -151,7 +151,7 @@ def test_stale_prehook_entry_never_becomes_a_wrong_positive_span() -> None:
 
     try:
         backward_mod._fire_timing_stamp_list = seeded
-        trace.log_backward(trace.output_ops[0].out.sum())
+        trace.backward(trace.output_ops[0].out.sum())
     finally:
         backward_mod._fire_timing_stamp_list = original
     for event in _fired_events(trace):
@@ -180,7 +180,7 @@ def test_timing_registration_failure_degrades_to_untimed_not_coverage_gap() -> N
 
     try:
         backward_mod._register_fire_timing_prehook = failing
-        trace.log_backward(trace.output_ops[0].out.sum())
+        trace.backward(trace.output_ops[0].out.sum())
     finally:
         backward_mod._register_fire_timing_prehook = original
     fired = _fired_events(trace)

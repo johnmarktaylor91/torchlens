@@ -149,7 +149,7 @@ class TestTraceTrainModeCarveOut:
                 save_raw_grads=False,
             ),
         )
-        log.log_backward(log[log.output_layers[0]].out.sum())
+        log.backward(log[log.output_layers[0]].out.sum())
         op = log["linear_1_1"]
         assert op.transformed_grad is not None
         assert op.transformed_grad.dtype == torch.int64

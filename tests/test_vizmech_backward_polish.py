@@ -35,7 +35,7 @@ def _backward_trace() -> tl.Trace:
         x,
         capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
-    trace.log_backward(trace.output_ops[0].out.sum())
+    trace.backward(trace.output_ops[0].out.sum())
     return trace
 
 
@@ -52,7 +52,7 @@ def _double_backprop_trace() -> tl.Trace:
     score = trace.output_ops[0].out.sum()
     (grad_input,) = torch.autograd.grad(score, x, create_graph=True)
     penalty = (grad_input.norm(2, dim=1) - 1.0).pow(2).mean()
-    trace.log_backward(score + penalty)
+    trace.backward(score + penalty)
     return trace
 
 
