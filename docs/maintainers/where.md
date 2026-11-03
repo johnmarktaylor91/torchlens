@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1378 modules, 632510 lines, 0 modules without a docstring.
+85 packages, 1383 modules, 632994 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -23,6 +23,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10551 |
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 53 | 35713 |
+| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 5 | 484 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 20 | 10674 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5849 |
 | `torchlens._notebook` | Extras-gated notebook namespace with no public objects yet. | 9 | 2412 |
@@ -474,6 +475,18 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 | `tensor_policy` | Compatibility checks for tensors saved into portable bundles. | 163 |
 | `tlspec` | Unified ''.tlspec'' manifest writer helpers. | 1044 |
 | `writer_contract` | The normative writer contract and its digest (ecosystem MEMO 3.1). | 151 |
+
+### `torchlens._io.format3`
+
+The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (5 modules, 484 lines)
+
+| Module | What it holds | Lines |
+| --- | --- | ---: |
+| `__init__` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 15 |
+| `contract` | Constants of the 3.0 saved format, pinned against the persisted-field contract. | 263 |
+| `reader` | The 3.0 reader: manifest first, then every record validated against the contract. | 85 |
+| `runnable` | The 3.0 runnable component: descriptor JSON plus safetensors state, no pickle. | 45 |
+| `writer` | The 3.0 writer: a trace or bundle to typed JSON records plus safetensors blobs. | 76 |
 
 ### `torchlens._ir`
 
