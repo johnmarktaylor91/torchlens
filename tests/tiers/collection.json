@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "source_commit": "07fa6420c",
+  "source_commit": "b35437229",
   "environment": "pinned smoke row: python 3.10, torch 2.13.0+cpu",
   "durations_source": "tests/tiers/durations.csv",
   "estimate_workers": 4,
@@ -32,14 +32,14 @@
       }
     },
     "not_slow": {
-      "count": 16273,
-      "files": 1646,
-      "id_digest": 147269233979265,
+      "count": 16272,
+      "files": 1645,
+      "id_digest": 187066515781917,
       "collect_command": "CI=true OMP_NUM_THREADS=1 TORCHLENS_ORACLE_ENFORCE=1 python -m pytest --collect-only -q -o addopts= -p no:randomly -p no:cacheprovider -m \"not rare and not slow\" tests/",
       "wall_estimate": {
         "method": "per_file_mean",
         "tests_with_duration": 13689,
-        "tests_without_duration": 2584,
+        "tests_without_duration": 2583,
         "serial_seconds": 7976.7,
         "n4_seconds": 1994.2
       }
