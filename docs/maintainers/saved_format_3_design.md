@@ -68,7 +68,6 @@ the current components; `__init__` provides their thin package entry.
 | `restore.py` | Declared record-state restoration while retaining saved cell values | 200 | reader |
 | `summaries.py` | Closed model-identity and backward-summary schemas | 200 | reader |
 | `codec_policy.py` | the payload codec boundary (section 9): payload columns take the artifact's codec, raw-value cells the array codec, disagreeing hints refuse before codec lookup | 100 | reader |
-| `restore.py` | record restore: the state hook on one decoded row, then the true-up that puts back saved nulls and level-omitted columns so load then save is lossless | 150 | reader |
 | `summaries.py` | closed shapes of the optional manifest summaries (`model_fingerprint`, `backward_summary`), refused `manifest_schema_invalid` when present and malformed | 150 | reader |
 
 Public doors do not move: `tl.load`, `Trace.save`, `Bundle.save`, `tl.io`
