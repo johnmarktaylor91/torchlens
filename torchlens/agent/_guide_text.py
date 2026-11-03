@@ -16,7 +16,9 @@ TorchLens captures a model's forward pass into a Trace: every operation,
 module boundary, shape, dtype, and (where requested) activation payload.
 The agent surface is a deterministic, READ-ONLY inspector over SAVED
 artifacts -- it never executes model code, never writes files, never
-mutates artifacts. Live capture stays in Python.
+mutates artifacts. Live capture stays in Python. To write TorchLens code,
+read the agent index shipped in the package (torchlens/_docs/AGENT_INDEX.md;
+`torchlens agent init` points a project's AGENTS.md at it).
 
 ## The two-phase workflow
 
