@@ -157,6 +157,8 @@ Declared future options:
 | `jax_max_control_flow_unroll` | JAX control-flow unroll safety limit |
 | `module_identity_mode` | Backend module-mode selection; JAX supports raw `function_root` and Equinox/Flax NNX `pytree_module`; tinygrad, MLX, Paddle, and TensorFlow support raw `function_root` and callable object `object_module` |
 | `payload_policy` | Backend payload codec/materialization policy; JAX/tinygrad/MLX/Paddle/TF use `array_payloads` |
+| `save_preview` | Future non-torch save preview flag; JAX/tinygrad/MLX/Paddle/TF support static-label `save=` |
+| `facets` | Per-trace facet recipes, backend-neutral: every backend (torch, JAX, tinygrad, MLX, Paddle, TF) snapshots them onto `trace.facet_functions` through one shared helper; a non-callable refuses `trace_option_unsupported` |
 
 Capability epochs keep the public API, `CaptureOptions`, backend specs, per-backend capability
 mirrors, cache keys, docs, and tests changing together.
@@ -281,10 +283,10 @@ FAILS CLOSED: a selector matching captured ops whose calls never passed through 
 helper actions are `zero_ablate`, `scale`, and `add`, plus plain callables; replacements must
 preserve shape and dtype. Conditions must be static selectors; a gradient site (`tl.grad(...)`),
 value-dependent callable conditions, shape-changing replacements, graph-only entries, and
-combining `intervene=` with `grad_options=` refuse typed. `stop_after=` and `recipes=` keep typed
-refusals inside the capture path.
+combining `intervene=` with `grad_options=` refuse typed. `stop_after=` keeps its typed refusal inside
+the capture path; `facets=` attaches per-trace facet recipes on both the eager and the static path.
 
-TensorFlow true backward capture, `stop_after=`, fastlog/`tl.record()`, streaming, and value-dependent
+TensorFlow true backward capture, `stop_after=`, sparse recording (`tl.record()`), streaming, and value-dependent
 predicates remain deferred. These surfaces raise typed backend errors instead of silently
 producing partial traces.
 
@@ -351,7 +353,7 @@ way (`unwrapped_op_in_capture`), or refuses with that code when the caller asks 
 see [the MLX page](backends/mlx.md).
 
 MLX rejects `tl.model_output(...)`, `tl.where(...)`,
-`tl.followed_by(...)`, `tl.preceded_by(...)`, value-dependent predicates, `recipes=`,
+`tl.followed_by(...)`, `tl.preceded_by(...)`, value-dependent predicates,
 gradient-site (`tl.grad(...)`) interventions, streaming, `save_grads=`, `backward_ready=True`, and
 `tl.record(backend="mlx")`. Portable MLX saves
 materialize forward and derived array payloads and load them back as `mlx.core.array` values when the
@@ -503,7 +505,7 @@ replayable ops and region seam checks pass. Pass `jax_control_flow="reject"` to 
 earlier nested-primitive rejection behavior, or `jax_control_flow="region"` to force supported
 scan/while/custom-VJP-forward boundaries to regions. Workarounds are to pass raw functions and explicit params/input leaves to
 `tl.trace(..., backend="jax")`, or use the PyTorch backend for value-dependent predicate capture,
-intervention, sparse fastlog, and true backward graphs.
+intervention, sparse recording, and true backward graphs.
 
 JAX `.tlspec` support uses `payload_policy="array_payloads"`: default portable saves persist
 forward and derived array payloads and load them back as `jax.Array` values.
@@ -596,7 +598,7 @@ selectors such as `tl.func(...)`, `tl.label(...)`, `tl.label_contains(...)`, and
 applied after full graph finalization: unsaved ops keep metadata but drop public activation
 payloads. Workarounds are to return a pure lazy tinygrad expression from a raw callable and use
 `tl.trace(..., backend="tinygrad")`, or use the PyTorch backend for value-dependent predicate
-capture, intervention, sparse fastlog, and true backward graphs.
+capture, intervention, sparse recording, and true backward graphs.
 
 tinygrad `.tlspec` support uses `payload_policy="array_payloads"`: default portable saves persist
 forward and derived array payloads and load them back as tinygrad `Tensor` values.

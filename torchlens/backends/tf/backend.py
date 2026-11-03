@@ -28,6 +28,7 @@ from ..._selection.selectors import BaseSelector
 from ..._trace_core.relation_views import freeze_trace_relation_views
 from ...backends import BackendName
 from ...options import CaptureOptions, merge_capture_options
+from .._facet_recipes import attach_facet_recipes, pop_facet_recipes
 from .._finalize import (
     attach_function_root_module,
     attach_module_owned_op_params,
@@ -40,7 +41,6 @@ from .._options import (
     TF_EXTRA_KWARG_POLICY,
     TF_PREVIEW_TRACE_OPTION_POLICY,
     default_if_missing,
-    is_missing,
     pop_stop_directive,
     reject_extra_trace_kwargs,
     reject_unsupported_trace_options,
@@ -110,7 +110,6 @@ class TFBackend:
         verbose: bool | MissingType = MISSING,
         backward_ready: bool | MissingType = MISSING,
         name: str | None = None,
-        module_filter: object | None = None,
         transform: object | None = None,
         raw_input: object | None = None,
         save_raw_input: str | bool | MissingType = MISSING,
@@ -182,7 +181,6 @@ class TFBackend:
         save_grads = resolve_optional_capture_field(capture, "save_grads", save_grads)
         random_seed = resolve_optional_capture_field(capture, "seed", random_seed)
         name = resolve_optional_capture_field(capture, "name", name)
-        module_filter = resolve_optional_capture_field(capture, "module_filter", module_filter)
         transform = resolve_optional_capture_field(capture, "transform", transform)
         output_transform = resolve_optional_capture_field(
             capture, "output_transform", output_transform
@@ -201,18 +199,15 @@ class TFBackend:
         # ``capture_options.<field>`` reads above already resolved each one to
         # its concrete (non-MISSING) default via ``merge_capture_options``,
         # with the same backend-local defaults this block used to re-apply.
-        # Re-running ``default_if_missing`` on an already-concrete value was a
-        # no-op at runtime, but it widened mypy's view of the variable back to
-        # its MISSING-including parameter type (``default_if_missing`` returns
-        # ``Any``, which does not narrow); resolving once at the merge
-        # boundary is the fix, not a second pass here.
+        # Re-running ``default_if_missing`` on a concrete value was a runtime no-op
+        # but widened mypy's view back to the MISSING-including parameter type
+        # (it returns ``Any``); resolving once at the merge boundary is the fix.
         activation_transform = default_if_missing(activation_transform, None)
         save_raw_activations = default_if_missing(save_raw_activations, True)
         save_grads = default_if_missing(save_grads, None)
         random_seed = default_if_missing(random_seed, None)
         num_context_lines = default_if_missing(num_context_lines, 7)
         name = default_if_missing(name, None)
-        module_filter = default_if_missing(module_filter, None)
         transform = default_if_missing(transform, None)
         raw_input = default_if_missing(raw_input, None)
         output_transform = default_if_missing(output_transform, None)
@@ -221,7 +216,7 @@ class TFBackend:
         grad_options = default_if_missing(grad_options, None)
         intervene = default_if_missing(intervene, None)
         save_predicate = _pop_tf_save_predicate(extra_kwargs)
-        _reject_unimplemented_intervention_options(extra_kwargs)
+        facet_recipes = _reject_unimplemented_intervention_options(extra_kwargs)
         _reject_extra_kwargs(extra_kwargs)
         if intervene is not None and grad_options is not None:
             raise BackendUnsupportedError(
@@ -246,7 +241,6 @@ class TFBackend:
             save_source_context=save_code_context,
             save_rng=save_rng_states,
             backward_ready=backward_ready,
-            module_filter=module_filter,
             transform=transform,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
@@ -285,7 +279,6 @@ class TFBackend:
                 verbose=verbose,
                 backward_ready=backward_ready,
                 name=name,
-                module_filter=module_filter,
                 transform=transform,
                 raw_input=raw_input,
                 save_raw_input=save_raw_input,
@@ -328,6 +321,7 @@ class TFBackend:
             delattr(trace, "capture_events")
             self._attach_param_logs(trace, None)
             self._finish_trace(trace, None)
+            attach_facet_recipes(trace, facet_recipes, backend_name="tf")
             freeze_trace_relation_views(trace)
             stamp_backend_finalized(trace)
             return trace
@@ -355,7 +349,6 @@ class TFBackend:
             verbose=verbose,
             backward_ready=backward_ready,
             name=name,
-            module_filter=module_filter,
             transform=transform,
             raw_input=raw_input,
             save_raw_input=save_raw_input,
@@ -452,6 +445,7 @@ class TFBackend:
                 grad_options=grad_options,
                 module_tree=module_tree,
             )
+        attach_facet_recipes(trace, facet_recipes, backend_name="tf")
         freeze_trace_relation_views(trace)
         stamp_backend_finalized(trace)
         return trace
@@ -538,7 +532,6 @@ class TFBackend:
         verbose: bool,
         backward_ready: bool,
         name: str | None,
-        module_filter: object | None,
         compute_input_output_distances: bool = True,
         transform: object | None,
         raw_input: object | None,
@@ -584,8 +577,6 @@ class TFBackend:
             Backward-ready flag.
         name
             Optional trace label.
-        module_filter
-            Module filter option.
         transform
             Input transform option.
         raw_input
@@ -628,7 +619,6 @@ class TFBackend:
             recurrence_detection=recurrence_detection,
             verbose=verbose,
             backward_ready=backward_ready,
-            module_filter=cast(Any, module_filter),
             emit_nvtx=False,
             input_transform=cast(Any, transform),
             input=raw_input,
@@ -945,13 +935,15 @@ class TFBackend:
         return bool(generic_function_type is not None and isinstance(value, generic_function_type))
 
 
-def _reject_unimplemented_intervention_options(kwargs: dict[str, Any]) -> None:
-    """Refuse intervention-gated options the tf preview does not implement.
+def _reject_unimplemented_intervention_options(kwargs: dict[str, Any]) -> Any:
+    """Refuse ``stop_after=`` and pop the facet recipes the tf preview attaches.
 
-    The ``can_intervene`` flag admits ``intervene=``, ``stop_after=`` and ``facets=``
-    through the shared option gate, so the two unimplemented spellings refuse typed
-    here in the capture path instead of in the policy tables (where a True flag
-    would classify them as self-contradictory registrations).
+    The ``can_intervene`` flag admits ``intervene=`` and ``stop_after=`` through the
+    shared option gate, so the unimplemented ``stop_after=`` refuses typed here in the
+    capture path instead of in the policy tables (where a True flag would classify it
+    as a self-contradictory registration). ``facets=`` is backend-neutral (the
+    ``facet_recipes`` record): its value is popped here and snapshotted onto the
+    finished trace.
 
     Parameters
     ----------
@@ -960,8 +952,8 @@ def _reject_unimplemented_intervention_options(kwargs: dict[str, Any]) -> None:
 
     Returns
     -------
-    None
-        Returns when neither option is explicitly requested.
+    Any
+        The facet recipes to attach, or ``None`` when none were requested.
     """
 
     halt_value = pop_stop_directive(kwargs)
@@ -971,12 +963,7 @@ def _reject_unimplemented_intervention_options(kwargs: dict[str, Any]) -> None:
             "partial-forward finalization semantics the tf preview does not "
             "implement. Use the PyTorch backend for stop_after."
         )
-    recipes_value = kwargs.pop("facets", None)
-    if recipes_value is not None and not is_missing(recipes_value):
-        raise BackendUnsupportedError(
-            "tf backend interventions support intervene= only; trace(facets=...) "
-            "replay recipes are torch-only. Use the PyTorch backend for recipes."
-        )
+    return pop_facet_recipes(kwargs)
 
 
 def _reject_extra_kwargs(kwargs: dict[str, Any]) -> None:
@@ -1043,7 +1030,6 @@ def _reject_unsupported_options(
     save_source_context: bool,
     save_rng: bool,
     backward_ready: bool,
-    module_filter: object | None,
     transform: object | None,
     layer_visualizers: dict[Any, Any] | None,
     save_visualizations: bool,
@@ -1073,8 +1059,6 @@ def _reject_unsupported_options(
         RNG-state option.
     backward_ready
         Backward-ready option.
-    module_filter
-        Module filter option.
     transform
         Input transform option.
     layer_visualizers
@@ -1101,7 +1085,6 @@ def _reject_unsupported_options(
             "save_source_context": save_source_context,
             "save_rng": save_rng,
             "backward_ready": backward_ready,
-            "module_filter": module_filter,
             "transform": transform,
             "output_device": output_device,
             "layer_visualizers": layer_visualizers,

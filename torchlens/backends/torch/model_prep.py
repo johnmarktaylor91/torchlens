@@ -2122,7 +2122,7 @@ def module_forward_decorator(
                 captured=bool(untraceable_output_boundaries),
                 boundary_outputs=untraceable_output_boundaries,
             )
-            options = getattr(trace, "_predicate_save_options", None)
+            options = trace.__dict__.get("_predicate_save_options")
             if options is not None and options.halt is not None:
                 from ..._capture.predicates import _evaluate_halt
                 from ..._capture.projections import _build_record_context

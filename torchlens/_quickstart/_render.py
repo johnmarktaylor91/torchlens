@@ -68,7 +68,7 @@ def _gate_value_channels(trace: Any, draw_kwargs: dict[str, Any]) -> None:
 
 def draw(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input ladder plus the render dials ARE the spec'd surface
     model: nn.Module,
-    input_args: Any = None,
+    inputs: Any = None,
     *,
     input_kwargs: dict[str, Any] | None = None,
     input_shape: Any = None,
@@ -94,7 +94,7 @@ def draw(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input lad
     ----------
     model:
         The model to picture.
-    input_args:
+    inputs:
         Real input (tensor, tuple of tensors, or an HF string prompt).
     input_kwargs:
         Keyword inputs forwarded to the model.
@@ -130,7 +130,7 @@ def draw(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input lad
 
 def _capture_and_render(
     model: nn.Module,
-    input_args: Any,
+    inputs: Any,
     input_kwargs: dict[str, Any] | None,
     input_shape: Any,
     draw_kwargs: dict[str, Any],
@@ -138,7 +138,7 @@ def _capture_and_render(
 ) -> Drawing:
     """Capture the model's concrete forward and render it with the facade's dials."""
 
-    resolved = resolve_inputs(model, input_args, input_kwargs, input_shape, verb="draw")
+    resolved = resolve_inputs(model, inputs, input_kwargs, input_shape, verb="draw")
     trace, receipt = capture_concrete(
         model,
         resolved.plan,

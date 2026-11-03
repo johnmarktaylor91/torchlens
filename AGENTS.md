@@ -46,12 +46,12 @@ coverage-chosen sample of those classics as a test corpus in `tests/classics_cor
 
 ## Common Patterns
 
-Required reading for this area: [Common Patterns](docs/agent-reference/common-patterns.md).
+Required reading for this area: [Common Patterns](docs/internal/agent-reference/common-patterns.md).
 Before steering, patching or capturing in a loop, pick the path in [Performance: choosing a fast path](docs/guides/fast_paths.md).
 
 ## Current 2.x Surface
 
-Required reading for this area: [Current 2.x Surface](docs/agent-reference/current-2-x-surface.md).
+Required reading for this area: [Current 2.x Surface](docs/internal/agent-reference/current-2-x-surface.md).
 
 ## Anti-Patterns
 
@@ -91,10 +91,10 @@ capture is a capture gap to fix, never to exempt.
 The glossary is the canonical API spec (maintained privately; `docs/reference/glossary.md` is
 the public copy); code conforms to it. Renaming, adding or removing any
 PUBLIC name (dataclass field, `@property`, method, top-level `tl.*` name, kwarg) updates, in the
-SAME change, the glossary entry, the examples in `docs/agent-reference/`, and the audit notebooks
+SAME change, the glossary entry, the examples in `docs/internal/agent-reference/`, and the audit notebooks
 (`notebooks/audit/`) and `examples/` that use it. A change that leaves them stale is INCOMPLETE.
 Required reading for the full rule (canonical re-file, old-name grep) and the runnable-state
-contracts filed with it: [lockstep reference](docs/agent-reference/keep-the-glossary-docs-in-lockstep-with-code-locked.md).
+contracts filed with it: [lockstep reference](docs/internal/agent-reference/keep-the-glossary-docs-in-lockstep-with-code-locked.md).
 
 ## Internal notes stay PRIVATE (LOCKED — this repo is PUBLIC)
 
@@ -170,15 +170,15 @@ deterministic and run documentation examples when they are meant to be executabl
 
 ## Architecture
 
-Required reading for this area: [Architecture](docs/agent-reference/architecture.md).
+Required reading for this area: [Architecture](docs/internal/agent-reference/architecture.md).
 
 ## Brainpipe (F20; spellings DOCUMENTED-UNSTABLE)
 
-Required reading for this area: [Brainpipe (F20; spellings DOCUMENTED-UNSTABLE)](docs/agent-reference/brainpipe-f20-spellings-documented-unstable.md).
+Required reading for this area: [Brainpipe (F20; spellings DOCUMENTED-UNSTABLE)](docs/internal/agent-reference/brainpipe-f20-spellings-documented-unstable.md).
 
 ## Conventions
 
-Required reading for this area: [Conventions](docs/agent-reference/conventions.md).
+Required reading for this area: [Conventions](docs/internal/agent-reference/conventions.md).
 
 ## Quality Gates
 
@@ -205,11 +205,11 @@ pytest tests/ -m "not rare and not slow" -x --tb=short
 
 ## Critical Invariants
 
-Required reading for this area: [Critical Invariants](docs/agent-reference/critical-invariants.md).
+Required reading for this area: [Critical Invariants](docs/internal/agent-reference/critical-invariants.md).
 
 ## Known Gotchas
 
-Required reading for this area: [Known Gotchas](docs/agent-reference/known-gotchas.md).
+Required reading for this area: [Known Gotchas](docs/internal/agent-reference/known-gotchas.md).
 
 ## Build & Test
 

@@ -308,7 +308,8 @@ def test_multi_input_view_keeps_each_io_role_and_rejects_bare_access() -> None:
     assert view.per_input["input.left"].size == (3, 3)
     assert view.per_input["input.right"].size == (1, 1)
     with pytest.raises(tl.receptive_field.AmbiguousInputError):
-        _ = view.status
+        _ = view.size
+    assert set(view.status) == {"input.left", "input.right"}
     frame = trace.receptive_fields().to_pandas()
     merge_rows = frame[frame["output_op"] == merge.label]
     assert set(merge_rows["input_role"]) == {"input.left", "input.right"}
