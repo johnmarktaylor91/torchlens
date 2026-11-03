@@ -29,32 +29,19 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
 @pytest.mark.parametrize(
     ("manifest", "spec", "expected"),
     [
-        ({"tlspec_version": 1, "kind": "intervention"}, None, "v2.0_unified"),
-        (
-            {"kind": "intervention", "format_version": "1"},
-            {"format_version": "1"},
-            "v2.16_intervention_with_kind",
-        ),
-        # A kind-bearing manifest WITHOUT spec.json is not an intervention
-        # artifact (every v2.16 intervention save writes spec.json); inferring
-        # it from `kind` alone misrouted a unified manifest with a deleted
-        # tlspec_version into the intervention loader, which died on the
-        # absent spec.json untyped (R73).
-        ({"kind": "intervention", "format_version": "1"}, None, "unknown"),
-        ({"format_version": "1"}, {"format_version": "1"}, "v2.16_intervention"),
-        # `tlspec_version` is itself a tlspec-schema-only marker: the genuine
-        # pre-tlspec v2.16 ModelLog format never carried it (it used
-        # `io_format_version`/`n_activation_blobs` instead, covered below). A
-        # manifest with `tlspec_version` but no `kind` is an older-but-still-
-        # modern unified manifest (or one whose `kind` was lost), not the
-        # legacy release -- it must route through v2.0_unified so the real
-        # numeric tlspec_version floor check applies, never the unrelated
-        # legacy-format refusal (R73 fast-tier fuzz finding, 2026-10: this
-        # exact shape -- a fresh manifest with `kind` deleted -- misclassified
-        # as the legacy format and raised a false "pre-tlspec ModelLog
-        # format" ArtifactTooOldError).
-        ({"tlspec_version": 2}, None, "v2.0_unified"),
+        ({"format": "torchlens.saved"}, None, "unknown"),
+        ({"tlspec_version": 1, "kind": "intervention"}, None, "pre_3"),
+        ({"kind": "intervention", "format_version": "1"}, {"format_version": "1"}, "pre_3"),
+        # R73: losing either discriminator must still refuse as 2.x, not dispatch
+        # into an intervention reader or escape through a missing spec.json.
+        ({"kind": "intervention", "format_version": "1"}, None, "pre_3"),
+        ({"format_version": "1"}, {"format_version": "1"}, "pre_3"),
+        ({"tlspec_version": 2}, None, "pre_3"),
+        ({"io_format_version": 2}, None, "pre_3"),
+        ({"n_activation_blobs": 1}, None, "pre_3"),
+        ({"torchlens_version": "2.36.0"}, None, "pre_3"),
         ({}, None, "unknown"),
+        ({"application": "unrelated"}, None, "unknown"),
     ],
 )
 def test_detect_tlspec_format_ordering(
@@ -63,7 +50,7 @@ def test_detect_tlspec_format_ordering(
     spec: dict[str, Any] | None,
     expected: str,
 ) -> None:
-    """Detection should follow Phase 11.0's first-match-wins ordering."""
+    """Detection distinguishes the current format, 2.x markers, and unrelated JSON."""
 
     tlspec_path = tmp_path / "sample.tlspec"
     tlspec_path.mkdir()
@@ -72,3 +59,82 @@ def test_detect_tlspec_format_ordering(
         _write_json(tlspec_path / "spec.json", spec)
 
     assert detect_tlspec_format(tlspec_path) == expected
+
+
+@pytest.mark.parametrize("marker", ["metadata.pkl", "bundle.json", "spec.json"])
+def test_detect_root_only_2x_markers(tmp_path: Path, marker: str) -> None:
+    """Recognize a 2.x root file without opening pickle content.
+
+    Parameters
+    ----------
+    tmp_path:
+        Temporary artifact directory.
+    marker:
+        Root member written by a 2.x artifact family.
+    """
+
+    (tmp_path / marker).write_text(
+        json.dumps({"format_version": "1"}) if marker == "spec.json" else "not decoded",
+        encoding="utf-8",
+    )
+    assert detect_tlspec_format(tmp_path) == "pre_3"
+
+
+def test_detect_empty_directory(tmp_path: Path) -> None:
+    """An empty directory has no artifact markers.
+
+    Parameters
+    ----------
+    tmp_path:
+        Empty temporary directory.
+    """
+
+    assert detect_tlspec_format(tmp_path) == "unknown"
+
+
+def test_detect_current_save(tmp_path: Path) -> None:
+    """A real current save detects as v3, even alongside a 2.x marker.
+
+    Parameters
+    ----------
+    tmp_path:
+        Parent of the saved artifact.
+    """
+
+    from _format3_envelope import save_tiny
+
+    path = tmp_path / "current.tlspec"
+    trace = save_tiny(path)
+    assert detect_tlspec_format(path) == "v3"
+    (path / "metadata.pkl").write_bytes(b"not opened")
+    assert detect_tlspec_format(path) == "v3"
+    trace.cleanup()
+
+
+@pytest.mark.parametrize("marker", ["metadata.pkl", "bundle.json", "spec.json", "manifest.json"])
+def test_pre3_marker_refuses_at_load_and_validation(tmp_path: Path, marker: str) -> None:
+    """Both public doors give the same marker-specific 2.x refusal.
+
+    Parameters
+    ----------
+    tmp_path:
+        Temporary artifact root.
+    marker:
+        Root marker identifying a 2.x artifact.
+    """
+
+    import torchlens as tl
+    from torchlens.errors import ArtifactTooOldError
+    from torchlens.validation import validate_tlspec
+
+    content = {"format_version": "1"} if marker == "spec.json" else {"kind": "trace"}
+    (tmp_path / marker).write_text(json.dumps(content), encoding="utf-8")
+    errors = []
+    for door in (tl.load, validate_tlspec):
+        with pytest.raises(ArtifactTooOldError) as excinfo:
+            door(tmp_path)
+        errors.append(excinfo.value)
+    assert errors[0].fields == errors[1].fields
+    assert errors[0].fields["code"] == "artifact_version_below_floor"
+    assert errors[0].fields["path"] == str(tmp_path)
+    assert errors[0].fields["observed"]

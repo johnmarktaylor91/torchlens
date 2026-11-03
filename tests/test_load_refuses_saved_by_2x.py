@@ -122,7 +122,7 @@ def test_intervention_spec_v2_16_refuses_as_2x() -> None:
     assert _INTERVENTION_V2_16.exists(), "frozen 2.16 intervention spec missing"
     spec = json.loads((_INTERVENTION_V2_16 / "spec.json").read_text(encoding="utf-8"))
     assert spec["format_version"] == "1", "the artifact must stay a format_version-1 spec"
-    assert tl.io.detect_tlspec_format(_INTERVENTION_V2_16) == "v2.16_intervention"
+    assert tl.io.detect_tlspec_format(_INTERVENTION_V2_16) == "pre_3"
 
     error = assert_refuses_as_2x(_INTERVENTION_V2_16)
     assert error.fields["observed"] == "intervention format_version=1"

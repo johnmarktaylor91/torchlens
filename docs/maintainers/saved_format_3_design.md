@@ -576,9 +576,8 @@ provisional mapping):
   differs (a cell, not the manifest) and the row text can name record, row and column.
 - `unencodable_values_stringified`: the load advisory when `disclosures.count > 0`.
   Recommend adding it to the capture advisory vocabulary rather than a warning category.
-- `detect_tlspec_format` return values `v3` and `pre_3` replacing the four `v2.*` labels and
-  `unknown`. Recommend: the function is public (`tl.io.detect_tlspec_format`), so the label
-  change is a public word change and needs the lockstep edits.
+- Ruled: `tl.io.detect_tlspec_format` returns `v3`, `pre_3`, or `unknown` for a folder
+  that is not a TorchLens save. The four `v2.*` labels are removed.
 
 ## 15. Where this design and the contract page differed
 

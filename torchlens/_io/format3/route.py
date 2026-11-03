@@ -20,19 +20,15 @@ if TYPE_CHECKING:
     from ...intervention.types import InterventionSpec
     from .. import PayloadLoadHints
 
-_FORMAT3_READER_SHAPES: Final = frozenset({"v3", "v2.0_unified", "unknown"})
+_FORMAT3_READER_SHAPES: Final = frozenset({"v3", "unknown"})
 
 
 def is_format3_root(bundle_path: Path, tlspec_format: str) -> bool:
     """Return whether the directory is read by the 3.0 reader.
 
-    The reader owns every root ``manifest.json`` that names the 3.0 format and
-    every one the 2.x detector cannot place: there the reader alone decides,
-    and a manifest missing or corrupting the ``format`` key, a 2.x root file
-    beside it, or a stamp below the floor refuses typed
-    (``artifact_version_below_floor`` or ``manifest_schema_invalid``). A
-    manifest the detector recognises as a 2.x family keeps that family's own
-    typed 2.x refusal.
+    The reader owns roots naming the 3.0 format and unrecognized roots with a
+    manifest. It validates their format, schema, version window and root files.
+    Recognized 2.x artifacts refuse before this route is considered.
     """
 
     manifest_path = bundle_path / contract.MANIFEST_FILE

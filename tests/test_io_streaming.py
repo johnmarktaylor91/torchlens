@@ -524,7 +524,7 @@ def test_streaming_bundle_manifest_is_unified_and_schema_valid(tmp_path: Path) -
 
     Regression test: ``BundleStreamWriter.finalize()`` used to write a bare
     legacy ``Manifest`` with no ``"kind"`` key, so ``detect_tlspec_format()``
-    misclassified every streaming bundle as the old ``"v2.16_modellog_portable"``
+    misclassified every streaming bundle as a pre-3 artifact
     format and ``validate_tlspec()`` silently skipped schema validation for
     the entire ``save_outs_to=`` save path.
     """
@@ -538,7 +538,7 @@ def test_streaming_bundle_manifest_is_unified_and_schema_valid(tmp_path: Path) -
         streaming=tl.options.StorageOptions(path=bundle_path),
     )
 
-    assert detect_tlspec_format(bundle_path) == "v2.0_unified"
+    assert detect_tlspec_format(bundle_path) == "v3"
     validate_tlspec(bundle_path)
 
     loaded = tl.load(bundle_path)

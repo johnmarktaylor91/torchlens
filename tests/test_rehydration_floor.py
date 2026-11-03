@@ -8,7 +8,6 @@ legacy field-alias ladders.
 from __future__ import annotations
 
 import json
-import pickle
 from pathlib import Path
 
 import pytest
@@ -22,32 +21,26 @@ from torchlens._io import (
     TLSPEC_VERSION,
     ArtifactError,
 )
-from torchlens._io._canonical_pickle import dump_canonical_metadata
 from torchlens.errors import ArtifactTooOldError
 
 FLOOR_MATCH = "saved by torchlens 2.x"
 
 
 def _stamp_between_floor(path: Path, version: int) -> None:
-    """Re-stamp a saved bundle as a COHERENT ``tlspec_version=version`` artifact.
+    """Re-stamp the manifest of a current artifact for a floor refusal.
 
-    Every torchlens writer stamps ``manifest.json`` AND the pickled root state
-    from the same ``TLSPEC_VERSION`` (a stampless state refuses below floor),
-    and the one lawful manifest-only bump (``tl.migrate``) leaves a witness.
-    A manifest-only edit therefore models NO real writer and trips the
-    manifest/metadata integrity anchor (``bundle_manifest_metadata_mismatch``)
-    before any age advisory; both stamps move together here.
+    Parameters
+    ----------
+    path:
+        Saved 3.0 artifact directory.
+    version:
+        Below-floor record-contract stamp to test.
     """
 
     manifest_path = path / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest["tlspec_version"] = version
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-    metadata_path = path / "metadata.pkl"
-    state = pickle.loads(metadata_path.read_bytes())  # trusted bytes this test wrote
-    state["tlspec_version"] = version
-    with metadata_path.open("wb") as handle:
-        dump_canonical_metadata(state, handle)
 
 
 def _build_trace() -> tl.Trace:

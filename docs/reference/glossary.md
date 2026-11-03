@@ -1460,6 +1460,13 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 ## Persistence, containers, and namespaces
 
+`tl.io.detect_tlspec_format(path)`
+: Inspects a saved-artifact directory without loading its payloads. Returns `"v3"` when the
+  root manifest names the 3.0 format, `"pre_3"` for TorchLens 2.x save markers, or `"unknown"`
+  when no TorchLens save markers are present. Symlinked metadata paths refuse. Detection does
+  not validate the artifact; use `tl.validation.validate_tlspec(path)` for validation.
+
+
 **Save / load**
 : `Trace.save` persists a `Trace` into a portable `.tlspec` directory bundle at a chosen
   level; `tl.load` loads a `.tlspec` object with eager tensor materialization.

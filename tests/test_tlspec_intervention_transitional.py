@@ -96,7 +96,7 @@ def test_intervention_writer_adds_unified_marker_without_removing_legacy_fields(
     assert manifest["kind"] == "intervention"
     assert manifest["format_version"] == "2"
     assert manifest["tensor_entries"] == []
-    assert tl.io.detect_tlspec_format(path) == "v2.0_unified"
+    assert tl.io.detect_tlspec_format(path) == "v3"
 
 
 def test_new_loader_reads_transitional_intervention_spec(tmp_path: Path) -> None:
@@ -131,7 +131,7 @@ def test_new_loader_reads_intervention_with_unified_manifest_marker(tmp_path: Pa
     unified_path = tmp_path / "unified.tlspec"
     _interventions().save_intervention(unified_path, level="portable")
 
-    assert tl.io.detect_tlspec_format(unified_path) == "v2.0_unified"
+    assert tl.io.detect_tlspec_format(unified_path) == "v3"
     loaded = tl.load(unified_path)
 
     assert isinstance(loaded, InterventionSpec)
