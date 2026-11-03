@@ -39,7 +39,7 @@ from .op_record import (
     validate_amendment,
 )
 from .predicate import RecordContext
-from .refs import ParamRef, ReservedLabel
+from .refs import ParamRef, ReservedLabel, _clone_frozen_record
 
 # Op-record count at which a running capture DISCLOSES its growth exactly
 # once (r8 R60-1). Purely informational -- capture continues -- sized from
@@ -192,14 +192,13 @@ def _clone_op_event_for_replay(event: Any) -> Any:
     ``transform_config`` and ``parent_arg_positions``. A ``_copy_for_replay``
     projection must not be able to mutate those dicts on the sealed source
     stream, so they are duplicated here. Every other field is immutable (or an
-    intentionally shared tensor payload / opaque handle), so the clone stays
-    cheap and never copies activations.
+    intentionally shared tensor payload / opaque handle) and is shared; the
+    copy itself is a slot copy (:func:`_clone_frozen_record`).
 
     Polymorphic from P3 (reviewer note O-N5): a decomposed ``OpRecord`` clones
     the facets that carry live dicts (``graph.parent_arg_positions``,
-    ``transform.transform_config``, ``annotations.annotations``) — the same
-    shared-mutable-state guarantee, NOT a blanket identity return, because the
-    record's facets are frozen but those three payloads are not. The clone
+    ``transform.transform_config``, ``annotations.annotations``): the same
+    shared-mutable-state guarantee, not a blanket identity return. The clone
     ALWAYS owns a fresh ``core``: the journal ``append`` path stamps ``seq``
     on the record's core (the one slot append mutates), so a shared core
     would let re-stamping a merged clone silently rewrite the sealed source
@@ -217,10 +216,10 @@ def _clone_op_event_for_replay(event: Any) -> Any:
     """
 
     if isinstance(event, OpRecord):
-        record_changes: dict[str, Any] = {"core": replace(event.core)}
+        record_changes: dict[str, Any] = {"core": _clone_frozen_record(event.core)}
         graph = event.graph
         if graph is not None:
-            record_changes["graph"] = replace(
+            record_changes["graph"] = _clone_frozen_record(
                 graph,
                 parent_arg_positions={
                     domain: dict(positions)
@@ -229,15 +228,15 @@ def _clone_op_event_for_replay(event: Any) -> Any:
             )
         transform = event.transform
         if transform is not None:
-            record_changes["transform"] = replace(
+            record_changes["transform"] = _clone_frozen_record(
                 transform, transform_config=dict(transform.transform_config)
             )
         annotations_facet = event.annotations_facet
         if annotations_facet is not None:
-            record_changes["annotations_facet"] = replace(
+            record_changes["annotations_facet"] = _clone_frozen_record(
                 annotations_facet, annotations=dict(annotations_facet.annotations)
             )
-        return replace(event, **record_changes)
+        return _clone_frozen_record(event, **record_changes)
     return replace(
         event,
         parent_arg_positions={
